@@ -85,7 +85,7 @@ func TestInitExecuteFlows(t *testing.T) {
 			projectPathFlag:     "services",
 			templateIDFlag:      0,
 			workflowNameFlag:    "",
-			mockResponses:       []string{"", "", "myworkflow"},
+			mockResponses:       []string{"", "myworkflow"},
 			expectProjectDirRel: filepath.Join("services", "myproj"),
 			expectWorkflowName:  "myworkflow",
 			expectTemplateFiles: GetTemplateFileList(),
@@ -96,7 +96,7 @@ func TestInitExecuteFlows(t *testing.T) {
 			projectPathFlag:     "",
 			templateIDFlag:      0,
 			workflowNameFlag:    "",
-			mockResponses:       []string{"", "", "default-wf"},
+			mockResponses:       []string{"", "default-wf"},
 			expectProjectDirRel: "alpha",
 			expectWorkflowName:  "default-wf",
 			expectTemplateFiles: GetTemplateFileList(),
@@ -107,7 +107,7 @@ func TestInitExecuteFlows(t *testing.T) {
 			projectPathFlag:     "",
 			templateIDFlag:      0,
 			workflowNameFlag:    "",
-			mockResponses:       []string{"projX", "1", "", "workflow-X"},
+			mockResponses:       []string{"projX", "1", "workflow-X"},
 			expectProjectDirRel: "projX",
 			expectWorkflowName:  "workflow-X",
 			expectTemplateFiles: GetTemplateFileList(),
@@ -118,7 +118,7 @@ func TestInitExecuteFlows(t *testing.T) {
 			projectPathFlag:     "",
 			templateIDFlag:      0,
 			workflowNameFlag:    "flagged-wf",
-			mockResponses:       []string{"", ""},
+			mockResponses:       []string{""},
 			expectProjectDirRel: "projFlag",
 			expectWorkflowName:  "flagged-wf",
 			expectTemplateFiles: GetTemplateFileList(),
@@ -196,7 +196,7 @@ func TestInsideExistingProjectAddsWorkflow(t *testing.T) {
 		WorkflowName: "",
 	}
 
-	mockStdin := testutil.NewMockStdinReader([]string{"wf-inside-existing-project", ""})
+	mockStdin := testutil.NewMockStdinReader([]string{"wf-inside-existing-project"})
 	h := newHandler(sim.NewRuntimeContext(), mockStdin)
 
 	require.NoError(t, h.ValidateInputs(inputs))
@@ -285,22 +285,19 @@ func TestInsideExistingProjectAddsTypescriptWorkflowSkipsGoScaffold(t *testing.T
 }
 
 func TestGetWorkflowTemplateByIDAndTitle(t *testing.T) {
-	tpl, lang, err := (&handler{}).getWorkflowTemplateByID(3)
+	tpl, err := (&handler{}).getWorkflowTemplateByID(3)
 	require.NoError(t, err)
 	require.Equal(t, uint32(3), tpl.ID)
-	require.Equal(t, lang.Title, "Typescript")
 	require.NotEmpty(t, tpl.Title)
 
-	_, _, err = (&handler{}).getWorkflowTemplateByID(9999)
+	_, err = (&handler{}).getWorkflowTemplateByID(9999)
 	require.Error(t, err)
 
 	title := tpl.Title
-	lang, langErr := (&handler{}).getLanguageTemplateByTitle("Typescript")
-	tplByTitle, err := (&handler{}).getWorkflowTemplateByTitle(title, lang.Workflows)
+	tplByTitle, err := (&handler{}).getWorkflowTemplateByTitle(title)
 	require.NoError(t, err)
-	require.NoError(t, langErr)
 	require.Equal(t, tpl.ID, tplByTitle.ID)
 
-	_, err = (&handler{}).getWorkflowTemplateByTitle("this-title-should-not-exist", lang.Workflows)
+	_, err = (&handler{}).getWorkflowTemplateByTitle("this-title-should-not-exist")
 	require.Error(t, err)
 }

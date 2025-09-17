@@ -45,7 +45,6 @@ const (
 	DefaultProjectSettingsFileName  = "project.yaml"
 	DefaultWorkflowSettingsFileName = "workflow.yaml"
 	DefaultEnvFileName              = ".env"
-	DefaultIsGoFileName             = "go.mod"
 
 	CognitoTokenExchangePath = "/oauth2/token"
 	CognitoAuthRevokePath    = "/oauth2/revoke"

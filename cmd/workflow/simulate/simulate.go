@@ -44,6 +44,10 @@ import (
 )
 
 const TIMEOUT = 30 * time.Second
+const (
+	ethSepoliaSelector = uint64(16015286601757825753)
+	ethMainnetSelector = uint64(5009297550715157269)
+)
 
 type Inputs struct {
 	WorkflowPath  string            `validate:"required,file"`
@@ -109,12 +113,24 @@ func newHandler(ctx *runtime.Context) *handler {
 }
 
 func (h *handler) ResolveInputs(args []string, v *viper.Viper, creSettings *settings.Settings) (Inputs, error) {
-	wrRpcUrl, err := settings.GetRpcUrlSettings(v, 16015286601757825753)
-	if err != nil {
-		return Inputs{}, err
-	}
-	if wrRpcUrl == "" {
-		return Inputs{}, fmt.Errorf("sepolia rpc url not found")
+	sepURL, errSep := settings.GetRpcUrlSettings(v, ethSepoliaSelector)
+	mainURL, errMain := settings.GetRpcUrlSettings(v, ethMainnetSelector)
+
+	var wrRpcUrl string
+	switch {
+	case errSep == nil && errMain == nil:
+		h.log.Info().Msgf("both ETH Sepolia (%d) and ETH Mainnet (%d) RPC URLs are configured; defaulting to Sepolia. If Mainnet is intended, please remove Sepolia RPC URL from setting and rerun",
+			ethSepoliaSelector, ethMainnetSelector)
+		wrRpcUrl = sepURL
+	case errSep == nil:
+		wrRpcUrl = sepURL
+	case errMain == nil:
+		wrRpcUrl = mainURL
+	default:
+		return Inputs{}, fmt.Errorf(
+			"rpc needed for EVM interactions. Please set in settings. no RPC URL configured for ETH Sepolia (%d) or ETH Mainnet (%d); sepolia error: %w; mainnet error: %w",
+			ethSepoliaSelector, ethMainnetSelector, errSep, errMain,
+		)
 	}
 
 	ethClient, err := ethclient.Dial(wrRpcUrl)
