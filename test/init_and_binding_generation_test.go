@@ -13,6 +13,7 @@ import (
 )
 
 func TestE2EInit_DevPoRTemplate(t *testing.T) {
+
 	tempDir := t.TempDir()
 	projectName := "e2e-init-test"
 	workflowName := "devPoRWorkflow"

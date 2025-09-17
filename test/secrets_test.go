@@ -182,7 +182,7 @@ func TestCLISecretsWithEoa(t *testing.T) {
 	require.NoError(t, createCliSettingsFile(tc, constants.TestAddress3, "myworkflow", testEthUrl), "Failed to create cre config file")
 
 	// create blank project.yaml
-	require.NoError(t, createBlankProjectSettingFile(), "Failed to create project.yaml setting file")
+	require.NoError(t, createBlankProjectSettingFile(tc.ProjectDirectory+"project.yaml"), "Failed to create project.yaml setting file")
 
 	t.Cleanup(tc.Cleanup(t))
 

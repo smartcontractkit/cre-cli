@@ -45,7 +45,7 @@ func TestCLIAccountLinkAndListKey_EOA(t *testing.T) {
 
 	// Create workflow.yaml with owner=Address4
 	require.NoError(t, createCliSettingsFile(tc, constants.TestAddress4, "workflow-name", testEthURL), "failed to create settings")
-	require.NoError(t, createBlankProjectSettingFile(), "failed to create project.yaml")
+	require.NoError(t, createBlankProjectSettingFile(tc.ProjectDirectory+"project.yaml"), "failed to create project.yaml")
 	t.Cleanup(tc.Cleanup(t))
 
 	// Pre-baked registry addresses from Anvil state dump

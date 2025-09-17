@@ -18,8 +18,6 @@ import (
 	test "github.com/smartcontractkit/cre-cli/test/contracts"
 )
 
-const projectSettingPath = "/tmp/project.yaml"
-
 func initGenerateEnv(t *testing.T) (*os.Process, string) {
 	InitLogging()
 
@@ -57,7 +55,7 @@ func stopAnvilGracefully(anvilProc *os.Process) {
 	}
 }
 
-func createBlankProjectSettingFile() error {
+func createBlankProjectSettingFile(projectSettingPath string) error {
 	if err := os.WriteFile(projectSettingPath, nil, 0o600); err != nil {
 		return fmt.Errorf("error writing project.yaml: %w", err)
 	}
