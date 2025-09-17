@@ -11,6 +11,7 @@ jobs:
     permissions:
       id-token: write
       contents: read
+    environment: Publish
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -43,6 +44,14 @@ jobs:
             sudo apt-get install -y gcc-x86-64-linux-gnu libc6-dev-amd64-cross
           fi
 
+          # Install GPG and kmspgp for signing
+          sudo apt-get install -y gnupg2
+
+          # Install kmspgp
+          curl -L https://github.com/smartcontractkit/kmspgp/releases/download/v1.1.0/kmspgp-v1.1.0-linux-amd64 -o kmspgp
+          chmod +x kmspgp
+          sudo mv kmspgp /usr/local/bin/
+
       - name: Build the Go Binary
         env:
           GOOS: linux
@@ -53,13 +62,62 @@ jobs:
         run: |
           VERSION="${{ github.ref_name }}"
           BINARY_NAME="cre_${VERSION}_linux_${{ matrix.arch }}"
-          go build -ldflags "-X 'github.com/smartcontractkit/dev-platform/cmd/version.Version=version $VERSION' -X google.golang.org/protobuf/reflect/protoregistry.conflictPolicy=ignore" -o "${BINARY_NAME}"
+          go build -ldflags "-X 'github.com/smartcontractkit/cre-cli/cmd/version.Version=version $VERSION' -X google.golang.org/protobuf/reflect/protoregistry.conflictPolicy=ignore" -o "${BINARY_NAME}"
 
           # Archive the binary
           tar -czvf "${BINARY_NAME}.tar.gz" "${BINARY_NAME}"
 
           # Verify the files
           ls -l
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@b47578312673ae6fa5b5096b330d9fbac3d116df # v4.2.1
+        with:
+          role-to-assume: ${{ secrets.LINUX_CODESIGNING_AWS_OIDC_ROLE }}
+          aws-region: us-west-2
+
+      - name: Sign Linux Binary
+        env:
+          KMS_KEY_ID: ${{ secrets.LINUX_CODESIGNING_KMS_KEY_ID }}
+          AWS_REGION: us-west-2
+        run: |
+          BINARY_NAME="cre_${{ github.ref_name }}_linux_${{ matrix.arch }}"
+
+          # Create detached signature using kmspgp (clearsign doesn't work well with binaries)
+          kmspgp sign "$KMS_KEY_ID" < "${BINARY_NAME}" > "${BINARY_NAME}_raw.sig"
+
+          # Strip the kmspgp version line and empty lines from the signature
+          grep -v "Version:" "${BINARY_NAME}_raw.sig" > "${BINARY_NAME}.sig"
+          rm "${BINARY_NAME}_raw.sig"
+
+      - name: Verify Linux Binary Signature
+        env:
+          KMS_KEY_ID: ${{ secrets.LINUX_CODESIGNING_KMS_KEY_ID }}
+          AWS_REGION: us-west-2
+        run: |
+          BINARY_NAME="cre_${{ github.ref_name }}_linux_${{ matrix.arch }}"
+
+          # Get the public key from KMS and convert to GPG format
+          kmspgp export --user-name "CRE" --user-email "cre@smartcontract.com" "$KMS_KEY_ID" > public_key_raw.asc
+
+          # Strip the kmspgp version line and empty lines from the public key
+          grep -v "Version:" public_key_raw.asc > public_key.asc
+          rm public_key_raw.asc
+
+          # Import the public key into GPG
+          gpg --import public_key.asc
+
+          # Verify the detached signature using GPG
+          if gpg --verify "${BINARY_NAME}.sig" "${BINARY_NAME}"; then
+            echo "✓ GPG signature verification PASSED"
+          else
+            echo "✗ GPG signature verification FAILED"
+            exit 1
+          fi
+
+          # Also display the public key info
+          echo "=== Public Key Info ==="
+          cat public_key.asc
 
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@6f51ac03b9356f520e9adb1b1b7802705f340c2b # actions/upload-artifact@v4.5.0
@@ -68,6 +126,7 @@ jobs:
           path: |
             cre_${{ github.ref_name }}_linux_${{ matrix.arch }}.tar.gz
             cre_${{ github.ref_name }}_linux_${{ matrix.arch }}
+            cre_${{ github.ref_name }}_linux_${{ matrix.arch }}.sig
 
   build-darwin:
     name: Build Darwin Binaries
@@ -108,7 +167,7 @@ jobs:
           GITHUB_TOKEN: ${{ steps.setup-github-token.outputs.access-token }}
         run: |
           BINARY_NAME="cre_${VERSION}_darwin_${{ matrix.arch }}"
-          go build -ldflags "-s -w -X 'github.com/smartcontractkit/dev-platform/cmd/version.Version=version $VERSION' -X google.golang.org/protobuf/reflect/protoregistry.conflictPolicy=ignore" -o "${BINARY_NAME}"
+          go build -ldflags "-s -w -X 'github.com/smartcontractkit/cre-cli/cmd/version.Version=version $VERSION' -X google.golang.org/protobuf/reflect/protoregistry.conflictPolicy=ignore" -o "${BINARY_NAME}"
 
       - name: Install the Apple keychain
         env:
@@ -249,7 +308,7 @@ jobs:
           & $env:CC /?
 
           # Build the Go binary with version embedding
-          go build -v -x -ldflags "-X 'github.com/smartcontractkit/dev-platform/cmd/version.Version=version ${{ env.VERSION }}' -X google.golang.org/protobuf/reflect/protoregistry.conflictPolicy=ignore" -o $BINARY_NAME
+          go build -v -x -ldflags "-X 'github.com/smartcontractkit/cre-cli/cmd/version.Version=version ${{ env.VERSION }}' -X google.golang.org/protobuf/reflect/protoregistry.conflictPolicy=ignore" -o $BINARY_NAME
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@b47578312673ae6fa5b5096b330d9fbac3d116df # v4.2.1
@@ -420,6 +479,17 @@ jobs:
           asset_name: cre_${{ github.ref_name }}_linux_amd64.tar.gz
           asset_content_type: application/octet-stream
 
+      # Upload Release Assets for linux/amd64 Signature
+      - name: Upload Release Assets for linux/amd64 Signature
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./linux_amd64/cre_${{ github.ref_name }}_linux_amd64.sig
+          asset_name: cre_${{ github.ref_name }}_linux_amd64.sig
+          asset_content_type: application/octet-stream
+
       # Upload Release Assets for linux/arm64 Tarball
       - name: Upload Release Assets for linux/arm64 Tarball
         uses: actions/upload-release-asset@v1
@@ -428,7 +498,18 @@ jobs:
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: ./linux_arm64/cre_${{ github.ref_name }}_linux_arm64.tar.gz
-          asset_name: cre_${{ github.ref_name }}_linux_arm64.zip
+          asset_name: cre_${{ github.ref_name }}_linux_arm64.tar.gz
+          asset_content_type: application/octet-stream
+
+      # Upload Release Assets for linux/arm64 Signature
+      - name: Upload Release Assets for linux/arm64 Signature
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./linux_arm64/cre_${{ github.ref_name }}_linux_arm64.sig
+          asset_name: cre_${{ github.ref_name }}_linux_arm64.sig
           asset_content_type: application/octet-stream
 
       # Upload Release Assets for darwin/amd64 Zip

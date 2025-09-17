@@ -13,8 +13,8 @@ import (
 
 	"github.com/smartcontractkit/chainlink-testing-framework/seth"
 
-	cmdCommon "github.com/smartcontractkit/dev-platform/cmd/common"
-	"github.com/smartcontractkit/dev-platform/internal/constants"
+	cmdCommon "github.com/smartcontractkit/cre-cli/cmd/common"
+	"github.com/smartcontractkit/cre-cli/internal/constants"
 )
 
 //go:generate stringer -type=TxType

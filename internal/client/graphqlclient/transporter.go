@@ -6,8 +6,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/smartcontractkit/dev-platform/internal/auth"
-	"github.com/smartcontractkit/dev-platform/internal/credentials"
+	"github.com/smartcontractkit/cre-cli/internal/auth"
+	"github.com/smartcontractkit/cre-cli/internal/credentials"
 )
 
 type headerTransport struct {

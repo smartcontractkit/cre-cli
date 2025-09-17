@@ -8,13 +8,13 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/smartcontractkit/dev-platform/internal/constants"
-	"github.com/smartcontractkit/dev-platform/internal/transformation"
+	"github.com/smartcontractkit/cre-cli/internal/constants"
+	"github.com/smartcontractkit/cre-cli/internal/transformation"
 )
 
 // Config names (YAML field paths)
 const (
-	DONFamilySettingName      = "dev-platform.don-family"
+	DONFamilySettingName      = "cre-cli.don-family"
 	WorkflowOwnerSettingName  = "user-workflow.workflow-owner-address"
 	WorkflowNameSettingName   = "user-workflow.workflow-name"
 	SethConfigPathSettingName = "logging.seth-config-path"

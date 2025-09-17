@@ -9,8 +9,8 @@ import (
 
 	chainSelectors "github.com/smartcontractkit/chain-selectors"
 
-	"github.com/smartcontractkit/dev-platform/internal/constants"
-	"github.com/smartcontractkit/dev-platform/internal/ethkeys"
+	"github.com/smartcontractkit/cre-cli/internal/constants"
+	"github.com/smartcontractkit/cre-cli/internal/ethkeys"
 )
 
 type ContractGroups struct {

@@ -10,7 +10,7 @@
 # Below is an example `my-target`:
 #
 # my-target:
-#   dev-platform:
+#   cre-cli:
 #     # Required: Workflow DON ID used for registering and operating workflows.
 #     don-family: "small"
 #   logging:
@@ -29,7 +29,7 @@ local-simulation:
 
 # ==========================================================================
 production-testnet:
-  dev-platform:
+  cre-cli:
     don-family: "{{ProductionTestnetDonFamily}}"
   logging:
     seth-config-path: {{SethConfigPath}}

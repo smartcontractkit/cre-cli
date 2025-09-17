@@ -3,8 +3,8 @@ package deploy
 import (
 	"fmt"
 
-	"github.com/smartcontractkit/dev-platform/internal/client/graphqlclient"
-	"github.com/smartcontractkit/dev-platform/internal/client/storageclient"
+	"github.com/smartcontractkit/cre-cli/internal/client/graphqlclient"
+	"github.com/smartcontractkit/cre-cli/internal/client/storageclient"
 )
 
 func (h *handler) UploadArtifacts() error {

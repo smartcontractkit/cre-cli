@@ -7,14 +7,14 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/smartcontractkit/dev-platform/internal/constants"
-	"github.com/smartcontractkit/dev-platform/internal/settings"
+	"github.com/smartcontractkit/cre-cli/internal/constants"
+	"github.com/smartcontractkit/cre-cli/internal/settings"
 )
 
 // buildBinary builds the Go binary from the specified source file.
 func buildBinary(sourceFile, outputBinary string) error {
 	// TODO (DEVSVCS-2016) clean the conflictPolicy=ignore flag
-	command := exec.Command("go", "build", "-ldflags", "-w -X 'github.com/smartcontractkit/dev-platform/cmd/version.Version=build $(git rev-parse HEAD)' -X google.golang.org/protobuf/reflect/protoregistry.conflictPolicy=ignore", "-o", outputBinary, sourceFile)
+	command := exec.Command("go", "build", "-ldflags", "-w -X 'github.com/smartcontractkit/cre-cli/cmd/version.Version=build $(git rev-parse HEAD)' -X google.golang.org/protobuf/reflect/protoregistry.conflictPolicy=ignore", "-o", outputBinary, sourceFile)
 	if os.Getenv("GOOS") == "windows" {
 		command.Env = append(os.Environ(),
 			"CC=gcc.exe",

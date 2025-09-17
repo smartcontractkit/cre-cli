@@ -12,7 +12,7 @@ import (
 	"github.com/rs/zerolog"
 	"gopkg.in/yaml.v3"
 
-	"github.com/smartcontractkit/dev-platform/internal/credentials"
+	"github.com/smartcontractkit/cre-cli/internal/credentials"
 )
 
 func TestSaveCredentials_WritesYAML(t *testing.T) {

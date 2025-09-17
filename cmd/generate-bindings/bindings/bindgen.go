@@ -11,7 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/compiler"
 	"github.com/ethereum/go-ethereum/crypto"
 
-	"github.com/smartcontractkit/dev-platform/cmd/generate-bindings/bindings/abigen"
+	"github.com/smartcontractkit/cre-cli/cmd/generate-bindings/bindings/abigen"
 )
 
 //go:embed sourcecre.go.tpl
