@@ -6,8 +6,10 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/rs/zerolog"
 	"gopkg.in/yaml.v3"
 
 	"github.com/smartcontractkit/dev-platform/internal/credentials"
@@ -43,6 +45,44 @@ func TestSaveCredentials_WritesYAML(t *testing.T) {
 		read.IDToken != tokenSet.IDToken ||
 		read.RefreshToken != tokenSet.RefreshToken {
 		t.Errorf("got %+v; want %+v", read, *tokenSet)
+	}
+}
+
+func TestGeneratePKCE_ReturnsValidChallenge(t *testing.T) {
+	verifier, challenge, err := generatePKCE()
+	if err != nil {
+		t.Fatalf("generatePKCE error: %v", err)
+	}
+	if verifier == "" || challenge == "" {
+		t.Error("PKCE verifier or challenge is empty")
+	}
+}
+
+func TestRandomState_IsRandomAndNonEmpty(t *testing.T) {
+	state1 := randomState()
+	state2 := randomState()
+	if state1 == "" || state2 == "" {
+		t.Error("randomState returned empty string")
+	}
+	if state1 == state2 {
+		t.Error("randomState returned duplicate values")
+	}
+}
+
+func TestOpenBrowser_UnsupportedOS(t *testing.T) {
+	err := openBrowser("http://example.com", "plan9")
+	if err == nil || !strings.Contains(err.Error(), "unsupported OS") {
+		t.Errorf("expected unsupported OS error, got %v", err)
+	}
+}
+
+func TestServeEmbeddedHTML_ErrorOnMissingFile(t *testing.T) {
+	h := &handler{log: &zerolog.Logger{}}
+	w := httptest.NewRecorder()
+	h.serveEmbeddedHTML(w, "htmlPages/doesnotexist.html", http.StatusOK)
+	resp := w.Result()
+	if resp.StatusCode != http.StatusInternalServerError {
+		t.Errorf("expected 500 error, got %d", resp.StatusCode)
 	}
 }
 

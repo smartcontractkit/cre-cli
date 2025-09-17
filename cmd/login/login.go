@@ -118,7 +118,7 @@ func (h *handler) startAuthFlow() (string, error) {
 
 	authURL := h.buildAuthURL(challenge, h.lastState)
 	h.log.Info().Msgf("Opening browser to %s", authURL)
-	if err := openBrowser(authURL); err != nil {
+	if err := openBrowser(authURL, rt.GOOS); err != nil {
 		h.log.Warn().Err(err).Msg("could not open browser, please navigate manually")
 	}
 
@@ -272,8 +272,8 @@ func saveCredentials(tokenSet *credentials.CreLoginTokenSet) error {
 	return os.Rename(tmp, path)
 }
 
-func openBrowser(urlStr string) error {
-	switch rt.GOOS {
+func openBrowser(urlStr string, goos string) error {
+	switch goos {
 	case "darwin":
 		return exec.Command("open", urlStr).Start()
 	case "linux":
@@ -281,7 +281,7 @@ func openBrowser(urlStr string) error {
 	case "windows":
 		return exec.Command("rundll32", "url.dll,FileProtocolHandler", urlStr).Start()
 	default:
-		return fmt.Errorf("unsupported OS: %s", rt.GOOS)
+		return fmt.Errorf("unsupported OS: %s", goos)
 	}
 }
 
