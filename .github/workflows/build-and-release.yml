@@ -4,8 +4,6 @@ on:
   push:
     tags:
       - "v*"
-    branches:
-      - "linux-signing"
 
 jobs:
   build-linux:
