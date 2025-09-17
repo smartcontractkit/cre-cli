@@ -20,10 +20,11 @@ import (
 )
 
 type Inputs struct {
-	WorkflowName  string `validate:"workflow_name"`
-	WorkflowOwner string `validate:"workflow_owner"`
-	WorkflowTag   string `validate:"omitempty,ascii,max=32"`
-	DonFamily     string `validate:"required"`
+	WorkflowName      string `validate:"workflow_name"`
+	WorkflowOwner     string `validate:"workflow_owner"`
+	WorkflowTag       string `validate:"omitempty,ascii,max=32"`
+	DonFamily         string `validate:"required"`
+	WorkflowOwnerType string `validate:"required"`
 
 	BinaryURL  string  `validate:"omitempty,http_url|eq="`
 	ConfigURL  *string `validate:"omitempty,http_url|eq="`
@@ -133,13 +134,14 @@ func (h *handler) ResolveInputs(args []string, v *viper.Viper) (Inputs, error) {
 	}
 
 	return Inputs{
-		WorkflowName:  h.settings.Workflow.UserWorkflowSettings.WorkflowName,
-		WorkflowOwner: h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress,
-		WorkflowTag:   h.settings.Workflow.UserWorkflowSettings.WorkflowName,
-		ConfigURL:     configURL,
-		SecretsURL:    secretsURL,
-		AutoStart:     v.GetBool("auto-start"),
-		DonFamily:     h.settings.Workflow.DevPlatformSettings.DonFamily,
+		WorkflowName:      h.settings.Workflow.UserWorkflowSettings.WorkflowName,
+		WorkflowOwner:     h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress,
+		WorkflowOwnerType: h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerType,
+		WorkflowTag:       h.settings.Workflow.UserWorkflowSettings.WorkflowName,
+		ConfigURL:         configURL,
+		SecretsURL:        secretsURL,
+		AutoStart:         v.GetBool("auto-start"),
+		DonFamily:         h.settings.Workflow.DevPlatformSettings.DonFamily,
 
 		WorkflowPath: args[0],
 		KeepAlive:    v.GetBool("keep-alive"),
@@ -180,7 +182,7 @@ func (h *handler) Execute() error {
 	}
 	h.wrc = wrc
 
-	if h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerType == constants.WorkflowOwnerTypeMSIG {
+	if h.inputs.WorkflowOwnerType == constants.WorkflowOwnerTypeMSIG {
 		halt, err := h.autoLinkMSIGAndExit()
 		if err != nil {
 			return fmt.Errorf("failed to check/handle MSIG owner link status: %w", err)
@@ -267,6 +269,7 @@ func (h *handler) tryAutoLink() error {
 
 	lkInputs := linkkey.Inputs{
 		WorkflowOwner:                   h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress,
+		WorkflowOwnerType:               h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerType,
 		WorkflowRegistryContractAddress: h.inputs.WorkflowRegistryContractAddress,
 		WorkflowOwnerLabel:              "",
 	}

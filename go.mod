@@ -377,7 +377,7 @@ require (
 	gopkg.in/guregu/null.v4 v4.0.0 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	gotest.tools/v3 v3.5.2 // indirect
-	nhooyr.io/websocket v1.8.14 // indirect
+	nhooyr.io/websocket v1.8.10 // indirect
 	pgregory.net/rapid v1.1.0 // indirect
 	sigs.k8s.io/yaml v1.4.0 // indirect
 )

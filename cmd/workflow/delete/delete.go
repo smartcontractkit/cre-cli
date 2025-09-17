@@ -27,9 +27,10 @@ import (
 )
 
 type Inputs struct {
-	WorkflowName     string `validate:"workflow_name"`
-	WorkflowOwner    string `validate:"workflow_owner"`
-	SkipConfirmation bool
+	WorkflowName      string `validate:"workflow_name"`
+	WorkflowOwner     string `validate:"workflow_owner"`
+	WorkflowOwnerType string `validate:"required"`
+	SkipConfirmation  bool
 
 	WorkflowRegistryContractAddress       string `validate:"required"`
 	WorkflowRegistryContractChainselector uint64 `validate:"required"`
@@ -92,6 +93,7 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 	return Inputs{
 		WorkflowName:                          h.settings.Workflow.UserWorkflowSettings.WorkflowName,
 		WorkflowOwner:                         h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress,
+		WorkflowOwnerType:                     h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerType,
 		SkipConfirmation:                      v.GetBool("skip-confirmation"),
 		WorkflowRegistryContractChainselector: h.environmentSet.WorkflowRegistryChainSelector,
 		WorkflowRegistryContractAddress:       h.environmentSet.WorkflowRegistryAddress,
@@ -143,7 +145,7 @@ func (h *handler) Execute() error {
 		h.log.Info().Msg("")
 	}
 
-	if h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerType == constants.WorkflowOwnerTypeMSIG {
+	if h.inputs.WorkflowOwnerType == constants.WorkflowOwnerTypeMSIG {
 		for _, wf := range allWorkflows {
 			txData, err := packDeleteTxData(wf.WorkflowId)
 			if err != nil {

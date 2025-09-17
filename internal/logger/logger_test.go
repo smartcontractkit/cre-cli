@@ -99,6 +99,7 @@ func TestLogger(t *testing.T) {
 			"WorkflowID":    [32]byte{1, 2, 3},
 			"WorkflowName":  "Sample Workflow",
 			"WorkflowOwner": "0x1234567890abcdef1234567890abcdef12345678",
+			"DonID":         12345,
 			"Raw":           map[string]interface{}{"key": "value"},
 		}
 		testLogEvent := seth.DecodedCommonLog{
@@ -117,6 +118,7 @@ func TestLogger(t *testing.T) {
 		assert.Contains(t, output, `"WorkflowID":"0102030000000000000000000000000000000000000000000000000000000000"`)
 		assert.Contains(t, output, `"WorkflowName":"Sample Workflow"`)
 		assert.Contains(t, output, `"WorkflowOwner":"0x1234567890abcdef1234567890abcdef12345678"`)
+		assert.Contains(t, output, `"DonID":12345`)
 		assert.Contains(t, output, `"Raw":{"key":"value"}`)
 	})
 

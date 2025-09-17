@@ -27,42 +27,16 @@ var workflowTemplatesContent embed.FS
 
 const SecretsFileName = "secrets.yaml"
 
-type TemplateLanguage string
-
-const (
-	TemplateLangGo TemplateLanguage = "go"
-	TemplateLangTS TemplateLanguage = "typescript"
-)
-
 type WorkflowTemplate struct {
 	Folder string
 	Title  string
 	ID     uint32
-	Lang   TemplateLanguage
 }
 
-type LanguageTemplate struct {
-	Title     string
-	Lang      TemplateLanguage
-	Workflows []WorkflowTemplate
-}
-
-var languageTemplates = []LanguageTemplate{
-	{
-		Title: "Golang",
-		Lang:  TemplateLangGo,
-		Workflows: []WorkflowTemplate{
-			{Folder: "porExampleDev", Title: "Development PoR Example to understand capabilities and simulate workflows", ID: 1},
-			{Folder: "blankTemplate", Title: "New Workflow (blank)", ID: 2},
-		},
-	},
-	{
-		Title: "Typescript",
-		Lang:  TemplateLangTS,
-		Workflows: []WorkflowTemplate{
-			{Folder: "typescriptSimpleExample", Title: "Development Hello World example for a simple workflow", ID: 3},
-		},
-	},
+var workflowTemplates = []WorkflowTemplate{
+	{Folder: "porExampleDev", Title: "Development PoR Example to understand capabilities and simulate workflows", ID: 1},
+	{Folder: "blankTemplate", Title: "New Workflow (blank)", ID: 2},
+	{Folder: "typescriptSimpleExample", Title: "Typescript Development Hello World example to demonstrate simple workflow", ID: 3},
 }
 
 type Inputs struct {
@@ -146,19 +120,14 @@ func (h *handler) Execute(inputs Inputs) error {
 		startDir = cwd
 	}
 
-	projectRoot, existingProjectLanguage, err := func(dir string) (string, string, error) {
+	projectRoot, err := func(dir string) (string, error) {
 		for {
 			if h.pathExists(filepath.Join(dir, constants.DefaultProjectSettingsFileName)) {
-
-				if h.pathExists(filepath.Join(dir, constants.DefaultIsGoFileName)) {
-					return dir, "Golang", nil
-				}
-
-				return dir, "Typescript", nil
+				return dir, nil
 			}
 			parent := filepath.Dir(dir)
 			if parent == dir {
-				return "", "", fmt.Errorf("no existing project found")
+				return "", fmt.Errorf("no existing project found")
 			}
 			dir = parent
 		}
@@ -198,40 +167,16 @@ func (h *handler) Execute(inputs Inputs) error {
 	}
 
 	var tpl WorkflowTemplate
-	var selectedLanguageTemplate LanguageTemplate
-	var workflowTemplates []WorkflowTemplate
 	if inputs.TemplateID != 0 {
 		var findErr error
-		tpl, selectedLanguageTemplate, findErr = h.getWorkflowTemplateByID(inputs.TemplateID)
+		tpl, findErr = h.getWorkflowTemplateByID(inputs.TemplateID)
 		if findErr != nil {
 			return fmt.Errorf("invalid template ID %d: %w", inputs.TemplateID, findErr)
 		}
 	} else {
-		if existingProjectLanguage != "" {
-			var templateErr error
-			selectedLanguageTemplate, templateErr = h.getLanguageTemplateByTitle(existingProjectLanguage)
-			workflowTemplates = selectedLanguageTemplate.Workflows
-
-			if templateErr != nil {
-				return fmt.Errorf("invalid template %s: %w", existingProjectLanguage, templateErr)
-			}
-		}
-
-		if len(workflowTemplates) < 1 {
-			languageTitles := h.extractLanguageTitles(languageTemplates)
-			if err := prompt.SelectPrompt(h.stdin, "What language do you want to use?", languageTitles, func(choice string) error {
-				selected, selErr := h.getLanguageTemplateByTitle(choice)
-				selectedLanguageTemplate = selected
-				workflowTemplates = selectedLanguageTemplate.Workflows
-				return selErr
-			}); err != nil {
-				return fmt.Errorf("language selection aborted: %w", err)
-			}
-		}
-
-		workflowTitles := h.extractWorkflowTitles(workflowTemplates)
-		if err := prompt.SelectPrompt(h.stdin, "Pick a workflow template", workflowTitles, func(choice string) error {
-			selected, selErr := h.getWorkflowTemplateByTitle(choice, workflowTemplates)
+		titles := h.extractTitles(workflowTemplates)
+		if err := prompt.SelectPrompt(h.stdin, "Pick a workflow template", titles, func(choice string) error {
+			selected, selErr := h.getWorkflowTemplateByTitle(choice)
 			tpl = selected
 			return selErr
 		}); err != nil {
@@ -282,15 +227,13 @@ func (h *handler) Execute(inputs Inputs) error {
 		return fmt.Errorf("failed to scaffold workflow: %w", err)
 	}
 
-	if selectedLanguageTemplate.Lang == TemplateLangGo {
-		// Generate contracts at project level if template has contracts
-		if err := h.generateContractsTemplate(projectRoot, tpl, projectName); err != nil {
-			return fmt.Errorf("failed to scaffold contracts: %w", err)
-		}
+	// Generate contracts at project level if template has contracts
+	if err := h.generateContractsTemplate(projectRoot, tpl, projectName); err != nil {
+		return fmt.Errorf("failed to scaffold contracts: %w", err)
+	}
 
-		if err := initializeGoModule(h.log, projectRoot, projectName); err != nil {
-			return fmt.Errorf("failed to initialize Go module: %w", err)
-		}
+	if err := initializeGoModule(h.log, projectRoot, projectName); err != nil {
+		return fmt.Errorf("failed to initialize Go module: %w", err)
 	}
 
 	_, err = settings.GenerateWorkflowSettingsFile(workflowDirectory, workflowName, "(optional) Multi-signature contract address")
@@ -312,45 +255,15 @@ func (h *handler) Execute(inputs Inputs) error {
 	return nil
 }
 
-type TitledTemplate interface {
-	GetTitle() string
-}
-
-func (w WorkflowTemplate) GetTitle() string {
-	return w.Title
-}
-
-func (l LanguageTemplate) GetTitle() string {
-	return l.Title
-}
-
-func extractTitles[T TitledTemplate](templates []T) []string {
+func (h *handler) extractTitles(templates []WorkflowTemplate) []string {
 	titles := make([]string, len(templates))
 	for i, template := range templates {
-		titles[i] = template.GetTitle()
+		titles[i] = template.Title
 	}
 	return titles
 }
 
-func (h *handler) extractLanguageTitles(templates []LanguageTemplate) []string {
-	return extractTitles(templates)
-}
-
-func (h *handler) extractWorkflowTitles(templates []WorkflowTemplate) []string {
-	return extractTitles(templates)
-}
-
-func (h *handler) getLanguageTemplateByTitle(title string) (LanguageTemplate, error) {
-	for _, lang := range languageTemplates {
-		if lang.Title == title {
-			return lang, nil
-		}
-	}
-
-	return LanguageTemplate{}, errors.New("language not found")
-}
-
-func (h *handler) getWorkflowTemplateByTitle(title string, workflowTemplates []WorkflowTemplate) (WorkflowTemplate, error) {
+func (h *handler) getWorkflowTemplateByTitle(title string) (WorkflowTemplate, error) {
 	for _, template := range workflowTemplates {
 		if template.Title == title {
 			return template, nil
@@ -470,16 +383,13 @@ func (h *handler) generateWorkflowTemplate(workingDirectory string, template Wor
 	return walkErr
 }
 
-func (h *handler) getWorkflowTemplateByID(id uint32) (WorkflowTemplate, LanguageTemplate, error) {
-	for _, lang := range languageTemplates {
-		for _, tpl := range lang.Workflows {
-			if tpl.ID == id {
-				return tpl, lang, nil
-			}
+func (h *handler) getWorkflowTemplateByID(id uint32) (WorkflowTemplate, error) {
+	for _, tpl := range workflowTemplates {
+		if tpl.ID == id {
+			return tpl, nil
 		}
 	}
-
-	return WorkflowTemplate{}, LanguageTemplate{}, fmt.Errorf("template with ID %d not found", id)
+	return WorkflowTemplate{}, fmt.Errorf("template with ID %d not found", id)
 }
 
 func (h *handler) ensureProjectDirectoryExists(dirPath string) error {

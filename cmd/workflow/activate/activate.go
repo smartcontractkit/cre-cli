@@ -27,6 +27,7 @@ type Inputs struct {
 	WorkflowName                          string `validate:"workflow_name"`
 	WorkflowOwner                         string `validate:"workflow_owner"`
 	DonFamily                             string `validate:"required"`
+	WorkflowOwnerType                     string `validate:"required"`
 	WorkflowRegistryContractAddress       string `validate:"required"`
 	WorkflowRegistryContractChainselector uint64 `validate:"required"`
 }
@@ -82,6 +83,7 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 		WorkflowName:                          h.settings.Workflow.UserWorkflowSettings.WorkflowName,
 		WorkflowOwner:                         h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress,
 		DonFamily:                             h.settings.Workflow.DevPlatformSettings.DonFamily,
+		WorkflowOwnerType:                     h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerType,
 		WorkflowRegistryContractAddress:       h.environmentsSet.WorkflowRegistryAddress,
 		WorkflowRegistryContractChainselector: h.environmentsSet.WorkflowRegistryChainSelector,
 	}, nil
@@ -138,7 +140,7 @@ func (h *handler) Execute() error {
 		Str("WorkflowID", hex.EncodeToString(latest.WorkflowId[:])).
 		Msg("Activating workflow")
 
-	if h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerType == constants.WorkflowOwnerTypeMSIG {
+	if h.inputs.WorkflowOwnerType == constants.WorkflowOwnerTypeMSIG {
 		txData, err := packActivateTxData(latest.WorkflowId, h.inputs.DonFamily)
 		if err != nil {
 			return fmt.Errorf("failed to pack activate tx: %w", err)

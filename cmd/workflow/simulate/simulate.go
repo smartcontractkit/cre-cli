@@ -121,9 +121,17 @@ func (h *handler) ResolveInputs(args []string, v *viper.Viper, creSettings *sett
 	if err != nil {
 		return Inputs{}, fmt.Errorf("failed to create eth client: %w", err)
 	}
-	pk, err := crypto.HexToECDSA(creSettings.User.EthPrivateKey)
-	if err != nil {
-		return Inputs{}, fmt.Errorf("failed to create private key: %w", err)
+	broadcast := v.GetBool("broadcast")
+
+	var pk *ecdsa.PrivateKey
+	if broadcast {
+		if strings.TrimSpace(creSettings.User.EthPrivateKey) == "" {
+			return Inputs{}, fmt.Errorf("broadcast is enabled but no private key is configured")
+		}
+		pk, err = crypto.HexToECDSA(creSettings.User.EthPrivateKey)
+		if err != nil {
+			return Inputs{}, fmt.Errorf("failed to create private key: %w", err)
+		}
 	}
 
 	return Inputs{
@@ -131,7 +139,7 @@ func (h *handler) ResolveInputs(args []string, v *viper.Viper, creSettings *sett
 		ConfigPath:     v.GetString("config"),
 		SecretsPath:    v.GetString("secrets"),
 		EngineLogs:     v.GetBool("engine-logs"),
-		Broadcast:      v.GetBool("broadcast"),
+		Broadcast:      broadcast,
 		EthClient:      ethClient,
 		EthPrivateKey:  pk,
 		WorkflowName:   creSettings.Workflow.UserWorkflowSettings.WorkflowName,

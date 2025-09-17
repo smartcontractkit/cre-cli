@@ -22,12 +22,11 @@ func TestCompileCmd(t *testing.T) {
 	t.Run("input errors", func(t *testing.T) {
 		gist.SetupGitHubAPIMocks(t, "valid-token", "foo")
 		tests := []struct {
-			name              string
-			cmd               Inputs
-			wantKeys          []string
-			wantDetails       []string
-			WorkflowOwnerType string
-			wantError         bool
+			name        string
+			cmd         Inputs
+			wantKeys    []string
+			wantDetails []string
+			wantError   bool
 		}{
 			{
 				name:        "Required WorkflowPath",
@@ -50,39 +49,39 @@ func TestCompileCmd(t *testing.T) {
 				cmd: Inputs{
 					WorkflowPath:                          "testdata/test_workflow.yaml",
 					ConfigPath:                            "nonexistent.yaml",
+					WorkflowOwnerType:                     constants.WorkflowOwnerTypeEOA,
 					WorkflowRegistryContractAddress:       "0x1234567890123456789012345678901234567890",
 					WorkflowRegistryContractChainselector: 1234567890,
 				},
-				WorkflowOwnerType: constants.WorkflowOwnerTypeEOA,
-				wantError:         true,
-				wantKeys:          []string{"Inputs.ConfigPath"},
-				wantDetails:       []string{"--config must be a valid existing file: nonexistent.yaml"},
+				wantError:   true,
+				wantKeys:    []string{"Inputs.ConfigPath"},
+				wantDetails: []string{"--config must be a valid existing file: nonexistent.yaml"},
 			},
 			{
 				name: "Non-ASCII ConfigPath",
 				cmd: Inputs{
 					WorkflowPath:                          "testdata/test_workflow.yaml",
 					ConfigPath:                            "./testdata/đuveč.yaml",
+					WorkflowOwnerType:                     constants.WorkflowOwnerTypeEOA,
 					WorkflowRegistryContractAddress:       "0x1234567890123456789012345678901234567890",
 					WorkflowRegistryContractChainselector: 1234567890,
 				},
-				WorkflowOwnerType: constants.WorkflowOwnerTypeEOA,
-				wantError:         true,
-				wantKeys:          []string{"Inputs.ConfigPath"},
-				wantDetails:       []string{"--config must contain only ASCII characters: ./testdata/đuveč.yaml"},
+				wantError:   true,
+				wantKeys:    []string{"Inputs.ConfigPath"},
+				wantDetails: []string{"--config must contain only ASCII characters: ./testdata/đuveč.yaml"},
 			},
 			{
 				name: "Non-ASCII OutputPath",
 				cmd: Inputs{
 					WorkflowPath:                          "testdata/test_workflow.yaml",
 					OutputPath:                            "outputŠČ.yaml",
+					WorkflowOwnerType:                     constants.WorkflowOwnerTypeEOA,
 					WorkflowRegistryContractAddress:       "0x1234567890123456789012345678901234567890",
 					WorkflowRegistryContractChainselector: 1234567890,
 				},
-				WorkflowOwnerType: constants.WorkflowOwnerTypeEOA,
-				wantError:         true,
-				wantKeys:          []string{"Inputs.OutputPath"},
-				wantDetails:       []string{"--output must contain only ASCII characters: outputŠČ.yaml"},
+				wantError:   true,
+				wantKeys:    []string{"Inputs.OutputPath"},
+				wantDetails: []string{"--output must contain only ASCII characters: outputŠČ.yaml"},
 			},
 			{
 				name: "Valid Input Without Gist",
@@ -93,13 +92,13 @@ func TestCompileCmd(t *testing.T) {
 					WorkflowPath:                          filepath.Join("testdata", "basic_workflow", "main.go"),
 					ConfigPath:                            filepath.Join("testdata", "basic_workflow", "config.yml"),
 					OutputPath:                            "output.yaml",
+					WorkflowOwnerType:                     constants.WorkflowOwnerTypeEOA,
 					WorkflowRegistryContractAddress:       "0x1234567890123456789012345678901234567890",
 					WorkflowRegistryContractChainselector: 1234567890,
 				},
-				WorkflowOwnerType: constants.WorkflowOwnerTypeEOA,
-				wantError:         false,
-				wantKeys:          []string{},
-				wantDetails:       []string{},
+				wantError:   false,
+				wantKeys:    []string{},
+				wantDetails: []string{},
 			},
 		}
 
@@ -111,7 +110,6 @@ func TestCompileCmd(t *testing.T) {
 				ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
 				handler := newHandler(ctx, buf)
 				handler.inputs = tt.cmd
-				ctx.Settings.Workflow.UserWorkflowSettings.WorkflowOwnerType = tt.WorkflowOwnerType
 				err := handler.ValidateInputs()
 
 				if tt.wantError {
@@ -176,24 +174,23 @@ func TestCompileCmd(t *testing.T) {
 			gist.SetupGistAPIMock(t, "valid-token", "foo")
 
 			tests := []struct {
-				inputs            Inputs
-				wantErr           string
-				compilationErr    string
-				WorkflowOwnerType string
+				inputs         Inputs
+				wantErr        string
+				compilationErr string
 			}{
 				{
 					inputs: Inputs{
 						WorkflowName:                          "test_workflow",
 						WorkflowOwner:                         chainsim.TestAddress,
+						WorkflowOwnerType:                     constants.WorkflowOwnerTypeEOA,
 						DonFamily:                             "test_label",
 						WorkflowPath:                          filepath.Join("testdata", "malformed_workflow", "main.go"),
 						OutputPath:                            outputPath,
 						WorkflowRegistryContractAddress:       "0x1234567890123456789012345678901234567890",
 						WorkflowRegistryContractChainselector: 1234567890,
 					},
-					WorkflowOwnerType: constants.WorkflowOwnerTypeEOA,
-					wantErr:           "failed to compile workflow: exit status 1",
-					compilationErr:    "undefined: sdk.RemovedFunctionThatFailsCompilation",
+					wantErr:        "failed to compile workflow: exit status 1",
+					compilationErr: "undefined: sdk.RemovedFunctionThatFailsCompilation",
 				},
 			}
 
@@ -205,7 +202,6 @@ func TestCompileCmd(t *testing.T) {
 					ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
 					handler := newHandler(ctx, buf)
 					handler.inputs = tt.inputs
-					ctx.Settings.Workflow.UserWorkflowSettings.WorkflowOwnerType = tt.WorkflowOwnerType
 					err := handler.ValidateInputs()
 					require.NoError(t, err)
 
@@ -224,9 +220,6 @@ func TestCompileCmd(t *testing.T) {
 			simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
 			defer simulatedEnvironment.Close()
 
-			ctx, _ := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
-			ctx.Settings.Workflow.UserWorkflowSettings.WorkflowOwnerType = constants.WorkflowOwnerTypeEOA
-
 			httpmock.Activate()
 			t.Cleanup(httpmock.DeactivateAndReset)
 			gist.SetupGistAPIMock(t, "valid-token", "foo")
@@ -234,12 +227,13 @@ func TestCompileCmd(t *testing.T) {
 			err := runCompile(simulatedEnvironment, Inputs{
 				WorkflowName:                          "test_workflow",
 				WorkflowOwner:                         chainsim.TestAddress,
+				WorkflowOwnerType:                     constants.WorkflowOwnerTypeEOA,
 				DonFamily:                             "test_label",
 				WorkflowPath:                          filepath.Join("testdata", "configless_workflow", "main.go"),
 				OutputPath:                            outputPath,
 				WorkflowRegistryContractAddress:       "0x1234567890123456789012345678901234567890",
 				WorkflowRegistryContractChainselector: 1234567890,
-			}, constants.WorkflowOwnerTypeEOA)
+			})
 			defer os.Remove(outputPath)
 
 			require.NoError(t, err)
@@ -252,13 +246,14 @@ func TestCompileCmd(t *testing.T) {
 			err := runCompile(simulatedEnvironment, Inputs{
 				WorkflowName:                          "test_workflow",
 				WorkflowOwner:                         chainsim.TestAddress,
+				WorkflowOwnerType:                     constants.WorkflowOwnerTypeEOA,
 				DonFamily:                             "test_label",
 				WorkflowPath:                          filepath.Join("testdata", "basic_workflow", "main.go"),
 				OutputPath:                            outputPath,
 				ConfigPath:                            filepath.Join("testdata", "basic_workflow", "config.yml"),
 				WorkflowRegistryContractAddress:       "0x1234567890123456789012345678901234567890",
 				WorkflowRegistryContractChainselector: 1234567890,
-			}, constants.WorkflowOwnerTypeEOA)
+			})
 			defer os.Remove(outputPath)
 
 			require.NoError(t, err)
@@ -276,12 +271,13 @@ func TestCompileCmd(t *testing.T) {
 			err := runCompile(simulatedEnvironment, Inputs{
 				WorkflowName:                          "test_workflow",
 				WorkflowOwner:                         chainsim.TestAddress,
+				WorkflowOwnerType:                     constants.WorkflowOwnerTypeEOA,
 				DonFamily:                             "test_label",
 				WorkflowPath:                          filepath.Join("testdata", "missing_go_mod", "main.go"),
 				OutputPath:                            outputPath,
 				WorkflowRegistryContractAddress:       "0x1234567890123456789012345678901234567890",
 				WorkflowRegistryContractChainselector: 1234567890,
-			}, constants.WorkflowOwnerTypeEOA)
+			})
 			defer os.Remove(outputPath)
 
 			require.NoError(t, err)
@@ -299,12 +295,13 @@ func TestCompileCreatesBase64EncodedFile(t *testing.T) {
 		err := runCompile(simulatedEnvironment, Inputs{
 			WorkflowName:                          "test_workflow",
 			WorkflowOwner:                         chainsim.TestAddress,
+			WorkflowOwnerType:                     constants.WorkflowOwnerTypeEOA,
 			DonFamily:                             "test_label",
 			WorkflowPath:                          filepath.Join("testdata", "basic_workflow", "main.go"),
 			ConfigPath:                            filepath.Join("testdata", "basic_workflow", "config.yml"),
 			WorkflowRegistryContractAddress:       "0x1234567890123456789012345678901234567890",
 			WorkflowRegistryContractChainselector: 1234567890,
-		}, constants.WorkflowOwnerTypeEOA)
+		})
 		defer os.Remove(expectedOutputPath)
 
 		require.NoError(t, err)
@@ -349,13 +346,14 @@ func TestCompileCreatesBase64EncodedFile(t *testing.T) {
 				err := runCompile(simulatedEnvironment, Inputs{
 					WorkflowName:                          "test_workflow",
 					WorkflowOwner:                         chainsim.TestAddress,
+					WorkflowOwnerType:                     constants.WorkflowOwnerTypeEOA,
 					DonFamily:                             "test_label",
 					WorkflowPath:                          filepath.Join("testdata", "basic_workflow", "main.go"),
 					ConfigPath:                            filepath.Join("testdata", "basic_workflow", "config.yml"),
 					OutputPath:                            tt.outputPath,
 					WorkflowRegistryContractAddress:       "0x1234567890123456789012345678901234567890",
 					WorkflowRegistryContractChainselector: 1234567890,
-				}, constants.WorkflowOwnerTypeEOA)
+				})
 				defer os.Remove(tt.expectedOutput)
 
 				require.NoError(t, err)
@@ -370,13 +368,14 @@ func TestCompileCreatesBase64EncodedFile(t *testing.T) {
 		err := runCompile(simulatedEnvironment, Inputs{
 			WorkflowName:                          "test_workflow",
 			WorkflowOwner:                         chainsim.TestAddress,
+			WorkflowOwnerType:                     constants.WorkflowOwnerTypeEOA,
 			DonFamily:                             "test_label",
 			WorkflowPath:                          filepath.Join("testdata", "basic_workflow", "main.go"),
 			ConfigPath:                            filepath.Join("testdata", "basic_workflow", "config.yml"),
 			OutputPath:                            outputPath,
 			WorkflowRegistryContractAddress:       "0x1234567890123456789012345678901234567890",
 			WorkflowRegistryContractChainselector: 1234567890,
-		}, constants.WorkflowOwnerTypeEOA)
+		})
 		defer os.Remove(outputPath)
 
 		require.NoError(t, err)
@@ -392,9 +391,8 @@ func TestCompileCreatesBase64EncodedFile(t *testing.T) {
 	})
 }
 
-func runCompile(simulatedEnvironment *chainsim.SimulatedEnvironment, inputs Inputs, ownerType string) error {
+func runCompile(simulatedEnvironment *chainsim.SimulatedEnvironment, inputs Inputs) error {
 	ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
-	ctx.Settings.Workflow.UserWorkflowSettings.WorkflowOwnerType = ownerType
 	handler := newHandler(ctx, buf)
 	handler.inputs = inputs
 	err := handler.ValidateInputs()

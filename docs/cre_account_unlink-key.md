@@ -13,8 +13,9 @@ cre account unlink-key [flags]
 ### Options
 
 ```
-  -h, --help       help for unlink-key
-      --unsigned   If set, the command will return the raw transaction instead of sending it to the network [EXPERIMENTAL]
+  -a, --action-id uint32   ID of the unlink action option to use
+  -h, --help               help for unlink-key
+      --unsigned           If set, the command will return the raw transaction instead of sending it to the network [EXPERIMENTAL]
 ```
 
 ### Options inherited from parent commands

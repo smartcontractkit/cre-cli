@@ -28,7 +28,7 @@ func (h *handler) upsert() error {
 }
 
 func (h *handler) submitWorkflow(params client.RegisterWorkflowV2Parameters) error {
-	if h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerType == constants.WorkflowOwnerTypeMSIG {
+	if h.inputs.WorkflowOwnerType == constants.WorkflowOwnerTypeMSIG {
 		return h.handleMSIGFlow(params)
 	}
 	return h.handleEOAFlow(params)

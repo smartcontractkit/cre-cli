@@ -14,6 +14,9 @@ import (
 
 // Config names (YAML field paths)
 const (
+	// TODO: Remove DONIdSettingName once fully replaced with DONFamilySettingName
+	DONIdSettingName = "dev-platform.don-id"
+
 	DONFamilySettingName      = "dev-platform.don-family"
 	WorkflowOwnerSettingName  = "user-workflow.workflow-owner-address"
 	WorkflowNameSettingName   = "user-workflow.workflow-name"

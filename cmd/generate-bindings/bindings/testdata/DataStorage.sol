@@ -49,10 +49,6 @@ contract DataStorage {
         return reserves;
     }
 
-    function getTupleReserves() external view returns (uint256 totalMinted, uint256 totalReserve) {
-        return (100, 200);
-    }
-
     // Write method: Stores a key-value pair
     function storeData(string calldata key, string calldata value) external {
         data[msg.sender][key] = value;

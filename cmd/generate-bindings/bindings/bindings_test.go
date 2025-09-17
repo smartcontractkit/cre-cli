@@ -220,63 +220,6 @@ func TestReadMethods(t *testing.T) {
 		require.Equal(t, expectedReserves[1].TotalMinted, decodedReserves[1].TotalMinted, "Second struct TotalMinted should match")
 		require.Equal(t, expectedReserves[1].TotalReserve, decodedReserves[1].TotalReserve, "Second struct TotalReserve should match")
 	})
-
-	t.Run("tuple returns", func(t *testing.T) {
-		client := &evm.Client{ChainSelector: anyChainSelector}
-		ds, err := datastorage.NewDataStorage(client, nil, &bindings.ContractInitOptions{})
-		require.NoError(t, err, "Failed to create DataStorage instance")
-
-		// Expected values that match the Solidity function: return (100, 200)
-		expectedTotalMinted := big.NewInt(100)
-		expectedTotalReserve := big.NewInt(200)
-
-		// Create ABI arguments for encoding the expected tuple return values
-		args := abi.Arguments{
-			{Name: "totalMinted", Type: abi.Type{T: abi.UintTy, Size: 256}},
-			{Name: "totalReserve", Type: abi.Type{T: abi.UintTy, Size: 256}},
-		}
-		encodedData, err := args.Pack(expectedTotalMinted, expectedTotalReserve)
-		require.NoError(t, err)
-
-		evmCap, err := evmmock.NewClientCapability(anyChainSelector, t)
-		require.NoError(t, err, "Failed to create EVM client capability")
-
-		evmCap.HeaderByNumber = func(_ context.Context, input *evm.HeaderByNumberRequest) (*evm.HeaderByNumberReply, error) {
-			header := &evm.HeaderByNumberReply{
-				Header: &evm.Header{
-					BlockNumber: valuespb.NewBigIntFromInt(big.NewInt(123456)),
-				},
-			}
-			return header, nil
-		}
-
-		evmCap.CallContract = func(_ context.Context, input *evm.CallContractRequest) (*evm.CallContractReply, error) {
-			reply := &evm.CallContractReply{
-				Data: encodedData,
-			}
-			return reply, nil
-		}
-
-		runtime := testutils.NewRuntime(t, map[string]string{})
-		reply := ds.GetTupleReserves(runtime, nil)
-		require.NotNil(t, reply, "GetTupleReserves should return a non-nil promise")
-
-		response, err := reply.Await()
-		require.NoError(t, err, "Awaiting GetTupleReserves reply should not return an error")
-		require.NotNil(t, response, "Response from GetTupleReserves should not be nil")
-
-		// Test the decode functionality for multiple named return values (tuple)
-		decodedOutput, err := ds.Codec.DecodeGetTupleReservesMethodOutput(response.Data)
-		require.NoError(t, err, "Decoding GetTupleReserves output should not return an error")
-
-		// Verify both return values are correctly decoded from the tuple
-		require.Equal(t, expectedTotalMinted, decodedOutput.TotalMinted, "TotalMinted should match expected value")
-		require.Equal(t, expectedTotalReserve, decodedOutput.TotalReserve, "TotalReserve should match expected value")
-
-		// Verify the structure has the correct field names from the ABI
-		require.NotNil(t, decodedOutput.TotalMinted, "TotalMinted field should be populated")
-		require.NotNil(t, decodedOutput.TotalReserve, "TotalReserve field should be populated")
-	})
 }
 
 func TestWriteReportMethods(t *testing.T) {

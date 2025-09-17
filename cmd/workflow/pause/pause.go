@@ -25,6 +25,7 @@ import (
 type Inputs struct {
 	WorkflowName                          string `validate:"workflow_name"`
 	WorkflowOwner                         string `validate:"workflow_owner"`
+	WorkflowOwnerType                     string `validate:"required"`
 	WorkflowRegistryContractAddress       string `validate:"required"`
 	WorkflowRegistryContractChainselector uint64 `validate:"required"`
 }
@@ -78,6 +79,7 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 	return Inputs{
 		WorkflowName:                          h.settings.Workflow.UserWorkflowSettings.WorkflowName,
 		WorkflowOwner:                         h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress,
+		WorkflowOwnerType:                     h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerType,
 		WorkflowRegistryContractChainselector: h.environmentsSet.WorkflowRegistryChainSelector,
 		WorkflowRegistryContractAddress:       h.environmentsSet.WorkflowRegistryAddress,
 	}, nil
@@ -123,7 +125,7 @@ func (h *handler) Execute() error {
 		return fmt.Errorf("no workflows found for name %q and owner %q", workflowName, workflowOwner.Hex())
 	}
 
-	if h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerType == constants.WorkflowOwnerTypeMSIG {
+	if h.inputs.WorkflowOwnerType == constants.WorkflowOwnerTypeMSIG {
 		txData, err := packBatchPauseTxData(workflowIDs)
 		if err != nil {
 			return fmt.Errorf("failed to pack batch pause tx: %w", err)

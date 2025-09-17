@@ -1,12 +1,6 @@
-# DO NOT CHANGE
 production-testnet:
-  hierarchy-test: Project
-  test-key: projectValue
   dev-platform:
     don-id: 1
-  user-workflow:
-    workflow-owner-address: ""
-    workflow-name: ""
   logging:
     seth-config-path: seth.toml
   contracts:
@@ -22,3 +16,5 @@ production-testnet:
       url: https://somethingElse.rpc.org
     - chain-selector: 16015286601757825753
       url: https://something.rpc.org
+  workflow_storage:
+    gist: {}

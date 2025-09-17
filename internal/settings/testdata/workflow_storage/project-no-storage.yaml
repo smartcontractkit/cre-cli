@@ -1,12 +1,6 @@
-# DO NOT CHANGE
 production-testnet:
-  hierarchy-test: Project
-  test-key: projectValue
   dev-platform:
     don-id: 1
-  user-workflow:
-    workflow-owner-address: ""
-    workflow-name: ""
   logging:
     seth-config-path: seth.toml
   contracts:

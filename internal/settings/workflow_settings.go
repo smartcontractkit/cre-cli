@@ -12,6 +12,8 @@ import (
 
 type WorkflowSettings struct {
 	DevPlatformSettings struct {
+		// TODO: Remove DonID once fully replaced with DonFamily
+		DonID     int    `mapstructure:"don-id" yaml:"don-id"`
 		DonFamily string `mapstructure:"don-family" yaml:"don-family"`
 	} `mapstructure:"dev-platform" yaml:"dev-platform"`
 	UserWorkflowSettings struct {
@@ -41,6 +43,14 @@ func loadWorkflowSettings(logger *zerolog.Logger, v *viper.Viper) (WorkflowSetti
 	}
 
 	var workflowSettings WorkflowSettings
+
+	// TODO: Remove DONIdSettingName once fully replaced with DONFamilySettingName
+	fullDonIDKey := fmt.Sprintf("%s.%s", target, DONIdSettingName)
+	if v.IsSet(fullDonIDKey) {
+		workflowSettings.DevPlatformSettings.DonID = int(v.GetInt(fullDonIDKey))
+	} else {
+		logger.Debug().Msgf("setting %q not found in target %q", DONIdSettingName, target)
+	}
 
 	workflowSettings.DevPlatformSettings.DonFamily = getSetting(DONFamilySettingName)
 
@@ -101,6 +111,12 @@ func flattenWorkflowSettingsToViper(v *viper.Viper, target string) error {
 		v.Set(SethConfigPathSettingName, sethPath)
 	}
 
+	// Manually flatten the DON id setting.
+	donIDKey := fmt.Sprintf("%s.%s", target, DONIdSettingName)
+	if v.IsSet(donIDKey) {
+		donID := v.GetInt(donIDKey)
+		v.Set(DONIdSettingName, donID)
+	}
 	// Manually flatten contracts.
 	contractsKey := fmt.Sprintf("%s.%s", target, "contracts")
 	if v.IsSet(contractsKey) {
