@@ -4,3 +4,4 @@
 
 # Root
 * @smartcontractkit/dev-services
+/install/public_key.asc @smartcontractkit/prodsec-public
