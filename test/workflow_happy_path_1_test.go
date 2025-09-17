@@ -221,7 +221,7 @@ func TestCLIWorkflowDeployWithEoa(t *testing.T) {
 	// Use linked Address3 + its key
 	require.NoError(t, createCliEnvFile(tc.EnvFile, constants.TestPrivateKey3), "failed to create env file")
 	require.NoError(t, createCliSettingsFile(tc, constants.TestAddress3, "workflow-name", testEthUrl), "failed to create cre config file")
-	require.NoError(t, createBlankProjectSettingFile(), "failed to create project.yaml")
+	require.NoError(t, createBlankProjectSettingFile(tc.ProjectDirectory+"project.yaml"), "failed to create project.yaml")
 	t.Cleanup(tc.Cleanup(t))
 
 	// Pre-baked registries from Anvil state dump
