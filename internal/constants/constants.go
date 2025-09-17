@@ -5,13 +5,9 @@ import (
 )
 
 const (
-	// TODO cleanup this later, we will not need all of these env vars with Viper
-
-	// Contract Names
 	WorkflowRegistryContractName     = "WorkflowRegistry"
 	CapabilitiesRegistryContractName = "CapabilitiesRegistry"
 
-	// Limits
 	MaxBinarySize                               = 20 * 1024 * 1024
 	MaxConfigSize                               = 5 * 1024 * 1024
 	MaxEncryptedSecretsSize                     = 5 * 1024 * 1024
@@ -20,7 +16,6 @@ const (
 	MaxVaultAllowlistDuration     time.Duration = 7 * 24 * time.Hour
 	DefaultVaultAllowlistDuration time.Duration = 2 * 24 * time.Hour // 90 days
 
-	// Logging Levels
 	DefaultSethLogLevel = "error"
 
 	// Default Values
@@ -47,11 +42,14 @@ const (
 	DefaultEnvFileName              = ".env"
 	DefaultIsGoFileName             = "go.mod"
 
-	CognitoTokenExchangePath = "/oauth2/token"
-	CognitoAuthRevokePath    = "/oauth2/revoke"
-	CognitoAuthRedirectURI   = "http://localhost:53682/callback"
-	CognitoAuthListenAddr    = "localhost:53682"
-	CreUiAuthPath            = "/auth/cli"
+	AuthAuthorizePath = "/authorize"
+	AuthTokenPath     = "/oauth/token"
+	AuthRevokePath    = "/oauth/revoke"
+	AuthBrowserLogout = "/v2/logout"
+
+	AuthRedirectURI = "http://localhost:53682/callback"
+	AuthListenAddr  = "localhost:53682"
+	CreUiAuthPath   = "/auth/cli"
 
 	WorkflowOwnerTypeEOA  = "EOA"
 	WorkflowOwnerTypeMSIG = "MSIG"

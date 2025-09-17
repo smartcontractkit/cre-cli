@@ -11,9 +11,12 @@ import (
 
 const testYAML = `ENVIRONMENTS:
   SANDBOX:
+    CRE_CLI_UI_URL: http://localhost:3000
+    CRE_CLI_AUTH_BASE: https://auth0.test
     CRE_CLI_COGNITO_URL: https://cognito.test
     CRE_CLI_CLIENT_ID: test-id
     CRE_CLI_GRAPHQL_URL: https://graphql.test
+    CRE_CLI_AUDIENCE: sandbox-aud
     CRE_CLI_USER_POOL_ID: pool-id
 
     CRE_CLI_WORKFLOW_REGISTRY_ADDRESS: "0x51D3acf4526e014deBf9884159A57f63Fc0Ca49D"
@@ -23,9 +26,12 @@ const testYAML = `ENVIRONMENTS:
     CRE_CLI_CAPABILITIES_REGISTRY_CHAIN_SELECTOR: 16015286601757825753
 
   STAGING:
+    CRE_CLI_UI_URL: https://staging.ui
+    CRE_CLI_AUTH_BASE: https://staging.auth0
     CRE_CLI_COGNITO_URL: https://staging.cognito
     CRE_CLI_CLIENT_ID: staging-id
     CRE_CLI_GRAPHQL_URL: https://staging.graphql
+    CRE_CLI_AUDIENCE: staging-aud
     CRE_CLI_USER_POOL_ID: staging-pool
 
     CRE_CLI_WORKFLOW_REGISTRY_ADDRESS: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -51,8 +57,8 @@ func TestLoadEnvironmentFile(t *testing.T) {
 	if !ok {
 		t.Fatal("SANDBOX environment missing")
 	}
-	if sbx.CognitoURL != "https://cognito.test" {
-		t.Errorf("CognitoURL = %q; want https://cognito.test", sbx.CognitoURL)
+	if sbx.AuthBase != "https://auth0.test" {
+		t.Errorf("AuthBase = %q; want https://auth0.test", sbx.AuthBase)
 	}
 	if sbx.ClientID != "test-id" {
 		t.Errorf("ClientID = %q; want test-id", sbx.ClientID)
@@ -60,8 +66,8 @@ func TestLoadEnvironmentFile(t *testing.T) {
 	if sbx.GraphQLURL != "https://graphql.test" {
 		t.Errorf("GraphQLURL = %q; want https://graphql.test", sbx.GraphQLURL)
 	}
-	if sbx.UserPoolID != "pool-id" {
-		t.Errorf("UserPoolID = %q; want pool-id", sbx.UserPoolID)
+	if sbx.Audience != "sandbox-aud" {
+		t.Errorf("Audience = %q; want sandbox-aud", sbx.Audience)
 	}
 
 	if sbx.WorkflowRegistryAddress != "0x51D3acf4526e014deBf9884159A57f63Fc0Ca49D" {
@@ -81,10 +87,11 @@ func TestLoadEnvironmentFile(t *testing.T) {
 func TestNewEnvironmentSet_FallbackAndOverrides(t *testing.T) {
 	ff := &fileFormat{Envs: map[string]EnvironmentSet{
 		"SANDBOX": {
-			CognitoURL: "b",
+			UIURL:      "a",
+			AuthBase:   "b",
 			ClientID:   "c",
 			GraphQLURL: "d",
-			UserPoolID: "e",
+			Audience:   "aa",
 
 			WorkflowRegistryAddress:           "0xsandbox_wr",
 			WorkflowRegistryChainSelector:     101,
@@ -92,10 +99,11 @@ func TestNewEnvironmentSet_FallbackAndOverrides(t *testing.T) {
 			CapabilitiesRegistryChainSelector: 201,
 		},
 		"STAGING": {
-			CognitoURL: "g",
+			UIURL:      "f",
+			AuthBase:   "g",
 			ClientID:   "h",
 			GraphQLURL: "i",
-			UserPoolID: "j",
+			Audience:   "bb",
 
 			WorkflowRegistryAddress:           "0xstaging_wr",
 			WorkflowRegistryChainSelector:     111,
@@ -104,10 +112,22 @@ func TestNewEnvironmentSet_FallbackAndOverrides(t *testing.T) {
 		},
 	}}
 
-	t.Setenv(EnvVarCognitoURL, "")
+	t.Setenv(EnvVarAuthBase, "")
 	t.Setenv(EnvVarClientID, "")
 	t.Setenv(EnvVarGraphQLURL, "")
-	t.Setenv(EnvVarUserPoolID, "")
+	t.Setenv(EnvVarAudience, "")
+
+	set := NewEnvironmentSet(ff, "SANDBOX")
+	if set.UIURL != "a" {
+		t.Errorf("fallback UIURL = %q; want a", set.UIURL)
+	}
+	if set.AuthBase != "b" {
+		t.Errorf("fallback AuthBase = %q; want b", set.AuthBase)
+	}
+	if set.Audience != "aa" {
+		t.Errorf("fallback Audience = %q; want aa", set.Audience)
+	}
+	t.Setenv(EnvVarAudience, "")
 	t.Setenv(EnvVarWorkflowRegistryAddress, "")
 	t.Setenv(EnvVarCapabilitiesRegistryAddress, "")
 	t.Setenv(EnvVarWorkflowRegistryChainSelector, "")
@@ -131,6 +151,8 @@ func TestNewEnvironmentSet_FallbackAndOverrides(t *testing.T) {
 	}
 
 	t.Setenv(EnvVarClientID, "override-id")
+	t.Setenv(EnvVarAuthBase, "override-auth")
+	t.Setenv(EnvVarAudience, "override-aud")
 	t.Setenv(EnvVarWorkflowRegistryAddress, "0xoverride_wr")
 	t.Setenv(EnvVarCapabilitiesRegistryAddress, "0xoverride_cap")
 	t.Setenv(EnvVarWorkflowRegistryChainSelector, "123456")
@@ -139,6 +161,12 @@ func TestNewEnvironmentSet_FallbackAndOverrides(t *testing.T) {
 	set3 := NewEnvironmentSet(ff, "STAGING")
 	if set3.ClientID != "override-id" {
 		t.Errorf("overridden ClientID = %q; want override-id", set3.ClientID)
+	}
+	if set3.AuthBase != "override-auth" {
+		t.Errorf("overridden AuthBase = %q; want override-auth", set3.AuthBase)
+	}
+	if set3.Audience != "override-aud" {
+		t.Errorf("overridden Audience = %q; want override-aud", set3.Audience)
 	}
 	if set3.WorkflowRegistryAddress != "0xoverride_wr" {
 		t.Errorf("WorkflowRegistryAddress = %q; want 0xoverride_wr", set3.WorkflowRegistryAddress)

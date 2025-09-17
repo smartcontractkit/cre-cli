@@ -13,10 +13,10 @@ const (
 	EnvVarEnv = "CRE_CLI_ENV"
 
 	EnvVarUIURL           = "CRE_CLI_UI_URL"
-	EnvVarCognitoURL      = "CRE_CLI_COGNITO_URL"
+	EnvVarAuthBase        = "CRE_CLI_AUTH_BASE"
 	EnvVarClientID        = "CRE_CLI_CLIENT_ID"
 	EnvVarGraphQLURL      = "CRE_CLI_GRAPHQL_URL"
-	EnvVarUserPoolID      = "CRE_CLI_USER_POOL_ID"
+	EnvVarAudience        = "CRE_CLI_AUDIENCE"
 	EnvVarVaultGatewayURL = "CRE_VAULT_DON_GATEWAY_URL"
 
 	EnvVarWorkflowRegistryAddress           = "CRE_CLI_WORKFLOW_REGISTRY_ADDRESS"
@@ -24,7 +24,7 @@ const (
 	EnvVarCapabilitiesRegistryAddress       = "CRE_CLI_CAPABILITIES_REGISTRY_ADDRESS"
 	EnvVarCapabilitiesRegistryChainSelector = "CRE_CLI_CAPABILITIES_REGISTRY_CHAIN_SELECTOR"
 
-	DefaultEnv = "STAGING"
+	DefaultEnv = "SANDBOX"
 )
 
 //go:embed environments.yaml
@@ -32,10 +32,10 @@ var envFileContent embed.FS
 
 type EnvironmentSet struct {
 	UIURL      string `yaml:"CRE_CLI_UI_URL"`
-	CognitoURL string `yaml:"CRE_CLI_COGNITO_URL"`
+	AuthBase   string `yaml:"CRE_CLI_AUTH_BASE"`
 	ClientID   string `yaml:"CRE_CLI_CLIENT_ID"`
 	GraphQLURL string `yaml:"CRE_CLI_GRAPHQL_URL"`
-	UserPoolID string `yaml:"CRE_CLI_USER_POOL_ID"`
+	Audience   string `yaml:"CRE_CLI_AUDIENCE"`
 	GatewayURL string `yaml:"CRE_VAULT_DON_GATEWAY_URL"`
 
 	WorkflowRegistryAddress           string `yaml:"CRE_CLI_WORKFLOW_REGISTRY_ADDRESS"`
@@ -68,8 +68,8 @@ func NewEnvironmentSet(ff *fileFormat, envName string) *EnvironmentSet {
 	if v := os.Getenv(EnvVarUIURL); v != "" {
 		set.UIURL = v
 	}
-	if v := os.Getenv(EnvVarCognitoURL); v != "" {
-		set.CognitoURL = v
+	if v := os.Getenv(EnvVarAuthBase); v != "" {
+		set.AuthBase = v
 	}
 	if v := os.Getenv(EnvVarClientID); v != "" {
 		set.ClientID = v
@@ -77,8 +77,8 @@ func NewEnvironmentSet(ff *fileFormat, envName string) *EnvironmentSet {
 	if v := os.Getenv(EnvVarGraphQLURL); v != "" {
 		set.GraphQLURL = v
 	}
-	if v := os.Getenv(EnvVarUserPoolID); v != "" {
-		set.UserPoolID = v
+	if v := os.Getenv(EnvVarAudience); v != "" {
+		set.Audience = v
 	}
 	if v := os.Getenv(EnvVarVaultGatewayURL); v != "" {
 		set.GatewayURL = v

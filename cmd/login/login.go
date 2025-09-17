@@ -2,7 +2,10 @@ package login
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
 	"embed"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -28,7 +31,6 @@ import (
 
 var (
 	httpClient  = &http.Client{Timeout: 10 * time.Second}
-	tokenURL    = ""
 	errorPage   = "htmlPages/error.html"
 	successPage = "htmlPages/success.html"
 	stylePage   = "htmlPages/output.css"
@@ -54,8 +56,10 @@ func New(runtimeCtx *runtime.Context) *cobra.Command {
 }
 
 type handler struct {
-	environmentSet *environments.EnvironmentSet
-	log            *zerolog.Logger
+	environmentSet   *environments.EnvironmentSet
+	log              *zerolog.Logger
+	lastPKCEVerifier string
+	lastState        string
 }
 
 func newHandler(ctx *runtime.Context) *handler {
@@ -105,9 +109,16 @@ func (h *handler) startAuthFlow() (string, error) {
 		}
 	}()
 
-	authURL := h.buildAuthURL()
+	verifier, challenge, err := generatePKCE()
+	if err != nil {
+		return "", err
+	}
+	h.lastPKCEVerifier = verifier
+	h.lastState = randomState()
+
+	authURL := h.buildAuthURL(challenge, h.lastState)
 	h.log.Info().Msgf("Opening browser to %s", authURL)
-	if err := openBrowser(authURL); err != nil {
+	if err := openBrowser(authURL, rt.GOOS); err != nil {
 		h.log.Warn().Err(err).Msg("could not open browser, please navigate manually")
 	}
 
@@ -124,9 +135,9 @@ func (h *handler) setupServer(codeCh chan string) (*http.Server, net.Listener, e
 	mux.HandleFunc("/callback", h.callbackHandler(codeCh))
 
 	// TODO: Add a fallback port in case the default port is in use
-	listener, err := net.Listen("tcp", constants.CognitoAuthListenAddr)
+	listener, err := net.Listen("tcp", constants.AuthListenAddr)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to listen on %s: %w", constants.CognitoAuthListenAddr, err)
+		return nil, nil, fmt.Errorf("failed to listen on %s: %w", constants.AuthListenAddr, err)
 	}
 
 	return &http.Server{
@@ -137,6 +148,11 @@ func (h *handler) setupServer(codeCh chan string) (*http.Server, net.Listener, e
 
 func (h *handler) callbackHandler(codeCh chan string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if st := r.URL.Query().Get("state"); st == "" || h.lastState == "" || st != h.lastState {
+			h.log.Error().Msg("invalid state in response")
+			h.serveEmbeddedHTML(w, errorPage, http.StatusBadRequest)
+			return
+		}
 		code := r.URL.Query().Get("code")
 		if code == "" {
 			h.log.Error().Msg("no code in response")
@@ -182,17 +198,20 @@ func (h *handler) sendHTTPError(w http.ResponseWriter) {
 	http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 }
 
-func (h *handler) buildAuthURL() string {
+func (h *handler) buildAuthURL(codeChallenge, state string) string {
 	params := url.Values{}
 	params.Set("client_id", h.environmentSet.ClientID)
-	params.Set("redirect_uri", constants.CognitoAuthRedirectURI)
+	params.Set("redirect_uri", constants.AuthRedirectURI)
 	params.Set("response_type", "code")
-	params.Set("scope", "openid profile email aws.cognito.signin.user.admin")
-	if tokenURL == "" {
-		tokenURL = h.environmentSet.UIURL + constants.CreUiAuthPath
+	params.Set("scope", "openid profile email offline_access")
+	params.Set("code_challenge", codeChallenge)
+	params.Set("code_challenge_method", "S256")
+	if h.environmentSet.Audience != "" {
+		params.Set("audience", h.environmentSet.Audience)
 	}
+	params.Set("state", state)
 
-	return tokenURL + "?" + params.Encode()
+	return h.environmentSet.AuthBase + constants.AuthAuthorizePath + "?" + params.Encode()
 }
 
 func (h *handler) exchangeCodeForTokens(ctx context.Context, code string) (*credentials.CreLoginTokenSet, error) {
@@ -200,9 +219,10 @@ func (h *handler) exchangeCodeForTokens(ctx context.Context, code string) (*cred
 	form.Set("grant_type", "authorization_code")
 	form.Set("client_id", h.environmentSet.ClientID)
 	form.Set("code", code)
-	form.Set("redirect_uri", constants.CognitoAuthRedirectURI)
+	form.Set("redirect_uri", constants.AuthRedirectURI)
+	form.Set("code_verifier", h.lastPKCEVerifier)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, h.environmentSet.CognitoURL+constants.CognitoTokenExchangePath, strings.NewReader(form.Encode()))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, h.environmentSet.AuthBase+constants.AuthTokenPath, strings.NewReader(form.Encode()))
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
@@ -252,8 +272,8 @@ func saveCredentials(tokenSet *credentials.CreLoginTokenSet) error {
 	return os.Rename(tmp, path)
 }
 
-func openBrowser(urlStr string) error {
-	switch rt.GOOS {
+func openBrowser(urlStr string, goos string) error {
+	switch goos {
 	case "darwin":
 		return exec.Command("open", urlStr).Start()
 	case "linux":
@@ -261,6 +281,25 @@ func openBrowser(urlStr string) error {
 	case "windows":
 		return exec.Command("rundll32", "url.dll,FileProtocolHandler", urlStr).Start()
 	default:
-		return fmt.Errorf("unsupported OS: %s", rt.GOOS)
+		return fmt.Errorf("unsupported OS: %s", goos)
 	}
+}
+
+func generatePKCE() (verifier, challenge string, err error) {
+	b := make([]byte, 32)
+	if _, err = rand.Read(b); err != nil {
+		return "", "", err
+	}
+	verifier = base64.RawURLEncoding.EncodeToString(b)
+	sum := sha256.Sum256([]byte(verifier))
+	challenge = base64.RawURLEncoding.EncodeToString(sum[:])
+	return verifier, challenge, nil
+}
+
+func randomState() string {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return fmt.Sprintf("%d", time.Now().UnixNano())
+	}
+	return base64.RawURLEncoding.EncodeToString(b)
 }

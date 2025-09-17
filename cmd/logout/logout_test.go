@@ -44,13 +44,17 @@ func TestExecute_NoCredentialsFile(t *testing.T) {
 	tDir := t.TempDir()
 	t.Setenv("HOME", tDir)
 
-	credentials := credentials.Credentials{
+	creds := credentials.Credentials{
 		Tokens:   &credentials.CreLoginTokenSet{},
 		APIKey:   "",
 		AuthType: "Bearer",
 	}
 
-	runtimeCtx := &runtime.Context{Logger: testutil.NewTestLogger(), Credentials: &credentials}
+	runtimeCtx := &runtime.Context{
+		Logger:         testutil.NewTestLogger(),
+		Credentials:    &creds,
+		EnvironmentSet: &environments.EnvironmentSet{},
+	}
 	h := newHandler(runtimeCtx)
 
 	if err := h.execute(); err != nil {
@@ -92,10 +96,9 @@ func TestExecute_SuccessRevocationAndRemoval(t *testing.T) {
 		},
 		EnvironmentSet: &environments.EnvironmentSet{
 			UIURL:      "https://fake-ui.local",
-			CognitoURL: "https://fake-cognito.local",
+			AuthBase:   "https://fake-auth0.local",
 			ClientID:   "fake-client-id",
 			GraphQLURL: "https://fake-graphql.local",
-			UserPoolID: "fake-pool-id",
 		},
 	}
 
@@ -138,10 +141,9 @@ func TestExecute_RevocationFails_StillRemovesFile(t *testing.T) {
 		},
 		EnvironmentSet: &environments.EnvironmentSet{
 			UIURL:      "https://fake-ui.local",
-			CognitoURL: "https://fake-cognito.local",
+			AuthBase:   "https://fake-auth0.local",
 			ClientID:   "fake-client-id",
 			GraphQLURL: "https://fake-graphql.local",
-			UserPoolID: "fake-pool-id",
 		},
 	}
 
