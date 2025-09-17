@@ -5,12 +5,12 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/smartcontractkit/dev-platform/cmd/secrets/create"
-	"github.com/smartcontractkit/dev-platform/cmd/secrets/delete"
-	"github.com/smartcontractkit/dev-platform/cmd/secrets/list"
-	"github.com/smartcontractkit/dev-platform/cmd/secrets/update"
-	"github.com/smartcontractkit/dev-platform/internal/constants"
-	"github.com/smartcontractkit/dev-platform/internal/runtime"
+	"github.com/smartcontractkit/cre-cli/cmd/secrets/create"
+	"github.com/smartcontractkit/cre-cli/cmd/secrets/delete"
+	"github.com/smartcontractkit/cre-cli/cmd/secrets/list"
+	"github.com/smartcontractkit/cre-cli/cmd/secrets/update"
+	"github.com/smartcontractkit/cre-cli/internal/constants"
+	"github.com/smartcontractkit/cre-cli/internal/runtime"
 )
 
 func New(runtimeContext *runtime.Context) *cobra.Command {

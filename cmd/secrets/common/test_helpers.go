@@ -10,7 +10,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/test-go/testify/mock"
 
-	"github.com/smartcontractkit/dev-platform/cmd/client"
+	"github.com/smartcontractkit/cre-cli/cmd/client"
 )
 
 func newMockHandler(t *testing.T) (*Handler, *MockClientFactory, *ecdsa.PrivateKey) {

@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/smartcontractkit/dev-platform/cmd/generate-bindings/bindings"
+	"github.com/smartcontractkit/cre-cli/cmd/generate-bindings/bindings"
 )
 
 func main() {

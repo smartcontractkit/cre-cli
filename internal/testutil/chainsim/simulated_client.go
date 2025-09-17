@@ -10,7 +10,7 @@ import (
 
 	"github.com/smartcontractkit/chainlink-testing-framework/seth"
 
-	"github.com/smartcontractkit/dev-platform/cmd/client"
+	"github.com/smartcontractkit/cre-cli/cmd/client"
 )
 
 func NewSimulatedClient(t *testing.T, chain *SimulatedChain, logger *zerolog.Logger) *seth.Client {

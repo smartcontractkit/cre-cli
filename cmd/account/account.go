@@ -3,10 +3,10 @@ package account
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/smartcontractkit/dev-platform/cmd/account/link_key"
-	"github.com/smartcontractkit/dev-platform/cmd/account/list_key"
-	"github.com/smartcontractkit/dev-platform/cmd/account/unlink_key"
-	"github.com/smartcontractkit/dev-platform/internal/runtime"
+	"github.com/smartcontractkit/cre-cli/cmd/account/link_key"
+	"github.com/smartcontractkit/cre-cli/cmd/account/list_key"
+	"github.com/smartcontractkit/cre-cli/cmd/account/unlink_key"
+	"github.com/smartcontractkit/cre-cli/internal/runtime"
 )
 
 func New(runtimeContext *runtime.Context) *cobra.Command {

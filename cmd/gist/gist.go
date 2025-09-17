@@ -16,7 +16,7 @@ import (
 
 	"github.com/rs/zerolog"
 
-	cmdCommon "github.com/smartcontractkit/dev-platform/cmd/common"
+	cmdCommon "github.com/smartcontractkit/cre-cli/cmd/common"
 )
 
 const (

@@ -8,8 +8,8 @@ import (
 
 	workflowUtils "github.com/smartcontractkit/chainlink-common/pkg/workflows"
 
-	"github.com/smartcontractkit/dev-platform/cmd/client"
-	"github.com/smartcontractkit/dev-platform/internal/testutil/chainsim"
+	"github.com/smartcontractkit/cre-cli/cmd/client"
+	"github.com/smartcontractkit/cre-cli/internal/testutil/chainsim"
 )
 
 func RegisterWorkflow(t *testing.T, wrc *client.WorkflowRegistryV2Client, workflowName string, keepAlive bool) {

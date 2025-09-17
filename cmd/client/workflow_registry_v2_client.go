@@ -16,8 +16,8 @@ import (
 	workflow_registry_v2_wrapper "github.com/smartcontractkit/chainlink-evm/gethwrappers/workflow/generated/workflow_registry_wrapper_v2"
 	"github.com/smartcontractkit/chainlink-testing-framework/seth"
 
-	cmdCommon "github.com/smartcontractkit/dev-platform/cmd/common"
-	"github.com/smartcontractkit/dev-platform/internal/constants"
+	cmdCommon "github.com/smartcontractkit/cre-cli/cmd/common"
+	"github.com/smartcontractkit/cre-cli/internal/constants"
 )
 
 type workflowRegistryV2Contract interface {

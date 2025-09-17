@@ -1,4 +1,4 @@
-module github.com/smartcontractkit/dev-platform
+module github.com/smartcontractkit/cre-cli
 
 go 1.24.5
 
