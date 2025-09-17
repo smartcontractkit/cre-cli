@@ -1,10 +1,21 @@
 production-testnet:
   dev-platform:
-    don-family: "test-don"
+    don-id: 1
   logging:
     seth-config-path: seth.toml
+  contracts:
+    registries:
+      - name: WorkflowRegistry
+        address: "0x0E974d80e38DC52d90afBaa3745FDB71C723613b"
+        chain-selector: 3478487238524512106
+      - name: CapabilitiesRegistry
+        address: "0x531eF7673958E227002fBe8FF6A97DC17111f815"
+        chain-selector: 16015286601757825753
   rpcs:
     - chain-selector: 3478487238524512106
       url: https://somethingElse.rpc.org
     - chain-selector: 16015286601757825753
       url: https://something.rpc.org
+  workflow_storage:
+    gist:
+      github_token: hardcodedToken

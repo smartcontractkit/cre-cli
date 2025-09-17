@@ -15,13 +15,6 @@ import (
 func buildBinary(sourceFile, outputBinary string) error {
 	// TODO (DEVSVCS-2016) clean the conflictPolicy=ignore flag
 	command := exec.Command("go", "build", "-ldflags", "-w -X 'github.com/smartcontractkit/dev-platform/cmd/version.Version=build $(git rev-parse HEAD)' -X google.golang.org/protobuf/reflect/protoregistry.conflictPolicy=ignore", "-o", outputBinary, sourceFile)
-	if os.Getenv("GOOS") == "windows" {
-		command.Env = append(os.Environ(),
-			"CC=gcc.exe",
-			"GOARCH=amd64",
-			"CGO_ENABLED=1",
-		)
-	}
 	output, err := command.CombinedOutput()
 	if err != nil {
 		fmt.Printf("Build cre binary output: %s", string(output))
@@ -50,7 +43,9 @@ func TestMain(m *testing.M) {
 
 	// Store contents of env vars found in the shell environment and unset them
 	// That way they won't leak into tests
+	ethUrlValue := LookupAndUnsetEnvVar(settings.EthUrlEnvVar)
 	ethPrivateKeyValue := LookupAndUnsetEnvVar(settings.EthPrivateKeyEnvVar)
+	githubTokenValue := LookupAndUnsetEnvVar(settings.GithubApiTokenEnvVar)
 
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -67,7 +62,9 @@ func TestMain(m *testing.M) {
 	exitCode := m.Run()
 
 	// Restore env var that were previously present in this user's shell environment
+	RestoreEnvVar(settings.EthUrlEnvVar, ethUrlValue)
 	RestoreEnvVar(settings.EthPrivateKeyEnvVar, ethPrivateKeyValue)
+	RestoreEnvVar(settings.GithubApiTokenEnvVar, githubTokenValue)
 
 	// Cleanup: Delete the test files
 	cleanupTestFiles(cwd)

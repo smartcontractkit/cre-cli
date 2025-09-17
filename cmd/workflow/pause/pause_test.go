@@ -7,7 +7,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/smartcontractkit/dev-platform/internal/constants"
 	"github.com/smartcontractkit/dev-platform/internal/settings"
 	"github.com/smartcontractkit/dev-platform/internal/testutil/chainsim"
 	"github.com/smartcontractkit/dev-platform/internal/validation"
@@ -18,6 +17,9 @@ func TestWorkflowPauseCommand(t *testing.T) {
 		t.Parallel()
 
 		validRequired := func(in Inputs) Inputs {
+			if in.WorkflowOwnerType == "" {
+				in.WorkflowOwnerType = "EOA"
+			}
 			if in.WorkflowRegistryContractAddress == "" {
 				in.WorkflowRegistryContractAddress = "0x0000000000000000000000000000000000000000"
 			}
@@ -96,7 +98,6 @@ func TestWorkflowPauseCommand(t *testing.T) {
 						EthPrivateKey: chainsim.TestPrivateKey,
 					},
 				}
-				ctx.Settings.Workflow.UserWorkflowSettings.WorkflowOwnerType = constants.WorkflowOwnerTypeEOA
 
 				h := newHandler(ctx)
 				h.inputs = tt.inputs

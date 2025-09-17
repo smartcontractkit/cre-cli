@@ -99,7 +99,7 @@ func (wrc *WorkflowRegistryV2Client) LinkOwner(validityTimestamp *big.Int, proof
 	return nil
 }
 
-func (wrc *WorkflowRegistryV2Client) UnlinkOwner(owner common.Address, validityTimestamp *big.Int, signature []byte) error {
+func (wrc *WorkflowRegistryV2Client) UnlinkOwner(owner common.Address, validityTimestamp *big.Int, signature []byte, action uint8) error {
 	contract, err := workflow_registry_v2_wrapper.NewWorkflowRegistry(wrc.ContractAddress, wrc.EthClient.Client)
 	if err != nil {
 		wrc.Logger.Error().
@@ -335,7 +335,7 @@ func (wrc *WorkflowRegistryV2Client) CanLinkOwner(owner common.Address, validity
 	return nil
 }
 
-func (wrc *WorkflowRegistryV2Client) CanUnlinkOwner(owner common.Address, validityTimestamp *big.Int, signature []byte) error {
+func (wrc *WorkflowRegistryV2Client) CanUnlinkOwner(owner common.Address, validityTimestamp *big.Int, signature []byte, action uint8) error {
 	contract, err := workflow_registry_v2_wrapper.NewWorkflowRegistry(wrc.ContractAddress, wrc.EthClient.Client)
 	if err != nil {
 		wrc.Logger.Error().

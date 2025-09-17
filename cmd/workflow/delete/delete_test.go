@@ -86,8 +86,10 @@ func TestWorkflowDeleteCommand(t *testing.T) {
 						EthPrivateKey: chainsim.TestPrivateKey,
 					},
 				}
-				ctx.Settings.Workflow.UserWorkflowSettings.WorkflowOwnerType = constants.WorkflowOwnerTypeEOA
 
+				if tt.inputs.WorkflowOwnerType == "" {
+					tt.inputs.WorkflowOwnerType = constants.WorkflowOwnerTypeEOA
+				}
 				if tt.inputs.WorkflowRegistryContractAddress == "" {
 					tt.inputs.WorkflowRegistryContractAddress = "0x0000000000000000000000000000000000000000"
 				}

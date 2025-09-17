@@ -39,6 +39,7 @@ type Inputs struct {
 	// TODO: Add validation for WorkflowOwnerLabel
 	WorkflowOwnerLabel              string `validate:"omitempty"`
 	WorkflowOwner                   string `validate:"required,workflow_owner"`
+	WorkflowOwnerType               string `validate:"required"`
 	WorkflowRegistryContractAddress string `validate:"required"`
 }
 
@@ -112,6 +113,7 @@ func newHandler(ctx *runtime.Context, stdin io.Reader) *handler {
 func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 	return Inputs{
 		WorkflowOwner:                   h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress,
+		WorkflowOwnerType:               h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerType,
 		WorkflowRegistryContractAddress: h.environmentSet.WorkflowRegistryAddress,
 		WorkflowOwnerLabel:              v.GetString("owner-label"),
 	}, nil
@@ -160,7 +162,7 @@ func (h *handler) Execute(in Inputs) error {
 		return fmt.Errorf("contract address validation failed")
 	}
 
-	if h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerType == constants.WorkflowOwnerTypeMSIG {
+	if in.WorkflowOwnerType == constants.WorkflowOwnerTypeMSIG {
 		if err := h.linkOwnerUsingMSIG(resp); err != nil {
 			return fmt.Errorf("linking failed: %w", err)
 		}
@@ -191,13 +193,13 @@ mutation InitiateLinking($request: InitiateLinkingRequest!) {
 }`
 
 	var requestProcess string
-	switch h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerType {
+	switch in.WorkflowOwnerType {
 	case constants.WorkflowOwnerTypeMSIG:
 		requestProcess = requestProcessMSIG
 	case constants.WorkflowOwnerTypeEOA:
 		requestProcess = requestProcessEOA
 	default:
-		return initiateLinkingResponse{}, fmt.Errorf("invalid workflow owner type: %s", h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerType)
+		return initiateLinkingResponse{}, fmt.Errorf("invalid workflow owner type: %s", in.WorkflowOwnerType)
 	}
 
 	req := graphql.NewRequest(mutation)
@@ -238,7 +240,7 @@ func (h *handler) linkOwnerUsingEOA(resp initiateLinkingResponse) error {
 	var proofBytes [32]byte
 	decoded, err := hex.DecodeString(strings.TrimPrefix(resp.OwnershipProofHash, "0x"))
 	if err != nil {
-		return fmt.Errorf("error decoding proof")
+		return fmt.Errorf("the request has expired")
 	}
 	if len(decoded) != 32 {
 		return fmt.Errorf("proof hash must be 32 bytes, got %d", len(decoded))
@@ -311,7 +313,6 @@ func (h *handler) linkOwnerUsingMSIG(resp initiateLinkingResponse) error {
 	selector, err := strconv.ParseUint(resp.ChainSelector, 10, 64)
 	if err != nil {
 		h.log.Error().Err(err).Msg("failed to parse chain selector")
-		return err
 	}
 
 	ChainName, err := settings.GetChainNameByChainSelector(selector)

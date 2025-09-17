@@ -15,8 +15,10 @@ import (
 
 // sensitive information (not in configuration file)
 const (
-	EthPrivateKeyEnvVar = "CRE_ETH_PRIVATE_KEY"
-	CreTargetEnvVar     = "CRE_TARGET"
+	EthUrlEnvVar         = "CRE_ETH_URL"
+	EthPrivateKeyEnvVar  = "CRE_ETH_PRIVATE_KEY"
+	GithubApiTokenEnvVar = "CRE_GITHUB_API_TOKEN"
+	CreTargetEnvVar      = "CRE_TARGET"
 )
 
 const loadEnvErrorMessage = "Not able to load configuration from .env file, skipping this optional step.\n" +
@@ -87,6 +89,7 @@ func New(logger *zerolog.Logger, v *viper.Viper) (*Settings, error) {
 		User: UserSettings{
 			EthPrivateKey: normPrivKey,
 			TargetName:    target,
+			EthUrl:        v.GetString(EthUrlEnvVar),
 		},
 		Workflow:        workflowSettings,
 		StorageSettings: storageSettings,
@@ -95,7 +98,9 @@ func New(logger *zerolog.Logger, v *viper.Viper) (*Settings, error) {
 
 func BindEnv(v *viper.Viper) error {
 	envVars := []string{
+		EthUrlEnvVar,
 		EthPrivateKeyEnvVar,
+		GithubApiTokenEnvVar,
 		CreTargetEnvVar,
 	}
 

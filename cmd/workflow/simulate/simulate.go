@@ -153,6 +153,20 @@ func (h *handler) ValidateInputs(inputs Inputs) error {
 		return validate.ParseValidationErrors(err)
 	}
 
+	// Basic RPC health check via eth_chainId
+	if inputs.EthClient == nil {
+		return fmt.Errorf("ethereum RPC client is not configured")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	chainID, err := inputs.EthClient.ChainID(ctx)
+	if err != nil {
+		return fmt.Errorf("failed RPC health check (eth_chainId): %w", err)
+	}
+	if chainID == nil || chainID.Sign() <= 0 {
+		return fmt.Errorf("invalid RPC response: empty or zero chain ID")
+	}
+
 	h.validated = true
 	return nil
 }

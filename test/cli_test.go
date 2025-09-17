@@ -17,6 +17,7 @@ import (
 )
 
 const (
+	CLIPath           = "/tmp/cre"
 	SethConfigPath    = "seth.toml"
 	TestChainSelector = uint64(7759470850252068959)
 	SettingsTarget    = "production-testnet"
@@ -24,12 +25,6 @@ const (
 
 // strip the ANSI escape codes from the output
 var ansiRE = regexp.MustCompile(`\x1b\[[0-9;]*m`)
-var CLIPath = os.TempDir() + string(os.PathSeparator) + "cre" + func() string {
-	if os.PathSeparator == '\\' {
-		return ".exe"
-	}
-	return ""
-}()
 
 func stripANSI(s string) string {
 	return ansiRE.ReplaceAllString(s, "")

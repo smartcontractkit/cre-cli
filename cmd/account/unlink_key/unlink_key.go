@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -32,8 +33,22 @@ const (
 	environment = "PRODUCTION_TESTNET"
 )
 
+type UnlinkActionOption struct {
+	Action      string
+	Description string
+	ID          uint32
+}
+
+var unlinkActionOptions = []UnlinkActionOption{
+	{Action: "NONE", Description: "No action prior to unlinking", ID: 1},
+	{Action: "REMOVE_WORKFLOWS", Description: "Remove all workflows owned by the owner prior to unlinking", ID: 2},
+	{Action: "PAUSE_WORKFLOWS", Description: "Pause all workflows owned by the owner prior to unlinking", ID: 3},
+}
+
 type Inputs struct {
 	WorkflowOwner                   string `validate:"workflow_owner"`
+	WorkflowOwnerType               string `validate:"omitempty"`
+	ActionID                        uint32 `validate:"omitempty,gt=0,lt=4"`
 	WorkflowRegistryContractAddress string `validate:"required"`
 }
 
@@ -77,6 +92,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 		},
 	}
 	settings.AddRawTxFlag(cmd)
+	cmd.Flags().Uint32P("action-id", "a", 0, "ID of the unlink action option to use")
 	return cmd
 }
 
@@ -94,7 +110,9 @@ func newHandler(ctx *runtime.Context, stdin io.Reader) *handler {
 func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 	return Inputs{
 		WorkflowOwner:                   h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress,
+		WorkflowOwnerType:               h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerType,
 		WorkflowRegistryContractAddress: h.environmentSet.WorkflowRegistryAddress,
+		ActionID:                        v.GetUint32("action-id"),
 	}, nil
 }
 
@@ -117,18 +135,12 @@ func (h *handler) Execute(in Inputs) error {
 
 	h.log.Info().Str("owner", in.WorkflowOwner).Msg("Starting unlinking")
 
-	deleteWorkflows, err := prompt.YesNoPrompt(
-		h.stdin,
-		"Warning: Unlink is a destructive action that will wipe out all workflows registered under your owner address. Do you wish to proceed?",
-	)
+	action, err := h.selectAction(in)
 	if err != nil {
 		return err
 	}
-	if !deleteWorkflows {
-		return fmt.Errorf("unlinking aborted by user")
-	}
 
-	resp, err := h.callInitiateUnlinking(context.Background(), in)
+	resp, err := h.callInitiateUnlinking(context.Background(), in, action)
 	if err != nil {
 		return err
 	}
@@ -139,7 +151,7 @@ func (h *handler) Execute(in Inputs) error {
 		return fmt.Errorf("contract address validation failed")
 	}
 
-	switch h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerType {
+	switch in.WorkflowOwnerType {
 	case constants.WorkflowOwnerTypeMSIG:
 		return h.unlinkOwnerUsingMSIG(resp)
 	default:
@@ -147,7 +159,35 @@ func (h *handler) Execute(in Inputs) error {
 	}
 }
 
-func (h *handler) callInitiateUnlinking(ctx context.Context, in Inputs) (initiateUnlinkingResponse, error) {
+func (h *handler) selectAction(in Inputs) (string, error) {
+	if in.ActionID != 0 {
+		opt, err := h.getActionOptionByID(in.ActionID)
+		if err != nil {
+			return "", fmt.Errorf("invalid action ID %d: %w", in.ActionID, err)
+		}
+		return opt.Action, nil
+	}
+	descriptions := h.extractActionDescriptions()
+	var selected UnlinkActionOption
+	err := prompt.SelectPrompt(h.stdin,
+		"Choose what to do with existing workflows owned by this address",
+		descriptions,
+		func(choice string) error {
+			opt, err := h.getUnlinkActionByDescription(choice)
+			if err != nil {
+				return err
+			}
+			selected = opt
+			return nil
+		},
+	)
+	if err != nil {
+		return "", fmt.Errorf("action selection aborted: %w", err)
+	}
+	return selected.Action, nil
+}
+
+func (h *handler) callInitiateUnlinking(ctx context.Context, in Inputs, action string) (initiateUnlinkingResponse, error) {
 	const mutation = `
 mutation InitiateUnlinking($request: InitiateUnlinkingRequest!) {
   initiateUnlinking(request: $request) {
@@ -164,6 +204,7 @@ mutation InitiateUnlinking($request: InitiateUnlinkingRequest!) {
 
 	req := graphql.NewRequest(mutation)
 	req.Var("request", map[string]any{
+		"preUnlinkAction":      action,
 		"workflowOwnerAddress": in.WorkflowOwner,
 		"environment":          environment,
 	})
@@ -197,15 +238,26 @@ func (h *handler) unlinkOwnerUsingEOA(owner string, resp initiateUnlinkingRespon
 		return fmt.Errorf("invalid signature hex: %w", err)
 	}
 
+	args := resp.FunctionArgs
+	if len(args) < 4 {
+		return fmt.Errorf("unexpected functionArgs length: %d", len(args))
+	}
+	actionRaw := args[3]
+	actionUint, err := strconv.ParseUint(actionRaw, 10, 8)
+	if err != nil {
+		return fmt.Errorf("invalid action: %s", actionRaw)
+	}
+	actionByte := uint8(actionUint)
+
 	client, err := h.clientFactory.NewWorkflowRegistryV2Client()
 	if err != nil {
 		return fmt.Errorf("client init: %w", err)
 	}
 	addr := common.HexToAddress(owner)
-	if err := client.CanUnlinkOwner(addr, ts, sigBytes); err != nil {
+	if err := client.CanUnlinkOwner(addr, ts, sigBytes, actionByte); err != nil {
 		return fmt.Errorf("unlink request verification failed: %w", err)
 	}
-	if err := client.UnlinkOwner(addr, ts, sigBytes); err != nil {
+	if err := client.UnlinkOwner(addr, ts, sigBytes, actionByte); err != nil {
 		return fmt.Errorf("UnlinkOwner failed: %w", err)
 	}
 
@@ -229,12 +281,23 @@ func (h *handler) unlinkOwnerUsingMSIG(resp initiateUnlinkingResponse) error {
 		return fmt.Errorf("invalid signature hex: %w", err)
 	}
 
+	args := resp.FunctionArgs
+	if len(args) < 4 {
+		return fmt.Errorf("unexpected functionArgs length: %d", len(args))
+	}
+	actionRaw := args[3]
+	actionUint, err := strconv.ParseUint(actionRaw, 10, 8)
+	if err != nil {
+		return fmt.Errorf("invalid action: %s", actionRaw)
+	}
+	actionByte := uint8(actionUint)
+
 	client, err := h.clientFactory.NewWorkflowRegistryV2Client()
 	if err != nil {
 		return fmt.Errorf("client init: %w", err)
 	}
 	ownerAddr := common.HexToAddress(h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress)
-	if err := client.CanUnlinkOwner(ownerAddr, ts, sigBytes); err != nil {
+	if err := client.CanUnlinkOwner(ownerAddr, ts, sigBytes, actionByte); err != nil {
 		return fmt.Errorf("unlink request verification failed: %w", err)
 	}
 
@@ -272,4 +335,30 @@ func (h *handler) unlinkOwnerUsingMSIG(resp initiateUnlinkingResponse) error {
 	h.log.Info().Msg("")
 
 	return nil
+}
+
+func (h *handler) getUnlinkActionByDescription(desc string) (UnlinkActionOption, error) {
+	for _, opt := range unlinkActionOptions {
+		if opt.Description == desc {
+			return opt, nil
+		}
+	}
+	return UnlinkActionOption{}, errors.New("action not found")
+}
+
+func (h *handler) extractActionDescriptions() []string {
+	list := make([]string, len(unlinkActionOptions))
+	for i, opt := range unlinkActionOptions {
+		list[i] = opt.Description
+	}
+	return list
+}
+
+func (h *handler) getActionOptionByID(id uint32) (UnlinkActionOption, error) {
+	for _, opt := range unlinkActionOptions {
+		if opt.ID == id {
+			return opt, nil
+		}
+	}
+	return UnlinkActionOption{}, fmt.Errorf("action with ID %d not found", id)
 }

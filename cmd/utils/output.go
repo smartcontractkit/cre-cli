@@ -26,7 +26,7 @@ type WorkflowMetadataSerialized struct {
 	WorkflowOwner string `yaml:"workflowOwner" json:"workflowOwner"`
 	BinaryURL     string `yaml:"binaryURL" json:"binaryURL"`
 	ConfigURL     string `yaml:"configURL" json:"configURL"`
-	DonFamily     string `yaml:"donFamily" json:"donFamily"`
+	DonFamily     string `yaml:"donID" json:"donID"`
 	Status        string `yaml:"status" json:"status"`
 }
 

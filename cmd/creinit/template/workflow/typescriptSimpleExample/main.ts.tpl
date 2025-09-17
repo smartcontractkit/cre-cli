@@ -1,5 +1,4 @@
 import { cre } from "cre-sdk-typescript/src/sdk/cre";
-import { Value } from "cre-sdk-typescript/src/sdk/utils/values/value";
 import type { Runtime } from "cre-sdk-typescript/src/sdk/runtime/runtime";
 
 type Config = {
@@ -8,7 +7,7 @@ type Config = {
 
 function onCronTrigger(_config: Config, runtime: Runtime) {
   runtime.logger.log("Hello world! Workflow triggered.");
-  cre.sendResponseValue(new Value("Hello world!"));
+  cre.sendResponseValue(cre.utils.val.string("Hello world!"));
 };
 
 function initWorkflow(config: Config) {

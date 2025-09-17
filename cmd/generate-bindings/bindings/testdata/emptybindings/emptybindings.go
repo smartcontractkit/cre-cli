@@ -54,8 +54,6 @@ var EmptyContractMetaData = &bind.MetaData{
 
 // Contract Method Inputs
 
-// Contract Method Outputs
-
 // Errors
 
 // Events

@@ -74,21 +74,6 @@ type {{$call.Normalized.Name}}Input struct {
 
 {{- end}}
 
-// Contract Method Outputs{{- range $call := $contract.Calls}}
-{{- if gt (len $call.Normalized.Outputs) 1 }}
-type {{$call.Normalized.Name}}Output struct {
-	{{- range $idx, $param := $call.Normalized.Outputs}}
-	{{- if $param.Name}}
-	{{capitalise $param.Name}} {{bindtype .Type $.Structs}}
-	{{- else}}
-	Output{{$idx}} {{bindtype .Type $.Structs}}
-	{{- end}}
-	{{- end}}
-}
-{{end}}
-
-{{- end}}
-
 // Errors
 {{range $error := $contract.Errors}}type {{.Normalized.Name}} struct {
 	{{- range .Normalized.Inputs}}
@@ -124,9 +109,7 @@ type {{$contract.Type}}Codec interface {
 	{{- else }}
 	Encode{{$call.Normalized.Name}}MethodCall() ([]byte, error)
 	{{- end }}
-	{{- if gt (len $call.Normalized.Outputs) 1 }}
-	Decode{{$call.Normalized.Name}}MethodOutput(data []byte) ({{$call.Normalized.Name}}Output, error)
-	{{- else if eq (len $call.Normalized.Outputs) 1 }}
+	{{- if gt (len $call.Normalized.Outputs) 0 }}
 	Decode{{$call.Normalized.Name}}MethodOutput(data []byte) ({{with index $call.Normalized.Outputs 0}}{{bindtype .Type $.Structs}}{{end}}, error)
 	{{- end }}
 	
@@ -191,40 +174,7 @@ func (c *Codec) Encode{{ $call.Normalized.Name }}MethodCall() ([]byte, error) {
 
 {{- end }}
 
-{{- if gt (len $call.Normalized.Outputs) 1 }}
-
-func (c *Codec) Decode{{ $call.Normalized.Name }}MethodOutput(data []byte) ({{ $call.Normalized.Name }}Output, error) {
-	vals, err := c.abi.Methods["{{ $call.Original.Name }}"].Outputs.Unpack(data)
-	if err != nil {
-		return {{ $call.Normalized.Name }}Output{}, err
-	}
-	if len(vals) != {{ len $call.Normalized.Outputs }} {
-		return {{ $call.Normalized.Name }}Output{}, fmt.Errorf("expected {{ len $call.Normalized.Outputs }} values, got %d", len(vals))
-	}
-
-	{{- range $idx, $param := $call.Normalized.Outputs}}
-	jsonData{{ $idx }}, err := json.Marshal(vals[{{ $idx }}])
-	if err != nil {
-		return {{ $call.Normalized.Name }}Output{}, fmt.Errorf("failed to marshal ABI result {{ $idx }}: %w", err)
-	}
-
-	var result{{ $idx }} {{ bindtype $param.Type $.Structs }}
-	if err := json.Unmarshal(jsonData{{ $idx }}, &result{{ $idx }}); err != nil {
-		return {{ $call.Normalized.Name }}Output{}, fmt.Errorf("failed to unmarshal to {{ bindtype $param.Type $.Structs }}: %w", err)
-	}
-	{{- end}}
-
-	return {{ $call.Normalized.Name }}Output{
-		{{- range $idx, $param := $call.Normalized.Outputs}}
-		{{- if $param.Name}}
-		{{capitalise $param.Name}}: result{{ $idx }},
-		{{- else}}
-		Output{{ $idx }}: result{{ $idx }},
-		{{- end}}
-		{{- end}}
-	}, nil
-}
-{{- else if eq (len $call.Normalized.Outputs) 1 }}
+{{- if gt (len $call.Normalized.Outputs) 0 }}
 
 func (c *Codec) Decode{{ $call.Normalized.Name }}MethodOutput(data []byte) ({{ with index $call.Normalized.Outputs 0 }}{{ bindtype .Type $.Structs }}{{ end }}, error) {
 	vals, err := c.abi.Methods["{{ $call.Original.Name }}"].Outputs.Unpack(data)
