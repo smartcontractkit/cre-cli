@@ -1,0 +1,160 @@
+package settings
+
+import (
+	"fmt"
+	"net/url"
+
+	"github.com/rs/zerolog"
+	"github.com/spf13/viper"
+
+	chain_selectors "github.com/smartcontractkit/chain-selectors"
+)
+
+type WorkflowSettings struct {
+	DevPlatformSettings struct {
+		DonFamily string `mapstructure:"don-family" yaml:"don-family"`
+	} `mapstructure:"dev-platform" yaml:"dev-platform"`
+	UserWorkflowSettings struct {
+		WorkflowOwnerAddress string `mapstructure:"workflow-owner-address" yaml:"workflow-owner-address"`
+		WorkflowOwnerType    string `mapstructure:"workflow-owner-type" yaml:"workflow-owner-type"`
+		WorkflowName         string `mapstructure:"workflow-name" yaml:"workflow-name"`
+	} `mapstructure:"user-workflow" yaml:"user-workflow"`
+	LoggingSettings struct {
+		SethConfigPath string `mapstructure:"seth-config-path" yaml:"seth-config-path"`
+	} `mapstructure:"logging" yaml:"logging"`
+	RPCs []RpcEndpoint `mapstructure:"rpcs" yaml:"rpcs"`
+}
+
+func loadWorkflowSettings(logger *zerolog.Logger, v *viper.Viper) (WorkflowSettings, error) {
+	target, err := GetTarget(v)
+	if err != nil {
+		return WorkflowSettings{}, err
+	}
+
+	getSetting := func(settingsKey string) string {
+		keyWithTarget := fmt.Sprintf("%s.%s", target, settingsKey)
+		if !v.IsSet(keyWithTarget) {
+			logger.Debug().Msgf("setting %q not found in target %q", settingsKey, target)
+			return ""
+		}
+		return v.GetString(keyWithTarget)
+	}
+
+	var workflowSettings WorkflowSettings
+
+	workflowSettings.DevPlatformSettings.DonFamily = getSetting(DONFamilySettingName)
+
+	ownerAddress, ownerType, err := GetWorkflowOwner(v)
+	if err != nil {
+		return WorkflowSettings{}, err
+	}
+	workflowSettings.UserWorkflowSettings.WorkflowOwnerAddress = ownerAddress
+	workflowSettings.UserWorkflowSettings.WorkflowOwnerType = ownerType
+
+	workflowSettings.UserWorkflowSettings.WorkflowName = getSetting(WorkflowNameSettingName)
+	workflowSettings.LoggingSettings.SethConfigPath = getSetting(SethConfigPathSettingName)
+
+	fullRPCsKey := fmt.Sprintf("%s.%s", target, RpcsSettingName)
+	if v.IsSet(fullRPCsKey) {
+		if err := v.UnmarshalKey(fullRPCsKey, &workflowSettings.RPCs); err != nil {
+			logger.Debug().Err(err).Msg("failed to unmarshal rpcs")
+		}
+	} else {
+		logger.Debug().Msgf("rpcs settings not found in target %q", target)
+	}
+
+	if err := validateSettings(&workflowSettings); err != nil {
+		return WorkflowSettings{}, err
+	}
+
+	// This is required because some commands still read values directly out of viper
+	// TODO: Remove this function once all access to settings no longer uses viper
+	// DEVSVCS-1561
+	if err := flattenWorkflowSettingsToViper(v, target); err != nil {
+		return WorkflowSettings{}, err
+	}
+
+	return workflowSettings, nil
+}
+
+// TODO: Remove this function once all access to settings no longer uses viper
+// DEVSVCS-1561
+func flattenWorkflowSettingsToViper(v *viper.Viper, target string) error {
+	// Manually flatten the workflow owner setting.
+	ownerKey := fmt.Sprintf("%s.%s", target, WorkflowOwnerSettingName)
+	if v.IsSet(ownerKey) {
+		owner := v.GetString(ownerKey)
+		v.Set(WorkflowOwnerSettingName, owner)
+	}
+
+	// Manually flatten the workflow name setting.
+	wfNameKey := fmt.Sprintf("%s.%s", target, WorkflowNameSettingName)
+	if v.IsSet(wfNameKey) {
+		wfName := v.GetString(wfNameKey)
+		v.Set(WorkflowNameSettingName, wfName)
+	}
+
+	// Manually flatten the Seth config path setting.
+	sethPathKey := fmt.Sprintf("%s.%s", target, SethConfigPathSettingName)
+	if v.IsSet(sethPathKey) {
+		sethPath := v.GetString(sethPathKey)
+		v.Set(SethConfigPathSettingName, sethPath)
+	}
+
+	// Manually flatten contracts.
+	contractsKey := fmt.Sprintf("%s.%s", target, "contracts")
+	if v.IsSet(contractsKey) {
+		contracts := v.Get(contractsKey)
+		v.Set("contracts", contracts)
+	}
+
+	// Manually flatten the RPCs setting.
+	rpcsKey := fmt.Sprintf("%s.%s", target, RpcsSettingName)
+	if v.IsSet(rpcsKey) {
+		rpcs := v.Get(rpcsKey)
+		v.Set(RpcsSettingName, rpcs)
+	}
+
+	return nil
+}
+
+func validateSettings(config *WorkflowSettings) error {
+	// TODO validate that all chain selectors mentioned for the contracts above have a matching URL specified
+	for _, rpc := range config.RPCs {
+		if err := isValidRpcUrl(rpc.Url); err != nil {
+			return err
+		}
+		if err := isValidChainSelector(rpc.ChainSelector); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func isValidChainSelector(chainSelector uint64) error {
+	isEvm, err := chain_selectors.IsEvm(chainSelector)
+	if err != nil {
+		return fmt.Errorf("not possible to determine if chain belongs to the EVM family: %d, err: %w", chainSelector, err)
+	}
+	if !isEvm {
+		return fmt.Errorf("only chains from the EVM family are accepted: %d", chainSelector)
+	}
+	return nil
+}
+
+func isValidRpcUrl(rpcURL string) error {
+	parsedURL, err := url.Parse(rpcURL)
+	if err != nil {
+		return fmt.Errorf("failed to parse RPC URL %s", rpcURL)
+	}
+
+	// Check if the URL has a valid scheme and host
+	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
+		return fmt.Errorf("invalid scheme in RPC URL %s", rpcURL)
+	}
+	if parsedURL.Host == "" {
+		return fmt.Errorf("invalid host in RPC URL %s", rpcURL)
+	}
+
+	return nil
+}

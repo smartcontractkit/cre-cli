@@ -1,0 +1,7 @@
+# DO NOT CHANGE
+production-testnet:
+  hierarchy-test: Workflow
+  test-key: workflowValue
+  user-workflow:
+    workflow-owner-address: "0xc0ffee254729296a45a3885639AC7E10F9d54979"
+    workflow-name: "workflowTest"

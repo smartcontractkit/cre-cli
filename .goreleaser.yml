@@ -1,0 +1,26 @@
+# Make sure to check the documentation at https://goreleaser.com
+project_name: dev-platform
+
+env:
+  - IMAGE_REPO={{ if index .Env "IMAGE_REPO"  }}{{ .Env.IMAGE_REPO }}{{ else }}localhost:5001/{{ .ProjectName }}{{ end }}
+  - IMAGE_TAG={{ if index .Env "IMAGE_TAG"  }}{{ .Env.IMAGE_TAG }}{{ else }}local{{ end }}
+
+before:
+  hooks:
+    # You may remove this if you don't use go modules.
+    - go mod tidy
+    # you may remove this if you don't need go generate
+    - go generate ./...
+
+# See https://goreleaser.com/customization/build/
+builds:
+  - binary: dev-platform-cli
+    env:
+      - CGO_ENABLED=0
+    main: ./main.go
+    goarch:
+      - arm64
+      - amd64
+    goos:
+      - linux
+      - darwin

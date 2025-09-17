@@ -1,0 +1,194 @@
+package activate
+
+import (
+	"encoding/hex"
+	"fmt"
+	"math/big"
+	"sort"
+	"strings"
+
+	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/rs/zerolog"
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
+
+	workflow_registry_v2_wrapper "github.com/smartcontractkit/chainlink-evm/gethwrappers/workflow/generated/workflow_registry_wrapper_v2"
+
+	"github.com/smartcontractkit/dev-platform/cmd/client"
+	"github.com/smartcontractkit/dev-platform/internal/constants"
+	"github.com/smartcontractkit/dev-platform/internal/environments"
+	"github.com/smartcontractkit/dev-platform/internal/runtime"
+	"github.com/smartcontractkit/dev-platform/internal/settings"
+	"github.com/smartcontractkit/dev-platform/internal/validation"
+)
+
+type Inputs struct {
+	WorkflowName                          string `validate:"workflow_name"`
+	WorkflowOwner                         string `validate:"workflow_owner"`
+	DonFamily                             string `validate:"required"`
+	WorkflowRegistryContractAddress       string `validate:"required"`
+	WorkflowRegistryContractChainselector uint64 `validate:"required"`
+}
+
+func New(runtimeContext *runtime.Context) *cobra.Command {
+	activateCmd := &cobra.Command{
+		Use:   "activate",
+		Short: "Activates workflow on the Workflow Registry contract",
+		Long:  `Changes workflow status to active on the Workflow Registry contract`,
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			handler := newHandler(runtimeContext)
+
+			inputs, err := handler.ResolveInputs(runtimeContext.Viper)
+			if err != nil {
+				return err
+			}
+			handler.inputs = inputs
+
+			if err := handler.ValidateInputs(); err != nil {
+				return err
+			}
+			return handler.Execute()
+		},
+	}
+
+	settings.AddRawTxFlag(activateCmd)
+
+	return activateCmd
+}
+
+type handler struct {
+	log             *zerolog.Logger
+	clientFactory   client.Factory
+	settings        *settings.Settings
+	environmentsSet *environments.EnvironmentSet
+	validated       bool
+	inputs          Inputs
+}
+
+func newHandler(ctx *runtime.Context) *handler {
+	return &handler{
+		log:             ctx.Logger,
+		clientFactory:   ctx.ClientFactory,
+		settings:        ctx.Settings,
+		environmentsSet: ctx.EnvironmentSet,
+		validated:       false,
+	}
+}
+
+func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
+	return Inputs{
+		WorkflowName:                          h.settings.Workflow.UserWorkflowSettings.WorkflowName,
+		WorkflowOwner:                         h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress,
+		DonFamily:                             h.settings.Workflow.DevPlatformSettings.DonFamily,
+		WorkflowRegistryContractAddress:       h.environmentsSet.WorkflowRegistryAddress,
+		WorkflowRegistryContractChainselector: h.environmentsSet.WorkflowRegistryChainSelector,
+	}, nil
+}
+
+func (h *handler) ValidateInputs() error {
+	validate, err := validation.NewValidator()
+	if err != nil {
+		return fmt.Errorf("failed to initialize validator: %w", err)
+	}
+
+	if err := validate.Struct(h.inputs); err != nil {
+		return validate.ParseValidationErrors(err)
+	}
+
+	h.validated = true
+	return nil
+}
+
+func (h *handler) Execute() error {
+	if !h.validated {
+		return fmt.Errorf("handler inputs not validated")
+	}
+
+	workflowName := h.inputs.WorkflowName
+	workflowOwner := h.inputs.WorkflowOwner
+
+	wrc, err := h.clientFactory.NewWorkflowRegistryV2Client()
+	if err != nil {
+		return fmt.Errorf("failed to create WorkflowRegistryClient: %w", err)
+	}
+
+	ownerAddr := common.HexToAddress(workflowOwner)
+
+	const pageLimit = 200
+	workflows, err := wrc.GetWorkflowListByOwnerAndName(ownerAddr, workflowName, big.NewInt(0), big.NewInt(pageLimit))
+	if err != nil {
+		return fmt.Errorf("failed to get workflow list: %w", err)
+	}
+	if len(workflows) == 0 {
+		return fmt.Errorf("no workflows found for owner=%s name=%s", workflowOwner, workflowName)
+	}
+
+	// Sort by CreatedAt descending
+	sort.Slice(workflows, func(i, j int) bool {
+		return workflows[i].CreatedAt > workflows[j].CreatedAt
+	})
+
+	latest := workflows[0]
+
+	h.log.Info().
+		Str("Name", workflowName).
+		Str("Owner", workflowOwner).
+		Str("WorkflowID", hex.EncodeToString(latest.WorkflowId[:])).
+		Msg("Activating workflow")
+
+	if h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerType == constants.WorkflowOwnerTypeMSIG {
+		txData, err := packActivateTxData(latest.WorkflowId, h.inputs.DonFamily)
+		if err != nil {
+			return fmt.Errorf("failed to pack activate tx: %w", err)
+		}
+		if err := h.logMSIGNextSteps(txData); err != nil {
+			return fmt.Errorf("failed to log MSIG steps: %w", err)
+		}
+		return nil
+	}
+
+	if err := wrc.ActivateWorkflow(latest.WorkflowId, h.inputs.DonFamily); err != nil {
+		return fmt.Errorf("failed to activate workflow: %w", err)
+	}
+
+	h.log.Info().Msg("Workflow activated successfully")
+	return nil
+}
+
+// TODO: DEVSVCS-2341 Refactor to use txOutput interface
+func packActivateTxData(workflowID [32]byte, donFamily string) (string, error) {
+	contractABI, err := abi.JSON(strings.NewReader(workflow_registry_v2_wrapper.WorkflowRegistryMetaData.ABI))
+	if err != nil {
+		return "", fmt.Errorf("parse ABI: %w", err)
+	}
+	data, err := contractABI.Pack("activateWorkflow", workflowID, donFamily)
+	if err != nil {
+		return "", fmt.Errorf("pack data: %w", err)
+	}
+	return hex.EncodeToString(data), nil
+}
+
+func (h *handler) logMSIGNextSteps(txData string) error {
+	chainName, err := settings.GetChainNameByChainSelector(h.inputs.WorkflowRegistryContractChainselector)
+	if err != nil {
+		h.log.Error().Err(err).Uint64("selector", h.inputs.WorkflowRegistryContractChainselector).Msg("failed to get chain name")
+		return err
+	}
+
+	h.log.Info().Msg("")
+	h.log.Info().Msg("MSIG workflow activation transaction prepared!")
+	h.log.Info().Msg("")
+	h.log.Info().Msg("Next steps:")
+	h.log.Info().Msg("")
+	h.log.Info().Msg("   1. Submit the following transaction on the target chain:")
+	h.log.Info().Msgf("      Chain:   %s", chainName)
+	h.log.Info().Msgf("      Contract Address: %s", h.inputs.WorkflowRegistryContractAddress)
+	h.log.Info().Msg("")
+	h.log.Info().Msg("   2. Use the following transaction data:")
+	h.log.Info().Msg("")
+	h.log.Info().Msgf("      %s", txData)
+	h.log.Info().Msg("")
+	return nil
+}

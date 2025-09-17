@@ -1,0 +1,476 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-linux:
+    name: Build Linux Binaries
+    permissions:
+      id-token: write
+      contents: read
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # actions/checkout@v4.2.2
+
+      - name: Set up Go
+        uses: actions/setup-go@3041bf56c941b39c61721a86cd11f3bb1338122a # actions/setup-go@v5.2.0
+        with:
+          go-version: "1.24"
+
+      - name: Setup GitHub Token
+        id: setup-github-token
+        uses: smartcontractkit/.github/actions/setup-github-token@ef78fa97bf3c77de6563db1175422703e9e6674f # setup-github-token@0.2.1
+        with:
+          aws-role-arn: ${{ secrets.AWS_OIDC_DEV_PLATFORM_READ_REPOS_EXTERNAL_TOKEN_ISSUER_ROLE_ARN }}
+          aws-lambda-url: ${{ secrets.AWS_DEV_SERVICES_TOKEN_ISSUER_LAMBDA_URL }}
+          aws-region: ${{ secrets.AWS_REGION }}
+          aws-role-duration-seconds: "1800" # this is optional and defaults to 900
+          set-git-config: true
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          if [ "${{ matrix.arch }}" == "arm64" ]; then
+            sudo apt-get install -y gcc-aarch64-linux-gnu libc6-dev-arm64-cross libstdc++-13-dev-arm64-cross libstdc++-12-dev-arm64-cross
+          elif [ "${{ matrix.arch }}" == "amd64" ]; then
+            sudo apt-get install -y gcc-x86-64-linux-gnu libc6-dev-amd64-cross
+          fi
+
+      - name: Build the Go Binary
+        env:
+          GOOS: linux
+          GOARCH: ${{ matrix.arch }}
+          CGO_ENABLED: 1
+          CC: ${{ matrix.arch == 'amd64' && 'x86_64-linux-gnu-gcc' || matrix.arch == 'arm64' && 'aarch64-linux-gnu-gcc' || '' }}
+          GITHUB_TOKEN: ${{ steps.setup-github-token.outputs.access-token }}
+        run: |
+          VERSION="${{ github.ref_name }}"
+          BINARY_NAME="cre_${VERSION}_linux_${{ matrix.arch }}"
+          go build -ldflags "-X 'github.com/smartcontractkit/dev-platform/cmd/version.Version=version $VERSION' -X google.golang.org/protobuf/reflect/protoregistry.conflictPolicy=ignore" -o "${BINARY_NAME}"
+
+          # Archive the binary
+          tar -czvf "${BINARY_NAME}.tar.gz" "${BINARY_NAME}"
+
+          # Verify the files
+          ls -l
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@6f51ac03b9356f520e9adb1b1b7802705f340c2b # actions/upload-artifact@v4.5.0
+        with:
+          name: cre_linux_${{ matrix.arch }}
+          path: |
+            cre_${{ github.ref_name }}_linux_${{ matrix.arch }}.tar.gz
+            cre_${{ github.ref_name }}_linux_${{ matrix.arch }}
+
+  build-darwin:
+    name: Build Darwin Binaries
+    permissions:
+      id-token: write
+      contents: read
+    runs-on: macos-latest
+    environment: Publish
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+    env:
+      VERSION: ${{ github.ref_name }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # actions/checkout@v4.2.2
+
+      - name: Set up Go
+        uses: actions/setup-go@3041bf56c941b39c61721a86cd11f3bb1338122a # actions/setup-go@v5.2.0
+        with:
+          go-version: "1.24"
+
+      - name: Setup GitHub Token
+        id: setup-github-token
+        uses: smartcontractkit/.github/actions/setup-github-token@ef78fa97bf3c77de6563db1175422703e9e6674f # setup-github-token@0.2.1
+        with:
+          aws-role-arn: ${{ secrets.AWS_OIDC_DEV_PLATFORM_READ_REPOS_EXTERNAL_TOKEN_ISSUER_ROLE_ARN }}
+          aws-lambda-url: ${{ secrets.AWS_DEV_SERVICES_TOKEN_ISSUER_LAMBDA_URL }}
+          aws-region: ${{ secrets.AWS_REGION }}
+          aws-role-duration-seconds: "1800" # this is optional and defaults to 900
+          set-git-config: true
+
+      - name: Build the Go Binary
+        env:
+          GOOS: darwin
+          GOARCH: ${{ matrix.arch }}
+          CGO_ENABLED: 1
+          GITHUB_TOKEN: ${{ steps.setup-github-token.outputs.access-token }}
+        run: |
+          BINARY_NAME="cre_${VERSION}_darwin_${{ matrix.arch }}"
+          go build -ldflags "-s -w -X 'github.com/smartcontractkit/dev-platform/cmd/version.Version=version $VERSION' -X google.golang.org/protobuf/reflect/protoregistry.conflictPolicy=ignore" -o "${BINARY_NAME}"
+
+      - name: Install the Apple keychain
+        env:
+          CERTIFICATE_BASE64: ${{ secrets.CERTIFICATE_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.CERTIFICATE_PASSWORD }}
+        run: |
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+          APP_CERTIFICATE_PATH=$RUNNER_TEMP/app_certificate.p12
+          KEYCHAIN_PASSWORD=$(openssl rand -hex 32)
+
+          # Decode certificates
+          printf '%s' "$CERTIFICATE_BASE64" | base64 -D > "$APP_CERTIFICATE_PATH"
+
+          # Create and unlock temporary keychain
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security default-keychain -s "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -t 600 -u "$KEYCHAIN_PATH"
+
+          # Import certificates
+          security import "$APP_CERTIFICATE_PATH" -k "$KEYCHAIN_PATH" -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+      - name: Sign binary
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          TEAM_ID: ${{ vars.TEAM_ID }}
+        run: |
+          KEYCHAIN_PATH="${RUNNER_TEMP}/app-signing.keychain-db"
+          BINARY_NAME="cre_${VERSION}_darwin_${{ matrix.arch }}"
+
+          # Create entitlements file
+          echo '<?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+            <true/>
+          </dict>
+          </plist>' > entitlements.plist
+
+          # Sign cli
+          codesign --verbose --options=runtime --entitlements entitlements.plist --timestamp -f -s "U52" --identifier "com.smartcontract.cre.cli" --keychain "$KEYCHAIN_PATH" "$BINARY_NAME"
+
+          # Archive the binary
+          zip -r "${BINARY_NAME}.zip" "${BINARY_NAME}"
+
+          # Notarize
+          xcrun notarytool submit "${BINARY_NAME}.zip" --apple-id "${APPLE_ID}" --password "${APPLE_PASSWORD}" --team-id "${TEAM_ID}" --wait
+
+          # Verify the files
+          ls -l
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@6f51ac03b9356f520e9adb1b1b7802705f340c2b # actions/upload-artifact@v4.5.0
+        with:
+          name: cre_darwin_${{ matrix.arch }}
+          path: |
+            cre_${{ github.ref_name }}_darwin_${{ matrix.arch }}.zip
+
+  build-windows:
+    name: Build Windows Binaries
+    permissions:
+      id-token: write
+      contents: read
+    runs-on: windows-latest
+    environment: Publish
+    env:
+      VERSION: ${{ github.ref_name }}
+    strategy:
+      matrix:
+        arch: [amd64]
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # actions/checkout@v4.2.2
+
+      - name: Set up Go
+        uses: actions/setup-go@3041bf56c941b39c61721a86cd11f3bb1338122a # actions/stup-go@v5.2.0
+        with:
+          go-version: "1.24"
+
+      - name: Setup GitHub Token
+        id: setup-github-token
+        uses: smartcontractkit/.github/actions/setup-github-token@ef78fa97bf3c77de6563db1175422703e9e6674f # setup-github-token@0.2.1
+        with:
+          aws-role-arn: ${{ secrets.AWS_OIDC_DEV_PLATFORM_READ_REPOS_EXTERNAL_TOKEN_ISSUER_ROLE_ARN }}
+          aws-lambda-url: ${{ secrets.AWS_DEV_SERVICES_TOKEN_ISSUER_LAMBDA_URL }}
+          aws-region: ${{ secrets.AWS_REGION }}
+          aws-role-duration-seconds: "1800" # this is optional and defaults to 900
+          set-git-config: true
+
+      - name: Install Dependencies
+        shell: pwsh
+        run: |
+          Write-Host "Installing MinGW GCC and AWS CLI for amd64..."
+          choco install mingw awscli -y
+          gcc --version
+
+      - name: Add SignTool to PATH
+        shell: pwsh
+        run: |
+          $Arch = ($env:RUNNER_ARCH).ToLower()
+          $SearchBase = "${env:ProgramFiles(x86)}\Windows Kits\10\bin"
+
+          "Searching `"$SearchBase`" for signtool ($Arch)..."
+          $Tool = Get-ChildItem $SearchBase -Recurse -Force -ErrorAction SilentlyContinue |
+              Where-Object {$_.Name -eq 'signtool.exe' -and $_.Directory -like "*\$Arch"} |
+              Sort-Object -Descending |
+              Select-Object -First 1
+
+          if (!($Tool)) {throw [System.IO.FileNotFoundException]::new('File not found.', 'signtool.exe')}
+
+          'Adding signtool to PATH'
+          $Tool.Directory.FullName | Out-File $env:GITHUB_PATH -Append
+          "signtool-$Arch=$($Tool.FullName)" | Out-File $env:GITHUB_OUTPUT -Append
+          $env:PATH = "$($Tool.Directory.FullName);$env:PATH"
+
+          signtool.exe /h
+
+      - name: Build the Go Binary
+        shell: pwsh
+        env:
+          GOOS: windows
+          GOARCH: ${{ matrix.arch }}
+          CGO_ENABLED: 1
+          CC: gcc.exe
+          GITHUB_TOKEN: ${{ steps.setup-github-token.outputs.access-token }}
+        run: |
+          $BINARY_NAME = "cre_${{ env.VERSION }}_windows_${{ matrix.arch }}.exe"
+
+          Write-Host "Building for AMD64 architecture..."
+
+          # Display selected C compiler
+          Write-Host "Using C compiler: $env:CC"
+
+          # Verify CC version
+          & $env:CC /?
+
+          # Build the Go binary with version embedding
+          go build -v -x -ldflags "-X 'github.com/smartcontractkit/dev-platform/cmd/version.Version=version ${{ env.VERSION }}' -X google.golang.org/protobuf/reflect/protoregistry.conflictPolicy=ignore" -o $BINARY_NAME
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@b47578312673ae6fa5b5096b330d9fbac3d116df # v4.2.1
+        with:
+          role-to-assume: ${{ secrets.WINDOWS_CODESIGNING_AWS_OIDC_ROLE }}
+          aws-region: us-west-2
+
+      - name: Sign the Go Binary
+        shell: pwsh
+        env:
+          KMS_KEY_ID: ${{ secrets.WINDOWS_CODESIGNING_KMS_KEY_ID }}
+          CERT_PEM: ${{ secrets.WINDOWS_CODESIGNING_CERT }}
+        run: |
+          $exe = "cre_${{ env.VERSION }}_windows_${{ matrix.arch }}.exe"
+
+          [IO.File]::WriteAllText('code-signing.cer', $Env:CERT_PEM)
+
+          # Generate unsigned PKCS#7 (dig + p7u) using your cert
+          signtool.exe sign -f code-signing.cer -fd sha256 -dg . $exe
+
+          # Extract the raw SHA256 digest from the .dig file
+          $digFile = "$exe.dig"
+          $base64Hash = Get-Content $digFile -Raw
+          $base64Hash = $base64Hash.Trim()  # Remove any whitespace
+
+          $hashBytes = [Convert]::FromBase64String($base64Hash)
+
+          # Write the raw hash to a temporary file
+          $tempDigFile = "$exe.temp.dig"
+          [IO.File]::WriteAllBytes($tempDigFile, $hashBytes)
+
+          # Sign the raw digest with AWS KMS
+          $sigB64 = aws kms sign `
+            --key-id $env:KMS_KEY_ID `
+            --message "fileb://$tempDigFile" `
+            --message-type DIGEST `
+            --signing-algorithm RSASSA_PKCS1_V1_5_SHA_256 `
+            --output text --query Signature `
+            --cli-binary-format raw-in-base64-out
+
+          if (-not $sigB64) {
+            Write-Error "AWS KMS sign operation returned null"
+            exit 1
+          }
+
+          # Create the .dig.signed file in the format SignTool expects
+          $signedDigFile = "$exe.dig.signed"
+          $sigBytes = [Convert]::FromBase64String($sigB64)
+
+          # Write the signature as base64-encoded string
+          $sigB64ForFile = [Convert]::ToBase64String($sigBytes)
+          [IO.File]::WriteAllText($signedDigFile, $sigB64ForFile)
+
+          # Incorporate the signed digest back into the EXE
+          signtool.exe sign -di . $exe
+
+          # Timestamp the signature (recommended)
+          signtool.exe timestamp `
+            -tr "http://timestamp.digicert.com" `
+            -td sha256 `
+            $exe
+
+      - name: Verify signature
+        shell: pwsh
+        run: |
+          $exe = "cre_${{ env.VERSION }}_windows_${{ matrix.arch }}.exe"
+
+          Get-AuthenticodeSignature -FilePath $exe | Format-List
+
+          signtool.exe verify /pa $exe
+
+      - name: Archive binary
+        shell: pwsh
+        run: |
+          # Archive the binary
+          $BINARY_NAME = "cre_${{ env.VERSION }}_windows_${{ matrix.arch }}.exe"
+          $ZIP_NAME = "cre_${{ env.VERSION }}_windows_${{ matrix.arch }}.zip"
+          Compress-Archive -Path "$BINARY_NAME" -DestinationPath "$ZIP_NAME"
+
+          # Verify the files
+          Get-ChildItem -Path .
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@6f51ac03b9356f520e9adb1b1b7802705f340c2b # actions/upload-artifact@v4.5.0
+        with:
+          name: cre_windows_${{ matrix.arch }}
+          path: |
+            cre_${{ env.VERSION }}_windows_${{ matrix.arch }}.zip
+
+  release:
+    name: Release
+    needs: [build-linux, build-darwin, build-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Build Artifacts for linux/amd64
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # actions/download-artifact@v4.1.8
+        with:
+          name: cre_linux_amd64
+          path: ./linux_amd64
+
+      - name: Download Build Artifacts for linux/arm64
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # actions/download-artifact@v4.1.8
+        with:
+          name: cre_linux_arm64
+          path: ./linux_arm64
+
+      - name: Download Build Artifacts for darwin/amd64
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # actions/download-artifact@v4.1.8
+        with:
+          name: cre_darwin_amd64
+          path: ./darwin_amd64
+
+      - name: Download Build Artifacts for darwin/arm64
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # actions/download-artifact@v4.1.8
+        with:
+          name: cre_darwin_arm64
+          path: ./darwin_arm64
+
+      - name: Download Build Artifacts for windows/amd64
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # actions/download-artifact@v4.1.8
+        with:
+          name: cre_windows_amd64
+          path: ./windows_amd64
+
+      - name: Generate Checksums
+        run: |
+          VERSION="${{ github.ref_name }}"
+
+          {
+            # Linux amd64 tar.gz
+            echo "cre_${VERSION}_linux_amd64.tar.gz: $(shasum -a 256 ./linux_amd64/cre_${VERSION}_linux_amd64.tar.gz | awk '{print $1}')"
+
+            # Linux arm64 tar.gz
+            echo "cre_${VERSION}_linux_arm64.tar.gz: $(shasum -a 256 ./linux_arm64/cre_${VERSION}_linux_arm64.tar.gz | awk '{print $1}')"
+
+            # Darwin amd64 zip
+            echo "cre_${VERSION}_darwin_amd64.zip: $(shasum -a 256 ./darwin_amd64/cre_${VERSION}_darwin_amd64.zip | awk '{print $1}')"
+
+            # Darwin arm64 zip
+            echo "cre_${VERSION}_darwin_arm64.zip: $(shasum -a 256 ./darwin_arm64/cre_${VERSION}_darwin_arm64.zip | awk '{print $1}')"
+
+            # Windows amd64 zip
+            echo "cre_${VERSION}_windows_amd64.zip: $(shasum -a 256 ./windows_amd64/cre_${VERSION}_windows_amd64.zip | awk '{print $1}')"
+          } >> checksums.txt
+
+          # Display checksums for verification
+          cat checksums.txt
+
+      - name: Create GitHub Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref_name }}
+          draft: true
+          prerelease: false
+
+      # Upload Release Assets for linux/amd64 Tarball
+      - name: Upload Release Assets for linux/amd64 Tarball
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./linux_amd64/cre_${{ github.ref_name }}_linux_amd64.tar.gz
+          asset_name: cre_${{ github.ref_name }}_linux_amd64.tar.gz
+          asset_content_type: application/octet-stream
+
+      # Upload Release Assets for linux/arm64 Tarball
+      - name: Upload Release Assets for linux/arm64 Tarball
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./linux_arm64/cre_${{ github.ref_name }}_linux_arm64.tar.gz
+          asset_name: cre_${{ github.ref_name }}_linux_arm64.zip
+          asset_content_type: application/octet-stream
+
+      # Upload Release Assets for darwin/amd64 Zip
+      - name: Upload Release Assets for darwin/amd64 Zip
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./darwin_amd64/cre_${{ github.ref_name }}_darwin_amd64.zip
+          asset_name: cre_${{ github.ref_name }}_darwin_amd64.zip
+          asset_content_type: application/octet-stream
+
+      # Upload Release Assets for darwin/arm64 Zip
+      - name: Upload Release Assets for darwin/arm64 Zip
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./darwin_arm64/cre_${{ github.ref_name }}_darwin_arm64.zip
+          asset_name: cre_${{ github.ref_name }}_darwin_arm64.tar.gz
+          asset_content_type: application/octet-stream
+
+      # Upload Release Assets for windows/amd64 Zip
+      - name: Upload Release Assets for windows/amd64 Zip
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./windows_amd64/cre_${{ github.ref_name }}_windows_amd64.zip
+          asset_name: cre_${{ github.ref_name }}_windows_amd64.zip
+          asset_content_type: application/octet-stream
+
+      # Upload Checksums
+      - name: Upload Checksums
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./checksums.txt
+          asset_name: checksums.txt
+          asset_content_type: text/plain

@@ -1,0 +1,16 @@
+# DO NOT CHANGE
+production-testnet:
+  hierarchy-test: Project
+  test-key: projectValue
+  dev-platform:
+    don-family: "test-don"
+  user-workflow:
+    workflow-owner-address: ""
+    workflow-name: ""
+  logging:
+    seth-config-path: seth.toml
+  rpcs:
+    - chain-selector: 3478487238524512106
+      url: https://somethingElse.rpc.org
+    - chain-selector: 16015286601757825753
+      url: https://something.rpc.org

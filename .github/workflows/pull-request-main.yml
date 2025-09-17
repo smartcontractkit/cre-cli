@@ -1,0 +1,258 @@
+name: pull-request-main
+
+on:
+  merge_group:
+  pull_request:
+    branches:
+      - main
+      - "releases/**"
+
+env:
+  # Ensure that a cached go version is used:
+  # https://github.com/actions/runner-images/blob/main/images/ubuntu/Ubuntu2404-Readme.md#go
+  GO_VERSION: 1.24
+
+jobs:
+  ci-lint:
+    runs-on: ubuntu-latest-4cores-16GB
+    permissions:
+      id-token: write
+      contents: read
+      actions: read
+    steps:
+      - name: ci-lint
+        uses: smartcontractkit/.github/actions/ci-lint-go@01d931b0455a754d12e7143cc54a5a3521a8f6f6 # ci-lint-go@0.3.1
+        with:
+          golangci-lint-args: --timeout 10m --out-format checkstyle:golangci-lint-report.xml
+          only-new-issues: false
+          aws-region: ${{ secrets.AWS_REGION }}
+          use-gati: "true"
+          aws-role-arn-gati: ${{ secrets.AWS_OIDC_DEV_PLATFORM_READ_REPOS_EXTERNAL_TOKEN_ISSUER_ROLE_ARN }}
+          aws-lambda-url-gati: ${{ secrets.AWS_DEV_SERVICES_TOKEN_ISSUER_LAMBDA_URL }}
+
+  ci-lint-misc:
+    runs-on: ubuntu-latest
+    steps:
+      - name: ci-lint-misc
+        uses: smartcontractkit/.github/actions/ci-lint-misc@01d931b0455a754d12e7143cc54a5a3521a8f6f6 # ci-lint-misc@0.1.4
+
+  ci-test-unit:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+      actions: read
+    steps:
+      - name: ci-test
+        uses: smartcontractkit/.github/actions/ci-test-go@ci-test-go/0.3.5
+        with:
+          go-test-cmd: go test -v $(go list ./... | grep -v -e usbwallet -e test)
+          use-go-cache: "true"
+          aws-region: ${{ secrets.AWS_REGION }}
+          use-gati: "true"
+          aws-role-arn-gati: ${{ secrets.AWS_OIDC_DEV_PLATFORM_READ_REPOS_EXTERNAL_TOKEN_ISSUER_ROLE_ARN }}
+          aws-lambda-url-gati: ${{ secrets.AWS_DEV_SERVICES_TOKEN_ISSUER_LAMBDA_URL }}
+
+  ci-test-e2e:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ ubuntu-latest, windows-latest ]
+    permissions:
+      id-token: write
+      contents: read
+      actions: read
+    steps:
+      - name: setup-foundry
+        uses: foundry-rs/foundry-toolchain@82dee4ba654bd2146511f85f0d013af94670c4de # v1.4.0
+        with:
+          version: "v1.1.0"
+      - name: ci-test
+        uses: smartcontractkit/.github/actions/ci-test-go@2b1d964024bb001ae9fba4f840019ac86ad1d824 #1.1.0
+        env:
+          TEST_LOG_LEVEL: debug
+        with:
+          go-test-cmd: go test -p 5 -v -timeout 30m ./test/ 2>&1 | tee output.txt
+          use-go-cache: "true"
+          aws-region: ${{ secrets.AWS_REGION }}
+          use-gati: "true"
+          aws-role-arn-gati: ${{ secrets.AWS_OIDC_DEV_PLATFORM_READ_REPOS_EXTERNAL_TOKEN_ISSUER_ROLE_ARN }}
+          aws-lambda-url-gati: ${{ secrets.AWS_DEV_SERVICES_TOKEN_ISSUER_LAMBDA_URL }}
+          artifact-name: go-test-${{ matrix.os }}
+
+  ci-test-system:
+    runs-on: ubuntu-latest-4cores-16GB
+    if: false # Disable system test untill we have a version of the test that works with the new CRE CLI (Smartcon)
+    environment: system-test
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    steps:
+      # based on build-and-release.yml
+      - name: Checkout Repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # actions/checkout@v4.2.2
+
+      - name: Setup GitHub Token
+        id: setup-github-token
+        uses: smartcontractkit/.github/actions/setup-github-token@ef78fa97bf3c77de6563db1175422703e9e6674f # setup-github-token@0.2.1
+        with:
+          aws-role-arn: ${{ secrets.AWS_OIDC_DEV_PLATFORM_READ_REPOS_EXTERNAL_TOKEN_ISSUER_ROLE_ARN }}
+          aws-lambda-url: ${{ secrets.AWS_DEV_SERVICES_TOKEN_ISSUER_LAMBDA_URL }}
+          aws-region: ${{ secrets.AWS_REGION }}
+          aws-role-duration-seconds: "1800" # this is optional and defaults to 900
+          set-git-config: true
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-x86-64-linux-gnu libc6-dev-amd64-cross
+
+      - name: Build the CRE CLI Go Binary
+        env:
+          GOOS: linux
+          GOARCH: amd64
+          CGO_ENABLED: 1
+          CC: x86_64-linux-gnu-gcc
+          GITHUB_TOKEN: ${{ steps.setup-github-token.outputs.access-token }}
+        run: |
+          VERSION="${{ github.ref_name }}"
+          BINARY_NAME="cre_linux_amd64"
+          go build -ldflags "-X 'github.com/smartcontractkit/dev-platform/cmd/version.Version=version $VERSION'" -o "${BINARY_NAME}"
+
+      - name: Check if current branch exists in chainlink repo
+        id: check-branch
+        env:
+          BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
+          GITHUB_TOKEN: ${{ steps.setup-github-token.outputs.access-token }}
+        run: |
+          echo "Current branch: $BRANCH_NAME"
+
+          # Check if branch exists in the target repository
+          if gh api "repos/smartcontractkit/chainlink/branches/$BRANCH_NAME" --silent 2>/dev/null; then
+            echo "Branch $BRANCH_NAME exists in chainlink repository. Going to use it"
+            echo "target_branch=$BRANCH_NAME" >> "$GITHUB_OUTPUT"
+          else
+            echo "Branch $BRANCH_NAME does not exist in chainlink repository, will use develop"
+            echo "target_branch=develop" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Derive nightly image tag
+        id: derive-nightly-image-tag
+        shell: bash
+        run: |
+          # use todays's nightly image tag, built at 03:00 UTC
+          TODAY="$(date +%Y%m%d)"
+          echo "nightly_image_tag=nightly-${TODAY}-plugins" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout chainlink repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # actions/checkout@v4.2.2
+        with:
+          repository: smartcontractkit/chainlink
+          ref: ${{ steps.check-branch.outputs.target_branch }}
+          path: chainlink
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: chainlink/system-tests/tests/go.mod
+
+      - name: Copy CRE CLI binary to test folder
+        run: |
+          cp cre_linux_amd64 chainlink/system-tests/tests/smoke/cre/cre_linux_amd64
+          # override a bit of test config with the new binary
+          # currently, there's no elegant way to dynamically pass the binary to the test
+          # also, override blockchains slice with only 1 blockchain
+          cat > chainlink/system-tests/tests/smoke/cre/dev-platform.toml<< EOF
+          [[blockchains]]
+            type = "anvil"
+            chain_id = "1337"
+
+          [dependencies]
+            cre_cli_binary_path = "./cre_linux_amd64"
+          EOF
+
+      # We need to login to ECR to allow the test to pull the Job Distributor and Chainlink images
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@010d0da01d0b5a38af31e9c3470dbfdabdecca3a # v4.0.1
+        with:
+          aws-region: ${{ secrets.AWS_REGION }}
+          role-to-assume: ${{ secrets.READ_JD_ECR_ROLE_ARN }}
+          role-duration-seconds: 1800
+          mask-aws-account-id: true
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@062b18b96a7aff071d4dc91bc00c4c1a7945b076 # v2.0.1
+        with:
+          registries: ${{ format('{0},{1}', secrets.PROD_AWS_ACCOUNT_NUMBER, secrets.SDLC_AWS_ACCOUNT_NUMBER) }}
+        env:
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+
+      - name: Run CRE System Test
+        id: run_cre_tests
+        timeout-minutes: 30
+        env:
+          CI: "true"
+          E2E_TEST_CHAINLINK_IMAGE: ${{ secrets.SDLC_AWS_ACCOUNT_NUMBER }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/chainlink
+          E2E_TEST_CHAINLINK_VERSION: ${{ steps.derive-nightly-image-tag.outputs.nightly_image_tag }}
+          E2E_JD_IMAGE: ${{ secrets.PROD_AWS_ACCOUNT_NUMBER }}.dkr.ecr.${{
+            secrets.AWS_REGION}}.amazonaws.com/job-distributor
+          E2E_JD_VERSION: 0.9.0
+          CTF_CONFIGS: environment-one-don-multichain-ci.toml,dev-platform.toml
+          GIST_WRITE_TOKEN: ${{ secrets.GIST_WRITE_TOKEN }}
+          GITHUB_READ_TOKEN: ${{ steps.setup-github-token.outputs.access-token }}
+          # Anvil developer key, not a secret
+          PRIVATE_KEY: "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+        shell: bash
+        #TODO (DEVSVCS-2016) clean the GOLANG_PROTOBUF_REGISTRATION_CONFLICT flag
+        run: |
+          cd chainlink/system-tests/tests/smoke/cre
+          go mod download
+          # download the cron capability required by the test
+          pushd cmd > /dev/null && \
+          go run main.go download capabilities --output-dir ../ --gh-token-env-var-name GITHUB_READ_TOKEN --names cron --version v1.0.2-alpha 1>&2 && \
+          popd > /dev/null
+          # run the test
+          GOLANG_PROTOBUF_REGISTRATION_CONFLICT=warn go test github.com/smartcontractkit/chainlink/system-tests/tests/smoke/cre -v -run "^(TestCRE_OCR3_PoR_Workflow_SingleDon_MultipleWriters_MockedPrice)$" -timeout 30m -count=1 -test.parallel=1
+
+      - name: Publish Artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cre-system-tests-logs
+          path: |
+            ./chainlink/system-tests/tests/smoke/cre/logs/
+            /tmp/gotest.log
+
+  tidy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    steps:
+      - name: Checkout the repo
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 #4.1.7
+        with:
+          fetch-depth: 0
+
+      - name: Setup GitHub Token
+        id: setup-github-token
+        uses: smartcontractkit/.github/actions/setup-github-token@ef78fa97bf3c77de6563db1175422703e9e6674f # setup-github-token@0.2.1
+        with:
+          aws-role-arn: ${{ secrets.AWS_OIDC_DEV_PLATFORM_READ_REPOS_EXTERNAL_TOKEN_ISSUER_ROLE_ARN }}
+          aws-lambda-url: ${{ secrets.AWS_DEV_SERVICES_TOKEN_ISSUER_LAMBDA_URL }}
+          aws-region: ${{ secrets.AWS_REGION }}
+          aws-role-duration-seconds: "1800" # this is optional and defaults to 900
+          set-git-config: true
+
+      - name: Set up Go
+        uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # 5.0.2
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Run "tidy"
+        run: go mod tidy
+
+      - name: Ensure no diff
+        run: git diff --stat --exit-code

@@ -1,0 +1,10 @@
+production-testnet:
+  dev-platform:
+    don-family: "test-don"
+  logging:
+    seth-config-path: seth.toml
+  rpcs:
+    - chain-selector: 3478487238524512106
+      url: https://somethingElse.rpc.org
+    - chain-selector: 16015286601757825753
+      url: https://something.rpc.org

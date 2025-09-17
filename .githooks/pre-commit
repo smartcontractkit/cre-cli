@@ -1,0 +1,15 @@
+#!/bin/bash
+
+# To enable this pre-commit run:
+# ln -sf ../../.githooks/pre-commit .git/hooks/pre-commit
+#
+# To disable this pre-commit run:
+# rm .git/hooks/pre-commit
+echo "Running make lint..."
+if ! golangci-lint run; then
+  echo "make lint found issues. Commit aborted."
+  exit 1
+fi
+
+echo "make lint passed. Proceeding with commit."
+exit 0

@@ -1,0 +1,39 @@
+## cre generate-bindings
+
+Generate bindings from contract ABI
+
+### Synopsis
+
+This command generates bindings from contract ABI files.
+Supports EVM chain family and Go language.
+Each contract gets its own package subdirectory to avoid naming conflicts.
+For example, IERC20.abi generates bindings in generated/ierc20/ package.
+
+```
+cre generate-bindings [flags]
+```
+
+### Options
+
+```
+  -a, --abi string            Path to ABI directory (defaults to contracts/{chain-family}/src/abi/)
+  -c, --chain-family string   Chain family (evm) (default "evm")
+  -h, --help                  help for generate-bindings
+  -l, --language string       Target language (go) (default "go")
+  -k, --pkg string            Base package name (each contract gets its own subdirectory) (default "bindings")
+  -p, --project-root string   Path to project root directory (defaults to current directory)
+```
+
+### Options inherited from parent commands
+
+```
+  -e, --env string                      Path to .env file which contains sensitive info (default ".env")
+  -T, --target string                   Set the target settings
+  -v, --verbose                         Print DEBUG logs
+  -S, --workflow-settings-file string   Path to CLI workflow settings file (default "workflow.yaml")
+```
+
+### SEE ALSO
+
+* [cre](cre.md)	 - Dev Platform CLI tool
+
