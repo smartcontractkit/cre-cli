@@ -10,7 +10,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/spf13/viper"
 
-	"github.com/smartcontractkit/dev-platform/internal/constants"
+	"github.com/smartcontractkit/cre-cli/internal/constants"
 )
 
 // sensitive information (not in configuration file)

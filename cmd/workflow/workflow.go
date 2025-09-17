@@ -3,13 +3,13 @@ package workflow
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/smartcontractkit/dev-platform/cmd/workflow/activate"
-	"github.com/smartcontractkit/dev-platform/cmd/workflow/delete"
-	"github.com/smartcontractkit/dev-platform/cmd/workflow/deploy"
-	"github.com/smartcontractkit/dev-platform/cmd/workflow/pause"
-	"github.com/smartcontractkit/dev-platform/cmd/workflow/simulate"
-	"github.com/smartcontractkit/dev-platform/cmd/workflow/test"
-	"github.com/smartcontractkit/dev-platform/internal/runtime"
+	"github.com/smartcontractkit/cre-cli/cmd/workflow/activate"
+	"github.com/smartcontractkit/cre-cli/cmd/workflow/delete"
+	"github.com/smartcontractkit/cre-cli/cmd/workflow/deploy"
+	"github.com/smartcontractkit/cre-cli/cmd/workflow/pause"
+	"github.com/smartcontractkit/cre-cli/cmd/workflow/simulate"
+	"github.com/smartcontractkit/cre-cli/cmd/workflow/test"
+	"github.com/smartcontractkit/cre-cli/internal/runtime"
 )
 
 func New(runtimeContext *runtime.Context) *cobra.Command {

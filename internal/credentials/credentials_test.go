@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/smartcontractkit/dev-platform/internal/testutil"
+	"github.com/smartcontractkit/cre-cli/internal/testutil"
 )
 
 func TestNew_Default(t *testing.T) {

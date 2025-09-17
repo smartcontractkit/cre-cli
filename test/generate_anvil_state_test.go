@@ -14,8 +14,8 @@ import (
 
 	p2ptypes "github.com/smartcontractkit/libocr/ragep2p/types"
 
-	"github.com/smartcontractkit/dev-platform/internal/constants"
-	test "github.com/smartcontractkit/dev-platform/test/contracts"
+	"github.com/smartcontractkit/cre-cli/internal/constants"
+	test "github.com/smartcontractkit/cre-cli/test/contracts"
 )
 
 const projectSettingPath = "/tmp/project.yaml"

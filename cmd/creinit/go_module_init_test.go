@@ -8,7 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/smartcontractkit/dev-platform/internal/testutil"
+	"github.com/smartcontractkit/cre-cli/internal/testutil"
 )
 
 func TestShouldInitGoProject_ReturnsFalseWhenGoModExists(t *testing.T) {

@@ -9,7 +9,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/spf13/viper"
 
-	"github.com/smartcontractkit/dev-platform/cmd/gist"
+	"github.com/smartcontractkit/cre-cli/cmd/gist"
 )
 
 type WorkflowStorageSettings struct {

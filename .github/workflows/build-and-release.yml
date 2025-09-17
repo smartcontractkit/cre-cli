@@ -53,7 +53,7 @@ jobs:
         run: |
           VERSION="${{ github.ref_name }}"
           BINARY_NAME="cre_${VERSION}_linux_${{ matrix.arch }}"
-          go build -ldflags "-X 'github.com/smartcontractkit/dev-platform/cmd/version.Version=version $VERSION' -X google.golang.org/protobuf/reflect/protoregistry.conflictPolicy=ignore" -o "${BINARY_NAME}"
+          go build -ldflags "-X 'github.com/smartcontractkit/cre-cli/cmd/version.Version=version $VERSION' -X google.golang.org/protobuf/reflect/protoregistry.conflictPolicy=ignore" -o "${BINARY_NAME}"
 
           # Archive the binary
           tar -czvf "${BINARY_NAME}.tar.gz" "${BINARY_NAME}"
@@ -108,7 +108,7 @@ jobs:
           GITHUB_TOKEN: ${{ steps.setup-github-token.outputs.access-token }}
         run: |
           BINARY_NAME="cre_${VERSION}_darwin_${{ matrix.arch }}"
-          go build -ldflags "-s -w -X 'github.com/smartcontractkit/dev-platform/cmd/version.Version=version $VERSION' -X google.golang.org/protobuf/reflect/protoregistry.conflictPolicy=ignore" -o "${BINARY_NAME}"
+          go build -ldflags "-s -w -X 'github.com/smartcontractkit/cre-cli/cmd/version.Version=version $VERSION' -X google.golang.org/protobuf/reflect/protoregistry.conflictPolicy=ignore" -o "${BINARY_NAME}"
 
       - name: Install the Apple keychain
         env:
@@ -249,7 +249,7 @@ jobs:
           & $env:CC /?
 
           # Build the Go binary with version embedding
-          go build -v -x -ldflags "-X 'github.com/smartcontractkit/dev-platform/cmd/version.Version=version ${{ env.VERSION }}' -X google.golang.org/protobuf/reflect/protoregistry.conflictPolicy=ignore" -o $BINARY_NAME
+          go build -v -x -ldflags "-X 'github.com/smartcontractkit/cre-cli/cmd/version.Version=version ${{ env.VERSION }}' -X google.golang.org/protobuf/reflect/protoregistry.conflictPolicy=ignore" -o $BINARY_NAME
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@b47578312673ae6fa5b5096b330d9fbac3d116df # v4.2.1

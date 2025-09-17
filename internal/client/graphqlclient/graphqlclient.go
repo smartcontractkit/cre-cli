@@ -7,9 +7,9 @@ import (
 
 	"github.com/machinebox/graphql"
 
-	"github.com/smartcontractkit/dev-platform/internal/auth"
-	"github.com/smartcontractkit/dev-platform/internal/credentials"
-	"github.com/smartcontractkit/dev-platform/internal/environments"
+	"github.com/smartcontractkit/cre-cli/internal/auth"
+	"github.com/smartcontractkit/cre-cli/internal/credentials"
+	"github.com/smartcontractkit/cre-cli/internal/environments"
 )
 
 type Client struct {

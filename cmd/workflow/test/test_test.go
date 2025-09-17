@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/smartcontractkit/dev-platform/internal/testutil/chainsim"
+	"github.com/smartcontractkit/cre-cli/internal/testutil/chainsim"
 )
 
 func TestTestCmd(t *testing.T) {

@@ -3,9 +3,9 @@ package gist
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/smartcontractkit/dev-platform/cmd/upload/gist/batch"
-	"github.com/smartcontractkit/dev-platform/cmd/upload/gist/single"
-	"github.com/smartcontractkit/dev-platform/internal/runtime"
+	"github.com/smartcontractkit/cre-cli/cmd/upload/gist/batch"
+	"github.com/smartcontractkit/cre-cli/cmd/upload/gist/single"
+	"github.com/smartcontractkit/cre-cli/internal/runtime"
 )
 
 // TDDO: Remove upload gist
