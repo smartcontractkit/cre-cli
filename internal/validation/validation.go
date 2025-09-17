@@ -10,7 +10,7 @@ import (
 	"github.com/go-playground/validator/v10"
 	en_translations "github.com/go-playground/validator/v10/translations/en"
 
-	"github.com/smartcontractkit/dev-platform/internal/validation/files"
+	"github.com/smartcontractkit/cre-cli/internal/validation/files"
 )
 
 var customValidators = map[string]validator.Func{

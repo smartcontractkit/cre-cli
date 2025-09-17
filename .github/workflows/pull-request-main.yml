@@ -118,7 +118,7 @@ jobs:
         run: |
           VERSION="${{ github.ref_name }}"
           BINARY_NAME="cre_linux_amd64"
-          go build -ldflags "-X 'github.com/smartcontractkit/dev-platform/cmd/version.Version=version $VERSION'" -o "${BINARY_NAME}"
+          go build -ldflags "-X 'github.com/smartcontractkit/cre-cli/cmd/version.Version=version $VERSION'" -o "${BINARY_NAME}"
 
       - name: Check if current branch exists in chainlink repo
         id: check-branch
@@ -163,7 +163,7 @@ jobs:
           # override a bit of test config with the new binary
           # currently, there's no elegant way to dynamically pass the binary to the test
           # also, override blockchains slice with only 1 blockchain
-          cat > chainlink/system-tests/tests/smoke/cre/dev-platform.toml<< EOF
+          cat > chainlink/system-tests/tests/smoke/cre/cre-cli.toml<< EOF
           [[blockchains]]
             type = "anvil"
             chain_id = "1337"
@@ -198,7 +198,7 @@ jobs:
           E2E_JD_IMAGE: ${{ secrets.PROD_AWS_ACCOUNT_NUMBER }}.dkr.ecr.${{
             secrets.AWS_REGION}}.amazonaws.com/job-distributor
           E2E_JD_VERSION: 0.9.0
-          CTF_CONFIGS: environment-one-don-multichain-ci.toml,dev-platform.toml
+          CTF_CONFIGS: environment-one-don-multichain-ci.toml,cre-cli.toml
           GIST_WRITE_TOKEN: ${{ secrets.GIST_WRITE_TOKEN }}
           GITHUB_READ_TOKEN: ${{ steps.setup-github-token.outputs.access-token }}
           # Anvil developer key, not a secret

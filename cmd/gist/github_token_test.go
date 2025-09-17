@@ -7,7 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/smartcontractkit/dev-platform/internal/logger"
+	"github.com/smartcontractkit/cre-cli/internal/logger"
 )
 
 func TestGitHubAPIToken_String(t *testing.T) {

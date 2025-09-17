@@ -18,15 +18,15 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/smartcontractkit/dev-platform/cmd/client"
-	"github.com/smartcontractkit/dev-platform/internal/client/graphqlclient"
-	"github.com/smartcontractkit/dev-platform/internal/constants"
-	"github.com/smartcontractkit/dev-platform/internal/credentials"
-	"github.com/smartcontractkit/dev-platform/internal/environments"
-	"github.com/smartcontractkit/dev-platform/internal/prompt"
-	"github.com/smartcontractkit/dev-platform/internal/runtime"
-	"github.com/smartcontractkit/dev-platform/internal/settings"
-	"github.com/smartcontractkit/dev-platform/internal/validation"
+	"github.com/smartcontractkit/cre-cli/cmd/client"
+	"github.com/smartcontractkit/cre-cli/internal/client/graphqlclient"
+	"github.com/smartcontractkit/cre-cli/internal/constants"
+	"github.com/smartcontractkit/cre-cli/internal/credentials"
+	"github.com/smartcontractkit/cre-cli/internal/environments"
+	"github.com/smartcontractkit/cre-cli/internal/prompt"
+	"github.com/smartcontractkit/cre-cli/internal/runtime"
+	"github.com/smartcontractkit/cre-cli/internal/settings"
+	"github.com/smartcontractkit/cre-cli/internal/validation"
 )
 
 const (

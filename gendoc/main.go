@@ -7,7 +7,7 @@ import (
 
 	"github.com/spf13/cobra/doc"
 
-	"github.com/smartcontractkit/dev-platform/cmd"
+	"github.com/smartcontractkit/cre-cli/cmd"
 )
 
 func main() {

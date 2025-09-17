@@ -18,10 +18,10 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/capabilities/actions/vault"
 	"github.com/smartcontractkit/chainlink/v2/core/capabilities/vault/vaulttypes"
 
-	"github.com/smartcontractkit/dev-platform/cmd/secrets/common"
-	"github.com/smartcontractkit/dev-platform/cmd/secrets/delete"
-	"github.com/smartcontractkit/dev-platform/internal/constants"
-	"github.com/smartcontractkit/dev-platform/internal/environments"
+	"github.com/smartcontractkit/cre-cli/cmd/secrets/common"
+	"github.com/smartcontractkit/cre-cli/cmd/secrets/delete"
+	"github.com/smartcontractkit/cre-cli/internal/constants"
+	"github.com/smartcontractkit/cre-cli/internal/environments"
 )
 
 // secretsCreateEoa writes a minimal secrets.json and invokes:

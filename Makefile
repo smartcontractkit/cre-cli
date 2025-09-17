@@ -12,7 +12,7 @@ GOTEST=$(GOCMD) test
 GOGET=$(GOCMD) get
 GORUN=$(GOCMD) run
 #TODO (DEVSVCS-2016) clean the conflictPolicy=ignore flag
-BUILD_FLAGS=-ldflags "-w -X 'github.com/smartcontractkit/dev-platform/cmd/version.Version=build $(COMMIT_SHA)' -X google.golang.org/protobuf/reflect/protoregistry.conflictPolicy=ignore"
+BUILD_FLAGS=-ldflags "-w -X 'github.com/smartcontractkit/cre-cli/cmd/version.Version=build $(COMMIT_SHA)' -X google.golang.org/protobuf/reflect/protoregistry.conflictPolicy=ignore"
 BINARY_NAME=cre
 ADMIN_BINARY_NAME=cre-admin
 GENDOC_BINARY_NAME=gendoc-cli

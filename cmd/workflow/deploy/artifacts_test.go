@@ -12,7 +12,7 @@ import (
 	"github.com/jarcoal/httpmock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/smartcontractkit/dev-platform/internal/testutil/chainsim"
+	"github.com/smartcontractkit/cre-cli/internal/testutil/chainsim"
 )
 
 func mockGraphQL() {

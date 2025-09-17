@@ -1,5 +1,5 @@
 production-testnet:
-  dev-platform:
+  cre-cli:
     don-family: "test-don"
   logging:
     seth-config-path: seth.toml

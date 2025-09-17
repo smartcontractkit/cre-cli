@@ -15,10 +15,10 @@ import (
 	nautilus "github.com/smartcontractkit/chainlink-common/pkg/nodeauth/utils"
 	"github.com/smartcontractkit/chainlink/v2/core/capabilities/vault/vaulttypes"
 
-	"github.com/smartcontractkit/dev-platform/cmd/secrets/common"
-	"github.com/smartcontractkit/dev-platform/internal/constants"
-	"github.com/smartcontractkit/dev-platform/internal/runtime"
-	"github.com/smartcontractkit/dev-platform/internal/settings"
+	"github.com/smartcontractkit/cre-cli/cmd/secrets/common"
+	"github.com/smartcontractkit/cre-cli/internal/constants"
+	"github.com/smartcontractkit/cre-cli/internal/runtime"
+	"github.com/smartcontractkit/cre-cli/internal/settings"
 )
 
 // cre secrets list --namespace main --timeout 1h

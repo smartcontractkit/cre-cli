@@ -10,8 +10,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/smartcontractkit/dev-platform/internal/runtime"
-	"github.com/smartcontractkit/dev-platform/internal/validation"
+	"github.com/smartcontractkit/cre-cli/internal/runtime"
+	"github.com/smartcontractkit/cre-cli/internal/validation"
 )
 
 type Inputs struct {

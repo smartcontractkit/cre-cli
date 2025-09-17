@@ -16,7 +16,7 @@ import (
 	"github.com/machinebox/graphql"
 	"github.com/rs/zerolog"
 
-	"github.com/smartcontractkit/dev-platform/internal/client/graphqlclient"
+	"github.com/smartcontractkit/cre-cli/internal/client/graphqlclient"
 )
 
 type Client struct {

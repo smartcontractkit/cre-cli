@@ -8,9 +8,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/smartcontractkit/dev-platform/internal/constants"
-	"github.com/smartcontractkit/dev-platform/internal/testutil"
-	"github.com/smartcontractkit/dev-platform/internal/testutil/chainsim"
+	"github.com/smartcontractkit/cre-cli/internal/constants"
+	"github.com/smartcontractkit/cre-cli/internal/testutil"
+	"github.com/smartcontractkit/cre-cli/internal/testutil/chainsim"
 )
 
 func GetTemplateFileList() []string {

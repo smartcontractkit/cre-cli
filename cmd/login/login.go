@@ -20,10 +20,10 @@ import (
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v2"
 
-	"github.com/smartcontractkit/dev-platform/internal/constants"
-	"github.com/smartcontractkit/dev-platform/internal/credentials"
-	"github.com/smartcontractkit/dev-platform/internal/environments"
-	"github.com/smartcontractkit/dev-platform/internal/runtime"
+	"github.com/smartcontractkit/cre-cli/internal/constants"
+	"github.com/smartcontractkit/cre-cli/internal/credentials"
+	"github.com/smartcontractkit/cre-cli/internal/environments"
+	"github.com/smartcontractkit/cre-cli/internal/runtime"
 )
 
 var (

@@ -12,9 +12,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/smartcontractkit/dev-platform/internal/constants"
-	"github.com/smartcontractkit/dev-platform/internal/settings"
-	"github.com/smartcontractkit/dev-platform/internal/testutil"
+	"github.com/smartcontractkit/cre-cli/internal/constants"
+	"github.com/smartcontractkit/cre-cli/internal/settings"
+	"github.com/smartcontractkit/cre-cli/internal/testutil"
 )
 
 func createTestContext(t *testing.T, envVars map[string]string, targetDir string) (*viper.Viper, *zerolog.Logger) {

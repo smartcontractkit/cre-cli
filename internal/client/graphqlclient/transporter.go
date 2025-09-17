@@ -7,9 +7,9 @@ import (
 	"github.com/denisbrodbeck/machineid"
 	"github.com/google/uuid"
 
-	"github.com/smartcontractkit/dev-platform/cmd/version"
-	"github.com/smartcontractkit/dev-platform/internal/auth"
-	"github.com/smartcontractkit/dev-platform/internal/credentials"
+	"github.com/smartcontractkit/cre-cli/cmd/version"
+	"github.com/smartcontractkit/cre-cli/internal/auth"
+	"github.com/smartcontractkit/cre-cli/internal/credentials"
 )
 
 type headerTransport struct {

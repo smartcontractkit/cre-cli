@@ -1,5 +1,5 @@
 # Make sure to check the documentation at https://goreleaser.com
-project_name: dev-platform
+project_name: cre-cli
 
 env:
   - IMAGE_REPO={{ if index .Env "IMAGE_REPO"  }}{{ .Env.IMAGE_REPO }}{{ else }}localhost:5001/{{ .ProjectName }}{{ end }}
@@ -14,7 +14,7 @@ before:
 
 # See https://goreleaser.com/customization/build/
 builds:
-  - binary: dev-platform-cli
+  - binary: cre-cli-cli
     env:
       - CGO_ENABLED=0
     main: ./main.go

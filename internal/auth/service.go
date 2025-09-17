@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/smartcontractkit/dev-platform/internal/constants"
-	"github.com/smartcontractkit/dev-platform/internal/credentials"
-	"github.com/smartcontractkit/dev-platform/internal/environments"
+	"github.com/smartcontractkit/cre-cli/internal/constants"
+	"github.com/smartcontractkit/cre-cli/internal/credentials"
+	"github.com/smartcontractkit/cre-cli/internal/environments"
 )
 
 var httpClient = &http.Client{Timeout: 10 * time.Second}

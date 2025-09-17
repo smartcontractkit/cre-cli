@@ -9,11 +9,11 @@ import (
 
 	"github.com/smartcontractkit/chainlink-testing-framework/seth"
 
-	"github.com/smartcontractkit/dev-platform/internal/credentials"
-	"github.com/smartcontractkit/dev-platform/internal/environments"
-	"github.com/smartcontractkit/dev-platform/internal/runtime"
-	"github.com/smartcontractkit/dev-platform/internal/settings"
-	"github.com/smartcontractkit/dev-platform/internal/testutil"
+	"github.com/smartcontractkit/cre-cli/internal/credentials"
+	"github.com/smartcontractkit/cre-cli/internal/environments"
+	"github.com/smartcontractkit/cre-cli/internal/runtime"
+	"github.com/smartcontractkit/cre-cli/internal/settings"
+	"github.com/smartcontractkit/cre-cli/internal/testutil"
 )
 
 type SimulatedEnvironment struct {

@@ -10,9 +10,9 @@ import (
 
 	"github.com/smartcontractkit/chainlink-testing-framework/seth"
 
-	"github.com/smartcontractkit/dev-platform/internal/constants"
-	"github.com/smartcontractkit/dev-platform/internal/environments"
-	"github.com/smartcontractkit/dev-platform/internal/settings"
+	"github.com/smartcontractkit/cre-cli/internal/constants"
+	"github.com/smartcontractkit/cre-cli/internal/environments"
+	"github.com/smartcontractkit/cre-cli/internal/settings"
 )
 
 type Factory interface {

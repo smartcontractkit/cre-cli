@@ -7,10 +7,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/smartcontractkit/dev-platform/internal/constants"
-	"github.com/smartcontractkit/dev-platform/internal/settings"
-	"github.com/smartcontractkit/dev-platform/internal/testutil/chainsim"
-	"github.com/smartcontractkit/dev-platform/internal/validation"
+	"github.com/smartcontractkit/cre-cli/internal/constants"
+	"github.com/smartcontractkit/cre-cli/internal/settings"
+	"github.com/smartcontractkit/cre-cli/internal/testutil/chainsim"
+	"github.com/smartcontractkit/cre-cli/internal/validation"
 )
 
 func TestWorkflowPauseCommand(t *testing.T) {

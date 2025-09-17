@@ -3,7 +3,7 @@ package version
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/smartcontractkit/dev-platform/internal/runtime"
+	"github.com/smartcontractkit/cre-cli/internal/runtime"
 )
 
 // Default placeholder value

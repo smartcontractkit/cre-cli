@@ -5,8 +5,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/smartcontractkit/dev-platform/cmd/version"
-	"github.com/smartcontractkit/dev-platform/internal/testutil/chainsim"
+	"github.com/smartcontractkit/cre-cli/cmd/version"
+	"github.com/smartcontractkit/cre-cli/internal/testutil/chainsim"
 )
 
 func TestVersionCommand(t *testing.T) {

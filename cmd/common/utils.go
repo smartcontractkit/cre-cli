@@ -19,7 +19,7 @@ import (
 
 	"github.com/smartcontractkit/chainlink-testing-framework/seth"
 
-	"github.com/smartcontractkit/dev-platform/internal/logger"
+	"github.com/smartcontractkit/cre-cli/internal/logger"
 )
 
 func ValidateEventSignature(l *zerolog.Logger, tx *seth.DecodedTransaction, e abi.Event) (bool, int) {

@@ -24,13 +24,13 @@ linters-settings:
   exhaustive:
     default-signifies-exhaustive: true
   goimports:
-    local-prefixes: github.com/smartcontractkit/dev-platform
+    local-prefixes: github.com/smartcontractkit/cre-cli
   gci:
     sections:
       - standard
       - default
       - prefix(github.com/smartcontractkit)
-      - prefix(github.com/smartcontractkit/dev-platform)
+      - prefix(github.com/smartcontractkit/cre-cli)
   golint:
     min-confidence: 0.999
   gosec:

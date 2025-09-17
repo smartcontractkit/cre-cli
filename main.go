@@ -1,6 +1,6 @@
 package main
 
-import "github.com/smartcontractkit/dev-platform/cmd"
+import "github.com/smartcontractkit/cre-cli/cmd"
 
 func main() {
 	cmd.Execute()

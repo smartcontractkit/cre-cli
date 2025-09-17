@@ -13,7 +13,7 @@ import (
 type WorkflowSettings struct {
 	DevPlatformSettings struct {
 		DonFamily string `mapstructure:"don-family" yaml:"don-family"`
-	} `mapstructure:"dev-platform" yaml:"dev-platform"`
+	} `mapstructure:"cre-cli" yaml:"cre-cli"`
 	UserWorkflowSettings struct {
 		WorkflowOwnerAddress string `mapstructure:"workflow-owner-address" yaml:"workflow-owner-address"`
 		WorkflowOwnerType    string `mapstructure:"workflow-owner-type" yaml:"workflow-owner-type"`

@@ -11,8 +11,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/smartcontractkit/dev-platform/internal/credentials"
-	"github.com/smartcontractkit/dev-platform/internal/environments"
+	"github.com/smartcontractkit/cre-cli/internal/credentials"
+	"github.com/smartcontractkit/cre-cli/internal/environments"
 )
 
 type mockGraphQLClient struct {

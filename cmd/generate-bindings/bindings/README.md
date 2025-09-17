@@ -32,7 +32,7 @@ that lets you generate Go bindings for your smart contracts using a custom templ
 ### Programmatic API
 
 ```go
-import "github.com/smartcontractkit/dev-platform/cmd/generate-bindings/bindings"
+import "github.com/smartcontractkit/cre-cli/cmd/generate-bindings/bindings"
 
 func main() {
   err := bindings.GenerateBindings(

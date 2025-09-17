@@ -31,8 +31,8 @@ A command-line interface (CLI) tool for managing workflows, built with Go and Co
 1. Clone the repository:
 
    ```bash
-   git clone https://github.com/smartcontractkit/dev-platform.git
-   cd dev-platform
+   git clone https://github.com/smartcontractkit/cre-cli.git
+   cd cre-cli
    ```
 
 2. Make sure you have Go installed. You can check this with:

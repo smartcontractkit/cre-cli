@@ -12,10 +12,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/smartcontractkit/dev-platform/cmd/gist"
-	"github.com/smartcontractkit/dev-platform/internal/constants"
-	"github.com/smartcontractkit/dev-platform/internal/testutil/chainsim"
-	"github.com/smartcontractkit/dev-platform/internal/validation"
+	"github.com/smartcontractkit/cre-cli/cmd/gist"
+	"github.com/smartcontractkit/cre-cli/internal/constants"
+	"github.com/smartcontractkit/cre-cli/internal/testutil/chainsim"
+	"github.com/smartcontractkit/cre-cli/internal/validation"
 )
 
 func TestCompileCmd(t *testing.T) {
@@ -265,7 +265,7 @@ func TestCompileCmd(t *testing.T) {
 		})
 
 		t.Run("compiles even without go.mod", func(t *testing.T) {
-			// it auto falls back to using the go.mod in the root directory (/dev-platform)
+			// it auto falls back to using the go.mod in the root directory (/cre-cli)
 			simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
 			defer simulatedEnvironment.Close()
 

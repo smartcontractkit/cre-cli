@@ -18,9 +18,9 @@ import (
 	workflow_registry_wrapper "github.com/smartcontractkit/chainlink-evm/gethwrappers/workflow/generated/workflow_registry_wrapper_v2"
 	"github.com/smartcontractkit/chainlink-testing-framework/seth"
 
-	cmdCommon "github.com/smartcontractkit/dev-platform/cmd/common"
-	"github.com/smartcontractkit/dev-platform/internal/constants"
-	"github.com/smartcontractkit/dev-platform/internal/settings"
+	cmdCommon "github.com/smartcontractkit/cre-cli/cmd/common"
+	"github.com/smartcontractkit/cre-cli/internal/constants"
+	"github.com/smartcontractkit/cre-cli/internal/settings"
 )
 
 func LoadContracts(l *zerolog.Logger, client *seth.Client) error {

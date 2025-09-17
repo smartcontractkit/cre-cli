@@ -10,10 +10,10 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/smartcontractkit/dev-platform/cmd/creinit"
-	"github.com/smartcontractkit/dev-platform/cmd/generate-bindings/bindings"
-	"github.com/smartcontractkit/dev-platform/internal/runtime"
-	"github.com/smartcontractkit/dev-platform/internal/validation"
+	"github.com/smartcontractkit/cre-cli/cmd/creinit"
+	"github.com/smartcontractkit/cre-cli/cmd/generate-bindings/bindings"
+	"github.com/smartcontractkit/cre-cli/internal/runtime"
+	"github.com/smartcontractkit/cre-cli/internal/validation"
 )
 
 type Inputs struct {

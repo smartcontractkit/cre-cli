@@ -29,8 +29,8 @@ import (
 	"github.com/smartcontractkit/chainlink-testing-framework/seth"
 	p2ptypes "github.com/smartcontractkit/libocr/ragep2p/types"
 
-	"github.com/smartcontractkit/dev-platform/cmd/client"
-	"github.com/smartcontractkit/dev-platform/internal/constants"
+	"github.com/smartcontractkit/cre-cli/cmd/client"
+	"github.com/smartcontractkit/cre-cli/internal/constants"
 )
 
 func DeployCapabilitiesRegistry(sethClient *seth.Client, pubKeys []*ed25519.PublicKey, p2pIds []p2ptypes.PeerID) (common.Address, error) {

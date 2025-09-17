@@ -8,17 +8,17 @@ import (
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 
-	"github.com/smartcontractkit/dev-platform/internal/constants"
-	"github.com/smartcontractkit/dev-platform/internal/settings"
-	"github.com/smartcontractkit/dev-platform/internal/testutil"
-	"github.com/smartcontractkit/dev-platform/internal/transformation"
+	"github.com/smartcontractkit/cre-cli/internal/constants"
+	"github.com/smartcontractkit/cre-cli/internal/settings"
+	"github.com/smartcontractkit/cre-cli/internal/testutil"
+	"github.com/smartcontractkit/cre-cli/internal/transformation"
 )
 
 const ValidProjectSettingsFile = `
 production-testnet:
   hierarchy-test: Project
   test-key: projectValue
-  dev-platform:
+  cre-cli:
     don-id: 1
   user-workflow:
     workflow-owner-address: ""

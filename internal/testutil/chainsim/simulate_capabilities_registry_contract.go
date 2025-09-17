@@ -11,7 +11,7 @@ import (
 	"github.com/smartcontractkit/chainlink-evm/gethwrappers/keystone/generated/capabilities_registry"
 	"github.com/smartcontractkit/chainlink-testing-framework/seth"
 
-	"github.com/smartcontractkit/dev-platform/internal/constants"
+	"github.com/smartcontractkit/cre-cli/internal/constants"
 )
 
 type SimulatedCapabilitiesRegistry struct {

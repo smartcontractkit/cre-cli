@@ -23,8 +23,8 @@ import (
 	"github.com/smartcontractkit/chainlink-evm/gethwrappers/workflow/generated/workflow_registry_wrapper_v2"
 	valuespb "github.com/smartcontractkit/chainlink-protos/cre/go/values/pb"
 
-	"github.com/smartcontractkit/dev-platform/cmd/client"
-	"github.com/smartcontractkit/dev-platform/internal/constants"
+	"github.com/smartcontractkit/cre-cli/cmd/client"
+	"github.com/smartcontractkit/cre-cli/internal/constants"
 )
 
 var randReader = rand.Reader

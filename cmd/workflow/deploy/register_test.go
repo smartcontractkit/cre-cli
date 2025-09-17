@@ -10,7 +10,7 @@ import (
 
 	workflow_registry_v2_wrapper "github.com/smartcontractkit/chainlink-evm/gethwrappers/workflow/generated/workflow_registry_wrapper_v2"
 
-	"github.com/smartcontractkit/dev-platform/cmd/client"
+	"github.com/smartcontractkit/cre-cli/cmd/client"
 )
 
 func makeWorkflowID(hexNoPrefix string) [32]byte {
