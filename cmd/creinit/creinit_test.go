@@ -285,13 +285,12 @@ func TestInsideExistingProjectAddsTypescriptWorkflowSkipsGoScaffold(t *testing.T
 }
 
 func TestGetWorkflowTemplateByIDAndTitle(t *testing.T) {
-	tpl, lang, err := (&handler{}).getWorkflowTemplateByID(3)
+	tpl, err := (&handler{}).getWorkflowTemplateByID(3)
 	require.NoError(t, err)
 	require.Equal(t, uint32(3), tpl.ID)
-	require.Equal(t, lang.Title, "Typescript")
 	require.NotEmpty(t, tpl.Title)
 
-	_, _, err = (&handler{}).getWorkflowTemplateByID(9999)
+	_, err = (&handler{}).getWorkflowTemplateByID(9999)
 	require.Error(t, err)
 
 	title := tpl.Title

@@ -67,7 +67,7 @@ func (h *handler) execute() error {
 		form.Set("client_id", h.environmentSet.ClientID)
 
 		if revokeURL == "" {
-			revokeURL = h.environmentSet.CognitoURL + constants.CognitoAuthRevokePath
+			revokeURL = h.environmentSet.AuthBase + constants.AuthRevokePath
 		}
 		// #nosec G107: revokeURL is a validated constant from configuration
 		resp, err := http.PostForm(revokeURL, form)

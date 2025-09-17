@@ -26,7 +26,7 @@ func NewOAuthService(environmentSet *environments.EnvironmentSet) *OAuthService 
 }
 
 func (s *OAuthService) buildURL(path string) string {
-	return s.environmentSet.CognitoURL + path
+	return s.environmentSet.AuthBase + path
 }
 
 func (s *OAuthService) RefreshToken(ctx context.Context, oldTokenSet *credentials.CreLoginTokenSet) (*credentials.CreLoginTokenSet, error) {
@@ -39,7 +39,7 @@ func (s *OAuthService) RefreshToken(ctx context.Context, oldTokenSet *credential
 	form.Set("client_id", s.environmentSet.ClientID)
 	form.Set("refresh_token", oldTokenSet.RefreshToken)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.buildURL(constants.CognitoTokenExchangePath), strings.NewReader(form.Encode()))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.buildURL(constants.AuthTokenPath), strings.NewReader(form.Encode()))
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +85,7 @@ func (s *OAuthService) RevokeToken(ctx context.Context, token string) error {
 	form.Set("token", token)
 	form.Set("client_id", s.environmentSet.ClientID)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.buildURL(constants.CognitoAuthRevokePath), strings.NewReader(form.Encode()))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.buildURL(constants.AuthRevokePath), strings.NewReader(form.Encode()))
 	if err != nil {
 		return err
 	}

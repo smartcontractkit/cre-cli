@@ -202,7 +202,7 @@ func (h *handler) Execute(inputs Inputs) error {
 	var workflowTemplates []WorkflowTemplate
 	if inputs.TemplateID != 0 {
 		var findErr error
-		tpl, selectedLanguageTemplate, findErr = h.getWorkflowTemplateByID(inputs.TemplateID)
+		tpl, findErr = h.getWorkflowTemplateByID(inputs.TemplateID)
 		if findErr != nil {
 			return fmt.Errorf("invalid template ID %d: %w", inputs.TemplateID, findErr)
 		}
@@ -470,16 +470,19 @@ func (h *handler) generateWorkflowTemplate(workingDirectory string, template Wor
 	return walkErr
 }
 
-func (h *handler) getWorkflowTemplateByID(id uint32) (WorkflowTemplate, LanguageTemplate, error) {
+func (h *handler) getWorkflowTemplateByID(id uint32) (WorkflowTemplate, error) {
+	var allWorkflowTemplates []WorkflowTemplate
+
 	for _, lang := range languageTemplates {
-		for _, tpl := range lang.Workflows {
-			if tpl.ID == id {
-				return tpl, lang, nil
-			}
-		}
+		allWorkflowTemplates = append(allWorkflowTemplates, lang.Workflows...)
 	}
 
-	return WorkflowTemplate{}, LanguageTemplate{}, fmt.Errorf("template with ID %d not found", id)
+	for _, tpl := range allWorkflowTemplates {
+		if tpl.ID == id {
+			return tpl, nil
+		}
+	}
+	return WorkflowTemplate{}, fmt.Errorf("template with ID %d not found", id)
 }
 
 func (h *handler) ensureProjectDirectoryExists(dirPath string) error {
