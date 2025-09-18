@@ -135,7 +135,7 @@ type NoFields struct {
 
 // Main Binding Type for DataStorage
 type DataStorage struct {
-	Address []byte
+	Address common.Address
 	Options *bindings.ContractInitOptions
 	ABI     *abi.ABI
 	client  *evm.Client
@@ -177,7 +177,7 @@ type DataStorageCodec interface {
 
 func NewDataStorage(
 	client *evm.Client,
-	address []byte,
+	address common.Address,
 	options *bindings.ContractInitOptions,
 ) (*DataStorage, error) {
 	parsed, err := abi.JSON(strings.NewReader(DataStorageMetaData.ABI))
@@ -666,10 +666,10 @@ func (c *Codec) DecodeNoFields(log *evm.Log) (*NoFields, error) {
 func (c DataStorage) GetMultipleReserves(
 	runtime cre.Runtime,
 	blockNumber *big.Int,
-) cre.Promise[*evm.CallContractReply] {
+) cre.Promise[[]UpdateReserves] {
 	calldata, err := c.Codec.EncodeGetMultipleReservesMethodCall()
 	if err != nil {
-		return cre.PromiseFromResult[*evm.CallContractReply](nil, err)
+		return cre.PromiseFromResult[[]UpdateReserves](*new([]UpdateReserves), err)
 	}
 
 	var bn cre.Promise[*pb.BigInt]
@@ -688,11 +688,14 @@ func (c DataStorage) GetMultipleReserves(
 		bn = cre.PromiseFromResult(pb.NewBigIntFromInt(blockNumber), nil)
 	}
 
-	return cre.ThenPromise(bn, func(bn *pb.BigInt) cre.Promise[*evm.CallContractReply] {
+	promise := cre.ThenPromise(bn, func(bn *pb.BigInt) cre.Promise[*evm.CallContractReply] {
 		return c.client.CallContract(runtime, &evm.CallContractRequest{
-			Call:        &evm.CallMsg{To: c.Address, Data: calldata},
+			Call:        &evm.CallMsg{To: c.Address.Bytes(), Data: calldata},
 			BlockNumber: bn,
 		})
+	})
+	return cre.Then(promise, func(response *evm.CallContractReply) ([]UpdateReserves, error) {
+		return c.Codec.DecodeGetMultipleReservesMethodOutput(response.Data)
 	})
 
 }
@@ -700,10 +703,10 @@ func (c DataStorage) GetMultipleReserves(
 func (c DataStorage) GetReserves(
 	runtime cre.Runtime,
 	blockNumber *big.Int,
-) cre.Promise[*evm.CallContractReply] {
+) cre.Promise[UpdateReserves] {
 	calldata, err := c.Codec.EncodeGetReservesMethodCall()
 	if err != nil {
-		return cre.PromiseFromResult[*evm.CallContractReply](nil, err)
+		return cre.PromiseFromResult[UpdateReserves](*new(UpdateReserves), err)
 	}
 
 	var bn cre.Promise[*pb.BigInt]
@@ -722,11 +725,14 @@ func (c DataStorage) GetReserves(
 		bn = cre.PromiseFromResult(pb.NewBigIntFromInt(blockNumber), nil)
 	}
 
-	return cre.ThenPromise(bn, func(bn *pb.BigInt) cre.Promise[*evm.CallContractReply] {
+	promise := cre.ThenPromise(bn, func(bn *pb.BigInt) cre.Promise[*evm.CallContractReply] {
 		return c.client.CallContract(runtime, &evm.CallContractRequest{
-			Call:        &evm.CallMsg{To: c.Address, Data: calldata},
+			Call:        &evm.CallMsg{To: c.Address.Bytes(), Data: calldata},
 			BlockNumber: bn,
 		})
+	})
+	return cre.Then(promise, func(response *evm.CallContractReply) (UpdateReserves, error) {
+		return c.Codec.DecodeGetReservesMethodOutput(response.Data)
 	})
 
 }
@@ -734,10 +740,10 @@ func (c DataStorage) GetReserves(
 func (c DataStorage) GetTupleReserves(
 	runtime cre.Runtime,
 	blockNumber *big.Int,
-) cre.Promise[*evm.CallContractReply] {
+) cre.Promise[GetTupleReservesOutput] {
 	calldata, err := c.Codec.EncodeGetTupleReservesMethodCall()
 	if err != nil {
-		return cre.PromiseFromResult[*evm.CallContractReply](nil, err)
+		return cre.PromiseFromResult[GetTupleReservesOutput](GetTupleReservesOutput{}, err)
 	}
 
 	var bn cre.Promise[*pb.BigInt]
@@ -756,11 +762,14 @@ func (c DataStorage) GetTupleReserves(
 		bn = cre.PromiseFromResult(pb.NewBigIntFromInt(blockNumber), nil)
 	}
 
-	return cre.ThenPromise(bn, func(bn *pb.BigInt) cre.Promise[*evm.CallContractReply] {
+	promise := cre.ThenPromise(bn, func(bn *pb.BigInt) cre.Promise[*evm.CallContractReply] {
 		return c.client.CallContract(runtime, &evm.CallContractRequest{
-			Call:        &evm.CallMsg{To: c.Address, Data: calldata},
+			Call:        &evm.CallMsg{To: c.Address.Bytes(), Data: calldata},
 			BlockNumber: bn,
 		})
+	})
+	return cre.Then(promise, func(response *evm.CallContractReply) (GetTupleReservesOutput, error) {
+		return c.Codec.DecodeGetTupleReservesMethodOutput(response.Data)
 	})
 
 }
@@ -768,10 +777,10 @@ func (c DataStorage) GetTupleReserves(
 func (c DataStorage) GetValue(
 	runtime cre.Runtime,
 	blockNumber *big.Int,
-) cre.Promise[*evm.CallContractReply] {
+) cre.Promise[string] {
 	calldata, err := c.Codec.EncodeGetValueMethodCall()
 	if err != nil {
-		return cre.PromiseFromResult[*evm.CallContractReply](nil, err)
+		return cre.PromiseFromResult[string](*new(string), err)
 	}
 
 	var bn cre.Promise[*pb.BigInt]
@@ -790,11 +799,14 @@ func (c DataStorage) GetValue(
 		bn = cre.PromiseFromResult(pb.NewBigIntFromInt(blockNumber), nil)
 	}
 
-	return cre.ThenPromise(bn, func(bn *pb.BigInt) cre.Promise[*evm.CallContractReply] {
+	promise := cre.ThenPromise(bn, func(bn *pb.BigInt) cre.Promise[*evm.CallContractReply] {
 		return c.client.CallContract(runtime, &evm.CallContractRequest{
-			Call:        &evm.CallMsg{To: c.Address, Data: calldata},
+			Call:        &evm.CallMsg{To: c.Address.Bytes(), Data: calldata},
 			BlockNumber: bn,
 		})
+	})
+	return cre.Then(promise, func(response *evm.CallContractReply) (string, error) {
+		return c.Codec.DecodeGetValueMethodOutput(response.Data)
 	})
 
 }
@@ -803,10 +815,10 @@ func (c DataStorage) ReadData(
 	runtime cre.Runtime,
 	args ReadDataInput,
 	blockNumber *big.Int,
-) cre.Promise[*evm.CallContractReply] {
+) cre.Promise[string] {
 	calldata, err := c.Codec.EncodeReadDataMethodCall(args)
 	if err != nil {
-		return cre.PromiseFromResult[*evm.CallContractReply](nil, err)
+		return cre.PromiseFromResult[string](*new(string), err)
 	}
 
 	var bn cre.Promise[*pb.BigInt]
@@ -825,11 +837,14 @@ func (c DataStorage) ReadData(
 		bn = cre.PromiseFromResult(pb.NewBigIntFromInt(blockNumber), nil)
 	}
 
-	return cre.ThenPromise(bn, func(bn *pb.BigInt) cre.Promise[*evm.CallContractReply] {
+	promise := cre.ThenPromise(bn, func(bn *pb.BigInt) cre.Promise[*evm.CallContractReply] {
 		return c.client.CallContract(runtime, &evm.CallContractRequest{
-			Call:        &evm.CallMsg{To: c.Address, Data: calldata},
+			Call:        &evm.CallMsg{To: c.Address.Bytes(), Data: calldata},
 			BlockNumber: bn,
 		})
+	})
+	return cre.Then(promise, func(response *evm.CallContractReply) (string, error) {
+		return c.Codec.DecodeReadDataMethodOutput(response.Data)
 	})
 
 }
@@ -852,7 +867,7 @@ func (c DataStorage) WriteReportFromUpdateReserves(
 
 	return cre.ThenPromise(promise, func(report *cre.Report) cre.Promise[*evm.WriteReportReply] {
 		return c.client.WriteReport(runtime, &evm.WriteCreReportRequest{
-			Receiver:  c.Address,
+			Receiver:  c.Address.Bytes(),
 			Report:    report,
 			GasConfig: gasConfig,
 		})
@@ -877,7 +892,7 @@ func (c DataStorage) WriteReportFromUserData(
 
 	return cre.ThenPromise(promise, func(report *cre.Report) cre.Promise[*evm.WriteReportReply] {
 		return c.client.WriteReport(runtime, &evm.WriteCreReportRequest{
-			Receiver:  c.Address,
+			Receiver:  c.Address.Bytes(),
 			Report:    report,
 			GasConfig: gasConfig,
 		})
@@ -890,7 +905,7 @@ func (c DataStorage) WriteReport(
 	gasConfig *evm.GasConfig,
 ) cre.Promise[*evm.WriteReportReply] {
 	return c.client.WriteReport(runtime, &evm.WriteCreReportRequest{
-		Receiver:  c.Address,
+		Receiver:  c.Address.Bytes(),
 		Report:    report,
 		GasConfig: gasConfig,
 	})
@@ -991,7 +1006,7 @@ func (c *DataStorage) LogTriggerAccessLoggedLog(chainSelector uint64, confidence
 	}
 
 	return evm.LogTrigger(chainSelector, &evm.FilterLogTriggerRequest{
-		Addresses:  [][]byte{c.Address},
+		Addresses:  [][]byte{c.Address.Bytes()},
 		Topics:     topics,
 		Confidence: confidence,
 	}), nil
@@ -1005,7 +1020,7 @@ func (c *DataStorage) FilterLogsAccessLogged(runtime cre.Runtime, options *bindi
 	}
 	return c.client.FilterLogs(runtime, &evm.FilterLogsRequest{
 		FilterQuery: &evm.FilterQuery{
-			Addresses: [][]byte{c.Address},
+			Addresses: [][]byte{c.Address.Bytes()},
 			Topics: []*evm.Topics{
 				{Topic: [][]byte{c.Codec.AccessLoggedLogHash()}},
 			},
@@ -1024,7 +1039,7 @@ func (c *DataStorage) LogTriggerDataStoredLog(chainSelector uint64, confidence e
 	}
 
 	return evm.LogTrigger(chainSelector, &evm.FilterLogTriggerRequest{
-		Addresses:  [][]byte{c.Address},
+		Addresses:  [][]byte{c.Address.Bytes()},
 		Topics:     topics,
 		Confidence: confidence,
 	}), nil
@@ -1038,7 +1053,7 @@ func (c *DataStorage) FilterLogsDataStored(runtime cre.Runtime, options *binding
 	}
 	return c.client.FilterLogs(runtime, &evm.FilterLogsRequest{
 		FilterQuery: &evm.FilterQuery{
-			Addresses: [][]byte{c.Address},
+			Addresses: [][]byte{c.Address.Bytes()},
 			Topics: []*evm.Topics{
 				{Topic: [][]byte{c.Codec.DataStoredLogHash()}},
 			},
@@ -1057,7 +1072,7 @@ func (c *DataStorage) LogTriggerDynamicEventLog(chainSelector uint64, confidence
 	}
 
 	return evm.LogTrigger(chainSelector, &evm.FilterLogTriggerRequest{
-		Addresses:  [][]byte{c.Address},
+		Addresses:  [][]byte{c.Address.Bytes()},
 		Topics:     topics,
 		Confidence: confidence,
 	}), nil
@@ -1071,7 +1086,7 @@ func (c *DataStorage) FilterLogsDynamicEvent(runtime cre.Runtime, options *bindi
 	}
 	return c.client.FilterLogs(runtime, &evm.FilterLogsRequest{
 		FilterQuery: &evm.FilterQuery{
-			Addresses: [][]byte{c.Address},
+			Addresses: [][]byte{c.Address.Bytes()},
 			Topics: []*evm.Topics{
 				{Topic: [][]byte{c.Codec.DynamicEventLogHash()}},
 			},
@@ -1090,7 +1105,7 @@ func (c *DataStorage) LogTriggerNoFieldsLog(chainSelector uint64, confidence evm
 	}
 
 	return evm.LogTrigger(chainSelector, &evm.FilterLogTriggerRequest{
-		Addresses:  [][]byte{c.Address},
+		Addresses:  [][]byte{c.Address.Bytes()},
 		Topics:     topics,
 		Confidence: confidence,
 	}), nil
@@ -1104,7 +1119,7 @@ func (c *DataStorage) FilterLogsNoFields(runtime cre.Runtime, options *bindings.
 	}
 	return c.client.FilterLogs(runtime, &evm.FilterLogsRequest{
 		FilterQuery: &evm.FilterQuery{
-			Addresses: [][]byte{c.Address},
+			Addresses: [][]byte{c.Address.Bytes()},
 			Topics: []*evm.Topics{
 				{Topic: [][]byte{c.Codec.NoFieldsLogHash()}},
 			},

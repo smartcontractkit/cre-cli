@@ -62,7 +62,7 @@ var EmptyContractMetaData = &bind.MetaData{
 
 // Main Binding Type for EmptyContract
 type EmptyContract struct {
-	Address []byte
+	Address common.Address
 	Options *bindings.ContractInitOptions
 	ABI     *abi.ABI
 	client  *evm.Client
@@ -74,7 +74,7 @@ type EmptyContractCodec interface {
 
 func NewEmptyContract(
 	client *evm.Client,
-	address []byte,
+	address common.Address,
 	options *bindings.ContractInitOptions,
 ) (*EmptyContract, error) {
 	parsed, err := abi.JSON(strings.NewReader(EmptyContractMetaData.ABI))
@@ -112,7 +112,7 @@ func (c EmptyContract) WriteReport(
 	gasConfig *evm.GasConfig,
 ) cre.Promise[*evm.WriteReportReply] {
 	return c.client.WriteReport(runtime, &evm.WriteCreReportRequest{
-		Receiver:  c.Address,
+		Receiver:  c.Address.Bytes(),
 		Report:    report,
 		GasConfig: gasConfig,
 	})

@@ -109,7 +109,7 @@ type {{$call.Normalized.Name}}Output struct {
 
 // Main Binding Type for {{$contract.Type}}
 type {{$contract.Type}} struct {
-	Address   []byte
+	Address   common.Address
 	Options   *bindings.ContractInitOptions
 	ABI       *abi.ABI
 	client *evm.Client
@@ -145,7 +145,7 @@ type {{$contract.Type}}Codec interface {
 
 func New{{$contract.Type}}(
 	client *evm.Client,
-	address []byte,
+	address common.Address,
 	options *bindings.ContractInitOptions,
 ) (*{{$contract.Type}}, error) {
 	parsed, err := abi.JSON(strings.NewReader({{$contract.Type}}MetaData.ABI))
@@ -349,14 +349,26 @@ func (c {{$contract.Type}}) {{$call.Normalized.Name}}(
     args {{$call.Normalized.Name}}Input,
     {{- end}}
     blockNumber *big.Int,
-) cre.Promise[*evm.CallContractReply] {
+) {{- if gt (len $call.Normalized.Outputs) 1 -}}
+cre.Promise[{{$call.Normalized.Name}}Output]
+{{- else if eq (len $call.Normalized.Outputs) 1 -}}
+cre.Promise[{{with index $call.Normalized.Outputs 0}}{{bindtype .Type $.Structs}}{{end}}]
+{{- else -}}
+cre.Promise[*evm.CallContractReply]
+{{- end}} {
     {{- if gt (len $call.Normalized.Inputs) 0}}
     calldata, err := c.Codec.Encode{{$call.Normalized.Name}}MethodCall(args)
 	{{- else }}
 	calldata, err := c.Codec.Encode{{$call.Normalized.Name}}MethodCall()
 	{{- end}}
     if err != nil {
+        {{- if gt (len $call.Normalized.Outputs) 1}}
+        return cre.PromiseFromResult[{{$call.Normalized.Name}}Output]({{$call.Normalized.Name}}Output{}, err)
+        {{- else if eq (len $call.Normalized.Outputs) 1}}
+        return cre.PromiseFromResult[{{with index $call.Normalized.Outputs 0}}{{bindtype .Type $.Structs}}{{end}}]({{with index $call.Normalized.Outputs 0}}*new({{bindtype .Type $.Structs}}){{end}}, err)
+        {{- else}}
         return cre.PromiseFromResult[*evm.CallContractReply](nil, err)
+        {{- end}}
     }
 
 	var bn cre.Promise[*pb.BigInt]
@@ -375,12 +387,21 @@ func (c {{$contract.Type}}) {{$call.Normalized.Name}}(
 		bn = cre.PromiseFromResult(pb.NewBigIntFromInt(blockNumber), nil)
 	}
 
-    return cre.ThenPromise(bn, func(bn *pb.BigInt) cre.Promise[*evm.CallContractReply] {
+    promise := cre.ThenPromise(bn, func(bn *pb.BigInt) cre.Promise[*evm.CallContractReply] {
         return c.client.CallContract(runtime, &evm.CallContractRequest{
-            Call:        &evm.CallMsg{To: c.Address, Data: calldata},
+            Call:        &evm.CallMsg{To: c.Address.Bytes(), Data: calldata},
             BlockNumber: bn,
         })
     })
+
+    {{- if gt (len $call.Normalized.Outputs) 0}}
+    return cre.Then(promise, func(response *evm.CallContractReply) ({{- if gt (len $call.Normalized.Outputs) 1 -}}{{$call.Normalized.Name}}Output{{- else -}}{{with index $call.Normalized.Outputs 0}}{{bindtype .Type $.Structs}}{{end}}{{- end}}, error) {
+        return c.Codec.Decode{{$call.Normalized.Name}}MethodOutput(response.Data)
+    })
+    {{- else}}
+    // No outputs to decode, return raw response
+    return promise
+    {{- end}}
 
 }
   {{- end}}
@@ -406,7 +427,7 @@ func (c {{$contract.Type}}) WriteReportFrom{{.Name}}(
 
 	return cre.ThenPromise(promise, func(report *cre.Report) cre.Promise[*evm.WriteReportReply] {
 	    return c.client.WriteReport(runtime, &evm.WriteCreReportRequest{
-    		Receiver: c.Address,
+    		Receiver: c.Address.Bytes(),
     		Report: report,
     		GasConfig: gasConfig,
     	})
@@ -420,7 +441,7 @@ func (c {{$contract.Type}}) WriteReport(
 	gasConfig *evm.GasConfig,
 ) cre.Promise[*evm.WriteReportReply] {
 	return c.client.WriteReport(runtime, &evm.WriteCreReportRequest{
-		Receiver: c.Address,
+		Receiver: c.Address.Bytes(),
 		Report: report,
 		GasConfig: gasConfig,
 	})
@@ -481,7 +502,7 @@ func (c *{{$contract.Type}}) LogTrigger{{.Normalized.Name}}Log(chainSelector uin
 	}
 
 	return evm.LogTrigger(chainSelector, &evm.FilterLogTriggerRequest{
-		Addresses:  [][]byte{c.Address},
+		Addresses:  [][]byte{c.Address.Bytes()},
 		Topics:     topics,
 		Confidence: confidence,
 	}), nil
@@ -495,7 +516,7 @@ func (c *{{$contract.Type}}) FilterLogs{{.Normalized.Name}}(runtime cre.Runtime,
 	}
 	return c.client.FilterLogs(runtime, &evm.FilterLogsRequest{
 		FilterQuery: &evm.FilterQuery{
-			Addresses: [][]byte{c.Address},
+			Addresses: [][]byte{c.Address.Bytes()},
 			Topics:    []*evm.Topics{
 				{Topic:[][]byte{c.Codec.{{.Normalized.Name}}LogHash()}},
 			},			
