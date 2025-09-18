@@ -131,7 +131,7 @@ func onLogTrigger(config *Config, runtime cre.Runtime, payload *evm.Log) (string
 
 	logger.Info("Message retrieved from the contract", "message", message)
 
-	return string(message.GetData()), nil
+	return message, nil
 }
 
 func onHTTPTrigger(config *Config, runtime cre.Runtime, payload *http.Payload) (string, error) {
@@ -219,11 +219,7 @@ func prepareMessageEmitter(logger *slog.Logger, evmCfg EVMConfig) (*message_emit
 		ChainSelector: evmCfg.ChainSelector,
 	}
 
-	address, err := hexToBytes(evmCfg.MessageEmitterAddress)
-	if err != nil {
-		logger.Error("failed to decode message emitter address", "address", evmCfg.MessageEmitterAddress, "err", err)
-		return nil, fmt.Errorf("failed to decode message emitter address %s: %w", evmCfg.MessageEmitterAddress, err)
-	}
+	address := common.HexToAddress(evmCfg.MessageEmitterAddress)
 
 	messageEmitter, err := message_emitter.NewMessageEmitter(evmClient, address, nil)
 	if err != nil {
@@ -240,11 +236,7 @@ func fetchNativeTokenBalance(runtime cre.Runtime, evmCfg EVMConfig, tokenHolderA
 		ChainSelector: evmCfg.ChainSelector,
 	}
 
-	balanceReaderAddress, err := hexToBytes(evmCfg.BalanceReaderAddress)
-	if err != nil {
-		logger.Error("failed to decode balance reader address", "address", evmCfg.BalanceReaderAddress, "err", err)
-		return nil, fmt.Errorf("failed to decode balance reader address %s: %w", evmCfg.BalanceReaderAddress, err)
-	}
+	balanceReaderAddress := common.HexToAddress(evmCfg.BalanceReaderAddress)
 	balanceReader, err := balance_reader.NewBalanceReader(evmClient, balanceReaderAddress, nil)
 	if err != nil {
 		logger.Error("failed to create balance reader", "address", evmCfg.BalanceReaderAddress, "err", err)
@@ -266,29 +258,25 @@ func fetchNativeTokenBalance(runtime cre.Runtime, evmCfg EVMConfig, tokenHolderA
 		return nil, err
 	}
 
-	if len(balances.GetData()) < 1 {
+	if len(balances) < 1 {
 		logger.Error("No balances returned from contract", "contract_chain", evmCfg.ChainSelector)
 		return nil, fmt.Errorf("no balances returned from contract for chain %d", evmCfg.ChainSelector)
 	}
 
-	return new(big.Int).SetBytes(balances.GetData()), nil
+	return balances[0], nil
 }
 
 func getTotalSupply(config *Config, runtime cre.Runtime) (*big.Int, error) {
 	evms := config.EVMs
 	logger := runtime.Logger()
 	// Fetch supply from all EVMs in parallel
-	supplyPromises := make([]cre.Promise[*evm.CallContractReply], len(evms))
+	supplyPromises := make([]cre.Promise[*big.Int], len(evms))
 	for i, evmCfg := range evms {
 		evmClient := &evm.Client{
 			ChainSelector: evmCfg.ChainSelector,
 		}
 
-		address, err := hexToBytes(evmCfg.TokenAddress)
-		if err != nil {
-			logger.Error("failed to decode token address", "address", evmCfg.TokenAddress, "err", err)
-			return nil, fmt.Errorf("failed to decode token address %s: %w", evmCfg.TokenAddress, err)
-		}
+		address := common.HexToAddress(evmCfg.TokenAddress)
 		token, err := ierc20.NewIERC20(evmClient, address, nil)
 		if err != nil {
 			logger.Error("failed to create token", "address", evmCfg.TokenAddress, "err", err)
@@ -308,7 +296,7 @@ func getTotalSupply(config *Config, runtime cre.Runtime) (*big.Int, error) {
 			return nil, err
 		}
 
-		totalSupply = totalSupply.Add(totalSupply, new(big.Int).SetBytes(supply.GetData()))
+		totalSupply = totalSupply.Add(totalSupply, supply)
 	}
 
 	return totalSupply, nil
@@ -321,7 +309,7 @@ func updateReserves(config *Config, runtime cre.Runtime, totalSupply *big.Int, t
 	evmClient := &evm.Client{
 		ChainSelector: evmCfg.ChainSelector,
 	}
-	reserveManager, err := reserve_manager.NewReserveManager(evmClient, common.HexToAddress(evmCfg.ProxyAddress).Bytes(), nil)
+	reserveManager, err := reserve_manager.NewReserveManager(evmClient, common.HexToAddress(evmCfg.ProxyAddress), nil)
 	if err != nil {
 		return fmt.Errorf("failed to create reserve manager: %w", err)
 	}

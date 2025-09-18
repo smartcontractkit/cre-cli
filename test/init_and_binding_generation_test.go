@@ -2,6 +2,7 @@ package test
 
 import (
 	"bytes"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
@@ -82,6 +83,23 @@ func TestE2EInit_DevPoRTemplate(t *testing.T) {
 		t,
 		tidyCmd.Run(),
 		"go mod tidy failed:\nSTDOUT:\n%s\nSTDERR:\n%s",
+		stdout.String(),
+		stderr.String(),
+	)
+
+	// Check that the generated main.go file compiles successfully for WASM target
+	stdout.Reset()
+	stderr.Reset()
+	buildCmd := exec.Command("go", "build", "-o", "workflow.wasm", "main.go")
+	buildCmd.Dir = workflowDirectory
+	buildCmd.Env = append(os.Environ(), "GOOS=wasip1", "GOARCH=wasm")
+	buildCmd.Stdout = &stdout
+	buildCmd.Stderr = &stderr
+
+	require.NoError(
+		t,
+		buildCmd.Run(),
+		"generated main.go failed to compile for WASM target:\nSTDOUT:\n%s\nSTDERR:\n%s",
 		stdout.String(),
 		stderr.String(),
 	)
