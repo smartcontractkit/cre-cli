@@ -120,8 +120,17 @@ func TestDecodeEvents(t *testing.T) {
 func TestReadMethods(t *testing.T) {
 	t.Run("single", func(t *testing.T) {
 		client := &evm.Client{ChainSelector: anyChainSelector}
-		ds, err := datastorage.NewDataStorage(client, nil, &bindings.ContractInitOptions{})
+		ds, err := datastorage.NewDataStorage(client, common.Address{}, &bindings.ContractInitOptions{})
 		require.NoError(t, err, "Failed to create DataStorage instance")
+
+		expectedValue := "test string response"
+
+		// Encode the expected string response
+		stringType, err := abi.NewType("string", "", nil)
+		require.NoError(t, err)
+		args := abi.Arguments{{Name: "value", Type: stringType}}
+		encodedData, err := args.Pack(expectedValue)
+		require.NoError(t, err)
 
 		evmCap, err := evmmock.NewClientCapability(anyChainSelector, t)
 		require.NoError(t, err, "Failed to create EVM client capability")
@@ -136,9 +145,8 @@ func TestReadMethods(t *testing.T) {
 		}
 
 		evmCap.CallContract = func(_ context.Context, input *evm.CallContractRequest) (*evm.CallContractReply, error) {
-			// Simulate a successful call with dummy data
 			reply := &evm.CallContractReply{
-				Data: []byte{0x01, 0x02, 0x03, 0x04}, // Example data
+				Data: encodedData,
 			}
 			return reply, nil
 		}
@@ -148,18 +156,16 @@ func TestReadMethods(t *testing.T) {
 			User: common.HexToAddress("0x1234567890abcdef1234567890abcdef12345678"),
 			Key:  "testKey",
 		}, nil)
-		require.NoError(t, err)
-		require.NotNil(t, reply, "ReadData should return a non-nil reply")
+		require.NotNil(t, reply, "ReadData should return a non-nil promise")
 
-		response, err := reply.Await()
+		decodedValue, err := reply.Await()
 		require.NoError(t, err, "Awaiting ReadData reply should not return an error")
-		require.NotNil(t, response, "Response from ReadData should not be nil")
-		require.Equal(t, []byte{0x01, 0x02, 0x03, 0x04}, response.Data, "Response data should match expected dummy data")
+		require.Equal(t, expectedValue, decodedValue, "Decoded value should match expected string")
 	})
 
 	t.Run("multiple", func(t *testing.T) {
 		client := &evm.Client{ChainSelector: anyChainSelector}
-		ds, err := datastorage.NewDataStorage(client, nil, &bindings.ContractInitOptions{})
+		ds, err := datastorage.NewDataStorage(client, common.Address{}, &bindings.ContractInitOptions{})
 		require.NoError(t, err, "Failed to create DataStorage instance")
 
 		expectedReserves := []datastorage.UpdateReserves{
@@ -206,12 +212,8 @@ func TestReadMethods(t *testing.T) {
 		reply := ds.GetMultipleReserves(runtime, nil)
 		require.NotNil(t, reply, "GetMultipleReserves should return a non-nil promise")
 
-		response, err := reply.Await()
+		decodedReserves, err := reply.Await()
 		require.NoError(t, err, "Awaiting GetMultipleReserves reply should not return an error")
-		require.NotNil(t, response, "Response from GetMultipleReserves should not be nil")
-
-		decodedReserves, err := ds.Codec.DecodeGetMultipleReservesMethodOutput(response.Data)
-		require.NoError(t, err, "Decoding GetMultipleReserves output should not return an error")
 		require.Len(t, decodedReserves, 2, "Should decode exactly 2 UpdateReserves structs")
 
 		require.Equal(t, expectedReserves[0].TotalMinted, decodedReserves[0].TotalMinted, "First struct TotalMinted should match")
@@ -223,7 +225,7 @@ func TestReadMethods(t *testing.T) {
 
 	t.Run("tuple returns", func(t *testing.T) {
 		client := &evm.Client{ChainSelector: anyChainSelector}
-		ds, err := datastorage.NewDataStorage(client, nil, &bindings.ContractInitOptions{})
+		ds, err := datastorage.NewDataStorage(client, common.Address{}, &bindings.ContractInitOptions{})
 		require.NoError(t, err, "Failed to create DataStorage instance")
 
 		// Expected values that match the Solidity function: return (100, 200)
@@ -261,13 +263,8 @@ func TestReadMethods(t *testing.T) {
 		reply := ds.GetTupleReserves(runtime, nil)
 		require.NotNil(t, reply, "GetTupleReserves should return a non-nil promise")
 
-		response, err := reply.Await()
+		decodedOutput, err := reply.Await()
 		require.NoError(t, err, "Awaiting GetTupleReserves reply should not return an error")
-		require.NotNil(t, response, "Response from GetTupleReserves should not be nil")
-
-		// Test the decode functionality for multiple named return values (tuple)
-		decodedOutput, err := ds.Codec.DecodeGetTupleReservesMethodOutput(response.Data)
-		require.NoError(t, err, "Decoding GetTupleReserves output should not return an error")
 
 		// Verify both return values are correctly decoded from the tuple
 		require.Equal(t, expectedTotalMinted, decodedOutput.TotalMinted, "TotalMinted should match expected value")
@@ -281,7 +278,7 @@ func TestReadMethods(t *testing.T) {
 
 func TestWriteReportMethods(t *testing.T) {
 	client := &evm.Client{ChainSelector: anyChainSelector}
-	ds, err := datastorage.NewDataStorage(client, nil, &bindings.ContractInitOptions{})
+	ds, err := datastorage.NewDataStorage(client, common.Address{}, &bindings.ContractInitOptions{})
 	require.NoError(t, err, "Failed to create DataStorage instance")
 
 	report := ocr3types.Metadata{
@@ -382,7 +379,7 @@ func TestErrorHandling(t *testing.T) {
 
 func TestFilterLogs(t *testing.T) {
 	client := &evm.Client{ChainSelector: anyChainSelector}
-	anyAddress := common.HexToAddress("0xAb8483F64d9C6d1EcF9b849Ae677dD3315835cb2").Bytes()
+	anyAddress := common.HexToAddress("0xAb8483F64d9C6d1EcF9b849Ae677dD3315835cb2")
 	ds, err := datastorage.NewDataStorage(client, anyAddress, &bindings.ContractInitOptions{})
 	require.NoError(t, err, "Failed to create DataStorage instance")
 
@@ -393,13 +390,13 @@ func TestFilterLogs(t *testing.T) {
 	evmCap, err := evmmock.NewClientCapability(anyChainSelector, t)
 	require.NoError(t, err, "Failed to create EVM client capability")
 	evmCap.FilterLogs = func(_ context.Context, req *evm.FilterLogsRequest) (*evm.FilterLogsReply, error) {
-		require.Equal(t, [][]byte{ds.Address}, req.FilterQuery.Addresses, "Filter should contain the correct address")
+		require.Equal(t, [][]byte{ds.Address.Bytes()}, req.FilterQuery.Addresses, "Filter should contain the correct address")
 		require.Equal(t, bh, req.FilterQuery.BlockHash, "Filter should contain the correct block hash")
 		require.Equal(t, fb.Bytes(), req.FilterQuery.FromBlock.GetAbsVal(), "Filter should contain the correct from block")
 		require.Equal(t, tb.Bytes(), req.FilterQuery.ToBlock.GetAbsVal(), "Filter should contain the correct to block")
 		logs := []*evm.Log{
 			{
-				Address: ds.Address,
+				Address: ds.Address.Bytes(),
 				Topics:  [][]byte{ds.Codec.AccessLoggedLogHash()},
 				Data:    []byte("test log data"),
 			},
@@ -418,12 +415,12 @@ func TestFilterLogs(t *testing.T) {
 	require.NoError(t, err, "Awaiting FilteredLogsAccessLogged reply should not return an error")
 	require.NotNil(t, response, "Response from FilteredLogsAccessLogged should not be nil")
 	require.Len(t, response.Logs, 1, "Response should contain one log")
-	require.Equal(t, ds.Address, response.Logs[0].Address)
+	require.Equal(t, ds.Address.Bytes(), response.Logs[0].Address)
 }
 
 func TestLogTrigger(t *testing.T) {
 	client := &evm.Client{ChainSelector: anyChainSelector}
-	ds, err := datastorage.NewDataStorage(client, nil, &bindings.ContractInitOptions{})
+	ds, err := datastorage.NewDataStorage(client, common.Address{}, &bindings.ContractInitOptions{})
 	require.NoError(t, err, "Failed to create DataStorage instance")
 	t.Run("simple event", func(t *testing.T) {
 		ev := ds.ABI.Events["DataStored"]
@@ -528,7 +525,7 @@ func TestLogTrigger(t *testing.T) {
 
 func newDataStorage(t *testing.T) *datastorage.DataStorage {
 	client := &evm.Client{ChainSelector: anyChainSelector}
-	ds, err := datastorage.NewDataStorage(client, nil, &bindings.ContractInitOptions{})
+	ds, err := datastorage.NewDataStorage(client, common.Address{}, &bindings.ContractInitOptions{})
 	require.NoError(t, err, "Failed to create DataStorage instance")
 	return ds
 }
