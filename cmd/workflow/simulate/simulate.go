@@ -45,21 +45,52 @@ import (
 
 const TIMEOUT = 30 * time.Second
 
+// ---- SUPPORTED CHAINS ----
+var supportedEVM = []struct {
+	Selector  uint64
+	Forwarder string
+	Name      string // CLI-friendly name
+	Display   string // pretty label for prompts/logs
+}{
+	{Selector: SEPOLIA_CHAIN_SELECTOR, Forwarder: SEPOLIA_MOCK_KEYSTONE_FORWARDER_ADDRESS, Name: "eth-sepolia", Display: "Ethereum Sepolia"},
+	{Selector: MAINNET_CHAIN_SELECTOR, Forwarder: MAINNET_MOCK_KEYSTONE_FORWARDER_ADDRESS, Name: "eth-mainnet", Display: "Ethereum Mainnet"},
+}
+
+func selectorToName(sel uint64) string {
+	for _, c := range supportedEVM {
+		if c.Selector == sel {
+			return c.Name
+		}
+	}
+	return fmt.Sprintf("%d", sel)
+}
+
+func nameToSelector(name string) (uint64, bool) {
+	n := strings.ToLower(strings.TrimSpace(name))
+	for _, c := range supportedEVM {
+		if c.Name == n {
+			return c.Selector, true
+		}
+	}
+	return 0, false
+}
+
 type Inputs struct {
-	WorkflowPath  string            `validate:"required,file"`
-	ConfigPath    string            `validate:"omitempty,file,ascii,max=97" cli:"--config"`
-	SecretsPath   string            `validate:"omitempty,file,ascii,max=97" cli:"--secrets"`
-	EngineLogs    bool              `validate:"omitempty" cli:"--engine-logs"`
-	Broadcast     bool              `validate:"-"`
-	EthClient     *ethclient.Client `validate:"omitempty"`
-	EthPrivateKey *ecdsa.PrivateKey `validate:"omitempty"`
-	WorkflowName  string            `validate:"required"`
+	WorkflowPath  string                       `validate:"required,file"`
+	ConfigPath    string                       `validate:"omitempty,file,ascii,max=97" cli:"--config"`
+	SecretsPath   string                       `validate:"omitempty,file,ascii,max=97" cli:"--secrets"`
+	EngineLogs    bool                         `validate:"omitempty" cli:"--engine-logs"`
+	Broadcast     bool                         `validate:"-"`
+	EVMClients    map[uint64]*ethclient.Client `validate:"omitempty"` // multichain clients keyed by selector
+	EthPrivateKey *ecdsa.PrivateKey            `validate:"omitempty"`
+	WorkflowName  string                       `validate:"required"`
 	// Non-interactive mode options
 	NonInteractive bool   `validate:"-"`
 	TriggerIndex   int    `validate:"-"`
 	HTTPPayload    string `validate:"-"` // JSON string or @/path/to/file.json
 	EVMTxHash      string `validate:"-"` // 0x-prefixed
 	EVMEventIndex  int    `validate:"-"`
+	EVMChain       string `validate:"-"` // which chain to use in non-interactive EVM trigger
 }
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
@@ -93,6 +124,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	simulateCmd.Flags().String("http-payload", "", "HTTP trigger payload as JSON string or path to JSON file (with or without @ prefix)")
 	simulateCmd.Flags().String("evm-tx-hash", "", "EVM trigger transaction hash (0x...)")
 	simulateCmd.Flags().Int("evm-event-index", -1, "EVM trigger log index (0-based)")
+	simulateCmd.Flags().String("evm-chain", "", "EVM chain to use for EVM triggers in non-interactive mode (eth-sepolia|eth-mainnet)")
 	return simulateCmd
 }
 
@@ -109,18 +141,28 @@ func newHandler(ctx *runtime.Context) *handler {
 }
 
 func (h *handler) ResolveInputs(args []string, v *viper.Viper, creSettings *settings.Settings) (Inputs, error) {
-	wrRpcUrl, err := settings.GetRpcUrlSettings(v, 16015286601757825753)
-	if err != nil {
-		return Inputs{}, err
-	}
-	if wrRpcUrl == "" {
-		return Inputs{}, fmt.Errorf("sepolia rpc url not found")
+	// build clients for each supported chain from settings, skip if rpc is empty
+	clients := make(map[uint64]*ethclient.Client)
+	for _, chain := range supportedEVM {
+		rpcURL, err := settings.GetRpcUrlSettings(v, chain.Selector)
+		if err != nil || strings.TrimSpace(rpcURL) == "" {
+			h.log.Info().Msgf("RPC not provided for %s (%s); skipping", chain.Display, chain.Name)
+			continue
+		}
+
+		c, err := ethclient.Dial(rpcURL)
+		if err != nil {
+			h.log.Info().Msgf("failed to create eth client for %s (%s): %v", chain.Display, chain.Name, err)
+			continue
+		}
+
+		clients[chain.Selector] = c
 	}
 
-	ethClient, err := ethclient.Dial(wrRpcUrl)
-	if err != nil {
-		return Inputs{}, fmt.Errorf("failed to create eth client: %w", err)
+	if len(clients) == 0 {
+		return Inputs{}, fmt.Errorf("no RPC URLs found for supported chains (eth-sepolia, eth-mainnet)")
 	}
+
 	pk, err := crypto.HexToECDSA(creSettings.User.EthPrivateKey)
 	if err != nil {
 		return Inputs{}, fmt.Errorf("failed to create private key: %w", err)
@@ -132,7 +174,7 @@ func (h *handler) ResolveInputs(args []string, v *viper.Viper, creSettings *sett
 		SecretsPath:    v.GetString("secrets"),
 		EngineLogs:     v.GetBool("engine-logs"),
 		Broadcast:      v.GetBool("broadcast"),
-		EthClient:      ethClient,
+		EVMClients:     clients,
 		EthPrivateKey:  pk,
 		WorkflowName:   creSettings.Workflow.UserWorkflowSettings.WorkflowName,
 		NonInteractive: v.GetBool("non-interactive"),
@@ -140,6 +182,7 @@ func (h *handler) ResolveInputs(args []string, v *viper.Viper, creSettings *sett
 		HTTPPayload:    v.GetString("http-payload"),
 		EVMTxHash:      v.GetString("evm-tx-hash"),
 		EVMEventIndex:  v.GetInt("evm-event-index"),
+		EVMChain:       v.GetString("evm-chain"),
 	}, nil
 }
 
@@ -304,9 +347,18 @@ func run(
 			}
 		}
 
+		// Build forwarder address map based on which chains actually have RPC clients configured
+		forwarders := map[uint64]common.Address{}
+		for _, c := range supportedEVM {
+			if _, ok := inputs.EVMClients[c.Selector]; ok && strings.TrimSpace(c.Forwarder) != "" {
+				forwarders[c.Selector] = common.HexToAddress(c.Forwarder)
+			}
+		}
+
 		manualTriggerCapConfig := ManualTriggerCapabilitiesConfig{
-			Client:     inputs.EthClient,
+			Clients:    inputs.EVMClients,
 			PrivateKey: inputs.EthPrivateKey,
+			Forwarders: forwarders,
 		}
 
 		triggerLggr := lggr.Named("TriggerCapabilities")
@@ -337,7 +389,10 @@ func run(
 			}
 		}
 
-		srvcs = append(srvcs, triggerCaps.ManualCronTrigger, triggerCaps.ManualHTTPTrigger, triggerCaps.ManualEVMChainTrigger)
+		srvcs = append(srvcs, triggerCaps.ManualCronTrigger, triggerCaps.ManualHTTPTrigger)
+		for _, evm := range triggerCaps.ManualEVMChains {
+			srvcs = append(srvcs, evm)
+		}
 		srvcs = append(srvcs, computeCaps...)
 		return registry, srvcs
 	}
@@ -514,13 +569,19 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 				return triggerCaps.ManualHTTPTrigger.ManualTrigger(ctx, triggerRegistrationID, payload)
 			}
 		case strings.HasPrefix(trigger, "evm") && strings.HasSuffix(trigger, "@1.0.0"):
-			log, err := getEVMTriggerLog(ctx, inputs.EthClient)
+			// Ask which chain, then fetch the log from the selected chain's RPC and trigger that specific EVM chain
+			log, sel, err := getEVMTriggerLogInteractive(ctx, inputs.EVMClients)
 			if err != nil {
 				fmt.Printf("failed to get EVM trigger log: %v\n", err)
 				os.Exit(1)
 			}
+			evmChain := triggerCaps.ManualEVMChains[sel]
+			if evmChain == nil {
+				fmt.Printf("no EVM chain initialized for selector %d\n", sel)
+				os.Exit(1)
+			}
 			holder.TriggerFunc = func() error {
-				return triggerCaps.ManualEVMChainTrigger.ManualTrigger(ctx, triggerRegistrationID, log)
+				return evmChain.ManualTrigger(ctx, triggerRegistrationID, log)
 			}
 		default:
 			fmt.Printf("unsupported trigger type: %s\n", holder.TriggerToRun.Id)
@@ -579,13 +640,35 @@ func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inp
 				fmt.Println("--evm-tx-hash and --evm-event-index are required for EVM triggers in non-interactive mode")
 				os.Exit(1)
 			}
-			log, err := getEVMTriggerLogFromValues(ctx, inputs.EthClient, inputs.EVMTxHash, uint64(inputs.EVMEventIndex))
+			//log, err := getEVMTriggerLogFromValues(ctx, inputs.EthClient, inputs.EVMTxHash, uint64(inputs.EVMEventIndex))
+			if strings.TrimSpace(inputs.EVMChain) == "" {
+				fmt.Println("--evm-chain is required for EVM triggers in non-interactive mode (eth-sepolia|eth-mainnet)")
+				os.Exit(1)
+			}
+
+			sel, ok := nameToSelector(inputs.EVMChain)
+			if !ok {
+				fmt.Printf("unsupported --evm-chain %q; supported: eth-sepolia, eth-mainnet\n", inputs.EVMChain)
+				os.Exit(1)
+			}
+			client := inputs.EVMClients[sel]
+			if client == nil {
+				fmt.Printf("no RPC configured for chain %s (%d)\n", inputs.EVMChain, sel)
+				os.Exit(1)
+			}
+
+			log, err := getEVMTriggerLogFromValues(ctx, client, inputs.EVMTxHash, uint64(inputs.EVMEventIndex))
 			if err != nil {
 				fmt.Printf("failed to build EVM trigger log: %v\n", err)
 				os.Exit(1)
 			}
+			evmChain := triggerCaps.ManualEVMChains[sel]
+			if evmChain == nil {
+				fmt.Printf("no EVM chain initialized for selector %d\n", sel)
+				os.Exit(1)
+			}
 			holder.TriggerFunc = func() error {
-				return triggerCaps.ManualEVMChainTrigger.ManualTrigger(ctx, triggerRegistrationID, log)
+				return evmChain.ManualTrigger(ctx, triggerRegistrationID, log)
 			}
 		default:
 			fmt.Printf("unsupported trigger type: %s\n", holder.TriggerToRun.Id)
@@ -713,6 +796,57 @@ func getHTTPTriggerPayload(ctx context.Context) (*httptypedapi.Payload, error) {
 
 	fmt.Printf("Created HTTP trigger payload with %d fields\n", len(jsonData))
 	return payload, nil
+}
+
+// interactive helper — choose a chain, then fetch the EVM log from that chain
+func getEVMTriggerLogInteractive(ctx context.Context, clients map[uint64]*ethclient.Client) (*evm.Log, uint64, error) {
+	available := make([]uint64, 0, len(clients))
+	for sel := range clients {
+		available = append(available, sel)
+	}
+
+	var chosen uint64
+	if len(available) == 1 {
+		chosen = available[0]
+		fmt.Printf("\n🔗 EVM Trigger Configuration: using %s\n", selectorToName(chosen))
+	} else {
+		fmt.Println("\n🔗 EVM Trigger Configuration:")
+		fmt.Println("Select chain:")
+
+		idx := 1
+		indexToSel := map[int]uint64{}
+		for _, c := range supportedEVM {
+			if _, ok := clients[c.Selector]; ok {
+				fmt.Printf("%d. %s (%s)\n", idx, c.Display, c.Name)
+				indexToSel[idx] = c.Selector
+				idx++
+			}
+		}
+		if len(indexToSel) == 0 {
+			return nil, 0, fmt.Errorf("no EVM chains are configured")
+		}
+
+		fmt.Printf("Enter your choice (1-%d): ", len(indexToSel))
+		reader := bufio.NewReader(os.Stdin)
+		input, err := reader.ReadString('\n')
+
+		if err != nil {
+			return nil, 0, fmt.Errorf("failed to read choice: %w", err)
+		}
+
+		choiceNum, err := strconv.Atoi(strings.TrimSpace(input))
+		if err != nil || choiceNum < 1 || choiceNum > len(indexToSel) {
+			return nil, 0, fmt.Errorf("invalid choice")
+		}
+		chosen = indexToSel[choiceNum]
+	}
+
+	log, err := getEVMTriggerLog(ctx, clients[chosen])
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return log, chosen, nil
 }
 
 // getEVMTriggerLog prompts user for EVM trigger data and fetches the log

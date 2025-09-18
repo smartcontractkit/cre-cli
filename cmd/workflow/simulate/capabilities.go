@@ -21,19 +21,22 @@ import (
 )
 
 const (
-	MOCK_KEYSTONE_FORWARDER_ADDRESS = "0x15fC6ae953E024d975e77382eEeC56A9101f9F88"
-	SEPOLIA_CHAIN_SELECTOR          = 16015286601757825753
+	SEPOLIA_MOCK_KEYSTONE_FORWARDER_ADDRESS = "0x15fC6ae953E024d975e77382eEeC56A9101f9F88"
+	MAINNET_MOCK_KEYSTONE_FORWARDER_ADDRESS = "0xa3d1ad4ac559a6575a114998affb2fb2ec97a7d9"
+	SEPOLIA_CHAIN_SELECTOR                  = 16015286601757825753
+	MAINNET_CHAIN_SELECTOR                  = 5009297550715157269
 )
 
 type ManualTriggerCapabilitiesConfig struct {
-	Client     *ethclient.Client
+	Clients    map[uint64]*ethclient.Client
+	Forwarders map[uint64]common.Address
 	PrivateKey *ecdsa.PrivateKey
 }
 
 type ManualTriggers struct {
-	ManualCronTrigger     *fakes.ManualCronTriggerService
-	ManualHTTPTrigger     *fakes.ManualHTTPTriggerService
-	ManualEVMChainTrigger *fakes.FakeEVMChain
+	ManualCronTrigger *fakes.ManualCronTriggerService
+	ManualHTTPTrigger *fakes.ManualHTTPTriggerService
+	ManualEVMChains   map[uint64]*fakes.FakeEVMChain
 }
 
 func NewManualTriggerCapabilities(
@@ -58,23 +61,35 @@ func NewManualTriggerCapabilities(
 	}
 
 	// EVM
-	evm := fakes.NewFakeEvmChain(
-		lggr,
-		cfg.Client,
-		cfg.PrivateKey,
-		common.HexToAddress(MOCK_KEYSTONE_FORWARDER_ADDRESS),
-		SEPOLIA_CHAIN_SELECTOR,
-		dryRunChainWrite,
-	)
-	evmServer := evmserver.NewClientServer(evm)
-	if err := registry.Add(ctx, evmServer); err != nil {
-		return nil, err
+	evmChains := make(map[uint64]*fakes.FakeEVMChain)
+	for sel, client := range cfg.Clients {
+		fwd, ok := cfg.Forwarders[sel]
+		if !ok {
+			lggr.Infow("Forwarder not found for chain", "selector", sel)
+			continue
+		}
+
+		evm := fakes.NewFakeEvmChain(
+			lggr,
+			client,
+			cfg.PrivateKey,
+			fwd,
+			sel,
+			dryRunChainWrite,
+		)
+
+		evmServer := evmserver.NewClientServer(evm)
+		if err := registry.Add(ctx, evmServer); err != nil {
+			return nil, err
+		}
+
+		evmChains[sel] = evm
 	}
 
 	return &ManualTriggers{
-		ManualCronTrigger:     manualCronTrigger,
-		ManualHTTPTrigger:     manualHTTPTrigger,
-		ManualEVMChainTrigger: evm,
+		ManualCronTrigger: manualCronTrigger,
+		ManualHTTPTrigger: manualHTTPTrigger,
+		ManualEVMChains:   evmChains,
 	}, nil
 }
 
@@ -87,6 +102,13 @@ func (m *ManualTriggers) Start(ctx context.Context) error {
 	err = m.ManualHTTPTrigger.Start(ctx)
 	if err != nil {
 		return err
+	}
+
+	// Start all configured EVM chains
+	for _, evm := range m.ManualEVMChains {
+		if err := evm.Start(ctx); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -103,6 +125,12 @@ func (m *ManualTriggers) Close() error {
 		return err
 	}
 
+	// Close all EVM chains
+	for _, evm := range m.ManualEVMChains {
+		if err := evm.Close(); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -114,7 +142,7 @@ func NewFakeActionCapabilities(ctx context.Context, lggr logger.Logger, registry
 	// generate deterministic signers - need to be configured on the Forwarder contract
 	nSigners := 4
 	signers := []ocr2key.KeyBundle{}
-	for range nSigners {
+	for i := 0; i < nSigners; i++ {
 		signer := ocr2key.MustNewInsecure(fakes.SeedForKeys(), chaintype.EVM)
 		lggr.Infow("Generated new consensus signer", "addrss", common.BytesToAddress(signer.PublicKey()))
 		signers = append(signers, signer)
