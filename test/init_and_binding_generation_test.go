@@ -71,11 +71,11 @@ func TestE2EInit_DevPoRTemplate(t *testing.T) {
 		stderr.String(),
 	)
 
-	// go mod tidy on workflow directory to sync dependencies
+	// go mod tidy on project root to sync dependencies
 	stdout.Reset()
 	stderr.Reset()
 	tidyCmd := exec.Command("go", "mod", "tidy")
-	tidyCmd.Dir = workflowDirectory
+	tidyCmd.Dir = projectRoot
 	tidyCmd.Stdout = &stdout
 	tidyCmd.Stderr = &stderr
 
