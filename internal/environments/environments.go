@@ -4,7 +4,6 @@ import (
 	"embed"
 	"fmt"
 	"os"
-	"strconv"
 
 	"gopkg.in/yaml.v2"
 )
@@ -19,10 +18,10 @@ const (
 	EnvVarAudience        = "CRE_CLI_AUDIENCE"
 	EnvVarVaultGatewayURL = "CRE_VAULT_DON_GATEWAY_URL"
 
-	EnvVarWorkflowRegistryAddress           = "CRE_CLI_WORKFLOW_REGISTRY_ADDRESS"
-	EnvVarWorkflowRegistryChainSelector     = "CRE_CLI_WORKFLOW_REGISTRY_CHAIN_SELECTOR"
-	EnvVarCapabilitiesRegistryAddress       = "CRE_CLI_CAPABILITIES_REGISTRY_ADDRESS"
-	EnvVarCapabilitiesRegistryChainSelector = "CRE_CLI_CAPABILITIES_REGISTRY_CHAIN_SELECTOR"
+	EnvVarWorkflowRegistryAddress       = "CRE_CLI_WORKFLOW_REGISTRY_ADDRESS"
+	EnvVarWorkflowRegistryChainName     = "CRE_CLI_WORKFLOW_REGISTRY_CHAIN_NAME"
+	EnvVarCapabilitiesRegistryAddress   = "CRE_CLI_CAPABILITIES_REGISTRY_ADDRESS"
+	EnvVarCapabilitiesRegistryChainName = "CRE_CLI_CAPABILITIES_REGISTRY_CHAIN_NAME"
 
 	DefaultEnv = "SANDBOX"
 )
@@ -38,10 +37,10 @@ type EnvironmentSet struct {
 	Audience   string `yaml:"CRE_CLI_AUDIENCE"`
 	GatewayURL string `yaml:"CRE_VAULT_DON_GATEWAY_URL"`
 
-	WorkflowRegistryAddress           string `yaml:"CRE_CLI_WORKFLOW_REGISTRY_ADDRESS"`
-	WorkflowRegistryChainSelector     uint64 `yaml:"CRE_CLI_WORKFLOW_REGISTRY_CHAIN_SELECTOR"`
-	CapabilitiesRegistryAddress       string `yaml:"CRE_CLI_CAPABILITIES_REGISTRY_ADDRESS"`
-	CapabilitiesRegistryChainSelector uint64 `yaml:"CRE_CLI_CAPABILITIES_REGISTRY_CHAIN_SELECTOR"`
+	WorkflowRegistryAddress       string `yaml:"CRE_CLI_WORKFLOW_REGISTRY_ADDRESS"`
+	WorkflowRegistryChainName     string `yaml:"CRE_CLI_WORKFLOW_REGISTRY_CHAIN_NAME"`
+	CapabilitiesRegistryAddress   string `yaml:"CRE_CLI_CAPABILITIES_REGISTRY_ADDRESS"`
+	CapabilitiesRegistryChainName string `yaml:"CRE_CLI_CAPABILITIES_REGISTRY_CHAIN_NAME"`
 }
 
 type fileFormat struct {
@@ -91,15 +90,11 @@ func NewEnvironmentSet(ff *fileFormat, envName string) *EnvironmentSet {
 		set.CapabilitiesRegistryAddress = v
 	}
 
-	if v := os.Getenv(EnvVarWorkflowRegistryChainSelector); v != "" {
-		if n, err := strconv.ParseUint(v, 10, 64); err == nil {
-			set.WorkflowRegistryChainSelector = n
-		}
+	if v := os.Getenv(EnvVarWorkflowRegistryChainName); v != "" {
+		set.WorkflowRegistryChainName = v
 	}
-	if v := os.Getenv(EnvVarCapabilitiesRegistryChainSelector); v != "" {
-		if n, err := strconv.ParseUint(v, 10, 64); err == nil {
-			set.CapabilitiesRegistryChainSelector = n
-		}
+	if v := os.Getenv(EnvVarCapabilitiesRegistryChainName); v != "" {
+		set.CapabilitiesRegistryChainName = v
 	}
 
 	return &set

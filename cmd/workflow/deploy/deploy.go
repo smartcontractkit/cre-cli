@@ -36,8 +36,8 @@ type Inputs struct {
 	ConfigPath   string `validate:"omitempty,file,ascii,max=97" cli:"--config"`
 	OutputPath   string `validate:"omitempty,filepath,ascii,max=97" cli:"--output"`
 
-	WorkflowRegistryContractAddress       string `validate:"required"`
-	WorkflowRegistryContractChainselector uint64 `validate:"required"`
+	WorkflowRegistryContractAddress   string `validate:"required"`
+	WorkflowRegistryContractChainName string `validate:"required"`
 }
 
 func (i *Inputs) ResolveConfigURL(fallbackURL string) string {
@@ -147,8 +147,8 @@ func (h *handler) ResolveInputs(args []string, v *viper.Viper) (Inputs, error) {
 		ConfigPath: v.GetString("config"),
 		OutputPath: v.GetString("output"),
 
-		WorkflowRegistryContractChainselector: h.environmentSet.WorkflowRegistryChainSelector,
-		WorkflowRegistryContractAddress:       h.environmentSet.WorkflowRegistryAddress,
+		WorkflowRegistryContractChainName: h.environmentSet.WorkflowRegistryChainName,
+		WorkflowRegistryContractAddress:   h.environmentSet.WorkflowRegistryAddress,
 	}, nil
 }
 

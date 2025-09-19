@@ -25,9 +25,9 @@ const (
 	// Default settings
 	DefaultProposalExpirationTime = 60 * 60 * 24 * 3 // 72 hours
 
-	DefaultEthSepoliaChainSelector  = "16015286601757825753" // ETH Sepolia
-	DefaultBaseSepoliaChainSelector = "10344971235874465080" // Base Sepolia
-	DefaultEthMainnetChainSelector  = "5009297550715157269"  // Eth Mainnet
+	DefaultEthSepoliaChainName  = "ethereum-testnet-sepolia"        // ETH Sepolia
+	DefaultBaseSepoliaChainName = "ethereum-testnet-sepolia-base-1" // Base Sepolia
+	DefaultEthMainnetChainName  = "ethereum-mainnet"                // Eth Mainnet
 
 	DefaultEthSepoliaRpcUrl  = "https://sepolia.infura.io/v3/YOUR_API_KEY" // ETH Sepolia
 	DefaultEthMainnetRpcUrl  = "<select your own rpc url>"                 // ETH Mainnet

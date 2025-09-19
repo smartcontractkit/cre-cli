@@ -26,6 +26,7 @@ import (
 
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
+	"github.com/smartcontractkit/cre-cli/internal/settings"
 	test "github.com/smartcontractkit/cre-cli/test/contracts"
 )
 
@@ -50,9 +51,9 @@ func TestCLIAccountLinkAndListKey_EOA(t *testing.T) {
 
 	// Pre-baked registry addresses from Anvil state dump
 	t.Setenv(environments.EnvVarWorkflowRegistryAddress, "0x5FbDB2315678afecb367f032d93F642f64180aa3")
-	t.Setenv(environments.EnvVarWorkflowRegistryChainSelector, strconv.FormatUint(TestChainSelector, 10))
+	t.Setenv(environments.EnvVarWorkflowRegistryChainName, TestChainName)
 	t.Setenv(environments.EnvVarCapabilitiesRegistryAddress, "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9")
-	t.Setenv(environments.EnvVarCapabilitiesRegistryChainSelector, strconv.FormatUint(TestChainSelector, 10))
+	t.Setenv(environments.EnvVarCapabilitiesRegistryChainName, TestChainName)
 
 	registryAddr := os.Getenv(environments.EnvVarWorkflowRegistryAddress)
 	require.NotEmpty(t, registryAddr, "registry address env must be set")
@@ -81,7 +82,16 @@ func TestCLIAccountLinkAndListKey_EOA(t *testing.T) {
 				return
 			}
 
-			resp, _, err := buildInitiateLinkingEOAResponse(t, testEthURL, registryAddr, ownerHex, TestChainSelector)
+			chainSelector, err := settings.GetChainSelectorByChainName(TestChainName)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"errors": []map[string]string{{"message": fmt.Sprintf("failed to get chain selector: %v", err)}},
+				})
+				return
+			}
+
+			resp, _, err := buildInitiateLinkingEOAResponse(t, testEthURL, registryAddr, ownerHex, chainSelector)
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
 				_ = json.NewEncoder(w).Encode(map[string]any{
@@ -108,9 +118,12 @@ func TestCLIAccountLinkAndListKey_EOA(t *testing.T) {
 								"environment":          "PRODUCTION_TESTNET",
 								"verificationStatus":   "VERIFIED",
 								"verifiedAt":           "2025-01-02T03:04:05Z",
-								"chainSelector":        strconv.FormatUint(TestChainSelector, 10),
-								"contractAddress":      registryAddr,
-								"requestProcess":       "EOA",
+								"chainSelector": func() string {
+									chainSelector, _ := settings.GetChainSelectorByChainName(TestChainName)
+									return strconv.FormatUint(chainSelector, 10)
+								}(),
+								"contractAddress": registryAddr,
+								"requestProcess":  "EOA",
 							},
 						},
 					},

@@ -9,7 +9,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"strings"
 	"testing"
 
@@ -226,9 +225,9 @@ func TestCLIWorkflowDeployWithEoa(t *testing.T) {
 
 	// Pre-baked registries from Anvil state dump
 	t.Setenv(environments.EnvVarWorkflowRegistryAddress, "0x5FbDB2315678afecb367f032d93F642f64180aa3")
-	t.Setenv(environments.EnvVarWorkflowRegistryChainSelector, strconv.FormatUint(TestChainSelector, 10))
+	t.Setenv(environments.EnvVarWorkflowRegistryChainName, TestChainName)
 	t.Setenv(environments.EnvVarCapabilitiesRegistryAddress, "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9")
-	t.Setenv(environments.EnvVarCapabilitiesRegistryChainSelector, strconv.FormatUint(TestChainSelector, 10))
+	t.Setenv(environments.EnvVarCapabilitiesRegistryChainName, TestChainName)
 
 	// Deploy with mocked storage
 	out := tc.workflowDeployEoaWithMockStorage(t)

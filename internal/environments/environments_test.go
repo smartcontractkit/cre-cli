@@ -20,10 +20,10 @@ const testYAML = `ENVIRONMENTS:
     CRE_CLI_USER_POOL_ID: pool-id
 
     CRE_CLI_WORKFLOW_REGISTRY_ADDRESS: "0x51D3acf4526e014deBf9884159A57f63Fc0Ca49D"
-    CRE_CLI_WORKFLOW_REGISTRY_CHAIN_SELECTOR: 10344971235874465080
+    CRE_CLI_WORKFLOW_REGISTRY_CHAIN_NAME: "ethereum-testnet-sepolia-base-1"
 
     CRE_CLI_CAPABILITIES_REGISTRY_ADDRESS: "0x02471a03A86ac92DE793af303E9f756f0aE60677"
-    CRE_CLI_CAPABILITIES_REGISTRY_CHAIN_SELECTOR: 16015286601757825753
+    CRE_CLI_CAPABILITIES_REGISTRY_CHAIN_NAME: "ethereum-testnet-sepolia"
 
   STAGING:
     CRE_CLI_UI_URL: https://staging.ui
@@ -35,10 +35,10 @@ const testYAML = `ENVIRONMENTS:
     CRE_CLI_USER_POOL_ID: staging-pool
 
     CRE_CLI_WORKFLOW_REGISTRY_ADDRESS: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-    CRE_CLI_WORKFLOW_REGISTRY_CHAIN_SELECTOR: 1234567890123456789
+    CRE_CLI_WORKFLOW_REGISTRY_CHAIN_NAME: "ethereum-mainnet"
 
     CRE_CLI_CAPABILITIES_REGISTRY_ADDRESS: "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-    CRE_CLI_CAPABILITIES_REGISTRY_CHAIN_SELECTOR: 9876543210987654321
+    CRE_CLI_CAPABILITIES_REGISTRY_CHAIN_NAME: "polygon-mainnet"
 `
 
 func TestLoadEnvironmentFile(t *testing.T) {
@@ -73,14 +73,14 @@ func TestLoadEnvironmentFile(t *testing.T) {
 	if sbx.WorkflowRegistryAddress != "0x51D3acf4526e014deBf9884159A57f63Fc0Ca49D" {
 		t.Errorf("WorkflowRegistryAddress = %q; want 0x51D3acf4526e014deBf9884159A57f63Fc0Ca49D", sbx.WorkflowRegistryAddress)
 	}
-	if sbx.WorkflowRegistryChainSelector != 10344971235874465080 {
-		t.Errorf("WorkflowRegistryChainSelector = %d; want 10344971235874465080", sbx.WorkflowRegistryChainSelector)
+	if sbx.WorkflowRegistryChainName != "ethereum-testnet-sepolia-base-1" {
+		t.Errorf("WorkflowRegistryChainName = %q; want ethereum-testnet-sepolia-base-1", sbx.WorkflowRegistryChainName)
 	}
 	if sbx.CapabilitiesRegistryAddress != "0x02471a03A86ac92DE793af303E9f756f0aE60677" {
 		t.Errorf("CapabilitiesRegistryAddress = %q; want 0x02471a03A86ac92DE793af303E9f756f0aE60677", sbx.CapabilitiesRegistryAddress)
 	}
-	if sbx.CapabilitiesRegistryChainSelector != 16015286601757825753 {
-		t.Errorf("CapabilitiesRegistryChainSelector = %d; want 16015286601757825753", sbx.CapabilitiesRegistryChainSelector)
+	if sbx.CapabilitiesRegistryChainName != "ethereum-testnet-sepolia" {
+		t.Errorf("CapabilitiesRegistryChainName = %q; want ethereum-testnet-sepolia", sbx.CapabilitiesRegistryChainName)
 	}
 }
 
@@ -93,10 +93,10 @@ func TestNewEnvironmentSet_FallbackAndOverrides(t *testing.T) {
 			GraphQLURL: "d",
 			Audience:   "aa",
 
-			WorkflowRegistryAddress:           "0xsandbox_wr",
-			WorkflowRegistryChainSelector:     101,
-			CapabilitiesRegistryAddress:       "0xsandbox_cap",
-			CapabilitiesRegistryChainSelector: 201,
+			WorkflowRegistryAddress:       "0xsandbox_wr",
+			WorkflowRegistryChainName:     "ethereum-testnet-sepolia",
+			CapabilitiesRegistryAddress:   "0xsandbox_cap",
+			CapabilitiesRegistryChainName: "ethereum-testnet-sepolia-base-1",
 		},
 		"STAGING": {
 			UIURL:      "f",
@@ -105,10 +105,10 @@ func TestNewEnvironmentSet_FallbackAndOverrides(t *testing.T) {
 			GraphQLURL: "i",
 			Audience:   "bb",
 
-			WorkflowRegistryAddress:           "0xstaging_wr",
-			WorkflowRegistryChainSelector:     111,
-			CapabilitiesRegistryAddress:       "0xstaging_cap",
-			CapabilitiesRegistryChainSelector: 211,
+			WorkflowRegistryAddress:       "0xstaging_wr",
+			WorkflowRegistryChainName:     "polygon-mainnet",
+			CapabilitiesRegistryAddress:   "0xstaging_cap",
+			CapabilitiesRegistryChainName: "ethereum-mainnet",
 		},
 	}}
 
@@ -130,8 +130,8 @@ func TestNewEnvironmentSet_FallbackAndOverrides(t *testing.T) {
 	t.Setenv(EnvVarAudience, "")
 	t.Setenv(EnvVarWorkflowRegistryAddress, "")
 	t.Setenv(EnvVarCapabilitiesRegistryAddress, "")
-	t.Setenv(EnvVarWorkflowRegistryChainSelector, "")
-	t.Setenv(EnvVarCapabilitiesRegistryChainSelector, "")
+	t.Setenv(EnvVarWorkflowRegistryChainName, "")
+	t.Setenv(EnvVarCapabilitiesRegistryChainName, "")
 
 	set2 := NewEnvironmentSet(ff, "STAGING")
 	if set2.ClientID != "h" {
@@ -140,14 +140,14 @@ func TestNewEnvironmentSet_FallbackAndOverrides(t *testing.T) {
 	if set2.WorkflowRegistryAddress != "0xstaging_wr" {
 		t.Errorf("WorkflowRegistryAddress = %q; want 0xstaging_wr", set2.WorkflowRegistryAddress)
 	}
-	if set2.WorkflowRegistryChainSelector != 111 {
-		t.Errorf("WorkflowRegistryChainSelector = %d; want 111", set2.WorkflowRegistryChainSelector)
+	if set2.WorkflowRegistryChainName != "polygon-mainnet" {
+		t.Errorf("WorkflowRegistryChainName = %q; want polygon-mainnet", set2.WorkflowRegistryChainName)
 	}
 	if set2.CapabilitiesRegistryAddress != "0xstaging_cap" {
 		t.Errorf("CapabilitiesRegistryAddress = %q; want 0xstaging_cap", set2.CapabilitiesRegistryAddress)
 	}
-	if set2.CapabilitiesRegistryChainSelector != 211 {
-		t.Errorf("CapabilitiesRegistryChainSelector = %d; want 211", set2.CapabilitiesRegistryChainSelector)
+	if set2.CapabilitiesRegistryChainName != "ethereum-mainnet" {
+		t.Errorf("CapabilitiesRegistryChainName = %q; want ethereum-mainnet", set2.CapabilitiesRegistryChainName)
 	}
 
 	t.Setenv(EnvVarClientID, "override-id")
@@ -155,8 +155,8 @@ func TestNewEnvironmentSet_FallbackAndOverrides(t *testing.T) {
 	t.Setenv(EnvVarAudience, "override-aud")
 	t.Setenv(EnvVarWorkflowRegistryAddress, "0xoverride_wr")
 	t.Setenv(EnvVarCapabilitiesRegistryAddress, "0xoverride_cap")
-	t.Setenv(EnvVarWorkflowRegistryChainSelector, "123456")
-	t.Setenv(EnvVarCapabilitiesRegistryChainSelector, "654321")
+	t.Setenv(EnvVarWorkflowRegistryChainName, "ethereum-testnet-arbitrum-1")
+	t.Setenv(EnvVarCapabilitiesRegistryChainName, "ethereum-testnet-optimism-1")
 
 	set3 := NewEnvironmentSet(ff, "STAGING")
 	if set3.ClientID != "override-id" {
@@ -174,23 +174,13 @@ func TestNewEnvironmentSet_FallbackAndOverrides(t *testing.T) {
 	if set3.CapabilitiesRegistryAddress != "0xoverride_cap" {
 		t.Errorf("CapabilitiesRegistryAddress = %q; want 0xoverride_cap", set3.CapabilitiesRegistryAddress)
 	}
-	if set3.WorkflowRegistryChainSelector != 123456 {
-		t.Errorf("WorkflowRegistryChainSelector = %d; want 123456", set3.WorkflowRegistryChainSelector)
+	if set3.WorkflowRegistryChainName != "ethereum-testnet-arbitrum-1" {
+		t.Errorf("WorkflowRegistryChainName = %q; want ethereum-testnet-arbitrum-1", set3.WorkflowRegistryChainName)
 	}
-	if set3.CapabilitiesRegistryChainSelector != 654321 {
-		t.Errorf("CapabilitiesRegistryChainSelector = %d; want 654321", set3.CapabilitiesRegistryChainSelector)
+	if set3.CapabilitiesRegistryChainName != "ethereum-testnet-optimism-1" {
+		t.Errorf("CapabilitiesRegistryChainName = %q; want ethereum-testnet-optimism-1", set3.CapabilitiesRegistryChainName)
 	}
 
-	t.Setenv(EnvVarWorkflowRegistryChainSelector, "not-a-number")
-	t.Setenv(EnvVarCapabilitiesRegistryChainSelector, "also-bad")
-
-	set4 := NewEnvironmentSet(ff, "STAGING")
-	if set4.WorkflowRegistryChainSelector != 111 {
-		t.Errorf("invalid override kept? WorkflowRegistryChainSelector = %d; want 111", set4.WorkflowRegistryChainSelector)
-	}
-	if set4.CapabilitiesRegistryChainSelector != 211 {
-		t.Errorf("invalid override kept? CapabilitiesRegistryChainSelector = %d; want 211", set4.CapabilitiesRegistryChainSelector)
-	}
 }
 
 func loadEnvironmentFile(path string) (*fileFormat, error) {

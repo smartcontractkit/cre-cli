@@ -33,9 +33,9 @@ type ProjectEnv struct {
 
 func GetDefaultReplacements() map[string]string {
 	return map[string]string{
-		"EthSepoliaChainSelector":  constants.DefaultEthSepoliaChainSelector,
-		"BaseSepoliaChainSelector": constants.DefaultBaseSepoliaChainSelector,
-		"EthMainnetChainSelector":  constants.DefaultEthMainnetChainSelector,
+		"EthSepoliaChainName":  constants.DefaultEthSepoliaChainName,
+		"BaseSepoliaChainName": constants.DefaultBaseSepoliaChainName,
+		"EthMainnetChainName":  constants.DefaultEthMainnetChainName,
 
 		"EthSepoliaRpcUrl":  constants.DefaultEthSepoliaRpcUrl,
 		"EthMainnetRpcUrl":  constants.DefaultEthMainnetRpcUrl,

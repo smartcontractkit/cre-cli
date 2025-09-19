@@ -21,8 +21,8 @@ func TestWorkflowActivateCommand(t *testing.T) {
 			if in.WorkflowRegistryContractAddress == "" {
 				in.WorkflowRegistryContractAddress = "0x0000000000000000000000000000000000000000"
 			}
-			if in.WorkflowRegistryContractChainselector == 0 {
-				in.WorkflowRegistryContractChainselector = 1
+			if in.WorkflowRegistryContractChainName == "" {
+				in.WorkflowRegistryContractChainName = "ethereum-testnet-sepolia"
 			}
 			return in
 		}

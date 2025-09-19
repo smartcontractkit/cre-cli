@@ -48,10 +48,10 @@ func TestCompileCmd(t *testing.T) {
 			{
 				name: "Invalid ConfigPath",
 				cmd: Inputs{
-					WorkflowPath:                          "testdata/test_workflow.yaml",
-					ConfigPath:                            "nonexistent.yaml",
-					WorkflowRegistryContractAddress:       "0x1234567890123456789012345678901234567890",
-					WorkflowRegistryContractChainselector: 1234567890,
+					WorkflowPath:                      "testdata/test_workflow.yaml",
+					ConfigPath:                        "nonexistent.yaml",
+					WorkflowRegistryContractAddress:   "0x1234567890123456789012345678901234567890",
+					WorkflowRegistryContractChainName: "ethereum-testnet-sepolia",
 				},
 				WorkflowOwnerType: constants.WorkflowOwnerTypeEOA,
 				wantError:         true,
@@ -61,10 +61,10 @@ func TestCompileCmd(t *testing.T) {
 			{
 				name: "Non-ASCII ConfigPath",
 				cmd: Inputs{
-					WorkflowPath:                          "testdata/test_workflow.yaml",
-					ConfigPath:                            "./testdata/đuveč.yaml",
-					WorkflowRegistryContractAddress:       "0x1234567890123456789012345678901234567890",
-					WorkflowRegistryContractChainselector: 1234567890,
+					WorkflowPath:                      "testdata/test_workflow.yaml",
+					ConfigPath:                        "./testdata/đuveč.yaml",
+					WorkflowRegistryContractAddress:   "0x1234567890123456789012345678901234567890",
+					WorkflowRegistryContractChainName: "ethereum-testnet-sepolia",
 				},
 				WorkflowOwnerType: constants.WorkflowOwnerTypeEOA,
 				wantError:         true,
@@ -74,10 +74,10 @@ func TestCompileCmd(t *testing.T) {
 			{
 				name: "Non-ASCII OutputPath",
 				cmd: Inputs{
-					WorkflowPath:                          "testdata/test_workflow.yaml",
-					OutputPath:                            "outputŠČ.yaml",
-					WorkflowRegistryContractAddress:       "0x1234567890123456789012345678901234567890",
-					WorkflowRegistryContractChainselector: 1234567890,
+					WorkflowPath:                      "testdata/test_workflow.yaml",
+					OutputPath:                        "outputŠČ.yaml",
+					WorkflowRegistryContractAddress:   "0x1234567890123456789012345678901234567890",
+					WorkflowRegistryContractChainName: "ethereum-testnet-sepolia",
 				},
 				WorkflowOwnerType: constants.WorkflowOwnerTypeEOA,
 				wantError:         true,
@@ -87,14 +87,14 @@ func TestCompileCmd(t *testing.T) {
 			{
 				name: "Valid Input Without Gist",
 				cmd: Inputs{
-					WorkflowName:                          "test_workflow",
-					WorkflowOwner:                         chainsim.TestAddress,
-					DonFamily:                             "test_label",
-					WorkflowPath:                          filepath.Join("testdata", "basic_workflow", "main.go"),
-					ConfigPath:                            filepath.Join("testdata", "basic_workflow", "config.yml"),
-					OutputPath:                            "output.yaml",
-					WorkflowRegistryContractAddress:       "0x1234567890123456789012345678901234567890",
-					WorkflowRegistryContractChainselector: 1234567890,
+					WorkflowName:                      "test_workflow",
+					WorkflowOwner:                     chainsim.TestAddress,
+					DonFamily:                         "test_label",
+					WorkflowPath:                      filepath.Join("testdata", "basic_workflow", "main.go"),
+					ConfigPath:                        filepath.Join("testdata", "basic_workflow", "config.yml"),
+					OutputPath:                        "output.yaml",
+					WorkflowRegistryContractAddress:   "0x1234567890123456789012345678901234567890",
+					WorkflowRegistryContractChainName: "ethereum-testnet-sepolia",
 				},
 				WorkflowOwnerType: constants.WorkflowOwnerTypeEOA,
 				wantError:         false,
@@ -183,13 +183,13 @@ func TestCompileCmd(t *testing.T) {
 			}{
 				{
 					inputs: Inputs{
-						WorkflowName:                          "test_workflow",
-						WorkflowOwner:                         chainsim.TestAddress,
-						DonFamily:                             "test_label",
-						WorkflowPath:                          filepath.Join("testdata", "malformed_workflow", "main.go"),
-						OutputPath:                            outputPath,
-						WorkflowRegistryContractAddress:       "0x1234567890123456789012345678901234567890",
-						WorkflowRegistryContractChainselector: 1234567890,
+						WorkflowName:                      "test_workflow",
+						WorkflowOwner:                     chainsim.TestAddress,
+						DonFamily:                         "test_label",
+						WorkflowPath:                      filepath.Join("testdata", "malformed_workflow", "main.go"),
+						OutputPath:                        outputPath,
+						WorkflowRegistryContractAddress:   "0x1234567890123456789012345678901234567890",
+						WorkflowRegistryContractChainName: "ethereum-testnet-sepolia",
 					},
 					WorkflowOwnerType: constants.WorkflowOwnerTypeEOA,
 					wantErr:           "failed to compile workflow: exit status 1",
@@ -232,13 +232,13 @@ func TestCompileCmd(t *testing.T) {
 			gist.SetupGistAPIMock(t, "valid-token", "foo")
 
 			err := runCompile(simulatedEnvironment, Inputs{
-				WorkflowName:                          "test_workflow",
-				WorkflowOwner:                         chainsim.TestAddress,
-				DonFamily:                             "test_label",
-				WorkflowPath:                          filepath.Join("testdata", "configless_workflow", "main.go"),
-				OutputPath:                            outputPath,
-				WorkflowRegistryContractAddress:       "0x1234567890123456789012345678901234567890",
-				WorkflowRegistryContractChainselector: 1234567890,
+				WorkflowName:                      "test_workflow",
+				WorkflowOwner:                     chainsim.TestAddress,
+				DonFamily:                         "test_label",
+				WorkflowPath:                      filepath.Join("testdata", "configless_workflow", "main.go"),
+				OutputPath:                        outputPath,
+				WorkflowRegistryContractAddress:   "0x1234567890123456789012345678901234567890",
+				WorkflowRegistryContractChainName: "ethereum-testnet-sepolia",
 			}, constants.WorkflowOwnerTypeEOA)
 			defer os.Remove(outputPath)
 
@@ -250,14 +250,14 @@ func TestCompileCmd(t *testing.T) {
 			defer simulatedEnvironment.Close()
 
 			err := runCompile(simulatedEnvironment, Inputs{
-				WorkflowName:                          "test_workflow",
-				WorkflowOwner:                         chainsim.TestAddress,
-				DonFamily:                             "test_label",
-				WorkflowPath:                          filepath.Join("testdata", "basic_workflow", "main.go"),
-				OutputPath:                            outputPath,
-				ConfigPath:                            filepath.Join("testdata", "basic_workflow", "config.yml"),
-				WorkflowRegistryContractAddress:       "0x1234567890123456789012345678901234567890",
-				WorkflowRegistryContractChainselector: 1234567890,
+				WorkflowName:                      "test_workflow",
+				WorkflowOwner:                     chainsim.TestAddress,
+				DonFamily:                         "test_label",
+				WorkflowPath:                      filepath.Join("testdata", "basic_workflow", "main.go"),
+				OutputPath:                        outputPath,
+				ConfigPath:                        filepath.Join("testdata", "basic_workflow", "config.yml"),
+				WorkflowRegistryContractAddress:   "0x1234567890123456789012345678901234567890",
+				WorkflowRegistryContractChainName: "ethereum-testnet-sepolia",
 			}, constants.WorkflowOwnerTypeEOA)
 			defer os.Remove(outputPath)
 
@@ -274,13 +274,13 @@ func TestCompileCmd(t *testing.T) {
 			gist.SetupGistAPIMock(t, "valid-token", "foo")
 
 			err := runCompile(simulatedEnvironment, Inputs{
-				WorkflowName:                          "test_workflow",
-				WorkflowOwner:                         chainsim.TestAddress,
-				DonFamily:                             "test_label",
-				WorkflowPath:                          filepath.Join("testdata", "missing_go_mod", "main.go"),
-				OutputPath:                            outputPath,
-				WorkflowRegistryContractAddress:       "0x1234567890123456789012345678901234567890",
-				WorkflowRegistryContractChainselector: 1234567890,
+				WorkflowName:                      "test_workflow",
+				WorkflowOwner:                     chainsim.TestAddress,
+				DonFamily:                         "test_label",
+				WorkflowPath:                      filepath.Join("testdata", "missing_go_mod", "main.go"),
+				OutputPath:                        outputPath,
+				WorkflowRegistryContractAddress:   "0x1234567890123456789012345678901234567890",
+				WorkflowRegistryContractChainName: "ethereum-testnet-sepolia",
 			}, constants.WorkflowOwnerTypeEOA)
 			defer os.Remove(outputPath)
 
@@ -297,13 +297,13 @@ func TestCompileCreatesBase64EncodedFile(t *testing.T) {
 		expectedOutputPath := "./binary.wasm.br.b64"
 
 		err := runCompile(simulatedEnvironment, Inputs{
-			WorkflowName:                          "test_workflow",
-			WorkflowOwner:                         chainsim.TestAddress,
-			DonFamily:                             "test_label",
-			WorkflowPath:                          filepath.Join("testdata", "basic_workflow", "main.go"),
-			ConfigPath:                            filepath.Join("testdata", "basic_workflow", "config.yml"),
-			WorkflowRegistryContractAddress:       "0x1234567890123456789012345678901234567890",
-			WorkflowRegistryContractChainselector: 1234567890,
+			WorkflowName:                      "test_workflow",
+			WorkflowOwner:                     chainsim.TestAddress,
+			DonFamily:                         "test_label",
+			WorkflowPath:                      filepath.Join("testdata", "basic_workflow", "main.go"),
+			ConfigPath:                        filepath.Join("testdata", "basic_workflow", "config.yml"),
+			WorkflowRegistryContractAddress:   "0x1234567890123456789012345678901234567890",
+			WorkflowRegistryContractChainName: "ethereum-testnet-sepolia",
 		}, constants.WorkflowOwnerTypeEOA)
 		defer os.Remove(expectedOutputPath)
 
@@ -347,14 +347,14 @@ func TestCompileCreatesBase64EncodedFile(t *testing.T) {
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
 				err := runCompile(simulatedEnvironment, Inputs{
-					WorkflowName:                          "test_workflow",
-					WorkflowOwner:                         chainsim.TestAddress,
-					DonFamily:                             "test_label",
-					WorkflowPath:                          filepath.Join("testdata", "basic_workflow", "main.go"),
-					ConfigPath:                            filepath.Join("testdata", "basic_workflow", "config.yml"),
-					OutputPath:                            tt.outputPath,
-					WorkflowRegistryContractAddress:       "0x1234567890123456789012345678901234567890",
-					WorkflowRegistryContractChainselector: 1234567890,
+					WorkflowName:                      "test_workflow",
+					WorkflowOwner:                     chainsim.TestAddress,
+					DonFamily:                         "test_label",
+					WorkflowPath:                      filepath.Join("testdata", "basic_workflow", "main.go"),
+					ConfigPath:                        filepath.Join("testdata", "basic_workflow", "config.yml"),
+					OutputPath:                        tt.outputPath,
+					WorkflowRegistryContractAddress:   "0x1234567890123456789012345678901234567890",
+					WorkflowRegistryContractChainName: "ethereum-testnet-sepolia",
 				}, constants.WorkflowOwnerTypeEOA)
 				defer os.Remove(tt.expectedOutput)
 
@@ -368,14 +368,14 @@ func TestCompileCreatesBase64EncodedFile(t *testing.T) {
 		outputPath := "./binary.wasm.br.b64"
 
 		err := runCompile(simulatedEnvironment, Inputs{
-			WorkflowName:                          "test_workflow",
-			WorkflowOwner:                         chainsim.TestAddress,
-			DonFamily:                             "test_label",
-			WorkflowPath:                          filepath.Join("testdata", "basic_workflow", "main.go"),
-			ConfigPath:                            filepath.Join("testdata", "basic_workflow", "config.yml"),
-			OutputPath:                            outputPath,
-			WorkflowRegistryContractAddress:       "0x1234567890123456789012345678901234567890",
-			WorkflowRegistryContractChainselector: 1234567890,
+			WorkflowName:                      "test_workflow",
+			WorkflowOwner:                     chainsim.TestAddress,
+			DonFamily:                         "test_label",
+			WorkflowPath:                      filepath.Join("testdata", "basic_workflow", "main.go"),
+			ConfigPath:                        filepath.Join("testdata", "basic_workflow", "config.yml"),
+			OutputPath:                        outputPath,
+			WorkflowRegistryContractAddress:   "0x1234567890123456789012345678901234567890",
+			WorkflowRegistryContractChainName: "ethereum-testnet-sepolia",
 		}, constants.WorkflowOwnerTypeEOA)
 		defer os.Remove(outputPath)
 

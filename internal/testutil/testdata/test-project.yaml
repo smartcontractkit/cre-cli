@@ -3,21 +3,6 @@ production-testnet:
     don-id: 4
   logging:
     seth-config-path: ""
-  contracts:
-    registries:
-      - name: WorkflowRegistry
-        address: "0xF3f93fc4dc177748E7557568b5354cB009e3818a"
-        chain-selector: 16015286601757825753
-      - name: CapabilitiesRegistry
-        address: "0x02471a03A86ac92DE793af303E9f756f0aE60677"
-        chain-selector: 16015286601757825753
-    keystone:
-      - name: KeystoneForwarder
-        address: "0xd0dbB2486e3Fbf371D1B2e35Fa330bef6529d2f4"
-        chain-selector: 16015286601757825753
   rpcs:
-    - chain-selector: 16015286601757825753 #ethereum-sepolia
+    - chain-name: ethereum-testnet-sepolia
       url: https://example.com
-  workflow_storage:
-    gist:
-      github_token: "${CRE_GITHUB_API_TOKEN}"
