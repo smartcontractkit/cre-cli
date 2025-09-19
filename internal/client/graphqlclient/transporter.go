@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/denisbrodbeck/machineid"
 	"github.com/google/uuid"
 
+	"github.com/smartcontractkit/cre-cli/cmd/version"
 	"github.com/smartcontractkit/cre-cli/internal/auth"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 )
@@ -30,6 +32,12 @@ func (t *headerTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if t.credentials == nil {
 		return nil, fmt.Errorf("credentials not provided")
 	}
+
+	machineID, err := machineid.ProtectedID("cre-cli")
+	if err != nil {
+		return nil, err
+	}
+	t.extraHeaders.Add("X-Machine-Id", machineID)
 
 	clone := req.Clone(req.Context())
 	t.injectHeaders(clone)
@@ -62,6 +70,7 @@ func (t *headerTransport) injectHeaders(req *http.Request) {
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Idempotency-Key", uuid.New().String())
 	req.Header.Set("User-Agent", "cre-cli")
+	req.Header.Set("X-CLI-Version", version.Version)
 
 	switch t.credentials.AuthType {
 	case credentials.AuthTypeApiKey:
