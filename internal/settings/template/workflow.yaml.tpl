@@ -33,9 +33,3 @@ production-testnet:
   user-workflow:
     workflow-owner-address: "{{WorkflowOwnerAddress}}"
     workflow-name: "{{WorkflowName}}"
-
-# ==========================================================================
-production:
-  user-workflow:
-    workflow-owner-address: "{{WorkflowOwnerAddress}}"
-    workflow-name: "{{WorkflowName}}"

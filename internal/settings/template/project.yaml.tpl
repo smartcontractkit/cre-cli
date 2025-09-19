@@ -34,7 +34,7 @@ production-testnet:
   logging:
     seth-config-path: {{SethConfigPath}}
   rpcs:
-    - chain-name: {{EthSepoliaChainName}} # Eth-Sepolia
+    - chain-name: {{EthSepoliaChainName}}
       url: {{EthSepoliaRpcUrl}}
-    - chain-name: {{BaseSepoliaChainName}} # Base-Sepolia
+    - chain-name: {{BaseSepoliaChainName}}
       url: {{BaseSepoliaRpcUrl}}
