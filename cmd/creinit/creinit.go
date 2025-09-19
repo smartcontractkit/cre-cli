@@ -52,8 +52,8 @@ var languageTemplates = []LanguageTemplate{
 		Title: "Golang",
 		Lang:  TemplateLangGo,
 		Workflows: []WorkflowTemplate{
-			{Folder: "porExampleDev", Title: "Development PoR Example to understand capabilities and simulate workflows", ID: 1},
-			{Folder: "blankTemplate", Title: "New Workflow (blank)", ID: 2},
+			{Folder: "porExampleDev", Title: "Custom data feed: Updating on-chain data periodically using offchain API data", ID: 1},
+			{Folder: "blankTemplate", Title: "Boilerplate: A barebones template with just the essentials", ID: 2},
 		},
 	},
 	{
@@ -302,10 +302,10 @@ func (h *handler) Execute(inputs Inputs) error {
 	h.log.Info().Msg("")
 	h.log.Info().Msg("Next steps:")
 	h.log.Info().Msg("")
-	h.log.Info().Msg("   1. Navigate to your workflow directory:")
+	h.log.Info().Msg("   1. Navigate to your workflow directory to see workflow details:")
 	h.log.Info().Msgf("      cd %s", workflowDirectory)
 	h.log.Info().Msg("")
-	h.log.Info().Msg("   2. Follow the setup instructions in the README:")
+	h.log.Info().Msg("   2. To learn more about this template view the README.MD file:")
 	h.log.Info().Msgf("      %s", filepath.Join(workflowDirectory, "README.md"))
 	h.log.Info().Msg("")
 
