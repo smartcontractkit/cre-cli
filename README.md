@@ -349,3 +349,6 @@ cre workflow simulate --target local-simulation --config <path-to-config.json> <
 
 [//]: # ()
 [//]: # (To generate, visit https://github.com/settings/tokens?type=beta and click "Generate new token". Name the token and enable read & write access for Gists from the "Account permissions" drop-down menu. Do not enable any additional permissions.)
+
+## Legal Notice
+By using the CRE CLI tool, you agree to the Terms of Service (https://chain.link/terms) and Privacy Policy (https://chain.link/privacy-policy).
