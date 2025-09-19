@@ -47,7 +47,7 @@ func TestBlankWorkflowSimulation(t *testing.T) {
 	v.Set("target", "local-simulation")
 
 	var rpc settings.RpcEndpoint
-	rpc.ChainSelector = 16015286601757825753
+	rpc.ChainName = "ethereum-testnet-sepolia"
 	rpc.Url = "https://sepolia.infura.io/v3"
 	v.Set(fmt.Sprintf("%s.%s", "local-simulation", settings.RpcsSettingName), []settings.RpcEndpoint{rpc})
 

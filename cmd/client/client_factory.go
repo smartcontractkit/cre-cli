@@ -40,10 +40,10 @@ func (f *factoryImpl) NewCapabilitiesRegistryClient() (*CapabilitiesRegistryClie
 	}
 	f.logger.Debug().
 		Str("Address", environmentSet.CapabilitiesRegistryAddress).
-		Uint64("Chain Selector", environmentSet.CapabilitiesRegistryChainSelector).
+		Str("Chain Name", environmentSet.CapabilitiesRegistryChainName).
 		Msg("Selected Capabilities Registry")
 
-	ethClient, err := f.newEthClient(environmentSet.CapabilitiesRegistryChainSelector)
+	ethClient, err := f.newEthClient(environmentSet.CapabilitiesRegistryChainName)
 	if err != nil {
 		return nil, err
 	}
@@ -58,12 +58,12 @@ func (f *factoryImpl) NewWorkflowRegistryV2Client() (*WorkflowRegistryV2Client, 
 	}
 	f.logger.Debug().
 		Str("Address", environmentSet.WorkflowRegistryAddress).
-		Uint64("Chain Selector", environmentSet.WorkflowRegistryChainSelector).
+		Str("Chain Name", environmentSet.WorkflowRegistryChainName).
 		Msg("Selected Workflow Registry")
 
-	ethClient, err := f.newEthClient(environmentSet.WorkflowRegistryChainSelector)
+	ethClient, err := f.newEthClient(environmentSet.WorkflowRegistryChainName)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create client for chain selector %d: %w", environmentSet.WorkflowRegistryChainSelector, err)
+		return nil, fmt.Errorf("failed to create client for chain %q: %w", environmentSet.WorkflowRegistryChainName, err)
 	}
 
 	workflowRegistryV2Client := NewWorkflowRegistryV2Client(
@@ -89,8 +89,8 @@ func (f *factoryImpl) NewWorkflowRegistryV2Client() (*WorkflowRegistryV2Client, 
 	return workflowRegistryV2Client, nil
 }
 
-func (f *factoryImpl) newEthClient(chainSelector uint64) (*seth.Client, error) {
-	wrRpcUrl, err := settings.GetRpcUrlSettings(f.viper, chainSelector)
+func (f *factoryImpl) newEthClient(chainName string) (*seth.Client, error) {
+	wrRpcUrl, err := settings.GetRpcUrlSettings(f.viper, chainName)
 	if err != nil {
 		return nil, err
 	}

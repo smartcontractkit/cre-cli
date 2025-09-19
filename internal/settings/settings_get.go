@@ -25,7 +25,7 @@ type Contract struct {
 }
 
 type RpcEndpoint struct {
-	ChainSelector uint64 `mapstructure:"chain-selector" yaml:"chain-selector"`
+	ChainName string `mapstructure:"chain-name" yaml:"chain-name"`
 	// TODO: in the future, we can have a distinction between "public URL" and "private URL", with only one of them present at the time
 	// "public URL" would be URL hidden behind the VPN or URL from ChainList, something that doesn't contain sensitive API tokens, e.g.
 	// url_public: https://rpcs.cldev.sh/ethereum/sepolia
@@ -34,7 +34,7 @@ type RpcEndpoint struct {
 	Url string `mapstructure:"url" yaml:"url"`
 }
 
-func GetRpcUrlSettings(v *viper.Viper, chainSelector uint64) (string, error) {
+func GetRpcUrlSettings(v *viper.Viper, chainName string) (string, error) {
 	target, err := GetTarget(v)
 	if err != nil {
 		return "", err
@@ -48,12 +48,12 @@ func GetRpcUrlSettings(v *viper.Viper, chainSelector uint64) (string, error) {
 	}
 
 	for _, rpc := range rpcs {
-		if rpc.ChainSelector == chainSelector {
+		if rpc.ChainName == chainName {
 			return rpc.Url, nil
 		}
 	}
 
-	return "", fmt.Errorf("rpc url not found for chain %d", chainSelector)
+	return "", fmt.Errorf("rpc url not found for chain %s", chainName)
 }
 
 func GetEnvironmentVariable(filePath, key string) (string, error) {
@@ -137,4 +137,18 @@ func GetChainNameByChainSelector(chainSelector uint64) (string, error) {
 	}
 
 	return chainDetails.ChainName, nil
+}
+
+func GetChainSelectorByChainName(name string) (uint64, error) {
+	chainID, err := chainSelectors.ChainIdFromName(name)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get chain ID from name %q: %w", name, err)
+	}
+
+	selector, err := chainSelectors.SelectorFromChainId(chainID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get selector from chain ID %d: %w", chainID, err)
+	}
+
+	return selector, nil
 }

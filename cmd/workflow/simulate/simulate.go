@@ -109,7 +109,7 @@ func newHandler(ctx *runtime.Context) *handler {
 }
 
 func (h *handler) ResolveInputs(args []string, v *viper.Viper, creSettings *settings.Settings) (Inputs, error) {
-	wrRpcUrl, err := settings.GetRpcUrlSettings(v, 16015286601757825753)
+	wrRpcUrl, err := settings.GetRpcUrlSettings(v, "ethereum-testnet-sepolia")
 	if err != nil {
 		return Inputs{}, err
 	}
