@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -15,6 +17,7 @@ import (
 
 	cmdCommon "github.com/smartcontractkit/cre-cli/cmd/common"
 	"github.com/smartcontractkit/cre-cli/internal/constants"
+	"github.com/smartcontractkit/cre-cli/internal/prompt"
 )
 
 //go:generate stringer -type=TxType
@@ -64,8 +67,10 @@ type TxOutput struct {
 }
 
 type RawTx struct {
-	To   string
-	Data []byte
+	To       string
+	Data     []byte
+	Function string
+	Args     []string
 }
 
 //func (c *TxClient) ledgerOpts(ledgerConfig LedgerConfig) (*bind.TransactOpts, error) {
@@ -107,11 +112,27 @@ type RawTx struct {
 //}
 
 // TODO DEVSVCS-2341
-//
-//nolint:unused
-func (c *TxClient) executeTransactionByTxType(txFn func(opts *bind.TransactOpts) (*types.Transaction, error), funName string, validationEvent string) (TxOutput, error) {
+func (c *TxClient) executeTransactionByTxType(txFn func(opts *bind.TransactOpts) (*types.Transaction, error), funName string, validationEvent string, args ...any) (TxOutput, error) {
 	switch c.txType {
 	case Regular:
+		simulateTx, err := txFn(cmdCommon.SimTransactOpts())
+		if err != nil {
+			return TxOutput{Type: Regular}, err
+		}
+		c.Logger.Info().Msgf("Transaction details:\n")
+		c.Logger.Info().Msgf("  To:   %s\n", simulateTx.To().Hex())
+		c.Logger.Info().Msgf("  Function: %s\n", funName)
+		c.Logger.Info().Msgf("  Inputs: %s\n", strings.Join(cmdCommon.ToStringSlice(args), ", "))
+		c.Logger.Info().Msgf("  Data: %x\n", simulateTx.Data())
+
+		// Ask for user confirmation before executing the transaction
+		confirm, err := prompt.YesNoPrompt(os.Stdin, "Do you want to execute this transaction?")
+		if err != nil {
+			return TxOutput{}, err
+		}
+		if !confirm {
+			return TxOutput{}, errors.New("transaction cancelled by user")
+		}
 		decodedTx, err := c.EthClient.Decode(txFn(c.EthClient.NewTXOpts()))
 		if err != nil {
 			return TxOutput{Type: Regular}, err
@@ -120,7 +141,16 @@ func (c *TxClient) executeTransactionByTxType(txFn func(opts *bind.TransactOpts)
 		if err != nil {
 			return TxOutput{Type: Regular}, err
 		}
-		return TxOutput{Type: Regular, Hash: decodedTx.Transaction.Hash()}, nil
+		return TxOutput{
+			Type: Regular,
+			Hash: decodedTx.Transaction.Hash(),
+			RawTx: RawTx{
+				To:       decodedTx.Transaction.To().Hex(),
+				Data:     decodedTx.Transaction.Data(),
+				Function: funName,
+				Args:     cmdCommon.ToStringSlice(args),
+			},
+		}, nil
 	case Raw:
 		c.Logger.Info().Msg("--unsigned flag detected: transaction not sent on-chain.")
 		c.Logger.Info().Msg("Generating call data for offline signing and submission in your preferred tool:\n")
@@ -128,7 +158,7 @@ func (c *TxClient) executeTransactionByTxType(txFn func(opts *bind.TransactOpts)
 		if err != nil {
 			return TxOutput{Type: Raw}, err
 		}
-		c.Logger.Info().Msgf("Generated call data:\n%s", func() string {
+		c.Logger.Debug().Msgf("Generated call data:\n%s", func() string {
 			b, err := json.MarshalIndent(tx, "", "  ")
 			if err != nil {
 				return fmt.Sprintf("failed to marshal tx: %v", err)
@@ -136,9 +166,12 @@ func (c *TxClient) executeTransactionByTxType(txFn func(opts *bind.TransactOpts)
 			return string(b)
 		}())
 		return TxOutput{
-			Type: Raw, RawTx: RawTx{
-				To:   tx.To().Hex(),
-				Data: tx.Data(),
+			Type: Raw,
+			RawTx: RawTx{
+				To:       tx.To().Hex(),
+				Data:     tx.Data(),
+				Function: funName,
+				Args:     cmdCommon.ToStringSlice(args),
 			},
 		}, nil
 	//case Ledger:
