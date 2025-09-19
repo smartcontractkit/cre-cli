@@ -20,13 +20,6 @@ import (
 	"github.com/smartcontractkit/chainlink/v2/core/services/keystore/keys/ocr2key"
 )
 
-const (
-	SEPOLIA_MOCK_KEYSTONE_FORWARDER_ADDRESS = "0x15fC6ae953E024d975e77382eEeC56A9101f9F88"
-	MAINNET_MOCK_KEYSTONE_FORWARDER_ADDRESS = "0xa3d1ad4ac559a6575a114998affb2fb2ec97a7d9"
-	SEPOLIA_CHAIN_SELECTOR                  = 16015286601757825753
-	MAINNET_CHAIN_SELECTOR                  = 5009297550715157269
-)
-
 type ManualTriggerCapabilitiesConfig struct {
 	Clients    map[uint64]*ethclient.Client
 	Forwarders map[uint64]common.Address

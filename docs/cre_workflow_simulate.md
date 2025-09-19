@@ -16,7 +16,6 @@ cre workflow simulate ./path/to/workflow/main.go [flags]
       --broadcast             Broadcast transactions to the EVM (default: false)
   -c, --config string         Path to the config file
   -g, --engine-logs           Enable non-fatal engine logging
-      --evm-chain string      EVM chain to use for EVM triggers in non-interactive mode (eth-sepolia|eth-mainnet)
       --evm-event-index int   EVM trigger log index (0-based) (default -1)
       --evm-tx-hash string    EVM trigger transaction hash (0x...)
   -h, --help                  help for simulate
