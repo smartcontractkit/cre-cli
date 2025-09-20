@@ -44,7 +44,7 @@ type RegisterWorkflowV2Parameters struct {
 	KeepAlive  bool   // optional: whether to keep the other workflows of the same name and owner active after the new deploy (default is false)
 }
 
-func NewWorkflowRegistryV2Client(logger *zerolog.Logger, ethClient *seth.Client, address string, outputType TxType, ledgerConfig *LedgerConfig) *WorkflowRegistryV2Client {
+func NewWorkflowRegistryV2Client(logger *zerolog.Logger, ethClient *seth.Client, address string, txcConfig TxClientConfig) *WorkflowRegistryV2Client {
 	// Create the real workflow registry client
 	wr, err := workflow_registry_v2_wrapper.NewWorkflowRegistry(common.HexToAddress(address), ethClient.Client)
 	if err != nil {
@@ -55,86 +55,74 @@ func NewWorkflowRegistryV2Client(logger *zerolog.Logger, ethClient *seth.Client,
 	contractAddr := common.HexToAddress(address)
 	abi, _ := workflow_registry_v2_wrapper.WorkflowRegistryMetaData.GetAbi()
 	return &WorkflowRegistryV2Client{
-		TxClient:        TxClient{Logger: logger, EthClient: ethClient, abi: abi, txType: outputType, ledgerConfig: *ledgerConfig},
+		TxClient:        TxClient{Logger: logger, EthClient: ethClient, abi: abi, config: txcConfig},
 		ContractAddress: contractAddr,
 		Wr:              wr,
 	}
 }
 
-func (wrc *WorkflowRegistryV2Client) LinkOwner(validityTimestamp *big.Int, proof [32]byte, signature []byte) error {
+func (wrc *WorkflowRegistryV2Client) LinkOwner(validityTimestamp *big.Int, proof [32]byte, signature []byte) (*TxOutput, error) {
 	contract, err := workflow_registry_v2_wrapper.NewWorkflowRegistry(wrc.ContractAddress, wrc.EthClient.Client)
 	if err != nil {
 		wrc.Logger.Error().
 			Str("contract", wrc.ContractAddress.Hex()).
 			Err(err).
 			Msgf("Failed to connect to %s", constants.WorkflowRegistryContractName)
-		return err
+		return nil, err
 	}
 
-	tx, err := wrc.EthClient.Decode(
-		contract.LinkOwner(wrc.EthClient.NewTXOpts(), validityTimestamp, proof, signature),
-	)
+	txFn := func(opts *bind.TransactOpts) (*types.Transaction, error) {
+		return contract.LinkOwner(opts, validityTimestamp, proof, signature)
+	}
+	txOut, err := wrc.executeTransactionByTxType(txFn, "LinkOwner", "OwnershipLinkUpdated", validityTimestamp, proof, signature)
 	if err != nil {
 		wrc.Logger.Error().
 			Str("contract", contract.Address().Hex()).
 			Err(err).
 			Msg("Failed to call LinkOwner")
-		return err
+		return nil, err
 	}
 
 	wrc.Logger.Debug().
-		Interface("tx", tx).
+		Interface("tx", txOut.RawTx).
 		Msg("LinkOwner transaction submitted")
 
-	if err := wrc.validateReceiptAndEvent(contract, tx, "LinkOwner", "OwnershipLinkUpdated"); err != nil {
-		wrc.Logger.Error().
-			Err(err).
-			Msg("OwnershipLinkUpdated event validation failed")
-		return err
-	}
-
 	wrc.Logger.Debug().
-		Str("txHash", tx.Transaction.Hash().Hex()).
+		Str("txHash", txOut.Hash.String()).
 		Msg("Owner linked successfully")
-	return nil
+	return &txOut, nil
 }
 
-func (wrc *WorkflowRegistryV2Client) UnlinkOwner(owner common.Address, validityTimestamp *big.Int, signature []byte) error {
+func (wrc *WorkflowRegistryV2Client) UnlinkOwner(owner common.Address, validityTimestamp *big.Int, signature []byte) (*TxOutput, error) {
 	contract, err := workflow_registry_v2_wrapper.NewWorkflowRegistry(wrc.ContractAddress, wrc.EthClient.Client)
 	if err != nil {
 		wrc.Logger.Error().
 			Str("contract", wrc.ContractAddress.Hex()).
 			Err(err).
 			Msgf("Failed to connect to %s", constants.WorkflowRegistryContractName)
-		return err
+		return nil, err
 	}
 
-	tx, err := wrc.EthClient.Decode(
-		contract.UnlinkOwner(wrc.EthClient.NewTXOpts(), owner, validityTimestamp, signature),
-	)
+	txFn := func(opts *bind.TransactOpts) (*types.Transaction, error) {
+		return contract.UnlinkOwner(opts, owner, validityTimestamp, signature)
+	}
+	txOut, err := wrc.executeTransactionByTxType(txFn, "UnlinkOwner", "OwnershipLinkUpdated", owner, validityTimestamp, signature)
 	if err != nil {
 		wrc.Logger.Error().
 			Str("contract", contract.Address().Hex()).
 			Err(err).
 			Msg("Failed to call UnlinkOwner")
-		return err
+		return nil, err
 	}
 
 	wrc.Logger.Debug().
-		Interface("tx", tx).
+		Interface("tx", txOut.RawTx).
 		Msg("UnlinkOwner transaction submitted")
 
-	if err := wrc.validateReceiptAndEvent(contract, tx, "UnlinkOwner", "OwnershipLinkUpdated"); err != nil {
-		wrc.Logger.Error().
-			Err(err).
-			Msg("OwnershipLinkUpdated event validation failed")
-		return err
-	}
-
 	wrc.Logger.Debug().
-		Str("txHash", tx.Transaction.Hash().Hex()).
+		Str("txHash", txOut.Hash.String()).
 		Msg("Owner unlinked successfully")
-	return nil
+	return &txOut, nil
 }
 
 func (wrc *WorkflowRegistryV2Client) UpdateAllowedSigners(signers []common.Address, allowed bool) error {
