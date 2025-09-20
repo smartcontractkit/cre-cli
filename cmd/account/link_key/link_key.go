@@ -83,6 +83,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 		},
 	}
 	settings.AddRawTxFlag(cmd)
+	settings.AddNonInteractiveFlag(cmd)
 	cmd.Flags().StringP("owner-label", "l", "", "Label for the workflow owner")
 
 	return cmd

@@ -44,7 +44,7 @@ type RegisterWorkflowV2Parameters struct {
 	KeepAlive  bool   // optional: whether to keep the other workflows of the same name and owner active after the new deploy (default is false)
 }
 
-func NewWorkflowRegistryV2Client(logger *zerolog.Logger, ethClient *seth.Client, address string, outputType TxType, ledgerConfig *LedgerConfig) *WorkflowRegistryV2Client {
+func NewWorkflowRegistryV2Client(logger *zerolog.Logger, ethClient *seth.Client, address string, txcConfig TxClientConfig) *WorkflowRegistryV2Client {
 	// Create the real workflow registry client
 	wr, err := workflow_registry_v2_wrapper.NewWorkflowRegistry(common.HexToAddress(address), ethClient.Client)
 	if err != nil {
@@ -55,7 +55,7 @@ func NewWorkflowRegistryV2Client(logger *zerolog.Logger, ethClient *seth.Client,
 	contractAddr := common.HexToAddress(address)
 	abi, _ := workflow_registry_v2_wrapper.WorkflowRegistryMetaData.GetAbi()
 	return &WorkflowRegistryV2Client{
-		TxClient:        TxClient{Logger: logger, EthClient: ethClient, abi: abi, txType: outputType, ledgerConfig: *ledgerConfig},
+		TxClient:        TxClient{Logger: logger, EthClient: ethClient, abi: abi, config: txcConfig},
 		ContractAddress: contractAddr,
 		Wr:              wr,
 	}

@@ -21,7 +21,12 @@ func DeployWorkflowRegistry(t *testing.T, ethClient *seth.Client, chain *Simulat
 	deployedContract, err := ethClient.DeployContractFromContractStore(ethClient.NewTXOpts(), constants.WorkflowRegistryContractName)
 	require.NoError(t, err, "Failed to deploy contract")
 
-	workflowRegistryClient := client.NewWorkflowRegistryV2Client(logger, ethClient, deployedContract.Address.Hex(), client.Regular, &client.LedgerConfig{LedgerEnabled: false})
+	txcConfig := client.TxClientConfig{
+		TxType:       client.Regular,
+		LedgerConfig: &client.LedgerConfig{LedgerEnabled: false},
+		SkipPrompt:   true,
+	}
+	workflowRegistryClient := client.NewWorkflowRegistryV2Client(logger, ethClient, deployedContract.Address.Hex(), txcConfig)
 
 	err = workflowRegistryClient.UpdateAllowedSigners([]common.Address{common.HexToAddress(TestAddress)}, true)
 	chain.Backend.Commit()

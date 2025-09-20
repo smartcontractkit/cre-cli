@@ -35,6 +35,10 @@ type MockClientFactory struct {
 	mock.Mock
 }
 
+func (m *MockClientFactory) GetNonInteractive() bool {
+	panic("not used in these tests")
+}
+
 func (m *MockClientFactory) NewCapabilitiesRegistryClient() (*client.CapabilitiesRegistryClient, error) {
 	args := m.Called()
 	return args.Get(0).(*client.CapabilitiesRegistryClient), args.Error(1)
