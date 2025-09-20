@@ -10,7 +10,7 @@ import (
 func DeriveEthAddressFromPrivateKey(privateKeyHex string) (string, error) {
 	privateKey, err := crypto.HexToECDSA(privateKeyHex)
 	if err != nil {
-		return "", fmt.Errorf("failed to parse private key: %w", err)
+		return "", fmt.Errorf("failed to parse private key. Please check CRE_ETH_PRIVATE_KEY in your .env file or system environment: %w", err)
 	}
 
 	publicKey := privateKey.Public()

@@ -23,7 +23,7 @@ The workflow command allows you to register and manage existing workflows.
 
 ### SEE ALSO
 
-* [cre](cre.md)	 - Dev Platform CLI tool
+* [cre](cre.md)	 - CRE CLI tool
 * [cre workflow activate](cre_workflow_activate.md)	 - Activates workflow on the Workflow Registry contract
 * [cre workflow delete](cre_workflow_delete.md)	 - Deletes all versions of a workflow from the Workflow Registry
 * [cre workflow deploy](cre_workflow_deploy.md)	 - Deploys a workflow to the Workflow Registry contract

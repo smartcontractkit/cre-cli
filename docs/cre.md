@@ -1,6 +1,6 @@
 ## cre
 
-Dev Platform CLI tool
+CRE CLI tool
 
 ### Synopsis
 
