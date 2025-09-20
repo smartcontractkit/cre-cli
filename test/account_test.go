@@ -26,6 +26,7 @@ import (
 
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
+	"github.com/smartcontractkit/cre-cli/internal/settings"
 	test "github.com/smartcontractkit/cre-cli/test/contracts"
 )
 
@@ -137,6 +138,7 @@ func TestCLIAccountLinkAndListKey_EOA(t *testing.T) {
 			tc.GetCliEnvFlag(),
 			tc.GetCliSettingsFlag(),
 			"-l", "owner-label-1",
+			"--" + settings.Flags.NonInteractive.Name,
 		}
 		cmd := exec.Command(CLIPath, args...)
 		cmd.Dir = tc.ProjectDirectory

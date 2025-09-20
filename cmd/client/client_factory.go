@@ -19,6 +19,7 @@ type Factory interface {
 	NewCapabilitiesRegistryClient() (*CapabilitiesRegistryClient, error)
 	NewWorkflowRegistryV2Client() (*WorkflowRegistryV2Client, error)
 	GetTxType() TxType
+	GetNonInteractive() bool
 }
 
 type factoryImpl struct {
@@ -66,12 +67,17 @@ func (f *factoryImpl) NewWorkflowRegistryV2Client() (*WorkflowRegistryV2Client, 
 		return nil, fmt.Errorf("failed to create client for chain selector %d: %w", environmentSet.WorkflowRegistryChainSelector, err)
 	}
 
+	txcConfig := TxClientConfig{
+		TxType:       f.GetTxType(),
+		LedgerConfig: f.getLedgerConfig(),
+		SkipPrompt:   f.GetNonInteractive(),
+	}
+
 	workflowRegistryV2Client := NewWorkflowRegistryV2Client(
 		f.logger,
 		ethClient,
 		environmentSet.WorkflowRegistryAddress,
-		f.GetTxType(),
-		f.getLedgerConfig(),
+		txcConfig,
 	)
 
 	typeAndVersion, err := workflowRegistryV2Client.TypeAndVersion()
@@ -104,6 +110,10 @@ func (f *factoryImpl) GetTxType() TxType {
 		return Ledger
 	}
 	return Regular
+}
+
+func (f *factoryImpl) GetNonInteractive() bool {
+	return f.viper.GetBool(settings.Flags.NonInteractive.Name)
 }
 
 func (f *factoryImpl) getLedgerConfig() *LedgerConfig {

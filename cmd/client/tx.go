@@ -29,12 +29,17 @@ const (
 	Ledger
 )
 
+type TxClientConfig struct {
+	TxType       TxType
+	LedgerConfig *LedgerConfig
+	SkipPrompt   bool
+}
+
 type TxClient struct {
-	Logger       *zerolog.Logger
-	EthClient    *seth.Client
-	abi          *abi.ABI
-	txType       TxType
-	ledgerConfig LedgerConfig
+	Logger    *zerolog.Logger
+	EthClient *seth.Client
+	abi       *abi.ABI
+	config    TxClientConfig
 }
 
 // TODO DEVSVCS-2341
@@ -113,7 +118,7 @@ type RawTx struct {
 
 // TODO DEVSVCS-2341
 func (c *TxClient) executeTransactionByTxType(txFn func(opts *bind.TransactOpts) (*types.Transaction, error), funName string, validationEvent string, args ...any) (TxOutput, error) {
-	switch c.txType {
+	switch c.config.TxType {
 	case Regular:
 		simulateTx, err := txFn(cmdCommon.SimTransactOpts())
 		if err != nil {
@@ -126,13 +131,16 @@ func (c *TxClient) executeTransactionByTxType(txFn func(opts *bind.TransactOpts)
 		c.Logger.Info().Msgf("  Data: %x\n", simulateTx.Data())
 
 		// Ask for user confirmation before executing the transaction
-		confirm, err := prompt.YesNoPrompt(os.Stdin, "Do you want to execute this transaction?")
-		if err != nil {
-			return TxOutput{}, err
+		if !c.config.SkipPrompt {
+			confirm, err := prompt.YesNoPrompt(os.Stdin, "Do you want to execute this transaction?")
+			if err != nil {
+				return TxOutput{}, err
+			}
+			if !confirm {
+				return TxOutput{}, errors.New("transaction cancelled by user")
+			}
 		}
-		if !confirm {
-			return TxOutput{}, errors.New("transaction cancelled by user")
-		}
+
 		decodedTx, err := c.EthClient.Decode(txFn(c.EthClient.NewTXOpts()))
 		if err != nil {
 			return TxOutput{Type: Regular}, err
@@ -195,6 +203,6 @@ func (c *TxClient) executeTransactionByTxType(txFn func(opts *bind.TransactOpts)
 	//	}
 	//	return TxOutput{Type: Ledger, Hash: tx.Hash()}, nil
 	default:
-		return TxOutput{}, fmt.Errorf("unknown output type: %d", c.txType)
+		return TxOutput{}, fmt.Errorf("unknown output type: %d", c.config.TxType)
 	}
 }

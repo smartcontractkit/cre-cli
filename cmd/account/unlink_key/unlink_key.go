@@ -77,6 +77,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 		},
 	}
 	settings.AddRawTxFlag(cmd)
+	settings.AddNonInteractiveFlag(cmd)
 	return cmd
 }
 
