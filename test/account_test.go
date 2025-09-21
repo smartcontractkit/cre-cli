@@ -40,7 +40,7 @@ func TestCLIAccountLinkListUnlinkFlow_EOA(t *testing.T) {
 
 	tc := NewTestConfig(t)
 
-	// Use test address for this comprehensive flow test
+	// Use test address for this test
 	require.NoError(t, createCliEnvFile(tc.EnvFile, constants.TestPrivateKey4), "failed to create env file")
 	require.NoError(t, createCliSettingsFile(tc, constants.TestAddress4, "workflow-name", testEthURL), "failed to create settings")
 	require.NoError(t, createBlankProjectSettingFile(tc.ProjectDirectory+"project.yaml"), "failed to create project.yaml")
@@ -58,7 +58,7 @@ func TestCLIAccountLinkListUnlinkFlow_EOA(t *testing.T) {
 	// Track state for dynamic list responses
 	isOwnerLinked := false
 
-	// Comprehensive GraphQL server that supports InitiateLinking, InitiateUnlinking, and listWorkflowOwners
+	// GraphQL server that supports InitiateLinking, InitiateUnlinking, and listWorkflowOwners
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !(strings.HasPrefix(r.URL.Path, "/graphql") && r.Method == http.MethodPost) {
 			w.WriteHeader(http.StatusNotFound)
@@ -141,7 +141,7 @@ func TestCLIAccountLinkListUnlinkFlow_EOA(t *testing.T) {
 			}
 
 			// Build realistic response with correct function signature
-			resp, err := buildInitiateUnlinkingEOAResponse(t, testEthURL, registryAddr, ownerHex, TestChainSelector)
+			resp, err := buildInitiateUnlinkingEOAResponse(testEthURL, registryAddr, ownerHex, TestChainSelector)
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
 				_ = json.NewEncoder(w).Encode(map[string]any{
@@ -412,7 +412,7 @@ func buildInitiateLinkingEOAResponse(rpcURL, registryAddrHex, ownerHex string, c
 
 // Builds a valid InitiateUnlinking GraphQL response for EOA flow.
 // Signs the message with the allowed signer (TestPrivateKey2) so CanUnlinkOwner + UnlinkOwner succeed.
-func buildInitiateUnlinkingEOAResponse(t *testing.T, rpcURL, registryAddrHex, ownerHex string, chainSelector uint64) (map[string]any, error) {
+func buildInitiateUnlinkingEOAResponse(rpcURL, registryAddrHex, ownerHex string, chainSelector uint64) (map[string]any, error) {
 	ctx := context.Background()
 
 	ec, err := ethclient.DialContext(ctx, rpcURL)
