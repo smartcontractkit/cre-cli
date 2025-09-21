@@ -56,7 +56,7 @@ install-tools: install-foundry
 
 install-foundry:
 	curl -L https://foundry.paradigm.xyz | bash
-	foundryup
+	foundryup --version v1.3.6
 
 run-op:
 	op run --env-file=".env" -- ./$(BINARY_NAME) $(CMD)

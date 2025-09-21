@@ -6,3 +6,4 @@ nodejs 20.13.1
 pnpm 9.4.0
 bun 1.2.21
 rust 1.87.0
+foundry v1.3.6
