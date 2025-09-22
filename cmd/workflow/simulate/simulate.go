@@ -43,17 +43,15 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/validation"
 )
 
-const TIMEOUT = 30 * time.Second
-
 type Inputs struct {
-	WorkflowPath  string            `validate:"required,file"`
-	ConfigPath    string            `validate:"omitempty,file,ascii,max=97" cli:"--config"`
-	SecretsPath   string            `validate:"omitempty,file,ascii,max=97" cli:"--secrets"`
-	EngineLogs    bool              `validate:"omitempty" cli:"--engine-logs"`
-	Broadcast     bool              `validate:"-"`
-	EthClient     *ethclient.Client `validate:"omitempty"`
-	EthPrivateKey *ecdsa.PrivateKey `validate:"omitempty"`
-	WorkflowName  string            `validate:"required"`
+	WorkflowPath  string                       `validate:"required,file"`
+	ConfigPath    string                       `validate:"omitempty,file,ascii,max=97" cli:"--config"`
+	SecretsPath   string                       `validate:"omitempty,file,ascii,max=97" cli:"--secrets"`
+	EngineLogs    bool                         `validate:"omitempty" cli:"--engine-logs"`
+	Broadcast     bool                         `validate:"-"`
+	EVMClients    map[uint64]*ethclient.Client `validate:"omitempty"` // multichain clients keyed by selector
+	EthPrivateKey *ecdsa.PrivateKey            `validate:"omitempty"`
+	WorkflowName  string                       `validate:"required"`
 	// Non-interactive mode options
 	NonInteractive bool   `validate:"-"`
 	TriggerIndex   int    `validate:"-"`
@@ -109,18 +107,28 @@ func newHandler(ctx *runtime.Context) *handler {
 }
 
 func (h *handler) ResolveInputs(args []string, v *viper.Viper, creSettings *settings.Settings) (Inputs, error) {
-	wrRpcUrl, err := settings.GetRpcUrlSettings(v, "ethereum-testnet-sepolia")
-	if err != nil {
-		return Inputs{}, err
-	}
-	if wrRpcUrl == "" {
-		return Inputs{}, fmt.Errorf("sepolia rpc url not found")
+	// build clients for each supported chain from settings, skip if rpc is empty
+	clients := make(map[uint64]*ethclient.Client)
+	for _, chain := range supportedEVM {
+		rpcURL, err := settings.GetRpcUrlSettings(v, chain.ChainName)
+		if err != nil || strings.TrimSpace(rpcURL) == "" {
+			h.log.Info().Msgf("RPC not provided for %s; skipping", chain.ChainName)
+			continue
+		}
+
+		c, err := ethclient.Dial(rpcURL)
+		if err != nil {
+			h.log.Info().Msgf("failed to create eth client for %s: %v", chain.ChainName, err)
+			continue
+		}
+
+		clients[chain.Selector] = c
 	}
 
-	ethClient, err := ethclient.Dial(wrRpcUrl)
-	if err != nil {
-		return Inputs{}, fmt.Errorf("failed to create eth client: %w", err)
+	if len(clients) == 0 {
+		return Inputs{}, fmt.Errorf("no RPC URLs found for supported chains")
 	}
+
 	pk, err := crypto.HexToECDSA(creSettings.User.EthPrivateKey)
 	if err != nil {
 		return Inputs{}, fmt.Errorf("failed to create private key: %w", err)
@@ -132,7 +140,7 @@ func (h *handler) ResolveInputs(args []string, v *viper.Viper, creSettings *sett
 		SecretsPath:    v.GetString("secrets"),
 		EngineLogs:     v.GetBool("engine-logs"),
 		Broadcast:      v.GetBool("broadcast"),
-		EthClient:      ethClient,
+		EVMClients:     clients,
 		EthPrivateKey:  pk,
 		WorkflowName:   creSettings.Workflow.UserWorkflowSettings.WorkflowName,
 		NonInteractive: v.GetBool("non-interactive"),
@@ -304,9 +312,18 @@ func run(
 			}
 		}
 
+		// Build forwarder address map based on which chains actually have RPC clients configured
+		forwarders := map[uint64]common.Address{}
+		for _, c := range supportedEVM {
+			if _, ok := inputs.EVMClients[c.Selector]; ok && strings.TrimSpace(c.Forwarder) != "" {
+				forwarders[c.Selector] = common.HexToAddress(c.Forwarder)
+			}
+		}
+
 		manualTriggerCapConfig := ManualTriggerCapabilitiesConfig{
-			Client:     inputs.EthClient,
+			Clients:    inputs.EVMClients,
 			PrivateKey: inputs.EthPrivateKey,
+			Forwarders: forwarders,
 		}
 
 		triggerLggr := lggr.Named("TriggerCapabilities")
@@ -337,7 +354,10 @@ func run(
 			}
 		}
 
-		srvcs = append(srvcs, triggerCaps.ManualCronTrigger, triggerCaps.ManualHTTPTrigger, triggerCaps.ManualEVMChainTrigger)
+		srvcs = append(srvcs, triggerCaps.ManualCronTrigger, triggerCaps.ManualHTTPTrigger)
+		for _, evm := range triggerCaps.ManualEVMChains {
+			srvcs = append(srvcs, evm)
+		}
 		srvcs = append(srvcs, computeCaps...)
 		return registry, srvcs
 	}
@@ -505,7 +525,7 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 				return triggerCaps.ManualCronTrigger.ManualTrigger(ctx, triggerRegistrationID, time.Now())
 			}
 		case trigger == "http-trigger@1.0.0-alpha":
-			payload, err := getHTTPTriggerPayload(ctx)
+			payload, err := getHTTPTriggerPayload()
 			if err != nil {
 				fmt.Printf("failed to get HTTP trigger payload: %v\n", err)
 				os.Exit(1)
@@ -514,13 +534,31 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 				return triggerCaps.ManualHTTPTrigger.ManualTrigger(ctx, triggerRegistrationID, payload)
 			}
 		case strings.HasPrefix(trigger, "evm") && strings.HasSuffix(trigger, "@1.0.0"):
-			log, err := getEVMTriggerLog(ctx, inputs.EthClient)
+			// Derive the chain selector directly from the selected trigger ID.
+			sel, ok := parseChainSelectorFromTriggerID(holder.TriggerToRun.GetId())
+			if !ok {
+				fmt.Printf("could not determine chain selector from trigger id %q\n", holder.TriggerToRun.GetId())
+				os.Exit(1)
+			}
+
+			client := inputs.EVMClients[sel]
+			if client == nil {
+				fmt.Printf("no RPC configured for chain selector %d\n", sel)
+				os.Exit(1)
+			}
+
+			log, err := getEVMTriggerLog(ctx, client)
 			if err != nil {
 				fmt.Printf("failed to get EVM trigger log: %v\n", err)
 				os.Exit(1)
 			}
+			evmChain := triggerCaps.ManualEVMChains[sel]
+			if evmChain == nil {
+				fmt.Printf("no EVM chain initialized for selector %d\n", sel)
+				os.Exit(1)
+			}
 			holder.TriggerFunc = func() error {
-				return triggerCaps.ManualEVMChainTrigger.ManualTrigger(ctx, triggerRegistrationID, log)
+				return evmChain.ManualTrigger(ctx, triggerRegistrationID, log)
 			}
 		default:
 			fmt.Printf("unsupported trigger type: %s\n", holder.TriggerToRun.Id)
@@ -579,13 +617,31 @@ func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inp
 				fmt.Println("--evm-tx-hash and --evm-event-index are required for EVM triggers in non-interactive mode")
 				os.Exit(1)
 			}
-			log, err := getEVMTriggerLogFromValues(ctx, inputs.EthClient, inputs.EVMTxHash, uint64(inputs.EVMEventIndex))
+
+			sel, ok := parseChainSelectorFromTriggerID(holder.TriggerToRun.GetId())
+			if !ok {
+				fmt.Printf("could not determine chain selector from trigger id %q\n", holder.TriggerToRun.GetId())
+				os.Exit(1)
+			}
+
+			client := inputs.EVMClients[sel]
+			if client == nil {
+				fmt.Printf("no RPC configured for chain selector %d\n", sel)
+				os.Exit(1)
+			}
+
+			log, err := getEVMTriggerLogFromValues(ctx, client, inputs.EVMTxHash, uint64(inputs.EVMEventIndex))
 			if err != nil {
 				fmt.Printf("failed to build EVM trigger log: %v\n", err)
 				os.Exit(1)
 			}
+			evmChain := triggerCaps.ManualEVMChains[sel]
+			if evmChain == nil {
+				fmt.Printf("no EVM chain initialized for selector %d\n", sel)
+				os.Exit(1)
+			}
 			holder.TriggerFunc = func() error {
-				return triggerCaps.ManualEVMChainTrigger.ManualTrigger(ctx, triggerRegistrationID, log)
+				return evmChain.ManualTrigger(ctx, triggerRegistrationID, log)
 			}
 		default:
 			fmt.Printf("unsupported trigger type: %s\n", holder.TriggerToRun.Id)
@@ -662,7 +718,7 @@ func getUserTriggerChoice(ctx context.Context, triggerSub []*pb.TriggerSubscript
 }
 
 // getHTTPTriggerPayload prompts user for HTTP trigger data
-func getHTTPTriggerPayload(ctx context.Context) (*httptypedapi.Payload, error) {
+func getHTTPTriggerPayload() (*httptypedapi.Payload, error) {
 	fmt.Println("\n🔍 HTTP Trigger Configuration:")
 	fmt.Println("Please provide JSON input for the HTTP trigger.")
 	fmt.Println("You can enter a file path or JSON directly.")
