@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"math/big"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -141,12 +140,6 @@ func (h *handler) Execute(in Inputs) error {
 	}
 
 	h.log.Debug().Msg("\nRaw linking response payload:\n\n" + string(prettyResp))
-
-	fileName := fmt.Sprintf("linking_%s_%d.json", in.WorkflowOwner, time.Now().Unix())
-	if err := os.WriteFile(fileName, prettyResp, 0600); err != nil {
-		h.log.Error().Err(err).Msg("failed to write linking response to file")
-		return err
-	}
 
 	if in.WorkflowRegistryContractAddress == resp.ContractAddress {
 		h.log.Info().Msg("Contract address validation passed")
