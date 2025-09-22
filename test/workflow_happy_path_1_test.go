@@ -16,6 +16,7 @@ import (
 
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
+	"github.com/smartcontractkit/cre-cli/internal/settings"
 )
 
 // Small struct to read GraphQL body
@@ -104,6 +105,7 @@ func (tc *TestConfig) workflowDeployEoaWithMockStorage(t *testing.T) string {
 		tc.GetCliEnvFlag(),
 		tc.GetCliSettingsFlag(),
 		"--auto-start=true",
+		"--" + settings.Flags.NonInteractive.Name,
 	}
 
 	cmd := exec.Command(CLIPath, args...)
@@ -133,6 +135,7 @@ func (tc *TestConfig) workflowPauseEoa(t *testing.T) string {
 		"workflow", "pause",
 		tc.GetCliEnvFlag(),
 		tc.GetCliSettingsFlag(),
+		"--" + settings.Flags.NonInteractive.Name,
 	}
 
 	cmd := exec.Command(CLIPath, args...)
@@ -161,6 +164,7 @@ func (tc *TestConfig) workflowActivateEoa(t *testing.T) string {
 		"workflow", "activate",
 		tc.GetCliEnvFlag(),
 		tc.GetCliSettingsFlag(),
+		"--" + settings.Flags.NonInteractive.Name,
 	}
 
 	cmd := exec.Command(CLIPath, args...)
@@ -189,7 +193,7 @@ func (tc *TestConfig) workflowDeleteEoa(t *testing.T) string {
 		"workflow", "delete",
 		tc.GetCliEnvFlag(),
 		tc.GetCliSettingsFlag(),
-		"-y", // --skip-confirmation
+		"--" + settings.Flags.NonInteractive.Name,
 	}
 
 	cmd := exec.Command(CLIPath, args...)
