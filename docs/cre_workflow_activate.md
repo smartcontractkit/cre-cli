@@ -13,8 +13,9 @@ cre workflow activate [flags]
 ### Options
 
 ```
-  -h, --help       help for activate
-      --unsigned   If set, the command will return the raw transaction instead of sending it to the network
+  -h, --help              help for activate
+      --non-interactive   If set, the command will skip all interactive prompts and fail if any required information is missing
+      --unsigned          If set, the command will return the raw transaction instead of sending it to the network
 ```
 
 ### Options inherited from parent commands

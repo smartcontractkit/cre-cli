@@ -17,6 +17,7 @@ cre workflow deploy [flags]
   -c, --config string        Path to the config file
   -h, --help                 help for deploy
   -k, --keep-alive           Keep previous workflows with same workflow name and owner active (default: false).
+      --non-interactive      If set, the command will skip all interactive prompts and fail if any required information is missing
   -o, --output string        The output file for the compiled WASM binary encoded in base64 (default "./binary.wasm.br.b64")
   -s, --secrets-url string   URL of the encrypted secrets JSON file
   -x, --source-url string    URL of the source code in Gist
