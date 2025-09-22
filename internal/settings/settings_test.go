@@ -8,6 +8,7 @@ import (
 
 	"github.com/joho/godotenv"
 	"github.com/rs/zerolog"
+	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -81,7 +82,8 @@ func TestLoadEnvAndSettingsEmptyTarget(t *testing.T) {
 	v, logger := createTestContext(t, envVars, tempDir)
 
 	setUpTestSettingsFiles(t, v, workflowTemplatePath, projectTemplatePath, tempDir)
-	s, err := settings.New(logger, v)
+	cmd := &cobra.Command{Use: "login"}
+	s, err := settings.New(logger, v, cmd)
 
 	assert.Error(t, err, "Expected error due to empty target")
 	assert.Contains(t, err.Error(), "target not set", "Expected missing target error")
@@ -108,7 +110,8 @@ func TestLoadEnvAndSettings(t *testing.T) {
 	v, logger := createTestContext(t, envVars, tempDir)
 
 	setUpTestSettingsFiles(t, v, workflowTemplatePath, projectTemplatePath, tempDir)
-	s, err := settings.New(logger, v)
+	cmd := &cobra.Command{Use: "login"}
+	s, err := settings.New(logger, v, cmd)
 	require.NoError(t, err)
 	assert.Equal(t, "production-testnet", s.User.TargetName)
 	assert.Equal(t, "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80", s.User.EthPrivateKey)
@@ -140,7 +143,8 @@ func TestLoadEnvAndSettingsWithWorkflowSettingsFlag(t *testing.T) {
 	v.Set(settings.Flags.CliSettingsFile.Name, workflowFilePath)
 
 	setUpTestSettingsFiles(t, v, workflowTemplatePath, projectTemplatePath, tempDir)
-	s, err := settings.New(logger, v)
+	cmd := &cobra.Command{Use: "login"}
+	s, err := settings.New(logger, v, cmd)
 	require.NoError(t, err)
 	assert.Equal(t, "production-testnet", s.User.TargetName)
 	assert.Equal(t, "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80", s.User.EthPrivateKey)
@@ -168,7 +172,9 @@ func TestInlineEnvTakesPrecedenceOverDotEnv(t *testing.T) {
 	setUpTestSettingsFiles(t, v, workflowTemplatePath, projectTemplatePath, tempDir)
 	os.Setenv(settings.CreTargetEnvVar, "production-testnet")
 	defer os.Unsetenv(settings.CreTargetEnvVar)
-	s, err := settings.New(logger, v)
+
+	cmd := &cobra.Command{Use: "login"}
+	s, err := settings.New(logger, v, cmd)
 	require.NoError(t, err)
 	assert.Equal(t, "production-testnet", s.User.TargetName)
 	assert.Equal(t, "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80", s.User.EthPrivateKey)
@@ -195,7 +201,8 @@ func TestLoadEnvAndMergedSettings(t *testing.T) {
 
 	setUpTestSettingsFiles(t, v, workflowTemplatePath, projectTemplatePath, tempDir)
 
-	s, err := settings.New(logger, v)
+	cmd := &cobra.Command{Use: "login"}
+	s, err := settings.New(logger, v, cmd)
 	require.NoError(t, err)
 	require.NotNil(t, s)
 
@@ -214,4 +221,69 @@ func TestLoadEnvAndMergedSettings(t *testing.T) {
 	assert.Equal(t, "https://somethingElse.rpc.org", rpc1.Url, "First RPC URL mismatch")
 	assert.Equal(t, "https://something.rpc.org", rpc2.Url, "Second RPC URL mismatch")
 	assert.Equal(t, "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80", s.User.EthPrivateKey)
+}
+
+// helper to build a command with optional --broadcast flag and parse args
+func makeCmd(use string, defineBroadcast bool, args ...string) *cobra.Command {
+	cmd := &cobra.Command{
+		Use: use,
+		Run: func(cmd *cobra.Command, args []string) {},
+	}
+	if defineBroadcast {
+		cmd.Flags().Bool("broadcast", false, "broadcast the tx")
+	}
+	_ = cmd.Flags().Parse(args) // parse only the provided flag args
+	return cmd
+}
+
+func TestShouldSkipGetOwner(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		cmd      *cobra.Command
+		wantSkip bool
+	}{
+		{
+			name:     "simulate with --broadcast=true → do NOT skip",
+			cmd:      makeCmd("simulate", true, "--broadcast"),
+			wantSkip: false,
+		},
+		{
+			name:     "simulate with --broadcast=false → skip",
+			cmd:      makeCmd("simulate", true, "--broadcast=false"),
+			wantSkip: true,
+		},
+		{
+			name:     "simulate with broadcast flag defined but not set → skip",
+			cmd:      makeCmd("simulate", true /* no args */),
+			wantSkip: true,
+		},
+		{
+			name:     "simulate with no broadcast flag defined → skip (treated as false)",
+			cmd:      makeCmd("simulate", false /* no flag defined */),
+			wantSkip: true,
+		},
+		{
+			name:     "non-simulate command with broadcast=true → do NOT skip",
+			cmd:      makeCmd("deploy", true, "--broadcast"),
+			wantSkip: false,
+		},
+		{
+			name:     "non-simulate command with no broadcast → do NOT skip",
+			cmd:      makeCmd("deploy", false),
+			wantSkip: false,
+		},
+	}
+
+	for _, tc := range tests {
+
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := settings.ShouldSkipGetOwner(tc.cmd)
+			if got != tc.wantSkip {
+				t.Fatalf("ShouldSkipGetOwner(%q) = %v, want %v", tc.cmd.Name(), got, tc.wantSkip)
+			}
+		})
+	}
 }
