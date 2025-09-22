@@ -14,7 +14,7 @@ cre workflow pause [flags]
 
 ```
   -h, --help       help for pause
-      --unsigned   If set, the command will return the raw transaction instead of sending it to the network [EXPERIMENTAL]
+      --unsigned   If set, the command will return the raw transaction instead of sending it to the network
 ```
 
 ### Options inherited from parent commands

@@ -150,6 +150,7 @@ func TestCLIAccountLinkAndListKey_EOA(t *testing.T) {
 			tc.GetCliEnvFlag(),
 			tc.GetCliSettingsFlag(),
 			"-l", "owner-label-1",
+			"--" + settings.Flags.NonInteractive.Name,
 		}
 		cmd := exec.Command(CLIPath, args...)
 		cmd.Dir = tc.ProjectDirectory

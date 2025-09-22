@@ -27,9 +27,18 @@ func (f *testFactoryImpl) NewCapabilitiesRegistryClient() (*client.CapabilitiesR
 }
 
 func (f *testFactoryImpl) NewWorkflowRegistryV2Client() (*client.WorkflowRegistryV2Client, error) {
-	return client.NewWorkflowRegistryV2Client(f.logger, f.ethClient, f.simulatedContracts.WorkflowRegistry.Contract.Hex(), client.Regular, &client.LedgerConfig{LedgerEnabled: false}), nil
+	txcConfig := client.TxClientConfig{
+		TxType:       client.Regular,
+		LedgerConfig: &client.LedgerConfig{LedgerEnabled: false},
+		SkipPrompt:   true,
+	}
+	return client.NewWorkflowRegistryV2Client(f.logger, f.ethClient, f.simulatedContracts.WorkflowRegistry.Contract.Hex(), txcConfig), nil
 }
 
 func (f *testFactoryImpl) GetTxType() client.TxType {
 	return client.Regular
+}
+
+func (f *testFactoryImpl) GetNonInteractive() bool {
+	return true
 }
