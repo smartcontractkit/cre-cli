@@ -70,7 +70,7 @@ func newRootCommand() *cobra.Command {
 
 			// load env vars from .env file and settings from yaml files
 			if isLoadEnvAndConfig(cmd) {
-				err := runtimeContext.AttachSettings()
+				err := runtimeContext.AttachSettings(cmd)
 				if err != nil {
 					return fmt.Errorf("%w", err)
 				}
