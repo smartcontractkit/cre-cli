@@ -83,6 +83,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 		},
 	}
 	settings.AddRawTxFlag(cmd)
+	settings.AddNonInteractiveFlag(cmd)
 	cmd.Flags().StringP("owner-label", "l", "", "Label for the workflow owner")
 
 	return cmd
@@ -153,6 +154,14 @@ func (h *handler) Execute(in Inputs) error {
 		return err
 	}
 
+	prettyResp, err := json.MarshalIndent(resp, "", "  ")
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to marshal linking response")
+		return err
+	}
+
+	h.log.Debug().Msg("\nRaw linking response payload:\n\n" + string(prettyResp))
+
 	if in.WorkflowRegistryContractAddress == resp.ContractAddress {
 		h.log.Info().Msg("Contract address validation passed")
 	} else {
@@ -160,14 +169,7 @@ func (h *handler) Execute(in Inputs) error {
 		return fmt.Errorf("contract address validation failed")
 	}
 
-	if h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerType == constants.WorkflowOwnerTypeMSIG {
-		if err := h.linkOwnerUsingMSIG(resp); err != nil {
-			return fmt.Errorf("linking failed: %w", err)
-		}
-		return nil
-	}
-
-	if err := h.linkOwnerUsingEOA(resp); err != nil {
+	if err := h.linkOwner(resp); err != nil {
 		return fmt.Errorf("linking failed: %w", err)
 	}
 
@@ -224,7 +226,7 @@ mutation InitiateLinking($request: InitiateLinkingRequest!) {
 	return container.InitiateLinking, nil
 }
 
-func (h *handler) linkOwnerUsingEOA(resp initiateLinkingResponse) error {
+func (h *handler) linkOwner(resp initiateLinkingResponse) error {
 	expiresAt, err := time.Parse(time.RFC3339, resp.ValidUntil)
 	if err != nil {
 		return fmt.Errorf("invalid validUntil format: %w", err)
@@ -250,91 +252,53 @@ func (h *handler) linkOwnerUsingEOA(resp initiateLinkingResponse) error {
 		return fmt.Errorf("invalid signature hex: %w", err)
 	}
 
-	client, err := h.clientFactory.NewWorkflowRegistryV2Client()
+	wrc, err := h.clientFactory.NewWorkflowRegistryV2Client()
 	if err != nil {
-		return fmt.Errorf("client init: %w", err)
+		return fmt.Errorf("wrc init: %w", err)
 	}
 
 	ownerAddr := common.HexToAddress(h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress)
-	if err := client.CanLinkOwner(ownerAddr, ts, proofBytes, sigBytes); err != nil {
+	if err := wrc.CanLinkOwner(ownerAddr, ts, proofBytes, sigBytes); err != nil {
 		return fmt.Errorf("link request verification failed: %w", err)
 	}
-	if err := client.LinkOwner(ts, proofBytes, sigBytes); err != nil {
+	txOut, err := wrc.LinkOwner(ts, proofBytes, sigBytes)
+	if err != nil {
 		return fmt.Errorf("LinkOwner failed: %w", err)
 	}
 
+	switch txOut.Type {
+	case client.Regular:
+		h.log.Info().Msgf("Transaction submitted: %s", txOut.Hash)
+
+	case client.Raw:
+		selector, err := strconv.ParseUint(resp.ChainSelector, 10, 64)
+		if err != nil {
+			h.log.Error().Err(err).Msg("failed to parse chain selector")
+			return err
+		}
+		ChainName, err := settings.GetChainNameByChainSelector(selector)
+		if err != nil {
+			h.log.Error().Err(err).Uint64("selector", selector).Msg("failed to get chain name")
+			return err
+		}
+
+		h.log.Info().Msg("")
+		h.log.Info().Msg("Ownership linking initialized successfully!")
+		h.log.Info().Msg("")
+		h.log.Info().Msg("Next steps:")
+		h.log.Info().Msg("")
+		h.log.Info().Msg("   1. Submit the following transaction on the target chain:")
+		h.log.Info().Msgf("      Chain:            %s", ChainName)
+		h.log.Info().Msgf("      Contract Address: %s", txOut.RawTx.To)
+		h.log.Info().Msg("")
+		h.log.Info().Msg("   2. Use the following transaction data:")
+		h.log.Info().Msg("")
+		h.log.Info().Msgf("      %x", txOut.RawTx.Data)
+		h.log.Info().Msg("")
+	default:
+		h.log.Warn().Msgf("Unsupported transaction type: %s", txOut.Type)
+	}
+
 	h.log.Info().Msg("Linked successfully")
-	return nil
-}
-
-// TODO: Add support for output file
-func (h *handler) linkOwnerUsingMSIG(resp initiateLinkingResponse) error {
-	expiresAt, err := time.Parse(time.RFC3339, resp.ValidUntil)
-	if err != nil {
-		return fmt.Errorf("invalid validUntil format: %w", err)
-	}
-	if time.Now().UTC().After(expiresAt) {
-		return fmt.Errorf("the request has expired")
-	}
-
-	ts := big.NewInt(expiresAt.Unix())
-
-	var proofBytes [32]byte
-	decoded, err := hex.DecodeString(strings.TrimPrefix(resp.OwnershipProofHash, "0x"))
-	if err != nil {
-		return fmt.Errorf("invalid proof hash hex: %w", err)
-	}
-	if len(decoded) != 32 {
-		return fmt.Errorf("proof hash must be 32 bytes, got %d", len(decoded))
-	}
-	copy(proofBytes[:], decoded)
-
-	sigBytes, err := hex.DecodeString(strings.TrimPrefix(resp.Signature, "0x"))
-	if err != nil {
-		return fmt.Errorf("invalid signature hex: %w", err)
-	}
-
-	client, err := h.clientFactory.NewWorkflowRegistryV2Client()
-	if err != nil {
-		return fmt.Errorf("client init: %w", err)
-	}
-	ownerAddr := common.HexToAddress(h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress)
-	if err := client.CanLinkOwner(ownerAddr, ts, proofBytes, sigBytes); err != nil {
-		return fmt.Errorf("link request verification failed: %w", err)
-	}
-	prettyResp, err := json.MarshalIndent(resp, "", "  ")
-	if err != nil {
-		h.log.Error().Err(err).Msg("failed to marshal linking response")
-		return err
-	}
-
-	selector, err := strconv.ParseUint(resp.ChainSelector, 10, 64)
-	if err != nil {
-		h.log.Error().Err(err).Msg("failed to parse chain selector")
-		return err
-	}
-
-	ChainName, err := settings.GetChainNameByChainSelector(selector)
-	if err != nil {
-		h.log.Error().Err(err).Uint64("selector", selector).Msg("failed to get chain name")
-		return err
-	}
-
-	h.log.Debug().Msg("\nRaw linking response payload:\n\n" + string(prettyResp))
-
-	h.log.Info().Msg("")
-	h.log.Info().Msg("Ownership linking initialized successfully!")
-	h.log.Info().Msg("")
-	h.log.Info().Msg("Next steps:")
-	h.log.Info().Msg("")
-	h.log.Info().Msg("   1. Submit the following transaction on the target chain:")
-	h.log.Info().Msgf("      Chain:            %s", ChainName)
-	h.log.Info().Msgf("      Contract Address: %s", resp.ContractAddress)
-	h.log.Info().Msg("")
-	h.log.Info().Msg("   2. Use the following transaction data:")
-	h.log.Info().Msg("")
-	h.log.Info().Msgf("      %s", resp.TransactionData)
-	h.log.Info().Msg("")
-
 	return nil
 }

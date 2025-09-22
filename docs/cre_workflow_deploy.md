@@ -20,7 +20,7 @@ cre workflow deploy [flags]
   -o, --output string        The output file for the compiled WASM binary encoded in base64 (default "./binary.wasm.br.b64")
   -s, --secrets-url string   URL of the encrypted secrets JSON file
   -x, --source-url string    URL of the source code in Gist
-      --unsigned             If set, the command will return the raw transaction instead of sending it to the network [EXPERIMENTAL]
+      --unsigned             If set, the command will return the raw transaction instead of sending it to the network
 ```
 
 ### Options inherited from parent commands

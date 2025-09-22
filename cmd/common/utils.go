@@ -132,3 +132,18 @@ func IsBinaryFile(fileName string) (bool, error) {
 	}
 	return false, fmt.Errorf("file extension not supported by the tool: %s, supported extensions: .wasm.br, .json, .yaml, .yml", fileName)
 }
+
+// toStringSlice converts a slice of any type to a slice of strings.
+// If an element is a byte slice, it prints it as hex.
+func ToStringSlice(args []any) []string {
+	result := make([]string, len(args))
+	for i, v := range args {
+		switch b := v.(type) {
+		case []byte, [32]byte:
+			result[i] = fmt.Sprintf("0x%x", b)
+		default:
+			result[i] = fmt.Sprintf("%v", v)
+		}
+	}
+	return result
+}

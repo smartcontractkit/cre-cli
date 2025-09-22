@@ -19,7 +19,6 @@ import (
 
 	"github.com/smartcontractkit/cre-cli/cmd/client"
 	"github.com/smartcontractkit/cre-cli/internal/client/graphqlclient"
-	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/prompt"
@@ -77,6 +76,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 		},
 	}
 	settings.AddRawTxFlag(cmd)
+	settings.AddNonInteractiveFlag(cmd)
 	return cmd
 }
 
@@ -133,18 +133,21 @@ func (h *handler) Execute(in Inputs) error {
 		return err
 	}
 
+	prettyResp, err := json.MarshalIndent(resp, "", "  ")
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to marshal linking response")
+		return err
+	}
+
+	h.log.Debug().Msg("\nRaw linking response payload:\n\n" + string(prettyResp))
+
 	if in.WorkflowRegistryContractAddress == resp.ContractAddress {
 		h.log.Info().Msg("Contract address validation passed")
 	} else {
 		return fmt.Errorf("contract address validation failed")
 	}
 
-	switch h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerType {
-	case constants.WorkflowOwnerTypeMSIG:
-		return h.unlinkOwnerUsingMSIG(resp)
-	default:
-		return h.unlinkOwnerUsingEOA(in.WorkflowOwner, resp)
-	}
+	return h.unlinkOwner(in.WorkflowOwner, resp)
 }
 
 func (h *handler) callInitiateUnlinking(ctx context.Context, in Inputs) (initiateUnlinkingResponse, error) {
@@ -181,7 +184,7 @@ mutation InitiateUnlinking($request: InitiateUnlinkingRequest!) {
 	return container.InitiateUnlinking, nil
 }
 
-func (h *handler) unlinkOwnerUsingEOA(owner string, resp initiateUnlinkingResponse) error {
+func (h *handler) unlinkOwner(owner string, resp initiateUnlinkingResponse) error {
 	expiresAt, err := time.Parse(time.RFC3339, resp.ValidUntil)
 	if err != nil {
 		return fmt.Errorf("invalid validUntil format: %w", err)
@@ -197,79 +200,53 @@ func (h *handler) unlinkOwnerUsingEOA(owner string, resp initiateUnlinkingRespon
 		return fmt.Errorf("invalid signature hex: %w", err)
 	}
 
-	client, err := h.clientFactory.NewWorkflowRegistryV2Client()
+	wrc, err := h.clientFactory.NewWorkflowRegistryV2Client()
 	if err != nil {
-		return fmt.Errorf("client init: %w", err)
+		return fmt.Errorf("wrc init: %w", err)
 	}
 	addr := common.HexToAddress(owner)
-	if err := client.CanUnlinkOwner(addr, ts, sigBytes); err != nil {
+	if err := wrc.CanUnlinkOwner(addr, ts, sigBytes); err != nil {
 		return fmt.Errorf("unlink request verification failed: %w", err)
 	}
-	if err := client.UnlinkOwner(addr, ts, sigBytes); err != nil {
+	txOut, err := wrc.UnlinkOwner(addr, ts, sigBytes)
+	if err != nil {
 		return fmt.Errorf("UnlinkOwner failed: %w", err)
 	}
 
+	switch txOut.Type {
+	case client.Regular:
+		h.log.Info().Msgf("Transaction submitted: %s", txOut.Hash)
+
+	case client.Raw:
+		selector, err := strconv.ParseUint(resp.ChainSelector, 10, 64)
+		if err != nil {
+			h.log.Error().Err(err).Msg("failed to parse chain selector")
+			return err
+		}
+		ChainName, err := settings.GetChainNameByChainSelector(selector)
+		if err != nil {
+			h.log.Error().Err(err).Uint64("selector", selector).Msg("failed to get chain name")
+			return err
+		}
+
+		h.log.Info().Msg("")
+		h.log.Info().Msg("Ownership unlinking initialized successfully!")
+		h.log.Info().Msg("")
+		h.log.Info().Msg("Next steps:")
+		h.log.Info().Msg("")
+		h.log.Info().Msg("   1. Submit the following transaction on the target chain:")
+		h.log.Info().Msg("")
+		h.log.Info().Msgf("      Chain:            %s", ChainName)
+		h.log.Info().Msgf("      Contract Address: %s", resp.ContractAddress)
+		h.log.Info().Msg("")
+		h.log.Info().Msg("   2. Use the following transaction data:")
+		h.log.Info().Msg("")
+		h.log.Info().Msgf("      %s", resp.TransactionData)
+		h.log.Info().Msg("")
+	default:
+		h.log.Warn().Msgf("Unsupported transaction type: %s", txOut.Type)
+	}
+
 	h.log.Info().Msg("Unlinked successfully")
-	return nil
-}
-
-// TODO: Add support for output file
-func (h *handler) unlinkOwnerUsingMSIG(resp initiateUnlinkingResponse) error {
-	expiresAt, err := time.Parse(time.RFC3339, resp.ValidUntil)
-	if err != nil {
-		return fmt.Errorf("invalid validUntil format: %w", err)
-	}
-	if time.Now().UTC().After(expiresAt) {
-		return fmt.Errorf("the request has expired")
-	}
-	ts := big.NewInt(expiresAt.Unix())
-
-	sigBytes, err := hex.DecodeString(strings.TrimPrefix(resp.Signature, "0x"))
-	if err != nil {
-		return fmt.Errorf("invalid signature hex: %w", err)
-	}
-
-	client, err := h.clientFactory.NewWorkflowRegistryV2Client()
-	if err != nil {
-		return fmt.Errorf("client init: %w", err)
-	}
-	ownerAddr := common.HexToAddress(h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress)
-	if err := client.CanUnlinkOwner(ownerAddr, ts, sigBytes); err != nil {
-		return fmt.Errorf("unlink request verification failed: %w", err)
-	}
-
-	prettyResp, err := json.MarshalIndent(resp, "", "  ")
-	if err != nil {
-		h.log.Error().Err(err).Msg("failed to marshal linking response")
-		return err
-	}
-
-	selector, err := strconv.ParseUint(resp.ChainSelector, 10, 64)
-	if err != nil {
-		h.log.Error().Err(err).Msg("failed to parse chain selector")
-	}
-	ChainName, err := settings.GetChainNameByChainSelector(selector)
-	if err != nil {
-		h.log.Error().Err(err).Uint64("selector", selector).Msg("failed to get chain name")
-		return err
-	}
-
-	h.log.Debug().Msg("\nRaw linking response payload:\n\n" + string(prettyResp))
-
-	h.log.Info().Msg("")
-	h.log.Info().Msg("Ownership linking initialized successfully!")
-	h.log.Info().Msg("")
-	h.log.Info().Msg("Next steps:")
-	h.log.Info().Msg("")
-	h.log.Info().Msg("   1. Submit the following transaction on the target chain:")
-	h.log.Info().Msg("")
-	h.log.Info().Msgf("      Chain:            %s", ChainName)
-	h.log.Info().Msgf("      Contract Address: %s", resp.ContractAddress)
-	h.log.Info().Msg("")
-	h.log.Info().Msg("   2. Use the following transaction data:")
-	h.log.Info().Msg("")
-	h.log.Info().Msgf("      %s", resp.TransactionData)
-	h.log.Info().Msg("")
-
 	return nil
 }
