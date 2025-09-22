@@ -296,12 +296,10 @@ func TestCLIAccountLinkListUnlinkFlow_EOA(t *testing.T) {
 			tc.GetCliEnvFlag(),
 			tc.GetCliSettingsFlag(),
 			"--" + settings.Flags.NonInteractive.Name,
+			"-y",
 		}
 		cmd := exec.Command(CLIPath, args...)
 		cmd.Dir = tc.ProjectDirectory
-
-		// Provide Enter key to confirm the default "Yes" selection in the interactive prompt
-		cmd.Stdin = strings.NewReader("\n")
 
 		var stdout, stderr bytes.Buffer
 		cmd.Stdout, cmd.Stderr = &stdout, &stderr
@@ -314,8 +312,8 @@ func TestCLIAccountLinkListUnlinkFlow_EOA(t *testing.T) {
 		require.Contains(t, out, "owner="+constants.TestAddress4, "should show the owner address")
 		require.Contains(t, out, "Contract address validation passed", "should validate contract addresses match")
 
-		// Handle confirmation prompt
-		require.Contains(t, out, "destructive action", "should show warning about destructive action")
+		// With -y flag, should not show confirmation prompt
+		require.NotContains(t, out, "destructive action", "should skip confirmation prompt with -y flag")
 
 		// For CLI testing purposes, contract rejection is acceptable
 		if err != nil {
