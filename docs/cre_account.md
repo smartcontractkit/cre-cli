@@ -23,7 +23,7 @@ Manage your linked public key addresses for workflow operations.
 
 ### SEE ALSO
 
-* [cre](cre.md)	 - Dev Platform CLI tool
+* [cre](cre.md)	 - CRE CLI tool
 * [cre account link-key](cre_account_link-key.md)	 - Link a public key address to your account
 * [cre account list-key](cre_account_list-key.md)	 - List workflow owners
 * [cre account unlink-key](cre_account_unlink-key.md)	 - Unlink a public key address from your account

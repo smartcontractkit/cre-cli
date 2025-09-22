@@ -29,7 +29,6 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
-	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/validation"
 )
 
@@ -138,19 +137,13 @@ func (h *Handler) PackAllowlistRequestTxData(reqDigestStr string, duration time.
 }
 
 func (h *Handler) LogMSIGNextSteps(txData string) error {
-	chainName, err := settings.GetChainNameByChainSelector(h.EnvironmentSet.WorkflowRegistryChainSelector)
-	if err != nil {
-		h.Log.Error().Err(err).Uint64("selector", h.EnvironmentSet.WorkflowRegistryChainSelector).Msg("failed to get chain name")
-		return err
-	}
-
 	h.Log.Info().Msg("")
 	h.Log.Info().Msg("MSIG transaction prepared!")
 	h.Log.Info().Msg("")
 	h.Log.Info().Msg("Next steps:")
 	h.Log.Info().Msg("")
 	h.Log.Info().Msg("   1. Submit the following transaction on the target chain:")
-	h.Log.Info().Msgf("      Chain:   %s", chainName)
+	h.Log.Info().Msgf("      Chain:   %s", h.EnvironmentSet.WorkflowRegistryChainName)
 	h.Log.Info().Msgf("      Contract Address: %s", h.EnvironmentSet.WorkflowRegistryAddress)
 	h.Log.Info().Msg("")
 	h.Log.Info().Msg("   2. Use the following transaction data:")

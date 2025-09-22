@@ -31,8 +31,8 @@ type Inputs struct {
 	WorkflowOwner    string `validate:"workflow_owner"`
 	SkipConfirmation bool
 
-	WorkflowRegistryContractAddress       string `validate:"required"`
-	WorkflowRegistryContractChainselector uint64 `validate:"required"`
+	WorkflowRegistryContractAddress   string `validate:"required"`
+	WorkflowRegistryContractChainName string `validate:"required"`
 }
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
@@ -90,11 +90,11 @@ func newHandler(ctx *runtime.Context, stdin io.Reader) *handler {
 
 func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 	return Inputs{
-		WorkflowName:                          h.settings.Workflow.UserWorkflowSettings.WorkflowName,
-		WorkflowOwner:                         h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress,
-		SkipConfirmation:                      v.GetBool("skip-confirmation"),
-		WorkflowRegistryContractChainselector: h.environmentSet.WorkflowRegistryChainSelector,
-		WorkflowRegistryContractAddress:       h.environmentSet.WorkflowRegistryAddress,
+		WorkflowName:                      h.settings.Workflow.UserWorkflowSettings.WorkflowName,
+		WorkflowOwner:                     h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress,
+		SkipConfirmation:                  v.GetBool("skip-confirmation"),
+		WorkflowRegistryContractChainName: h.environmentSet.WorkflowRegistryChainName,
+		WorkflowRegistryContractAddress:   h.environmentSet.WorkflowRegistryAddress,
 	}, nil
 }
 
@@ -195,18 +195,13 @@ func packDeleteTxData(workflowID [32]byte) (string, error) {
 }
 
 func (h *handler) logMSIGNextSteps(txData string) error {
-	ChainName, err := settings.GetChainNameByChainSelector(h.inputs.WorkflowRegistryContractChainselector)
-	if err != nil {
-		h.log.Error().Err(err).Uint64("selector", h.inputs.WorkflowRegistryContractChainselector).Msg("failed to get chain name")
-		return err
-	}
 	h.log.Info().Msg("")
 	h.log.Info().Msg("MSIG workflow deletion transaction prepared!")
 	h.log.Info().Msg("")
 	h.log.Info().Msg("Next steps:")
 	h.log.Info().Msg("")
 	h.log.Info().Msg("   1. Submit the following transaction on the target chain:")
-	h.log.Info().Msgf("      Chain:   %s", ChainName)
+	h.log.Info().Msgf("      Chain:   %s", h.inputs.WorkflowRegistryContractChainName)
 	h.log.Info().Msgf("      Contract Address: %s", h.inputs.WorkflowRegistryContractAddress)
 	h.log.Info().Msg("")
 	h.log.Info().Msg("   2. Use the following transaction data:")

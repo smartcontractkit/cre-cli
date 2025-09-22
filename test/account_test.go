@@ -26,6 +26,7 @@ import (
 
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
+	"github.com/smartcontractkit/cre-cli/internal/settings"
 	test "github.com/smartcontractkit/cre-cli/test/contracts"
 )
 
@@ -48,9 +49,9 @@ func TestCLIAccountLinkListUnlinkFlow_EOA(t *testing.T) {
 
 	// Pre-baked registry addresses from Anvil state dump
 	t.Setenv(environments.EnvVarWorkflowRegistryAddress, "0x5FbDB2315678afecb367f032d93F642f64180aa3")
-	t.Setenv(environments.EnvVarWorkflowRegistryChainSelector, strconv.FormatUint(TestChainSelector, 10))
+	t.Setenv(environments.EnvVarWorkflowRegistryChainName, TestChainName)
 	t.Setenv(environments.EnvVarCapabilitiesRegistryAddress, "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9")
-	t.Setenv(environments.EnvVarCapabilitiesRegistryChainSelector, strconv.FormatUint(TestChainSelector, 10))
+	t.Setenv(environments.EnvVarCapabilitiesRegistryChainName, TestChainName)
 
 	registryAddr := os.Getenv(environments.EnvVarWorkflowRegistryAddress)
 	require.NotEmpty(t, registryAddr, "registry address env must be set")
@@ -86,17 +87,17 @@ func TestCLIAccountLinkListUnlinkFlow_EOA(t *testing.T) {
 			environment, _ := request["environment"].(string)
 			requestProcess, _ := request["requestProcess"].(string)
 
-			// Validate required fields
-			if ownerHex == "" || ownerLabel == "" {
-				w.WriteHeader(http.StatusBadRequest)
+			chainSelector, err := settings.GetChainSelectorByChainName(TestChainName)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
 				_ = json.NewEncoder(w).Encode(map[string]any{
-					"errors": []map[string]string{{"message": "missing required fields"}},
+					"errors": []map[string]string{{"message": fmt.Sprintf("failed to get chain selector: %v", err)}},
 				})
 				return
 			}
 
 			// Build realistic response with correct function signature
-			resp, _, err := buildInitiateLinkingEOAResponse(testEthURL, registryAddr, ownerHex, TestChainSelector)
+			resp, _, err := buildInitiateLinkingEOAResponse(testEthURL, registryAddr, ownerHex, chainSelector)
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
 				_ = json.NewEncoder(w).Encode(map[string]any{
@@ -140,8 +141,17 @@ func TestCLIAccountLinkListUnlinkFlow_EOA(t *testing.T) {
 				return
 			}
 
+			chainSelector, err := settings.GetChainSelectorByChainName(TestChainName)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"errors": []map[string]string{{"message": fmt.Sprintf("failed to get chain selector: %v", err)}},
+				})
+				return
+			}
+
 			// Build realistic response with correct function signature
-			resp, err := buildInitiateUnlinkingEOAResponse(testEthURL, registryAddr, ownerHex, TestChainSelector)
+			resp, err := buildInitiateUnlinkingEOAResponse(testEthURL, registryAddr, ownerHex, chainSelector)
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
 				_ = json.NewEncoder(w).Encode(map[string]any{
@@ -168,13 +178,16 @@ func TestCLIAccountLinkListUnlinkFlow_EOA(t *testing.T) {
 			if isOwnerLinked {
 				linkedOwners = append(linkedOwners, map[string]string{
 					"workflowOwnerAddress": constants.TestAddress4,
-					"workflowOwnerLabel":   "test-label-1",
+					"workflowOwnerLabel":   "owner-label-1",
 					"environment":          "PRODUCTION_TESTNET",
 					"verificationStatus":   "VERIFIED",
 					"verifiedAt":           "2025-09-21T22:05:05.025287Z",
-					"chainSelector":        strconv.FormatUint(TestChainSelector, 10),
-					"contractAddress":      registryAddr,
-					"requestProcess":       "EOA",
+					"chainSelector": func() string {
+						chainSelector, _ := settings.GetChainSelectorByChainName(TestChainName)
+						return strconv.FormatUint(chainSelector, 10)
+					}(),
+					"contractAddress": registryAddr,
+					"requestProcess":  "EOA",
 				})
 			}
 
@@ -199,7 +212,7 @@ func TestCLIAccountLinkListUnlinkFlow_EOA(t *testing.T) {
 	defer srv.Close()
 
 	// Point CLI at mock GraphQL
-	os.Setenv(environments.EnvVarGraphQLURL, srv.URL+"/graphql")
+	t.Setenv(environments.EnvVarGraphQLURL, srv.URL+"/graphql")
 
 	// ===== PHASE 1: LINK KEY =====
 	t.Run("Link", func(t *testing.T) {
@@ -207,7 +220,8 @@ func TestCLIAccountLinkListUnlinkFlow_EOA(t *testing.T) {
 			"account", "link-key",
 			tc.GetCliEnvFlag(),
 			tc.GetCliSettingsFlag(),
-			"-l", "test-label-1",
+			"-l", "owner-label-1",
+			"--" + settings.Flags.NonInteractive.Name,
 		}
 		cmd := exec.Command(CLIPath, args...)
 		cmd.Dir = tc.ProjectDirectory
@@ -220,7 +234,7 @@ func TestCLIAccountLinkListUnlinkFlow_EOA(t *testing.T) {
 
 		// Test CLI behavior - GraphQL interaction and response parsing
 		require.Contains(t, out, "Starting linking", "should announce linking start")
-		require.Contains(t, out, "label=test-label-1", "should show the provided label")
+		require.Contains(t, out, "label=owner-label-1", "should show the provided label")
 		require.Contains(t, out, "owner="+constants.TestAddress4, "should show the owner address")
 		require.Contains(t, out, "Contract address validation passed", "should validate contract addresses match")
 
