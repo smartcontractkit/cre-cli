@@ -285,8 +285,8 @@ func TestCLIAccountLinkListUnlinkFlow_EOA(t *testing.T) {
 		cmd := exec.Command(CLIPath, args...)
 		cmd.Dir = tc.ProjectDirectory
 
-		// Provide "yes" to the confirmation prompt
-		cmd.Stdin = strings.NewReader("yes\n")
+		// Provide Enter key to confirm the default "Yes" selection in the interactive prompt
+		cmd.Stdin = strings.NewReader("\n")
 
 		var stdout, stderr bytes.Buffer
 		cmd.Stdout, cmd.Stderr = &stdout, &stderr
