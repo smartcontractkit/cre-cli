@@ -295,6 +295,7 @@ func TestCLIAccountLinkListUnlinkFlow_EOA(t *testing.T) {
 			"account", "unlink-key",
 			tc.GetCliEnvFlag(),
 			tc.GetCliSettingsFlag(),
+			"--" + settings.Flags.NonInteractive.Name,
 		}
 		cmd := exec.Command(CLIPath, args...)
 		cmd.Dir = tc.ProjectDirectory
