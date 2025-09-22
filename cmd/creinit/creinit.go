@@ -60,7 +60,8 @@ var languageTemplates = []LanguageTemplate{
 		Title: "Typescript",
 		Lang:  TemplateLangTS,
 		Workflows: []WorkflowTemplate{
-			{Folder: "typescriptSimpleExample", Title: "Development Hello World example for a simple workflow", ID: 3},
+			{Folder: "typescriptSimpleExample", Title: "Boilerplate: Typescript Hello World example for a simple workflow", ID: 3},
+			{Folder: "porExampleTypescript", Title: "Custom data feed: Typescript updating on-chain data periodically using offchain API data", ID: 4},
 		},
 	},
 }

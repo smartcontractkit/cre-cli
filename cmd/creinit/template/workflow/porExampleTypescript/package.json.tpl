@@ -8,7 +8,7 @@
   },
   "license": "UNLICENSED",
   "dependencies": {
-    "cre-sdk-typescript": "github:smartcontractkit/cre-sdk-typescript#7acefabe7b52aa5bbbb85cb8afc0753981b6f06f"
+    "cre-sdk-typescript": "github:smartcontractkit/cre-sdk-typescript#13a4ed8fc5f8509479968805613246c2ce647689"
   },
   "devDependencies": {
     "@types/bun": "1.2.21",
