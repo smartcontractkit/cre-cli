@@ -27,5 +27,5 @@ cre whoami [flags]
 
 ### SEE ALSO
 
-* [cre](cre.md)	 - Dev Platform CLI tool
+* [cre](cre.md)	 - CRE CLI tool
 
