@@ -23,10 +23,10 @@ import (
 )
 
 type Inputs struct {
-	WorkflowName                          string `validate:"workflow_name"`
-	WorkflowOwner                         string `validate:"workflow_owner"`
-	WorkflowRegistryContractAddress       string `validate:"required"`
-	WorkflowRegistryContractChainselector uint64 `validate:"required"`
+	WorkflowName                      string `validate:"workflow_name"`
+	WorkflowOwner                     string `validate:"workflow_owner"`
+	WorkflowRegistryContractAddress   string `validate:"required"`
+	WorkflowRegistryContractChainName string `validate:"required"`
 }
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
@@ -76,10 +76,10 @@ func newHandler(ctx *runtime.Context) *handler {
 
 func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 	return Inputs{
-		WorkflowName:                          h.settings.Workflow.UserWorkflowSettings.WorkflowName,
-		WorkflowOwner:                         h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress,
-		WorkflowRegistryContractChainselector: h.environmentsSet.WorkflowRegistryChainSelector,
-		WorkflowRegistryContractAddress:       h.environmentsSet.WorkflowRegistryAddress,
+		WorkflowName:                      h.settings.Workflow.UserWorkflowSettings.WorkflowName,
+		WorkflowOwner:                     h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress,
+		WorkflowRegistryContractChainName: h.environmentsSet.WorkflowRegistryChainName,
+		WorkflowRegistryContractAddress:   h.environmentsSet.WorkflowRegistryAddress,
 	}, nil
 }
 
@@ -196,19 +196,13 @@ func packBatchPauseTxData(ids [][32]byte) (string, error) {
 }
 
 func (h *handler) logMSIGNextSteps(inputs Inputs, txData string) error {
-	chainName, err := settings.GetChainNameByChainSelector(inputs.WorkflowRegistryContractChainselector)
-	if err != nil {
-		h.log.Error().Err(err).Uint64("selector", inputs.WorkflowRegistryContractChainselector).Msg("failed to get chain name")
-		return err
-	}
-
 	h.log.Info().Msg("")
 	h.log.Info().Msg("MSIG workflow pause transaction prepared!")
 	h.log.Info().Msg("")
 	h.log.Info().Msg("Next steps:")
 	h.log.Info().Msg("")
 	h.log.Info().Msg("   1. Submit the following transaction on the target chain:")
-	h.log.Info().Msgf("      Chain:   %s", chainName)
+	h.log.Info().Msgf("      Chain:   %s", h.inputs.WorkflowRegistryContractChainName)
 	h.log.Info().Msgf("      Contract Address: %s", inputs.WorkflowRegistryContractAddress)
 	h.log.Info().Msg("")
 	h.log.Info().Msg("   2. Use the following transaction data:")

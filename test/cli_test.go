@@ -17,9 +17,9 @@ import (
 )
 
 const (
-	SethConfigPath    = "seth.toml"
-	TestChainSelector = uint64(7759470850252068959)
-	SettingsTarget    = "production-testnet"
+	SethConfigPath = "seth.toml"
+	TestChainName  = "anvil-devnet"
+	SettingsTarget = "production-testnet"
 )
 
 // strip the ANSI escape codes from the output
@@ -61,8 +61,8 @@ func createCliSettingsFile(
 	// rpcs
 	v.Set(fmt.Sprintf("%s.%s", SettingsTarget, settings.RpcsSettingName), []settings.RpcEndpoint{
 		{
-			ChainSelector: TestChainSelector,
-			Url:           testEthURL,
+			ChainName: TestChainName,
+			Url:       testEthURL,
 		},
 	})
 

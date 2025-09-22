@@ -19,34 +19,16 @@ production-testnet:
   hierarchy-test: Project
   test-key: projectValue
   cre-cli:
-    don-id: 1
+    don-family: "test-don"
   user-workflow:
     workflow-owner-address: ""
     workflow-name: ""
   logging:
     seth-config-path: seth.toml
-  contracts:
-    registries:
-      - name: WorkflowRegistry
-        address: "0x0E974d80e38DC52d90afBaa3745FDB71C723613b"
-        chain-selector: 3478487238524512106
-      - name: CapabilitiesRegistry
-        address: "0x531eF7673958E227002fBe8FF6A97DC17111f815"
-        chain-selector: 16015286601757825753
-    data-feeds:
-      - name: DataFeedsCache
-        address: "0x4B835DaeEE75127A4637046c7DA54c86c148Bfd1"
-        chain-selector: 16015286601757825753
-      - name: DataFeedsCache
-        address: "0xd00ce6061BfC404801FA7a965A0c4dA2fDbA067f"
-        chain-selector: 3478487238524512106
-      - name: BundleAggregatorProxy
-        address: "0xD1ADC316653733e075c43f5daF7e7f9867df6B02"
-        chain-selector: 3478487238524512106
   rpcs:
-    - chain-selector: 3478487238524512106
+    - chain-name: "ethereum-testnet-sepolia-arbitrum-1"
       url: https://somethingElse.rpc.org
-    - chain-selector: 16015286601757825753
+    - chain-name: "ethereum-testnet-sepolia"
       url: https://something.rpc.org
 
 `
@@ -98,11 +80,11 @@ func TestLoadingSettingsForValidFile(t *testing.T) {
 	err = settings.LoadSettingsIntoViper(v)
 	require.NoError(t, err, "Error when loading settings")
 
-	rpcUrl, err := settings.GetRpcUrlSettings(v, uint64(3478487238524512106))
+	rpcUrl, err := settings.GetRpcUrlSettings(v, "ethereum-testnet-sepolia-arbitrum-1")
 	require.NoError(t, err, "RPC URL not found")
 	require.Equal(t, "https://somethingElse.rpc.org", rpcUrl)
 
-	rpcUrl, err = settings.GetRpcUrlSettings(v, uint64(16015286601757825753))
+	rpcUrl, err = settings.GetRpcUrlSettings(v, "ethereum-testnet-sepolia")
 	require.NoError(t, err, "RPC URL not found")
 	require.Equal(t, "https://something.rpc.org", rpcUrl)
 

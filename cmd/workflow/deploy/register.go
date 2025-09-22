@@ -12,7 +12,6 @@ import (
 
 	"github.com/smartcontractkit/cre-cli/cmd/client"
 	"github.com/smartcontractkit/cre-cli/internal/constants"
-	"github.com/smartcontractkit/cre-cli/internal/settings"
 )
 
 func (h *handler) upsert() error {
@@ -102,18 +101,13 @@ func packUpsertTxData(params client.RegisterWorkflowV2Parameters) (string, error
 }
 
 func (h *handler) logMSIGNextSteps(txData string) error {
-	ChainName, err := settings.GetChainNameByChainSelector(h.inputs.WorkflowRegistryContractChainselector)
-	if err != nil {
-		h.log.Error().Err(err).Uint64("selector", h.inputs.WorkflowRegistryContractChainselector).Msg("failed to get chain name")
-		return err
-	}
 	h.log.Info().Msg("")
 	h.log.Info().Msg("MSIG workflow deployment transaction prepared!")
 	h.log.Info().Msg("")
 	h.log.Info().Msg("Next steps:")
 	h.log.Info().Msg("")
 	h.log.Info().Msg("   1. Submit the following transaction on the target chain:")
-	h.log.Info().Msgf("      Chain:   %s", ChainName)
+	h.log.Info().Msgf("      Chain:   %s", h.inputs.WorkflowRegistryContractChainName)
 	h.log.Info().Msgf("      Contract Address: %s", h.inputs.WorkflowRegistryContractAddress)
 	h.log.Info().Msg("")
 	h.log.Info().Msg("   2. Use the following transaction data:")

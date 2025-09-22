@@ -110,15 +110,15 @@ func (h *handler) ResolveInputs(args []string, v *viper.Viper, creSettings *sett
 	// build clients for each supported chain from settings, skip if rpc is empty
 	clients := make(map[uint64]*ethclient.Client)
 	for _, chain := range supportedEVM {
-		rpcURL, err := settings.GetRpcUrlSettings(v, chain.Selector)
+		rpcURL, err := settings.GetRpcUrlSettings(v, chain.ChainName)
 		if err != nil || strings.TrimSpace(rpcURL) == "" {
-			h.log.Info().Msgf("RPC not provided for %d; skipping", chain.Selector)
+			h.log.Info().Msgf("RPC not provided for %s; skipping", chain.ChainName)
 			continue
 		}
 
 		c, err := ethclient.Dial(rpcURL)
 		if err != nil {
-			h.log.Info().Msgf("failed to create eth client for %d: %v", chain.Selector, err)
+			h.log.Info().Msgf("failed to create eth client for %s: %v", chain.ChainName, err)
 			continue
 		}
 
@@ -126,7 +126,7 @@ func (h *handler) ResolveInputs(args []string, v *viper.Viper, creSettings *sett
 	}
 
 	if len(clients) == 0 {
-		return Inputs{}, fmt.Errorf("no RPC URLs found for supported chains (eth-sepolia, eth-mainnet)")
+		return Inputs{}, fmt.Errorf("no RPC URLs found for supported chains")
 	}
 
 	pk, err := crypto.HexToECDSA(creSettings.User.EthPrivateKey)
@@ -525,7 +525,7 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 				return triggerCaps.ManualCronTrigger.ManualTrigger(ctx, triggerRegistrationID, time.Now())
 			}
 		case trigger == "http-trigger@1.0.0-alpha":
-			payload, err := getHTTPTriggerPayload(ctx)
+			payload, err := getHTTPTriggerPayload()
 			if err != nil {
 				fmt.Printf("failed to get HTTP trigger payload: %v\n", err)
 				os.Exit(1)
@@ -718,7 +718,7 @@ func getUserTriggerChoice(ctx context.Context, triggerSub []*pb.TriggerSubscript
 }
 
 // getHTTPTriggerPayload prompts user for HTTP trigger data
-func getHTTPTriggerPayload(ctx context.Context) (*httptypedapi.Payload, error) {
+func getHTTPTriggerPayload() (*httptypedapi.Payload, error) {
 	fmt.Println("\n🔍 HTTP Trigger Configuration:")
 	fmt.Println("Please provide JSON input for the HTTP trigger.")
 	fmt.Println("You can enter a file path or JSON directly.")

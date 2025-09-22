@@ -3,11 +3,10 @@ package settings
 import (
 	"fmt"
 	"net/url"
+	"strings"
 
 	"github.com/rs/zerolog"
 	"github.com/spf13/viper"
-
-	chain_selectors "github.com/smartcontractkit/chain-selectors"
 )
 
 type WorkflowSettings struct {
@@ -119,25 +118,14 @@ func flattenWorkflowSettingsToViper(v *viper.Viper, target string) error {
 }
 
 func validateSettings(config *WorkflowSettings) error {
-	// TODO validate that all chain selectors mentioned for the contracts above have a matching URL specified
+	// TODO validate that all chain names mentioned for the contracts above have a matching URL specified
 	for _, rpc := range config.RPCs {
 		if err := isValidRpcUrl(rpc.Url); err != nil {
 			return err
 		}
-		if err := isValidChainSelector(rpc.ChainSelector); err != nil {
+		if err := IsValidChainName(rpc.ChainName); err != nil {
 			return err
 		}
-	}
-	return nil
-}
-
-func isValidChainSelector(chainSelector uint64) error {
-	isEvm, err := chain_selectors.IsEvm(chainSelector)
-	if err != nil {
-		return fmt.Errorf("not possible to determine if chain belongs to the EVM family: %d, err: %w", chainSelector, err)
-	}
-	if !isEvm {
-		return fmt.Errorf("only chains from the EVM family are accepted: %d", chainSelector)
 	}
 	return nil
 }
@@ -154,6 +142,20 @@ func isValidRpcUrl(rpcURL string) error {
 	}
 	if parsedURL.Host == "" {
 		return fmt.Errorf("invalid host in RPC URL %s", rpcURL)
+	}
+
+	return nil
+}
+
+func IsValidChainName(name string) error {
+	trimmedName := strings.TrimSpace(name)
+	if len(trimmedName) == 0 {
+		return fmt.Errorf("chain name cannot be empty")
+	}
+
+	_, err := GetChainSelectorByChainName(trimmedName)
+	if err != nil {
+		return fmt.Errorf("invalid chain name %q: %w", trimmedName, err)
 	}
 
 	return nil

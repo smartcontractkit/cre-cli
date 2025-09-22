@@ -18,13 +18,13 @@
 #     seth-config-path: "/path/to/seth-config.toml"
 #   rpcs:
 #     # Required: Map each used chain selector to a corresponding RPC URL (HTTPS)
-#     - chain-selector: 16015286601757825753
+#     - chain-name: ethereum-mainnet
 #       url: "https://sepolia.infura.io/v3/YOUR_API_KEY"
 
 # ==========================================================================
 local-simulation:
   rpcs:
-    - chain-selector: {{EthSepoliaChainSelector}}
+    - chain-name: {{EthSepoliaChainName}}
       url: {{EthSepoliaRpcUrl}}
 
 # ==========================================================================
@@ -34,7 +34,7 @@ production-testnet:
   logging:
     seth-config-path: {{SethConfigPath}}
   rpcs:
-    - chain-selector: {{EthSepoliaChainSelector}} # Eth-Sepolia
+    - chain-name: {{EthSepoliaChainName}}
       url: {{EthSepoliaRpcUrl}}
-    - chain-selector: {{BaseSepoliaChainSelector}} # Base-Sepolia
+    - chain-name: {{BaseSepoliaChainName}}
       url: {{BaseSepoliaRpcUrl}}
