@@ -4,11 +4,11 @@
   "main": "dist/main.js",
   "private": true,
   "scripts": {
-    "build:all": "bun run ./node_modules/cre-sdk-typescript/scripts/build-for-cli.ts"
+    "postinstall": "bunx cre-setup"
   },
   "license": "UNLICENSED",
   "dependencies": {
-    "cre-sdk-typescript": "github:smartcontractkit/cre-sdk-typescript#18e7bbd"
+    "@chainlink/cre-sdk": "0.0.1"
   },
   "devDependencies": {
     "@types/bun": "1.2.21",

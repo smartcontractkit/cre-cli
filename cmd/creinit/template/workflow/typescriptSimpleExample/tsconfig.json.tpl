@@ -9,7 +9,6 @@
     "forceConsistentCasingInFileNames": true
   },
   "include": [
-    "global.d.ts",
     "main.ts"
   ]
 }

@@ -176,8 +176,8 @@ func (h *handler) Execute(inputs Inputs) error {
 	var buildCmd *exec.Cmd
 	if isTypescriptWorkflow {
 		buildCmd = exec.Command(
-			"bun",
-			"build:all",
+			"bunx",
+			"cre-compile",
 			"--input", workflowMainFile,
 			"--output", tmpWasmFileName,
 		)
