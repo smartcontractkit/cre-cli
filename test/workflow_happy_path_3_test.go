@@ -1,0 +1,185 @@
+package test
+
+import (
+	"bytes"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	"github.com/smartcontractkit/cre-cli/internal/constants"
+	"github.com/smartcontractkit/cre-cli/internal/environments"
+)
+
+// Deploys a workflow with config via CLI, using unlinked address, mocking GraphQL + Origin.
+func (tc *TestConfig) workflowDeployUnlinkedWithConfig(t *testing.T, configPath string) string {
+	t.Helper()
+
+	var srv *httptest.Server
+	// One server that handles both GraphQL and "origin" uploads.
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasPrefix(r.URL.Path, "/graphql") && r.Method == http.MethodPost:
+			var req graphQLRequest
+			_ = json.NewDecoder(r.Body).Decode(&req)
+
+			// Respond based on the mutation in the query
+			if strings.Contains(req.Query, "GeneratePresignedPostUrlForArtifact") {
+				// Return presigned POST URL + fields (pointing back to this server)
+				resp := map[string]any{
+					"data": map[string]any{
+						"generatePresignedPostUrlForArtifact": map[string]any{
+							"presignedPostUrl":    srv.URL + "/upload",
+							"presignedPostFields": []map[string]string{{"key": "k1", "value": "v1"}},
+						},
+					},
+				}
+				_ = json.NewEncoder(w).Encode(resp)
+				return
+			}
+			if strings.Contains(req.Query, "GenerateUnsignedGetUrlForArtifact") {
+				resp := map[string]any{
+					"data": map[string]any{
+						"generateUnsignedGetUrlForArtifact": map[string]any{
+							"unsignedGetUrl": srv.URL + "/get",
+						},
+					},
+				}
+				_ = json.NewEncoder(w).Encode(resp)
+				return
+			}
+			// Fallback error
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"errors": []map[string]string{{"message": "Unsupported GraphQL query"}},
+			})
+			return
+
+		case r.URL.Path == "/upload" && r.Method == http.MethodPost:
+			// Accept origin "upload" (presigned POST target)
+			w.WriteHeader(http.StatusCreated)
+			_, _ = w.Write([]byte("OK"))
+			return
+
+		default:
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte("not found"))
+			return
+		}
+	}))
+	defer srv.Close()
+
+	// Point the CLI at our mock GraphQL endpoint
+	os.Setenv(environments.EnvVarGraphQLURL, srv.URL+"/graphql")
+
+	// Resolve the workflow module dir: ./test_project/blank_workflow
+	_, thisFile, _, _ := runtime.Caller(0)
+	testDir := filepath.Dir(thisFile)
+	wfDir := filepath.Join(testDir, "test_project", "blank_workflow")
+
+	// Artifact path (the CLI default)
+	artifactPath := filepath.Join(wfDir, "binary.wasm.br.b64")
+
+	// Ensure a clean slate and schedule cleanup
+	_ = os.Remove(artifactPath) // ignore if it doesn't exist
+	t.Cleanup(func() { _ = os.Remove(artifactPath) })
+
+	// Build CLI args with config file and non-interactive flag for auto-link
+	args := []string{
+		"workflow", "deploy",
+		"main.go",
+		tc.GetCliEnvFlag(),
+		tc.GetCliSettingsFlag(),
+		"--config", configPath,
+		"--non-interactive", // Skip prompts during auto-link
+	}
+
+	cmd := exec.Command(CLIPath, args...)
+	cmd.Dir = wfDir
+
+	// Provide stdin input for auto-link prompts:
+	// 1. "test-label" for owner address label prompt
+	// (transaction confirmation is skipped by --non-interactive flag)
+	stdinInput := "test-label\n"
+	cmd.Stdin = strings.NewReader(stdinInput)
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+
+	require.NoError(
+		t,
+		cmd.Run(),
+		"cre workflow deploy failed:\nSTDOUT:\n%s\nSTDERR:\n%s",
+		stdout.String(),
+		stderr.String(),
+	)
+
+	out := stripANSI(stdout.String() + stderr.String())
+
+	return out
+}
+
+func TestCLIWorkflowHappyPath3DeployUnlinkedWithConfig(t *testing.T) {
+	// Start Anvil with pre-baked state
+	anvilProc, testEthUrl := initTestEnv(t)
+	defer StopAnvil(anvilProc)
+
+	tc := NewTestConfig(t)
+
+	// Use TestAddress (unlinked) instead of TestAddress3 (linked) for this test
+	// TestAddress should be unlinked in the anvil state, so deploy will auto-link it
+	require.NoError(t, createCliEnvFile(tc.EnvFile, constants.TestPrivateKey), "failed to create env file")
+	require.NoError(t, createCliSettingsFile(tc, constants.TestAddress, "workflow-name", testEthUrl), "failed to create cre config file")
+	require.NoError(t, createBlankProjectSettingFile(tc.ProjectDirectory+"project.yaml"), "failed to create project.yaml")
+	t.Cleanup(tc.Cleanup(t))
+
+	// Pre-baked registries from Anvil state dump
+	t.Setenv(environments.EnvVarWorkflowRegistryAddress, "0x5FbDB2315678afecb367f032d93F642f64180aa3")
+	t.Setenv(environments.EnvVarWorkflowRegistryChainName, TestChainName)
+	t.Setenv(environments.EnvVarCapabilitiesRegistryAddress, "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9")
+	t.Setenv(environments.EnvVarCapabilitiesRegistryChainName, TestChainName)
+
+	// Create config file with specified content
+	configContent := `{
+		"schedule": "0 */1 * * * *",
+		"url": "https://api.example.com/v1/dummy/proof-of-reserves/DummyToken",
+		"evms": [
+		  {
+			"tokenAddress": "0x1111111111111111111111111111111111111111",
+			"porAddress": "0x2222222222222222222222222222222222222222",
+			"proxyAddress": "0x3333333333333333333333333333333333333333",
+			"balanceReaderAddress": "0x4444444444444444444444444444444444444444",
+			"messageEmitterAddress": "0x5555555555555555555555555555555555555555",
+			"chainSelector": 12345678901234567890,
+			"gasLimit": 500000
+		  }
+		]
+	  }`
+
+	configPath := filepath.Join(tc.ProjectDirectory, "workflow-config.json")
+	require.NoError(t, os.WriteFile(configPath, []byte(configContent), 0600), "failed to create config file")
+	t.Cleanup(func() { _ = os.Remove(configPath) })
+
+	// Deploy workflow with unlinked address and config (should auto-link)
+	deployOut := tc.workflowDeployUnlinkedWithConfig(t, configPath)
+	require.Contains(t, deployOut, "Workflow compiled", "expected workflow to compile.\nCLI OUTPUT:\n%s", deployOut)
+
+	// Key verification: The address should start unlinked, then get auto-linked
+	// Check for the exact log messages from deploy.go ensureOwnerLinkedOrFail()
+	require.Contains(t, deployOut, "Workflow owner link status", "expected owner link status message.\nCLI OUTPUT:\n%s", deployOut)
+	require.Contains(t, deployOut, "linked=false", "expected initial link-status false.\nCLI OUTPUT:\n%s", deployOut)
+	require.Contains(t, deployOut, "Owner not linked. Attempting auto-link...", "expected auto-link attempt message.\nCLI OUTPUT:\n%s", deployOut)
+	require.Contains(t, deployOut, "Provide a label for your owner address", "expected label prompt.\nCLI OUTPUT:\n%s", deployOut)
+	require.Contains(t, deployOut, "Starting linking", "expected linking start message.\nCLI OUTPUT:\n%s", deployOut)
+	require.Contains(t, deployOut, "Auto-link successful", "expected auto-link success message.\nCLI OUTPUT:\n%s", deployOut)
+
+	require.Contains(t, deployOut, "Successfully uploaded workflow artifacts", "expected upload to succeed.\nCLI OUTPUT:\n%s", deployOut)
+	require.Contains(t, deployOut, "Workflow deployed successfully", "expected deployment success.\nCLI OUTPUT:\n%s", deployOut)
+}
