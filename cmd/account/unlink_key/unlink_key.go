@@ -34,6 +34,7 @@ const (
 type Inputs struct {
 	WorkflowOwner                   string `validate:"workflow_owner"`
 	WorkflowRegistryContractAddress string `validate:"required"`
+	SkipConfirmation                bool
 }
 
 type initiateUnlinkingResponse struct {
@@ -77,6 +78,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	}
 	settings.AddRawTxFlag(cmd)
 	settings.AddNonInteractiveFlag(cmd)
+	cmd.Flags().BoolP("skip-confirmation", "y", false, "Force unlink without confirmation")
 	return cmd
 }
 
@@ -95,6 +97,7 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 	return Inputs{
 		WorkflowOwner:                   h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress,
 		WorkflowRegistryContractAddress: h.environmentSet.WorkflowRegistryAddress,
+		SkipConfirmation:                v.GetBool("skip-confirmation"),
 	}, nil
 }
 
@@ -117,15 +120,18 @@ func (h *handler) Execute(in Inputs) error {
 
 	h.log.Info().Str("owner", in.WorkflowOwner).Msg("Starting unlinking")
 
-	deleteWorkflows, err := prompt.YesNoPrompt(
-		h.stdin,
-		"Warning: Unlink is a destructive action that will wipe out all workflows registered under your owner address. Do you wish to proceed?",
-	)
-	if err != nil {
-		return err
-	}
-	if !deleteWorkflows {
-		return fmt.Errorf("unlinking aborted by user")
+	// Check if confirmation should be skipped
+	if !in.SkipConfirmation {
+		deleteWorkflows, err := prompt.YesNoPrompt(
+			h.stdin,
+			"Warning: Unlink is a destructive action that will wipe out all workflows registered under your owner address. Do you wish to proceed?",
+		)
+		if err != nil {
+			return err
+		}
+		if !deleteWorkflows {
+			return fmt.Errorf("unlinking aborted by user")
+		}
 	}
 
 	resp, err := h.callInitiateUnlinking(context.Background(), in)
