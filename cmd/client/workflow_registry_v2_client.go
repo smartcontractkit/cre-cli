@@ -492,11 +492,16 @@ func (wrc *WorkflowRegistryV2Client) UpsertWorkflow(params RegisterWorkflowV2Par
 		Interface("tx", tx).
 		Msg("UpsertWorkflow transaction submitted")
 
-	if err := wrc.validateReceiptAndEvent(contract, tx, "UpsertWorkflow", "WorkflowRegistered"); err != nil {
+	// Check for either WorkflowRegistered (new) or WorkflowUpdated (existing) events
+	workflowRegisteredErr := wrc.validateReceiptAndEvent(contract, tx, "UpsertWorkflow", "WorkflowRegistered")
+	workflowUpdatedErr := wrc.validateReceiptAndEvent(contract, tx, "UpsertWorkflow", "WorkflowUpdated")
+
+	if workflowRegisteredErr != nil && workflowUpdatedErr != nil {
 		wrc.Logger.Error().
-			Err(err).
-			Msg("WorkflowRegistered event validation failed")
-		return err
+			Err(workflowRegisteredErr).
+			Err(workflowUpdatedErr).
+			Msg("Neither WorkflowRegistered nor WorkflowUpdated event found")
+		return fmt.Errorf("workflow upsert event validation failed - neither WorkflowRegistered nor WorkflowUpdated event found")
 	}
 
 	wrc.Logger.Info().
