@@ -176,10 +176,10 @@ func (h *handler) Execute(inputs Inputs) error {
 	var buildCmd *exec.Cmd
 	if isTypescriptWorkflow {
 		buildCmd = exec.Command(
-			"bunx",
+			"bun",
 			"cre-compile",
-			"--input", workflowMainFile,
-			"--output", tmpWasmFileName,
+			workflowMainFile,
+			tmpWasmFileName,
 		)
 	} else {
 		// The build command for reproducible and trimmed binaries.
