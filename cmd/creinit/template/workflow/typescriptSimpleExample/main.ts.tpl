@@ -1,6 +1,4 @@
-import { cre } from "cre-sdk-typescript/src/sdk/cre";
-import { Value } from "cre-sdk-typescript/src/sdk/utils/values/value";
-import type { Runtime } from "cre-sdk-typescript/src/sdk/runtime/runtime";
+import { cre, Value, type Runtime } from "@chainlink/cre-sdk";
 
 type Config = {
   schedule: string;
