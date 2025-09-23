@@ -112,7 +112,7 @@ func (h *handler) ResolveInputs(args []string, v *viper.Viper, creSettings *sett
 	for _, chain := range supportedEVM {
 		rpcURL, err := settings.GetRpcUrlSettings(v, chain.ChainName)
 		if err != nil || strings.TrimSpace(rpcURL) == "" {
-			h.log.Info().Msgf("RPC not provided for %s; skipping", chain.ChainName)
+			h.log.Debug().Msgf("RPC not provided for %s; skipping", chain.ChainName)
 			continue
 		}
 
@@ -131,7 +131,7 @@ func (h *handler) ResolveInputs(args []string, v *viper.Viper, creSettings *sett
 
 	pk, err := crypto.HexToECDSA(creSettings.User.EthPrivateKey)
 	if err != nil {
-		return Inputs{}, fmt.Errorf("failed to create private key: %w", err)
+		return Inputs{}, fmt.Errorf("failed to get private key: %w", err)
 	}
 
 	return Inputs{
