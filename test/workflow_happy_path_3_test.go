@@ -91,14 +91,13 @@ func (tc *TestConfig) workflowDeployUnlinkedWithConfig(t *testing.T, configPath 
 	_ = os.Remove(artifactPath) // ignore if it doesn't exist
 	t.Cleanup(func() { _ = os.Remove(artifactPath) })
 
-	// Build CLI args with config file and non-interactive flag for auto-link
+	// Build CLI args with config file
 	args := []string{
 		"workflow", "deploy",
 		"main.go",
 		tc.GetCliEnvFlag(),
 		tc.GetCliSettingsFlag(),
 		"--config", configPath,
-		"--non-interactive", // Skip prompts during auto-link
 	}
 
 	cmd := exec.Command(CLIPath, args...)
@@ -106,8 +105,10 @@ func (tc *TestConfig) workflowDeployUnlinkedWithConfig(t *testing.T, configPath 
 
 	// Provide stdin input for auto-link prompts:
 	// 1. "test-label" for owner address label prompt
-	// (transaction confirmation is skipped by --non-interactive flag)
-	stdinInput := "test-label\n"
+	// 2. For the transaction confirmation, we need to simulate "Yes" selection
+	//    On Unix (promptui): send newline to select default (first option = "Yes")
+	//    On Windows (bubbletea): send newline to select default (first option = "Yes")
+	stdinInput := "test-label\n\n"
 	cmd.Stdin = strings.NewReader(stdinInput)
 
 	var stdout, stderr bytes.Buffer
