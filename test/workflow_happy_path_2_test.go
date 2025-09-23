@@ -238,26 +238,10 @@ func TestCLIWorkflowDeployWithEoaHappyPath2(t *testing.T) {
 	t.Setenv(environments.EnvVarCapabilitiesRegistryAddress, "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9")
 	t.Setenv(environments.EnvVarCapabilitiesRegistryChainName, TestChainName)
 
-	// Create config file with specified content
-	configContent := `{
-		"schedule": "0 */1 * * * *",
-		"url": "https://api.example.com/v1/dummy/proof-of-reserves/DummyToken",
-		"evms": [
-		  {
-			"tokenAddress": "0x1111111111111111111111111111111111111111",
-			"porAddress": "0x2222222222222222222222222222222222222222",
-			"proxyAddress": "0x3333333333333333333333333333333333333333",
-			"balanceReaderAddress": "0x4444444444444444444444444444444444444444",
-			"messageEmitterAddress": "0x5555555555555555555555555555555555555555",
-			"chainSelector": 12345678901234567890,
-			"gasLimit": 500000
-		  }
-		]
-	  }`
-
-	configPath := filepath.Join(tc.ProjectDirectory, "workflow-config.json")
-	require.NoError(t, os.WriteFile(configPath, []byte(configContent), 0600), "failed to create config file")
-	t.Cleanup(func() { _ = os.Remove(configPath) })
+	// Use existing config file from test project
+	_, thisFile, _, _ := runtime.Caller(0)
+	testDir := filepath.Dir(thisFile)
+	configPath := filepath.Join(testDir, "test_project", "blank_workflow", "config.json")
 
 	// Step 1: Deploy initial workflow without autostart
 	out := tc.workflowDeployEoaWithoutAutostart(t)
