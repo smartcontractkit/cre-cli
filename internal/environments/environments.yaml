@@ -3,7 +3,7 @@ ENVIRONMENTS:
     CRE_CLI_UI_URL: https://cre-ui.main.sand.cldev.sh
     CRE_CLI_AUTH_BASE: https://dev-f48jy845kzu6r36b.us.auth0.com
     CRE_CLI_CLIENT_ID: "E4J2Dv6BXo5r5rr7G0DPfxkz2AZtoaOU"
-    CRE_CLI_AUDIENCE: "https://dev-f48jy845kzu6r36b.us.auth0.com/api/v2/"
+    CRE_CLI_AUDIENCE: "https://cre-platform-graphql.main.sand.cldev.sh/"
     CRE_CLI_GRAPHQL_URL: https://cre-platform-graphql.main.sand.cldev.sh/graphql
     CRE_CLI_USER_POOL_ID: us-west-2_EGfnXKUQR
     CRE_VAULT_DON_GATEWAY_URL: https://cre-gateway.main.sand.cldev.sh
@@ -17,17 +17,16 @@ ENVIRONMENTS:
 
   STAGING:
     CRE_CLI_UI_URL: https://cre-ui.main.stage.cldev.sh
-    CRE_CLI_AUTH_BASE: https://dev-f48jy845kzu6r36b.us.auth0.com
-    CRE_CLI_CLIENT_ID: "E4J2Dv6BXo5r5rr7G0DPfxkz2AZtoaOU"
-    CRE_CLI_AUDIENCE: "https://dev-f48jy845kzu6r36b.us.auth0.com/api/v2/"
+    CRE_CLI_AUTH_BASE: https://cre-staging.us.auth0.com
+    CRE_CLI_CLIENT_ID: "pKF1lgw56KKUo5LCl8kEREtVY50YB2Gd"
+    CRE_CLI_AUDIENCE: "https://cre-platform-graphql.main.stage.cldev.sh/"
     CRE_CLI_GRAPHQL_URL: https://cre-platform-graphql.main.stage.cldev.sh/graphql
-    CRE_CLI_USER_POOL_ID: "us-west-2_WuxfEGZDQ"
-    CRE_VAULT_DON_GATEWAY_URL: https://cre-gateway.main.sand.cldev.sh
-    CRE_GATEWAY_URL: https://cre-gateway.main.sand.cldev.sh
+    CRE_CLI_USER_POOL_ID: us-west-2_WuxfEGZDQ
+    CRE_VAULT_DON_GATEWAY_URL: https://cre-gateway.main.stage.cldev.sh
+    CRE_GATEWAY_URL: https://cre-gateway.main.stage.cldev.sh
 
     CRE_CLI_WORKFLOW_REGISTRY_ADDRESS: "0xcF4629d8DC7a5fa17F4D77233F5b953225669821"
     CRE_CLI_WORKFLOW_REGISTRY_CHAIN_NAME: "ethereum-testnet-sepolia-base-1" # base-sepolia
 
     CRE_CLI_CAPABILITIES_REGISTRY_ADDRESS: "0x3392AC757B05bCb0DCEcBE298674462Dd30DEd29"
     CRE_CLI_CAPABILITIES_REGISTRY_CHAIN_NAME: "ethereum-testnet-sepolia-base-1" # base-sepolia
-
