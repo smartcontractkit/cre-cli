@@ -412,7 +412,10 @@ func run(
 			}
 		}
 
-		_ = cleanupBeholder()
+		err = cleanupBeholder()
+		if err != nil {
+			baseLggr.Warnw("Failed to cleanup beholder", "error", err)
+		}
 	}
 	emptyHook := func(context.Context, simulator.RunnerConfig, *capabilities.Registry, []services.Service) {}
 

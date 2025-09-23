@@ -132,7 +132,7 @@ func (w *telemetryWriter) Write(p []byte) (n int, err error) {
 			w.handleUserLogs(telLog)
 			return len(p), nil
 		case "BaseMessage":
-			return 0, nil
+			return len(p), nil
 		case entityWorkflowStarted:
 			w.handleWorkflowEvent(telLog, "started")
 			return len(p), nil
@@ -411,10 +411,10 @@ func mapCapabilityStatus(status string) string {
 }
 
 // mapWorkflowStatus maps workflow status to display format (different from capability status)
-// TODO: workflow status returns "completed" regardless of success or failure, which is misleading
 func (w *telemetryWriter) mapWorkflowStatus(status string) string {
 	switch strings.ToLower(status) {
 	case "completed":
+		// workflow is in completed status, but if any failure events were received, mark as FAILED
 		if w.failureEventReceived {
 			return "FAILED"
 		}
