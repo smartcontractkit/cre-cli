@@ -412,7 +412,10 @@ func run(
 			}
 		}
 
-		_ = cleanupBeholder()
+		err = cleanupBeholder()
+		if err != nil {
+			baseLggr.Warnw("Failed to cleanup beholder", "error", err)
+		}
 	}
 	emptyHook := func(context.Context, simulator.RunnerConfig, *capabilities.Registry, []services.Service) {}
 
@@ -438,12 +441,17 @@ func run(
 		Lggr:           engineLog,
 		LifecycleHooks: v2.LifecycleHooks{
 			OnInitialized: func(err error) {
+				if err != nil {
+					baseLggr.Errorw("Failed to initialize simulator", "error", err)
+					os.Exit(1)
+				}
 				baseLggr.Info("Simulator Initialized")
 				fmt.Println()
 				close(initializedCh)
 			},
 			OnExecutionError: func(msg string) {
 				fmt.Println("Workflow execution failed:\n", msg)
+				os.Exit(1)
 			},
 			OnResultReceived: func(result *pb.ExecutionResult) {
 				fmt.Println()
