@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/rs/zerolog"
+	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
 	"github.com/smartcontractkit/cre-cli/internal/settings"
@@ -37,7 +38,8 @@ func NewTestSettings(v *viper.Viper, logger *zerolog.Logger) (*settings.Settings
 	v.Set("projectSettingsPath", projectFile)
 	v.Set(settings.CreTargetEnvVar, "production-testnet")
 
-	testSettings, err := settings.New(logger, v)
+	cmd := &cobra.Command{Use: "login"}
+	testSettings, err := settings.New(logger, v, cmd)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create new test settings: %w", err)
 	}

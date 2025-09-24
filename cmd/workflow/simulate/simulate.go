@@ -112,7 +112,7 @@ func (h *handler) ResolveInputs(args []string, v *viper.Viper, creSettings *sett
 	for _, chain := range supportedEVM {
 		rpcURL, err := settings.GetRpcUrlSettings(v, chain.ChainName)
 		if err != nil || strings.TrimSpace(rpcURL) == "" {
-			h.log.Info().Msgf("RPC not provided for %s; skipping", chain.ChainName)
+			h.log.Debug().Msgf("RPC not provided for %s; skipping", chain.ChainName)
 			continue
 		}
 
@@ -131,7 +131,7 @@ func (h *handler) ResolveInputs(args []string, v *viper.Viper, creSettings *sett
 
 	pk, err := crypto.HexToECDSA(creSettings.User.EthPrivateKey)
 	if err != nil {
-		return Inputs{}, fmt.Errorf("failed to create private key: %w", err)
+		return Inputs{}, fmt.Errorf("failed to get private key: %w", err)
 	}
 
 	return Inputs{
@@ -177,9 +177,9 @@ func (h *handler) Execute(inputs Inputs) error {
 	if isTypescriptWorkflow {
 		buildCmd = exec.Command(
 			"bun",
-			"build:all",
-			"--input", workflowMainFile,
-			"--output", tmpWasmFileName,
+			"cre-compile",
+			workflowMainFile,
+			tmpWasmFileName,
 		)
 	} else {
 		// The build command for reproducible and trimmed binaries.
@@ -412,7 +412,10 @@ func run(
 			}
 		}
 
-		_ = cleanupBeholder()
+		err = cleanupBeholder()
+		if err != nil {
+			baseLggr.Warnw("Failed to cleanup beholder", "error", err)
+		}
 	}
 	emptyHook := func(context.Context, simulator.RunnerConfig, *capabilities.Registry, []services.Service) {}
 
@@ -438,12 +441,17 @@ func run(
 		Lggr:           engineLog,
 		LifecycleHooks: v2.LifecycleHooks{
 			OnInitialized: func(err error) {
+				if err != nil {
+					baseLggr.Errorw("Failed to initialize simulator", "error", err)
+					os.Exit(1)
+				}
 				baseLggr.Info("Simulator Initialized")
 				fmt.Println()
 				close(initializedCh)
 			},
 			OnExecutionError: func(msg string) {
 				fmt.Println("Workflow execution failed:\n", msg)
+				os.Exit(1)
 			},
 			OnResultReceived: func(result *pb.ExecutionResult) {
 				fmt.Println()

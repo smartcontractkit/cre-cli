@@ -47,12 +47,16 @@ func (s *OAuthService) RefreshToken(ctx context.Context, oldTokenSet *credential
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("token refresh failed: %w", err)
+		return nil, fmt.Errorf("graphql request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode == http.StatusUnauthorized {
+		return nil, errors.New("graphql response: unauthorized (401) - you have been logged out. " +
+			"Please login using `cre login` and retry your command")
+	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("token refresh failed: %s", resp.Status)
+		return nil, fmt.Errorf("graphql response: %s", resp.Status)
 	}
 
 	var tr struct {
