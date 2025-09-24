@@ -49,7 +49,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	}
 
 	settings.AddRawTxFlag(activateCmd)
-	settings.AddNonInteractiveFlag(activateCmd)
+	settings.AddSkipConfirmation(activateCmd)
 
 	return activateCmd
 }

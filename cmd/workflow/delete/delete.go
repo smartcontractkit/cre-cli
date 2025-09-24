@@ -22,9 +22,9 @@ import (
 )
 
 type Inputs struct {
-	WorkflowName   string `validate:"workflow_name"`
-	WorkflowOwner  string `validate:"workflow_owner"`
-	NonInteractive bool
+	WorkflowName     string `validate:"workflow_name"`
+	WorkflowOwner    string `validate:"workflow_owner"`
+	SkipConfirmation bool
 
 	WorkflowRegistryContractAddress   string `validate:"required"`
 	WorkflowRegistryContractChainName string `validate:"required"`
@@ -53,7 +53,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	}
 
 	settings.AddRawTxFlag(deleteCmd)
-	settings.AddNonInteractiveFlag(deleteCmd)
+	settings.AddSkipConfirmation(deleteCmd)
 
 	return deleteCmd
 }
@@ -87,7 +87,7 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 	return Inputs{
 		WorkflowName:                      h.settings.Workflow.UserWorkflowSettings.WorkflowName,
 		WorkflowOwner:                     h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress,
-		NonInteractive:                    v.GetBool(settings.Flags.NonInteractive.Name),
+		SkipConfirmation:                  v.GetBool(settings.Flags.SkipConfirmation.Name),
 		WorkflowRegistryContractChainName: h.environmentSet.WorkflowRegistryChainName,
 		WorkflowRegistryContractAddress:   h.environmentSet.WorkflowRegistryAddress,
 	}, nil
@@ -138,7 +138,7 @@ func (h *handler) Execute() error {
 		h.log.Info().Msg("")
 	}
 
-	shouldDeleteWorkflow, err := h.shouldDeleteWorkflow(h.inputs.NonInteractive, workflowName)
+	shouldDeleteWorkflow, err := h.shouldDeleteWorkflow(h.inputs.SkipConfirmation, workflowName)
 	if err != nil {
 		return err
 	}
@@ -186,8 +186,8 @@ func (h *handler) Execute() error {
 	return nil
 }
 
-func (h *handler) shouldDeleteWorkflow(nonInteractive bool, workflowName string) (bool, error) {
-	if nonInteractive {
+func (h *handler) shouldDeleteWorkflow(skipConfirmation bool, workflowName string) (bool, error) {
+	if skipConfirmation {
 		return true, nil
 	}
 

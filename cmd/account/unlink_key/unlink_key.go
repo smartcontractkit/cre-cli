@@ -77,8 +77,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 		},
 	}
 	settings.AddRawTxFlag(cmd)
-	settings.AddNonInteractiveFlag(cmd)
-	cmd.Flags().BoolP("skip-confirmation", "y", false, "Force unlink without confirmation")
+	settings.AddSkipConfirmation(cmd)
 	return cmd
 }
 
@@ -97,7 +96,7 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 	return Inputs{
 		WorkflowOwner:                   h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress,
 		WorkflowRegistryContractAddress: h.environmentSet.WorkflowRegistryAddress,
-		SkipConfirmation:                v.GetBool("skip-confirmation"),
+		SkipConfirmation:                v.GetBool(settings.Flags.SkipConfirmation.Name),
 	}, nil
 }
 

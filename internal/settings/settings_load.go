@@ -40,6 +40,7 @@ type flagNames struct {
 	Ledger               Flag
 	LedgerDerivationPath Flag
 	NonInteractive       Flag
+	SkipConfirmation     Flag
 }
 
 var Flags = flagNames{
@@ -53,6 +54,7 @@ var Flags = flagNames{
 	Ledger:               Flag{"ledger", ""},
 	LedgerDerivationPath: Flag{"ledger-derivation-path", ""},
 	NonInteractive:       Flag{"non-interactive", ""},
+	SkipConfirmation:     Flag{"yes", "y"},
 }
 
 func AddTxnTypeFlags(cmd *cobra.Command) {
@@ -65,8 +67,8 @@ func AddRawTxFlag(cmd *cobra.Command) {
 	cmd.Flags().Bool(Flags.RawTxFlag.Name, false, "If set, the command will return the raw transaction instead of sending it to the network")
 }
 
-func AddNonInteractiveFlag(cmd *cobra.Command) {
-	cmd.Flags().Bool(Flags.NonInteractive.Name, false, "If set, the command will skip all interactive prompts and fail if any required information is missing")
+func AddSkipConfirmation(cmd *cobra.Command) {
+	cmd.Flags().Bool(Flags.SkipConfirmation.Name, false, "If set, the command will skip the confirmation prompt and proceed with the operation even if it is potentially destructive")
 }
 
 func FindProjectSettingsPath(startDir string) (string, bool, error) {

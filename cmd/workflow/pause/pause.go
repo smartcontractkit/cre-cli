@@ -49,7 +49,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	}
 
 	settings.AddRawTxFlag(pauseCmd)
-	settings.AddNonInteractiveFlag(pauseCmd)
+	settings.AddSkipConfirmation(pauseCmd)
 	return pauseCmd
 }
 
