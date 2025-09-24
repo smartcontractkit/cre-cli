@@ -161,6 +161,12 @@ func (h *handler) ValidateInputs(inputs Inputs) error {
 		return validate.ParseValidationErrors(err)
 	}
 
+	if err := runRPCHealthCheck(inputs.EVMClients); err != nil {
+		// we don't block execution, just show the error to the user
+		// because some RPCs in settings might not be used in workflow and some RPCs might have hiccups
+		h.log.Error().Msgf("some RPCs in setting is not functioning properly, please check: %v", err)
+	}
+
 	h.validated = true
 	return nil
 }
