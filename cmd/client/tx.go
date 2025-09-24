@@ -42,12 +42,9 @@ type TxClient struct {
 	config    TxClientConfig
 }
 
-// TODO DEVSVCS-2341
 // Helper function to check transaction receipt and if the correct event was emitted or not
-//
-//nolint:unused
 func (c *TxClient) validateReceiptAndEvent(contractAddr string, tx *seth.DecodedTransaction,
-	contractFunctionName string, contractEventName string,
+	contractFunctionName string, contractEventNames []string,
 ) error {
 	// check if the transaction receipt is returned
 	if tx.Receipt.Status == types.ReceiptStatusFailed {
@@ -57,12 +54,14 @@ func (c *TxClient) validateReceiptAndEvent(contractAddr string, tx *seth.Decoded
 		return errors.New("transaction receipt not found")
 	}
 
-	// check if the event was emitted and print out the contents
-	eventExists, _ := cmdCommon.ValidateEventSignature(c.Logger, tx, c.abi.Events[contractEventName])
-	if eventExists {
-		return nil
+	// check if any of the events were emitted and print out the contents
+	for _, eventName := range contractEventNames {
+		eventExists, _ := cmdCommon.ValidateEventSignature(c.Logger, tx, c.abi.Events[eventName])
+		if eventExists {
+			return nil
+		}
 	}
-	return errors.New("event not emitted")
+	return errors.New("none of the specified events were emitted")
 }
 
 type TxOutput struct {
@@ -116,7 +115,6 @@ type RawTx struct {
 //	return txOpts, nil
 //}
 
-// TODO DEVSVCS-2341
 func (c *TxClient) executeTransactionByTxType(txFn func(opts *bind.TransactOpts) (*types.Transaction, error), funName string, validationEvent string, args ...any) (TxOutput, error) {
 	switch c.config.TxType {
 	case Regular:
@@ -145,7 +143,9 @@ func (c *TxClient) executeTransactionByTxType(txFn func(opts *bind.TransactOpts)
 		if err != nil {
 			return TxOutput{Type: Regular}, err
 		}
-		err = c.validateReceiptAndEvent(decodedTx.Transaction.To().Hex(), decodedTx, funName, validationEvent)
+		c.Logger.Debug().Interface("tx", decodedTx.Transaction).Str("TxHash", decodedTx.Transaction.Hash().Hex()).Msg("Transaction mined successfully")
+
+		err = c.validateReceiptAndEvent(decodedTx.Transaction.To().Hex(), decodedTx, funName, strings.Split(validationEvent, "|"))
 		if err != nil {
 			return TxOutput{Type: Regular}, err
 		}

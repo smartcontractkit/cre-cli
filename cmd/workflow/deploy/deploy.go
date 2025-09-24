@@ -94,6 +94,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	}
 
 	settings.AddRawTxFlag(deployCmd)
+	settings.AddSkipConfirmation(deployCmd)
 	deployCmd.Flags().StringP("secrets-url", "s", "", "URL of the encrypted secrets JSON file")
 	deployCmd.Flags().StringP("source-url", "x", "", "URL of the source code in Gist")
 	deployCmd.Flags().StringP("output", "o", defaultOutputPath, "The output file for the compiled WASM binary encoded in base64")

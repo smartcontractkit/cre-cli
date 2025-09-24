@@ -86,7 +86,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	simulateCmd.Flags().BoolP("engine-logs", "g", false, "Enable non-fatal engine logging")
 	simulateCmd.Flags().Bool("broadcast", false, "Broadcast transactions to the EVM (default: false)")
 	// Non-interactive flags
-	simulateCmd.Flags().Bool("non-interactive", false, "Run without prompts; requires --trigger-index and inputs for the selected trigger type")
+	simulateCmd.Flags().Bool(settings.Flags.NonInteractive.Name, false, "Run without prompts; requires --trigger-index and inputs for the selected trigger type")
 	simulateCmd.Flags().Int("trigger-index", -1, "Index of the trigger to run (0-based)")
 	simulateCmd.Flags().String("http-payload", "", "HTTP trigger payload as JSON string or path to JSON file (with or without @ prefix)")
 	simulateCmd.Flags().String("evm-tx-hash", "", "EVM trigger transaction hash (0x...)")

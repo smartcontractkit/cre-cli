@@ -19,7 +19,7 @@ type Factory interface {
 	NewCapabilitiesRegistryClient() (*CapabilitiesRegistryClient, error)
 	NewWorkflowRegistryV2Client() (*WorkflowRegistryV2Client, error)
 	GetTxType() TxType
-	GetNonInteractive() bool
+	GetSkipConfirmation() bool
 }
 
 type factoryImpl struct {
@@ -70,7 +70,7 @@ func (f *factoryImpl) NewWorkflowRegistryV2Client() (*WorkflowRegistryV2Client, 
 	txcConfig := TxClientConfig{
 		TxType:       f.GetTxType(),
 		LedgerConfig: f.getLedgerConfig(),
-		SkipPrompt:   f.GetNonInteractive(),
+		SkipPrompt:   f.GetSkipConfirmation(),
 	}
 
 	workflowRegistryV2Client := NewWorkflowRegistryV2Client(
@@ -112,8 +112,8 @@ func (f *factoryImpl) GetTxType() TxType {
 	return Regular
 }
 
-func (f *factoryImpl) GetNonInteractive() bool {
-	return f.viper.GetBool(settings.Flags.NonInteractive.Name)
+func (f *factoryImpl) GetSkipConfirmation() bool {
+	return f.viper.GetBool(settings.Flags.SkipConfirmation.Name)
 }
 
 func (f *factoryImpl) getLedgerConfig() *LedgerConfig {

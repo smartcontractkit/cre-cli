@@ -16,6 +16,7 @@ import (
 
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
+	"github.com/smartcontractkit/cre-cli/internal/settings"
 )
 
 // Deploys a workflow via CLI without autostart, mocking GraphQL + Origin.
@@ -97,6 +98,7 @@ func (tc *TestConfig) workflowDeployEoaWithoutAutostart(t *testing.T) string {
 		"main.go",
 		tc.GetCliEnvFlag(),
 		tc.GetCliSettingsFlag(),
+		"--" + settings.Flags.SkipConfirmation.Name,
 	}
 
 	cmd := exec.Command(CLIPath, args...)
@@ -198,6 +200,7 @@ func (tc *TestConfig) workflowDeployUpdateWithConfig(t *testing.T, configPath st
 		tc.GetCliEnvFlag(),
 		tc.GetCliSettingsFlag(),
 		"--config", configPath,
+		"--" + settings.Flags.SkipConfirmation.Name,
 	}
 
 	cmd := exec.Command(CLIPath, args...)

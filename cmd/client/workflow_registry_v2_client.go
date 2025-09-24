@@ -456,19 +456,19 @@ func (wrc *WorkflowRegistryV2Client) TypeAndVersion() (string, error) {
 	return tv, err
 }
 
-func (wrc *WorkflowRegistryV2Client) UpsertWorkflow(params RegisterWorkflowV2Parameters) error {
+func (wrc *WorkflowRegistryV2Client) UpsertWorkflow(params RegisterWorkflowV2Parameters) (*TxOutput, error) {
 	contract, err := workflow_registry_v2_wrapper.NewWorkflowRegistry(wrc.ContractAddress, wrc.EthClient.Client)
 	if err != nil {
 		wrc.Logger.Error().
 			Str("contract", wrc.ContractAddress.Hex()).
 			Err(err).
 			Msgf("Failed to connect to %s", constants.WorkflowRegistryContractName)
-		return err
+		return nil, err
 	}
 
-	tx, err := wrc.EthClient.Decode(
-		contract.UpsertWorkflow(
-			wrc.EthClient.NewTXOpts(),
+	txFn := func(opts *bind.TransactOpts) (*types.Transaction, error) {
+		return contract.UpsertWorkflow(
+			opts,
 			params.WorkflowName,
 			params.Tag,
 			params.WorkflowID,
@@ -478,36 +478,27 @@ func (wrc *WorkflowRegistryV2Client) UpsertWorkflow(params RegisterWorkflowV2Par
 			params.ConfigURL,
 			params.Attributes,
 			params.KeepAlive,
-		),
+		)
+	}
+	txOut, err := wrc.executeTransactionByTxType(txFn, "UpsertWorkflow", "WorkflowRegistered|WorkflowUpdated",
+		params.WorkflowName,
+		params.Tag,
+		params.WorkflowID,
+		params.Status,
+		params.DonFamily,
+		params.BinaryURL,
+		params.ConfigURL,
+		params.Attributes,
+		params.KeepAlive,
 	)
 	if err != nil {
 		wrc.Logger.Error().
 			Str("contract", contract.Address().Hex()).
 			Err(err).
 			Msg("Failed to call UpsertWorkflow")
-		return err
+		return nil, err
 	}
-
-	wrc.Logger.Debug().
-		Interface("tx", tx).
-		Msg("UpsertWorkflow transaction submitted")
-
-	// Check for either WorkflowRegistered (new) or WorkflowUpdated (existing) events
-	workflowRegisteredErr := wrc.validateReceiptAndEvent(contract, tx, "UpsertWorkflow", "WorkflowRegistered")
-	workflowUpdatedErr := wrc.validateReceiptAndEvent(contract, tx, "UpsertWorkflow", "WorkflowUpdated")
-
-	if workflowRegisteredErr != nil && workflowUpdatedErr != nil {
-		wrc.Logger.Error().
-			Err(workflowRegisteredErr).
-			Err(workflowUpdatedErr).
-			Msg("Neither WorkflowRegistered nor WorkflowUpdated event found")
-		return fmt.Errorf("workflow upsert event validation failed - neither WorkflowRegistered nor WorkflowUpdated event found")
-	}
-
-	wrc.Logger.Info().
-		Str("txHash", tx.Transaction.Hash().Hex()).
-		Msg("Workflow deployed successfully")
-	return nil
+	return &txOut, nil
 }
 
 func (wrc *WorkflowRegistryV2Client) GetWorkflow(owner common.Address, workflowName, tag string) (workflow_registry_v2_wrapper.WorkflowRegistryWorkflowMetadataView, error) {
@@ -542,121 +533,79 @@ func (wrc *WorkflowRegistryV2Client) GetWorkflowListByOwnerAndName(owner common.
 	return result, err
 }
 
-func (wrc *WorkflowRegistryV2Client) DeleteWorkflow(workflowID [32]byte) error {
+func (wrc *WorkflowRegistryV2Client) DeleteWorkflow(workflowID [32]byte) (*TxOutput, error) {
 	contract, err := workflow_registry_v2_wrapper.NewWorkflowRegistry(wrc.ContractAddress, wrc.EthClient.Client)
 	if err != nil {
 		wrc.Logger.Error().
 			Str("contract", wrc.ContractAddress.Hex()).
 			Err(err).
 			Msgf("Failed to connect to %s", constants.WorkflowRegistryContractName)
-		return err
+		return nil, err
 	}
 
-	tx, err := wrc.EthClient.Decode(
-		contract.DeleteWorkflow(wrc.EthClient.NewTXOpts(), workflowID),
-	)
+	txFn := func(opts *bind.TransactOpts) (*types.Transaction, error) {
+		return contract.DeleteWorkflow(opts, workflowID)
+	}
+	txOut, err := wrc.executeTransactionByTxType(txFn, "DeleteWorkflow", "WorkflowDeleted", workflowID)
 	if err != nil {
 		wrc.Logger.Error().
 			Str("contract", contract.Address().Hex()).
 			Err(err).
 			Msg("Failed to call DeleteWorkflow")
-		return err
+		return nil, err
 	}
-
-	wrc.Logger.Debug().
-		Interface("tx", tx).
-		Msg("DeleteWorkflow transaction submitted")
-
-	if err := wrc.validateReceiptAndEvent(contract, tx, "DeleteWorkflow", "WorkflowDeleted"); err != nil {
-		wrc.Logger.Error().
-			Err(err).
-			Msg("WorkflowDeleted event validation failed")
-		return err
-	}
-
-	wrc.Logger.Info().
-		Str("txHash", tx.Transaction.Hash().Hex()).
-		Msg("Workflow deleted successfully")
-	return nil
+	return &txOut, nil
 }
 
-func (wrc *WorkflowRegistryV2Client) BatchPauseWorkflows(workflowIDs [][32]byte) error {
+func (wrc *WorkflowRegistryV2Client) BatchPauseWorkflows(workflowIDs [][32]byte) (*TxOutput, error) {
 	contract, err := workflow_registry_v2_wrapper.NewWorkflowRegistry(wrc.ContractAddress, wrc.EthClient.Client)
 	if err != nil {
 		wrc.Logger.Error().
 			Str("contract", wrc.ContractAddress.Hex()).
 			Err(err).
 			Msgf("Failed to connect to %s", constants.WorkflowRegistryContractName)
-		return err
+		return nil, err
 	}
 
-	tx, err := wrc.EthClient.Decode(
-		contract.BatchPauseWorkflows(
-			wrc.EthClient.NewTXOpts(),
+	txFn := func(opts *bind.TransactOpts) (*types.Transaction, error) {
+		return contract.BatchPauseWorkflows(
+			opts,
 			workflowIDs,
-		),
-	)
+		)
+	}
+	txOut, err := wrc.executeTransactionByTxType(txFn, "BatchPauseWorkflows", "WorkflowStatusUpdated", workflowIDs)
 	if err != nil {
 		wrc.Logger.Error().
 			Str("contract", contract.Address().Hex()).
 			Err(err).
 			Msg("Failed to call BatchPauseWorkflows")
-		return err
+		return nil, err
 	}
-
-	wrc.Logger.Debug().
-		Interface("tx", tx).
-		Msg("BatchPauseWorkflows transaction submitted")
-
-	if err := wrc.validateReceiptAndEvent(contract, tx, "BatchPauseWorkflows", "WorkflowStatusUpdated"); err != nil {
-		wrc.Logger.Error().
-			Err(err).
-			Msg("WorkflowStatusUpdated event validation failed")
-		return err
-	}
-
-	wrc.Logger.Info().
-		Str("txHash", tx.Transaction.Hash().Hex()).
-		Msg("Workflows paused successfully")
-	return nil
+	return &txOut, nil
 }
 
-func (wrc *WorkflowRegistryV2Client) ActivateWorkflow(workflowID [32]byte, donFamily string) error {
+func (wrc *WorkflowRegistryV2Client) ActivateWorkflow(workflowID [32]byte, donFamily string) (*TxOutput, error) {
 	contract, err := workflow_registry_v2_wrapper.NewWorkflowRegistry(wrc.ContractAddress, wrc.EthClient.Client)
 	if err != nil {
 		wrc.Logger.Error().
 			Str("contract", wrc.ContractAddress.Hex()).
 			Err(err).
 			Msgf("Failed to connect to %s", constants.WorkflowRegistryContractName)
-		return err
+		return nil, err
 	}
 
-	tx, err := wrc.EthClient.Decode(
-		contract.ActivateWorkflow(wrc.EthClient.NewTXOpts(), workflowID, donFamily),
-	)
+	txFn := func(opts *bind.TransactOpts) (*types.Transaction, error) {
+		return contract.ActivateWorkflow(opts, workflowID, donFamily)
+	}
+	txOut, err := wrc.executeTransactionByTxType(txFn, "ActivateWorkflow", "WorkflowActivated", workflowID, donFamily)
 	if err != nil {
 		wrc.Logger.Error().
 			Str("contract", contract.Address().Hex()).
 			Err(err).
 			Msg("Failed to call ActivateWorkflow")
-		return err
+		return nil, err
 	}
-
-	wrc.Logger.Debug().
-		Interface("tx", tx).
-		Msg("ActivateWorkflow transaction submitted")
-
-	if err := wrc.validateReceiptAndEvent(contract, tx, "ActivateWorkflow", "WorkflowActivated"); err != nil {
-		wrc.Logger.Error().
-			Err(err).
-			Msg("WorkflowActivated event validation failed")
-		return err
-	}
-
-	wrc.Logger.Info().
-		Str("txHash", tx.Transaction.Hash().Hex()).
-		Msg("Workflow activated successfully")
-	return nil
+	return &txOut, nil
 }
 
 func (wrc *WorkflowRegistryV2Client) validateReceiptAndEvent(

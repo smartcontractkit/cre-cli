@@ -39,6 +39,6 @@ func (f *testFactoryImpl) GetTxType() client.TxType {
 	return client.Regular
 }
 
-func (f *testFactoryImpl) GetNonInteractive() bool {
+func (f *testFactoryImpl) GetSkipConfirmation() bool {
 	return true
 }

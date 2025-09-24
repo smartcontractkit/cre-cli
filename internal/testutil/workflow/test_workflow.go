@@ -26,6 +26,6 @@ func RegisterWorkflow(t *testing.T, wrc *client.WorkflowRegistryV2Client, workfl
 		DonFamily:    "1",
 	}
 
-	err = wrc.UpsertWorkflow(params)
+	_, err = wrc.UpsertWorkflow(params)
 	require.NoError(t, err, "Failed to register workflow")
 }
