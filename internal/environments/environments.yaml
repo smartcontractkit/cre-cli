@@ -1,13 +1,11 @@
 ENVIRONMENTS:
   SANDBOX:
     CRE_CLI_UI_URL: https://cre-ui.main.sand.cldev.sh
-    CRE_CLI_AUTH_BASE: https://dev-f48jy845kzu6r36b.us.auth0.com
-    CRE_CLI_CLIENT_ID: "E4J2Dv6BXo5r5rr7G0DPfxkz2AZtoaOU"
-    CRE_CLI_AUDIENCE: "https://dev-f48jy845kzu6r36b.us.auth0.com/api/v2/"
-    CRE_CLI_GRAPHQL_URL: https://cre-platform-graphql.main.sand.cldev.sh/graphql
-    CRE_CLI_USER_POOL_ID: us-west-2_EGfnXKUQR
+    CRE_CLI_AUTH_BASE: https://cre-sandbox.us.auth0.com
+    CRE_CLI_CLIENT_ID: KERrSYowuRhVyXUrI3u7pI8nnY95bIGt
+    CRE_CLI_AUDIENCE: https://graphql.cre.dev.internal.cldev.sh/
+    CRE_CLI_GRAPHQL_URL: https://graphql-cre-dev.tailf8f749.ts.net/graphql
     CRE_VAULT_DON_GATEWAY_URL: https://cre-gateway.main.sand.cldev.sh
-    CRE_GATEWAY_URL: https://cre-gateway.main.sand.cldev.sh
 
     CRE_CLI_WORKFLOW_REGISTRY_ADDRESS: "0xBc9Eb5D8358c9dF4E74fF149E15891F88f0203a6"
     CRE_CLI_WORKFLOW_REGISTRY_CHAIN_NAME: "ethereum-testnet-sepolia-base-1" # base-sepolia
@@ -17,17 +15,14 @@ ENVIRONMENTS:
 
   STAGING:
     CRE_CLI_UI_URL: https://cre-ui.main.stage.cldev.sh
-    CRE_CLI_AUTH_BASE: https://dev-f48jy845kzu6r36b.us.auth0.com
-    CRE_CLI_CLIENT_ID: "E4J2Dv6BXo5r5rr7G0DPfxkz2AZtoaOU"
-    CRE_CLI_AUDIENCE: "https://dev-f48jy845kzu6r36b.us.auth0.com/api/v2/"
-    CRE_CLI_GRAPHQL_URL: https://cre-platform-graphql.main.stage.cldev.sh/graphql
-    CRE_CLI_USER_POOL_ID: "us-west-2_WuxfEGZDQ"
-    CRE_VAULT_DON_GATEWAY_URL: https://cre-gateway.main.sand.cldev.sh
-    CRE_GATEWAY_URL: https://cre-gateway.main.sand.cldev.sh
+    CRE_CLI_AUTH_BASE: https://cre-staging.us.auth0.com
+    CRE_CLI_CLIENT_ID: pKF1lgw56KKUo5LCl8kEREtVY50YB2Gd
+    CRE_CLI_AUDIENCE: https://graphql.cre.stage.internal.cldev.sh/
+    CRE_CLI_GRAPHQL_URL: https://graphql-cre-stage.tailf8f749.ts.net/graphql
+    CRE_VAULT_DON_GATEWAY_URL: https://cre-gateway.main.stage.cldev.sh
 
-    CRE_CLI_WORKFLOW_REGISTRY_ADDRESS: "0xcF4629d8DC7a5fa17F4D77233F5b953225669821"
+    CRE_CLI_WORKFLOW_REGISTRY_ADDRESS: "0x7e69E853D9Ce50C2562a69823c80E01360019Cef"
     CRE_CLI_WORKFLOW_REGISTRY_CHAIN_NAME: "ethereum-testnet-sepolia-base-1" # base-sepolia
 
     CRE_CLI_CAPABILITIES_REGISTRY_ADDRESS: "0x3392AC757B05bCb0DCEcBE298674462Dd30DEd29"
     CRE_CLI_CAPABILITIES_REGISTRY_CHAIN_NAME: "ethereum-testnet-sepolia-base-1" # base-sepolia
-
