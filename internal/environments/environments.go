@@ -23,7 +23,7 @@ const (
 	EnvVarCapabilitiesRegistryAddress   = "CRE_CLI_CAPABILITIES_REGISTRY_ADDRESS"
 	EnvVarCapabilitiesRegistryChainName = "CRE_CLI_CAPABILITIES_REGISTRY_CHAIN_NAME"
 
-	DefaultEnv = "SANDBOX"
+	DefaultEnv = "STAGING"
 )
 
 //go:embed environments.yaml
