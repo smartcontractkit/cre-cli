@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - "v*"
+    branches:
+      - "DEVSVCS-2153/update-release-workflow"
 
 jobs:
   build-linux:
