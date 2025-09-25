@@ -11,7 +11,6 @@ import (
 
 const testYAML = `ENVIRONMENTS:
   SANDBOX:
-    CRE_CLI_UI_URL: http://localhost:3000
     CRE_CLI_AUTH_BASE: https://auth0.test
     CRE_CLI_COGNITO_URL: https://cognito.test
     CRE_CLI_CLIENT_ID: test-id
@@ -26,7 +25,6 @@ const testYAML = `ENVIRONMENTS:
     CRE_CLI_CAPABILITIES_REGISTRY_CHAIN_NAME: "ethereum-testnet-sepolia"
 
   STAGING:
-    CRE_CLI_UI_URL: https://staging.ui
     CRE_CLI_AUTH_BASE: https://staging.auth0
     CRE_CLI_COGNITO_URL: https://staging.cognito
     CRE_CLI_CLIENT_ID: staging-id
@@ -87,7 +85,6 @@ func TestLoadEnvironmentFile(t *testing.T) {
 func TestNewEnvironmentSet_FallbackAndOverrides(t *testing.T) {
 	ff := &fileFormat{Envs: map[string]EnvironmentSet{
 		"SANDBOX": {
-			UIURL:      "a",
 			AuthBase:   "b",
 			ClientID:   "c",
 			GraphQLURL: "d",
@@ -99,7 +96,6 @@ func TestNewEnvironmentSet_FallbackAndOverrides(t *testing.T) {
 			CapabilitiesRegistryChainName: "ethereum-testnet-sepolia-base-1",
 		},
 		"STAGING": {
-			UIURL:      "f",
 			AuthBase:   "g",
 			ClientID:   "h",
 			GraphQLURL: "i",
@@ -118,9 +114,6 @@ func TestNewEnvironmentSet_FallbackAndOverrides(t *testing.T) {
 	t.Setenv(EnvVarAudience, "")
 
 	set := NewEnvironmentSet(ff, "SANDBOX")
-	if set.UIURL != "a" {
-		t.Errorf("fallback UIURL = %q; want a", set.UIURL)
-	}
 	if set.AuthBase != "b" {
 		t.Errorf("fallback AuthBase = %q; want b", set.AuthBase)
 	}
