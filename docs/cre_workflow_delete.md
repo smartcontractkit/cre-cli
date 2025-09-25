@@ -13,9 +13,9 @@ cre workflow delete [flags]
 ### Options
 
 ```
-  -h, --help                help for delete
-  -y, --skip-confirmation   Force delete workflow without confirmation
-      --unsigned            If set, the command will return the raw transaction instead of sending it to the network
+  -h, --help       help for delete
+      --unsigned   If set, the command will return the raw transaction instead of sending it to the network
+      --yes        If set, the command will skip the confirmation prompt and proceed with the operation even if it is potentially destructive
 ```
 
 ### Options inherited from parent commands

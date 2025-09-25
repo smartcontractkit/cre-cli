@@ -13,7 +13,6 @@
     }
   },
   "include": [
-    "global.d.ts",
     "main.ts"
   ]
 }

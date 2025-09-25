@@ -1,6 +1,4 @@
-import { cre } from "@chainlink/cre-sdk/cre";
-import { Value } from "@chainlink/cre-sdk/utils/values/value";
-import type { Runtime } from "@chainlink/cre-sdk/runtime/runtime";
+import { cre, Value, type Runtime } from "@chainlink/cre-sdk";
 
 type Config = {
   schedule: string;

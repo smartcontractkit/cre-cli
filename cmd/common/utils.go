@@ -141,6 +141,18 @@ func ToStringSlice(args []any) []string {
 		switch b := v.(type) {
 		case []byte, [32]byte:
 			result[i] = fmt.Sprintf("0x%x", b)
+		case [][]byte:
+			hexStrings := make([]string, len(b))
+			for j, bb := range b {
+				hexStrings[j] = fmt.Sprintf("0x%x", bb)
+			}
+			result[i] = fmt.Sprintf("[%s]", strings.Join(hexStrings, ", "))
+		case [][32]byte:
+			hexStrings := make([]string, len(b))
+			for j, bb := range b {
+				hexStrings[j] = fmt.Sprintf("0x%x", bb)
+			}
+			result[i] = fmt.Sprintf("[%s]", strings.Join(hexStrings, ", "))
 		default:
 			result[i] = fmt.Sprintf("%v", v)
 		}

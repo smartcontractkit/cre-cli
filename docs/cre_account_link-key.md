@@ -14,9 +14,9 @@ cre account link-key [flags]
 
 ```
   -h, --help                 help for link-key
-      --non-interactive      If set, the command will skip all interactive prompts and fail if any required information is missing
   -l, --owner-label string   Label for the workflow owner
       --unsigned             If set, the command will return the raw transaction instead of sending it to the network
+      --yes                  If set, the command will skip the confirmation prompt and proceed with the operation even if it is potentially destructive
 ```
 
 ### Options inherited from parent commands

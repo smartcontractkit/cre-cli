@@ -5,18 +5,13 @@ import (
 	"fmt"
 	"math/big"
 	"sort"
-	"strings"
 
-	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	workflow_registry_v2_wrapper "github.com/smartcontractkit/chainlink-evm/gethwrappers/workflow/generated/workflow_registry_wrapper_v2"
-
 	"github.com/smartcontractkit/cre-cli/cmd/client"
-	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
@@ -54,6 +49,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	}
 
 	settings.AddRawTxFlag(activateCmd)
+	settings.AddSkipConfirmation(activateCmd)
 
 	return activateCmd
 }
@@ -138,51 +134,34 @@ func (h *handler) Execute() error {
 		Str("WorkflowID", hex.EncodeToString(latest.WorkflowId[:])).
 		Msg("Activating workflow")
 
-	if h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerType == constants.WorkflowOwnerTypeMSIG {
-		txData, err := packActivateTxData(latest.WorkflowId, h.inputs.DonFamily)
-		if err != nil {
-			return fmt.Errorf("failed to pack activate tx: %w", err)
-		}
-		if err := h.logMSIGNextSteps(txData); err != nil {
-			return fmt.Errorf("failed to log MSIG steps: %w", err)
-		}
-		return nil
-	}
-
-	if err := wrc.ActivateWorkflow(latest.WorkflowId, h.inputs.DonFamily); err != nil {
+	txOut, err := wrc.ActivateWorkflow(latest.WorkflowId, h.inputs.DonFamily)
+	if err != nil {
 		return fmt.Errorf("failed to activate workflow: %w", err)
 	}
 
-	h.log.Info().Msg("Workflow activated successfully")
-	return nil
-}
+	switch txOut.Type {
+	case client.Regular:
+		h.log.Info().Msgf("Transaction confirmed: %s", txOut.Hash)
+		h.log.Info().Msgf("Activated workflow ID: %s", hex.EncodeToString(latest.WorkflowId[:]))
+		h.log.Info().Msg("Workflow activated successfully")
 
-// TODO: DEVSVCS-2341 Refactor to use txOutput interface
-func packActivateTxData(workflowID [32]byte, donFamily string) (string, error) {
-	contractABI, err := abi.JSON(strings.NewReader(workflow_registry_v2_wrapper.WorkflowRegistryMetaData.ABI))
-	if err != nil {
-		return "", fmt.Errorf("parse ABI: %w", err)
+	case client.Raw:
+		h.log.Info().Msg("")
+		h.log.Info().Msg("MSIG workflow activation transaction prepared!")
+		h.log.Info().Msgf("To Activate %s with workflowID: %s", workflowName, hex.EncodeToString(latest.WorkflowId[:]))
+		h.log.Info().Msg("")
+		h.log.Info().Msg("Next steps:")
+		h.log.Info().Msg("")
+		h.log.Info().Msg("   1. Submit the following transaction on the target chain:")
+		h.log.Info().Msgf("      Chain:   %s", h.inputs.WorkflowRegistryContractChainName)
+		h.log.Info().Msgf("      Contract Address: %s", txOut.RawTx.To)
+		h.log.Info().Msg("")
+		h.log.Info().Msg("   2. Use the following transaction data:")
+		h.log.Info().Msg("")
+		h.log.Info().Msgf("      %x", txOut.RawTx.Data)
+		h.log.Info().Msg("")
+	default:
+		h.log.Warn().Msgf("Unsupported transaction type: %s", txOut.Type)
 	}
-	data, err := contractABI.Pack("activateWorkflow", workflowID, donFamily)
-	if err != nil {
-		return "", fmt.Errorf("pack data: %w", err)
-	}
-	return hex.EncodeToString(data), nil
-}
-
-func (h *handler) logMSIGNextSteps(txData string) error {
-	h.log.Info().Msg("")
-	h.log.Info().Msg("MSIG workflow activation transaction prepared!")
-	h.log.Info().Msg("")
-	h.log.Info().Msg("Next steps:")
-	h.log.Info().Msg("")
-	h.log.Info().Msg("   1. Submit the following transaction on the target chain:")
-	h.log.Info().Msgf("      Chain:   %s", h.inputs.WorkflowRegistryContractChainName)
-	h.log.Info().Msgf("      Contract Address: %s", h.inputs.WorkflowRegistryContractAddress)
-	h.log.Info().Msg("")
-	h.log.Info().Msg("   2. Use the following transaction data:")
-	h.log.Info().Msg("")
-	h.log.Info().Msgf("      %s", txData)
-	h.log.Info().Msg("")
 	return nil
 }

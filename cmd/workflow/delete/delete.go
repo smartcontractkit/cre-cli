@@ -5,19 +5,14 @@ import (
 	"fmt"
 	"io"
 	"math/big"
-	"strings"
 
-	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/jedib0t/go-pretty/v6/text"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	workflow_registry_v2_wrapper "github.com/smartcontractkit/chainlink-evm/gethwrappers/workflow/generated/workflow_registry_wrapper_v2"
-
 	"github.com/smartcontractkit/cre-cli/cmd/client"
-	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/prompt"
@@ -58,7 +53,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	}
 
 	settings.AddRawTxFlag(deleteCmd)
-	deleteCmd.Flags().BoolP("skip-confirmation", "y", false, "Force delete workflow without confirmation")
+	settings.AddSkipConfirmation(deleteCmd)
 
 	return deleteCmd
 }
@@ -92,7 +87,7 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 	return Inputs{
 		WorkflowName:                      h.settings.Workflow.UserWorkflowSettings.WorkflowName,
 		WorkflowOwner:                     h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress,
-		SkipConfirmation:                  v.GetBool("skip-confirmation"),
+		SkipConfirmation:                  v.GetBool(settings.Flags.SkipConfirmation.Name),
 		WorkflowRegistryContractChainName: h.environmentSet.WorkflowRegistryChainName,
 		WorkflowRegistryContractAddress:   h.environmentSet.WorkflowRegistryAddress,
 	}, nil
@@ -143,19 +138,6 @@ func (h *handler) Execute() error {
 		h.log.Info().Msg("")
 	}
 
-	if h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerType == constants.WorkflowOwnerTypeMSIG {
-		for _, wf := range allWorkflows {
-			txData, err := packDeleteTxData(wf.WorkflowId)
-			if err != nil {
-				return fmt.Errorf("failed to pack delete tx: %w", err)
-			}
-			if err := h.logMSIGNextSteps(txData); err != nil {
-				return fmt.Errorf("failed to log MSIG steps: %w", err)
-			}
-		}
-		return nil
-	}
-
 	shouldDeleteWorkflow, err := h.shouldDeleteWorkflow(h.inputs.SkipConfirmation, workflowName)
 	if err != nil {
 		return err
@@ -167,47 +149,40 @@ func (h *handler) Execute() error {
 
 	h.log.Info().Msgf("Deleting %d workflow(s)...", len(allWorkflows))
 	for _, wf := range allWorkflows {
-		if err := wrc.DeleteWorkflow(wf.WorkflowId); err != nil {
+		txOut, err := wrc.DeleteWorkflow(wf.WorkflowId)
+		if err != nil {
 			h.log.Error().
 				Err(err).
 				Str("workflowId", hex.EncodeToString(wf.WorkflowId[:])).
 				Msg("Failed to delete workflow")
 			continue
 		}
-		h.log.Info().Msgf("Deleted workflow ID: %s", hex.EncodeToString(wf.WorkflowId[:]))
+		switch txOut.Type {
+		case client.Regular:
+			h.log.Info().Msgf("Transaction confirmed: %s", txOut.Hash)
+			h.log.Info().Msgf("Deleted workflow ID: %s", hex.EncodeToString(wf.WorkflowId[:]))
+
+		case client.Raw:
+			h.log.Info().Msg("")
+			h.log.Info().Msg("MSIG workflow deletion transaction prepared!")
+			h.log.Info().Msg("")
+			h.log.Info().Msg("Next steps:")
+			h.log.Info().Msg("")
+			h.log.Info().Msg("   1. Submit the following transaction on the target chain:")
+			h.log.Info().Msgf("      Chain:   %s", h.inputs.WorkflowRegistryContractChainName)
+			h.log.Info().Msgf("      Contract Address: %s", txOut.RawTx.To)
+			h.log.Info().Msg("")
+			h.log.Info().Msg("   2. Use the following transaction data:")
+			h.log.Info().Msg("")
+			h.log.Info().Msgf("      %x", txOut.RawTx.Data)
+			h.log.Info().Msg("")
+		default:
+			h.log.Warn().Msgf("Unsupported transaction type: %s", txOut.Type)
+		}
+
 		// Workflow artifacts deletion will be handled by a background cleanup process.
 	}
 	h.log.Info().Msg("Workflows deleted successfully.")
-	return nil
-}
-
-// TODO: DEVSVCS-2341 Refactor to use txOutput interface
-func packDeleteTxData(workflowID [32]byte) (string, error) {
-	contractABI, err := abi.JSON(strings.NewReader(workflow_registry_v2_wrapper.WorkflowRegistryMetaData.ABI))
-	if err != nil {
-		return "", fmt.Errorf("parse ABI: %w", err)
-	}
-	data, err := contractABI.Pack("deleteWorkflow", workflowID)
-	if err != nil {
-		return "", fmt.Errorf("pack data: %w", err)
-	}
-	return hex.EncodeToString(data), nil
-}
-
-func (h *handler) logMSIGNextSteps(txData string) error {
-	h.log.Info().Msg("")
-	h.log.Info().Msg("MSIG workflow deletion transaction prepared!")
-	h.log.Info().Msg("")
-	h.log.Info().Msg("Next steps:")
-	h.log.Info().Msg("")
-	h.log.Info().Msg("   1. Submit the following transaction on the target chain:")
-	h.log.Info().Msgf("      Chain:   %s", h.inputs.WorkflowRegistryContractChainName)
-	h.log.Info().Msgf("      Contract Address: %s", h.inputs.WorkflowRegistryContractAddress)
-	h.log.Info().Msg("")
-	h.log.Info().Msg("   2. Use the following transaction data:")
-	h.log.Info().Msg("")
-	h.log.Info().Msgf("      %s", txData)
-	h.log.Info().Msg("")
 	return nil
 }
 

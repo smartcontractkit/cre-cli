@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/rs/zerolog"
+	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
 
@@ -24,7 +25,7 @@ type WorkflowSettings struct {
 	RPCs []RpcEndpoint `mapstructure:"rpcs" yaml:"rpcs"`
 }
 
-func loadWorkflowSettings(logger *zerolog.Logger, v *viper.Viper) (WorkflowSettings, error) {
+func loadWorkflowSettings(logger *zerolog.Logger, v *viper.Viper, cmd *cobra.Command) (WorkflowSettings, error) {
 	target, err := GetTarget(v)
 	if err != nil {
 		return WorkflowSettings{}, err
@@ -43,12 +44,15 @@ func loadWorkflowSettings(logger *zerolog.Logger, v *viper.Viper) (WorkflowSetti
 
 	workflowSettings.DevPlatformSettings.DonFamily = getSetting(DONFamilySettingName)
 
-	ownerAddress, ownerType, err := GetWorkflowOwner(v)
-	if err != nil {
-		return WorkflowSettings{}, err
+	// if a command doesn't need private key, skip getting owner here
+	if !ShouldSkipGetOwner(cmd) {
+		ownerAddress, ownerType, err := GetWorkflowOwner(v)
+		if err != nil {
+			return WorkflowSettings{}, err
+		}
+		workflowSettings.UserWorkflowSettings.WorkflowOwnerAddress = ownerAddress
+		workflowSettings.UserWorkflowSettings.WorkflowOwnerType = ownerType
 	}
-	workflowSettings.UserWorkflowSettings.WorkflowOwnerAddress = ownerAddress
-	workflowSettings.UserWorkflowSettings.WorkflowOwnerType = ownerType
 
 	workflowSettings.UserWorkflowSettings.WorkflowName = getSetting(WorkflowNameSettingName)
 	workflowSettings.LoggingSettings.SethConfigPath = getSetting(SethConfigPathSettingName)
@@ -159,4 +163,21 @@ func IsValidChainName(name string) error {
 	}
 
 	return nil
+}
+
+// For commands that don't need the private key, we skip getting the owner address.
+// ShouldSkipGetOwner returns true if the command is `simulate` and
+// `--broadcast` is false or not set. `cre help` should skip as well.
+func ShouldSkipGetOwner(cmd *cobra.Command) bool {
+	switch cmd.Name() {
+	case "help":
+		return true
+	case "simulate":
+		// Treat missing/invalid flag as false (i.e., skip).
+		// If broadcast is explicitly true, don't skip.
+		b, _ := cmd.Flags().GetBool("broadcast")
+		return !b
+	default:
+		return false
+	}
 }

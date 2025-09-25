@@ -8,6 +8,7 @@ import (
 
 	"github.com/joho/godotenv"
 	"github.com/rs/zerolog"
+	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
 	"github.com/smartcontractkit/cre-cli/internal/constants"
@@ -45,7 +46,7 @@ type UserSettings struct {
 }
 
 // New initializes and loads settings from the `.env` file or system environment.
-func New(logger *zerolog.Logger, v *viper.Viper) (*Settings, error) {
+func New(logger *zerolog.Logger, v *viper.Viper, cmd *cobra.Command) (*Settings, error) {
 	// Retrieve the flag value (user-provided or default)
 	envPath := v.GetString(Flags.CliEnvFile.Name)
 
@@ -74,7 +75,7 @@ func New(logger *zerolog.Logger, v *viper.Viper) (*Settings, error) {
 		return nil, fmt.Errorf("failed to load settings: %w", err)
 	}
 
-	workflowSettings, err := loadWorkflowSettings(logger, v)
+	workflowSettings, err := loadWorkflowSettings(logger, v, cmd)
 	if err != nil {
 		return nil, err
 	}

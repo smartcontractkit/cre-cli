@@ -137,7 +137,7 @@ func NewFakeActionCapabilities(ctx context.Context, lggr logger.Logger, registry
 	signers := []ocr2key.KeyBundle{}
 	for i := 0; i < nSigners; i++ {
 		signer := ocr2key.MustNewInsecure(fakes.SeedForKeys(), chaintype.EVM)
-		lggr.Infow("Generated new consensus signer", "addrss", common.BytesToAddress(signer.PublicKey()))
+		lggr.Infow("Generated new consensus signer", "address", common.BytesToAddress(signer.PublicKey()))
 		signers = append(signers, signer)
 	}
 	fakeConsensusNoDAG := fakes.NewFakeConsensusNoDAG(signers, lggr)

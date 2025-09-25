@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/rs/zerolog"
+	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
 	"github.com/smartcontractkit/cre-cli/cmd/client"
@@ -31,10 +32,10 @@ func NewContext(logger *zerolog.Logger, viper *viper.Viper) *Context {
 	}
 }
 
-func (ctx *Context) AttachSettings() error {
+func (ctx *Context) AttachSettings(cmd *cobra.Command) error {
 	var err error
 
-	ctx.Settings, err = settings.New(ctx.Logger, ctx.Viper)
+	ctx.Settings, err = settings.New(ctx.Logger, ctx.Viper, cmd)
 	if err != nil {
 		return fmt.Errorf("failed to load settings: %w", err)
 	}

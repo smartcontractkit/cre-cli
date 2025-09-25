@@ -12,7 +12,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/smartcontractkit/cre-cli/cmd/gist"
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/testutil/chainsim"
 	"github.com/smartcontractkit/cre-cli/internal/validation"
@@ -20,7 +19,6 @@ import (
 
 func TestCompileCmd(t *testing.T) {
 	t.Run("input errors", func(t *testing.T) {
-		gist.SetupGitHubAPIMocks(t, "valid-token", "foo")
 		tests := []struct {
 			name              string
 			cmd               Inputs
@@ -83,23 +81,6 @@ func TestCompileCmd(t *testing.T) {
 				wantError:         true,
 				wantKeys:          []string{"Inputs.OutputPath"},
 				wantDetails:       []string{"--output must contain only ASCII characters: outputŠČ.yaml"},
-			},
-			{
-				name: "Valid Input Without Gist",
-				cmd: Inputs{
-					WorkflowName:                      "test_workflow",
-					WorkflowOwner:                     chainsim.TestAddress,
-					DonFamily:                         "test_label",
-					WorkflowPath:                      filepath.Join("testdata", "basic_workflow", "main.go"),
-					ConfigPath:                        filepath.Join("testdata", "basic_workflow", "config.yml"),
-					OutputPath:                        "output.yaml",
-					WorkflowRegistryContractAddress:   "0x1234567890123456789012345678901234567890",
-					WorkflowRegistryContractChainName: "ethereum-testnet-sepolia",
-				},
-				WorkflowOwnerType: constants.WorkflowOwnerTypeEOA,
-				wantError:         false,
-				wantKeys:          []string{},
-				wantDetails:       []string{},
 			},
 		}
 
@@ -173,7 +154,6 @@ func TestCompileCmd(t *testing.T) {
 		t.Run("errors", func(t *testing.T) {
 			httpmock.Activate()
 			t.Cleanup(httpmock.DeactivateAndReset)
-			gist.SetupGistAPIMock(t, "valid-token", "foo")
 
 			tests := []struct {
 				inputs            Inputs
@@ -229,7 +209,6 @@ func TestCompileCmd(t *testing.T) {
 
 			httpmock.Activate()
 			t.Cleanup(httpmock.DeactivateAndReset)
-			gist.SetupGistAPIMock(t, "valid-token", "foo")
 
 			err := runCompile(simulatedEnvironment, Inputs{
 				WorkflowName:                      "test_workflow",
@@ -271,7 +250,6 @@ func TestCompileCmd(t *testing.T) {
 
 			httpmock.Activate()
 			t.Cleanup(httpmock.DeactivateAndReset)
-			gist.SetupGistAPIMock(t, "valid-token", "foo")
 
 			err := runCompile(simulatedEnvironment, Inputs{
 				WorkflowName:                      "test_workflow",

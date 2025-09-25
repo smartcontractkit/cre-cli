@@ -35,7 +35,7 @@ type MockClientFactory struct {
 	mock.Mock
 }
 
-func (m *MockClientFactory) GetNonInteractive() bool {
+func (m *MockClientFactory) GetSkipConfirmation() bool {
 	panic("not used in these tests")
 }
 
