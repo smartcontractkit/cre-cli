@@ -240,7 +240,7 @@ jobs:
       VERSION: ${{ github.ref_name }}
     strategy:
       matrix:
-        arch: [amd64]
+        arch: [amd64, arm64]
     steps:
       - name: Checkout Repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # actions/checkout@v4.2.2
@@ -433,6 +433,12 @@ jobs:
           name: cre_windows_amd64
           path: ./windows_amd64
 
+      - name: Download Build Artifacts for windows/arm64
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # actions/download-artifact@v4.1.8
+        with:
+          name: cre_windows_arm64
+          path: ./windows_arm64
+
       - name: Generate Checksums
         run: |
           VERSION="${{ github.ref_name }}"
@@ -452,6 +458,9 @@ jobs:
 
             # Windows amd64 zip
             echo "cre_${VERSION}_windows_amd64.zip: $(shasum -a 256 ./windows_amd64/cre_${VERSION}_windows_amd64.zip | awk '{print $1}')"
+
+            # Windows amd64 zip
+            echo "cre_${VERSION}_windows_arm64.zip: $(shasum -a 256 ./windows_arm64/cre_${VERSION}_windows_arm64.zip | awk '{print $1}')"
           } >> checksums.txt
 
           # Display checksums for verification
@@ -531,7 +540,7 @@ jobs:
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: ./darwin_arm64/cre_${{ github.ref_name }}_darwin_arm64.zip
-          asset_name: cre_${{ github.ref_name }}_darwin_arm64.tar.gz
+          asset_name: cre_${{ github.ref_name }}_darwin_arm64.zip
           asset_content_type: application/octet-stream
 
       # Upload Release Assets for windows/amd64 Zip
@@ -543,6 +552,17 @@ jobs:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: ./windows_amd64/cre_${{ github.ref_name }}_windows_amd64.zip
           asset_name: cre_${{ github.ref_name }}_windows_amd64.zip
+          asset_content_type: application/octet-stream
+
+      # Upload Release Assets for windows/arm64 Zip
+      - name: Upload Release Assets for windows/arm64 Zip
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./windows_arm64/cre_${{ github.ref_name }}_windows_arm64.zip
+          asset_name: cre_${{ github.ref_name }}_windows_arm64.zip
           asset_content_type: application/octet-stream
 
       # Upload Checksums
