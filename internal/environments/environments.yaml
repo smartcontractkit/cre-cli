@@ -1,6 +1,5 @@
 ENVIRONMENTS:
   SANDBOX:
-    CRE_CLI_UI_URL: https://cre-ui.main.sand.cldev.sh
     CRE_CLI_AUTH_BASE: https://cre-sandbox.us.auth0.com
     CRE_CLI_CLIENT_ID: KERrSYowuRhVyXUrI3u7pI8nnY95bIGt
     CRE_CLI_AUDIENCE: https://graphql.cre.dev.internal.cldev.sh/
@@ -14,7 +13,6 @@ ENVIRONMENTS:
     CRE_CLI_CAPABILITIES_REGISTRY_CHAIN_NAME: "ethereum-testnet-sepolia" # eth-sepolia
 
   STAGING:
-    CRE_CLI_UI_URL: https://cre-ui.main.stage.cldev.sh
     CRE_CLI_AUTH_BASE: https://cre-staging.us.auth0.com
     CRE_CLI_CLIENT_ID: pKF1lgw56KKUo5LCl8kEREtVY50YB2Gd
     CRE_CLI_AUDIENCE: https://graphql.cre.stage.internal.cldev.sh/

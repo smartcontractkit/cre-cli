@@ -95,7 +95,6 @@ func TestExecute_SuccessRevocationAndRemoval(t *testing.T) {
 			},
 		},
 		EnvironmentSet: &environments.EnvironmentSet{
-			UIURL:      "https://fake-ui.local",
 			AuthBase:   "https://fake-auth0.local",
 			ClientID:   "fake-client-id",
 			GraphQLURL: "https://fake-graphql.local",
@@ -140,7 +139,6 @@ func TestExecute_RevocationFails_StillRemovesFile(t *testing.T) {
 			},
 		},
 		EnvironmentSet: &environments.EnvironmentSet{
-			UIURL:      "https://fake-ui.local",
 			AuthBase:   "https://fake-auth0.local",
 			ClientID:   "fake-client-id",
 			GraphQLURL: "https://fake-graphql.local",
