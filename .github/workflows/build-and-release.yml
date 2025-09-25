@@ -4,8 +4,6 @@ on:
   push:
     tags:
       - "v*"
-    branches:
-      - "update-release-workflow"
 
 jobs:
   build-linux:
