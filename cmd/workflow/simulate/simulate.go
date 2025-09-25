@@ -109,16 +109,21 @@ func newHandler(ctx *runtime.Context) *handler {
 func (h *handler) ResolveInputs(args []string, v *viper.Viper, creSettings *settings.Settings) (Inputs, error) {
 	// build clients for each supported chain from settings, skip if rpc is empty
 	clients := make(map[uint64]*ethclient.Client)
-	for _, chain := range supportedEVM {
-		rpcURL, err := settings.GetRpcUrlSettings(v, chain.ChainName)
+	for _, chain := range SupportedEVM {
+		chainName, err := settings.GetChainNameByChainSelector(chain.Selector)
+		if err != nil {
+			h.log.Error().Msgf("Invalid chain selector for supported EVM chains %d; skipping", chain.Selector)
+			continue
+		}
+		rpcURL, err := settings.GetRpcUrlSettings(v, chainName)
 		if err != nil || strings.TrimSpace(rpcURL) == "" {
-			h.log.Debug().Msgf("RPC not provided for %s; skipping", chain.ChainName)
+			h.log.Debug().Msgf("RPC not provided for %s; skipping", chainName)
 			continue
 		}
 
 		c, err := ethclient.Dial(rpcURL)
 		if err != nil {
-			h.log.Info().Msgf("failed to create eth client for %s: %v", chain.ChainName, err)
+			h.log.Info().Msgf("failed to create eth client for %s: %v", chainName, err)
 			continue
 		}
 
@@ -320,7 +325,7 @@ func run(
 
 		// Build forwarder address map based on which chains actually have RPC clients configured
 		forwarders := map[uint64]common.Address{}
-		for _, c := range supportedEVM {
+		for _, c := range SupportedEVM {
 			if _, ok := inputs.EVMClients[c.Selector]; ok && strings.TrimSpace(c.Forwarder) != "" {
 				forwarders[c.Selector] = common.HexToAddress(c.Forwarder)
 			}
@@ -402,7 +407,7 @@ func run(
 			baseLggr.Infow("Execution finished signal received")
 		case <-ctx.Done():
 			baseLggr.Infow("Received interrupt signal, stopping execution")
-		case <-time.After(TIMEOUT):
+		case <-time.After(WorkflowExecutionTimeout):
 			baseLggr.Infow("Timeout waiting for execution to finish")
 		}
 	}
