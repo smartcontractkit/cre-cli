@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -158,4 +159,39 @@ func ToStringSlice(args []any) []string {
 		}
 	}
 	return result
+}
+
+// Gets a build command for either Golang or Typescript based on the filename
+func GetBuildCmd(inputFile string, outputFile string, rootFolder string) *exec.Cmd {
+	isTypescriptWorkflow := strings.HasSuffix(inputFile, ".ts")
+
+	var buildCmd *exec.Cmd
+	if isTypescriptWorkflow {
+		buildCmd = exec.Command(
+			"bun",
+			"cre-compile",
+			inputFile,
+			outputFile,
+		)
+	} else {
+		// The build command for reproducible and trimmed binaries.
+		// -trimpath removes all file system paths from the compiled binary.
+		// -ldflags="-buildid= -w -s" further reduces the binary size:
+		//   -buildid= removes the build ID, ensuring reproducibility.
+		//   -w disables DWARF debugging information.
+		//   -s removes the symbol table.
+		buildCmd = exec.Command(
+			"go",
+			"build",
+			"-o", outputFile,
+			"-trimpath",
+			"-ldflags=-buildid= -w -s",
+			inputFile,
+		)
+		buildCmd.Env = append(os.Environ(), "GOOS=wasip1", "GOARCH=wasm", "CGO_ENABLED=0")
+	}
+
+	buildCmd.Dir = rootFolder
+
+	return buildCmd
 }
