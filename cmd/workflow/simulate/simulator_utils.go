@@ -1,9 +1,16 @@
 package simulate
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"regexp"
 	"strconv"
 	"time"
+
+	"github.com/ethereum/go-ethereum/ethclient"
+
+	"github.com/smartcontractkit/cre-cli/internal/settings"
 )
 
 const TIMEOUT = 30 * time.Second
@@ -41,4 +48,43 @@ func parseChainSelectorFromTriggerID(id string) (uint64, bool) {
 	}
 
 	return v, true
+}
+
+// runRPCHealthCheck runs connectivity check against every configured client.
+func runRPCHealthCheck(clients map[uint64]*ethclient.Client) error {
+	if len(clients) == 0 {
+		return fmt.Errorf("check your settings: no RPC URLs found for supported chains")
+	}
+
+	var errs []error
+	for selector, c := range clients {
+		if c == nil {
+			// shouldnt happen
+			errs = append(errs, fmt.Errorf("[%d] nil client", selector))
+			continue
+		}
+
+		chainName, err := settings.GetChainNameByChainSelector(selector)
+		if err != nil {
+			return err
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		chainID, err := c.ChainID(ctx)
+		cancel() // don't defer in a loop
+
+		if err != nil {
+			errs = append(errs, fmt.Errorf("[%s] failed RPC health check: %w", chainName, err))
+			continue
+		}
+		if chainID == nil || chainID.Sign() <= 0 {
+			errs = append(errs, fmt.Errorf("[%s] invalid RPC response: empty or zero chain ID", chainName))
+			continue
+		}
+	}
+
+	if len(errs) > 0 {
+		return fmt.Errorf("RPC health check failed:\n%w", errors.Join(errs...))
+	}
+	return nil
 }
