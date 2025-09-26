@@ -43,7 +43,7 @@ func New(opts ...Option) *zerolog.Logger {
 func NewConsoleLogger() *zerolog.Logger {
 	return New(
 		WithLevel(DefaultLogLevel),
-		WithOutput(os.Stderr),
+		WithOutput(os.Stdout),
 		WithConsoleWriter(true),
 	)
 }
