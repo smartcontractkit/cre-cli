@@ -10,7 +10,7 @@ import (
 
 	"github.com/andybalholm/brotli"
 
-	cmdCommon "github.com/smartcontractkit/cre-cli/cmd/common"
+	cmdcommon "github.com/smartcontractkit/cre-cli/cmd/common"
 )
 
 func (h *handler) Compile() error {
@@ -44,7 +44,7 @@ func (h *handler) Compile() error {
 
 	tmpWasmFileName := "tmp.wasm"
 	workflowMainFile := filepath.Base(h.inputs.WorkflowPath)
-	buildCmd := cmdCommon.GetBuildCmd(workflowMainFile, tmpWasmFileName, workflowRootFolder)
+	buildCmd := cmdcommon.GetBuildCmd(workflowMainFile, tmpWasmFileName, workflowRootFolder)
 	h.log.Debug().
 		Str("Workflow directory", buildCmd.Dir).
 		Str("Command", buildCmd.String()).

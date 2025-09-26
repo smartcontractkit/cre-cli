@@ -37,7 +37,7 @@ import (
 	simulator "github.com/smartcontractkit/chainlink/v2/core/services/workflows/cmd/cre/utils"
 	v2 "github.com/smartcontractkit/chainlink/v2/core/services/workflows/v2"
 
-	cmdCommon "github.com/smartcontractkit/cre-cli/cmd/common"
+	cmdcommon "github.com/smartcontractkit/cre-cli/cmd/common"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/validation"
@@ -182,7 +182,7 @@ func (h *handler) Execute(inputs Inputs) error {
 	workflowRootFolder := filepath.Dir(inputs.WorkflowPath)
 	tmpWasmFileName := "tmp.wasm"
 	workflowMainFile := filepath.Base(inputs.WorkflowPath)
-	buildCmd := cmdCommon.GetBuildCmd(workflowMainFile, tmpWasmFileName, workflowRootFolder)
+	buildCmd := cmdcommon.GetBuildCmd(workflowMainFile, tmpWasmFileName, workflowRootFolder)
 
 	h.log.Debug().
 		Str("Workflow directory", buildCmd.Dir).
