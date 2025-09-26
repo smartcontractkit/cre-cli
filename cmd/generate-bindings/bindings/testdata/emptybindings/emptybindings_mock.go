@@ -1,9 +1,12 @@
 // Code generated — DO NOT EDIT.
 
+//go:build !wasip1
+
 package emptybindings
 
 import (
 	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -12,6 +15,7 @@ import (
 
 var (
 	_ = errors.New
+	_ = fmt.Errorf
 	_ = big.NewInt
 	_ = common.Big1
 )
@@ -24,13 +28,11 @@ type EmptyContractMock struct {
 func NewEmptyContractMock(address common.Address, clientMock *evmmock.ClientCapability) *EmptyContractMock {
 	mock := &EmptyContractMock{}
 
-	// Create ABI codec to get method IDs
 	codec, err := NewCodec()
 	if err != nil {
 		panic("failed to create codec for mock: " + err.Error())
 	}
 
-	// Get the underlying ABI
 	abi := codec.(*Codec).abi
 	_ = abi
 

@@ -1,5 +1,7 @@
 // Code generated — DO NOT EDIT.
 
+//go:build !wasip1
+
 package {{.Package}}
 
 import (

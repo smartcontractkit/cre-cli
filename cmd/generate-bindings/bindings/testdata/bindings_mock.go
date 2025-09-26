@@ -1,9 +1,12 @@
 // Code generated — DO NOT EDIT.
 
+//go:build !wasip1
+
 package bindings
 
 import (
 	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -12,6 +15,7 @@ import (
 
 var (
 	_ = errors.New
+	_ = fmt.Errorf
 	_ = big.NewInt
 	_ = common.Big1
 )
@@ -29,18 +33,16 @@ type DataStorageMock struct {
 func NewDataStorageMock(address common.Address, clientMock *evmmock.ClientCapability) *DataStorageMock {
 	mock := &DataStorageMock{}
 
-	// Create ABI codec to get method IDs
 	codec, err := NewCodec()
 	if err != nil {
 		panic("failed to create codec for mock: " + err.Error())
 	}
 
-	// Get the underlying ABI
 	abi := codec.(*Codec).abi
 	_ = abi
 
 	funcMap := map[string]func([]byte) ([]byte, error){
-		string(abi.Methods["getMultipleReserves"].ID): func(payload []byte) ([]byte, error) {
+		string(abi.Methods["getMultipleReserves"].ID[:4]): func(payload []byte) ([]byte, error) {
 			if mock.GetMultipleReserves == nil {
 				return nil, errors.New("getMultipleReserves method not mocked")
 			}
@@ -50,7 +52,7 @@ func NewDataStorageMock(address common.Address, clientMock *evmmock.ClientCapabi
 			}
 			return abi.Methods["getMultipleReserves"].Outputs.Pack(result)
 		},
-		string(abi.Methods["getReserves"].ID): func(payload []byte) ([]byte, error) {
+		string(abi.Methods["getReserves"].ID[:4]): func(payload []byte) ([]byte, error) {
 			if mock.GetReserves == nil {
 				return nil, errors.New("getReserves method not mocked")
 			}
@@ -60,7 +62,7 @@ func NewDataStorageMock(address common.Address, clientMock *evmmock.ClientCapabi
 			}
 			return abi.Methods["getReserves"].Outputs.Pack(result)
 		},
-		string(abi.Methods["getTupleReserves"].ID): func(payload []byte) ([]byte, error) {
+		string(abi.Methods["getTupleReserves"].ID[:4]): func(payload []byte) ([]byte, error) {
 			if mock.GetTupleReserves == nil {
 				return nil, errors.New("getTupleReserves method not mocked")
 			}
@@ -73,7 +75,7 @@ func NewDataStorageMock(address common.Address, clientMock *evmmock.ClientCapabi
 				result.TotalReserve,
 			)
 		},
-		string(abi.Methods["getValue"].ID): func(payload []byte) ([]byte, error) {
+		string(abi.Methods["getValue"].ID[:4]): func(payload []byte) ([]byte, error) {
 			if mock.GetValue == nil {
 				return nil, errors.New("getValue method not mocked")
 			}
@@ -83,14 +85,15 @@ func NewDataStorageMock(address common.Address, clientMock *evmmock.ClientCapabi
 			}
 			return abi.Methods["getValue"].Outputs.Pack(result)
 		},
-		string(abi.Methods["readData"].ID): func(payload []byte) ([]byte, error) {
+		string(abi.Methods["readData"].ID[:4]): func(payload []byte) ([]byte, error) {
 			if mock.ReadData == nil {
 				return nil, errors.New("readData method not mocked")
 			}
 			inputs := abi.Methods["readData"].Inputs
-			values, err := inputs.Unpack(payload[4:])
+
+			values, err := inputs.Unpack(payload)
 			if err != nil {
-				return nil, err
+				return nil, errors.New("Failed to unpack payload")
 			}
 			if len(values) != 2 {
 				return nil, errors.New("expected 2 input values")
