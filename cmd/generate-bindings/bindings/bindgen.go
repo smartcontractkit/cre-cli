@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common/compiler"
@@ -102,13 +101,8 @@ func GenerateBindings(
 		return fmt.Errorf("BindV2 mock: %w", err)
 	}
 
-	// Write mock to /mocks subdirectory
-	mockDir := filepath.Join(filepath.Dir(outPath), "mocks")
-	if err := os.MkdirAll(mockDir, 0755); err != nil {
-		return fmt.Errorf("create mock directory %q: %w", mockDir, err)
-	}
-
-	mockPath := filepath.Join(mockDir, strings.TrimSuffix(filepath.Base(outPath), ".go")+"_mock.go")
+	// Write mock file with "_mock.go" suffix
+	mockPath := strings.TrimSuffix(outPath, ".go") + "_mock.go"
 	if err := os.WriteFile(mockPath, []byte(mockSrc), 0o600); err != nil {
 		return fmt.Errorf("write mock %q: %w", mockPath, err)
 	}
