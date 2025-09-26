@@ -44,6 +44,8 @@ var (
 	_ = bindings.FilterOptions{}
 	_ = evm.FilterLogTriggerRequest{}
 	_ = cre.ResponseBufferTooSmall
+	_ = rpc.API{}
+	_ = json.Unmarshal
 )
 
 var DataStorageMetaData = &bind.MetaData{

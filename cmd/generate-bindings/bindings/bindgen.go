@@ -17,6 +17,9 @@ import (
 //go:embed sourcecre.go.tpl
 var tpl string
 
+//go:embed mockcontract.go.tpl
+var mockTpl string
+
 func GenerateBindings(
 	combinedJSONPath string, // path to combined-json, or ""
 	abiPath string, // path to a single ABI JSON, or ""
@@ -81,15 +84,28 @@ func GenerateBindings(
 		return errors.New("must provide either combinedJSONPath or abiPath")
 	}
 
-	// Generate w/ forked abigen
+	// Generate regular bindings w/ forked abigen
 	outSrc, err := abigen.BindV2(types, abis, bins, pkgName, libs, aliases, tpl)
 	if err != nil {
 		return fmt.Errorf("BindV2: %w", err)
 	}
 
-	// Write file
+	// Write regular bindings file
 	if err := os.WriteFile(outPath, []byte(outSrc), 0o600); err != nil {
 		return fmt.Errorf("write %q: %w", outPath, err)
 	}
+
+	// Generate mock bindings
+	mockSrc, err := abigen.BindV2(types, abis, bins, pkgName, libs, aliases, mockTpl)
+	if err != nil {
+		return fmt.Errorf("BindV2 mock: %w", err)
+	}
+
+	// Write mock file with "_mock.go" suffix
+	mockPath := strings.TrimSuffix(outPath, ".go") + "_mock.go"
+	if err := os.WriteFile(mockPath, []byte(mockSrc), 0o600); err != nil {
+		return fmt.Errorf("write mock %q: %w", mockPath, err)
+	}
+
 	return nil
 }
