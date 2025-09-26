@@ -53,11 +53,12 @@ type Inputs struct {
 	EthPrivateKey *ecdsa.PrivateKey            `validate:"omitempty"`
 	WorkflowName  string                       `validate:"required"`
 	// Non-interactive mode options
-	NonInteractive bool   `validate:"-"`
-	TriggerIndex   int    `validate:"-"`
-	HTTPPayload    string `validate:"-"` // JSON string or @/path/to/file.json
-	EVMTxHash      string `validate:"-"` // 0x-prefixed
-	EVMEventIndex  int    `validate:"-"`
+	NonInteractive bool                      `validate:"-"`
+	TriggerIndex   int                       `validate:"-"`
+	HTTPPayload    string                    `validate:"-"` // JSON string or @/path/to/file.json
+	EVMTxHash      string                    `validate:"-"` // 0x-prefixed
+	EVMEventIndex  int                       `validate:"-"`
+	Forwarders     map[uint64]common.Address `validate:"-"`
 }
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
@@ -85,6 +86,11 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	simulateCmd.Flags().StringP("secrets", "s", "", "Path to the secrets file")
 	simulateCmd.Flags().BoolP("engine-logs", "g", false, "Enable non-fatal engine logging")
 	simulateCmd.Flags().Bool("broadcast", false, "Broadcast transactions to the EVM (default: false)")
+	// RPC selection when multiple RPCs are configured for the target
+	simulateCmd.Flags().String("chain-name", "", "Use only RPC matching this chain name (when multiple are configured)")
+	simulateCmd.Flags().Uint64("chain-selector", 0, "Use only RPC matching this chain selector (when multiple are configured)")
+	// Optional forwarder address for EVM chains
+	simulateCmd.Flags().String("forwarder-address", "", "Forwarder contract address to initialize the EVM chain. If empty, simulation proceeds without a forwarder.")
 	// Non-interactive flags
 	simulateCmd.Flags().Bool(settings.Flags.NonInteractive.Name, false, "Run without prompts; requires --trigger-index and inputs for the selected trigger type")
 	simulateCmd.Flags().Int("trigger-index", -1, "Index of the trigger to run (0-based)")
@@ -106,32 +112,145 @@ func newHandler(ctx *runtime.Context) *handler {
 	}
 }
 
+// resolveConfiguredRPCs collects RPC endpoints from project settings (target.rpcs)
+// and returns a map[selector] -> URL. If multiple RPCs are configured, the user
+// may filter by --chain-name or --chain-selector.
+func (h *handler) resolveConfiguredRPCs(v *viper.Viper, creSettings *settings.Settings) (map[uint64]string, error) {
+	out := make(map[uint64]string)
+
+	target := creSettings.User.TargetName
+	if strings.TrimSpace(target) == "" {
+		// Fallback to CLI flag if target was not set in settings
+		target = v.GetString(settings.Flags.Target.Name)
+	}
+	key := fmt.Sprintf("%s.%s", target, settings.RpcsSettingName)
+
+	// Optional filtering flags
+	filterName := strings.TrimSpace(v.GetString("chain-name"))
+	filterSelector := v.GetUint64("chain-selector")
+
+	addEndpoint := func(sel uint64, name, url string) {
+		if strings.TrimSpace(url) == "" {
+			return
+		}
+		// Apply filters if provided
+		if filterName != "" && !strings.EqualFold(filterName, name) {
+			return
+		}
+		if filterSelector != 0 && sel != filterSelector {
+			return
+		}
+		out[sel] = url
+	}
+
+	// Try to unmarshal the configured endpoints as generic objects so we can
+	// support both "chain-selector" and "chainSelector" keys, and custom names
+	var rawList []map[string]any
+	_ = v.UnmarshalKey(key, &rawList)
+
+	if len(rawList) > 0 {
+		for _, m := range rawList {
+			// Extract URL
+			url := ""
+			if v, ok := m["url"].(string); ok {
+				url = v
+			}
+			// Extract chain name (allow both chain-name and chainName)
+			chainName := ""
+			if v, ok := m["chain-name"].(string); ok {
+				chainName = v
+			} else if v, ok := m["chainName"].(string); ok {
+				chainName = v
+			}
+			// Extract selector (allow both chain-selector and chainSelector)
+			var selector uint64
+			switch v := m["chain-selector"].(type) {
+			case int:
+				if v > 0 {
+					selector = uint64(v)
+				}
+			case int64:
+				if v > 0 {
+					selector = uint64(v)
+				}
+			case float64:
+				if v > 0 {
+					selector = uint64(v)
+				}
+			case uint64:
+				selector = v
+			case string:
+				s := strings.TrimSpace(v)
+				if s != "" {
+					if parsed, err := strconv.ParseUint(s, 10, 64); err == nil {
+						selector = parsed
+					}
+				}
+			}
+			if selector == 0 && strings.TrimSpace(chainName) != "" {
+				if sel, err := settings.GetChainSelectorByChainName(chainName); err == nil {
+					selector = sel
+				}
+			}
+			addEndpoint(selector, chainName, url)
+		}
+	} else {
+		// Backward-compatible fallback: try known chains from supportedEVM using env/config defaults
+		for _, chain := range supportedEVM {
+			rpcURL, err := settings.GetRpcUrlSettings(v, chain.ChainName)
+			if err != nil || strings.TrimSpace(rpcURL) == "" {
+				continue
+			}
+			addEndpoint(chain.Selector, chain.ChainName, rpcURL)
+		}
+	}
+
+	return out, nil
+}
+
 func (h *handler) ResolveInputs(args []string, v *viper.Viper, creSettings *settings.Settings) (Inputs, error) {
-	// build clients for each supported chain from settings, skip if rpc is empty
+	// Build clients from project-configured RPCs
+	rpcMap, err := h.resolveConfiguredRPCs(v, creSettings)
+	if err != nil {
+		return Inputs{}, err
+	}
+
 	clients := make(map[uint64]*ethclient.Client)
-	for _, chain := range supportedEVM {
-		rpcURL, err := settings.GetRpcUrlSettings(v, chain.ChainName)
-		if err != nil || strings.TrimSpace(rpcURL) == "" {
-			h.log.Debug().Msgf("RPC not provided for %s; skipping", chain.ChainName)
-			continue
-		}
-
-		c, err := ethclient.Dial(rpcURL)
+	for sel, url := range rpcMap {
+		c, err := ethclient.Dial(url)
 		if err != nil {
-			h.log.Info().Msgf("failed to create eth client for %s: %v", chain.ChainName, err)
+			h.log.Info().Msgf("failed to create eth client for selector %d: %v", sel, err)
 			continue
 		}
-
-		clients[chain.Selector] = c
+		clients[sel] = c
 	}
 
 	if len(clients) == 0 {
-		return Inputs{}, fmt.Errorf("no RPC URLs found for supported chains")
+		return Inputs{}, fmt.Errorf("no configured RPC URLs found; provide at least one rpc endpoint under your target or via flags")
 	}
 
-	pk, err := crypto.HexToECDSA(creSettings.User.EthPrivateKey)
-	if err != nil {
-		return Inputs{}, fmt.Errorf("failed to get private key: %w", err)
+	var pk *ecdsa.PrivateKey
+	if strings.TrimSpace(creSettings.User.EthPrivateKey) != "" {
+		pk, err = crypto.HexToECDSA(creSettings.User.EthPrivateKey)
+		if err != nil {
+			return Inputs{}, fmt.Errorf("failed to get private key: %w", err)
+		}
+	} else {
+		// Private key is optional for simulation; many flows (e.g. EVM log triggers) don't require it.
+		pk = nil
+	}
+
+	// Optional forwarder address (single address applied to all configured chains if provided)
+	forwarders := make(map[uint64]common.Address)
+	fwdStr := strings.TrimSpace(v.GetString("forwarder-address"))
+	if fwdStr != "" {
+		if !common.IsHexAddress(fwdStr) {
+			return Inputs{}, fmt.Errorf("invalid --forwarder-address: %s", fwdStr)
+		}
+		addr := common.HexToAddress(fwdStr)
+		for sel := range clients {
+			forwarders[sel] = addr
+		}
 	}
 
 	return Inputs{
@@ -148,6 +267,7 @@ func (h *handler) ResolveInputs(args []string, v *viper.Viper, creSettings *sett
 		HTTPPayload:    v.GetString("http-payload"),
 		EVMTxHash:      v.GetString("evm-tx-hash"),
 		EVMEventIndex:  v.GetInt("evm-event-index"),
+		Forwarders:     forwarders,
 	}, nil
 }
 
@@ -312,21 +432,14 @@ func run(
 			}
 		}
 
-		// Build forwarder address map based on which chains actually have RPC clients configured
-		forwarders := map[uint64]common.Address{}
-		for _, c := range supportedEVM {
-			if _, ok := inputs.EVMClients[c.Selector]; ok && strings.TrimSpace(c.Forwarder) != "" {
-				forwarders[c.Selector] = common.HexToAddress(c.Forwarder)
-			}
-		}
-
 		manualTriggerCapConfig := ManualTriggerCapabilitiesConfig{
 			Clients:    inputs.EVMClients,
 			PrivateKey: inputs.EthPrivateKey,
-			Forwarders: forwarders,
+			Forwarders: inputs.Forwarders,
 		}
 
 		triggerLggr := lggr.Named("TriggerCapabilities")
+		var err error
 		triggerCaps, err = NewManualTriggerCapabilities(ctx, triggerLggr, registry, manualTriggerCapConfig, !inputs.Broadcast)
 		if err != nil {
 			fmt.Printf("failed to create trigger capabilities: %v\n", err)

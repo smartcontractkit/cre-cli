@@ -56,10 +56,11 @@ func NewManualTriggerCapabilities(
 	// EVM
 	evmChains := make(map[uint64]*fakes.FakeEVMChain)
 	for sel, client := range cfg.Clients {
+		// Forwarder is optional in simulator mode. If not provided, continue with zero address.
 		fwd, ok := cfg.Forwarders[sel]
 		if !ok {
-			lggr.Infow("Forwarder not found for chain", "selector", sel)
-			continue
+			lggr.Infow("Forwarder not configured for chain; continuing with zero address", "selector", sel)
+			fwd = common.Address{} // zero addr
 		}
 
 		evm := fakes.NewFakeEvmChain(
