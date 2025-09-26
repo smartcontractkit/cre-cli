@@ -5,11 +5,12 @@ import (
 	"encoding/base64"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
 	"github.com/andybalholm/brotli"
+
+	cmdCommon "github.com/smartcontractkit/cre-cli/cmd/common"
 )
 
 func (h *handler) Compile() error {
@@ -43,24 +44,7 @@ func (h *handler) Compile() error {
 
 	tmpWasmFileName := "tmp.wasm"
 	workflowMainFile := filepath.Base(h.inputs.WorkflowPath)
-
-	// The build command for reproducible and trimmed binaries.
-	// -trimpath removes all file system paths from the compiled binary.
-	// -ldflags="-buildid= -w -s" further reduces the binary size:
-	//   -buildid= removes the build ID, ensuring reproducibility.
-	//   -w disables DWARF debugging information.
-	//   -s removes the symbol table.
-	buildCmd := exec.Command(
-		"go",
-		"build",
-		"-o", tmpWasmFileName,
-		"-trimpath",
-		"-ldflags=-buildid= -w -s",
-		workflowMainFile,
-	)
-
-	buildCmd.Env = append(os.Environ(), "GOOS=wasip1", "GOARCH=wasm", "CGO_ENABLED=0")
-	buildCmd.Dir = workflowRootFolder
+	buildCmd := cmdCommon.GetBuildCmd(workflowMainFile, tmpWasmFileName, workflowRootFolder)
 	h.log.Debug().
 		Str("Workflow directory", buildCmd.Dir).
 		Str("Command", buildCmd.String()).
