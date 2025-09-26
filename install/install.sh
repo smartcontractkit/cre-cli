@@ -35,7 +35,7 @@ case "$OS" in
     PLATFORM="linux"
     ;;
   Darwin) # macOS
-    PLATFORM="macos"
+    PLATFORM="darwin"
     ;;
   *)
     fail "Unsupported operating system: $OS. For Windows, please use the PowerShell script."
@@ -61,27 +61,55 @@ if [ -z "$LATEST_TAG" ]; then
   fail "Could not fetch the latest release version from GitHub."
 fi
 
-# 4. Construct Download URL and Download Binary
-BINARY_NAME="${CLI_NAME}-${PLATFORM}-${ARCH_NAME}"
-DOWNLOAD_URL="https://github.com/$REPO/releases/download/$LATEST_TAG/$BINARY_NAME"
+# 4. Construct Download URL and Download asset
+ASSET="${CLI_NAME}_${PLATFORM}_${ARCH_NAME}"
+# Determine the file extension based on OS
+if [ "$PLATFORM" = "linux" ]; then
+  ASSET="${ASSET}.tar.gz"
+elif [ "$PLATFORM" = "darwin" ]; then
+  ASSET="${ASSET}.zip"
+fi
+DOWNLOAD_URL="https://github.com/$REPO/releases/download/$LATEST_TAG/$ASSET"
 
 echo "Downloading $CLI_NAME ($LATEST_TAG) for $PLATFORM/$ARCH_NAME from $DOWNLOAD_URL"
 
-# Use curl to download the binary to a temporary file
-TMP_FILE=$(mktemp)
-curl -fSL "$DOWNLOAD_URL" -o "$TMP_FILE" || fail "Failed to download binary from $DOWNLOAD_URL"
+# Use curl to download the asset to a temporary file
+TMP_DIR=$(mktemp -d)
+curl -fSL "$DOWNLOAD_URL" -o "$TMP_DIR/$ASSET" || fail "Failed to download asset from $DOWNLOAD_URL"
 
+# Extract if it's a tar.gz
+if echo "$ASSET" | grep -qE '\.tar\.gz$'; then
+  tar -xzf "$TMP_DIR/$ASSET" -C "$TMP_DIR"
+  TMP_FILE="$TMP_DIR/$ASSET"
+  echo "Extracted to $TMP_FILE"
+fi
+
+# Extract if it's a zip
+if echo "$ASSET" | grep -qE '\.zip$'; then
+  check_command "unzip"
+  unzip -o "$TMP_DIR/$ASSET" -d "$TMP_DIR"
+  TMP_FILE="$TMP_DIR/$ASSET"
+fi
+
+BINARY_FILE="$TMP_DIR/${CLI_NAME}_${LATEST_TAG}_${PLATFORM}_${ARCH_NAME}"
 # 5. Install the Binary
 echo "Installing $CLI_NAME to $INSTALL_DIR"
+[ -f "$TMP_FILE" ] || fail "Temporary file $TMP_FILE does not exist."
 chmod +x "$TMP_FILE"
 
 # Check for write permissions and use sudo if necessary
 if [ -w "$INSTALL_DIR" ]; then
-  mv "$TMP_FILE" "$INSTALL_DIR/$CLI_NAME"
+  mv "$BINARY_FILE" "$INSTALL_DIR/$CLI_NAME"
 else
   echo "Write permission to $INSTALL_DIR denied. Attempting with sudo..."
   check_command "sudo"
-  sudo mv "$TMP_FILE" "$INSTALL_DIR/$CLI_NAME"
+  sudo mv "$BINARY_FILE" "$INSTALL_DIR/$CLI_NAME"
 fi
+
+# check if the binary is installed correctly
+$CLI_NAME version || fail "$CLI_NAME installation failed."
+
+#cleanup
+rm -rf "$TMP_DIR"
 
 echo "$CLI_NAME installed successfully! Run '$CLI_NAME --help' to get started."

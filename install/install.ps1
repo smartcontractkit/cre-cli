@@ -20,7 +20,7 @@ try {
     $Arch = $env:PROCESSOR_ARCHITECTURE
     switch ($Arch) {
         "AMD64" { $ArchName = "amd64" }
-        "ARM64" { $ArchName = "arm64" }
+        "ARM64" { $ArchName = "amd64" }
         default { throw "Unsupported architecture: $Arch" }
     }
     Write-Host "Detected Windows on $ArchName architecture."
@@ -36,21 +36,39 @@ try {
     Write-Host "Latest version is $LatestTag."
 
     # 3. Construct Download URL and Destination Path
-    $BinaryName = "$($CliName)-windows-$($ArchName).exe"
+    $BinaryName = "$($CliName)_windows_$($ArchName).zip"
     $DownloadUrl = "https://github.com/$Repo/releases/download/$LatestTag/$BinaryName"
-    $ExePath = Join-Path $InstallDir "$($CliName).exe"
+
+    # Use a temp directory for download and extraction
+    $TempDir = [System.IO.Path]::Combine([System.IO.Path]::GetTempPath(), "cre_install_" + [System.Guid]::NewGuid().ToString())
+    New-Item -ItemType Directory -Path $TempDir | Out-Null
+    $ZipPath = Join-Path $TempDir "$($CliName).zip"
 
     Write-Host "Downloading from $DownloadUrl..."
+    Invoke-WebRequest -Uri $DownloadUrl -OutFile $ZipPath
+
+    Write-Host "Extracting $CliName.exe from zip..."
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    [System.IO.Compression.ZipFile]::ExtractToDirectory($ZipPath, $TempDir)
+
+    # Find the extracted exe (assume only one .exe in the zip)
+    $ExtractedExe = Get-ChildItem -Path $TempDir -Filter "*.exe" | Select-Object -First 1
+    if (-not $ExtractedExe) {
+        throw "No .exe file found in the extracted zip archive."
+    }
 
     # Create installation directory if it doesn't exist
     if (-not (Test-Path -Path $InstallDir)) {
         New-Item -ItemType Directory -Path $InstallDir | Out-Null
     }
 
-    # 4. Download the Binary
-    Invoke-WebRequest -Uri $DownloadUrl -OutFile $ExePath
+    # Copy the exe to the install directory and rename
+    Copy-Item -Path $ExtractedExe.FullName -Destination (Join-Path $InstallDir "$($CliName).exe") -Force
 
-    Write-Host "Successfully downloaded $CliName to $InstallDir."
+    # Clean up temp directory
+    Remove-Item -Path $TempDir -Recurse -Force
+
+    Write-Host "Successfully extracted $CliName.exe to $InstallDir."
 
     # 5. Add to User's PATH
     Write-Host "Adding '$InstallDir' to your PATH."
