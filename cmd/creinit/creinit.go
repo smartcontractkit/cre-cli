@@ -239,14 +239,14 @@ func (h *handler) Execute(inputs Inputs) error {
 		}
 	}
 
-	workflowName := inputs.WorkflowName
+	workflowName := strings.TrimSpace(inputs.WorkflowName)
 	if workflowName == "" {
 		const maxAttempts = 3
 		for attempts := 1; attempts <= maxAttempts; attempts++ {
-			inputErr := prompt.SimplePrompt(h.stdin, "Workflow name? (10 characters minimum)", func(in string) error {
+			inputErr := prompt.SimplePrompt(h.stdin, "Workflow name? (1+ character)", func(in string) error {
 				trimmed := strings.TrimSpace(in)
-				if len(trimmed) < 10 {
-					return errors.New("workflow name must be at least 10 characters long")
+				if len(trimmed) < 1 {
+					return errors.New("workflow name must be at least 1 character long")
 				}
 				workflowName = trimmed
 				return nil
