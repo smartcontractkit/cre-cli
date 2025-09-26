@@ -6,7 +6,7 @@ type Config = {
 
 function onCronTrigger(_config: Config, runtime: Runtime) {
   runtime.logger.log("Hello world! Workflow triggered.");
-  cre.sendResponseValue(new Value("Hello world!"));
+  cre.sendResponseValue(Value.from("Hello world!"));
 };
 
 function initWorkflow(config: Config) {

@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "target": "es2016",
+    "target": "esnext",
     "module": "commonjs",
     "outDir": "./dist",
     "strict": true,
@@ -13,6 +13,7 @@
     }
   },
   "include": [
+    "global.d.ts",
     "main.ts"
   ]
 }
