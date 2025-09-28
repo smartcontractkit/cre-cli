@@ -4,8 +4,8 @@ type Config = {
   schedule: string;
 };
 
-const onCronTrigger = (_runtime: Runtime<Config>): string => {
-  console.log("Hello world! Workflow triggered.");
+const onCronTrigger = (runtime: Runtime<Config>): string => {
+  runtime.log("Hello world! Workflow triggered.");
   return "Hello world!";
 };
 
