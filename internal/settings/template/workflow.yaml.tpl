@@ -24,7 +24,7 @@ local-simulation:
   workflow-artifacts:
     workflow-path: "{{WorkflowPath}}"
     config-path: "./config.json"
-    secrets-path: "./secrets.yaml"
+    secrets-path: "../secrets.yaml"
 
 # ==========================================================================
 production-testnet:
@@ -33,5 +33,5 @@ production-testnet:
   workflow-artifacts:
     workflow-path: "{{WorkflowPath}}"
     config-path: "./config.json"
-    secrets-path: "./secrets.yaml"
+    secrets-path: "../secrets.yaml"
     
