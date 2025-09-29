@@ -496,6 +496,26 @@ func (c *{{$contract.Type}}) UnpackError(data []byte) (any, error) {
 
 {{range $event := $contract.Events}}
 
+// {{.Normalized.Name}}Trigger wraps the raw log trigger and provides decoded {{.Normalized.Name}} data
+type {{.Normalized.Name}}Trigger struct {
+	cre.Trigger[*evm.Log, *evm.Log]  // Embed the raw trigger
+	contract *{{$contract.Type}}      // Keep reference for decoding
+}
+
+// Adapt method that decodes the log into {{.Normalized.Name}} data
+func (t *{{.Normalized.Name}}Trigger) Adapt(l *evm.Log) (*bindings.DecodedLog[{{.Normalized.Name}}], error) {
+	// Decode the log using the contract's codec
+	decoded, err := t.contract.Codec.Decode{{.Normalized.Name}}(l)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode {{.Normalized.Name}} log: %w", err)
+	}
+	
+	return &bindings.DecodedLog[{{.Normalized.Name}}]{
+		Log:  l,           // Original log
+		Data: *decoded,    // Decoded data
+	}, nil
+}
+
 func (c *{{$contract.Type}}) LogTrigger{{.Normalized.Name}}Log(chainSelector uint64, confidence evm.ConfidenceLevel, filters []{{.Normalized.Name}}) (cre.Trigger[*evm.Log, *evm.Log], error) {
 	event := c.ABI.Events["{{.Normalized.Name}}"]
 	topics, err := c.Codec.Encode{{.Normalized.Name}}Topics(event, filters)
@@ -503,11 +523,16 @@ func (c *{{$contract.Type}}) LogTrigger{{.Normalized.Name}}Log(chainSelector uin
 		return nil, fmt.Errorf("failed to encode topics for {{.Normalized.Name}}: %w", err)
 	}
 
-	return evm.LogTrigger(chainSelector, &evm.FilterLogTriggerRequest{
+	rawTrigger := evm.LogTrigger(chainSelector, &evm.FilterLogTriggerRequest{
 		Addresses:  [][]byte{c.Address.Bytes()},
 		Topics:     topics,
 		Confidence: confidence,
-	}), nil
+	})
+
+	return &{{.Normalized.Name}}Trigger{
+		Trigger: rawTrigger,
+		contract: c,
+	}, nil
 }
 
 func (c *{{$contract.Type}}) FilterLogs{{.Normalized.Name}}(runtime cre.Runtime, options *bindings.FilterOptions) cre.Promise[*evm.FilterLogsReply] {

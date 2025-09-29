@@ -44,6 +44,8 @@ var (
 	_ = bindings.FilterOptions{}
 	_ = evm.FilterLogTriggerRequest{}
 	_ = cre.ResponseBufferTooSmall
+	_ = rpc.API{}
+	_ = json.Unmarshal
 )
 
 var DataStorageMetaData = &bind.MetaData{
@@ -998,6 +1000,26 @@ func (c *DataStorage) UnpackError(data []byte) (any, error) {
 	}
 }
 
+// AccessLoggedTrigger wraps the raw log trigger and provides decoded AccessLogged data
+type AccessLoggedTrigger struct {
+	cre.Trigger[*evm.Log, *evm.Log]              // Embed the raw trigger
+	contract                        *DataStorage // Keep reference for decoding
+}
+
+// Adapt method that decodes the log into AccessLogged data
+func (t *AccessLoggedTrigger) Adapt(l *evm.Log) (*bindings.DecodedLog[AccessLogged], error) {
+	// Decode the log using the contract's codec
+	decoded, err := t.contract.Codec.DecodeAccessLogged(l)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode AccessLogged log: %w", err)
+	}
+
+	return &bindings.DecodedLog[AccessLogged]{
+		Log:  l,        // Original log
+		Data: *decoded, // Decoded data
+	}, nil
+}
+
 func (c *DataStorage) LogTriggerAccessLoggedLog(chainSelector uint64, confidence evm.ConfidenceLevel, filters []AccessLogged) (cre.Trigger[*evm.Log, *evm.Log], error) {
 	event := c.ABI.Events["AccessLogged"]
 	topics, err := c.Codec.EncodeAccessLoggedTopics(event, filters)
@@ -1005,11 +1027,16 @@ func (c *DataStorage) LogTriggerAccessLoggedLog(chainSelector uint64, confidence
 		return nil, fmt.Errorf("failed to encode topics for AccessLogged: %w", err)
 	}
 
-	return evm.LogTrigger(chainSelector, &evm.FilterLogTriggerRequest{
+	rawTrigger := evm.LogTrigger(chainSelector, &evm.FilterLogTriggerRequest{
 		Addresses:  [][]byte{c.Address.Bytes()},
 		Topics:     topics,
 		Confidence: confidence,
-	}), nil
+	})
+
+	return &AccessLoggedTrigger{
+		Trigger:  rawTrigger,
+		contract: c,
+	}, nil
 }
 
 func (c *DataStorage) FilterLogsAccessLogged(runtime cre.Runtime, options *bindings.FilterOptions) cre.Promise[*evm.FilterLogsReply] {
@@ -1031,6 +1058,26 @@ func (c *DataStorage) FilterLogsAccessLogged(runtime cre.Runtime, options *bindi
 	})
 }
 
+// DataStoredTrigger wraps the raw log trigger and provides decoded DataStored data
+type DataStoredTrigger struct {
+	cre.Trigger[*evm.Log, *evm.Log]              // Embed the raw trigger
+	contract                        *DataStorage // Keep reference for decoding
+}
+
+// Adapt method that decodes the log into DataStored data
+func (t *DataStoredTrigger) Adapt(l *evm.Log) (*bindings.DecodedLog[DataStored], error) {
+	// Decode the log using the contract's codec
+	decoded, err := t.contract.Codec.DecodeDataStored(l)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode DataStored log: %w", err)
+	}
+
+	return &bindings.DecodedLog[DataStored]{
+		Log:  l,        // Original log
+		Data: *decoded, // Decoded data
+	}, nil
+}
+
 func (c *DataStorage) LogTriggerDataStoredLog(chainSelector uint64, confidence evm.ConfidenceLevel, filters []DataStored) (cre.Trigger[*evm.Log, *evm.Log], error) {
 	event := c.ABI.Events["DataStored"]
 	topics, err := c.Codec.EncodeDataStoredTopics(event, filters)
@@ -1038,11 +1085,16 @@ func (c *DataStorage) LogTriggerDataStoredLog(chainSelector uint64, confidence e
 		return nil, fmt.Errorf("failed to encode topics for DataStored: %w", err)
 	}
 
-	return evm.LogTrigger(chainSelector, &evm.FilterLogTriggerRequest{
+	rawTrigger := evm.LogTrigger(chainSelector, &evm.FilterLogTriggerRequest{
 		Addresses:  [][]byte{c.Address.Bytes()},
 		Topics:     topics,
 		Confidence: confidence,
-	}), nil
+	})
+
+	return &DataStoredTrigger{
+		Trigger:  rawTrigger,
+		contract: c,
+	}, nil
 }
 
 func (c *DataStorage) FilterLogsDataStored(runtime cre.Runtime, options *bindings.FilterOptions) cre.Promise[*evm.FilterLogsReply] {
@@ -1064,6 +1116,26 @@ func (c *DataStorage) FilterLogsDataStored(runtime cre.Runtime, options *binding
 	})
 }
 
+// DynamicEventTrigger wraps the raw log trigger and provides decoded DynamicEvent data
+type DynamicEventTrigger struct {
+	cre.Trigger[*evm.Log, *evm.Log]              // Embed the raw trigger
+	contract                        *DataStorage // Keep reference for decoding
+}
+
+// Adapt method that decodes the log into DynamicEvent data
+func (t *DynamicEventTrigger) Adapt(l *evm.Log) (*bindings.DecodedLog[DynamicEvent], error) {
+	// Decode the log using the contract's codec
+	decoded, err := t.contract.Codec.DecodeDynamicEvent(l)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode DynamicEvent log: %w", err)
+	}
+
+	return &bindings.DecodedLog[DynamicEvent]{
+		Log:  l,        // Original log
+		Data: *decoded, // Decoded data
+	}, nil
+}
+
 func (c *DataStorage) LogTriggerDynamicEventLog(chainSelector uint64, confidence evm.ConfidenceLevel, filters []DynamicEvent) (cre.Trigger[*evm.Log, *evm.Log], error) {
 	event := c.ABI.Events["DynamicEvent"]
 	topics, err := c.Codec.EncodeDynamicEventTopics(event, filters)
@@ -1071,11 +1143,16 @@ func (c *DataStorage) LogTriggerDynamicEventLog(chainSelector uint64, confidence
 		return nil, fmt.Errorf("failed to encode topics for DynamicEvent: %w", err)
 	}
 
-	return evm.LogTrigger(chainSelector, &evm.FilterLogTriggerRequest{
+	rawTrigger := evm.LogTrigger(chainSelector, &evm.FilterLogTriggerRequest{
 		Addresses:  [][]byte{c.Address.Bytes()},
 		Topics:     topics,
 		Confidence: confidence,
-	}), nil
+	})
+
+	return &DynamicEventTrigger{
+		Trigger:  rawTrigger,
+		contract: c,
+	}, nil
 }
 
 func (c *DataStorage) FilterLogsDynamicEvent(runtime cre.Runtime, options *bindings.FilterOptions) cre.Promise[*evm.FilterLogsReply] {
@@ -1097,6 +1174,26 @@ func (c *DataStorage) FilterLogsDynamicEvent(runtime cre.Runtime, options *bindi
 	})
 }
 
+// NoFieldsTrigger wraps the raw log trigger and provides decoded NoFields data
+type NoFieldsTrigger struct {
+	cre.Trigger[*evm.Log, *evm.Log]              // Embed the raw trigger
+	contract                        *DataStorage // Keep reference for decoding
+}
+
+// Adapt method that decodes the log into NoFields data
+func (t *NoFieldsTrigger) Adapt(l *evm.Log) (*bindings.DecodedLog[NoFields], error) {
+	// Decode the log using the contract's codec
+	decoded, err := t.contract.Codec.DecodeNoFields(l)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode NoFields log: %w", err)
+	}
+
+	return &bindings.DecodedLog[NoFields]{
+		Log:  l,        // Original log
+		Data: *decoded, // Decoded data
+	}, nil
+}
+
 func (c *DataStorage) LogTriggerNoFieldsLog(chainSelector uint64, confidence evm.ConfidenceLevel, filters []NoFields) (cre.Trigger[*evm.Log, *evm.Log], error) {
 	event := c.ABI.Events["NoFields"]
 	topics, err := c.Codec.EncodeNoFieldsTopics(event, filters)
@@ -1104,11 +1201,16 @@ func (c *DataStorage) LogTriggerNoFieldsLog(chainSelector uint64, confidence evm
 		return nil, fmt.Errorf("failed to encode topics for NoFields: %w", err)
 	}
 
-	return evm.LogTrigger(chainSelector, &evm.FilterLogTriggerRequest{
+	rawTrigger := evm.LogTrigger(chainSelector, &evm.FilterLogTriggerRequest{
 		Addresses:  [][]byte{c.Address.Bytes()},
 		Topics:     topics,
 		Confidence: confidence,
-	}), nil
+	})
+
+	return &NoFieldsTrigger{
+		Trigger:  rawTrigger,
+		contract: c,
+	}, nil
 }
 
 func (c *DataStorage) FilterLogsNoFields(runtime cre.Runtime, options *bindings.FilterOptions) cre.Promise[*evm.FilterLogsReply] {
