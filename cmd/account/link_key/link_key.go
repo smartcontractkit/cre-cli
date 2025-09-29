@@ -215,7 +215,7 @@ mutation InitiateLinking($request: InitiateLinkingRequest!) {
 		InitiateLinking initiateLinkingResponse `json:"initiateLinking"`
 	}
 
-	if err := graphqlclient.New(h.credentials, h.environmentSet).
+	if err := graphqlclient.New(h.credentials, h.environmentSet, h.log).
 		Execute(ctx, req, &container); err != nil {
 		return initiateLinkingResponse{}, fmt.Errorf("graphql request failed: %w", err)
 	}
