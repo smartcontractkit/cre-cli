@@ -28,10 +28,13 @@ type Inputs struct {
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
 	activateCmd := &cobra.Command{
-		Use:   "activate",
+		Use:   "activate [workflow-name]",
 		Short: "Activates workflow on the Workflow Registry contract",
 		Long:  `Changes workflow status to active on the Workflow Registry contract`,
-		Args:  cobra.NoArgs,
+		Args:  cobra.ExactArgs(1),
+		Example: `
+		cre workflow activate my-workflow
+		`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			handler := newHandler(runtimeContext)
 

@@ -29,8 +29,6 @@ func TestBlankWorkflowSimulation(t *testing.T) {
 	require.NoError(t, os.Chdir(wfDir))
 	t.Cleanup(func() { _ = os.Chdir(origWD) })
 
-	// Paths within the workflow module dir
-	workflowPath := "main.go"
 	configPath := "config.json"
 
 	// Clean up common artifacts produced by the compile/simulate flow
@@ -71,7 +69,7 @@ func TestBlankWorkflowSimulation(t *testing.T) {
 	// Instantiate and run the simulator handler
 	handler := newHandler(runtimeCtx)
 
-	inputs, err := handler.ResolveInputs([]string{workflowPath}, runtimeCtx.Viper, runtimeCtx.Settings)
+	inputs, err := handler.ResolveInputs(runtimeCtx.Viper, runtimeCtx.Settings)
 	require.NoError(t, err)
 
 	// Validate the resolved inputs.

@@ -62,14 +62,17 @@ type Inputs struct {
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
 	var simulateCmd = &cobra.Command{
-		Use:   "simulate ./path/to/workflow/main.go",
+		Use:   "simulate [workflow-name]",
 		Short: "Simulates a workflow",
 		Long:  `This command simulates a workflow.`,
 		Args:  cobra.ExactArgs(1),
+		Example: `
+		cre workflow simulate my-workflow
+		`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			handler := newHandler(runtimeContext)
 
-			inputs, err := handler.ResolveInputs(args, runtimeContext.Viper, runtimeContext.Settings)
+			inputs, err := handler.ResolveInputs(runtimeContext.Viper, runtimeContext.Settings)
 			if err != nil {
 				return err
 			}
@@ -81,8 +84,8 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 		},
 	}
 
-	simulateCmd.Flags().StringP("config", "c", "", "Path to the config file")
-	simulateCmd.Flags().StringP("secrets", "s", "", "Path to the secrets file")
+	simulateCmd.Flags().BoolP("config", "c", false, "Should include a config file (path defined in the workflow settings file) (default: false)")
+	simulateCmd.Flags().BoolP("secrets", "s", false, "Should include a secrets file (path defined in the workflow settings file) (default: false)")
 	simulateCmd.Flags().BoolP("engine-logs", "g", false, "Enable non-fatal engine logging")
 	simulateCmd.Flags().Bool("broadcast", false, "Broadcast transactions to the EVM (default: false)")
 	// Non-interactive flags
@@ -106,7 +109,7 @@ func newHandler(ctx *runtime.Context) *handler {
 	}
 }
 
-func (h *handler) ResolveInputs(args []string, v *viper.Viper, creSettings *settings.Settings) (Inputs, error) {
+func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) (Inputs, error) {
 	// build clients for each supported chain from settings, skip if rpc is empty
 	clients := make(map[uint64]*ethclient.Client)
 	for _, chain := range supportedEVM {
@@ -135,9 +138,9 @@ func (h *handler) ResolveInputs(args []string, v *viper.Viper, creSettings *sett
 	}
 
 	return Inputs{
-		WorkflowPath:   args[0],
-		ConfigPath:     v.GetString("config"),
-		SecretsPath:    v.GetString("secrets"),
+		WorkflowPath:   creSettings.Workflow.WorkflowArtifactSettings.WorkflowPath,
+		ConfigPath:     creSettings.Workflow.WorkflowArtifactSettings.ConfigPath,
+		SecretsPath:    creSettings.Workflow.WorkflowArtifactSettings.SecretsPath,
 		EngineLogs:     v.GetBool("engine-logs"),
 		Broadcast:      v.GetBool("broadcast"),
 		EVMClients:     clients,

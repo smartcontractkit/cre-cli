@@ -101,9 +101,9 @@ func (tc *TestConfig) workflowDeployEoaWithMockStorage(t *testing.T) string {
 	// Build CLI args
 	args := []string{
 		"workflow", "deploy",
-		"main.go",
+		"blank_workflow",
 		tc.GetCliEnvFlag(),
-		tc.GetCliSettingsFlag(),
+		tc.GetProjectRootFlag(),
 		"--auto-start=true",
 		"--" + settings.Flags.SkipConfirmation.Name,
 	}
@@ -134,7 +134,7 @@ func (tc *TestConfig) workflowPauseEoa(t *testing.T) string {
 	args := []string{
 		"workflow", "pause",
 		tc.GetCliEnvFlag(),
-		tc.GetCliSettingsFlag(),
+		tc.GetProjectRootFlag(),
 		"--" + settings.Flags.SkipConfirmation.Name,
 	}
 
@@ -163,7 +163,7 @@ func (tc *TestConfig) workflowActivateEoa(t *testing.T) string {
 	args := []string{
 		"workflow", "activate",
 		tc.GetCliEnvFlag(),
-		tc.GetCliSettingsFlag(),
+		tc.GetProjectRootFlag(),
 		"--" + settings.Flags.SkipConfirmation.Name,
 	}
 
@@ -192,7 +192,7 @@ func (tc *TestConfig) workflowDeleteEoa(t *testing.T) string {
 	args := []string{
 		"workflow", "delete",
 		tc.GetCliEnvFlag(),
-		tc.GetCliSettingsFlag(),
+		tc.GetProjectRootFlag(),
 		"--" + settings.Flags.SkipConfirmation.Name,
 	}
 

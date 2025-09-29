@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 
@@ -36,6 +37,12 @@ production-testnet:
 var TempWorkflowSettingsFile = filepath.Join("testdata", "workflow_storage", "workflow-with-hierarchy.yaml")
 var TempProjectSettingsFile = filepath.Join("testdata", "workflow_storage", "project-with-hierarchy.yaml")
 
+func createBlankCommand() *cobra.Command {
+	return &cobra.Command{
+		Use: "workflow",
+	}
+}
+
 func TestSettingsHierarchy(t *testing.T) {
 	//Create project settings file
 	err := os.WriteFile(constants.DefaultProjectSettingsFileName, []byte(ValidProjectSettingsFile), 0600)
@@ -44,12 +51,14 @@ func TestSettingsHierarchy(t *testing.T) {
 	absPathWorkflow, err := transformation.ResolvePath(TempWorkflowSettingsFile)
 	require.NoError(t, err, "Error when resolving settings path")
 
+	blankCmd := createBlankCommand()
+
 	v := viper.New()
-	v.Set(settings.Flags.CliSettingsFile.Name, absPathWorkflow)
+	v.Set(settings.Flags.ProjectRoot.Name, absPathWorkflow)
 	v.Set(settings.CreTargetEnvVar, "production-testnet")
 
 	v.SetConfigFile(constants.DefaultProjectSettingsFileName)
-	err = settings.LoadSettingsIntoViper(v)
+	err = settings.LoadSettingsIntoViper(v, blankCmd)
 	require.NoError(t, err, "Error when loading settings")
 
 	hierarchyVal := v.GetString("production-testnet.hierarchy-test")
@@ -73,11 +82,13 @@ func TestLoadingSettingsForValidFile(t *testing.T) {
 	require.NoError(t, err, "Error when resolving settings path")
 
 	v := viper.New()
-	v.Set(settings.Flags.CliSettingsFile.Name, absPath)
+	v.Set(settings.Flags.ProjectRoot.Name, absPath)
 	v.Set(settings.CreTargetEnvVar, "production-testnet")
 
+	blankCmd := createBlankCommand()
+
 	v.SetConfigFile(constants.DefaultProjectSettingsFileName)
-	err = settings.LoadSettingsIntoViper(v)
+	err = settings.LoadSettingsIntoViper(v, blankCmd)
 	require.NoError(t, err, "Error when loading settings")
 
 	rpcUrl, err := settings.GetRpcUrlSettings(v, "ethereum-testnet-sepolia-arbitrum-1")

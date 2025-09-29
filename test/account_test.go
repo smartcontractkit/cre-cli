@@ -219,7 +219,7 @@ func TestCLIAccountLinkListUnlinkFlow_EOA(t *testing.T) {
 		args := []string{
 			"account", "link-key",
 			tc.GetCliEnvFlag(),
-			tc.GetCliSettingsFlag(),
+			tc.GetProjectRootFlag(),
 			"-l", "owner-label-1",
 			"--" + settings.Flags.SkipConfirmation.Name,
 		}
@@ -264,7 +264,7 @@ func TestCLIAccountLinkListUnlinkFlow_EOA(t *testing.T) {
 		args := []string{
 			"account", "list-key",
 			tc.GetCliEnvFlag(),
-			tc.GetCliSettingsFlag(),
+			tc.GetProjectRootFlag(),
 		}
 		cmd := exec.Command(CLIPath, args...)
 		cmd.Dir = tc.ProjectDirectory
@@ -294,7 +294,7 @@ func TestCLIAccountLinkListUnlinkFlow_EOA(t *testing.T) {
 		args := []string{
 			"account", "unlink-key",
 			tc.GetCliEnvFlag(),
-			tc.GetCliSettingsFlag(),
+			tc.GetProjectRootFlag(),
 			"--" + settings.Flags.SkipConfirmation.Name,
 		}
 		cmd := exec.Command(CLIPath, args...)
@@ -334,7 +334,7 @@ func TestCLIAccountLinkListUnlinkFlow_EOA(t *testing.T) {
 		args := []string{
 			"account", "list-key",
 			tc.GetCliEnvFlag(),
-			tc.GetCliSettingsFlag(),
+			tc.GetProjectRootFlag(),
 		}
 		cmd := exec.Command(CLIPath, args...)
 		cmd.Dir = tc.ProjectDirectory

@@ -1,6 +1,6 @@
 production-testnet:
   cre-cli:
-    don-id: 4
+    don-family: "test-don"
   logging:
     seth-config-path: ""
   rpcs:

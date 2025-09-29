@@ -66,6 +66,13 @@ func createCliSettingsFile(
 		},
 	})
 
+	// workflow-artifacts
+	workflowArtifacts := map[string]string{
+		"workflow-path": "./main.go",
+		"config-path":   "./config.json",
+	}
+	v.Set(fmt.Sprintf("%s.workflow-artifacts", SettingsTarget), workflowArtifacts)
+
 	// write YAML
 	v.SetConfigType("yaml")
 	if err := v.WriteConfigAs(testConfig.WorkflowSettingsFile); err != nil {

@@ -7,7 +7,15 @@ Deletes all versions of a workflow from the Workflow Registry
 Deletes all workflow versions matching the given name and owner address.
 
 ```
-cre workflow delete [flags]
+cre workflow delete [workflow-name] [flags]
+```
+
+### Examples
+
+```
+
+		cre workflow delete my-workflow
+		
 ```
 
 ### Options
@@ -21,10 +29,10 @@ cre workflow delete [flags]
 ### Options inherited from parent commands
 
 ```
-  -e, --env string                      Path to .env file which contains sensitive info (default ".env")
-  -T, --target string                   Set the target settings
-  -v, --verbose                         Print DEBUG logs
-  -S, --workflow-settings-file string   Path to CLI workflow settings file (default "workflow.yaml")
+  -e, --env string            Path to .env file which contains sensitive info (default ".env")
+  -R, --project-root string   Path to the project root
+  -T, --target string         Set the target settings
+  -v, --verbose               Print DEBUG logs
 ```
 
 ### SEE ALSO

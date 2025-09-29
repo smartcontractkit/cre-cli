@@ -36,12 +36,11 @@ func setUpTestSettingsFiles(t *testing.T, v *viper.Viper, workflowTemplatePath s
 	// Workflow settings
 	workflowFilePath := filepath.Join(targetDir, constants.DefaultWorkflowSettingsFileName)
 	require.NoError(t, copyFile(workflowTemplatePath, workflowFilePath))
-	v.Set(settings.Flags.CliSettingsFile.Name, workflowFilePath)
+	v.Set(settings.Flags.ProjectRoot.Name, workflowFilePath)
 
 	// Project settings
 	projectFilePath := filepath.Join(targetDir, constants.DefaultProjectSettingsFileName)
 	require.NoError(t, copyFile(TempProjectSettingsFile, projectFilePath))
-	v.Set("projectSettingsPath", projectFilePath)
 
 	t.Cleanup(func() {
 		os.Remove(workflowFilePath)
@@ -140,7 +139,7 @@ func TestLoadEnvAndSettingsWithWorkflowSettingsFlag(t *testing.T) {
 
 	workflowFilePath := filepath.Join(tempWorkflowDir, constants.DefaultWorkflowSettingsFileName)
 	require.NoError(t, copyFile(workflowTemplatePath, workflowFilePath))
-	v.Set(settings.Flags.CliSettingsFile.Name, workflowFilePath)
+	v.Set(settings.Flags.ProjectRoot.Name, workflowFilePath)
 
 	setUpTestSettingsFiles(t, v, workflowTemplatePath, projectTemplatePath, tempDir)
 	cmd := &cobra.Command{Use: "login"}

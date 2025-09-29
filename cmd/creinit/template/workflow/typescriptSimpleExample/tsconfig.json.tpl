@@ -9,6 +9,6 @@
     "forceConsistentCasingInFileNames": true
   },
   "include": [
-    "main.ts"
+    "index.ts"
   ]
 }

@@ -95,14 +95,14 @@ func (tc *TestConfig) workflowDeployEoaWithoutAutostart(t *testing.T) string {
 	// Build CLI args - note: no auto-start flag (defaults to false)
 	args := []string{
 		"workflow", "deploy",
-		"main.go",
+		"workflow-name",
 		tc.GetCliEnvFlag(),
-		tc.GetCliSettingsFlag(),
+		tc.GetProjectRootFlag(),
 		"--" + settings.Flags.SkipConfirmation.Name,
 	}
 
 	cmd := exec.Command(CLIPath, args...)
-	cmd.Dir = wfDir
+	// cmd.Dir = wfDir
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
@@ -121,7 +121,7 @@ func (tc *TestConfig) workflowDeployEoaWithoutAutostart(t *testing.T) string {
 }
 
 // Deploys a workflow update with config via CLI, mocking GraphQL + Origin.
-func (tc *TestConfig) workflowDeployUpdateWithConfig(t *testing.T, configPath string) string {
+func (tc *TestConfig) workflowDeployUpdateWithConfig(t *testing.T) string {
 	t.Helper()
 
 	var srv *httptest.Server
@@ -196,10 +196,10 @@ func (tc *TestConfig) workflowDeployUpdateWithConfig(t *testing.T, configPath st
 	// Build CLI args with config file
 	args := []string{
 		"workflow", "deploy",
-		"main.go",
+		"workflow-name",
 		tc.GetCliEnvFlag(),
-		tc.GetCliSettingsFlag(),
-		"--config", configPath,
+		tc.GetProjectRootFlag(),
+		"--config",
 		"--" + settings.Flags.SkipConfirmation.Name,
 	}
 
@@ -241,11 +241,6 @@ func TestCLIWorkflowDeployWithEoaHappyPath2(t *testing.T) {
 	t.Setenv(environments.EnvVarCapabilitiesRegistryAddress, "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9")
 	t.Setenv(environments.EnvVarCapabilitiesRegistryChainName, TestChainName)
 
-	// Use existing config file from test project
-	_, thisFile, _, _ := runtime.Caller(0)
-	testDir := filepath.Dir(thisFile)
-	configPath := filepath.Join(testDir, "test_project", "blank_workflow", "config.json")
-
 	// Step 1: Deploy initial workflow without autostart
 	out := tc.workflowDeployEoaWithoutAutostart(t)
 	require.Contains(t, out, "Workflow compiled", "expected workflow to compile.\nCLI OUTPUT:\n%s", out)
@@ -254,7 +249,7 @@ func TestCLIWorkflowDeployWithEoaHappyPath2(t *testing.T) {
 	require.Contains(t, out, "Workflow deployed successfully", "expected deployment success.\nCLI OUTPUT:\n%s", out)
 
 	// Step 2: Deploy update with config
-	updateOut := tc.workflowDeployUpdateWithConfig(t, configPath)
+	updateOut := tc.workflowDeployUpdateWithConfig(t)
 	require.Contains(t, updateOut, "Workflow compiled", "expected workflow to compile on update.\nCLI OUTPUT:\n%s", updateOut)
 	require.Contains(t, updateOut, "Workflow owner link status linked=true", "expected link-status true on update.\nCLI OUTPUT:\n%s", updateOut)
 	require.Contains(t, updateOut, "Successfully uploaded workflow artifacts", "expected upload to succeed on update.\nCLI OUTPUT:\n%s", updateOut)

@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
@@ -20,6 +19,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/cmd/whoami"
 	"github.com/smartcontractkit/cre-cli/cmd/workflow"
 	"github.com/smartcontractkit/cre-cli/internal/constants"
+	"github.com/smartcontractkit/cre-cli/internal/context"
 	"github.com/smartcontractkit/cre-cli/internal/logger"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
@@ -69,20 +69,24 @@ func newRootCommand() *cobra.Command {
 			}
 
 			// load env vars from .env file and settings from yaml files
-			if isLoadEnvAndConfig(cmd) {
+			if isLoadEnvAndSettings(cmd) {
+				// Set execution context (project root + workflow directory if applicable)
+				projectRootFlag := runtimeContext.Viper.GetString(settings.Flags.ProjectRoot.Name)
+				if err := context.SetExecutionContext(cmd, args, projectRootFlag, rootLogger); err != nil {
+					return err
+				}
+
 				err := runtimeContext.AttachSettings(cmd)
 				if err != nil {
 					return fmt.Errorf("%w", err)
 				}
 			}
 
-			err := runtimeContext.AttachCredentials()
-			if err != nil {
+			if err := runtimeContext.AttachCredentials(); err != nil {
 				return fmt.Errorf("failed to load credentials: %w", err)
 			}
 
-			err = runtimeContext.AttachEnvironmentSet()
-			if err != nil {
+			if err := runtimeContext.AttachEnvironmentSet(); err != nil {
 				return fmt.Errorf("failed to load environment details: %w", err)
 			}
 
@@ -98,12 +102,12 @@ func newRootCommand() *cobra.Command {
 		constants.DefaultEnvFileName,
 		fmt.Sprintf("Path to %s file which contains sensitive info", constants.DefaultEnvFileName),
 	)
-	// cli-settings file flag is present for every subcommand
+	// project root path flag is present for every subcommand
 	rootCmd.PersistentFlags().StringP(
-		settings.Flags.CliSettingsFile.Name,
-		settings.Flags.CliSettingsFile.Short,
-		filepath.Join(".", constants.DefaultWorkflowSettingsFileName),
-		"Path to CLI workflow settings file",
+		settings.Flags.ProjectRoot.Name,
+		settings.Flags.ProjectRoot.Short,
+		"",
+		"Path to the project root",
 	)
 	// verbose flag is present in every subcommand
 	rootCmd.PersistentFlags().BoolP(
@@ -134,7 +138,7 @@ func newRootCommand() *cobra.Command {
 	return rootCmd
 }
 
-func isLoadEnvAndConfig(cmd *cobra.Command) bool {
+func isLoadEnvAndSettings(cmd *cobra.Command) bool {
 	// It is not expected to have the .env and the settings file when running the following commands
 	var excludedCommands = map[string]struct{}{
 		"version":           {},

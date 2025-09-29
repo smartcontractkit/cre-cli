@@ -46,7 +46,7 @@ func (tc *TestConfig) secretsCreateEoa(t *testing.T) (bool, string) {
 		"secrets", "create",
 		secretsPath,
 		tc.GetCliEnvFlag(),
-		tc.GetCliSettingsFlag(),
+		tc.GetProjectRootFlag(),
 	}
 	cmd := exec.Command(CLIPath, args...)
 	cmd.Dir = tc.ProjectDirectory
@@ -86,7 +86,7 @@ func (tc *TestConfig) secretsUpdateEoa(t *testing.T) (bool, string) {
 		"secrets", "update",
 		secretsPath,
 		tc.GetCliEnvFlag(),
-		tc.GetCliSettingsFlag(),
+		tc.GetProjectRootFlag(),
 	}
 	cmd := exec.Command(CLIPath, args...)
 	cmd.Dir = tc.ProjectDirectory
@@ -114,7 +114,7 @@ func (tc *TestConfig) secretsListEoa(t *testing.T, ns string) (bool, string) {
 		"secrets", "list",
 		"--namespace", ns,
 		tc.GetCliEnvFlag(),
-		tc.GetCliSettingsFlag(),
+		tc.GetProjectRootFlag(),
 	}
 	cmd := exec.Command(CLIPath, args...)
 	cmd.Dir = tc.ProjectDirectory
@@ -151,7 +151,7 @@ func (tc *TestConfig) secretsDeleteEoa(t *testing.T, ns string) (bool, string) {
 		"secrets", "delete",
 		delPath,
 		tc.GetCliEnvFlag(),
-		tc.GetCliSettingsFlag(),
+		tc.GetProjectRootFlag(),
 	}
 	cmd := exec.Command(CLIPath, args...)
 	cmd.Dir = tc.ProjectDirectory

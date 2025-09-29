@@ -13,23 +13,25 @@
 # Below is an example `my-target`:
 #
 # my-target:
-#   user-workflow:
-#     # Optional: The address of the workflow owner (wallet or MSIG contract).
-#     # Used to establish ownership for encrypting the workflow's secrets.
-#     # If omitted, defaults to an empty string.
-#     workflow-owner-address: "0x1234567890abcdef1234567890abcdef12345678"
-#     
+#   user-workflow:   
 #     # Required: The name of the workflow to register with the Workflow Registry contract.
 #     workflow-name: "MyExampleWorkflow"
 
 # ==========================================================================
 local-simulation:
   user-workflow:
-    workflow-owner-address: "{{WorkflowOwnerAddress}}"
     workflow-name: "{{WorkflowName}}"
+  workflow-artifacts:
+    workflow-path: "{{WorkflowPath}}"
+    config-path: "./config.json"
+    secrets-path: "./secrets.yaml"
 
 # ==========================================================================
 production-testnet:
   user-workflow:
-    workflow-owner-address: "{{WorkflowOwnerAddress}}"
     workflow-name: "{{WorkflowName}}"
+  workflow-artifacts:
+    workflow-path: "{{WorkflowPath}}"
+    config-path: "./config.json"
+    secrets-path: "./secrets.yaml"
+    

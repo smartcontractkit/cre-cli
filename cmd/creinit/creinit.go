@@ -38,12 +38,12 @@ type WorkflowTemplate struct {
 	Folder string
 	Title  string
 	ID     uint32
-	Lang   TemplateLanguage
 }
 
 type LanguageTemplate struct {
 	Title     string
 	Lang      TemplateLanguage
+	Path      string
 	Workflows []WorkflowTemplate
 }
 
@@ -51,6 +51,7 @@ var languageTemplates = []LanguageTemplate{
 	{
 		Title: "Golang",
 		Lang:  TemplateLangGo,
+		Path:  "./main.go",
 		Workflows: []WorkflowTemplate{
 			{Folder: "porExampleDev", Title: "Custom data feed: Updating on-chain data periodically using offchain API data", ID: 1},
 			{Folder: "blankTemplate", Title: "Boilerplate: A barebones template with just the essentials", ID: 2},
@@ -59,6 +60,7 @@ var languageTemplates = []LanguageTemplate{
 	{
 		Title: "Typescript",
 		Lang:  TemplateLangTS,
+		Path:  "./index.ts",
 		Workflows: []WorkflowTemplate{
 			{Folder: "typescriptSimpleExample", Title: "Development Hello World example for a simple workflow", ID: 3},
 		},
@@ -278,7 +280,7 @@ func (h *handler) Execute(inputs Inputs) error {
 	// Get project name from project root
 	projectName := filepath.Base(projectRoot)
 
-	if err := h.generateWorkflowTemplate(workflowDirectory, tpl, workflowName, projectName); err != nil {
+	if err := h.generateWorkflowTemplate(workflowDirectory, tpl, projectName); err != nil {
 		return fmt.Errorf("failed to scaffold workflow: %w", err)
 	}
 
@@ -293,7 +295,7 @@ func (h *handler) Execute(inputs Inputs) error {
 		}
 	}
 
-	_, err = settings.GenerateWorkflowSettingsFile(workflowDirectory, workflowName, "(optional) Multi-signature contract address")
+	_, err = settings.GenerateWorkflowSettingsFile(workflowDirectory, workflowName, selectedLanguageTemplate.Path)
 	if err != nil {
 		return fmt.Errorf("failed to generate %s file: %w", constants.DefaultWorkflowSettingsFileName, err)
 	}
@@ -388,7 +390,7 @@ func (h *handler) copySecretsFileIfExists(projectRoot string, template WorkflowT
 }
 
 // Copy the content of template/workflow/{{templateName}} and remove "tpl" extension
-func (h *handler) generateWorkflowTemplate(workingDirectory string, template WorkflowTemplate, workflowName string, projectName string) error {
+func (h *handler) generateWorkflowTemplate(workingDirectory string, template WorkflowTemplate, projectName string) error {
 
 	h.log.Info().Msgf("Generating template: %s", template.Title)
 
@@ -448,8 +450,7 @@ func (h *handler) generateWorkflowTemplate(workingDirectory string, template Wor
 		}
 
 		// Replace template variables with actual values
-		finalContent := strings.ReplaceAll(string(content), "{{workflowName}}", workflowName)
-		finalContent = strings.ReplaceAll(finalContent, "{{projectName}}", projectName)
+		finalContent := strings.ReplaceAll(string(content), "{{projectName}}", projectName)
 
 		// Ensure the target directory exists
 		if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {

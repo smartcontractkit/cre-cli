@@ -53,7 +53,6 @@ type TestConfig struct {
 	uid                  string
 	EnvFile              string
 	WorkflowSettingsFile string
-	ProposalDirectory    string
 	ProjectDirectory     string
 }
 
@@ -67,7 +66,6 @@ func NewTestConfig(t *testing.T) *TestConfig {
 		uid:                  uid,
 		EnvFile:              fmt.Sprintf("/tmp/%s/.env", uid),
 		WorkflowSettingsFile: fmt.Sprintf("/tmp/%s/%s", uid, constants.DefaultWorkflowSettingsFileName),
-		ProposalDirectory:    fmt.Sprintf("/tmp/%s/", uid),
 		ProjectDirectory:     fmt.Sprintf("/tmp/%s/", uid),
 	}
 	L.Info().Str("Test", t.Name()).Str("uid", uid).Interface("Config", config).Msg("Created test config")
@@ -78,8 +76,8 @@ func (tc *TestConfig) GetCliEnvFlag() string {
 	return fmt.Sprintf("--%s=%s", settings.Flags.CliEnvFile.Name, tc.EnvFile)
 }
 
-func (tc *TestConfig) GetCliSettingsFlag() string {
-	return fmt.Sprintf("--%s=%s", settings.Flags.CliSettingsFile.Name, tc.WorkflowSettingsFile)
+func (tc *TestConfig) GetProjectRootFlag() string {
+	return fmt.Sprintf("--%s=%s", settings.Flags.ProjectRoot.Name, tc.ProjectDirectory)
 }
 
 func (tc *TestConfig) Cleanup(t *testing.T) func() {
