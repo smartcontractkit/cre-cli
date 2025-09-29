@@ -179,7 +179,7 @@ mutation InitiateUnlinking($request: InitiateUnlinkingRequest!) {
 	var container struct {
 		InitiateUnlinking initiateUnlinkingResponse `json:"initiateUnlinking"`
 	}
-	if err := graphqlclient.New(h.credentials, h.environmentSet).Execute(ctx, req, &container); err != nil {
+	if err := graphqlclient.New(h.credentials, h.environmentSet, h.log).Execute(ctx, req, &container); err != nil {
 		return initiateUnlinkingResponse{}, fmt.Errorf("graphql failed: %w", err)
 	}
 
