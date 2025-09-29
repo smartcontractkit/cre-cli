@@ -138,3 +138,123 @@ func TestResolveFilePathOrCreate(t *testing.T) {
 		})
 	}
 }
+
+func TestResolveWorkflowPath(t *testing.T) {
+	t.Parallel()
+
+	// Create a temporary directory for testing to avoid polluting project files
+	tempDir, err := os.MkdirTemp("", "workflow_path_test_*")
+	if err != nil {
+		t.Fatalf("Failed to create temp directory: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create temporary workflow directories for testing
+	workflowDir1 := filepath.Join(tempDir, "workflow1")
+	workflowDir2 := filepath.Join(tempDir, "src", "workflow2")
+	nestedWorkflowDir := filepath.Join(tempDir, "nested", "deep", "workflow3")
+
+	// Create directories
+	dirs := []string{workflowDir1, workflowDir2, nestedWorkflowDir}
+	for _, dir := range dirs {
+		err := os.MkdirAll(dir, os.ModePerm)
+		if err != nil {
+			t.Fatalf("Failed to create test directory %s: %v", dir, err)
+		}
+	}
+
+	// Get absolute paths for expected results
+	expectedWorkflowDir1, _ := filepath.Abs(workflowDir1)
+	expectedWorkflowDir2, _ := filepath.Abs(workflowDir2)
+	expectedNestedWorkflowDir, _ := filepath.Abs(nestedWorkflowDir)
+
+	// Create a temporary file to test non-directory error
+	tempFile := filepath.Join(tempDir, "test_file.txt")
+	file, err := os.Create(tempFile)
+	if err != nil {
+		t.Fatalf("Failed to create temp file: %v", err)
+	}
+	file.Close()
+
+	tests := []struct {
+		name    string
+		input   string
+		expects string
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name:    "Empty path should error",
+			input:   "",
+			expects: "",
+			wantErr: true,
+			errMsg:  "workflow path cannot be empty",
+		},
+		{
+			name:    "Absolute path - workflow1",
+			input:   workflowDir1,
+			expects: expectedWorkflowDir1,
+			wantErr: false,
+		},
+		{
+			name:    "Absolute path - nested workflow",
+			input:   workflowDir2,
+			expects: expectedWorkflowDir2,
+			wantErr: false,
+		},
+		{
+			name:    "Absolute path - deep nested workflow",
+			input:   nestedWorkflowDir,
+			expects: expectedNestedWorkflowDir,
+			wantErr: false,
+		},
+		{
+			name:    "Non-existing absolute directory should error",
+			input:   filepath.Join(tempDir, "nonexistent"),
+			expects: "",
+			wantErr: true,
+			errMsg:  "workflow directory does not exist",
+		},
+		{
+			name:    "File path (not directory) should error",
+			input:   tempFile,
+			expects: "",
+			wantErr: true,
+			errMsg:  "workflow path must be a directory",
+		},
+		{
+			name:    "Path with redundant separators should be cleaned",
+			input:   workflowDir1 + "//",
+			expects: expectedWorkflowDir1,
+			wantErr: false,
+		},
+		{
+			name:    "Path with dot components should be cleaned",
+			input:   filepath.Join(tempDir, "src", "..", "workflow1"),
+			expects: expectedWorkflowDir1,
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ResolveWorkflowPath(tt.input)
+
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ResolveWorkflowPath() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+
+			if tt.wantErr {
+				if tt.errMsg != "" && err.Error() != tt.errMsg {
+					t.Errorf("ResolveWorkflowPath() error message = %v, want %v", err.Error(), tt.errMsg)
+				}
+				return
+			}
+
+			if got != tt.expects {
+				t.Errorf("ResolveWorkflowPath() = %v, want %v", got, tt.expects)
+			}
+		})
+	}
+}

@@ -44,7 +44,7 @@ import (
 )
 
 type Inputs struct {
-	WorkflowPath  string                       `validate:"required,file"`
+	WorkflowPath  string                       `validate:"required,path_read"`
 	ConfigPath    string                       `validate:"omitempty,file,ascii,max=97" cli:"--config"`
 	SecretsPath   string                       `validate:"omitempty,file,ascii,max=97" cli:"--secrets"`
 	EngineLogs    bool                         `validate:"omitempty" cli:"--engine-logs"`
@@ -62,12 +62,12 @@ type Inputs struct {
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
 	var simulateCmd = &cobra.Command{
-		Use:   "simulate <workflow-name>",
+		Use:   "simulate <workflow-folder-path>",
 		Short: "Simulates a workflow",
 		Long:  `This command simulates a workflow.`,
 		Args:  cobra.ExactArgs(1),
 		Example: `
-		cre workflow simulate my-workflow
+		cre workflow simulate ./my-workflow
 		`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			handler := newHandler(runtimeContext)
@@ -85,7 +85,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	}
 
 	simulateCmd.Flags().BoolP("config", "c", false, "Should include a config file (path defined in the workflow settings file) (default: false)")
-	simulateCmd.Flags().BoolP("secrets", "s", false, "Should include a secrets file (path defined in the workflow settings file) (default: false)")
+	simulateCmd.Flags().StringP("secrets", "s", "", "Path to the secrets file")
 	simulateCmd.Flags().BoolP("engine-logs", "g", false, "Enable non-fatal engine logging")
 	simulateCmd.Flags().Bool("broadcast", false, "Broadcast transactions to the EVM (default: false)")
 	// Non-interactive flags
@@ -145,7 +145,7 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 	return Inputs{
 		WorkflowPath:   creSettings.Workflow.WorkflowArtifactSettings.WorkflowPath,
 		ConfigPath:     creSettings.Workflow.WorkflowArtifactSettings.ConfigPath,
-		SecretsPath:    creSettings.Workflow.WorkflowArtifactSettings.SecretsPath,
+		SecretsPath:    v.GetString("secrets"),
 		EngineLogs:     v.GetBool("engine-logs"),
 		Broadcast:      v.GetBool("broadcast"),
 		EVMClients:     clients,

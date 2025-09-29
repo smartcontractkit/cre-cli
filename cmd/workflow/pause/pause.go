@@ -28,12 +28,12 @@ type Inputs struct {
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
 	var pauseCmd = &cobra.Command{
-		Use:   "pause <workflow-name>",
+		Use:   "pause <workflow-folder-path>",
 		Short: "Pauses workflow on the Workflow Registry contract",
 		Long:  `Changes workflow status to paused on the Workflow Registry contract`,
 		Args:  cobra.ExactArgs(1),
 		Example: `
-		cre workflow pause my-workflow
+		cre workflow pause ./my-workflow
 		`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			handler := newHandler(runtimeContext)

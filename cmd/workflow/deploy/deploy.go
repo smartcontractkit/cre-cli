@@ -32,7 +32,7 @@ type Inputs struct {
 	AutoStart bool
 
 	KeepAlive    bool
-	WorkflowPath string `validate:"required,file"`
+	WorkflowPath string `validate:"required,path_read"`
 	ConfigPath   string `validate:"omitempty,file,ascii,max=97" cli:"--config"`
 	OutputPath   string `validate:"omitempty,filepath,ascii,max=97" cli:"--output"`
 
@@ -73,12 +73,12 @@ var defaultOutputPath = "./binary.wasm.br.b64"
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
 	var deployCmd = &cobra.Command{
-		Use:   "deploy <workflow-name>",
+		Use:   "deploy <workflow-folder-path>",
 		Short: "Deploys a workflow to the Workflow Registry contract",
 		Long:  `Compiles the workflow, uploads the artifacts, and registers the workflow in the Workflow Registry contract.`,
 		Args:  cobra.ExactArgs(1),
 		Example: `
-		cre workflow deploy my-workflow
+		cre workflow deploy ./my-workflow
 		`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			h := newHandler(runtimeContext, cmd.InOrStdin())

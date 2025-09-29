@@ -51,7 +51,7 @@ var languageTemplates = []LanguageTemplate{
 	{
 		Title: "Golang",
 		Lang:  TemplateLangGo,
-		Path:  "./main.go",
+		Path:  ".",
 		Workflows: []WorkflowTemplate{
 			{Folder: "porExampleDev", Title: "Custom data feed: Updating on-chain data periodically using offchain API data", ID: 1},
 			{Folder: "blankTemplate", Title: "Boilerplate: A barebones template with just the essentials", ID: 2},

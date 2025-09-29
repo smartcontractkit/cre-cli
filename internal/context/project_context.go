@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/smartcontractkit/cre-cli/internal/constants"
+	"github.com/smartcontractkit/cre-cli/internal/transformation"
 )
 
 // SetExecutionContext sets the appropriate execution context for commands
@@ -41,9 +42,9 @@ func SetExecutionContext(cmd *cobra.Command, args []string, projectRootFlag stri
 
 	// Then, if it's a workflow command with exactly one argument, change to the workflow directory
 	if IsWorkflowCommand(cmd) && len(args) == 1 {
-		workflowDir, err := FindWorkflowDirectory(args[0])
+		workflowDir, err := transformation.ResolveWorkflowPath(args[0])
 		if err != nil {
-			return fmt.Errorf("failed to find workflow directory for '%s': %w", args[0], err)
+			return fmt.Errorf("failed to resolve workflow directory path '%s': %w", args[0], err)
 		}
 		logger.Info().Msgf("Changing working directory to %s", workflowDir)
 		if err := os.Chdir(workflowDir); err != nil {

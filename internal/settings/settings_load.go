@@ -18,7 +18,6 @@ const (
 	WorkflowNameSettingName   = "user-workflow.workflow-name"
 	WorkflowPathSettingName   = "workflow-artifacts.workflow-path"
 	ConfigPathSettingName     = "workflow-artifacts.config-path"
-	SecretsPathSettingName    = "workflow-artifacts.secrets-path"
 	SethConfigPathSettingName = "logging.seth-config-path"
 	RegistriesSettingName     = "contracts.registries"
 	KeystoneSettingName       = "contracts.keystone"
