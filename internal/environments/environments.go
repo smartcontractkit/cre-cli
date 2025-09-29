@@ -11,7 +11,6 @@ import (
 const (
 	EnvVarEnv = "CRE_CLI_ENV"
 
-	EnvVarUIURL           = "CRE_CLI_UI_URL"
 	EnvVarAuthBase        = "CRE_CLI_AUTH_BASE"
 	EnvVarClientID        = "CRE_CLI_CLIENT_ID"
 	EnvVarGraphQLURL      = "CRE_CLI_GRAPHQL_URL"
@@ -23,14 +22,13 @@ const (
 	EnvVarCapabilitiesRegistryAddress   = "CRE_CLI_CAPABILITIES_REGISTRY_ADDRESS"
 	EnvVarCapabilitiesRegistryChainName = "CRE_CLI_CAPABILITIES_REGISTRY_CHAIN_NAME"
 
-	DefaultEnv = "SANDBOX"
+	DefaultEnv = "STAGING"
 )
 
 //go:embed environments.yaml
 var envFileContent embed.FS
 
 type EnvironmentSet struct {
-	UIURL      string `yaml:"CRE_CLI_UI_URL"`
 	AuthBase   string `yaml:"CRE_CLI_AUTH_BASE"`
 	ClientID   string `yaml:"CRE_CLI_CLIENT_ID"`
 	GraphQLURL string `yaml:"CRE_CLI_GRAPHQL_URL"`
@@ -63,9 +61,6 @@ func NewEnvironmentSet(ff *fileFormat, envName string) *EnvironmentSet {
 	set, ok := ff.Envs[envName]
 	if !ok {
 		set = ff.Envs[DefaultEnv]
-	}
-	if v := os.Getenv(EnvVarUIURL); v != "" {
-		set.UIURL = v
 	}
 	if v := os.Getenv(EnvVarAuthBase); v != "" {
 		set.AuthBase = v

@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/machinebox/graphql"
+	"github.com/rs/zerolog"
 
 	"github.com/smartcontractkit/cre-cli/internal/auth"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
@@ -18,10 +19,13 @@ type Client struct {
 	transport *headerTransport
 }
 
-func New(creds *credentials.Credentials, environmentSet *environments.EnvironmentSet) *Client {
+func New(creds *credentials.Credentials, environmentSet *environments.EnvironmentSet, l *zerolog.Logger) *Client {
 	ht := newHeaderTransport(creds, auth.NewOAuthService(environmentSet), http.DefaultTransport)
 	httpClient := &http.Client{Transport: ht}
 	gqlClient := graphql.NewClient(environmentSet.GraphQLURL, graphql.WithHTTPClient(httpClient))
+	gqlClient.Log = func(s string) {
+		l.Debug().Str("client", "GraphQL").Msg(s)
+	}
 
 	return &Client{
 		client:    gqlClient,

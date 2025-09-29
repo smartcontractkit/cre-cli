@@ -72,7 +72,7 @@ func NewHandler(ctx *runtime.Context) *Handler {
 		log:            ctx.Logger,
 		credentials:    ctx.Credentials,
 		environmentSet: ctx.EnvironmentSet,
-		client:         graphqlclient.New(ctx.Credentials, ctx.EnvironmentSet),
+		client:         graphqlclient.New(ctx.Credentials, ctx.EnvironmentSet, ctx.Logger),
 	}
 }
 
