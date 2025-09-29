@@ -123,7 +123,7 @@ func copyFile(src, dst string) error {
 
 // Boot Anvil by either loading Anvil state or running a fresh instance that will dump its state on exit
 // Input parameter can be LOAD_ANVIL_STATE=true or DUMP_ANVIL_STATE=false (look at the defined constants)
-func StartAnvil(initState AnvilInitState) (*os.Process, int, error) {
+func StartAnvil(initState AnvilInitState, stateFileName string) (*os.Process, int, error) {
 	// introduce random delay to prevent tests binding to the same port for Anvil
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	minDelay := 1 * time.Millisecond
@@ -145,10 +145,10 @@ func StartAnvil(initState AnvilInitState) (*os.Process, int, error) {
 	args := []string{"--chain-id", "31337"}
 	if initState == LOAD_ANVIL_STATE {
 		// booting up Anvil with pre-baked contracts, required for some E2E tests
-		args = append(args, "--load-state", "anvil-state.json")
+		args = append(args, "--load-state", stateFileName)
 	} else if initState == DUMP_ANVIL_STATE {
 		// start fresh instance of Anvil, then deploy and configure contracts to bake them into the state dump
-		args = append(args, "--dump-state", "anvil-state.json")
+		args = append(args, "--dump-state", stateFileName)
 	} else {
 		return nil, 0, errors.New("unknown anvil init state enum")
 	}

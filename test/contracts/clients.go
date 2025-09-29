@@ -33,6 +33,18 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/testutil"
 )
 
+func DeployBalanceReader(sethClient *seth.Client) (common.Address, error) {
+	deployedContract, err := sethClient.DeployContractFromContractStore(
+		sethClient.NewTXOpts(),
+		constants.BalanceReaderContractName,
+	)
+	if err != nil {
+		return common.Address{}, fmt.Errorf("failed to deploy BalanceReader contract: %w", err)
+	}
+
+	return deployedContract.Address, nil
+}
+
 func DeployCapabilitiesRegistry(sethClient *seth.Client, pubKeys []*ed25519.PublicKey, p2pIds []p2ptypes.PeerID) (common.Address, error) {
 	deployedContract, err := sethClient.DeployContractFromContractStore(
 		sethClient.NewTXOpts(),
