@@ -73,7 +73,7 @@ var defaultOutputPath = "./binary.wasm.br.b64"
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
 	var deployCmd = &cobra.Command{
-		Use:   "deploy [workflow-name]",
+		Use:   "deploy <workflow-name>",
 		Short: "Deploys a workflow to the Workflow Registry contract",
 		Long:  `Compiles the workflow, uploads the artifacts, and registers the workflow in the Workflow Registry contract.`,
 		Args:  cobra.ExactArgs(1),

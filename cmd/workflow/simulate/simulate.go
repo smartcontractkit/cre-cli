@@ -62,7 +62,7 @@ type Inputs struct {
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
 	var simulateCmd = &cobra.Command{
-		Use:   "simulate [workflow-name]",
+		Use:   "simulate <workflow-name>",
 		Short: "Simulates a workflow",
 		Long:  `This command simulates a workflow.`,
 		Args:  cobra.ExactArgs(1),

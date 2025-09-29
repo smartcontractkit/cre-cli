@@ -7,7 +7,7 @@ Pauses workflow on the Workflow Registry contract
 Changes workflow status to paused on the Workflow Registry contract
 
 ```
-cre workflow pause [workflow-name] [flags]
+cre workflow pause <workflow-name> [flags]
 ```
 
 ### Examples

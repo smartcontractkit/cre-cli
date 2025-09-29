@@ -7,7 +7,7 @@ Activates workflow on the Workflow Registry contract
 Changes workflow status to active on the Workflow Registry contract
 
 ```
-cre workflow activate [workflow-name] [flags]
+cre workflow activate <workflow-name> [flags]
 ```
 
 ### Examples

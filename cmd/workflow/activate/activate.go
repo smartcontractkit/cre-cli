@@ -28,7 +28,7 @@ type Inputs struct {
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
 	activateCmd := &cobra.Command{
-		Use:   "activate [workflow-name]",
+		Use:   "activate <workflow-name>",
 		Short: "Activates workflow on the Workflow Registry contract",
 		Long:  `Changes workflow status to active on the Workflow Registry contract`,
 		Args:  cobra.ExactArgs(1),
