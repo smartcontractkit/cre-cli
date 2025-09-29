@@ -41,6 +41,14 @@ func LoadContracts(l *zerolog.Logger, client *seth.Client) error {
 	client.ContractStore.AddBIN(constants.BalanceReaderContractName, common.FromHex(balance_reader.BalanceReaderMetaData.Bin))
 	l.Debug().Msgf("Loaded %s contract into ContractStore", constants.BalanceReaderContractName)
 
+	abi, err = balance_reader.BalanceReaderMetaData.GetAbi()
+	if err != nil {
+		return fmt.Errorf("failed to get BalanceReader ABI: %w", err)
+	}
+	client.ContractStore.AddABI(constants.BalanceReaderContractName, *abi)
+	client.ContractStore.AddBIN(constants.BalanceReaderContractName, common.FromHex(balance_reader.BalanceReaderMetaData.Bin))
+	l.Debug().Msgf("Loaded %s contract into ContractStore", constants.BalanceReaderContractName)
+
 	return nil
 }
 

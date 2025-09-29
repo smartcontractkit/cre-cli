@@ -118,3 +118,30 @@ func TestGenerateAnvilStateForSimulator(t *testing.T) {
 		t.Fatalf("failed to deploy and configure BalanceReader: %v", err)
 	}
 }
+
+// NOTE: this is not really a test, this is a script to re-generated Anvil EVM state dump
+// once generated, state dump will contain pre-baked contracts and contract setups
+// it will help with running tests
+// please enable this test (comment out first line "t.Skip") and run it as standalone test only when necessary:
+//
+//	go test -run ^TestGenerateAnvilStateForSimulator$ -v
+//
+// the reason why it's created as a test rather than as a script is to be able to reuse
+// multiple helper functions available in test files
+
+func TestGenerateAnvilStateForSimulator(t *testing.T) {
+	t.Skip("Re-enable this test only when it's required to re-generate Anvil state dump")
+
+	anvilProc, testEthUrl := initGenerateEnvForSimulator(t)
+	defer stopAnvilGracefully(anvilProc)
+
+	tc := NewTestConfig(t)
+	t.Cleanup(tc.Cleanup(t))
+
+	// deploy and config contracts on Anvil
+	sethClient := test.NewSethClientWithContracts(t, L, testEthUrl, constants.TestAnvilChainID, SethConfigPath)
+	_, err := test.DeployBalanceReader(sethClient)
+	if err != nil {
+		t.Fatalf("failed to deploy and configure BalanceReader: %v", err)
+	}
+}

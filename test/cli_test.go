@@ -17,6 +17,7 @@ import (
 	chainselectors "github.com/smartcontractkit/chain-selectors"
 
 	"github.com/smartcontractkit/cre-cli/internal/constants"
+	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 )
 
@@ -90,11 +91,23 @@ func createCliEnvFile(envPath string, ethPrivateKey string) error {
 	if err != nil {
 		return err
 	}
+
+	// use a dummy API key, the actual key is not important for tests
+	_, err = writer.WriteString(fmt.Sprintf("%s=%s", credentials.CreApiKeyVar, "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IkU5MnViMF"))
+	if err != nil {
+		return err
+	}
+
+	_, err = writer.WriteString("\n")
+	if err != nil {
+		return err
+	}
 	writer.Flush()
 
 	return nil
 }
 
+<<<<<<< HEAD
 // createWorkflowDirectory creates the workflow directory with test files and workflow.yaml
 func createWorkflowDirectory(
 	projectDirectory string,
