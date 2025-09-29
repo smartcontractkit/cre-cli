@@ -7,14 +7,14 @@ Deletes all versions of a workflow from the Workflow Registry
 Deletes all workflow versions matching the given name and owner address.
 
 ```
-cre workflow delete <workflow-name> [flags]
+cre workflow delete <workflow-folder-path> [flags]
 ```
 
 ### Examples
 
 ```
 
-		cre workflow delete my-workflow
+		cre workflow delete ./my-workflow
 		
 ```
 

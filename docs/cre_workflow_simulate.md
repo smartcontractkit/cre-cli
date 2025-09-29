@@ -7,14 +7,14 @@ Simulates a workflow
 This command simulates a workflow.
 
 ```
-cre workflow simulate <workflow-name> [flags]
+cre workflow simulate <workflow-folder-path> [flags]
 ```
 
 ### Examples
 
 ```
 
-		cre workflow simulate my-workflow
+		cre workflow simulate ./my-workflow
 		
 ```
 
@@ -29,7 +29,7 @@ cre workflow simulate <workflow-name> [flags]
   -h, --help                  help for simulate
       --http-payload string   HTTP trigger payload as JSON string or path to JSON file (with or without @ prefix)
       --non-interactive       Run without prompts; requires --trigger-index and inputs for the selected trigger type
-  -s, --secrets               Should include a secrets file (path defined in the workflow settings file) (default: false)
+  -s, --secrets string        Path to the secrets file
       --trigger-index int     Index of the trigger to run (0-based) (default -1)
 ```
 
