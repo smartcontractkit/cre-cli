@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/google/uuid"
 	"github.com/machinebox/graphql"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
@@ -175,6 +176,7 @@ mutation InitiateUnlinking($request: InitiateUnlinkingRequest!) {
 		"workflowOwnerAddress": in.WorkflowOwner,
 		"environment":          environment,
 	})
+	req.Header.Set("Idempotency-Key", uuid.New().String())
 
 	var container struct {
 		InitiateUnlinking initiateUnlinkingResponse `json:"initiateUnlinking"`
