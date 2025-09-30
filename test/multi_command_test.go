@@ -78,7 +78,6 @@ func TestMultiCommandWorkflowHappyPaths(t *testing.T) {
 		// Use test address for this test
 		require.NoError(t, createCliEnvFile(tc.EnvFile, constants.TestPrivateKey4), "failed to create env file")
 		require.NoError(t, createProjectSettingsFile(tc.ProjectDirectory+"project.yaml", constants.TestAddress4, testEthUrl), "failed to create project.yaml")
-		require.NoError(t, createWorkflowDirectory(tc.ProjectDirectory, "account-workflow", ""), "failed to create workflow directory")
 		t.Cleanup(tc.Cleanup(t))
 
 		// Run account happy path workflow
