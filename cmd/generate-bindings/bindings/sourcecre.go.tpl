@@ -101,13 +101,24 @@ type {{$call.Normalized.Name}}Output struct {
 {{end}}
 
 // Events
-{{range $event := $contract.Events}}type {{.Normalized.Name}} struct {
+{{range $event := $contract.Events}}
+
+type {{.Normalized.Name}} struct {
 	{{- range .Normalized.Inputs}}
 	{{capitalise .Name}} {{if .Indexed}}{{bindtopictype .Type $.Structs}}{{else}}{{bindtype .Type $.Structs}}{{end}}
 	{{- end}}
 }
 
+// Decoded Events (indexed inputs -> common.Hash)
+// Add support for retaining non-dynamic types that are not hashed
+type {{.Normalized.Name}}Decoded struct {
+	{{- range .Normalized.Inputs}}
+	{{capitalise .Name}} {{if .Indexed}}common.Hash{{else}}{{bindtype .Type $.Structs}}{{end}}
+	{{- end}}
+}
+
 {{end}}
+
 
 // Main Binding Type for {{$contract.Type}}
 type {{$contract.Type}} struct {
@@ -141,7 +152,7 @@ type {{$contract.Type}}Codec interface {
 	{{- range $event := .Events}}
 	{{.Normalized.Name}}LogHash() []byte
 	Encode{{.Normalized.Name}}Topics(evt abi.Event, values []{{.Normalized.Name}}) ([]*evm.TopicValues, error)
-	Decode{{.Normalized.Name}}(log *evm.Log) (*{{.Normalized.Name}}, error)
+	Decode{{.Normalized.Name}}(log *evm.Log) (*{{.Normalized.Name}}Decoded, error)
 	{{- end}}
 }
 
@@ -318,14 +329,15 @@ func (c *Codec) Encode{{.Normalized.Name}}Topics(
 
 
 // Decode{{.Normalized.Name}} decodes a log into a {{.Normalized.Name}} struct.
-func (c *Codec) Decode{{.Normalized.Name}}(log *evm.Log) (*{{.Normalized.Name}}, error) {
-	event := new({{.Normalized.Name}})
+func (c *Codec) Decode{{.Normalized.Name}}(log *evm.Log) (*{{.Normalized.Name}}Decoded, error) {
+	event := new({{.Normalized.Name}}Decoded)
 	if err := c.abi.UnpackIntoInterface(event, "{{.Original.Name}}", log.Data); err != nil {
 		return nil, err
 	}
 	var indexed abi.Arguments
 	for _, arg := range c.abi.Events["{{.Original.Name}}"].Inputs {
 		if arg.Indexed {
+			arg.Type.T = abi.BytesTy
 			indexed = append(indexed, arg)
 		}
 	}
@@ -503,20 +515,20 @@ type {{.Normalized.Name}}Trigger struct {
 }
 
 // Adapt method that decodes the log into {{.Normalized.Name}} data
-func (t *{{.Normalized.Name}}Trigger) Adapt(l *evm.Log) (*bindings.DecodedLog[{{.Normalized.Name}}], error) {
+func (t *{{.Normalized.Name}}Trigger) Adapt(l *evm.Log) (*bindings.DecodedLog[{{.Normalized.Name}}Decoded], error) {
 	// Decode the log using the contract's codec
 	decoded, err := t.contract.Codec.Decode{{.Normalized.Name}}(l)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode {{.Normalized.Name}} log: %w", err)
 	}
 	
-	return &bindings.DecodedLog[{{.Normalized.Name}}]{
+	return &bindings.DecodedLog[{{.Normalized.Name}}Decoded]{
 		Log:  l,           // Original log
 		Data: *decoded,    // Decoded data
 	}, nil
 }
 
-func (c *{{$contract.Type}}) LogTrigger{{.Normalized.Name}}Log(chainSelector uint64, confidence evm.ConfidenceLevel, filters []{{.Normalized.Name}}) (cre.Trigger[*evm.Log, *bindings.DecodedLog[{{.Normalized.Name}}]], error) {
+func (c *{{$contract.Type}}) LogTrigger{{.Normalized.Name}}Log(chainSelector uint64, confidence evm.ConfidenceLevel, filters []{{.Normalized.Name}}) (cre.Trigger[*evm.Log, *bindings.DecodedLog[{{.Normalized.Name}}Decoded]], error) {
 	event := c.ABI.Events["{{.Normalized.Name}}"]
 	topics, err := c.Codec.Encode{{.Normalized.Name}}Topics(event, filters)
 	if err != nil {

@@ -113,13 +113,29 @@ type DataNotFound2 struct {
 }
 
 // Events
+
 type AccessLogged struct {
 	Caller  common.Address
 	Message string
 }
 
+// Decoded Events (indexed inputs -> common.Hash)
+// Add support for retaining non-dynamic types that are not hashed
+type AccessLoggedDecoded struct {
+	Caller  common.Hash
+	Message string
+}
+
 type DataStored struct {
 	Sender common.Address
+	Key    string
+	Value  string
+}
+
+// Decoded Events (indexed inputs -> common.Hash)
+// Add support for retaining non-dynamic types that are not hashed
+type DataStoredDecoded struct {
+	Sender common.Hash
 	Key    string
 	Value  string
 }
@@ -132,7 +148,22 @@ type DynamicEvent struct {
 	MetadataArray [][]byte
 }
 
+// Decoded Events (indexed inputs -> common.Hash)
+// Add support for retaining non-dynamic types that are not hashed
+type DynamicEventDecoded struct {
+	Key           string
+	UserData      common.Hash
+	Sender        string
+	Metadata      common.Hash
+	MetadataArray common.Hash
+}
+
 type NoFields struct {
+}
+
+// Decoded Events (indexed inputs -> common.Hash)
+// Add support for retaining non-dynamic types that are not hashed
+type NoFieldsDecoded struct {
 }
 
 // Main Binding Type for DataStorage
@@ -165,16 +196,16 @@ type DataStorageCodec interface {
 	EncodeUserDataStruct(in UserData) ([]byte, error)
 	AccessLoggedLogHash() []byte
 	EncodeAccessLoggedTopics(evt abi.Event, values []AccessLogged) ([]*evm.TopicValues, error)
-	DecodeAccessLogged(log *evm.Log) (*AccessLogged, error)
+	DecodeAccessLogged(log *evm.Log) (*AccessLoggedDecoded, error)
 	DataStoredLogHash() []byte
 	EncodeDataStoredTopics(evt abi.Event, values []DataStored) ([]*evm.TopicValues, error)
-	DecodeDataStored(log *evm.Log) (*DataStored, error)
+	DecodeDataStored(log *evm.Log) (*DataStoredDecoded, error)
 	DynamicEventLogHash() []byte
 	EncodeDynamicEventTopics(evt abi.Event, values []DynamicEvent) ([]*evm.TopicValues, error)
-	DecodeDynamicEvent(log *evm.Log) (*DynamicEvent, error)
+	DecodeDynamicEvent(log *evm.Log) (*DynamicEventDecoded, error)
 	NoFieldsLogHash() []byte
 	EncodeNoFieldsTopics(evt abi.Event, values []NoFields) ([]*evm.TopicValues, error)
-	DecodeNoFields(log *evm.Log) (*NoFields, error)
+	DecodeNoFields(log *evm.Log) (*NoFieldsDecoded, error)
 }
 
 func NewDataStorage(
@@ -448,14 +479,15 @@ func (c *Codec) EncodeAccessLoggedTopics(
 }
 
 // DecodeAccessLogged decodes a log into a AccessLogged struct.
-func (c *Codec) DecodeAccessLogged(log *evm.Log) (*AccessLogged, error) {
-	event := new(AccessLogged)
+func (c *Codec) DecodeAccessLogged(log *evm.Log) (*AccessLoggedDecoded, error) {
+	event := new(AccessLoggedDecoded)
 	if err := c.abi.UnpackIntoInterface(event, "AccessLogged", log.Data); err != nil {
 		return nil, err
 	}
 	var indexed abi.Arguments
 	for _, arg := range c.abi.Events["AccessLogged"].Inputs {
 		if arg.Indexed {
+			arg.Type.T = abi.BytesTy
 			indexed = append(indexed, arg)
 		}
 	}
@@ -510,14 +542,15 @@ func (c *Codec) EncodeDataStoredTopics(
 }
 
 // DecodeDataStored decodes a log into a DataStored struct.
-func (c *Codec) DecodeDataStored(log *evm.Log) (*DataStored, error) {
-	event := new(DataStored)
+func (c *Codec) DecodeDataStored(log *evm.Log) (*DataStoredDecoded, error) {
+	event := new(DataStoredDecoded)
 	if err := c.abi.UnpackIntoInterface(event, "DataStored", log.Data); err != nil {
 		return nil, err
 	}
 	var indexed abi.Arguments
 	for _, arg := range c.abi.Events["DataStored"].Inputs {
 		if arg.Indexed {
+			arg.Type.T = abi.BytesTy
 			indexed = append(indexed, arg)
 		}
 	}
@@ -590,14 +623,15 @@ func (c *Codec) EncodeDynamicEventTopics(
 }
 
 // DecodeDynamicEvent decodes a log into a DynamicEvent struct.
-func (c *Codec) DecodeDynamicEvent(log *evm.Log) (*DynamicEvent, error) {
-	event := new(DynamicEvent)
+func (c *Codec) DecodeDynamicEvent(log *evm.Log) (*DynamicEventDecoded, error) {
+	event := new(DynamicEventDecoded)
 	if err := c.abi.UnpackIntoInterface(event, "DynamicEvent", log.Data); err != nil {
 		return nil, err
 	}
 	var indexed abi.Arguments
 	for _, arg := range c.abi.Events["DynamicEvent"].Inputs {
 		if arg.Indexed {
+			arg.Type.T = abi.BytesTy
 			indexed = append(indexed, arg)
 		}
 	}
@@ -642,14 +676,15 @@ func (c *Codec) EncodeNoFieldsTopics(
 }
 
 // DecodeNoFields decodes a log into a NoFields struct.
-func (c *Codec) DecodeNoFields(log *evm.Log) (*NoFields, error) {
-	event := new(NoFields)
+func (c *Codec) DecodeNoFields(log *evm.Log) (*NoFieldsDecoded, error) {
+	event := new(NoFieldsDecoded)
 	if err := c.abi.UnpackIntoInterface(event, "NoFields", log.Data); err != nil {
 		return nil, err
 	}
 	var indexed abi.Arguments
 	for _, arg := range c.abi.Events["NoFields"].Inputs {
 		if arg.Indexed {
+			arg.Type.T = abi.BytesTy
 			indexed = append(indexed, arg)
 		}
 	}
@@ -1007,20 +1042,20 @@ type AccessLoggedTrigger struct {
 }
 
 // Adapt method that decodes the log into AccessLogged data
-func (t *AccessLoggedTrigger) Adapt(l *evm.Log) (*bindings.DecodedLog[AccessLogged], error) {
+func (t *AccessLoggedTrigger) Adapt(l *evm.Log) (*bindings.DecodedLog[AccessLoggedDecoded], error) {
 	// Decode the log using the contract's codec
 	decoded, err := t.contract.Codec.DecodeAccessLogged(l)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode AccessLogged log: %w", err)
 	}
 
-	return &bindings.DecodedLog[AccessLogged]{
+	return &bindings.DecodedLog[AccessLoggedDecoded]{
 		Log:  l,        // Original log
 		Data: *decoded, // Decoded data
 	}, nil
 }
 
-func (c *DataStorage) LogTriggerAccessLoggedLog(chainSelector uint64, confidence evm.ConfidenceLevel, filters []AccessLogged) (cre.Trigger[*evm.Log, *bindings.DecodedLog[AccessLogged]], error) {
+func (c *DataStorage) LogTriggerAccessLoggedLog(chainSelector uint64, confidence evm.ConfidenceLevel, filters []AccessLogged) (cre.Trigger[*evm.Log, *bindings.DecodedLog[AccessLoggedDecoded]], error) {
 	event := c.ABI.Events["AccessLogged"]
 	topics, err := c.Codec.EncodeAccessLoggedTopics(event, filters)
 	if err != nil {
@@ -1065,20 +1100,20 @@ type DataStoredTrigger struct {
 }
 
 // Adapt method that decodes the log into DataStored data
-func (t *DataStoredTrigger) Adapt(l *evm.Log) (*bindings.DecodedLog[DataStored], error) {
+func (t *DataStoredTrigger) Adapt(l *evm.Log) (*bindings.DecodedLog[DataStoredDecoded], error) {
 	// Decode the log using the contract's codec
 	decoded, err := t.contract.Codec.DecodeDataStored(l)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode DataStored log: %w", err)
 	}
 
-	return &bindings.DecodedLog[DataStored]{
+	return &bindings.DecodedLog[DataStoredDecoded]{
 		Log:  l,        // Original log
 		Data: *decoded, // Decoded data
 	}, nil
 }
 
-func (c *DataStorage) LogTriggerDataStoredLog(chainSelector uint64, confidence evm.ConfidenceLevel, filters []DataStored) (cre.Trigger[*evm.Log, *bindings.DecodedLog[DataStored]], error) {
+func (c *DataStorage) LogTriggerDataStoredLog(chainSelector uint64, confidence evm.ConfidenceLevel, filters []DataStored) (cre.Trigger[*evm.Log, *bindings.DecodedLog[DataStoredDecoded]], error) {
 	event := c.ABI.Events["DataStored"]
 	topics, err := c.Codec.EncodeDataStoredTopics(event, filters)
 	if err != nil {
@@ -1123,20 +1158,20 @@ type DynamicEventTrigger struct {
 }
 
 // Adapt method that decodes the log into DynamicEvent data
-func (t *DynamicEventTrigger) Adapt(l *evm.Log) (*bindings.DecodedLog[DynamicEvent], error) {
+func (t *DynamicEventTrigger) Adapt(l *evm.Log) (*bindings.DecodedLog[DynamicEventDecoded], error) {
 	// Decode the log using the contract's codec
 	decoded, err := t.contract.Codec.DecodeDynamicEvent(l)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode DynamicEvent log: %w", err)
 	}
 
-	return &bindings.DecodedLog[DynamicEvent]{
+	return &bindings.DecodedLog[DynamicEventDecoded]{
 		Log:  l,        // Original log
 		Data: *decoded, // Decoded data
 	}, nil
 }
 
-func (c *DataStorage) LogTriggerDynamicEventLog(chainSelector uint64, confidence evm.ConfidenceLevel, filters []DynamicEvent) (cre.Trigger[*evm.Log, *bindings.DecodedLog[DynamicEvent]], error) {
+func (c *DataStorage) LogTriggerDynamicEventLog(chainSelector uint64, confidence evm.ConfidenceLevel, filters []DynamicEvent) (cre.Trigger[*evm.Log, *bindings.DecodedLog[DynamicEventDecoded]], error) {
 	event := c.ABI.Events["DynamicEvent"]
 	topics, err := c.Codec.EncodeDynamicEventTopics(event, filters)
 	if err != nil {
@@ -1181,20 +1216,20 @@ type NoFieldsTrigger struct {
 }
 
 // Adapt method that decodes the log into NoFields data
-func (t *NoFieldsTrigger) Adapt(l *evm.Log) (*bindings.DecodedLog[NoFields], error) {
+func (t *NoFieldsTrigger) Adapt(l *evm.Log) (*bindings.DecodedLog[NoFieldsDecoded], error) {
 	// Decode the log using the contract's codec
 	decoded, err := t.contract.Codec.DecodeNoFields(l)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode NoFields log: %w", err)
 	}
 
-	return &bindings.DecodedLog[NoFields]{
+	return &bindings.DecodedLog[NoFieldsDecoded]{
 		Log:  l,        // Original log
 		Data: *decoded, // Decoded data
 	}, nil
 }
 
-func (c *DataStorage) LogTriggerNoFieldsLog(chainSelector uint64, confidence evm.ConfidenceLevel, filters []NoFields) (cre.Trigger[*evm.Log, *bindings.DecodedLog[NoFields]], error) {
+func (c *DataStorage) LogTriggerNoFieldsLog(chainSelector uint64, confidence evm.ConfidenceLevel, filters []NoFields) (cre.Trigger[*evm.Log, *bindings.DecodedLog[NoFieldsDecoded]], error) {
 	event := c.ABI.Events["NoFields"]
 	topics, err := c.Codec.EncodeNoFieldsTopics(event, filters)
 	if err != nil {
