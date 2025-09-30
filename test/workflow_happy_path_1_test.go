@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/smartcontractkit/cre-cli/internal/constants"
+	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 )
@@ -232,6 +233,9 @@ func TestCLIWorkflowDeployWithEoa(t *testing.T) {
 	t.Setenv(environments.EnvVarWorkflowRegistryChainName, TestChainName)
 	t.Setenv(environments.EnvVarCapabilitiesRegistryAddress, "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9")
 	t.Setenv(environments.EnvVarCapabilitiesRegistryChainName, TestChainName)
+
+	// Set dummy API key
+	t.Setenv(credentials.CreApiKeyVar, "test-api")
 
 	// Deploy with mocked storage
 	out := tc.workflowDeployEoaWithMockStorage(t)

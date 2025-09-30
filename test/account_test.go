@@ -25,6 +25,7 @@ import (
 	workflow_registry_v2_wrapper "github.com/smartcontractkit/chainlink-evm/gethwrappers/workflow/generated/workflow_registry_wrapper_v2"
 
 	"github.com/smartcontractkit/cre-cli/internal/constants"
+	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	test "github.com/smartcontractkit/cre-cli/test/contracts"
@@ -52,6 +53,9 @@ func TestCLIAccountLinkListUnlinkFlow_EOA(t *testing.T) {
 	t.Setenv(environments.EnvVarWorkflowRegistryChainName, TestChainName)
 	t.Setenv(environments.EnvVarCapabilitiesRegistryAddress, "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9")
 	t.Setenv(environments.EnvVarCapabilitiesRegistryChainName, TestChainName)
+
+	// Set dummy API key
+	t.Setenv(credentials.CreApiKeyVar, "test-api")
 
 	registryAddr := os.Getenv(environments.EnvVarWorkflowRegistryAddress)
 	require.NotEmpty(t, registryAddr, "registry address env must be set")
