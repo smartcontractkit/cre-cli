@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/smartcontractkit/cre-cli/internal/constants"
+	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/test/multi_command_flows"
 )
@@ -27,6 +28,9 @@ func TestMultiCommandWorkflowHappyPaths(t *testing.T) {
 
 	// Run Happy Path 1: Deploy -> Pause -> Activate -> Delete
 	t.Run("HappyPath1_DeployPauseActivateDelete", func(t *testing.T) {
+		// Set dummy API key for authentication
+		t.Setenv(credentials.CreApiKeyVar, "test-api")
+
 		// Setup environment variables for pre-baked registries from Anvil state dump
 		t.Setenv(environments.EnvVarWorkflowRegistryAddress, "0x5FbDB2315678afecb367f032d93F642f64180aa3")
 		t.Setenv(environments.EnvVarWorkflowRegistryChainName, TestChainName)
@@ -47,6 +51,9 @@ func TestMultiCommandWorkflowHappyPaths(t *testing.T) {
 
 	// Run Happy Path 2: Deploy without autostart -> Deploy update with config
 	t.Run("HappyPath2_DeployUpdateWithConfig", func(t *testing.T) {
+		// Set dummy API key for authentication
+		t.Setenv(credentials.CreApiKeyVar, "test-api")
+
 		// Setup environment variables for pre-baked registries from Anvil state dump
 		t.Setenv(environments.EnvVarWorkflowRegistryAddress, "0x5FbDB2315678afecb367f032d93F642f64180aa3")
 		t.Setenv(environments.EnvVarWorkflowRegistryChainName, TestChainName)
@@ -67,6 +74,9 @@ func TestMultiCommandWorkflowHappyPaths(t *testing.T) {
 
 	// Run Account Happy Path: Link -> List -> Unlink -> List (verify unlinked)
 	t.Run("AccountHappyPath_LinkListUnlinkList", func(t *testing.T) {
+		// Set dummy API key for authentication
+		t.Setenv(credentials.CreApiKeyVar, "test-api")
+
 		// Setup environment variables for pre-baked registries from Anvil state dump
 		t.Setenv(environments.EnvVarWorkflowRegistryAddress, "0x5FbDB2315678afecb367f032d93F642f64180aa3")
 		t.Setenv(environments.EnvVarWorkflowRegistryChainName, TestChainName)
@@ -86,6 +96,9 @@ func TestMultiCommandWorkflowHappyPaths(t *testing.T) {
 
 	// Run Secrets Happy Path: Create -> Update -> List -> Delete
 	t.Run("SecretsHappyPath_CreateUpdateListDelete", func(t *testing.T) {
+		// Set dummy API key for authentication
+		t.Setenv(credentials.CreApiKeyVar, "test-api")
+
 		tc := NewTestConfig(t)
 
 		// Use linked Address3 + its key
