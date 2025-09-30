@@ -12,6 +12,7 @@ import (
 	"github.com/jarcoal/httpmock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/testutil/chainsim"
 )
 
@@ -61,6 +62,9 @@ type GraphQLRequest struct {
 func TestUpload_SuccessAndErrorCases(t *testing.T) {
 	httpmock.Activate()
 	t.Cleanup(httpmock.DeactivateAndReset)
+
+	// Set dummy API key
+	t.Setenv(credentials.CreApiKeyVar, "test-api")
 
 	simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
 	ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
@@ -127,6 +131,9 @@ func TestUploadArtifactToStorageService_OriginError(t *testing.T) {
 	httpmock.Activate()
 	t.Cleanup(httpmock.DeactivateAndReset)
 
+	// Set dummy API key
+	t.Setenv(credentials.CreApiKeyVar, "test-api")
+
 	simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
 	runtimeContext, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
 	h := newHandler(runtimeContext, buf)
@@ -155,6 +162,9 @@ func TestUploadArtifactToStorageService_OriginError(t *testing.T) {
 func TestUploadArtifactToStorageService_AlreadyExistsError(t *testing.T) {
 	httpmock.Activate()
 	t.Cleanup(httpmock.DeactivateAndReset)
+
+	// Set dummy API key
+	t.Setenv(credentials.CreApiKeyVar, "test-api")
 
 	simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
 	runtimeContext, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()

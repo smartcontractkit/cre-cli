@@ -13,18 +13,9 @@ func TestNew_Default(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	logger := testutil.NewTestLogger()
 
-	cfg, err := New(logger)
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
-	if cfg.APIKey != "" {
-		t.Errorf("expected empty APIKey, got %q", cfg.APIKey)
-	}
-	if cfg.AuthType != AuthTypeBearer {
-		t.Errorf("expected AuthType %q, got %q", AuthTypeBearer, cfg.AuthType)
-	}
-	if cfg.Tokens != nil {
-		t.Error("expected nil Tokens when no config file present")
+	_, err := New(logger)
+	if err == nil || err.Error() != "you are not logged in, try running cre login" {
+		t.Fatalf("expected error %q, got %v", "you are not logged in, try running cre login", err)
 	}
 }
 
