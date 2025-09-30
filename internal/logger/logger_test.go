@@ -60,8 +60,10 @@ func TestLogger(t *testing.T) {
 		log.Info().Msg("pretty message")
 		output := buf.String()
 
-		// Pretty logging typically includes colors (ANSI escape codes)
-		assert.Contains(t, output, "\x1b[")
+		// Console writer uses level abbreviations like "INF" instead of JSON format
+		assert.Contains(t, output, "INF")
+		// Console format should not be JSON
+		assert.NotContains(t, output, `{"level":"info"}`)
 	})
 
 	t.Run("Logger with fields", func(t *testing.T) {

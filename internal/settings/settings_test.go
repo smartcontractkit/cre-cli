@@ -200,7 +200,7 @@ func TestLoadEnvAndMergedSettings(t *testing.T) {
 
 	setUpTestSettingsFiles(t, v, workflowTemplatePath, projectTemplatePath, tempDir)
 
-	cmd := &cobra.Command{Use: "login"}
+	cmd := &cobra.Command{Use: "workflow"}
 	s, err := settings.New(logger, v, cmd)
 	require.NoError(t, err)
 	require.NotNil(t, s)

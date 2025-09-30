@@ -14,7 +14,7 @@ production-testnet:
   logging:
     seth-config-path: seth.toml
   rpcs:
-    - chain-name: ethereum-testnet-sepolia-base-1
+    - chain-name: ethereum-testnet-sepolia-arbitrum-1
       url: https://somethingElse.rpc.org
     - chain-name: ethereum-testnet-sepolia
       url: https://something.rpc.org
