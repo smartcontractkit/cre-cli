@@ -64,4 +64,24 @@ func TestMultiCommandWorkflowHappyPaths(t *testing.T) {
 		// Run happy path 2 workflow
 		multi_command_flows.RunHappyPath2Workflow(t, tc)
 	})
+
+	// Run Account Happy Path: Link -> List -> Unlink -> List (verify unlinked)
+	t.Run("AccountHappyPath_LinkListUnlinkList", func(t *testing.T) {
+		// Setup environment variables for pre-baked registries from Anvil state dump
+		t.Setenv(environments.EnvVarWorkflowRegistryAddress, "0x5FbDB2315678afecb367f032d93F642f64180aa3")
+		t.Setenv(environments.EnvVarWorkflowRegistryChainName, TestChainName)
+		t.Setenv(environments.EnvVarCapabilitiesRegistryAddress, "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9")
+		t.Setenv(environments.EnvVarCapabilitiesRegistryChainName, TestChainName)
+
+		tc := NewTestConfig(t)
+
+		// Use test address for this test
+		require.NoError(t, createCliEnvFile(tc.EnvFile, constants.TestPrivateKey4), "failed to create env file")
+		require.NoError(t, createProjectSettingsFile(tc.ProjectDirectory+"project.yaml", constants.TestAddress4, testEthUrl), "failed to create project.yaml")
+		require.NoError(t, createWorkflowDirectory(tc.ProjectDirectory, "account-workflow", ""), "failed to create workflow directory")
+		t.Cleanup(tc.Cleanup(t))
+
+		// Run account happy path workflow
+		multi_command_flows.RunAccountHappyPath(t, tc, testEthUrl, TestChainName)
+	})
 }
