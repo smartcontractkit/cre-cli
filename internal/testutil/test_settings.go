@@ -34,7 +34,7 @@ func NewTestSettings(v *viper.Viper, logger *zerolog.Logger) (*settings.Settings
 		return nil, fmt.Errorf("failed to write project settings file: %w", err)
 	}
 
-	v.Set(settings.Flags.ProjectRoot.Name, workflowFile)
+	v.Set(settings.Flags.ProjectRoot.Name, projectFile)
 	v.Set(settings.CreTargetEnvVar, "production-testnet")
 
 	cmd := &cobra.Command{Use: "login"}

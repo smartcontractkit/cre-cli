@@ -51,7 +51,7 @@ var languageTemplates = []LanguageTemplate{
 	{
 		Title: "Golang",
 		Lang:  TemplateLangGo,
-		Path:  ".",
+		Path:  ".", // Path to the workflow main file
 		Workflows: []WorkflowTemplate{
 			{Folder: "porExampleDev", Title: "Custom data feed: Updating on-chain data periodically using offchain API data", ID: 1},
 			{Folder: "blankTemplate", Title: "Boilerplate: A barebones template with just the essentials", ID: 2},
@@ -60,7 +60,7 @@ var languageTemplates = []LanguageTemplate{
 	{
 		Title: "Typescript",
 		Lang:  TemplateLangTS,
-		Path:  "./main.ts",
+		Path:  "./main.ts", // Path to the workflow main file
 		Workflows: []WorkflowTemplate{
 			{Folder: "typescriptSimpleExample", Title: "Development Hello World example for a simple workflow", ID: 3},
 		},

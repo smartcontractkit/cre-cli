@@ -31,11 +31,9 @@ func New(opts ...Option) *zerolog.Logger {
 
 	// Pretty logging for development
 	if config.isDev {
-		// For console writer, only exclude timestamp but keep level for readability
-		excludeParts := []string{zerolog.TimestampFieldName}
 		logger = logger.Output(zerolog.ConsoleWriter{
 			Out:          config.output,
-			PartsExclude: excludeParts,
+			PartsExclude: config.excludeParts,
 		})
 	}
 
