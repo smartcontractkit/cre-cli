@@ -39,7 +39,7 @@ func TestWorkflowActivateCommand(t *testing.T) {
 				inputs: fillRequired(Inputs{
 					WorkflowName:  "",
 					WorkflowOwner: "0x4c0883a69102937d6234146e38a6aefbf95944c6e4d4013a6d287e4d739e7f9b",
-					DonFamily:     "test-don",
+					DonFamily:     "zone-a",
 				}),
 				wantErr:    true,
 				wantKey:    "Inputs.WorkflowName",
@@ -50,7 +50,7 @@ func TestWorkflowActivateCommand(t *testing.T) {
 				inputs: fillRequired(Inputs{
 					WorkflowName:  "this_is_a_really_long_workflow_name_that_exceeds_the_maximum_allowed_length_of_64_chars",
 					WorkflowOwner: "0x4c0883a69102937d6234146e38a6aefbf95944c6e4d4013a6d287e4d739e7f9b",
-					DonFamily:     "test-don",
+					DonFamily:     "zone-a",
 				}),
 				wantErr:    true,
 				wantKey:    "Inputs.WorkflowName",
@@ -61,7 +61,7 @@ func TestWorkflowActivateCommand(t *testing.T) {
 				inputs: fillRequired(Inputs{
 					WorkflowName:  "valid_workflow",
 					WorkflowOwner: "4c0883a69102937d6234146e38a6aefbf95944c6e4d4013a6d287e4d739e7f9b",
-					DonFamily:     "test-don",
+					DonFamily:     "zone-a",
 				}),
 				wantErr:    true,
 				wantKey:    "Inputs.WorkflowOwner",
@@ -72,7 +72,7 @@ func TestWorkflowActivateCommand(t *testing.T) {
 				inputs: fillRequired(Inputs{
 					WorkflowName:  "valid_workflow",
 					WorkflowOwner: "0x12345",
-					DonFamily:     "test-don",
+					DonFamily:     "zone-a",
 				}),
 				wantErr:    true,
 				wantKey:    "Inputs.WorkflowOwner",
@@ -83,7 +83,7 @@ func TestWorkflowActivateCommand(t *testing.T) {
 				inputs: fillRequired(Inputs{
 					WorkflowName:  "valid_workflow",
 					WorkflowOwner: "",
-					DonFamily:     "test-don",
+					DonFamily:     "zone-a",
 				}),
 				wantErr:    true,
 				wantKey:    "Inputs.WorkflowOwner",

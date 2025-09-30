@@ -92,7 +92,7 @@ func DeployCapabilitiesRegistry(sethClient *seth.Client, pubKeys []*ed25519.Publ
 
 	_, err = sethClient.Decode(registry.AddDONs(sethClient.NewTXOpts(), []capabilities_registry_wrapper_v2.CapabilitiesRegistryNewDONParams{
 		{
-			Name:        "test-don",
+			Name:        "zone-a",
 			DonFamilies: []string{constants.DefaultStagingDonFamily},
 			Config:      []byte{0x01, 0x02, 0x03}, // Example config, should be replaced with actual config
 			CapabilityConfigurations: []capabilities_registry_wrapper_v2.CapabilitiesRegistryCapabilityConfiguration{

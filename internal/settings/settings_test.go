@@ -210,7 +210,7 @@ func TestLoadEnvAndMergedSettings(t *testing.T) {
 
 	assert.Equal(t, "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266", s.Workflow.UserWorkflowSettings.WorkflowOwnerAddress, "Workflow owner address should be taken from workflow settings")
 	assert.Equal(t, "workflowTest", s.Workflow.UserWorkflowSettings.WorkflowName, "Workflow name should be taken from workflow settings")
-	assert.Equal(t, "test-don", s.Workflow.DevPlatformSettings.DonFamily, "DonFamily should be test-don")
+	assert.Equal(t, "zone-a", s.Workflow.DevPlatformSettings.DonFamily, "DonFamily should be zone-a")
 
 	assert.Equal(t, "seth.toml", s.Workflow.LoggingSettings.SethConfigPath, "Logging seth config path should be set to 'seth.toml'")
 

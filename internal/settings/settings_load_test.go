@@ -20,7 +20,7 @@ production-testnet:
   hierarchy-test: Project
   test-key: projectValue
   cre-cli:
-    don-family: "test-don"
+    don-family: "zone-a"
   user-workflow:
     workflow-owner-address: ""
     workflow-name: ""
