@@ -20,6 +20,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/cmd/secrets/common"
 	"github.com/smartcontractkit/cre-cli/cmd/secrets/delete"
 	"github.com/smartcontractkit/cre-cli/internal/constants"
+	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 )
 
@@ -46,6 +47,10 @@ func RunSecretsHappyPath(t *testing.T, tc TestConfig, chainName string) {
 	t.Setenv(environments.EnvVarCapabilitiesRegistryChainName, chainName)
 
 	// Set up a mock server to simulate the vault gateway
+	// Set dummy API key
+	t.Setenv(credentials.CreApiKeyVar, "test-api")
+
+	// set up a mock server to simulate the vault gateway
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		type reqEnvelope struct {
 			JSONRPC string          `json:"jsonrpc"`

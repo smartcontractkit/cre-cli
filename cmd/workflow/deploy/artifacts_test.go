@@ -64,6 +64,9 @@ func TestUpload_SuccessAndErrorCases(t *testing.T) {
 	httpmock.Activate()
 	t.Cleanup(httpmock.DeactivateAndReset)
 
+	// Set dummy API key
+	t.Setenv(credentials.CreApiKeyVar, "test-api")
+
 	simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
 	ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
 	h := newHandler(ctx, buf)
@@ -168,6 +171,9 @@ func TestUploadArtifactToStorageService_OriginError(t *testing.T) {
 	httpmock.Activate()
 	t.Cleanup(httpmock.DeactivateAndReset)
 
+	// Set dummy API key
+	t.Setenv(credentials.CreApiKeyVar, "test-api")
+
 	simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
 	runtimeContext, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
 	h := newHandler(runtimeContext, buf)
@@ -235,6 +241,9 @@ func TestUploadArtifactToStorageService_OriginError(t *testing.T) {
 func TestUploadArtifactToStorageService_AlreadyExistsError(t *testing.T) {
 	httpmock.Activate()
 	t.Cleanup(httpmock.DeactivateAndReset)
+
+	// Set dummy API key
+	t.Setenv(credentials.CreApiKeyVar, "test-api")
 
 	simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
 	runtimeContext, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()

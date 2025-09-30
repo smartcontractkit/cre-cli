@@ -57,6 +57,7 @@ func (h *handler) handleUpsert(params client.RegisterWorkflowV2Parameters) error
 	switch txOut.Type {
 	case client.Regular:
 		h.log.Info().Msgf("Transaction confirmed: %s", txOut.Hash)
+		h.log.Info().Msgf("View on explorer: %s/tx/%s", h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash)
 		h.log.Info().Msgf("Deployed %s:%s with workflow ID: %s", workflowName, workflowTag, hex.EncodeToString(params.WorkflowID[:]))
 		h.log.Info().Msg("Workflow deployed successfully")
 

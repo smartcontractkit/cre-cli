@@ -58,21 +58,21 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 }
 
 type handler struct {
-	log             *zerolog.Logger
-	clientFactory   client.Factory
-	settings        *settings.Settings
-	environmentsSet *environments.EnvironmentSet
-	validated       bool
-	inputs          Inputs
+	log            *zerolog.Logger
+	clientFactory  client.Factory
+	settings       *settings.Settings
+	environmentSet *environments.EnvironmentSet
+	validated      bool
+	inputs         Inputs
 }
 
 func newHandler(ctx *runtime.Context) *handler {
 	return &handler{
-		log:             ctx.Logger,
-		clientFactory:   ctx.ClientFactory,
-		settings:        ctx.Settings,
-		environmentsSet: ctx.EnvironmentSet,
-		validated:       false,
+		log:            ctx.Logger,
+		clientFactory:  ctx.ClientFactory,
+		settings:       ctx.Settings,
+		environmentSet: ctx.EnvironmentSet,
+		validated:      false,
 	}
 }
 
@@ -81,8 +81,8 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 		WorkflowName:                      h.settings.Workflow.UserWorkflowSettings.WorkflowName,
 		WorkflowOwner:                     h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress,
 		DonFamily:                         h.settings.Workflow.DevPlatformSettings.DonFamily,
-		WorkflowRegistryContractAddress:   h.environmentsSet.WorkflowRegistryAddress,
-		WorkflowRegistryContractChainName: h.environmentsSet.WorkflowRegistryChainName,
+		WorkflowRegistryContractAddress:   h.environmentSet.WorkflowRegistryAddress,
+		WorkflowRegistryContractChainName: h.environmentSet.WorkflowRegistryChainName,
 	}, nil
 }
 
@@ -145,6 +145,7 @@ func (h *handler) Execute() error {
 	switch txOut.Type {
 	case client.Regular:
 		h.log.Info().Msgf("Transaction confirmed: %s", txOut.Hash)
+		h.log.Info().Msgf("View on explorer: %s/tx/%s", h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash)
 		h.log.Info().Msgf("Activated workflow ID: %s", hex.EncodeToString(latest.WorkflowId[:]))
 		h.log.Info().Msg("Workflow activated successfully")
 

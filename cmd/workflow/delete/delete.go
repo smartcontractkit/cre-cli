@@ -163,6 +163,7 @@ func (h *handler) Execute() error {
 		switch txOut.Type {
 		case client.Regular:
 			h.log.Info().Msgf("Transaction confirmed: %s", txOut.Hash)
+			h.log.Info().Msgf("View on explorer: %s/tx/%s", h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash)
 			h.log.Info().Msgf("Deleted workflow ID: %s", hex.EncodeToString(wf.WorkflowId[:]))
 
 		case client.Raw:

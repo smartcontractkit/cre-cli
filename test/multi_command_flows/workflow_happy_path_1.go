@@ -13,6 +13,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 )
@@ -226,6 +227,9 @@ func workflowDeleteEoa(t *testing.T, tc TestConfig) string {
 // Deploy -> Pause -> Activate -> Delete
 func RunHappyPath1Workflow(t *testing.T, tc TestConfig) {
 	t.Helper()
+
+	// Set dummy API key
+	t.Setenv(credentials.CreApiKeyVar, "test-api")
 
 	// Deploy with mocked storage
 	out := workflowDeployEoaWithMockStorage(t, tc)
