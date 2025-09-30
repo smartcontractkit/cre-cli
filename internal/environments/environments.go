@@ -17,10 +17,11 @@ const (
 	EnvVarAudience        = "CRE_CLI_AUDIENCE"
 	EnvVarVaultGatewayURL = "CRE_VAULT_DON_GATEWAY_URL"
 
-	EnvVarWorkflowRegistryAddress       = "CRE_CLI_WORKFLOW_REGISTRY_ADDRESS"
-	EnvVarWorkflowRegistryChainName     = "CRE_CLI_WORKFLOW_REGISTRY_CHAIN_NAME"
-	EnvVarCapabilitiesRegistryAddress   = "CRE_CLI_CAPABILITIES_REGISTRY_ADDRESS"
-	EnvVarCapabilitiesRegistryChainName = "CRE_CLI_CAPABILITIES_REGISTRY_CHAIN_NAME"
+	EnvVarWorkflowRegistryAddress          = "CRE_CLI_WORKFLOW_REGISTRY_ADDRESS"
+	EnvVarWorkflowRegistryChainName        = "CRE_CLI_WORKFLOW_REGISTRY_CHAIN_NAME"
+	EnvVarWorkflowRegistryChainExplorerURL = "CRE_CLI_WORKFLOW_REGISTRY_CHAIN_EXPLORER_URL"
+	EnvVarCapabilitiesRegistryAddress      = "CRE_CLI_CAPABILITIES_REGISTRY_ADDRESS"
+	EnvVarCapabilitiesRegistryChainName    = "CRE_CLI_CAPABILITIES_REGISTRY_CHAIN_NAME"
 
 	DefaultEnv = "STAGING"
 )
@@ -35,10 +36,11 @@ type EnvironmentSet struct {
 	Audience   string `yaml:"CRE_CLI_AUDIENCE"`
 	GatewayURL string `yaml:"CRE_VAULT_DON_GATEWAY_URL"`
 
-	WorkflowRegistryAddress       string `yaml:"CRE_CLI_WORKFLOW_REGISTRY_ADDRESS"`
-	WorkflowRegistryChainName     string `yaml:"CRE_CLI_WORKFLOW_REGISTRY_CHAIN_NAME"`
-	CapabilitiesRegistryAddress   string `yaml:"CRE_CLI_CAPABILITIES_REGISTRY_ADDRESS"`
-	CapabilitiesRegistryChainName string `yaml:"CRE_CLI_CAPABILITIES_REGISTRY_CHAIN_NAME"`
+	WorkflowRegistryAddress          string `yaml:"CRE_CLI_WORKFLOW_REGISTRY_ADDRESS"`
+	WorkflowRegistryChainName        string `yaml:"CRE_CLI_WORKFLOW_REGISTRY_CHAIN_NAME"`
+	WorkflowRegistryChainExplorerURL string `yaml:"CRE_CLI_WORKFLOW_REGISTRY_CHAIN_EXPLORER_URL"`
+	CapabilitiesRegistryAddress      string `yaml:"CRE_CLI_CAPABILITIES_REGISTRY_ADDRESS"`
+	CapabilitiesRegistryChainName    string `yaml:"CRE_CLI_CAPABILITIES_REGISTRY_CHAIN_NAME"`
 }
 
 type fileFormat struct {
@@ -76,6 +78,9 @@ func NewEnvironmentSet(ff *fileFormat, envName string) *EnvironmentSet {
 	}
 	if v := os.Getenv(EnvVarVaultGatewayURL); v != "" {
 		set.GatewayURL = v
+	}
+	if v := os.Getenv(EnvVarWorkflowRegistryChainExplorerURL); v != "" {
+		set.WorkflowRegistryChainExplorerURL = v
 	}
 	// TODO for each contract - check if it's really a contract, not an EOA
 	if v := os.Getenv(EnvVarWorkflowRegistryAddress); v != "" {
