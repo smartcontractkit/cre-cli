@@ -93,39 +93,14 @@ func TestCompileCmd(t *testing.T) {
 				ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
 				handler := newHandler(ctx, buf)
 
-				// Manually construct settings to fix nil pointer issue
-				if ctx.Settings == nil {
-					ctx.Settings = &settings.Settings{}
-				}
-				ctx.Settings.Workflow = settings.WorkflowSettings{
-					UserWorkflowSettings: struct {
-						WorkflowOwnerAddress string `mapstructure:"workflow-owner-address" yaml:"workflow-owner-address"`
-						WorkflowOwnerType    string `mapstructure:"workflow-owner-type" yaml:"workflow-owner-type"`
-						WorkflowName         string `mapstructure:"workflow-name" yaml:"workflow-name"`
-					}{
-						WorkflowOwnerAddress: chainsim.TestAddress,
-						WorkflowOwnerType:    tt.WorkflowOwnerType,
-						WorkflowName:         "test_workflow",
-					},
-					DevPlatformSettings: struct {
-						DonFamily string `mapstructure:"don-family" yaml:"don-family"`
-					}{
-						DonFamily: "test_don_family",
-					},
-					WorkflowArtifactSettings: struct {
-						WorkflowPath string `mapstructure:"workflow-path" yaml:"workflow-path"`
-						ConfigPath   string `mapstructure:"config-path" yaml:"config-path"`
-					}{
-						WorkflowPath: tt.cmd.WorkflowPath,
-						ConfigPath:   tt.cmd.ConfigPath,
-					},
-				}
-				ctx.Settings.StorageSettings = settings.WorkflowStorageSettings{
-					CREStorage: settings.CREStorageSettings{
-						ServiceTimeout: 0,
-						HTTPTimeout:    0,
-					},
-				}
+				ctx.Settings = createTestSettings(
+					chainsim.TestAddress,
+					tt.WorkflowOwnerType,
+					"test_workflow",
+					"test_don_family",
+					tt.cmd.WorkflowPath,
+					tt.cmd.ConfigPath,
+				)
 				handler.settings = ctx.Settings
 				handler.inputs = tt.cmd
 				err := handler.ValidateInputs()
@@ -220,39 +195,14 @@ func TestCompileCmd(t *testing.T) {
 					ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
 					handler := newHandler(ctx, buf)
 
-					// Manually construct settings to fix nil pointer issue
-					if ctx.Settings == nil {
-						ctx.Settings = &settings.Settings{}
-					}
-					ctx.Settings.Workflow = settings.WorkflowSettings{
-						UserWorkflowSettings: struct {
-							WorkflowOwnerAddress string `mapstructure:"workflow-owner-address" yaml:"workflow-owner-address"`
-							WorkflowOwnerType    string `mapstructure:"workflow-owner-type" yaml:"workflow-owner-type"`
-							WorkflowName         string `mapstructure:"workflow-name" yaml:"workflow-name"`
-						}{
-							WorkflowOwnerAddress: chainsim.TestAddress,
-							WorkflowOwnerType:    tt.WorkflowOwnerType,
-							WorkflowName:         "test_workflow",
-						},
-						DevPlatformSettings: struct {
-							DonFamily string `mapstructure:"don-family" yaml:"don-family"`
-						}{
-							DonFamily: "test_don_family",
-						},
-						WorkflowArtifactSettings: struct {
-							WorkflowPath string `mapstructure:"workflow-path" yaml:"workflow-path"`
-							ConfigPath   string `mapstructure:"config-path" yaml:"config-path"`
-						}{
-							WorkflowPath: tt.inputs.WorkflowPath,
-							ConfigPath:   tt.inputs.ConfigPath,
-						},
-					}
-					ctx.Settings.StorageSettings = settings.WorkflowStorageSettings{
-						CREStorage: settings.CREStorageSettings{
-							ServiceTimeout: 0,
-							HTTPTimeout:    0,
-						},
-					}
+					ctx.Settings = createTestSettings(
+						chainsim.TestAddress,
+						tt.WorkflowOwnerType,
+						"test_workflow",
+						"test_don_family",
+						tt.inputs.WorkflowPath,
+						tt.inputs.ConfigPath,
+					)
 					handler.settings = ctx.Settings
 					handler.inputs = tt.inputs
 					err := handler.ValidateInputs()
@@ -275,39 +225,14 @@ func TestCompileCmd(t *testing.T) {
 
 			ctx, _ := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
 
-			// Manually construct settings to fix nil pointer issue
-			if ctx.Settings == nil {
-				ctx.Settings = &settings.Settings{}
-			}
-			ctx.Settings.Workflow = settings.WorkflowSettings{
-				UserWorkflowSettings: struct {
-					WorkflowOwnerAddress string `mapstructure:"workflow-owner-address" yaml:"workflow-owner-address"`
-					WorkflowOwnerType    string `mapstructure:"workflow-owner-type" yaml:"workflow-owner-type"`
-					WorkflowName         string `mapstructure:"workflow-name" yaml:"workflow-name"`
-				}{
-					WorkflowOwnerAddress: chainsim.TestAddress,
-					WorkflowOwnerType:    constants.WorkflowOwnerTypeEOA,
-					WorkflowName:         "test_workflow",
-				},
-				DevPlatformSettings: struct {
-					DonFamily string `mapstructure:"don-family" yaml:"don-family"`
-				}{
-					DonFamily: "test_don_family",
-				},
-				WorkflowArtifactSettings: struct {
-					WorkflowPath string `mapstructure:"workflow-path" yaml:"workflow-path"`
-					ConfigPath   string `mapstructure:"config-path" yaml:"config-path"`
-				}{
-					WorkflowPath: "testdata/configless_workflow/main.go",
-					ConfigPath:   "",
-				},
-			}
-			ctx.Settings.StorageSettings = settings.WorkflowStorageSettings{
-				CREStorage: settings.CREStorageSettings{
-					ServiceTimeout: 0,
-					HTTPTimeout:    0,
-				},
-			}
+			ctx.Settings = createTestSettings(
+				chainsim.TestAddress,
+				constants.WorkflowOwnerTypeEOA,
+				"test_workflow",
+				"test_don_family",
+				"testdata/configless_workflow/main.go",
+				"",
+			)
 
 			httpmock.Activate()
 			t.Cleanup(httpmock.DeactivateAndReset)
@@ -472,43 +397,53 @@ func TestCompileCreatesBase64EncodedFile(t *testing.T) {
 	})
 }
 
+// createTestSettings is a helper function to construct settings for tests
+func createTestSettings(workflowOwnerAddress, workflowOwnerType, workflowName, donFamily, workflowPath, configPath string) *settings.Settings {
+	return &settings.Settings{
+		Workflow: settings.WorkflowSettings{
+			UserWorkflowSettings: struct {
+				WorkflowOwnerAddress string `mapstructure:"workflow-owner-address" yaml:"workflow-owner-address"`
+				WorkflowOwnerType    string `mapstructure:"workflow-owner-type" yaml:"workflow-owner-type"`
+				WorkflowName         string `mapstructure:"workflow-name" yaml:"workflow-name"`
+			}{
+				WorkflowOwnerAddress: workflowOwnerAddress,
+				WorkflowOwnerType:    workflowOwnerType,
+				WorkflowName:         workflowName,
+			},
+			DevPlatformSettings: struct {
+				DonFamily string `mapstructure:"don-family" yaml:"don-family"`
+			}{
+				DonFamily: donFamily,
+			},
+			WorkflowArtifactSettings: struct {
+				WorkflowPath string `mapstructure:"workflow-path" yaml:"workflow-path"`
+				ConfigPath   string `mapstructure:"config-path" yaml:"config-path"`
+			}{
+				WorkflowPath: workflowPath,
+				ConfigPath:   configPath,
+			},
+		},
+		StorageSettings: settings.WorkflowStorageSettings{
+			CREStorage: settings.CREStorageSettings{
+				ServiceTimeout: 0,
+				HTTPTimeout:    0,
+			},
+		},
+	}
+}
+
 func runCompile(simulatedEnvironment *chainsim.SimulatedEnvironment, inputs Inputs, ownerType string) error {
 	ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
 	handler := newHandler(ctx, buf)
 
-	// Manually construct settings to fix nil pointer issue
-	if ctx.Settings == nil {
-		ctx.Settings = &settings.Settings{}
-	}
-	ctx.Settings.Workflow = settings.WorkflowSettings{
-		UserWorkflowSettings: struct {
-			WorkflowOwnerAddress string `mapstructure:"workflow-owner-address" yaml:"workflow-owner-address"`
-			WorkflowOwnerType    string `mapstructure:"workflow-owner-type" yaml:"workflow-owner-type"`
-			WorkflowName         string `mapstructure:"workflow-name" yaml:"workflow-name"`
-		}{
-			WorkflowOwnerAddress: inputs.WorkflowOwner,
-			WorkflowOwnerType:    ownerType,
-			WorkflowName:         inputs.WorkflowName,
-		},
-		DevPlatformSettings: struct {
-			DonFamily string `mapstructure:"don-family" yaml:"don-family"`
-		}{
-			DonFamily: inputs.DonFamily,
-		},
-		WorkflowArtifactSettings: struct {
-			WorkflowPath string `mapstructure:"workflow-path" yaml:"workflow-path"`
-			ConfigPath   string `mapstructure:"config-path" yaml:"config-path"`
-		}{
-			WorkflowPath: inputs.WorkflowPath,
-			ConfigPath:   inputs.ConfigPath,
-		},
-	}
-	ctx.Settings.StorageSettings = settings.WorkflowStorageSettings{
-		CREStorage: settings.CREStorageSettings{
-			ServiceTimeout: 0,
-			HTTPTimeout:    0,
-		},
-	}
+	ctx.Settings = createTestSettings(
+		inputs.WorkflowOwner,
+		ownerType,
+		inputs.WorkflowName,
+		inputs.DonFamily,
+		inputs.WorkflowPath,
+		inputs.ConfigPath,
+	)
 	handler.settings = ctx.Settings
 
 	handler.inputs = inputs

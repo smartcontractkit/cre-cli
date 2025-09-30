@@ -13,7 +13,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
-	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/testutil/chainsim"
 )
 
@@ -74,26 +73,14 @@ func TestUpload_SuccessAndErrorCases(t *testing.T) {
 	h.inputs.WorkflowName = "test_workflow"
 	h.inputs.DonFamily = "test_label"
 
-	// Manually construct settings to fix nil pointer issue
-	h.settings = &settings.Settings{
-		Workflow: settings.WorkflowSettings{
-			UserWorkflowSettings: struct {
-				WorkflowOwnerAddress string `mapstructure:"workflow-owner-address" yaml:"workflow-owner-address"`
-				WorkflowOwnerType    string `mapstructure:"workflow-owner-type" yaml:"workflow-owner-type"`
-				WorkflowName         string `mapstructure:"workflow-name" yaml:"workflow-name"`
-			}{
-				WorkflowOwnerAddress: chainsim.TestAddress,
-				WorkflowOwnerType:    "eoa",
-				WorkflowName:         "test_workflow",
-			},
-		},
-		StorageSettings: settings.WorkflowStorageSettings{
-			CREStorage: settings.CREStorageSettings{
-				ServiceTimeout: 0,
-				HTTPTimeout:    0,
-			},
-		},
-	}
+	h.settings = createTestSettings(
+		chainsim.TestAddress,
+		"eoa",
+		"test_workflow",
+		"test_label",
+		"",
+		"",
+	)
 
 	mockGraphQL()
 
@@ -163,26 +150,14 @@ func TestUploadArtifactToStorageService_OriginError(t *testing.T) {
 	h.inputs.WorkflowName = "test_workflow"
 	h.inputs.DonFamily = "test_label"
 
-	// Manually construct settings to fix nil pointer issue
-	h.settings = &settings.Settings{
-		Workflow: settings.WorkflowSettings{
-			UserWorkflowSettings: struct {
-				WorkflowOwnerAddress string `mapstructure:"workflow-owner-address" yaml:"workflow-owner-address"`
-				WorkflowOwnerType    string `mapstructure:"workflow-owner-type" yaml:"workflow-owner-type"`
-				WorkflowName         string `mapstructure:"workflow-name" yaml:"workflow-name"`
-			}{
-				WorkflowOwnerAddress: chainsim.TestAddress,
-				WorkflowOwnerType:    "eoa",
-				WorkflowName:         "test_workflow",
-			},
-		},
-		StorageSettings: settings.WorkflowStorageSettings{
-			CREStorage: settings.CREStorageSettings{
-				ServiceTimeout: 0,
-				HTTPTimeout:    0,
-			},
-		},
-	}
+	h.settings = createTestSettings(
+		chainsim.TestAddress,
+		"eoa",
+		"test_workflow",
+		"test_label",
+		"",
+		"",
+	)
 
 	mockGraphQL()
 
@@ -216,26 +191,14 @@ func TestUploadArtifactToStorageService_AlreadyExistsError(t *testing.T) {
 	h.inputs.WorkflowName = "test_workflow"
 	h.inputs.DonFamily = "test_label"
 
-	// Manually construct settings to fix nil pointer issue
-	h.settings = &settings.Settings{
-		Workflow: settings.WorkflowSettings{
-			UserWorkflowSettings: struct {
-				WorkflowOwnerAddress string `mapstructure:"workflow-owner-address" yaml:"workflow-owner-address"`
-				WorkflowOwnerType    string `mapstructure:"workflow-owner-type" yaml:"workflow-owner-type"`
-				WorkflowName         string `mapstructure:"workflow-name" yaml:"workflow-name"`
-			}{
-				WorkflowOwnerAddress: chainsim.TestAddress,
-				WorkflowOwnerType:    "eoa",
-				WorkflowName:         "test_workflow",
-			},
-		},
-		StorageSettings: settings.WorkflowStorageSettings{
-			CREStorage: settings.CREStorageSettings{
-				ServiceTimeout: 0,
-				HTTPTimeout:    0,
-			},
-		},
-	}
+	h.settings = createTestSettings(
+		chainsim.TestAddress,
+		"eoa",
+		"test_workflow",
+		"test_label",
+		"",
+		"",
+	)
 
 	httpmock.RegisterResponder("POST", "http://graphql.endpoint",
 		func(req *http.Request) (*http.Response, error) {
