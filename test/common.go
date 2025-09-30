@@ -8,7 +8,6 @@ import (
 	"net"
 	"os"
 	"os/exec"
-	"regexp"
 	"strconv"
 	"testing"
 	"time"
@@ -33,14 +32,6 @@ var CLIPath = os.TempDir() + string(os.PathSeparator) + "cre" + func() string {
 	}
 	return ""
 }()
-
-// Regular expression to strip ANSI escape codes from output
-var ansiRE = regexp.MustCompile(`\x1b\[[0-9;]*m`)
-
-// stripANSI strips the ANSI escape codes from the output
-func stripANSI(s string) string {
-	return ansiRE.ReplaceAllString(s, "")
-}
 
 const (
 	TestLogLevelEnvVar = "TEST_LOG_LEVEL" // export this env var before running tests if DEBUG level is needed
