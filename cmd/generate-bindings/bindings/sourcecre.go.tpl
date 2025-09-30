@@ -110,10 +110,9 @@ type {{.Normalized.Name}} struct {
 }
 
 // Decoded Events (indexed inputs -> common.Hash)
-// Add support for retaining non-dynamic types that are not hashed
 type {{.Normalized.Name}}Decoded struct {
 	{{- range .Normalized.Inputs}}
-	{{capitalise .Name}} {{if .Indexed}}common.Hash{{else}}{{bindtype .Type $.Structs}}{{end}}
+	{{capitalise .Name}} {{if and .Indexed (isDynTopicType .Type)}}common.Hash{{else}}{{bindtype .Type $.Structs}}{{end}}
 	{{- end}}
 }
 
@@ -337,7 +336,10 @@ func (c *Codec) Decode{{.Normalized.Name}}(log *evm.Log) (*{{.Normalized.Name}}D
 	var indexed abi.Arguments
 	for _, arg := range c.abi.Events["{{.Original.Name}}"].Inputs {
 		if arg.Indexed {
-			arg.Type.T = abi.BytesTy
+			switch arg.Type.T {
+			case abi.TupleTy, abi.StringTy, abi.BytesTy, abi.SliceTy, abi.ArrayTy:
+				arg.Type.T = abi.BytesTy
+			}
 			indexed = append(indexed, arg)
 		}
 	}

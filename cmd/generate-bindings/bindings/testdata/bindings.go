@@ -120,9 +120,8 @@ type AccessLogged struct {
 }
 
 // Decoded Events (indexed inputs -> common.Hash)
-// Add support for retaining non-dynamic types that are not hashed
 type AccessLoggedDecoded struct {
-	Caller  common.Hash
+	Caller  common.Address
 	Message string
 }
 
@@ -133,9 +132,8 @@ type DataStored struct {
 }
 
 // Decoded Events (indexed inputs -> common.Hash)
-// Add support for retaining non-dynamic types that are not hashed
 type DataStoredDecoded struct {
-	Sender common.Hash
+	Sender common.Address
 	Key    string
 	Value  string
 }
@@ -149,7 +147,6 @@ type DynamicEvent struct {
 }
 
 // Decoded Events (indexed inputs -> common.Hash)
-// Add support for retaining non-dynamic types that are not hashed
 type DynamicEventDecoded struct {
 	Key           string
 	UserData      common.Hash
@@ -162,7 +159,6 @@ type NoFields struct {
 }
 
 // Decoded Events (indexed inputs -> common.Hash)
-// Add support for retaining non-dynamic types that are not hashed
 type NoFieldsDecoded struct {
 }
 
@@ -487,7 +483,10 @@ func (c *Codec) DecodeAccessLogged(log *evm.Log) (*AccessLoggedDecoded, error) {
 	var indexed abi.Arguments
 	for _, arg := range c.abi.Events["AccessLogged"].Inputs {
 		if arg.Indexed {
-			arg.Type.T = abi.BytesTy
+			switch arg.Type.T {
+			case abi.TupleTy, abi.StringTy, abi.BytesTy, abi.SliceTy, abi.ArrayTy:
+				arg.Type.T = abi.BytesTy
+			}
 			indexed = append(indexed, arg)
 		}
 	}
@@ -550,7 +549,10 @@ func (c *Codec) DecodeDataStored(log *evm.Log) (*DataStoredDecoded, error) {
 	var indexed abi.Arguments
 	for _, arg := range c.abi.Events["DataStored"].Inputs {
 		if arg.Indexed {
-			arg.Type.T = abi.BytesTy
+			switch arg.Type.T {
+			case abi.TupleTy, abi.StringTy, abi.BytesTy, abi.SliceTy, abi.ArrayTy:
+				arg.Type.T = abi.BytesTy
+			}
 			indexed = append(indexed, arg)
 		}
 	}
@@ -631,7 +633,10 @@ func (c *Codec) DecodeDynamicEvent(log *evm.Log) (*DynamicEventDecoded, error) {
 	var indexed abi.Arguments
 	for _, arg := range c.abi.Events["DynamicEvent"].Inputs {
 		if arg.Indexed {
-			arg.Type.T = abi.BytesTy
+			switch arg.Type.T {
+			case abi.TupleTy, abi.StringTy, abi.BytesTy, abi.SliceTy, abi.ArrayTy:
+				arg.Type.T = abi.BytesTy
+			}
 			indexed = append(indexed, arg)
 		}
 	}
@@ -684,7 +689,10 @@ func (c *Codec) DecodeNoFields(log *evm.Log) (*NoFieldsDecoded, error) {
 	var indexed abi.Arguments
 	for _, arg := range c.abi.Events["NoFields"].Inputs {
 		if arg.Indexed {
-			arg.Type.T = abi.BytesTy
+			switch arg.Type.T {
+			case abi.TupleTy, abi.StringTy, abi.BytesTy, abi.SliceTy, abi.ArrayTy:
+				arg.Type.T = abi.BytesTy
+			}
 			indexed = append(indexed, arg)
 		}
 	}
