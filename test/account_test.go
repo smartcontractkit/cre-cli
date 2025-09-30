@@ -44,7 +44,7 @@ func TestCLIAccountLinkListUnlinkFlow_EOA(t *testing.T) {
 	// Use test address for this test
 	require.NoError(t, createCliEnvFile(tc.EnvFile, constants.TestPrivateKey4), "failed to create env file")
 	require.NoError(t, createProjectSettingsFile(tc.ProjectDirectory+"project.yaml", constants.TestAddress4, testEthURL), "failed to create project.yaml")
-	require.NoError(t, createWorkflowSettingsFile(tc.WorkflowSettingsFile, "workflow-name", ""), "failed to create workflow.yaml")
+	require.NoError(t, createWorkflowDirectory(tc.ProjectDirectory, "workflow-name", ""), "failed to create workflow directory")
 	t.Cleanup(tc.Cleanup(t))
 
 	// Pre-baked registry addresses from Anvil state dump

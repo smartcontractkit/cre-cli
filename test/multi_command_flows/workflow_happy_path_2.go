@@ -3,15 +3,19 @@ package multi_command_flows
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 
+	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 )
@@ -76,11 +80,6 @@ func workflowDeployEoaWithoutAutostart(t *testing.T, tc TestConfig) string {
 
 	// Point the CLI at our mock GraphQL endpoint
 	os.Setenv(environments.EnvVarGraphQLURL, srv.URL+"/graphql")
-
-	// Setup test workflow in the temporary project directory
-	if err := tc.SetupTestWorkflow(t); err != nil {
-		require.NoError(t, err, "failed to setup test workflow")
-	}
 
 	// Build CLI args - CLI will automatically resolve workflow path using new context system
 	// Note: no auto-start flag (defaults to false)
@@ -178,7 +177,6 @@ func workflowDeployUpdateWithConfig(t *testing.T, tc TestConfig) string {
 		"blank_workflow",
 		tc.GetCliEnvFlag(),
 		tc.GetProjectRootFlag(),
-		"--config",
 		"--" + settings.Flags.SkipConfirmation.Name,
 	}
 
@@ -213,10 +211,54 @@ func RunHappyPath2Workflow(t *testing.T, tc TestConfig) {
 	require.Contains(t, out, "Successfully uploaded workflow artifacts", "expected upload to succeed.\nCLI OUTPUT:\n%s", out)
 	require.Contains(t, out, "Workflow deployed successfully", "expected deployment success.\nCLI OUTPUT:\n%s", out)
 
+	// Step 1.5: Update workflow.yaml to include config-path for the second deployment
+	// This ensures the second deployment has different artifacts and generates a different workflowID
+	if err := updateWorkflowConfigPath(tc.GetProjectRootFlag(), "./config.json"); err != nil {
+		require.NoError(t, err, "failed to update workflow config path")
+	}
+
 	// Step 2: Deploy update with config (workflow already setup from step 1)
 	updateOut := workflowDeployUpdateWithConfig(t, tc)
 	require.Contains(t, updateOut, "Workflow compiled", "expected workflow to compile on update.\nCLI OUTPUT:\n%s", updateOut)
 	require.Contains(t, updateOut, "Workflow owner link status linked=true", "expected link-status true on update.\nCLI OUTPUT:\n%s", updateOut)
 	require.Contains(t, updateOut, "Successfully uploaded workflow artifacts", "expected upload to succeed on update.\nCLI OUTPUT:\n%s", updateOut)
 	require.Contains(t, updateOut, "Workflow deployed successfully", "expected deployment update success.\nCLI OUTPUT:\n%s", updateOut)
+}
+
+// updateWorkflowConfigPath updates the config-path in the workflow.yaml file
+func updateWorkflowConfigPath(projectRootFlag, configPath string) error {
+	const SettingsTarget = "production-testnet"
+
+	// Extract directory path from flag format "--project-root=/path/..."
+	parts := strings.Split(projectRootFlag, "=")
+	if len(parts) != 2 {
+		return fmt.Errorf("invalid project root flag format: %s", projectRootFlag)
+	}
+	projectDirectory := parts[1]
+
+	workflowDir := filepath.Join(projectDirectory, "blank_workflow")
+	workflowSettingsPath := filepath.Join(workflowDir, constants.DefaultWorkflowSettingsFileName)
+
+	v := viper.New()
+	v.SetConfigFile(workflowSettingsPath)
+	if err := v.ReadInConfig(); err != nil {
+		return fmt.Errorf("failed to read workflow.yaml: %w", err)
+	}
+
+	// Update the config-path in workflow-artifacts
+	workflowArtifacts := v.GetStringMapString(fmt.Sprintf("%s.workflow-artifacts", SettingsTarget))
+	if workflowArtifacts == nil {
+		workflowArtifacts = make(map[string]string)
+	}
+
+	workflowArtifacts["workflow-path"] = "./main.go"
+	workflowArtifacts["config-path"] = configPath
+	v.Set(fmt.Sprintf("%s.workflow-artifacts", SettingsTarget), workflowArtifacts)
+
+	// Write the updated configuration
+	if err := v.WriteConfig(); err != nil {
+		return fmt.Errorf("failed to write workflow.yaml: %w", err)
+	}
+
+	return nil
 }

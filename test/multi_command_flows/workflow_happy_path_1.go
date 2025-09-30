@@ -19,7 +19,6 @@ import (
 
 // TestConfig represents test configuration
 type TestConfig interface {
-	SetupTestWorkflow(t *testing.T) error
 	GetCliEnvFlag() string
 	GetProjectRootFlag() string
 }
@@ -106,11 +105,6 @@ func workflowDeployEoaWithMockStorage(t *testing.T, tc TestConfig) string {
 
 	// Point the CLI at our mock GraphQL endpoint
 	os.Setenv(environments.EnvVarGraphQLURL, srv.URL+"/graphql")
-
-	// Setup test workflow in the temporary project directory
-	if err := tc.SetupTestWorkflow(t); err != nil {
-		require.NoError(t, err, "failed to setup test workflow")
-	}
 
 	// Build CLI args - CLI will automatically resolve workflow path using new context system
 	args := []string{

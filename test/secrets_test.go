@@ -179,7 +179,7 @@ func TestCLISecretsWithEoa(t *testing.T) {
 
 	// create workflow.yaml
 	require.NoError(t, createProjectSettingsFile(tc.ProjectDirectory+"project.yaml", constants.TestAddress3, testEthUrl), "Failed to create project.yaml")
-	require.NoError(t, createWorkflowSettingsFile(tc.WorkflowSettingsFile, "myworkflow", ""), "Failed to create workflow.yaml")
+	require.NoError(t, createWorkflowDirectory(tc.ProjectDirectory, "myworkflow", ""), "Failed to create workflow directory")
 
 	t.Cleanup(tc.Cleanup(t))
 

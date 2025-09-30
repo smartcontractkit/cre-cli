@@ -38,7 +38,7 @@ func TestMultiCommandWorkflowHappyPaths(t *testing.T) {
 		// Use linked Address3 + its key
 		require.NoError(t, createCliEnvFile(tc.EnvFile, constants.TestPrivateKey3), "failed to create env file")
 		require.NoError(t, createProjectSettingsFile(tc.ProjectDirectory+"project.yaml", constants.TestAddress3, testEthUrl), "failed to create project.yaml")
-		require.NoError(t, createWorkflowSettingsFile(tc.WorkflowSettingsFile, "happy-path-1-workflow", ""), "failed to create workflow.yaml")
+		require.NoError(t, createWorkflowDirectory(tc.ProjectDirectory, "happy-path-1-workflow", ""), "failed to create workflow directory")
 		t.Cleanup(tc.Cleanup(t))
 
 		// Run happy path 1 workflow
@@ -62,7 +62,7 @@ func TestMultiCommandWorkflowHappyPaths(t *testing.T) {
 		// Use linked Address3 + its key
 		require.NoError(t, createCliEnvFile(tc.EnvFile, constants.TestPrivateKey3), "failed to create env file")
 		require.NoError(t, createProjectSettingsFile(tc.ProjectDirectory+"project.yaml", constants.TestAddress3, testEthUrl), "failed to create project.yaml")
-		require.NoError(t, createWorkflowSettingsFile(tc.WorkflowSettingsFile, "happy-path-2-workflow", "./config.json"), "failed to create workflow.yaml")
+		require.NoError(t, createWorkflowDirectory(tc.ProjectDirectory, "happy-path-2-workflow", ""), "failed to create workflow directory")
 		t.Cleanup(tc.Cleanup(t))
 
 		// Run happy path 2 workflow

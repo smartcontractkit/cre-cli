@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -50,47 +52,6 @@ func createProjectSettingsFile(projectSettingPath string, workflowOwner string, 
 	return nil
 }
 
-// createWorkflowSettingsFile creates the workflow.yaml file with user-workflow and workflow-artifacts settings
-func createWorkflowSettingsFile(
-	workflowSettingsPath string,
-	workflowName string,
-	workflowConfigPath string,
-) error {
-	trimmedName := strings.TrimSpace(workflowName)
-	if len(trimmedName) < 10 {
-		return fmt.Errorf("workflow name %q is too short, minimum length is 10 characters", trimmedName)
-	}
-
-	v := viper.New()
-
-	// user-workflow fields
-	v.Set(fmt.Sprintf("%s.user-workflow.workflow-name", SettingsTarget), trimmedName)
-
-	// workflow-artifacts
-	configPath := workflowConfigPath
-	if configPath == "" {
-		configPath = "./config.json"
-	}
-	workflowArtifacts := map[string]string{
-		"workflow-path": "./main.go",
-		"config-path":   configPath,
-	}
-	v.Set(fmt.Sprintf("%s.workflow-artifacts", SettingsTarget), workflowArtifacts)
-
-	// write YAML
-	v.SetConfigType("yaml")
-	if err := v.WriteConfigAs(workflowSettingsPath); err != nil {
-		return fmt.Errorf("error writing workflow.yaml: %w", err)
-	}
-
-	L.Debug().
-		Str("WorkflowSettingsFile", workflowSettingsPath).
-		Interface("Config", v.AllSettings()).
-		Msg("Workflow settings file created")
-
-	return nil
-}
-
 func createCliEnvFile(envPath string, ethPrivateKey string) error {
 	file, err := os.OpenFile(envPath, os.O_TRUNC|os.O_WRONLY|os.O_CREATE, 0644)
 	if err != nil {
@@ -123,6 +84,70 @@ func createCliEnvFile(envPath string, ethPrivateKey string) error {
 		return err
 	}
 	writer.Flush()
+
+	return nil
+}
+
+// createWorkflowDirectory creates the workflow directory with test files and workflow.yaml
+func createWorkflowDirectory(
+	projectDirectory string,
+	workflowName string,
+	workflowConfigPath string,
+) error {
+	trimmedName := strings.TrimSpace(workflowName)
+	if len(trimmedName) < 10 {
+		return fmt.Errorf("workflow name %q is too short, minimum length is 10 characters", trimmedName)
+	}
+
+	// Get the source workflow directory
+	_, thisFile, _, _ := runtime.Caller(0)
+	testDir := filepath.Dir(thisFile)
+	sourceWorkflowDir := filepath.Join(testDir, "test_project", "blank_workflow")
+
+	// Create workflow directory in project
+	workflowDir := filepath.Join(projectDirectory, "blank_workflow")
+	if err := os.MkdirAll(workflowDir, 0755); err != nil {
+		return fmt.Errorf("failed to create workflow directory: %w", err)
+	}
+
+	// Copy workflow files
+	files := []string{"main.go", "config.json", "go.mod", "go.sum"}
+	for _, file := range files {
+		src := filepath.Join(sourceWorkflowDir, file)
+		dst := filepath.Join(workflowDir, file)
+		if err := copyFile(src, dst); err != nil {
+			return fmt.Errorf("failed to copy %s: %w", file, err)
+		}
+	}
+
+	// Create workflow.yaml file using viper
+	workflowSettingsPath := filepath.Join(workflowDir, constants.DefaultWorkflowSettingsFileName)
+
+	v := viper.New()
+
+	// user-workflow fields
+	v.Set(fmt.Sprintf("%s.user-workflow.workflow-name", SettingsTarget), trimmedName)
+
+	// workflow-artifacts - initially create without config-path for first deployment
+	workflowArtifacts := map[string]string{
+		"workflow-path": "./main.go",
+	}
+	// Only add config-path if explicitly provided
+	if workflowConfigPath != "" {
+		workflowArtifacts["config-path"] = workflowConfigPath
+	}
+	v.Set(fmt.Sprintf("%s.workflow-artifacts", SettingsTarget), workflowArtifacts)
+
+	// write YAML
+	v.SetConfigType("yaml")
+	if err := v.WriteConfigAs(workflowSettingsPath); err != nil {
+		return fmt.Errorf("error writing workflow.yaml: %w", err)
+	}
+
+	L.Debug().
+		Str("WorkflowSettingsFile", workflowSettingsPath).
+		Interface("Config", v.AllSettings()).
+		Msg("Workflow settings file created")
 
 	return nil
 }
