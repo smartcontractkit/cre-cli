@@ -10,7 +10,6 @@ import (
 	"math"
 	"math/big"
 	"os"
-	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"strconv"
@@ -38,6 +37,7 @@ import (
 	simulator "github.com/smartcontractkit/chainlink/v2/core/services/workflows/cmd/cre/utils"
 	v2 "github.com/smartcontractkit/chainlink/v2/core/services/workflows/v2"
 
+	cmdcommon "github.com/smartcontractkit/cre-cli/cmd/common"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/validation"
@@ -185,35 +185,8 @@ func (h *handler) Execute(inputs Inputs) error {
 	workflowRootFolder := filepath.Dir(inputs.WorkflowPath)
 	tmpWasmFileName := "tmp.wasm"
 	workflowMainFile := filepath.Base(inputs.WorkflowPath)
-	isTypescriptWorkflow := strings.HasSuffix(workflowMainFile, ".ts")
+	buildCmd := cmdcommon.GetBuildCmd(workflowMainFile, tmpWasmFileName, workflowRootFolder)
 
-	var buildCmd *exec.Cmd
-	if isTypescriptWorkflow {
-		buildCmd = exec.Command(
-			"bun",
-			"cre-compile",
-			workflowMainFile,
-			tmpWasmFileName,
-		)
-	} else {
-		// The build command for reproducible and trimmed binaries.
-		// -trimpath removes all file system paths from the compiled binary.
-		// -ldflags="-buildid= -w -s" further reduces the binary size:
-		//   -buildid= removes the build ID, ensuring reproducibility.
-		//   -w disables DWARF debugging information.
-		//   -s removes the symbol table.
-		buildCmd = exec.Command(
-			"go",
-			"build",
-			"-o", tmpWasmFileName,
-			"-trimpath",
-			"-ldflags=-buildid= -w -s",
-			workflowMainFile,
-		)
-		buildCmd.Env = append(os.Environ(), "GOOS=wasip1", "GOARCH=wasm", "CGO_ENABLED=0")
-	}
-
-	buildCmd.Dir = workflowRootFolder
 	h.log.Debug().
 		Str("Workflow directory", buildCmd.Dir).
 		Str("Command", buildCmd.String()).
