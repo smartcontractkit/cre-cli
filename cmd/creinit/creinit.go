@@ -60,7 +60,7 @@ var languageTemplates = []LanguageTemplate{
 	{
 		Title: "Typescript",
 		Lang:  TemplateLangTS,
-		Path:  "./index.ts",
+		Path:  "./main.ts",
 		Workflows: []WorkflowTemplate{
 			{Folder: "typescriptSimpleExample", Title: "Development Hello World example for a simple workflow", ID: 3},
 		},
