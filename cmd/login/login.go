@@ -83,7 +83,7 @@ func (h *handler) execute() error {
 		return err
 	}
 
-	h.log.Info().Msg("Login completed successfully")
+	fmt.Println("Login completed successfully")
 	return nil
 }
 
@@ -114,7 +114,7 @@ func (h *handler) startAuthFlow() (string, error) {
 	h.lastState = randomState()
 
 	authURL := h.buildAuthURL(challenge, h.lastState)
-	h.log.Info().Msgf("Opening browser to %s", authURL)
+	fmt.Printf("Opening browser to %s\n", authURL)
 	if err := openBrowser(authURL, rt.GOOS); err != nil {
 		h.log.Warn().Err(err).Msg("could not open browser, please navigate manually")
 	}

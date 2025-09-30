@@ -137,15 +137,9 @@ func Execute(h *common.Handler, inputs DeleteSecretsInputs, duration time.Durati
 		if err := wrV2Client.AllowlistRequest(digest, duration); err != nil {
 			return fmt.Errorf("allowlist request failed: %w", err)
 		}
-		h.Log.Info().
-			Str("owner", ownerAddr.Hex()).
-			Str("digest", digest).
-			Msg("Digest allowlisted; proceeding to gateway POST")
+		fmt.Println("Digest allowlisted; proceeding to gateway POST: owner=", ownerAddr.Hex(), "digest=", digest)
 	} else {
-		h.Log.Info().
-			Str("owner", ownerAddr.Hex()).
-			Str("digest", digest).
-			Msg("Digest already allowlisted; skipping on-chain allowlist")
+		fmt.Println("Digest already allowlisted; skipping on-chain allowlist: owner=", ownerAddr.Hex(), "digest=", digest)
 	}
 
 	// POST to gateway

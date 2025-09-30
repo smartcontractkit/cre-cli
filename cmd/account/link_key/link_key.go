@@ -145,10 +145,7 @@ func (h *handler) Execute(in Inputs) error {
 		}
 	}
 
-	h.log.Info().
-		Str("owner", in.WorkflowOwner).
-		Str("label", in.WorkflowOwnerLabel).
-		Msg("Starting linking")
+	fmt.Printf("Starting linking: owner=%s, label=%s\n", in.WorkflowOwner, in.WorkflowOwnerLabel)
 
 	resp, err := h.callInitiateLinking(context.Background(), in)
 	if err != nil {
@@ -164,7 +161,7 @@ func (h *handler) Execute(in Inputs) error {
 	h.log.Debug().Msg("\nRaw linking response payload:\n\n" + string(prettyResp))
 
 	if in.WorkflowRegistryContractAddress == resp.ContractAddress {
-		h.log.Info().Msg("Contract address validation passed")
+		fmt.Println("Contract address validation passed")
 	} else {
 		h.log.Warn().Msg("The workflowRegistryContractAddress in your settings does not match the one returned by the server")
 		return fmt.Errorf("contract address validation failed")
@@ -270,8 +267,8 @@ func (h *handler) linkOwner(resp initiateLinkingResponse) error {
 
 	switch txOut.Type {
 	case client.Regular:
-		h.log.Info().Msgf("Transaction submitted: %s", txOut.Hash)
-		h.log.Info().Msgf("View on explorer: %s/tx/%s", h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash)
+		fmt.Printf("Transaction submitted: %s\n", txOut.Hash)
+		fmt.Printf("View on explorer: %s/tx/%s\n", h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash)
 
 	case client.Raw:
 		selector, err := strconv.ParseUint(resp.ChainSelector, 10, 64)
@@ -285,23 +282,23 @@ func (h *handler) linkOwner(resp initiateLinkingResponse) error {
 			return err
 		}
 
-		h.log.Info().Msg("")
-		h.log.Info().Msg("Ownership linking initialized successfully!")
-		h.log.Info().Msg("")
-		h.log.Info().Msg("Next steps:")
-		h.log.Info().Msg("")
-		h.log.Info().Msg("   1. Submit the following transaction on the target chain:")
-		h.log.Info().Msgf("      Chain:            %s", ChainName)
-		h.log.Info().Msgf("      Contract Address: %s", txOut.RawTx.To)
-		h.log.Info().Msg("")
-		h.log.Info().Msg("   2. Use the following transaction data:")
-		h.log.Info().Msg("")
-		h.log.Info().Msgf("      %x", txOut.RawTx.Data)
-		h.log.Info().Msg("")
+		fmt.Println("")
+		fmt.Println("Ownership linking initialized successfully!")
+		fmt.Println("")
+		fmt.Println("Next steps:")
+		fmt.Println("")
+		fmt.Println("   1. Submit the following transaction on the target chain:")
+		fmt.Printf("      Chain:            %s\n", ChainName)
+		fmt.Printf("      Contract Address: %s\n", txOut.RawTx.To)
+		fmt.Println("")
+		fmt.Println("   2. Use the following transaction data:")
+		fmt.Println("")
+		fmt.Printf("      %x\n", txOut.RawTx.Data)
+		fmt.Println("")
 	default:
 		h.log.Warn().Msgf("Unsupported transaction type: %s", txOut.Type)
 	}
 
-	h.log.Info().Msg("Linked successfully")
+	fmt.Println("Linked successfully")
 	return nil
 }

@@ -282,7 +282,7 @@ func TestCLISecretsWithEoa(t *testing.T) {
 	if !allowedCreate {
 		t.Fatalf("allowlist not detected for create.\n\nCLI OUTPUT:\n%s", outCreate)
 	}
-	require.Contains(t, outCreate, "secret created", "expected create log.\nCLI OUTPUT:\n%s", outCreate)
+	require.Contains(t, outCreate, "Secret created", "expected create log.\nCLI OUTPUT:\n%s", outCreate)
 	require.Contains(t, outCreate, "success=true", "create should not fail.\nCLI OUTPUT:\n%s", outCreate)
 
 	// --- UPDATE ---

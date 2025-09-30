@@ -62,7 +62,7 @@ func NewHandler(ctx *runtime.Context, secretsFilePath string) (*Handler, error) 
 			return nil, fmt.Errorf("failed to decode the provided private key: %w", err)
 		}
 	} else {
-		ctx.Logger.Info().Msg("No EthPrivateKey found in settings; assuming a multisig request.")
+		fmt.Println("No EthPrivateKey found in settings; assuming a multisig request.")
 	}
 
 	h := &Handler{
@@ -137,21 +137,21 @@ func (h *Handler) PackAllowlistRequestTxData(reqDigestStr string, duration time.
 }
 
 func (h *Handler) LogMSIGNextSteps(txData string) error {
-	h.Log.Info().Msg("")
-	h.Log.Info().Msg("MSIG transaction prepared!")
-	h.Log.Info().Msg("")
-	h.Log.Info().Msg("Next steps:")
-	h.Log.Info().Msg("")
-	h.Log.Info().Msg("   1. Submit the following transaction on the target chain:")
-	h.Log.Info().Msgf("      Chain:   %s", h.EnvironmentSet.WorkflowRegistryChainName)
-	h.Log.Info().Msgf("      Contract Address: %s", h.EnvironmentSet.WorkflowRegistryAddress)
-	h.Log.Info().Msg("")
-	h.Log.Info().Msg("   2. Use the following transaction data:")
-	h.Log.Info().Msg("")
-	h.Log.Info().Msgf("      %s", txData)
-	h.Log.Info().Msg("")
-	h.Log.Info().Msg("   3. Run the same command again without the --unsigned flag once transaction is finalized onchain")
-	h.Log.Info().Msg("")
+	fmt.Println("")
+	fmt.Println("MSIG transaction prepared!")
+	fmt.Println("")
+	fmt.Println("Next steps:")
+	fmt.Println("")
+	fmt.Println("   1. Submit the following transaction on the target chain:")
+	fmt.Printf("      Chain:   %s\n", h.EnvironmentSet.WorkflowRegistryChainName)
+	fmt.Printf("      Contract Address: %s\n", h.EnvironmentSet.WorkflowRegistryAddress)
+	fmt.Println("")
+	fmt.Println("   2. Use the following transaction data:")
+	fmt.Println("")
+	fmt.Printf("      %s\n", txData)
+	fmt.Println("")
+	fmt.Println("   3. Run the same command again without the --unsigned flag once transaction is finalized onchain")
+	fmt.Println("")
 	return nil
 }
 
@@ -298,15 +298,9 @@ func (h *Handler) Execute(inputs UpsertSecretsInputs, method string, duration ti
 		if err := wrV2Client.AllowlistRequest(digest, duration); err != nil {
 			return fmt.Errorf("allowlist request failed: %w", err)
 		}
-		h.Log.Info().
-			Str("owner", ownerAddr.Hex()).
-			Str("digest", digest).
-			Msg("Digest allowlisted; proceeding to gateway POST")
+		fmt.Println("Digest allowlisted; proceeding to gateway POST: owner=", ownerAddr.Hex(), "digest=", digest)
 	} else {
-		h.Log.Info().
-			Str("owner", ownerAddr.Hex()).
-			Str("digest", digest).
-			Msg("Digest already allowlisted; skipping on-chain allowlist")
+		fmt.Println("Digest already allowlisted; skipping on-chain allowlist: owner=", ownerAddr.Hex(), "digest=", digest)
 	}
 
 	// POST to gateway
@@ -357,12 +351,7 @@ func (h *Handler) ParseVaultGatewayResponse(method string, respBody []byte) erro
 				key, owner, ns = id.GetKey(), id.GetOwner(), id.GetNamespace()
 			}
 			if r.GetSuccess() {
-				h.Log.Info().
-					Str("secret_id", key).
-					Str("owner", owner).
-					Str("namespace", ns).
-					Bool("success", true).
-					Msg("secret created")
+				fmt.Printf("Secret created: secret_id=%s, owner=%s, namespace=%s\n", key, owner, ns)
 			} else {
 				h.Log.Error().
 					Str("secret_id", key).
@@ -385,12 +374,7 @@ func (h *Handler) ParseVaultGatewayResponse(method string, respBody []byte) erro
 				key, owner, ns = id.GetKey(), id.GetOwner(), id.GetNamespace()
 			}
 			if r.GetSuccess() {
-				h.Log.Info().
-					Str("secret_id", key).
-					Str("owner", owner).
-					Str("namespace", ns).
-					Bool("success", true).
-					Msg("secret updated")
+				fmt.Printf("Secret updated: secret_id=%s, owner=%s, namespace=%s\n", key, owner, ns)
 			} else {
 				h.Log.Error().
 					Str("secret_id", key).
@@ -413,12 +397,7 @@ func (h *Handler) ParseVaultGatewayResponse(method string, respBody []byte) erro
 				key, owner, ns = id.GetKey(), id.GetOwner(), id.GetNamespace()
 			}
 			if r.GetSuccess() {
-				h.Log.Info().
-					Str("secret_id", key).
-					Str("owner", owner).
-					Str("namespace", ns).
-					Bool("success", true).
-					Msg("secret deleted")
+				fmt.Printf("Secret deleted: secret_id=%s, owner=%s, namespace=%s\n", key, owner, ns)
 			} else {
 				h.Log.Error().
 					Str("secret_id", key).
@@ -445,24 +424,15 @@ func (h *Handler) ParseVaultGatewayResponse(method string, respBody []byte) erro
 
 		ids := p.GetIdentifiers()
 		if len(ids) == 0 {
-			h.Log.Info().
-				Bool("success", true).
-				Msg("no secrets found")
+			fmt.Println("No secrets found")
 			break
 		}
-
-		// Success: log one line per identifier
 		for _, id := range ids {
 			key, owner, ns := "", "", ""
 			if id != nil {
 				key, owner, ns = id.GetKey(), id.GetOwner(), id.GetNamespace()
 			}
-			h.Log.Info().
-				Str("secret_id", key).
-				Str("owner", owner).
-				Str("namespace", ns).
-				Bool("success", true).
-				Msg("secret identifier")
+			fmt.Printf("Secret identifier: secret_id=%s, owner=%s, namespace=%s\n", key, owner, ns)
 		}
 	default:
 		// Unknown/unsupported method — don’t fail, just surface it explicitly

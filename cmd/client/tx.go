@@ -122,11 +122,11 @@ func (c *TxClient) executeTransactionByTxType(txFn func(opts *bind.TransactOpts)
 		if err != nil {
 			return TxOutput{Type: Regular}, err
 		}
-		c.Logger.Info().Msgf("Transaction details:\n")
-		c.Logger.Info().Msgf("  To:   %s\n", simulateTx.To().Hex())
-		c.Logger.Info().Msgf("  Function: %s\n", funName)
-		c.Logger.Info().Msgf("  Inputs: %s\n", strings.Join(cmdCommon.ToStringSlice(args), ", "))
-		c.Logger.Info().Msgf("  Data: %x\n", simulateTx.Data())
+		fmt.Println("Transaction details:")
+		fmt.Printf("  To:   %s\n", simulateTx.To().Hex())
+		fmt.Printf("  Function: %s\n", funName)
+		fmt.Printf("  Inputs: %s\n", strings.Join(cmdCommon.ToStringSlice(args), ", "))
+		fmt.Printf("  Data: %x\n", simulateTx.Data())
 
 		// Ask for user confirmation before executing the transaction
 		if !c.config.SkipPrompt {
@@ -160,8 +160,8 @@ func (c *TxClient) executeTransactionByTxType(txFn func(opts *bind.TransactOpts)
 			},
 		}, nil
 	case Raw:
-		c.Logger.Info().Msg("--unsigned flag detected: transaction not sent on-chain.")
-		c.Logger.Info().Msg("Generating call data for offline signing and submission in your preferred tool:\n")
+		fmt.Println("--unsigned flag detected: transaction not sent on-chain.")
+		fmt.Println("Generating call data for offline signing and submission in your preferred tool:")
 		tx, err := txFn(cmdCommon.SimTransactOpts())
 		if err != nil {
 			return TxOutput{Type: Raw}, err
