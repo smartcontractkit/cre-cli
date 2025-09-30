@@ -44,7 +44,7 @@ func (c *Client) Execute(ctx context.Context, req *graphql.Request, resp any) er
 		return fmt.Errorf("credentials not provided")
 	}
 	req.Header.Set("User-Agent", "cre-cli")
-	err := c.CheckTokenValidityIfExists(ctx)
+	err := c.refreshTokenIfNeeded(ctx)
 	if err != nil {
 		return fmt.Errorf("token validity check failed: %w", err)
 	}
@@ -62,7 +62,7 @@ func (c *Client) Execute(ctx context.Context, req *graphql.Request, resp any) er
 	return c.client.Run(ctx, req, resp)
 }
 
-func (c *Client) RefreshTokens(ctx context.Context) error {
+func (c *Client) refreshTokens(ctx context.Context) error {
 	if c.creds == nil || c.creds.Tokens == nil || c.creds.Tokens.RefreshToken == "" {
 		return fmt.Errorf("no refresh token available")
 	}
@@ -81,7 +81,7 @@ func (c *Client) RefreshTokens(ctx context.Context) error {
 	return nil
 }
 
-func (c *Client) CheckTokenValidityIfExists(ctx context.Context) error {
+func (c *Client) refreshTokenIfNeeded(ctx context.Context) error {
 	if c.creds == nil || c.creds.Tokens == nil || c.creds.Tokens.AccessToken == "" {
 		return nil
 	}
@@ -104,7 +104,7 @@ func (c *Client) CheckTokenValidityIfExists(ctx context.Context) error {
 
 	if time.Now().Unix() >= claims.Exp-bufferSeconds {
 		c.log.Debug().Msg("token expired or approaching expiration, refreshing")
-		return c.RefreshTokens(ctx)
+		return c.refreshTokens(ctx)
 	}
 
 	return nil
