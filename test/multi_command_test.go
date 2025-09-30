@@ -83,4 +83,17 @@ func TestMultiCommandWorkflowHappyPaths(t *testing.T) {
 		// Run account happy path workflow
 		multi_command_flows.RunAccountHappyPath(t, tc, testEthUrl, TestChainName)
 	})
+
+	// Run Secrets Happy Path: Create -> Update -> List -> Delete
+	t.Run("SecretsHappyPath_CreateUpdateListDelete", func(t *testing.T) {
+		tc := NewTestConfig(t)
+
+		// Use linked Address3 + its key
+		require.NoError(t, createCliEnvFile(tc.EnvFile, constants.TestPrivateKey3), "failed to create env file")
+		require.NoError(t, createProjectSettingsFile(tc.ProjectDirectory+"project.yaml", constants.TestAddress3, testEthUrl), "failed to create project.yaml")
+		t.Cleanup(tc.Cleanup(t))
+
+		// Run secrets happy path workflow
+		multi_command_flows.RunSecretsHappyPath(t, tc, TestChainName)
+	})
 }
