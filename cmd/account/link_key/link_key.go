@@ -271,6 +271,7 @@ func (h *handler) linkOwner(resp initiateLinkingResponse) error {
 	switch txOut.Type {
 	case client.Regular:
 		h.log.Info().Msgf("Transaction submitted: %s", txOut.Hash)
+		h.log.Info().Msgf("View on explorer: %s/tx/%s", h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash)
 
 	case client.Raw:
 		selector, err := strconv.ParseUint(resp.ChainSelector, 10, 64)
