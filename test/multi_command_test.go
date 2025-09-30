@@ -21,24 +21,24 @@ func TestMultiCommandWorkflowHappyPaths(t *testing.T) {
 	multiCommandTestMutex.Lock()
 	defer multiCommandTestMutex.Unlock()
 
-	// Start Anvil with pre-baked state (shared across all sub-tests)
-	anvilProc, testEthUrl := initTestEnv(t)
-	defer StopAnvil(anvilProc)
-
-	// Setup environment variables for pre-baked registries from Anvil state dump
-	t.Setenv(environments.EnvVarWorkflowRegistryAddress, "0x5FbDB2315678afecb367f032d93F642f64180aa3")
-	t.Setenv(environments.EnvVarWorkflowRegistryChainName, TestChainName)
-	t.Setenv(environments.EnvVarCapabilitiesRegistryAddress, "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9")
-	t.Setenv(environments.EnvVarCapabilitiesRegistryChainName, TestChainName)
-
 	// Run Happy Path 1: Deploy -> Pause -> Activate -> Delete
 	t.Run("HappyPath1_DeployPauseActivateDelete", func(t *testing.T) {
+		// Start fresh Anvil instance for this test
+		anvilProc, testEthUrl := initTestEnv(t)
+		defer StopAnvil(anvilProc)
+
+		// Setup environment variables for pre-baked registries from Anvil state dump
+		t.Setenv(environments.EnvVarWorkflowRegistryAddress, "0x5FbDB2315678afecb367f032d93F642f64180aa3")
+		t.Setenv(environments.EnvVarWorkflowRegistryChainName, TestChainName)
+		t.Setenv(environments.EnvVarCapabilitiesRegistryAddress, "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9")
+		t.Setenv(environments.EnvVarCapabilitiesRegistryChainName, TestChainName)
+
 		tc := NewTestConfig(t)
 
 		// Use linked Address3 + its key
 		require.NoError(t, createCliEnvFile(tc.EnvFile, constants.TestPrivateKey3), "failed to create env file")
 		require.NoError(t, createProjectSettingsFile(tc.ProjectDirectory+"project.yaml", constants.TestAddress3, testEthUrl), "failed to create project.yaml")
-		require.NoError(t, createWorkflowSettingsFile(tc.WorkflowSettingsFile, "workflow-name", ""), "failed to create workflow.yaml")
+		require.NoError(t, createWorkflowSettingsFile(tc.WorkflowSettingsFile, "happy-path-1-workflow", ""), "failed to create workflow.yaml")
 		t.Cleanup(tc.Cleanup(t))
 
 		// Run happy path 1 workflow
@@ -47,12 +47,22 @@ func TestMultiCommandWorkflowHappyPaths(t *testing.T) {
 
 	// Run Happy Path 2: Deploy without autostart -> Deploy update with config
 	t.Run("HappyPath2_DeployUpdateWithConfig", func(t *testing.T) {
+		// Start fresh Anvil instance for this test
+		anvilProc, testEthUrl := initTestEnv(t)
+		defer StopAnvil(anvilProc)
+
+		// Setup environment variables for pre-baked registries from Anvil state dump
+		t.Setenv(environments.EnvVarWorkflowRegistryAddress, "0x5FbDB2315678afecb367f032d93F642f64180aa3")
+		t.Setenv(environments.EnvVarWorkflowRegistryChainName, TestChainName)
+		t.Setenv(environments.EnvVarCapabilitiesRegistryAddress, "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9")
+		t.Setenv(environments.EnvVarCapabilitiesRegistryChainName, TestChainName)
+
 		tc := NewTestConfig(t)
 
 		// Use linked Address3 + its key
 		require.NoError(t, createCliEnvFile(tc.EnvFile, constants.TestPrivateKey3), "failed to create env file")
 		require.NoError(t, createProjectSettingsFile(tc.ProjectDirectory+"project.yaml", constants.TestAddress3, testEthUrl), "failed to create project.yaml")
-		require.NoError(t, createWorkflowSettingsFile(tc.WorkflowSettingsFile, "workflow-name", "./config.json"), "failed to create workflow.yaml")
+		require.NoError(t, createWorkflowSettingsFile(tc.WorkflowSettingsFile, "happy-path-2-workflow", "./config.json"), "failed to create workflow.yaml")
 		t.Cleanup(tc.Cleanup(t))
 
 		// Run happy path 2 workflow
