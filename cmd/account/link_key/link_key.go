@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/google/uuid"
 	"github.com/machinebox/graphql"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
@@ -210,6 +211,7 @@ mutation InitiateLinking($request: InitiateLinkingRequest!) {
 		"requestProcess":       requestProcess,
 	}
 	req.Var("request", reqVariables)
+	req.Header.Set("Idempotency-Key", uuid.New().String())
 
 	var container struct {
 		InitiateLinking initiateLinkingResponse `json:"initiateLinking"`
