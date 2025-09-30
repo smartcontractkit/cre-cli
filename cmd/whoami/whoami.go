@@ -62,7 +62,7 @@ func NewHandler(ctx *runtime.Context) *Handler {
 }
 
 func (h *Handler) Execute(ctx context.Context) error {
-	client := graphqlclient.New(h.credentials, h.environmentSet)
+	client := graphqlclient.New(h.credentials, h.environmentSet, h.log)
 	req := graphql.NewRequest(queryGetAccountDetails)
 
 	var respEnvelope struct {

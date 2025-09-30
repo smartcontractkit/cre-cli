@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/google/uuid"
 	"github.com/machinebox/graphql"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
@@ -175,11 +176,12 @@ mutation InitiateUnlinking($request: InitiateUnlinkingRequest!) {
 		"workflowOwnerAddress": in.WorkflowOwner,
 		"environment":          environment,
 	})
+	req.Header.Set("Idempotency-Key", uuid.New().String())
 
 	var container struct {
 		InitiateUnlinking initiateUnlinkingResponse `json:"initiateUnlinking"`
 	}
-	if err := graphqlclient.New(h.credentials, h.environmentSet).Execute(ctx, req, &container); err != nil {
+	if err := graphqlclient.New(h.credentials, h.environmentSet, h.log).Execute(ctx, req, &container); err != nil {
 		return initiateUnlinkingResponse{}, fmt.Errorf("graphql failed: %w", err)
 	}
 
@@ -221,6 +223,7 @@ func (h *handler) unlinkOwner(owner string, resp initiateUnlinkingResponse) erro
 	switch txOut.Type {
 	case client.Regular:
 		h.log.Info().Msgf("Transaction submitted: %s", txOut.Hash)
+		h.log.Info().Msgf("View on explorer: %s/tx/%s", h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash)
 
 	case client.Raw:
 		selector, err := strconv.ParseUint(resp.ChainSelector, 10, 64)

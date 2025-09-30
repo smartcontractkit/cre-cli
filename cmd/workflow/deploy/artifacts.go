@@ -20,7 +20,7 @@ func (h *handler) UploadArtifacts() error {
 		UnsignedGetUrl: "",
 	}
 
-	gql := graphqlclient.New(h.credentials, h.environmentSet)
+	gql := graphqlclient.New(h.credentials, h.environmentSet, h.log)
 
 	chainSelector, err := settings.GetChainSelectorByChainName(h.environmentSet.WorkflowRegistryChainName)
 	if err != nil {
