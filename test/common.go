@@ -3,10 +3,14 @@ package test
 import (
 	"errors"
 	"fmt"
+	"io"
 	"math/rand"
 	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"regexp"
+	"runtime"
 	"strconv"
 	"testing"
 	"time"
@@ -24,8 +28,27 @@ var (
 	L *zerolog.Logger
 )
 
+// CLI path for testing (also defined in multi_command_flows for their use)
+var CLIPath = os.TempDir() + string(os.PathSeparator) + "cre" + func() string {
+	if os.PathSeparator == '\\' {
+		return ".exe"
+	}
+	return ""
+}()
+
+// Regular expression to strip ANSI escape codes from output
+var ansiRE = regexp.MustCompile(`\x1b\[[0-9;]*m`)
+
+// stripANSI strips the ANSI escape codes from the output
+func stripANSI(s string) string {
+	return ansiRE.ReplaceAllString(s, "")
+}
+
 const (
 	TestLogLevelEnvVar = "TEST_LOG_LEVEL" // export this env var before running tests if DEBUG level is needed
+	SethConfigPath     = "seth.toml"
+	TestChainName      = "anvil-devnet"
+	SettingsTarget     = "production-testnet"
 )
 
 // needed for StartAnvil() function, describes how to boot Anvil
@@ -89,6 +112,66 @@ func (tc *TestConfig) Cleanup(t *testing.T) func() {
 			L.Warn().Str("Test", t.Name()).Str("uid", tc.uid).Msg("Test failed, keeping files for inspection")
 		}
 	}
+}
+
+// SetupTestWorkflow copies the test workflow files to the temporary project directory
+// and creates the necessary workflow.yaml configuration for the new context system
+func (tc *TestConfig) SetupTestWorkflow(t *testing.T) error {
+	t.Helper()
+
+	// Get the source workflow directory
+	_, thisFile, _, _ := runtime.Caller(0)
+	testDir := filepath.Dir(thisFile)
+	sourceWorkflowDir := filepath.Join(testDir, "test_project", "blank_workflow")
+
+	// Create workflow directory in temporary project
+	workflowDir := filepath.Join(tc.ProjectDirectory, "blank_workflow")
+	if err := os.MkdirAll(workflowDir, 0755); err != nil {
+		return fmt.Errorf("failed to create workflow directory: %w", err)
+	}
+
+	// Copy workflow files
+	files := []string{"main.go", "config.json", "go.mod", "go.sum"}
+	for _, file := range files {
+		src := filepath.Join(sourceWorkflowDir, file)
+		dst := filepath.Join(workflowDir, file)
+		if err := copyFile(src, dst); err != nil {
+			return fmt.Errorf("failed to copy %s: %w", file, err)
+		}
+	}
+
+	// Create workflow.yaml that maps "workflow-name" to the blank_workflow directory
+	workflowYaml := filepath.Join(workflowDir, constants.DefaultWorkflowSettingsFileName)
+	workflowConfig := `production-testnet:
+  user-workflow:
+    workflow-name: workflow-name
+  workflow-artifacts:
+    config-path: ./config.json
+    workflow-path: ./main.go
+`
+	if err := os.WriteFile(workflowYaml, []byte(workflowConfig), 0644); err != nil {
+		return fmt.Errorf("failed to create workflow.yaml: %w", err)
+	}
+
+	return nil
+}
+
+// copyFile copies a file from src to dst
+func copyFile(src, dst string) error {
+	sourceFile, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer sourceFile.Close()
+
+	destFile, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer destFile.Close()
+
+	_, err = io.Copy(destFile, sourceFile)
+	return err
 }
 
 // Boot Anvil by either loading Anvil state or running a fresh instance that will dump its state on exit

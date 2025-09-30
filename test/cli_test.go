@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -16,47 +15,18 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 )
 
-const (
-	SethConfigPath = "seth.toml"
-	TestChainName  = "anvil-devnet"
-	SettingsTarget = "production-testnet"
-)
-
-// strip the ANSI escape codes from the output
-var ansiRE = regexp.MustCompile(`\x1b\[[0-9;]*m`)
-var CLIPath = os.TempDir() + string(os.PathSeparator) + "cre" + func() string {
-	if os.PathSeparator == '\\' {
-		return ".exe"
-	}
-	return ""
-}()
-
-func stripANSI(s string) string {
-	return ansiRE.ReplaceAllString(s, "")
-}
-
-// Use viper to anchor cre config file defaults, override them where necessary
-// As a result, write the temporary config file only needed for tests
-func createCliSettingsFile(
-	testConfig *TestConfig,
-	workflowOwner string,
-	workflowName string,
-	testEthURL string,
-) error {
-	trimmedName := strings.TrimSpace(workflowName)
-	if len(trimmedName) < 10 {
-		return fmt.Errorf("workflow name %q is too short, minimum length is 10 characters", trimmedName)
-	}
-
+func createProjectSettingsFile(projectSettingPath string, workflowOwner string, testEthURL string) error {
 	v := viper.New()
 
 	v.Set(fmt.Sprintf("%s.%s", SettingsTarget, settings.DONFamilySettingName), constants.DefaultStagingDonFamily)
 
-	// user-workflow fields
+	// account fields
 	if workflowOwner != "" {
-		v.Set(fmt.Sprintf("%s.%s", SettingsTarget, settings.WorkflowOwnerSettingName), workflowOwner)
+		v.Set(fmt.Sprintf("%s.account.workflow-owner-address", SettingsTarget), workflowOwner)
 	}
-	v.Set(fmt.Sprintf("%s.%s", SettingsTarget, settings.WorkflowNameSettingName), trimmedName)
+
+	// cre-cli fields
+	v.Set(fmt.Sprintf("%s.cre-cli.don-family", SettingsTarget), constants.DefaultStagingDonFamily)
 
 	// rpcs
 	v.Set(fmt.Sprintf("%s.%s", SettingsTarget, settings.RpcsSettingName), []settings.RpcEndpoint{
@@ -66,23 +36,57 @@ func createCliSettingsFile(
 		},
 	})
 
+	// write YAML
+	v.SetConfigType("yaml")
+	if err := v.WriteConfigAs(projectSettingPath); err != nil {
+		return fmt.Errorf("error writing project.yaml: %w", err)
+	}
+
+	L.Debug().
+		Str("ProjectSettingsFile", projectSettingPath).
+		Interface("Config", v.AllSettings()).
+		Msg("Project settings file created")
+
+	return nil
+}
+
+// createWorkflowSettingsFile creates the workflow.yaml file with user-workflow and workflow-artifacts settings
+func createWorkflowSettingsFile(
+	workflowSettingsPath string,
+	workflowName string,
+	workflowConfigPath string,
+) error {
+	trimmedName := strings.TrimSpace(workflowName)
+	if len(trimmedName) < 10 {
+		return fmt.Errorf("workflow name %q is too short, minimum length is 10 characters", trimmedName)
+	}
+
+	v := viper.New()
+
+	// user-workflow fields
+	v.Set(fmt.Sprintf("%s.user-workflow.workflow-name", SettingsTarget), trimmedName)
+
 	// workflow-artifacts
+	configPath := workflowConfigPath
+	if configPath == "" {
+		configPath = "./config.json"
+	}
 	workflowArtifacts := map[string]string{
 		"workflow-path": "./main.go",
-		"config-path":   "./config.json",
+		"config-path":   configPath,
 	}
 	v.Set(fmt.Sprintf("%s.workflow-artifacts", SettingsTarget), workflowArtifacts)
 
 	// write YAML
 	v.SetConfigType("yaml")
-	if err := v.WriteConfigAs(testConfig.WorkflowSettingsFile); err != nil {
-		return fmt.Errorf("write config: %w", err)
+	if err := v.WriteConfigAs(workflowSettingsPath); err != nil {
+		return fmt.Errorf("error writing workflow.yaml: %w", err)
 	}
 
 	L.Debug().
-		Str("WorkflowSettingsFile", testConfig.WorkflowSettingsFile).
+		Str("WorkflowSettingsFile", workflowSettingsPath).
 		Interface("Config", v.AllSettings()).
-		Msg("Config file created")
+		Msg("Workflow settings file created")
 
 	return nil
 }
