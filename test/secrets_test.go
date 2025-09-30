@@ -20,6 +20,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/cmd/secrets/common"
 	"github.com/smartcontractkit/cre-cli/cmd/secrets/delete"
 	"github.com/smartcontractkit/cre-cli/internal/constants"
+	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 )
 
@@ -190,6 +191,9 @@ func TestCLISecretsWithEoa(t *testing.T) {
 	t.Setenv(environments.EnvVarWorkflowRegistryChainName, TestChainName)
 	t.Setenv(environments.EnvVarCapabilitiesRegistryAddress, "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9")
 	t.Setenv(environments.EnvVarCapabilitiesRegistryChainName, TestChainName)
+
+	// Set dummy API key
+	t.Setenv(credentials.CreApiKeyVar, "test-api")
 
 	// set up a mock server to simulate the vault gateway
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

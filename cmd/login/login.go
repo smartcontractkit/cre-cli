@@ -12,16 +12,13 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"os"
 	"os/exec"
-	"path/filepath"
 	rt "runtime"
 	"strings"
 	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v2"
 
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
@@ -81,7 +78,7 @@ func (h *handler) execute() error {
 		return err
 	}
 
-	if err := saveCredentials(tokenSet); err != nil {
+	if err := credentials.SaveCredentials(tokenSet); err != nil {
 		h.log.Error().Err(err).Msg("failed to save credentials")
 		return err
 	}
@@ -247,29 +244,6 @@ func (h *handler) exchangeCodeForTokens(ctx context.Context, code string) (*cred
 		return nil, fmt.Errorf("unmarshal token set: %w", err)
 	}
 	return &tokenSet, nil
-}
-
-func saveCredentials(tokenSet *credentials.CreLoginTokenSet) error {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return fmt.Errorf("get home dir: %w", err)
-	}
-	dir := filepath.Join(home, credentials.ConfigDir)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return fmt.Errorf("create config dir: %w", err)
-	}
-
-	path := filepath.Join(dir, credentials.ConfigFile)
-	data, err := yaml.Marshal(tokenSet)
-	if err != nil {
-		return fmt.Errorf("marshal token set: %w", err)
-	}
-
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o600); err != nil {
-		return fmt.Errorf("write temp file: %w", err)
-	}
-	return os.Rename(tmp, path)
 }
 
 func openBrowser(urlStr string, goos string) error {

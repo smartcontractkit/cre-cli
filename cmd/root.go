@@ -76,12 +76,14 @@ func newRootCommand() *cobra.Command {
 				}
 			}
 
-			err := runtimeContext.AttachCredentials()
-			if err != nil {
-				return fmt.Errorf("failed to load credentials: %w", err)
+			if isLoadCredentials(cmd) {
+				err := runtimeContext.AttachCredentials()
+				if err != nil {
+					return fmt.Errorf("failed to attach credentials: %w", err)
+				}
 			}
 
-			err = runtimeContext.AttachEnvironmentSet()
+			err := runtimeContext.AttachEnvironmentSet()
 			if err != nil {
 				return fmt.Errorf("failed to load environment details: %w", err)
 			}
@@ -148,6 +150,23 @@ func isLoadEnvAndConfig(cmd *cobra.Command) bool {
 		"fish":              {},
 		"powershell":        {},
 		"zsh":               {},
+		"help":              {},
+	}
+
+	_, exists := excludedCommands[cmd.Name()]
+	return !exists
+}
+
+func isLoadCredentials(cmd *cobra.Command) bool {
+	// It is not expected to have the credentials loaded when running the following commands
+	var excludedCommands = map[string]struct{}{
+		"version":    {},
+		"login":      {},
+		"bash":       {},
+		"fish":       {},
+		"powershell": {},
+		"zsh":        {},
+		"help":       {},
 	}
 
 	_, exists := excludedCommands[cmd.Name()]
