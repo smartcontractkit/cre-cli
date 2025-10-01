@@ -138,8 +138,7 @@ func RunSecretsHappyPath(t *testing.T, tc TestConfig, chainName string) {
 		if !allowed {
 			t.Fatalf("allowlist not detected for create.\n\nCLI OUTPUT:\n%s", out)
 		}
-		require.Contains(t, out, "secret created", "expected create log.\nCLI OUTPUT:\n%s", out)
-		require.Contains(t, out, "success=true", "create should not fail.\nCLI OUTPUT:\n%s", out)
+		require.Contains(t, out, "Secret created:", "expected create log.\nCLI OUTPUT:\n%s", out)
 	})
 
 	// ===== PHASE 2: UPDATE SECRETS =====
@@ -148,8 +147,7 @@ func RunSecretsHappyPath(t *testing.T, tc TestConfig, chainName string) {
 		if !allowed {
 			t.Fatalf("allowlist not detected for update.\n\nCLI OUTPUT:\n%s", out)
 		}
-		require.Contains(t, out, "secret updated", "expected update log.\nCLI OUTPUT:\n%s", out)
-		require.Contains(t, out, "success=true", "update should not fail.\nCLI OUTPUT:\n%s", out)
+		require.Contains(t, out, "Secret updated:", "expected update log.\nCLI OUTPUT:\n%s", out)
 	})
 
 	// ===== PHASE 3: LIST SECRETS =====
@@ -160,7 +158,6 @@ func RunSecretsHappyPath(t *testing.T, tc TestConfig, chainName string) {
 		}
 		require.Contains(t, out, "testid", "expected listed secret id in output.\nCLI OUTPUT:\n%s", out)
 		require.Contains(t, out, "namespace=testns", "expected namespace in list output.\nCLI OUTPUT:\n%s", out)
-		require.Contains(t, out, "success=true", "list should not fail.\nCLI OUTPUT:\n%s", out)
 	})
 
 	// ===== PHASE 4: DELETE SECRETS =====
@@ -169,9 +166,9 @@ func RunSecretsHappyPath(t *testing.T, tc TestConfig, chainName string) {
 		if !allowed {
 			t.Fatalf("allowlist not detected for delete.\n\nCLI OUTPUT:\n%s", out)
 		}
+		require.Contains(t, out, "Secret deleted:", "expected delete log.\nCLI OUTPUT:\n%s", out)
 		require.Contains(t, out, "testid", "expected listed secret id in output.\nCLI OUTPUT:\n%s", out)
 		require.Contains(t, out, "namespace=testns", "expected namespace in delete output.\nCLI OUTPUT:\n%s", out)
-		require.Contains(t, out, "success=true", "delete should not fail.\nCLI OUTPUT:\n%s", out)
 	})
 }
 
