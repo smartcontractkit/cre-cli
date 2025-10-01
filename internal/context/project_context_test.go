@@ -26,7 +26,7 @@ func TestFindProjectSettingsPath(t *testing.T) {
 			setupFunc: func() (string, func()) {
 				tempDir := t.TempDir()
 				projectFile := filepath.Join(tempDir, constants.DefaultProjectSettingsFileName)
-				err := os.WriteFile(projectFile, []byte("test: content"), 0644)
+				err := os.WriteFile(projectFile, []byte("test: content"), 0600)
 				require.NoError(t, err)
 				return tempDir, func() {}
 			},
@@ -42,7 +42,7 @@ func TestFindProjectSettingsPath(t *testing.T) {
 				require.NoError(t, err)
 
 				projectFile := filepath.Join(tempDir, constants.DefaultProjectSettingsFileName)
-				err = os.WriteFile(projectFile, []byte("test: content"), 0644)
+				err = os.WriteFile(projectFile, []byte("test: content"), 0600)
 				require.NoError(t, err)
 				return subDir, func() {}
 			},
@@ -104,7 +104,7 @@ func TestSetProjectContext(t *testing.T) {
 	require.NoError(t, err)
 	defer func() {
 		// Restore original working directory
-		os.Chdir(originalWd)
+		_ = os.Chdir(originalWd)
 	}()
 
 	tests := []struct {
@@ -132,11 +132,11 @@ func TestSetProjectContext(t *testing.T) {
 				require.NoError(t, err)
 
 				projectFile := filepath.Join(tempDir, constants.DefaultProjectSettingsFileName)
-				err = os.WriteFile(projectFile, []byte("test: content"), 0644)
+				err = os.WriteFile(projectFile, []byte("test: content"), 0600)
 				require.NoError(t, err)
 
 				// Change to subdirectory so we test finding parent
-				os.Chdir(subDir)
+				_ = os.Chdir(subDir)
 				return tempDir, func() {}
 			},
 			projectPath: "", // Empty path should trigger search
@@ -146,7 +146,7 @@ func TestSetProjectContext(t *testing.T) {
 			name: "fails when no project.yaml found",
 			setupFunc: func() (string, func()) {
 				tempDir := t.TempDir()
-				os.Chdir(tempDir)
+				_ = os.Chdir(tempDir)
 				return "", func() {}
 			},
 			projectPath:   "", // Empty path should trigger search
@@ -206,7 +206,7 @@ func TestSetExecutionContext(t *testing.T) {
 	require.NoError(t, err)
 	defer func() {
 		// Restore original working directory
-		os.Chdir(originalWd)
+		_ = os.Chdir(originalWd)
 	}()
 
 	logger := zerolog.Nop()
@@ -225,7 +225,7 @@ func TestSetExecutionContext(t *testing.T) {
 			setupFunc: func() (string, func()) {
 				tempDir := t.TempDir()
 				projectFile := filepath.Join(tempDir, constants.DefaultProjectSettingsFileName)
-				err := os.WriteFile(projectFile, []byte("test: content"), 0644)
+				err := os.WriteFile(projectFile, []byte("test: content"), 0600)
 				require.NoError(t, err)
 				return tempDir, func() {}
 			},
@@ -266,7 +266,7 @@ func TestSetExecutionContext(t *testing.T) {
 			setupFunc: func() (string, func()) {
 				tempDir := t.TempDir()
 				projectFile := filepath.Join(tempDir, constants.DefaultProjectSettingsFileName)
-				err := os.WriteFile(projectFile, []byte("test: content"), 0644)
+				err := os.WriteFile(projectFile, []byte("test: content"), 0600)
 				require.NoError(t, err)
 
 				// Create a workflow directory with workflow.yaml
@@ -280,7 +280,7 @@ test-profile:
   user-workflow:
     workflow-name: test-workflow
 `
-				err = os.WriteFile(workflowFile, []byte(workflowContent), 0644)
+				err = os.WriteFile(workflowFile, []byte(workflowContent), 0600)
 				require.NoError(t, err)
 
 				return tempDir, func() {}
