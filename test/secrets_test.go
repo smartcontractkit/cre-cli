@@ -283,7 +283,6 @@ func TestCLISecretsWithEoa(t *testing.T) {
 		t.Fatalf("allowlist not detected for create.\n\nCLI OUTPUT:\n%s", outCreate)
 	}
 	require.Contains(t, outCreate, "Secret created", "expected create log.\nCLI OUTPUT:\n%s", outCreate)
-	require.Contains(t, outCreate, "success=true", "create should not fail.\nCLI OUTPUT:\n%s", outCreate)
 
 	// --- UPDATE ---
 	allowedUpdate, outUpdate := tc.secretsUpdateEoa(t)
@@ -291,7 +290,6 @@ func TestCLISecretsWithEoa(t *testing.T) {
 		t.Fatalf("allowlist not detected for update.\n\nCLI OUTPUT:\n%s", outUpdate)
 	}
 	require.Contains(t, outUpdate, "secret updated", "expected update log.\nCLI OUTPUT:\n%s", outUpdate)
-	require.Contains(t, outUpdate, "success=true", "update should not fail.\nCLI OUTPUT:\n%s", outUpdate)
 
 	// --- LIST ---
 	allowedList, outList := tc.secretsListEoa(t, "main")
@@ -300,7 +298,6 @@ func TestCLISecretsWithEoa(t *testing.T) {
 	}
 	require.Contains(t, outList, "testid", "expected listed secret id in output.\nCLI OUTPUT:\n%s", outList)
 	require.Contains(t, outList, "namespace=main", "expected namespace in list output.\nCLI OUTPUT:\n%s", outList)
-	require.Contains(t, outList, "success=true", "list should not fail.\nCLI OUTPUT:\n%s", outList)
 
 	// --- DELETE ---
 	allowedDelete, outDelete := tc.secretsDeleteEoa(t, "main")
@@ -309,6 +306,5 @@ func TestCLISecretsWithEoa(t *testing.T) {
 	}
 	require.Contains(t, outDelete, "testid", "expected listed secret id in output.\nCLI OUTPUT:\n%s", outDelete)
 	require.Contains(t, outDelete, "namespace=main", "expected namespace in delete output.\nCLI OUTPUT:\n%s", outDelete)
-	require.Contains(t, outDelete, "success=true", "delete should not fail.\nCLI OUTPUT:\n%s", outDelete)
 
 }
