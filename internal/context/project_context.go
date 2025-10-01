@@ -119,3 +119,14 @@ func FindProjectSettingsPath(startDir string) (string, bool, error) {
 
 	return "", false, nil
 }
+
+// IsWorkflowCommand checks if the command is a workflow command
+func IsWorkflowCommand(cmd *cobra.Command) bool {
+	// Check if the current command or any parent command is "workflow"
+	for current := cmd; current != nil; current = current.Parent() {
+		if current.Name() == "workflow" {
+			return true
+		}
+	}
+	return false
+}
