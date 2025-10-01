@@ -394,10 +394,10 @@ func sanitizeStructNames(structs map[string]*tmplStruct, contracts map[string]*t
 	}
 }
 
-// If an event has indexed dynamic types, then they are hashed and stored on chain
-// We cannot decode them.
-// So we use this function deteremine if an indexed field should be stored as its type or as common.Hash
-// If it is a dynamic type, then it should be stored as common.Hash
+// If an event has indexed dynamic types, then its hashed and stored on chain.
+// It cannot be decoded from the onchain log.
+// This function deteremine's if an indexed field should be represented as its type or as common.Hash while decoding the onchain log.
+// If it is a dynamic type, then it should be represented as common.Hash
 func isDynTopicType(t abi.Type) bool {
 	switch t.T {
 	case abi.TupleTy, abi.StringTy, abi.BytesTy, abi.SliceTy, abi.ArrayTy:

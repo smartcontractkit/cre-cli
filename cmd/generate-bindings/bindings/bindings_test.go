@@ -483,6 +483,8 @@ func TestLogTrigger(t *testing.T) {
 	})
 	t.Run("dynamic event", func(t *testing.T) {
 		ev := ds.ABI.Events["DynamicEvent"]
+		// indexed (string and bytes) fields are hashed directly
+		// indexed tuple/slice/array fields are hashed by the EncodeDynamicEventTopics function
 		events := []datastorage.DynamicEvent{
 			{
 				Key: "testKey1",
@@ -491,8 +493,7 @@ func TestLogTrigger(t *testing.T) {
 					Value: "userValue1",
 				},
 				Sender: "testSender1",
-				// Metadata: common.HexToHash("metadata1"),
-				Metadata: common.BytesToHash([]byte("metadata1")),
+				Metadata: common.BytesToHash(crypto.Keccak256([]byte("metadata1"))),
 				MetadataArray: [][]byte{
 					[]byte("meta1"),
 					[]byte("meta2"),
@@ -505,8 +506,7 @@ func TestLogTrigger(t *testing.T) {
 					Value: "userValue2",
 				},
 				Sender: "testSender2",
-				// Metadata: common.HexToHash("metadata2"),
-				Metadata: common.BytesToHash([]byte("metadata2")),
+				Metadata: common.BytesToHash(crypto.Keccak256([]byte("metadata2"))),
 				MetadataArray: [][]byte{
 					[]byte("meta3"),
 					[]byte("meta4"),
@@ -523,8 +523,8 @@ func TestLogTrigger(t *testing.T) {
 		// user data
 		require.Len(t, encoded[1].Values, 2, "Second topic should have two values")
 		packed1, err := abi.Arguments{ev.Inputs[1]}.Pack(events[0].UserData)
-		expected1 := crypto.Keccak256(packed1)
 		require.NoError(t, err)
+		expected1 := crypto.Keccak256(packed1)
 		require.Equal(t, expected1, encoded[1].Values[0])
 
 		packed2, err := abi.Arguments{ev.Inputs[1]}.Pack(events[1].UserData)
@@ -565,7 +565,7 @@ func TestLogTrigger(t *testing.T) {
 			Topics: [][]byte{
 				ds.Codec.DynamicEventLogHash(), // Event signature hash
 				expected1,                      // UserData hash (indexed)
-				expected3,                      // Metadata (indexed)
+				expected3,                      // Metadata hash (indexed)
 				expected5,                      // MetadataArray hash (indexed)
 			},
 			Data: eventData, // Encoded Key and Sender data

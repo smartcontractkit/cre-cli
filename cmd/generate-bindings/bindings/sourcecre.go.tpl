@@ -101,6 +101,13 @@ type {{$call.Normalized.Name}}Output struct {
 {{end}}
 
 // Events
+// The <Event> struct should be used as a filter (for log triggers).
+// Indexed (string and bytes) fields will be of type common.Hash.
+// They need to he (crypto.Keccak256) hashed and passed in.
+// Indexed (tuple/slice/array) fields can be passed in as is, the Encode<Event>Topics function will handle the hashing.
+//
+// The <Event>Decoded struct will be the result of calling decode (Adapt) on the log trigger result.
+// Indexed dynamic type fields will be of type common.Hash.
 {{range $event := $contract.Events}}
 
 type {{.Normalized.Name}} struct {
@@ -109,7 +116,6 @@ type {{.Normalized.Name}} struct {
 	{{- end}}
 }
 
-// Decoded Events (indexed dynamic fields -> common.Hash (as you cannot decode from their hashes))
 type {{.Normalized.Name}}Decoded struct {
 	{{- range .Normalized.Inputs}}
 	{{capitalise .Name}} {{if and .Indexed (isDynTopicType .Type)}}common.Hash{{else}}{{bindtype .Type $.Structs}}{{end}}

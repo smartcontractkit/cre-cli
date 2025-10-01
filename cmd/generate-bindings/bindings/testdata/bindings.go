@@ -113,13 +113,19 @@ type DataNotFound2 struct {
 }
 
 // Events
+// The <Event> struct should be used as a filter (for log triggers).
+// Indexed (string and bytes) fields will be of type common.Hash.
+// They need to he (crypto.Keccak256) hashed and passed in.
+// Indexed (tuple/slice/array) fields can be passed in as is, the Encode<Event>Topics function will handle the hashing.
+//
+// The <Event>Decoded struct will be the result of calling decode (Adapt) on the log trigger result.
+// Indexed dynamic type fields will be of type common.Hash.
 
 type AccessLogged struct {
 	Caller  common.Address
 	Message string
 }
 
-// Decoded Events (indexed dynamic fields -> common.Hash (as you cannot decode from their hashes))
 type AccessLoggedDecoded struct {
 	Caller  common.Address
 	Message string
@@ -131,7 +137,6 @@ type DataStored struct {
 	Value  string
 }
 
-// Decoded Events (indexed dynamic fields -> common.Hash (as you cannot decode from their hashes))
 type DataStoredDecoded struct {
 	Sender common.Address
 	Key    string
@@ -146,7 +151,6 @@ type DynamicEvent struct {
 	MetadataArray [][]byte
 }
 
-// Decoded Events (indexed dynamic fields -> common.Hash (as you cannot decode from their hashes))
 type DynamicEventDecoded struct {
 	Key           string
 	UserData      common.Hash
@@ -158,7 +162,6 @@ type DynamicEventDecoded struct {
 type NoFields struct {
 }
 
-// Decoded Events (indexed dynamic fields -> common.Hash (as you cannot decode from their hashes))
 type NoFieldsDecoded struct {
 }
 
