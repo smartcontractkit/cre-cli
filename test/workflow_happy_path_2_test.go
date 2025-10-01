@@ -260,7 +260,7 @@ func TestCLIWorkflowDeployWithEoaHappyPath2(t *testing.T) {
 	// Step 2: Deploy update with config
 	updateOut := tc.workflowDeployUpdateWithConfig(t, configPath)
 	require.Contains(t, updateOut, "Workflow compiled", "expected workflow to compile on update.\nCLI OUTPUT:\n%s", updateOut)
-	require.Contains(t, out, "linked=true", "expected link-status true.\nCLI OUTPUT:\n%s", out)
+	require.Contains(t, updateOut, "linked=true", "expected link-status true.\nCLI OUTPUT:\n%s", out)
 	require.Contains(t, updateOut, "Successfully uploaded workflow artifacts", "expected upload to succeed on update.\nCLI OUTPUT:\n%s", updateOut)
 	require.Contains(t, updateOut, "Workflow deployed successfully", "expected deployment update success.\nCLI OUTPUT:\n%s", updateOut)
 }

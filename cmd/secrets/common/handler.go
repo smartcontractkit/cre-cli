@@ -298,9 +298,9 @@ func (h *Handler) Execute(inputs UpsertSecretsInputs, method string, duration ti
 		if err := wrV2Client.AllowlistRequest(digest, duration); err != nil {
 			return fmt.Errorf("allowlist request failed: %w", err)
 		}
-		fmt.Println("Digest allowlisted; proceeding to gateway POST: owner=", ownerAddr.Hex(), "digest=", digest)
+		fmt.Printf("\nDigest allowlisted; proceeding to gateway POST: owner=%s, digest=%s\n", ownerAddr.Hex(), digest)
 	} else {
-		fmt.Println("Digest already allowlisted; skipping on-chain allowlist: owner=", ownerAddr.Hex(), "digest=", digest)
+		fmt.Printf("\nDigest already allowlisted; skipping on-chain allowlist: owner=%s, digest=%s\n", ownerAddr.Hex(), digest)
 	}
 
 	// POST to gateway
