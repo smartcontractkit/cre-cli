@@ -32,7 +32,7 @@ type Inputs struct {
 	AutoStart bool
 
 	KeepAlive    bool
-	WorkflowPath string `validate:"required,file"`
+	WorkflowPath string `validate:"required,path_read"`
 	ConfigPath   string `validate:"omitempty,file,ascii,max=97" cli:"--config"`
 	OutputPath   string `validate:"omitempty,filepath,ascii,max=97" cli:"--output"`
 
@@ -73,14 +73,17 @@ var defaultOutputPath = "./binary.wasm.br.b64"
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
 	var deployCmd = &cobra.Command{
-		Use:   "deploy",
+		Use:   "deploy <workflow-folder-path>",
 		Short: "Deploys a workflow to the Workflow Registry contract",
 		Long:  `Compiles the workflow, uploads the artifacts, and registers the workflow in the Workflow Registry contract.`,
 		Args:  cobra.ExactArgs(1),
+		Example: `
+		cre workflow deploy ./my-workflow
+		`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			h := newHandler(runtimeContext, cmd.InOrStdin())
 
-			inputs, err := h.ResolveInputs(args, runtimeContext.Viper)
+			inputs, err := h.ResolveInputs(runtimeContext.Viper)
 			if err != nil {
 				return err
 			}
@@ -98,7 +101,6 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	deployCmd.Flags().StringP("secrets-url", "s", "", "URL of the encrypted secrets JSON file")
 	deployCmd.Flags().StringP("source-url", "x", "", "URL of the source code in Gist")
 	deployCmd.Flags().StringP("output", "o", defaultOutputPath, "The output file for the compiled WASM binary encoded in base64")
-	deployCmd.Flags().StringP("config", "c", "", "Path to the config file")
 	deployCmd.Flags().BoolP("keep-alive", "k", false, "Keep previous workflows with same workflow name and owner active (default: false).")
 	deployCmd.Flags().BoolP("auto-start", "r", true, "Activate and run the workflow after registration, or pause it")
 
@@ -120,7 +122,7 @@ func newHandler(ctx *runtime.Context, stdin io.Reader) *handler {
 	}
 }
 
-func (h *handler) ResolveInputs(args []string, v *viper.Viper) (Inputs, error) {
+func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 	var configURL *string
 	if v.IsSet("config-url") {
 		url := v.GetString("config-url")
@@ -142,10 +144,10 @@ func (h *handler) ResolveInputs(args []string, v *viper.Viper) (Inputs, error) {
 		AutoStart:     v.GetBool("auto-start"),
 		DonFamily:     h.settings.Workflow.DevPlatformSettings.DonFamily,
 
-		WorkflowPath: args[0],
+		WorkflowPath: h.settings.Workflow.WorkflowArtifactSettings.WorkflowPath,
 		KeepAlive:    v.GetBool("keep-alive"),
 
-		ConfigPath: v.GetString("config"),
+		ConfigPath: h.settings.Workflow.WorkflowArtifactSettings.ConfigPath,
 		OutputPath: v.GetString("output"),
 
 		WorkflowRegistryContractChainName: h.environmentSet.WorkflowRegistryChainName,

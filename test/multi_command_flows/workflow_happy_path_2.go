@@ -1,27 +1,27 @@
-package test
+package multi_command_flows
 
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 
 	"github.com/smartcontractkit/cre-cli/internal/constants"
-	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 )
 
-// Deploys a workflow via CLI without autostart, mocking GraphQL + Origin.
-func (tc *TestConfig) workflowDeployEoaWithoutAutostart(t *testing.T) string {
+// workflowDeployEoaWithoutAutostart deploys a workflow via CLI without autostart, mocking GraphQL + Origin.
+func workflowDeployEoaWithoutAutostart(t *testing.T, tc TestConfig) string {
 	t.Helper()
 
 	var srv *httptest.Server
@@ -81,29 +81,18 @@ func (tc *TestConfig) workflowDeployEoaWithoutAutostart(t *testing.T) string {
 	// Point the CLI at our mock GraphQL endpoint
 	os.Setenv(environments.EnvVarGraphQLURL, srv.URL+"/graphql")
 
-	// Resolve the workflow module dir: ./test_project/blank_workflow
-	_, thisFile, _, _ := runtime.Caller(0)
-	testDir := filepath.Dir(thisFile)
-	wfDir := filepath.Join(testDir, "test_project", "blank_workflow")
-
-	// Artifact path (the CLI default)
-	artifactPath := filepath.Join(wfDir, "binary.wasm.br.b64")
-
-	// Ensure a clean slate and schedule cleanup
-	_ = os.Remove(artifactPath) // ignore if it doesn't exist
-	t.Cleanup(func() { _ = os.Remove(artifactPath) })
-
-	// Build CLI args - note: no auto-start flag (defaults to false)
+	// Build CLI args - CLI will automatically resolve workflow path using new context system
+	// Note: no auto-start flag (defaults to false)
 	args := []string{
 		"workflow", "deploy",
-		"main.go",
+		"blank_workflow",
 		tc.GetCliEnvFlag(),
-		tc.GetCliSettingsFlag(),
+		tc.GetProjectRootFlag(),
 		"--" + settings.Flags.SkipConfirmation.Name,
 	}
 
 	cmd := exec.Command(CLIPath, args...)
-	cmd.Dir = wfDir
+	// Let CLI handle context switching - don't set cmd.Dir manually
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
@@ -116,13 +105,13 @@ func (tc *TestConfig) workflowDeployEoaWithoutAutostart(t *testing.T) string {
 		stderr.String(),
 	)
 
-	out := stripANSI(stdout.String() + stderr.String())
+	out := StripANSI(stdout.String() + stderr.String())
 
 	return out
 }
 
-// Deploys a workflow update with config via CLI, mocking GraphQL + Origin.
-func (tc *TestConfig) workflowDeployUpdateWithConfig(t *testing.T, configPath string) string {
+// workflowDeployUpdateWithConfig deploys a workflow update with config via CLI, mocking GraphQL + Origin.
+func workflowDeployUpdateWithConfig(t *testing.T, tc TestConfig) string {
 	t.Helper()
 
 	var srv *httptest.Server
@@ -182,30 +171,17 @@ func (tc *TestConfig) workflowDeployUpdateWithConfig(t *testing.T, configPath st
 	// Point the CLI at our mock GraphQL endpoint
 	os.Setenv(environments.EnvVarGraphQLURL, srv.URL+"/graphql")
 
-	// Resolve the workflow module dir: ./test_project/blank_workflow
-	_, thisFile, _, _ := runtime.Caller(0)
-	testDir := filepath.Dir(thisFile)
-	wfDir := filepath.Join(testDir, "test_project", "blank_workflow")
-
-	// Artifact path (the CLI default)
-	artifactPath := filepath.Join(wfDir, "binary.wasm.br.b64")
-
-	// Ensure a clean slate and schedule cleanup
-	_ = os.Remove(artifactPath) // ignore if it doesn't exist
-	t.Cleanup(func() { _ = os.Remove(artifactPath) })
-
-	// Build CLI args with config file
+	// Build CLI args with config file - CLI will automatically resolve workflow path
 	args := []string{
 		"workflow", "deploy",
-		"main.go",
+		"blank_workflow",
 		tc.GetCliEnvFlag(),
-		tc.GetCliSettingsFlag(),
-		"--config", configPath,
+		tc.GetProjectRootFlag(),
 		"--" + settings.Flags.SkipConfirmation.Name,
 	}
 
 	cmd := exec.Command(CLIPath, args...)
-	cmd.Dir = wfDir
+	// Let CLI handle context switching - don't set cmd.Dir manually
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
@@ -218,49 +194,71 @@ func (tc *TestConfig) workflowDeployUpdateWithConfig(t *testing.T, configPath st
 		stderr.String(),
 	)
 
-	out := stripANSI(stdout.String() + stderr.String())
+	out := StripANSI(stdout.String() + stderr.String())
 
 	return out
 }
 
-func TestCLIWorkflowDeployWithEoaHappyPath2(t *testing.T) {
-	// Start Anvil with pre-baked state
-	anvilProc, testEthUrl := initTestEnv(t)
-	defer StopAnvil(anvilProc)
-
-	tc := NewTestConfig(t)
-
-	// Use linked Address3 + its key
-	require.NoError(t, createCliEnvFile(tc.EnvFile, constants.TestPrivateKey3), "failed to create env file")
-	require.NoError(t, createCliSettingsFile(tc, constants.TestAddress3, "workflow-name", testEthUrl), "failed to create cre config file")
-	require.NoError(t, createBlankProjectSettingFile(tc.ProjectDirectory+"project.yaml"), "failed to create project.yaml")
-	t.Cleanup(tc.Cleanup(t))
-
-	// Pre-baked registries from Anvil state dump
-	t.Setenv(environments.EnvVarWorkflowRegistryAddress, "0x5FbDB2315678afecb367f032d93F642f64180aa3")
-	t.Setenv(environments.EnvVarWorkflowRegistryChainName, TestChainName)
-	t.Setenv(environments.EnvVarCapabilitiesRegistryAddress, "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9")
-	t.Setenv(environments.EnvVarCapabilitiesRegistryChainName, TestChainName)
-
-	// Set dummy API key
-	t.Setenv(credentials.CreApiKeyVar, "test-api")
-
-	// Use existing config file from test project
-	_, thisFile, _, _ := runtime.Caller(0)
-	testDir := filepath.Dir(thisFile)
-	configPath := filepath.Join(testDir, "test_project", "blank_workflow", "config.json")
+// RunHappyPath2Workflow runs the complete happy path 2 workflow:
+// Deploy without autostart -> Deploy update with config
+func RunHappyPath2Workflow(t *testing.T, tc TestConfig) {
+	t.Helper()
 
 	// Step 1: Deploy initial workflow without autostart
-	out := tc.workflowDeployEoaWithoutAutostart(t)
+	out := workflowDeployEoaWithoutAutostart(t, tc)
 	require.Contains(t, out, "Workflow compiled", "expected workflow to compile.\nCLI OUTPUT:\n%s", out)
 	require.Contains(t, out, "linked=true", "expected link-status true.\nCLI OUTPUT:\n%s", out)
 	require.Contains(t, out, "Successfully uploaded workflow artifacts", "expected upload to succeed.\nCLI OUTPUT:\n%s", out)
 	require.Contains(t, out, "Workflow deployed successfully", "expected deployment success.\nCLI OUTPUT:\n%s", out)
 
-	// Step 2: Deploy update with config
-	updateOut := tc.workflowDeployUpdateWithConfig(t, configPath)
+	// Step 1.5: Update workflow.yaml to include config-path for the second deployment
+	// This ensures the second deployment has different artifacts and generates a different workflowID
+	if err := updateWorkflowConfigPath(tc.GetProjectRootFlag(), "./config.json"); err != nil {
+		require.NoError(t, err, "failed to update workflow config path")
+	}
+
+	// Step 2: Deploy update with config (workflow already setup from step 1)
+	updateOut := workflowDeployUpdateWithConfig(t, tc)
 	require.Contains(t, updateOut, "Workflow compiled", "expected workflow to compile on update.\nCLI OUTPUT:\n%s", updateOut)
 	require.Contains(t, updateOut, "linked=true", "expected link-status true.\nCLI OUTPUT:\n%s", out)
 	require.Contains(t, updateOut, "Successfully uploaded workflow artifacts", "expected upload to succeed on update.\nCLI OUTPUT:\n%s", updateOut)
 	require.Contains(t, updateOut, "Workflow deployed successfully", "expected deployment update success.\nCLI OUTPUT:\n%s", updateOut)
+}
+
+// updateWorkflowConfigPath updates the config-path in the workflow.yaml file
+func updateWorkflowConfigPath(projectRootFlag, configPath string) error {
+	const SettingsTarget = "production-testnet"
+
+	// Extract directory path from flag format "--project-root=/path/..."
+	parts := strings.Split(projectRootFlag, "=")
+	if len(parts) != 2 {
+		return fmt.Errorf("invalid project root flag format: %s", projectRootFlag)
+	}
+	projectDirectory := parts[1]
+
+	workflowDir := filepath.Join(projectDirectory, "blank_workflow")
+	workflowSettingsPath := filepath.Join(workflowDir, constants.DefaultWorkflowSettingsFileName)
+
+	v := viper.New()
+	v.SetConfigFile(workflowSettingsPath)
+	if err := v.ReadInConfig(); err != nil {
+		return fmt.Errorf("failed to read workflow.yaml: %w", err)
+	}
+
+	// Update the config-path in workflow-artifacts
+	workflowArtifacts := v.GetStringMapString(fmt.Sprintf("%s.workflow-artifacts", SettingsTarget))
+	if workflowArtifacts == nil {
+		workflowArtifacts = make(map[string]string)
+	}
+
+	workflowArtifacts["workflow-path"] = "./main.go"
+	workflowArtifacts["config-path"] = configPath
+	v.Set(fmt.Sprintf("%s.workflow-artifacts", SettingsTarget), workflowArtifacts)
+
+	// Write the updated configuration
+	if err := v.WriteConfig(); err != nil {
+		return fmt.Errorf("failed to write workflow.yaml: %w", err)
+	}
+
+	return nil
 }

@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 )
 
@@ -52,58 +51,12 @@ func TestMain(m *testing.M) {
 	// That way they won't leak into tests
 	ethPrivateKeyValue := LookupAndUnsetEnvVar(settings.EthPrivateKeyEnvVar)
 
-	cwd, err := os.Getwd()
-	if err != nil {
-		fmt.Printf("Error getting current working directory: %s\n", err.Error())
-	}
-
-	err = buildTestProjectSettings(cwd)
-	if err != nil {
-		fmt.Printf("Error setting up project settings: %s", err.Error())
-		os.Exit(1)
-	}
-
 	// Run all tests
 	exitCode := m.Run()
 
 	// Restore env var that were previously present in this user's shell environment
 	RestoreEnvVar(settings.EthPrivateKeyEnvVar, ethPrivateKeyValue)
 
-	// Cleanup: Delete the test files
-	cleanupTestFiles(cwd)
 	// Exit with the appropriate code
 	os.Exit(exitCode)
-}
-
-func cleanupTestFiles(cwd string) {
-	// Cleanup: Delete the test project settings if it exists.
-	projectSettingsPath := filepath.Join(cwd, constants.DefaultProjectSettingsFileName)
-	if err := os.Remove(projectSettingsPath); err == nil {
-		fmt.Printf("Removed test project settings file: %s\n", projectSettingsPath)
-	}
-
-	// Cleanup: Delete the .gitignore file if it exists.
-	gitignorePath := filepath.Join(cwd, ".gitignore")
-	if err := os.Remove(gitignorePath); err == nil {
-		fmt.Printf("Removed .gitignore file: %s\n", gitignorePath)
-	}
-
-	// Cleanup: Delete the .env file if it exists.
-	envPath := filepath.Join(cwd, constants.DefaultEnvFileName)
-	if err := os.Remove(envPath); err == nil {
-		fmt.Printf("Removed environment file: %s\n", envPath)
-	}
-}
-
-func buildTestProjectSettings(cwd string) error {
-	replacements := settings.GetDefaultReplacements()
-	replacements["WorkflowOwnerAddress"] = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
-	replacements["WorkflowName"] = "TestCLIWorkflowNewForCronAPIFetchMultiVariable"
-
-	err := settings.FindOrCreateProjectSettings(cwd, replacements)
-	if err != nil {
-		return err
-	}
-
-	return nil
 }

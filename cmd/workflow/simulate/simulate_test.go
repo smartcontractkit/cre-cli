@@ -18,30 +18,26 @@ import (
 // TestBlankWorkflowSimulation validates that the simulator can successfully
 // run a blank workflow from end to end in a non-interactive mode.
 func TestBlankWorkflowSimulation(t *testing.T) {
-	// Locate repo root from this test file, then point to test/test_project/blank_workflow
+	// Locate repo root from this test file, then point to test/test_project as the project root
 	_, thisFile, _, _ := rt.Caller(0)
 	thisDir := filepath.Dir(thisFile)
 	repoRoot := filepath.Clean(filepath.Join(thisDir, "..", "..", "..")) // cmd/workflow/simulate -> repo root
-	wfDir := filepath.Join(repoRoot, "test", "test_project", "blank_workflow")
+	projectRoot := filepath.Join(repoRoot, "test", "test_project")
+	workflowPath := filepath.Join(projectRoot, "blank_workflow")
 
-	// Change into the workflow directory so `go build` resolves the local go.mod there
-	origWD, _ := os.Getwd()
-	require.NoError(t, os.Chdir(wfDir))
-	t.Cleanup(func() { _ = os.Chdir(origWD) })
-
-	// Paths within the workflow module dir
-	workflowPath := "main.go"
-	configPath := "config.json"
+	// Ensure workflow path is absolute
+	absWorkflowPath, err := filepath.Abs(workflowPath)
+	require.NoError(t, err)
 
 	// Clean up common artifacts produced by the compile/simulate flow
-	outB64 := filepath.Join(wfDir, "binary.wasm.br.b64")
+	outB64 := filepath.Join(absWorkflowPath, "binary.wasm.br.b64")
 	t.Cleanup(func() {
 		_ = os.Remove(outB64)
 	})
 
 	// Mock a `*viper.Viper` instance to represent CLI flags.
 	v := viper.New()
-	v.Set("config", configPath)
+	v.Set("project-root", projectRoot)
 	v.Set("non-interactive", true)
 	v.Set("trigger-index", 0)
 	v.Set("target", "local-simulation")
@@ -54,6 +50,8 @@ func TestBlankWorkflowSimulation(t *testing.T) {
 	var workflowSettings settings.WorkflowSettings
 	workflowSettings.UserWorkflowSettings.WorkflowName = "blank-workflow"
 	workflowSettings.DevPlatformSettings.DonFamily = "small"
+	workflowSettings.WorkflowArtifactSettings.WorkflowPath = filepath.Join(absWorkflowPath, "main.go")
+	workflowSettings.WorkflowArtifactSettings.ConfigPath = filepath.Join(absWorkflowPath, "config.json")
 
 	// Mock `runtime.Context` with a test logger.
 	runtimeCtx := &runtime.Context{
@@ -71,7 +69,7 @@ func TestBlankWorkflowSimulation(t *testing.T) {
 	// Instantiate and run the simulator handler
 	handler := newHandler(runtimeCtx)
 
-	inputs, err := handler.ResolveInputs([]string{workflowPath}, runtimeCtx.Viper, runtimeCtx.Settings)
+	inputs, err := handler.ResolveInputs(runtimeCtx.Viper, runtimeCtx.Settings)
 	require.NoError(t, err)
 
 	// Validate the resolved inputs.

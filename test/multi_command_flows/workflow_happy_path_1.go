@@ -1,4 +1,4 @@
-package test
+package multi_command_flows
 
 import (
 	"bytes"
@@ -7,27 +7,47 @@ import (
 	"net/http/httptest"
 	"os"
 	"os/exec"
-	"path/filepath"
-	"runtime"
+	"regexp"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 )
 
-// Small struct to read GraphQL body
+// TestConfig represents test configuration
+type TestConfig interface {
+	GetCliEnvFlag() string
+	GetProjectRootFlag() string
+}
+
+// CLI path for testing
+var CLIPath = os.TempDir() + string(os.PathSeparator) + "cre" + func() string {
+	if os.PathSeparator == '\\' {
+		return ".exe"
+	}
+	return ""
+}()
+
+// Regular expression to strip ANSI escape codes from output
+var ansiRE = regexp.MustCompile(`\x1b\[[0-9;]*m`)
+
+// StripANSI strips the ANSI escape codes from the output
+func StripANSI(s string) string {
+	return ansiRE.ReplaceAllString(s, "")
+}
+
+// graphQLRequest represents a GraphQL request body
 type graphQLRequest struct {
 	Query     string                 `json:"query"`
 	Variables map[string]interface{} `json:"variables"`
 }
 
-// Deploys a workflow via CLI, mocking GraphQL + Origin.
-func (tc *TestConfig) workflowDeployEoaWithMockStorage(t *testing.T) string {
+// workflowDeployEoaWithMockStorage deploys a workflow via CLI, mocking GraphQL + Origin.
+func workflowDeployEoaWithMockStorage(t *testing.T, tc TestConfig) string {
 	t.Helper()
 
 	var srv *httptest.Server
@@ -87,30 +107,18 @@ func (tc *TestConfig) workflowDeployEoaWithMockStorage(t *testing.T) string {
 	// Point the CLI at our mock GraphQL endpoint
 	os.Setenv(environments.EnvVarGraphQLURL, srv.URL+"/graphql")
 
-	// Resolve the workflow module dir: ./test_project/blank_workflow
-	_, thisFile, _, _ := runtime.Caller(0)
-	testDir := filepath.Dir(thisFile)
-	wfDir := filepath.Join(testDir, "test_project", "blank_workflow")
-
-	// Artifact path (the CLI default)
-	artifactPath := filepath.Join(wfDir, "binary.wasm.br.b64")
-
-	// Ensure a clean slate and schedule cleanup
-	_ = os.Remove(artifactPath) // ignore if it doesn't exist
-	t.Cleanup(func() { _ = os.Remove(artifactPath) })
-
-	// Build CLI args
+	// Build CLI args - CLI will automatically resolve workflow path using new context system
 	args := []string{
 		"workflow", "deploy",
-		"main.go",
+		"blank_workflow",
 		tc.GetCliEnvFlag(),
-		tc.GetCliSettingsFlag(),
+		tc.GetProjectRootFlag(),
 		"--auto-start=true",
 		"--" + settings.Flags.SkipConfirmation.Name,
 	}
 
 	cmd := exec.Command(CLIPath, args...)
-	cmd.Dir = wfDir
+	// Let CLI handle context switching - don't set cmd.Dir manually
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
@@ -123,25 +131,25 @@ func (tc *TestConfig) workflowDeployEoaWithMockStorage(t *testing.T) string {
 		stderr.String(),
 	)
 
-	out := stripANSI(stdout.String() + stderr.String())
+	out := StripANSI(stdout.String() + stderr.String())
 
 	return out
 }
 
-// Pauses all workflows (by owner + name) via CLI.
-func (tc *TestConfig) workflowPauseEoa(t *testing.T) string {
+// workflowPauseEoa pauses all workflows (by owner + name) via CLI.
+func workflowPauseEoa(t *testing.T, tc TestConfig) string {
 	t.Helper()
 
 	args := []string{
 		"workflow", "pause",
+		"blank_workflow",
 		tc.GetCliEnvFlag(),
-		tc.GetCliSettingsFlag(),
+		tc.GetProjectRootFlag(),
 		"--" + settings.Flags.SkipConfirmation.Name,
 	}
 
 	cmd := exec.Command(CLIPath, args...)
-	// Run from the project root
-	cmd.Dir = tc.ProjectDirectory
+	// CLI will handle context switching automatically
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
@@ -154,23 +162,23 @@ func (tc *TestConfig) workflowPauseEoa(t *testing.T) string {
 		stderr.String(),
 	)
 
-	return stripANSI(stdout.String() + stderr.String())
+	return StripANSI(stdout.String() + stderr.String())
 }
 
-// Activates the workflow (by owner+name) via CLI.
-func (tc *TestConfig) workflowActivateEoa(t *testing.T) string {
+// workflowActivateEoa activates the workflow (by owner+name) via CLI.
+func workflowActivateEoa(t *testing.T, tc TestConfig) string {
 	t.Helper()
 
 	args := []string{
 		"workflow", "activate",
+		"blank_workflow",
 		tc.GetCliEnvFlag(),
-		tc.GetCliSettingsFlag(),
+		tc.GetProjectRootFlag(),
 		"--" + settings.Flags.SkipConfirmation.Name,
 	}
 
 	cmd := exec.Command(CLIPath, args...)
-	// Run from the project root
-	cmd.Dir = tc.ProjectDirectory
+	// CLI will handle context switching automatically
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
@@ -183,23 +191,23 @@ func (tc *TestConfig) workflowActivateEoa(t *testing.T) string {
 		stderr.String(),
 	)
 
-	return stripANSI(stdout.String() + stderr.String())
+	return StripANSI(stdout.String() + stderr.String())
 }
 
-// Deletes for the current owner+name via CLI (non-interactive).
-func (tc *TestConfig) workflowDeleteEoa(t *testing.T) string {
+// workflowDeleteEoa deletes for the current owner+name via CLI (non-interactive).
+func workflowDeleteEoa(t *testing.T, tc TestConfig) string {
 	t.Helper()
 
 	args := []string{
 		"workflow", "delete",
+		"blank_workflow",
 		tc.GetCliEnvFlag(),
-		tc.GetCliSettingsFlag(),
+		tc.GetProjectRootFlag(),
 		"--" + settings.Flags.SkipConfirmation.Name,
 	}
 
 	cmd := exec.Command(CLIPath, args...)
-	// Run from the project root
-	cmd.Dir = tc.ProjectDirectory
+	// CLI will handle context switching automatically
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
@@ -212,48 +220,34 @@ func (tc *TestConfig) workflowDeleteEoa(t *testing.T) string {
 		stderr.String(),
 	)
 
-	return stripANSI(stdout.String() + stderr.String())
+	return StripANSI(stdout.String() + stderr.String())
 }
 
-func TestCLIWorkflowDeployWithEoa(t *testing.T) {
-	// Start Anvil with pre-baked state
-	anvilProc, testEthUrl := initTestEnv(t)
-	defer StopAnvil(anvilProc)
-
-	tc := NewTestConfig(t)
-
-	// Use linked Address3 + its key
-	require.NoError(t, createCliEnvFile(tc.EnvFile, constants.TestPrivateKey3), "failed to create env file")
-	require.NoError(t, createCliSettingsFile(tc, constants.TestAddress3, "workflow-name", testEthUrl), "failed to create cre config file")
-	require.NoError(t, createBlankProjectSettingFile(tc.ProjectDirectory+"project.yaml"), "failed to create project.yaml")
-	t.Cleanup(tc.Cleanup(t))
-
-	// Pre-baked registries from Anvil state dump
-	t.Setenv(environments.EnvVarWorkflowRegistryAddress, "0x5FbDB2315678afecb367f032d93F642f64180aa3")
-	t.Setenv(environments.EnvVarWorkflowRegistryChainName, TestChainName)
-	t.Setenv(environments.EnvVarCapabilitiesRegistryAddress, "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9")
-	t.Setenv(environments.EnvVarCapabilitiesRegistryChainName, TestChainName)
+// RunHappyPath1Workflow runs the complete happy path 1 workflow:
+// Deploy -> Pause -> Activate -> Delete
+func RunHappyPath1Workflow(t *testing.T, tc TestConfig) {
+	t.Helper()
 
 	// Set dummy API key
 	t.Setenv(credentials.CreApiKeyVar, "test-api")
 
 	// Deploy with mocked storage
-	out := tc.workflowDeployEoaWithMockStorage(t)
+	out := workflowDeployEoaWithMockStorage(t, tc)
 	require.Contains(t, out, "Workflow compiled", "expected workflow to compile.\nCLI OUTPUT:\n%s", out)
 	require.Contains(t, out, "linked=true", "expected link-status true.\nCLI OUTPUT:\n%s", out)
 	require.Contains(t, out, "Successfully uploaded workflow artifacts", "expected upload to succeed.\nCLI OUTPUT:\n%s", out)
 	require.Contains(t, out, "Workflow deployed successfully", "expected deployment success.\nCLI OUTPUT:\n%s", out)
 
 	// Pause
-	pauseOut := tc.workflowPauseEoa(t)
+	pauseOut := workflowPauseEoa(t, tc)
 	require.Contains(t, pauseOut, "Workflows paused successfully", "pause should succeed.\nCLI OUTPUT:\n%s", pauseOut)
 
 	// Activate
-	activateOut := tc.workflowActivateEoa(t)
+	activateOut := workflowActivateEoa(t, tc)
 	require.Contains(t, activateOut, "Activating workflow", "should target latest workflow.\nCLI OUTPUT:\n%s", activateOut)
 	require.Contains(t, activateOut, "Workflow activated successfully", "activate should succeed.\nCLI OUTPUT:\n%s", activateOut)
 
 	// Delete
-	deleteOut := tc.workflowDeleteEoa(t)
+	deleteOut := workflowDeleteEoa(t, tc)
 	require.Contains(t, deleteOut, "Workflows deleted successfully", "expected final deletion summary.\nCLI OUTPUT:\n%s", deleteOut)
 }
