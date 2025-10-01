@@ -160,7 +160,7 @@ func (h *handler) Execute() error {
 		switch txOut.Type {
 		case client.Regular:
 			fmt.Printf("Transaction confirmed: %s\n", txOut.Hash)
-			fmt.Printf("View on explorer: %s/tx/%s\n", h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash)
+			fmt.Printf("View on explorer: \033]8;;%s/tx/%s\033\\%s/tx/%s\033]8;;\033\\\n", h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash, h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash)
 			fmt.Printf("Deleted workflow ID: %s\n", hex.EncodeToString(wf.WorkflowId[:]))
 
 		case client.Raw:

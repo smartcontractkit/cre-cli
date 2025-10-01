@@ -268,7 +268,7 @@ func (h *handler) linkOwner(resp initiateLinkingResponse) error {
 	switch txOut.Type {
 	case client.Regular:
 		fmt.Printf("Transaction submitted: %s\n", txOut.Hash)
-		fmt.Printf("View on explorer: %s/tx/%s\n", h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash)
+		fmt.Printf("View on explorer: \033]8;;%s/tx/%s\033\\%s/tx/%s\033]8;;\033\\\n", h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash, h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash)
 
 	case client.Raw:
 		selector, err := strconv.ParseUint(resp.ChainSelector, 10, 64)
