@@ -108,10 +108,7 @@ func (h *handler) Execute() error {
 		return fmt.Errorf("failed to create workflow registry client: %w", err)
 	}
 
-	h.log.Info().
-		Str("Name", workflowName).
-		Str("Owner", workflowOwner.Hex()).
-		Msg("Fetching workflows to pause...")
+	fmt.Printf("Fetching workflows to pause... Name=%s, Owner=%s\n", workflowName, workflowOwner.Hex())
 
 	workflowIDs, err := fetchAllWorkflowIDs(wrc, workflowOwner, workflowName)
 	if err != nil {
@@ -121,9 +118,7 @@ func (h *handler) Execute() error {
 		return fmt.Errorf("no workflows found for name %q and owner %q", workflowName, workflowOwner.Hex())
 	}
 
-	h.log.Info().
-		Int("count", len(workflowIDs)).
-		Msg("Processing batch pause...")
+	fmt.Printf("Processing batch pause... count=%d\n", len(workflowIDs))
 
 	txOut, err := wrc.BatchPauseWorkflows(workflowIDs)
 	if err != nil {
@@ -132,28 +127,28 @@ func (h *handler) Execute() error {
 
 	switch txOut.Type {
 	case client.Regular:
-		h.log.Info().Msgf("Transaction confirmed: %s", txOut.Hash)
-		h.log.Info().Msgf("View on explorer: %s/tx/%s", h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash)
+		fmt.Printf("Transaction confirmed: %s\n", txOut.Hash)
+		fmt.Printf("View on explorer: \033]8;;%s/tx/%s\033\\%s/tx/%s\033]8;;\033\\\n", h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash, h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash)
 		for _, w := range workflowIDs {
-			h.log.Info().Msgf("Paused workflow IDs: %s", hex.EncodeToString(w[:]))
+			fmt.Printf("Paused workflow IDs: %s\n", hex.EncodeToString(w[:]))
 		}
-		h.log.Info().Msg("Workflows paused successfully")
+		fmt.Println("Workflows paused successfully")
 
 	case client.Raw:
-		h.log.Info().Msg("")
-		h.log.Info().Msg("MSIG workflow pause transaction prepared!")
-		h.log.Info().Msgf("To Pause %s", workflowName)
-		h.log.Info().Msg("")
-		h.log.Info().Msg("Next steps:")
-		h.log.Info().Msg("")
-		h.log.Info().Msg("   1. Submit the following transaction on the target chain:")
-		h.log.Info().Msgf("      Chain:   %s", h.inputs.WorkflowRegistryContractChainName)
-		h.log.Info().Msgf("      Contract Address: %s", txOut.RawTx.To)
-		h.log.Info().Msg("")
-		h.log.Info().Msg("   2. Use the following transaction data:")
-		h.log.Info().Msg("")
-		h.log.Info().Msgf("      %x", txOut.RawTx.Data)
-		h.log.Info().Msg("")
+		fmt.Println("")
+		fmt.Println("MSIG workflow pause transaction prepared!")
+		fmt.Printf("To Pause %s\n", workflowName)
+		fmt.Println("")
+		fmt.Println("Next steps:")
+		fmt.Println("")
+		fmt.Println("   1. Submit the following transaction on the target chain:")
+		fmt.Printf("      Chain:   %s\n", h.inputs.WorkflowRegistryContractChainName)
+		fmt.Printf("      Contract Address: %s\n", txOut.RawTx.To)
+		fmt.Println("")
+		fmt.Println("   2. Use the following transaction data:")
+		fmt.Println("")
+		fmt.Printf("      %x\n", txOut.RawTx.Data)
+		fmt.Println("")
 	default:
 		h.log.Warn().Msgf("Unsupported transaction type: %s", txOut.Type)
 	}

@@ -212,13 +212,13 @@ func (h *handler) ensureOwnerLinkedOrFail() error {
 		return fmt.Errorf("failed to check owner link status: %w", err)
 	}
 
-	h.log.Info().Str("owner", ownerAddr.Hex()).Bool("linked", linked).Msg("Workflow owner link status")
+	fmt.Printf("Workflow owner link status: owner=%s, linked=%v\n", ownerAddr.Hex(), linked)
 
 	if linked {
 		return nil
 	}
 
-	h.log.Info().Str("owner", ownerAddr.Hex()).Msg("Owner not linked. Attempting auto-link...")
+	fmt.Printf("Owner not linked. Attempting auto-link: owner=%s\n", ownerAddr.Hex())
 	if err := h.tryAutoLink(); err != nil {
 		return fmt.Errorf("auto-link attempt failed: %w", err)
 	}
@@ -229,7 +229,7 @@ func (h *handler) ensureOwnerLinkedOrFail() error {
 		return fmt.Errorf("auto-link executed but owner still not linked")
 	}
 
-	h.log.Info().Str("owner", ownerAddr.Hex()).Msg("Auto-link successful")
+	fmt.Printf("Auto-link successful: owner=%s\n", ownerAddr.Hex())
 	return nil
 }
 
@@ -242,18 +242,18 @@ func (h *handler) autoLinkMSIGAndExit() (halt bool, err error) {
 	}
 
 	if linked {
-		h.log.Info().Str("owner", ownerAddr.Hex()).Msg("MSIG owner already linked. Continuing deploy.")
+		fmt.Printf("MSIG owner already linked. Continuing deploy: owner=%s\n", ownerAddr.Hex())
 		return false, nil
 	}
 
-	h.log.Info().Str("owner", ownerAddr.Hex()).Bool("linked", linked).Msg("MSIG workflow owner link status")
-	h.log.Info().Str("owner", ownerAddr.Hex()).Msg("MSIG owner: attempting auto-link...")
+	fmt.Printf("MSIG workflow owner link status: owner=%s, linked=%v\n", ownerAddr.Hex(), linked)
+	fmt.Printf("MSIG owner: attempting auto-link... owner=%s\n", ownerAddr.Hex())
 
 	if err := h.tryAutoLink(); err != nil {
 		return false, fmt.Errorf("MSIG auto-link attempt failed: %w", err)
 	}
 
-	h.log.Info().Msg("MSIG auto-link initiated. Halting deploy. Submit the multisig transaction, then re-run deploy.")
+	fmt.Println("MSIG auto-link initiated. Halting deploy. Submit the multisig transaction, then re-run deploy.")
 	return true, nil
 }
 

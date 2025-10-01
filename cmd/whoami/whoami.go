@@ -77,12 +77,12 @@ func (h *Handler) Execute(ctx context.Context) error {
 		return fmt.Errorf("graphql request failed: %w", err)
 	}
 
-	h.log.Info().Msg("")
-	h.log.Info().Msg("	Account details retrieved:")
-	h.log.Info().Msg("")
-	h.log.Info().Msgf("   	Email:           %s", respEnvelope.GetAccountDetails.EmailAddress)
-	h.log.Info().Msgf("   	Organization ID: %s", respEnvelope.GetAccountDetails.OrganizationID)
-	h.log.Info().Msg("")
+	fmt.Println("")
+	fmt.Println("\tAccount details retrieved:")
+	fmt.Println("")
+	fmt.Printf("   \tEmail:           %s\n", respEnvelope.GetAccountDetails.EmailAddress)
+	fmt.Printf("   \tOrganization ID: %s\n", respEnvelope.GetAccountDetails.OrganizationID)
+	fmt.Println("")
 
 	return nil
 }

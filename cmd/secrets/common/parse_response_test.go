@@ -3,6 +3,8 @@ package common
 import (
 	"bytes"
 	"encoding/json"
+	"io"
+	"os"
 	"strings"
 	"testing"
 
@@ -115,6 +117,11 @@ func encodeRPCBodyFromError(code int, msg string) []byte {
 }
 
 func TestParseVaultGatewayResponse_Create_LogsPerItem(t *testing.T) {
+	// Capture stdout
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
 	var buf bytes.Buffer
 	h := newTestHandler(&buf)
 
@@ -123,44 +130,63 @@ func TestParseVaultGatewayResponse_Create_LogsPerItem(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	out := buf.String()
+	w.Close()
+	os.Stdout = oldStdout
+	var output strings.Builder
+	_, _ = io.Copy(&output, r)
+
+	logOutput := buf.String()
+
 	// Expect 2 successes + 1 failure
-	if got := strings.Count(out, `"message":"secret created"`); got < 2 {
-		t.Fatalf("expected at least 2 'secret created' logs, got %d.\nlogs:\n%s", got, out)
+	if got := strings.Count(output.String(), "Secret created"); got < 2 {
+		t.Fatalf("expected at least 2 'Secret created' outputs, got %d.\noutput:\n%s", got, output.String())
 	}
-	if got := strings.Count(out, `"message":"secret create failed"`); got != 1 {
-		t.Fatalf("expected 1 'secret create failed' log, got %d.\nlogs:\n%s", got, out)
+	if got := strings.Count(logOutput, "secret create failed"); got != 1 {
+		t.Fatalf("expected 1 'secret create failed' output, got %d.\noutput:\n%s", got, output.String())
 	}
-	// Spot-check structured fields
-	if !strings.Contains(out, `"secret_id":"k1"`) || !strings.Contains(out, `"namespace":"n1"`) || !strings.Contains(out, `"owner":"o1"`) {
-		t.Fatalf("expected id/owner/namespace fields for first secret in logs, got:\n%s", out)
+	// Spot-check fields
+	if !strings.Contains(output.String(), "k1") || !strings.Contains(output.String(), "n1") || !strings.Contains(output.String(), "o1") {
+		t.Fatalf("expected id/owner/namespace fields for first secret in output, got:\n%s", output.String())
 	}
-	if !strings.Contains(out, `"error":"boom"`) {
-		t.Fatalf("expected error text to be logged for failed item, got:\n%s", out)
+	if !strings.Contains(logOutput, "boom") {
+		t.Fatalf("expected error text to be printed for failed item, got:\n%s", output.String())
 	}
 }
 
 func TestParseVaultGatewayResponse_Update_Success(t *testing.T) {
-	var buf bytes.Buffer
-	h := newTestHandler(&buf)
+	// Capture stdout
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	h := newTestHandler(nil)
 
 	body := encodeRPCBodyFromPayload(buildUpdatePayloadProto(t))
 	if err := h.ParseVaultGatewayResponse(vaulttypes.MethodSecretsUpdate, body); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	out := buf.String()
-	if !strings.Contains(out, `"message":"secret updated"`) {
-		t.Fatalf("expected 'secret updated' log, got:\n%s", out)
+	w.Close()
+	os.Stdout = oldStdout
+	var output strings.Builder
+	_, _ = io.Copy(&output, r)
+
+	if !strings.Contains(output.String(), "Secret updated") {
+		t.Fatalf("expected 'Secret updated' output, got:\n%s", output.String())
 	}
-	if !strings.Contains(out, `"secret_id":"ku"`) ||
-		!strings.Contains(out, `"owner":"ou"`) ||
-		!strings.Contains(out, `"namespace":"nu"`) {
-		t.Fatalf("expected id/owner/namespace in logs, got:\n%s", out)
+	if !strings.Contains(output.String(), "ku") ||
+		!strings.Contains(output.String(), "ou") ||
+		!strings.Contains(output.String(), "nu") {
+		t.Fatalf("expected id/owner/namespace in output, got:\n%s", output.String())
 	}
 }
 
 func TestParseVaultGatewayResponse_Delete_Success(t *testing.T) {
+	// Capture stdout
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
 	var buf bytes.Buffer
 	h := newTestHandler(&buf)
 
@@ -169,14 +195,17 @@ func TestParseVaultGatewayResponse_Delete_Success(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	out := buf.String()
-	if !strings.Contains(out, `"message":"secret deleted"`) {
-		t.Fatalf("expected 'secret deleted' log, got:\n%s", out)
+	w.Close()
+	os.Stdout = oldStdout
+	var output strings.Builder
+	_, _ = io.Copy(&output, r)
+	if !strings.Contains(output.String(), `Secret deleted`) {
+		t.Fatalf("expected 'Secret deleted' log, got:\n%s", output.String())
 	}
-	if !strings.Contains(out, `"secret_id":"kd"`) ||
-		!strings.Contains(out, `"owner":"od"`) ||
-		!strings.Contains(out, `"namespace":"nd"`) {
-		t.Fatalf("expected id/owner/namespace in logs, got:\n%s", out)
+	if !strings.Contains(output.String(), `secret_id=kd`) ||
+		!strings.Contains(output.String(), `owner=od`) ||
+		!strings.Contains(output.String(), `namespace=nd`) {
+		t.Fatalf("expected id/owner/namespace in logs, got:\n%s", output.String())
 	}
 }
 
@@ -287,6 +316,11 @@ func buildListPayloadProtoFailure(t *testing.T, errMsg string) []byte {
 }
 
 func TestParseVaultGatewayResponse_List_SuccessWithIdentifiers(t *testing.T) {
+	// Capture stdout
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
 	var buf bytes.Buffer
 	h := newTestHandler(&buf)
 
@@ -295,21 +329,30 @@ func TestParseVaultGatewayResponse_List_SuccessWithIdentifiers(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	out := buf.String()
+	w.Close()
+	os.Stdout = oldStdout
+	var output strings.Builder
+	_, _ = io.Copy(&output, r)
+
 	// Two identifiers -> two info lines
-	if got := strings.Count(out, `"message":"secret identifier"`); got != 2 {
-		t.Fatalf("expected 2 'secret identifier' logs, got %d.\nlogs:\n%s", got, out)
+	if got := strings.Count(output.String(), `Secret identifier`); got != 2 {
+		t.Fatalf("expected 2 'Secret identifier' logs, got %d.\nlogs:\n%s", got, output.String())
 	}
 	// Spot-check fields
-	if !strings.Contains(out, `"secret_id":"l1"`) || !strings.Contains(out, `"owner":"ol1"`) || !strings.Contains(out, `"namespace":"nl1"`) {
-		t.Fatalf("expected fields for first identifier, got:\n%s", out)
+	if !strings.Contains(output.String(), `secret_id=l1`) || !strings.Contains(output.String(), `owner=ol1`) || !strings.Contains(output.String(), `namespace=nl1`) {
+		t.Fatalf("expected fields for first identifier, got:\n%s", output.String())
 	}
-	if !strings.Contains(out, `"secret_id":"l2"`) || !strings.Contains(out, `"owner":"ol2"`) || !strings.Contains(out, `"namespace":"nl2"`) {
-		t.Fatalf("expected fields for second identifier, got:\n%s", out)
+	if !strings.Contains(output.String(), `secret_id=l2`) || !strings.Contains(output.String(), `owner=ol2`) || !strings.Contains(output.String(), `namespace=nl2`) {
+		t.Fatalf("expected fields for second identifier, got:\n%s", output.String())
 	}
 }
 
 func TestParseVaultGatewayResponse_List_EmptySuccess(t *testing.T) {
+	// Capture stdout
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
 	var buf bytes.Buffer
 	h := newTestHandler(&buf)
 
@@ -318,14 +361,18 @@ func TestParseVaultGatewayResponse_List_EmptySuccess(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	out := buf.String()
+	w.Close()
+	os.Stdout = oldStdout
+	var output strings.Builder
+	_, _ = io.Copy(&output, r)
+
 	// Should log a single informational "no secrets found"
-	if !strings.Contains(out, `"message":"no secrets found"`) {
-		t.Fatalf("expected 'no secrets found' info log, got:\n%s", out)
+	if !strings.Contains(output.String(), `No secrets found`) {
+		t.Fatalf("expected 'no secrets found' info log, got:\n%s", output.String())
 	}
 	// And no per-identifier lines
-	if strings.Contains(out, `"message":"secret identifier"`) {
-		t.Fatalf("did not expect 'secret identifier' logs, got:\n%s", out)
+	if strings.Contains(output.String(), `secret identifier`) {
+		t.Fatalf("did not expect 'secret identifier' logs, got:\n%s", output.String())
 	}
 }
 

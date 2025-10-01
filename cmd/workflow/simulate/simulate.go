@@ -123,7 +123,7 @@ func (h *handler) ResolveInputs(args []string, v *viper.Viper, creSettings *sett
 
 		c, err := ethclient.Dial(rpcURL)
 		if err != nil {
-			h.log.Info().Msgf("failed to create eth client for %s: %v", chainName, err)
+			fmt.Printf("failed to create eth client for %s: %v\n", chainName, err)
 			continue
 		}
 
@@ -196,7 +196,7 @@ func (h *handler) Execute(inputs Inputs) error {
 		return fmt.Errorf("failed to compile workflow: %w", err)
 	}
 	h.log.Debug().Msgf("Build output: %s", buildOutput)
-	h.log.Info().Msg("Workflow compiled")
+	fmt.Println("Workflow compiled")
 
 	// Read the compiled workflow binary
 	tmpWasmLocation := filepath.Join(workflowRootFolder, tmpWasmFileName)

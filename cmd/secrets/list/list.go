@@ -110,11 +110,9 @@ func Execute(h *common.Handler, namespace string, duration time.Duration, ownerT
 		if err := wrV2Client.AllowlistRequest(digest, duration); err != nil {
 			return fmt.Errorf("allowlist request failed: %w", err)
 		}
-		h.Log.Info().Str("owner", ownerAddr.Hex()).Str("digest", digest).
-			Msg("Digest allowlisted; proceeding to gateway POST")
+		fmt.Printf("\nDigest allowlisted; proceeding to gateway POST: owner=%s, digest=%s\\n", ownerAddr.Hex(), digest)
 	} else {
-		h.Log.Info().Str("owner", ownerAddr.Hex()).Str("digest", digest).
-			Msg("Digest already allowlisted; skipping on-chain allowlist")
+		fmt.Printf("\nDigest already allowlisted; skipping on-chain allowlist: owner=%s, digest=%s\\n", ownerAddr.Hex(), digest)
 	}
 
 	// POST to gateway
