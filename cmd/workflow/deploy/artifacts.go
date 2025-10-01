@@ -49,7 +49,7 @@ func (h *handler) UploadArtifacts() error {
 		}
 		h.log.Debug().Str("URL", configURL.UnsignedGetUrl).Msg("Successfully uploaded workflow config to CRE Storage Service")
 	}
-	h.log.Info().Msg("Successfully uploaded workflow artifacts to CRE Storage Service")
+	fmt.Println("Successfully uploaded workflow artifacts to CRE Storage Service")
 
 	h.inputs.BinaryURL = binaryURL.UnsignedGetUrl
 	h.inputs.ConfigURL = &configURL.UnsignedGetUrl

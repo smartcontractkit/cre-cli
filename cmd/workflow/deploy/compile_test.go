@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/jarcoal/httpmock"
@@ -192,6 +193,11 @@ func TestCompileCmd(t *testing.T) {
 					simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
 					defer simulatedEnvironment.Close()
 
+					// Capture stdout
+					oldStdout := os.Stdout
+					r, w, _ := os.Pipe()
+					os.Stdout = w
+
 					ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
 					handler := newHandler(ctx, buf)
 
@@ -209,11 +215,17 @@ func TestCompileCmd(t *testing.T) {
 					require.NoError(t, err)
 
 					err = handler.Execute()
+
+					w.Close()
+					os.Stdout = oldStdout
+					var output strings.Builder
+					_, _ = io.Copy(&output, r)
+
 					require.Error(t, err)
 					assert.ErrorContains(t, err, tt.wantErr)
 
 					if tt.compilationErr != "" {
-						assert.Contains(t, buf.String(), tt.compilationErr)
+						assert.Contains(t, output.String(), tt.compilationErr)
 					}
 				})
 			}

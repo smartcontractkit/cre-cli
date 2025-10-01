@@ -207,7 +207,7 @@ func RunHappyPath2Workflow(t *testing.T, tc TestConfig) {
 	// Step 1: Deploy initial workflow without autostart
 	out := workflowDeployEoaWithoutAutostart(t, tc)
 	require.Contains(t, out, "Workflow compiled", "expected workflow to compile.\nCLI OUTPUT:\n%s", out)
-	require.Contains(t, out, "Workflow owner link status linked=true", "expected link-status true.\nCLI OUTPUT:\n%s", out)
+	require.Contains(t, out, "linked=true", "expected link-status true.\nCLI OUTPUT:\n%s", out)
 	require.Contains(t, out, "Successfully uploaded workflow artifacts", "expected upload to succeed.\nCLI OUTPUT:\n%s", out)
 	require.Contains(t, out, "Workflow deployed successfully", "expected deployment success.\nCLI OUTPUT:\n%s", out)
 
@@ -220,7 +220,7 @@ func RunHappyPath2Workflow(t *testing.T, tc TestConfig) {
 	// Step 2: Deploy update with config (workflow already setup from step 1)
 	updateOut := workflowDeployUpdateWithConfig(t, tc)
 	require.Contains(t, updateOut, "Workflow compiled", "expected workflow to compile on update.\nCLI OUTPUT:\n%s", updateOut)
-	require.Contains(t, updateOut, "Workflow owner link status linked=true", "expected link-status true on update.\nCLI OUTPUT:\n%s", updateOut)
+	require.Contains(t, updateOut, "linked=true", "expected link-status true.\nCLI OUTPUT:\n%s", out)
 	require.Contains(t, updateOut, "Successfully uploaded workflow artifacts", "expected upload to succeed on update.\nCLI OUTPUT:\n%s", updateOut)
 	require.Contains(t, updateOut, "Workflow deployed successfully", "expected deployment update success.\nCLI OUTPUT:\n%s", updateOut)
 }

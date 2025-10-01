@@ -124,21 +124,21 @@ func (h *handler) Execute() error {
 		return fmt.Errorf("failed to get workflow list: %w", err)
 	}
 	if len(allWorkflows) == 0 {
-		h.log.Info().Msgf("No workflows found for name: %s", workflowName)
+		fmt.Printf("No workflows found for name: %s\n", workflowName)
 		return nil
 	}
 
-	h.log.Info().Msgf("Found %d workflow(s) to delete for name: %s", len(allWorkflows), workflowName)
+	fmt.Printf("Found %d workflow(s) to delete for name: %s\n", len(allWorkflows), workflowName)
 	for i, wf := range allWorkflows {
 		status := map[uint8]string{0: "ACTIVE", 1: "PAUSED"}[wf.Status]
-		h.log.Info().Msgf("   %d. Workflow", i+1)
-		h.log.Info().Msgf("      ID:              %s", hex.EncodeToString(wf.WorkflowId[:]))
-		h.log.Info().Msgf("      Owner:           %s", wf.Owner.Hex())
-		h.log.Info().Msgf("      DON Family:      %s", wf.DonFamily)
-		h.log.Info().Msgf("      Tag:             %s", wf.Tag)
-		h.log.Info().Msgf("      Binary URL:      %s", wf.BinaryUrl)
-		h.log.Info().Msgf("      Workflow Status: %s", status)
-		h.log.Info().Msg("")
+		fmt.Printf("   %d. Workflow\n", i+1)
+		fmt.Printf("      ID:              %s\n", hex.EncodeToString(wf.WorkflowId[:]))
+		fmt.Printf("      Owner:           %s\n", wf.Owner.Hex())
+		fmt.Printf("      DON Family:      %s\n", wf.DonFamily)
+		fmt.Printf("      Tag:             %s\n", wf.Tag)
+		fmt.Printf("      Binary URL:      %s\n", wf.BinaryUrl)
+		fmt.Printf("      Workflow Status: %s\n", status)
+		fmt.Println("")
 	}
 
 	shouldDeleteWorkflow, err := h.shouldDeleteWorkflow(h.inputs.SkipConfirmation, workflowName)
@@ -146,11 +146,11 @@ func (h *handler) Execute() error {
 		return err
 	}
 	if !shouldDeleteWorkflow {
-		h.log.Info().Msg("Workflow deletion canceled")
+		fmt.Println("Workflow deletion canceled")
 		return nil
 	}
 
-	h.log.Info().Msgf("Deleting %d workflow(s)...", len(allWorkflows))
+	fmt.Printf("Deleting %d workflow(s)...\n", len(allWorkflows))
 	for _, wf := range allWorkflows {
 		txOut, err := wrc.DeleteWorkflow(wf.WorkflowId)
 		if err != nil {
@@ -162,31 +162,31 @@ func (h *handler) Execute() error {
 		}
 		switch txOut.Type {
 		case client.Regular:
-			h.log.Info().Msgf("Transaction confirmed: %s", txOut.Hash)
-			h.log.Info().Msgf("View on explorer: %s/tx/%s", h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash)
-			h.log.Info().Msgf("Deleted workflow ID: %s", hex.EncodeToString(wf.WorkflowId[:]))
+			fmt.Printf("Transaction confirmed: %s\n", txOut.Hash)
+			fmt.Printf("View on explorer: \033]8;;%s/tx/%s\033\\%s/tx/%s\033]8;;\033\\\n", h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash, h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash)
+			fmt.Printf("Deleted workflow ID: %s\n", hex.EncodeToString(wf.WorkflowId[:]))
 
 		case client.Raw:
-			h.log.Info().Msg("")
-			h.log.Info().Msg("MSIG workflow deletion transaction prepared!")
-			h.log.Info().Msg("")
-			h.log.Info().Msg("Next steps:")
-			h.log.Info().Msg("")
-			h.log.Info().Msg("   1. Submit the following transaction on the target chain:")
-			h.log.Info().Msgf("      Chain:   %s", h.inputs.WorkflowRegistryContractChainName)
-			h.log.Info().Msgf("      Contract Address: %s", txOut.RawTx.To)
-			h.log.Info().Msg("")
-			h.log.Info().Msg("   2. Use the following transaction data:")
-			h.log.Info().Msg("")
-			h.log.Info().Msgf("      %x", txOut.RawTx.Data)
-			h.log.Info().Msg("")
+			fmt.Println("")
+			fmt.Println("MSIG workflow deletion transaction prepared!")
+			fmt.Println("")
+			fmt.Println("Next steps:")
+			fmt.Println("")
+			fmt.Println("   1. Submit the following transaction on the target chain:")
+			fmt.Printf("      Chain:   %s\n", h.inputs.WorkflowRegistryContractChainName)
+			fmt.Printf("      Contract Address: %s\n", txOut.RawTx.To)
+			fmt.Println("")
+			fmt.Println("   2. Use the following transaction data:")
+			fmt.Println("")
+			fmt.Printf("      %x\n", txOut.RawTx.Data)
+			fmt.Println("")
 		default:
 			h.log.Warn().Msgf("Unsupported transaction type: %s", txOut.Type)
 		}
 
 		// Workflow artifacts deletion will be handled by a background cleanup process.
 	}
-	h.log.Info().Msg("Workflows deleted successfully.")
+	fmt.Println("Workflows deleted successfully.")
 	return nil
 }
 
@@ -204,7 +204,7 @@ func (h *handler) shouldDeleteWorkflow(skipConfirmation bool, workflowName strin
 
 func (h *handler) askForWorkflowDeletionConfirmation(expectedWorkflowName string) (bool, error) {
 	promptWarning := fmt.Sprintf("Are you sure you want to delete the workflow '%s'?\n%s\n", expectedWorkflowName, text.FgRed.Sprint("This action cannot be undone."))
-	h.log.Info().Msg(promptWarning)
+	fmt.Println(promptWarning)
 
 	promptText := fmt.Sprintf("To confirm, type the workflow name: %s", expectedWorkflowName)
 	var result string

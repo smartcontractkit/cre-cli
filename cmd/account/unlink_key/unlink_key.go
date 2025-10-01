@@ -118,7 +118,7 @@ func (h *handler) Execute(in Inputs) error {
 		return fmt.Errorf("inputs not validated")
 	}
 
-	h.log.Info().Str("owner", in.WorkflowOwner).Msg("Starting unlinking")
+	fmt.Printf("Starting unlinking: owner=%s\n", in.WorkflowOwner)
 
 	// Check if confirmation should be skipped
 	if !in.SkipConfirmation {
@@ -148,7 +148,7 @@ func (h *handler) Execute(in Inputs) error {
 	h.log.Debug().Msg("\nRaw linking response payload:\n\n" + string(prettyResp))
 
 	if in.WorkflowRegistryContractAddress == resp.ContractAddress {
-		h.log.Info().Msg("Contract address validation passed")
+		fmt.Println("Contract address validation passed")
 	} else {
 		return fmt.Errorf("contract address validation failed")
 	}
@@ -222,8 +222,8 @@ func (h *handler) unlinkOwner(owner string, resp initiateUnlinkingResponse) erro
 
 	switch txOut.Type {
 	case client.Regular:
-		h.log.Info().Msgf("Transaction submitted: %s", txOut.Hash)
-		h.log.Info().Msgf("View on explorer: %s/tx/%s", h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash)
+		fmt.Printf("Transaction submitted: %s\n", txOut.Hash)
+		fmt.Printf("View on explorer: \033]8;;%s/tx/%s\033\\%s/tx/%s\033]8;;\033\\\n", h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash, h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash)
 
 	case client.Raw:
 		selector, err := strconv.ParseUint(resp.ChainSelector, 10, 64)
@@ -237,24 +237,24 @@ func (h *handler) unlinkOwner(owner string, resp initiateUnlinkingResponse) erro
 			return err
 		}
 
-		h.log.Info().Msg("")
-		h.log.Info().Msg("Ownership unlinking initialized successfully!")
-		h.log.Info().Msg("")
-		h.log.Info().Msg("Next steps:")
-		h.log.Info().Msg("")
-		h.log.Info().Msg("   1. Submit the following transaction on the target chain:")
-		h.log.Info().Msg("")
-		h.log.Info().Msgf("      Chain:            %s", ChainName)
-		h.log.Info().Msgf("      Contract Address: %s", resp.ContractAddress)
-		h.log.Info().Msg("")
-		h.log.Info().Msg("   2. Use the following transaction data:")
-		h.log.Info().Msg("")
-		h.log.Info().Msgf("      %s", resp.TransactionData)
-		h.log.Info().Msg("")
+		fmt.Println("")
+		fmt.Println("Ownership unlinking initialized successfully!")
+		fmt.Println("")
+		fmt.Println("Next steps:")
+		fmt.Println("")
+		fmt.Println("   1. Submit the following transaction on the target chain:")
+		fmt.Println("")
+		fmt.Printf("      Chain:            %s\n", ChainName)
+		fmt.Printf("      Contract Address: %s\n", resp.ContractAddress)
+		fmt.Println("")
+		fmt.Println("   2. Use the following transaction data:")
+		fmt.Println("")
+		fmt.Printf("      %s\n", resp.TransactionData)
+		fmt.Println("")
 	default:
 		h.log.Warn().Msgf("Unsupported transaction type: %s", txOut.Type)
 	}
 
-	h.log.Info().Msg("Unlinked successfully")
+	fmt.Println("Unlinked successfully")
 	return nil
 }
