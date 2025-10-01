@@ -46,7 +46,6 @@ func SetExecutionContext(cmd *cobra.Command, args []string, projectRootFlag stri
 		if err != nil {
 			return fmt.Errorf("failed to resolve workflow directory path '%s': %w", args[0], err)
 		}
-		logger.Info().Msgf("Changing working directory to %s", workflowDir)
 		if err := os.Chdir(workflowDir); err != nil {
 			return fmt.Errorf("failed to change directory to %s: %w", workflowDir, err)
 		}
