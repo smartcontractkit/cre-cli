@@ -455,31 +455,31 @@ func TestLogTrigger(t *testing.T) {
 
 		// Test the Adapt method
 		// We need to encode the non-indexed parameters (Key and Value) into the log data
-    eventData, err := abi.Arguments{ev.Inputs[1], ev.Inputs[2]}.Pack(events[0].Key, events[0].Value)
-    require.NoError(t, err, "Encoding event data should not return an error")
+		eventData, err := abi.Arguments{ev.Inputs[1], ev.Inputs[2]}.Pack(events[0].Key, events[0].Value)
+		require.NoError(t, err, "Encoding event data should not return an error")
 
-    // Create a mock log that simulates what would be returned by the blockchain
-    mockLog := &evm.Log{
-        Address: ds.Address.Bytes(),                    // Contract address
-        Topics: [][]byte{
-            ds.Codec.DataStoredLogHash(),              // Event signature hash
-            expected1,                                 // Sender address (indexed)
-        },
-        Data: eventData,                               // Encoded Key and Value data
-    }
+		// Create a mock log that simulates what would be returned by the blockchain
+		mockLog := &evm.Log{
+			Address: ds.Address.Bytes(), // Contract address
+			Topics: [][]byte{
+				ds.Codec.DataStoredLogHash(), // Event signature hash
+				expected1,                    // Sender address (indexed)
+			},
+			Data: eventData, // Encoded Key and Value data
+		}
 
-    // Call Adapt to decode the log
-    decodedLog, err := trigger.Adapt(mockLog)
-    require.NoError(t, err, "Adapt should not return an error")
-    require.NotNil(t, decodedLog, "Decoded log should not be nil")
-    
-    // Verify the decoded data matches what we expect
-    require.Equal(t, events[0].Sender, decodedLog.Data.Sender, "Decoded sender should match")
-    require.Equal(t, events[0].Key, decodedLog.Data.Key, "Decoded key should match")
-    require.Equal(t, events[0].Value, decodedLog.Data.Value, "Decoded value should match")
-    
-    // Verify the original log is preserved
-    require.Equal(t, mockLog, decodedLog.Log, "Original log should be preserved")
+		// Call Adapt to decode the log
+		decodedLog, err := trigger.Adapt(mockLog)
+		require.NoError(t, err, "Adapt should not return an error")
+		require.NotNil(t, decodedLog, "Decoded log should not be nil")
+
+		// Verify the decoded data matches what we expect
+		require.Equal(t, events[0].Sender, decodedLog.Data.Sender, "Decoded sender should match")
+		require.Equal(t, events[0].Key, decodedLog.Data.Key, "Decoded key should match")
+		require.Equal(t, events[0].Value, decodedLog.Data.Value, "Decoded value should match")
+
+		// Verify the original log is preserved
+		require.Equal(t, mockLog, decodedLog.Log, "Original log should be preserved")
 	})
 	t.Run("dynamic event", func(t *testing.T) {
 		ev := ds.ABI.Events["DynamicEvent"]
@@ -490,7 +490,7 @@ func TestLogTrigger(t *testing.T) {
 					Key:   "userKey1",
 					Value: "userValue1",
 				},
-				Sender:   "testSender1",
+				Sender: "testSender1",
 				// Metadata: common.HexToHash("metadata1"),
 				Metadata: common.BytesToHash([]byte("metadata1")),
 				MetadataArray: [][]byte{
@@ -504,7 +504,7 @@ func TestLogTrigger(t *testing.T) {
 					Key:   "userKey2",
 					Value: "userValue2",
 				},
-				Sender:   "testSender2",
+				Sender: "testSender2",
 				// Metadata: common.HexToHash("metadata2"),
 				Metadata: common.BytesToHash([]byte("metadata2")),
 				MetadataArray: [][]byte{
@@ -538,7 +538,7 @@ func TestLogTrigger(t *testing.T) {
 
 		expected4 := events[1].Metadata.Bytes()
 		require.Equal(t, expected4, encoded[2].Values[1])
-		
+
 		// metadata array
 		packed3, err := abi.Arguments{ev.Inputs[4]}.Pack(events[0].MetadataArray)
 		expected5 := crypto.Keccak256(packed3)
@@ -555,36 +555,36 @@ func TestLogTrigger(t *testing.T) {
 		require.NoError(t, err)
 
 		// Test the Adapt method for DynamicEvent
-    // Encode the non-indexed parameters (Key and Sender) into the log data
-    eventData, err := abi.Arguments{ev.Inputs[0], ev.Inputs[2]}.Pack(events[0].Key, events[0].Sender)
-    require.NoError(t, err, "Encoding DynamicEvent data should not return an error")
+		// Encode the non-indexed parameters (Key and Sender) into the log data
+		eventData, err := abi.Arguments{ev.Inputs[0], ev.Inputs[2]}.Pack(events[0].Key, events[0].Sender)
+		require.NoError(t, err, "Encoding DynamicEvent data should not return an error")
 
-    // Create a mock log that simulates what would be returned by the blockchain
-    mockLog := &evm.Log{
-        Address: ds.Address.Bytes(),                    // Contract address
-        Topics: [][]byte{
-            ds.Codec.DynamicEventLogHash(),            // Event signature hash
-            expected1,                                 // UserData hash (indexed)
-            expected3,                                 // Metadata (indexed)
-            expected5,                                 // MetadataArray hash (indexed)
-        },
-        Data: eventData,                               // Encoded Key and Sender data
-    }
+		// Create a mock log that simulates what would be returned by the blockchain
+		mockLog := &evm.Log{
+			Address: ds.Address.Bytes(), // Contract address
+			Topics: [][]byte{
+				ds.Codec.DynamicEventLogHash(), // Event signature hash
+				expected1,                      // UserData hash (indexed)
+				expected3,                      // Metadata (indexed)
+				expected5,                      // MetadataArray hash (indexed)
+			},
+			Data: eventData, // Encoded Key and Sender data
+		}
 
-    // Call Adapt to decode the log
-    decodedLog, err := trigger.Adapt(mockLog)
-    require.NoError(t, err, "Adapt should not return an error")
-    require.NotNil(t, decodedLog, "Decoded log should not be nil")
-    
-    // Verify the decoded data matches what we expect
-    require.Equal(t, events[0].Key, decodedLog.Data.Key, "Decoded key should match")
+		// Call Adapt to decode the log
+		decodedLog, err := trigger.Adapt(mockLog)
+		require.NoError(t, err, "Adapt should not return an error")
+		require.NotNil(t, decodedLog, "Decoded log should not be nil")
+
+		// Verify the decoded data matches what we expect
+		require.Equal(t, events[0].Key, decodedLog.Data.Key, "Decoded key should match")
 		require.Equal(t, events[0].Sender, decodedLog.Data.Sender, "Decoded sender should match")
-    require.Equal(t, common.BytesToHash(expected1), decodedLog.Data.UserData, "Decoded userData should match")
-    require.Equal(t, common.BytesToHash(expected3), decodedLog.Data.Metadata, "Decoded metadata should match")
-    require.Equal(t, common.BytesToHash(expected5), decodedLog.Data.MetadataArray, "Decoded metadataArray should match")
-    
-    // Verify the original log is preserved
-    require.Equal(t, mockLog, decodedLog.Log, "Original log should be preserved")
+		require.Equal(t, common.BytesToHash(expected1), decodedLog.Data.UserData, "Decoded userData should match")
+		require.Equal(t, common.BytesToHash(expected3), decodedLog.Data.Metadata, "Decoded metadata should match")
+		require.Equal(t, common.BytesToHash(expected5), decodedLog.Data.MetadataArray, "Decoded metadataArray should match")
+
+		// Verify the original log is preserved
+		require.Equal(t, mockLog, decodedLog.Log, "Original log should be preserved")
 	})
 }
 
