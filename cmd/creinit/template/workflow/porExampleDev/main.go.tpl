@@ -21,6 +21,7 @@ import (
 
 	pb "github.com/smartcontractkit/chainlink-protos/cre/go/sdk"
 	"github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm"
+	"github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm/bindings"
 	"github.com/smartcontractkit/cre-sdk-go/capabilities/networking/http"
 	"github.com/smartcontractkit/cre-sdk-go/capabilities/scheduler/cron"
 	"github.com/smartcontractkit/cre-sdk-go/cre"
@@ -70,8 +71,21 @@ func InitWorkflow(config *Config, logger *slog.Logger, secretsProvider cre.Secre
 		Schedule: config.Schedule,
 	}
 
+	httpTriggerCfg := &http.Config{}
+
 	logTriggerCfg := &evm.FilterLogTriggerRequest{
 		Addresses: make([][]byte, len(config.EVMs)),
+	}
+
+	workflow := cre.Workflow[*Config]{
+		cre.Handler(
+			cron.Trigger(cronTriggerCfg),
+			onPORCronTrigger,
+		),
+		cre.Handler(
+			http.Trigger(httpTriggerCfg),
+			onHTTPTrigger,
+		),
 	}
 
 	for i, evmCfg := range config.EVMs {
@@ -80,58 +94,26 @@ func InitWorkflow(config *Config, logger *slog.Logger, secretsProvider cre.Secre
 			return nil, fmt.Errorf("failed to decode MessageEmitter address %s: %w", evmCfg.MessageEmitterAddress, err)
 		}
 		logTriggerCfg.Addresses[i] = address
+		msgEmitter, err := prepareMessageEmitter(logger, evmCfg)
+		if err != nil {
+			return nil, fmt.Errorf("failed to prepare message emitter: %w", err)
+		}
+		trigger, err := msgEmitter.LogTriggerMessageEmittedLog(config.EVMs[0].ChainSelector, evm.ConfidenceLevel_CONFIDENCE_LEVEL_LATEST, []message_emitter.MessageEmitted{})
+		if err != nil {
+			return nil, fmt.Errorf("failed to create message emitted trigger: %w", err)
+		}
+		workflow = append(workflow, cre.Handler(trigger, onLogTrigger))
 	}
 
-	httpTriggerCfg := &http.Config{}
-
-	return cre.Workflow[*Config]{
-		cre.Handler(
-			cron.Trigger(cronTriggerCfg),
-			onPORCronTrigger,
-		),
-		cre.Handler(
-			evm.LogTrigger(config.EVMs[0].ChainSelector, logTriggerCfg),
-			onLogTrigger,
-		),
-		cre.Handler(
-			http.Trigger(httpTriggerCfg),
-			onHTTPTrigger,
-		),
-	}, nil
+	return workflow, nil
 }
 
 func onPORCronTrigger(config *Config, runtime cre.Runtime, outputs *cron.Payload) (string, error) {
 	return doPOR(config, runtime, outputs.ScheduledExecutionTime.AsTime())
 }
 
-func onLogTrigger(config *Config, runtime cre.Runtime, payload *evm.Log) (string, error) {
-	logger := runtime.Logger()
-	messageEmitter, err := prepareMessageEmitter(logger, config.EVMs[0])
-	if err != nil {
-		return "", fmt.Errorf("failed to prepare message emitter: %w", err)
-	}
-
-	topics := payload.GetTopics()
-	if len(topics) < 3 {
-		logger.Error("Log payload does not contain enough topics", "topics", topics)
-		return "", fmt.Errorf("log payload does not contain enough topics: %d", len(topics))
-	}
-
-	// topics[1] is a 32-byte topic, but the address is the last 20 bytes
-	emitter := topics[1][12:]
-	lastMessageInput := message_emitter.GetLastMessageInput{
-		Emitter: common.Address(emitter),
-	}
-
-	message, err := messageEmitter.GetLastMessage(runtime, lastMessageInput, big.NewInt(8771643)).Await()
-	if err != nil {
-		logger.Error("Could not read from contract", "contract_chain", config.EVMs[0].ChainSelector, "err", err.Error())
-		return "", err
-	}
-
-	logger.Info("Message retrieved from the contract", "message", message)
-
-	return message, nil
+func onLogTrigger(config *Config, runtime cre.Runtime, payload *bindings.DecodedLog[message_emitter.MessageEmittedDecoded]) (string, error) {
+	return payload.Data.Message, nil
 }
 
 func onHTTPTrigger(config *Config, runtime cre.Runtime, payload *http.Payload) (string, error) {
