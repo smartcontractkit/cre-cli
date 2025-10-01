@@ -461,7 +461,7 @@ func (h *handler) generateWorkflowTemplate(workingDirectory string, template Wor
 			return fmt.Errorf("failed to write file: %w", err)
 		}
 
-		fmt.Printf("Copied file to: %s\n", targetPath)
+		h.log.Debug().Msgf("Copied file to: %s", targetPath)
 		return nil
 	})
 
@@ -515,7 +515,7 @@ func (h *handler) generateContractsTemplate(projectRoot string, template Workflo
 		return nil
 	}
 
-	fmt.Printf("Generating contracts for template: %s\n", template.Title)
+	h.log.Debug().Msgf("Generating contracts for template: %s", template.Title)
 
 	// Create contracts directory at project level
 	contractsDirectory := filepath.Join(projectRoot, "contracts")
@@ -574,7 +574,7 @@ func (h *handler) generateContractsTemplate(projectRoot string, template Workflo
 			return fmt.Errorf("failed to write file: %w", err)
 		}
 
-		fmt.Printf("Copied contracts file to: %s\n", targetPath)
+		h.log.Debug().Msgf("Copied contracts file to: %s", targetPath)
 		return nil
 	})
 
