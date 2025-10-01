@@ -10,7 +10,6 @@ import (
 	"math"
 	"math/big"
 	"os"
-	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"strconv"
@@ -38,6 +37,7 @@ import (
 	simulator "github.com/smartcontractkit/chainlink/v2/core/services/workflows/cmd/cre/utils"
 	v2 "github.com/smartcontractkit/chainlink/v2/core/services/workflows/v2"
 
+	cmdcommon "github.com/smartcontractkit/cre-cli/cmd/common"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/validation"
@@ -109,16 +109,21 @@ func newHandler(ctx *runtime.Context) *handler {
 func (h *handler) ResolveInputs(args []string, v *viper.Viper, creSettings *settings.Settings) (Inputs, error) {
 	// build clients for each supported chain from settings, skip if rpc is empty
 	clients := make(map[uint64]*ethclient.Client)
-	for _, chain := range supportedEVM {
-		rpcURL, err := settings.GetRpcUrlSettings(v, chain.ChainName)
+	for _, chain := range SupportedEVM {
+		chainName, err := settings.GetChainNameByChainSelector(chain.Selector)
+		if err != nil {
+			h.log.Error().Msgf("Invalid chain selector for supported EVM chains %d; skipping", chain.Selector)
+			continue
+		}
+		rpcURL, err := settings.GetRpcUrlSettings(v, chainName)
 		if err != nil || strings.TrimSpace(rpcURL) == "" {
-			h.log.Debug().Msgf("RPC not provided for %s; skipping", chain.ChainName)
+			h.log.Debug().Msgf("RPC not provided for %s; skipping", chainName)
 			continue
 		}
 
 		c, err := ethclient.Dial(rpcURL)
 		if err != nil {
-			h.log.Info().Msgf("failed to create eth client for %s: %v", chain.ChainName, err)
+			h.log.Info().Msgf("failed to create eth client for %s: %v", chainName, err)
 			continue
 		}
 
@@ -177,35 +182,8 @@ func (h *handler) Execute(inputs Inputs) error {
 	workflowRootFolder := filepath.Dir(inputs.WorkflowPath)
 	tmpWasmFileName := "tmp.wasm"
 	workflowMainFile := filepath.Base(inputs.WorkflowPath)
-	isTypescriptWorkflow := strings.HasSuffix(workflowMainFile, ".ts")
+	buildCmd := cmdcommon.GetBuildCmd(workflowMainFile, tmpWasmFileName, workflowRootFolder)
 
-	var buildCmd *exec.Cmd
-	if isTypescriptWorkflow {
-		buildCmd = exec.Command(
-			"bun",
-			"cre-compile",
-			workflowMainFile,
-			tmpWasmFileName,
-		)
-	} else {
-		// The build command for reproducible and trimmed binaries.
-		// -trimpath removes all file system paths from the compiled binary.
-		// -ldflags="-buildid= -w -s" further reduces the binary size:
-		//   -buildid= removes the build ID, ensuring reproducibility.
-		//   -w disables DWARF debugging information.
-		//   -s removes the symbol table.
-		buildCmd = exec.Command(
-			"go",
-			"build",
-			"-o", tmpWasmFileName,
-			"-trimpath",
-			"-ldflags=-buildid= -w -s",
-			workflowMainFile,
-		)
-		buildCmd.Env = append(os.Environ(), "GOOS=wasip1", "GOARCH=wasm", "CGO_ENABLED=0")
-	}
-
-	buildCmd.Dir = workflowRootFolder
 	h.log.Debug().
 		Str("Workflow directory", buildCmd.Dir).
 		Str("Command", buildCmd.String()).
@@ -320,7 +298,7 @@ func run(
 
 		// Build forwarder address map based on which chains actually have RPC clients configured
 		forwarders := map[uint64]common.Address{}
-		for _, c := range supportedEVM {
+		for _, c := range SupportedEVM {
 			if _, ok := inputs.EVMClients[c.Selector]; ok && strings.TrimSpace(c.Forwarder) != "" {
 				forwarders[c.Selector] = common.HexToAddress(c.Forwarder)
 			}
@@ -402,7 +380,7 @@ func run(
 			baseLggr.Infow("Execution finished signal received")
 		case <-ctx.Done():
 			baseLggr.Infow("Received interrupt signal, stopping execution")
-		case <-time.After(TIMEOUT):
+		case <-time.After(WorkflowExecutionTimeout):
 			baseLggr.Infow("Timeout waiting for execution to finish")
 		}
 	}

@@ -54,21 +54,21 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 }
 
 type handler struct {
-	log             *zerolog.Logger
-	clientFactory   client.Factory
-	settings        *settings.Settings
-	validated       bool
-	environmentsSet *environments.EnvironmentSet
-	inputs          Inputs
+	log            *zerolog.Logger
+	clientFactory  client.Factory
+	settings       *settings.Settings
+	validated      bool
+	environmentSet *environments.EnvironmentSet
+	inputs         Inputs
 }
 
 func newHandler(ctx *runtime.Context) *handler {
 	return &handler{
-		log:             ctx.Logger,
-		clientFactory:   ctx.ClientFactory,
-		settings:        ctx.Settings,
-		environmentsSet: ctx.EnvironmentSet,
-		validated:       false,
+		log:            ctx.Logger,
+		clientFactory:  ctx.ClientFactory,
+		settings:       ctx.Settings,
+		environmentSet: ctx.EnvironmentSet,
+		validated:      false,
 	}
 }
 
@@ -76,8 +76,8 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 	return Inputs{
 		WorkflowName:                      h.settings.Workflow.UserWorkflowSettings.WorkflowName,
 		WorkflowOwner:                     h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress,
-		WorkflowRegistryContractChainName: h.environmentsSet.WorkflowRegistryChainName,
-		WorkflowRegistryContractAddress:   h.environmentsSet.WorkflowRegistryAddress,
+		WorkflowRegistryContractChainName: h.environmentSet.WorkflowRegistryChainName,
+		WorkflowRegistryContractAddress:   h.environmentSet.WorkflowRegistryAddress,
 	}, nil
 }
 
@@ -133,6 +133,7 @@ func (h *handler) Execute() error {
 	switch txOut.Type {
 	case client.Regular:
 		h.log.Info().Msgf("Transaction confirmed: %s", txOut.Hash)
+		h.log.Info().Msgf("View on explorer: %s/tx/%s", h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash)
 		for _, w := range workflowIDs {
 			h.log.Info().Msgf("Paused workflow IDs: %s", hex.EncodeToString(w[:]))
 		}

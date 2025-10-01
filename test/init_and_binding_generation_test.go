@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/smartcontractkit/cre-cli/internal/constants"
+	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 )
 
@@ -23,6 +24,9 @@ func TestE2EInit_DevPoRTemplate(t *testing.T) {
 
 	ethKey := "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
 	t.Setenv(settings.EthPrivateKeyEnvVar, ethKey)
+
+	// Set dummy API key
+	t.Setenv(credentials.CreApiKeyVar, "test-api")
 
 	initArgs := []string{
 		"init",

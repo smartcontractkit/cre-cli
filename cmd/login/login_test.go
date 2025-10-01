@@ -27,7 +27,7 @@ func TestSaveCredentials_WritesYAML(t *testing.T) {
 		TokenType:    "Bearer",
 	}
 
-	if err := saveCredentials(tokenSet); err != nil {
+	if err := credentials.SaveCredentials(tokenSet); err != nil {
 		t.Fatalf("saveCredentials error: %v", err)
 	}
 
