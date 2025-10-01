@@ -492,7 +492,7 @@ func TestLogTrigger(t *testing.T) {
 					Key:   "userKey1",
 					Value: "userValue1",
 				},
-				Sender: "testSender1",
+				Sender:   "testSender1",
 				Metadata: common.BytesToHash(crypto.Keccak256([]byte("metadata1"))),
 				MetadataArray: [][]byte{
 					[]byte("meta1"),
@@ -505,7 +505,7 @@ func TestLogTrigger(t *testing.T) {
 					Key:   "userKey2",
 					Value: "userValue2",
 				},
-				Sender: "testSender2",
+				Sender:   "testSender2",
 				Metadata: common.BytesToHash(crypto.Keccak256([]byte("metadata2"))),
 				MetadataArray: [][]byte{
 					[]byte("meta3"),
