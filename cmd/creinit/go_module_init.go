@@ -10,7 +10,7 @@ import (
 	"github.com/rs/zerolog"
 )
 
-const SdkVersion = "v0.7.0"
+const SdkVersion = "v0.8.0"
 
 func initializeGoModule(logger *zerolog.Logger, workingDirectory, moduleName string) error {
 	var deps []string
