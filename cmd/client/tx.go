@@ -123,10 +123,10 @@ func (c *TxClient) executeTransactionByTxType(txFn func(opts *bind.TransactOpts)
 			return TxOutput{Type: Regular}, err
 		}
 		fmt.Println("Transaction details:")
-		fmt.Printf("  To:   %s\n", simulateTx.To().Hex())
-		fmt.Printf("  Function: %s\n", funName)
-		fmt.Printf("  Inputs: %s\n", strings.Join(cmdCommon.ToStringSlice(args), ", "))
-		fmt.Printf("  Data: %x\n", simulateTx.Data())
+		fmt.Printf("\n  To:   %s\n", simulateTx.To().Hex())
+		fmt.Printf("\n  Function: %s\n", funName)
+		fmt.Printf("\n  Inputs: %s\n", strings.Join(cmdCommon.ToStringSlice(args), ", "))
+		fmt.Printf("\n  Data: %x\n", simulateTx.Data())
 
 		// Ask for user confirmation before executing the transaction
 		if !c.config.SkipPrompt {

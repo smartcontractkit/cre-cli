@@ -289,7 +289,7 @@ func TestCLISecretsWithEoa(t *testing.T) {
 	if !allowedUpdate {
 		t.Fatalf("allowlist not detected for update.\n\nCLI OUTPUT:\n%s", outUpdate)
 	}
-	require.Contains(t, outUpdate, "secret updated", "expected update log.\nCLI OUTPUT:\n%s", outUpdate)
+	require.Contains(t, outUpdate, "Secret updated", "expected update log.\nCLI OUTPUT:\n%s", outUpdate)
 
 	// --- LIST ---
 	allowedList, outList := tc.secretsListEoa(t, "main")
