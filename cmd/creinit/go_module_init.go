@@ -2,6 +2,7 @@ package creinit
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -20,7 +21,7 @@ func initializeGoModule(logger *zerolog.Logger, workingDirectory, moduleName str
 		if err != nil {
 			return err
 		}
-		logger.Info().Msgf("→ Module initialized: %s", moduleName)
+		fmt.Printf("→ Module initialized: %s\n", moduleName)
 	}
 
 	captureDep := func(args ...string) error {
@@ -47,9 +48,9 @@ func initializeGoModule(logger *zerolog.Logger, workingDirectory, moduleName str
 
 	_ = runCommand(logger, workingDirectory, "go", "mod", "tidy")
 
-	logger.Info().Msg("→ Dependencies installed:")
+	fmt.Printf("→ Dependencies installed: \n")
 	for _, dep := range deps {
-		logger.Info().Msgf("\t•\t%s", dep)
+		fmt.Printf("\t•\t%s\n", dep)
 	}
 
 	return nil
