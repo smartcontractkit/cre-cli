@@ -579,9 +579,9 @@ func TestLogTrigger(t *testing.T) {
 		// Verify the decoded data matches what we expect
 		require.Equal(t, events[0].Key, decodedLog.Data.Key, "Decoded key should match")
 		require.Equal(t, events[0].Sender, decodedLog.Data.Sender, "Decoded sender should match")
-		require.Equal(t, common.BytesToHash(expected1), decodedLog.Data.UserData, "Decoded userData should match")
-		require.Equal(t, common.BytesToHash(expected3), decodedLog.Data.Metadata, "Decoded metadata should match")
-		require.Equal(t, common.BytesToHash(expected5), decodedLog.Data.MetadataArray, "Decoded metadataArray should match")
+		require.Equal(t, common.BytesToHash(expected1), decodedLog.Data.UserData, "UserData should be of type common.Hash and match the expected hash")
+		require.Equal(t, common.BytesToHash(expected3), decodedLog.Data.Metadata, "Metadata should be of type common.Hash and match the expected hash")
+		require.Equal(t, common.BytesToHash(expected5), decodedLog.Data.MetadataArray, "MetadataArray should be of type common.Hash and match the expected hash")
 
 		// Verify the original log is preserved
 		require.Equal(t, mockLog, decodedLog.Log, "Original log should be preserved")

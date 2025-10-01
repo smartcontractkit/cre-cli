@@ -119,7 +119,7 @@ type AccessLogged struct {
 	Message string
 }
 
-// Decoded Events (indexed inputs -> common.Hash)
+// Decoded Events (indexed dynamic fields -> common.Hash (as you cannot decode from their hashes))
 type AccessLoggedDecoded struct {
 	Caller  common.Address
 	Message string
@@ -131,7 +131,7 @@ type DataStored struct {
 	Value  string
 }
 
-// Decoded Events (indexed inputs -> common.Hash)
+// Decoded Events (indexed dynamic fields -> common.Hash (as you cannot decode from their hashes))
 type DataStoredDecoded struct {
 	Sender common.Address
 	Key    string
@@ -146,7 +146,7 @@ type DynamicEvent struct {
 	MetadataArray [][]byte
 }
 
-// Decoded Events (indexed inputs -> common.Hash)
+// Decoded Events (indexed dynamic fields -> common.Hash (as you cannot decode from their hashes))
 type DynamicEventDecoded struct {
 	Key           string
 	UserData      common.Hash
@@ -158,7 +158,7 @@ type DynamicEventDecoded struct {
 type NoFields struct {
 }
 
-// Decoded Events (indexed inputs -> common.Hash)
+// Decoded Events (indexed dynamic fields -> common.Hash (as you cannot decode from their hashes))
 type NoFieldsDecoded struct {
 }
 
@@ -483,8 +483,9 @@ func (c *Codec) DecodeAccessLogged(log *evm.Log) (*AccessLoggedDecoded, error) {
 	var indexed abi.Arguments
 	for _, arg := range c.abi.Events["AccessLogged"].Inputs {
 		if arg.Indexed {
-			switch arg.Type.T {
-			case abi.TupleTy, abi.StringTy, abi.BytesTy, abi.SliceTy, abi.ArrayTy:
+			if arg.Type.T == abi.TupleTy {
+				// abigen throws on tuple, so converting to bytes to
+				// receive back the common.Hash as is instead of error
 				arg.Type.T = abi.BytesTy
 			}
 			indexed = append(indexed, arg)
@@ -549,8 +550,9 @@ func (c *Codec) DecodeDataStored(log *evm.Log) (*DataStoredDecoded, error) {
 	var indexed abi.Arguments
 	for _, arg := range c.abi.Events["DataStored"].Inputs {
 		if arg.Indexed {
-			switch arg.Type.T {
-			case abi.TupleTy, abi.StringTy, abi.BytesTy, abi.SliceTy, abi.ArrayTy:
+			if arg.Type.T == abi.TupleTy {
+				// abigen throws on tuple, so converting to bytes to
+				// receive back the common.Hash as is instead of error
 				arg.Type.T = abi.BytesTy
 			}
 			indexed = append(indexed, arg)
@@ -633,8 +635,9 @@ func (c *Codec) DecodeDynamicEvent(log *evm.Log) (*DynamicEventDecoded, error) {
 	var indexed abi.Arguments
 	for _, arg := range c.abi.Events["DynamicEvent"].Inputs {
 		if arg.Indexed {
-			switch arg.Type.T {
-			case abi.TupleTy, abi.StringTy, abi.BytesTy, abi.SliceTy, abi.ArrayTy:
+			if arg.Type.T == abi.TupleTy {
+				// abigen throws on tuple, so converting to bytes to
+				// receive back the common.Hash as is instead of error
 				arg.Type.T = abi.BytesTy
 			}
 			indexed = append(indexed, arg)
@@ -689,8 +692,9 @@ func (c *Codec) DecodeNoFields(log *evm.Log) (*NoFieldsDecoded, error) {
 	var indexed abi.Arguments
 	for _, arg := range c.abi.Events["NoFields"].Inputs {
 		if arg.Indexed {
-			switch arg.Type.T {
-			case abi.TupleTy, abi.StringTy, abi.BytesTy, abi.SliceTy, abi.ArrayTy:
+			if arg.Type.T == abi.TupleTy {
+				// abigen throws on tuple, so converting to bytes to
+				// receive back the common.Hash as is instead of error
 				arg.Type.T = abi.BytesTy
 			}
 			indexed = append(indexed, arg)
@@ -1043,7 +1047,7 @@ func (c *DataStorage) UnpackError(data []byte) (any, error) {
 	}
 }
 
-// AccessLoggedTrigger wraps the raw log trigger and provides decoded AccessLogged data
+// AccessLoggedTrigger wraps the raw log trigger and provides decoded AccessLoggedDecoded data
 type AccessLoggedTrigger struct {
 	cre.Trigger[*evm.Log, *evm.Log]              // Embed the raw trigger
 	contract                        *DataStorage // Keep reference for decoding
@@ -1101,7 +1105,7 @@ func (c *DataStorage) FilterLogsAccessLogged(runtime cre.Runtime, options *bindi
 	})
 }
 
-// DataStoredTrigger wraps the raw log trigger and provides decoded DataStored data
+// DataStoredTrigger wraps the raw log trigger and provides decoded DataStoredDecoded data
 type DataStoredTrigger struct {
 	cre.Trigger[*evm.Log, *evm.Log]              // Embed the raw trigger
 	contract                        *DataStorage // Keep reference for decoding
@@ -1159,7 +1163,7 @@ func (c *DataStorage) FilterLogsDataStored(runtime cre.Runtime, options *binding
 	})
 }
 
-// DynamicEventTrigger wraps the raw log trigger and provides decoded DynamicEvent data
+// DynamicEventTrigger wraps the raw log trigger and provides decoded DynamicEventDecoded data
 type DynamicEventTrigger struct {
 	cre.Trigger[*evm.Log, *evm.Log]              // Embed the raw trigger
 	contract                        *DataStorage // Keep reference for decoding
@@ -1217,7 +1221,7 @@ func (c *DataStorage) FilterLogsDynamicEvent(runtime cre.Runtime, options *bindi
 	})
 }
 
-// NoFieldsTrigger wraps the raw log trigger and provides decoded NoFields data
+// NoFieldsTrigger wraps the raw log trigger and provides decoded NoFieldsDecoded data
 type NoFieldsTrigger struct {
 	cre.Trigger[*evm.Log, *evm.Log]              // Embed the raw trigger
 	contract                        *DataStorage // Keep reference for decoding

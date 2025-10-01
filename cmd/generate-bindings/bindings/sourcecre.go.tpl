@@ -109,7 +109,7 @@ type {{.Normalized.Name}} struct {
 	{{- end}}
 }
 
-// Decoded Events (indexed inputs -> common.Hash)
+// Decoded Events (indexed dynamic fields -> common.Hash (as you cannot decode from their hashes))
 type {{.Normalized.Name}}Decoded struct {
 	{{- range .Normalized.Inputs}}
 	{{capitalise .Name}} {{if and .Indexed (isDynTopicType .Type)}}common.Hash{{else}}{{bindtype .Type $.Structs}}{{end}}
@@ -117,7 +117,6 @@ type {{.Normalized.Name}}Decoded struct {
 }
 
 {{end}}
-
 
 // Main Binding Type for {{$contract.Type}}
 type {{$contract.Type}} struct {
@@ -336,8 +335,9 @@ func (c *Codec) Decode{{.Normalized.Name}}(log *evm.Log) (*{{.Normalized.Name}}D
 	var indexed abi.Arguments
 	for _, arg := range c.abi.Events["{{.Original.Name}}"].Inputs {
 		if arg.Indexed {
-			switch arg.Type.T {
-			case abi.TupleTy, abi.StringTy, abi.BytesTy, abi.SliceTy, abi.ArrayTy:
+			if arg.Type.T == abi.TupleTy {
+				// abigen throws on tuple, so converting to bytes to
+				// receive back the common.Hash as is instead of error
 				arg.Type.T = abi.BytesTy
 			}
 			indexed = append(indexed, arg)
@@ -510,7 +510,7 @@ func (c *{{$contract.Type}}) UnpackError(data []byte) (any, error) {
 
 {{range $event := $contract.Events}}
 
-// {{.Normalized.Name}}Trigger wraps the raw log trigger and provides decoded {{.Normalized.Name}} data
+// {{.Normalized.Name}}Trigger wraps the raw log trigger and provides decoded {{.Normalized.Name}}Decoded data
 type {{.Normalized.Name}}Trigger struct {
 	cre.Trigger[*evm.Log, *evm.Log]  // Embed the raw trigger
 	contract *{{$contract.Type}}      // Keep reference for decoding
