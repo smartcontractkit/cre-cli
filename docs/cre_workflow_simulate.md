@@ -22,7 +22,6 @@ cre workflow simulate <workflow-folder-path> [flags]
 
 ```
       --broadcast             Broadcast transactions to the EVM (default: false)
-  -c, --config                Should include a config file (path defined in the workflow settings file) (default: false)
   -g, --engine-logs           Enable non-fatal engine logging
       --evm-event-index int   EVM trigger log index (0-based) (default -1)
       --evm-tx-hash string    EVM trigger transaction hash (0x...)

@@ -41,26 +41,26 @@ type WorkflowTemplate struct {
 }
 
 type LanguageTemplate struct {
-	Title     string
-	Lang      TemplateLanguage
-	Path      string
-	Workflows []WorkflowTemplate
+	Title      string
+	Lang       TemplateLanguage
+	EntryPoint string
+	Workflows  []WorkflowTemplate
 }
 
 var languageTemplates = []LanguageTemplate{
 	{
-		Title: "Golang",
-		Lang:  TemplateLangGo,
-		Path:  ".", // Path to the workflow main file
+		Title:      "Golang",
+		Lang:       TemplateLangGo,
+		EntryPoint: ".",
 		Workflows: []WorkflowTemplate{
 			{Folder: "porExampleDev", Title: "Custom data feed: Updating on-chain data periodically using offchain API data", ID: 1},
 			{Folder: "blankTemplate", Title: "Boilerplate: A barebones template with just the essentials", ID: 2},
 		},
 	},
 	{
-		Title: "Typescript",
-		Lang:  TemplateLangTS,
-		Path:  "./main.ts", // Path to the workflow main file
+		Title:      "Typescript",
+		Lang:       TemplateLangTS,
+		EntryPoint: "./main.ts",
 		Workflows: []WorkflowTemplate{
 			{Folder: "typescriptSimpleExample", Title: "Development Hello World example for a simple workflow", ID: 3},
 		},
@@ -295,7 +295,7 @@ func (h *handler) Execute(inputs Inputs) error {
 		}
 	}
 
-	_, err = settings.GenerateWorkflowSettingsFile(workflowDirectory, workflowName, selectedLanguageTemplate.Path)
+	_, err = settings.GenerateWorkflowSettingsFile(workflowDirectory, workflowName, selectedLanguageTemplate.EntryPoint)
 	if err != nil {
 		return fmt.Errorf("failed to generate %s file: %w", constants.DefaultWorkflowSettingsFileName, err)
 	}

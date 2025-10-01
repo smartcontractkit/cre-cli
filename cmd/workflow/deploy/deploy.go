@@ -101,7 +101,6 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	deployCmd.Flags().StringP("secrets-url", "s", "", "URL of the encrypted secrets JSON file")
 	deployCmd.Flags().StringP("source-url", "x", "", "URL of the source code in Gist")
 	deployCmd.Flags().StringP("output", "o", defaultOutputPath, "The output file for the compiled WASM binary encoded in base64")
-	deployCmd.Flags().BoolP("config", "c", false, "Should include a config file (path defined in the workflow settings file) (default: false)")
 	deployCmd.Flags().BoolP("keep-alive", "k", false, "Keep previous workflows with same workflow name and owner active (default: false).")
 	deployCmd.Flags().BoolP("auto-start", "r", true, "Activate and run the workflow after registration, or pause it")
 

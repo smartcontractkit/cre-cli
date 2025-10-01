@@ -84,7 +84,6 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 		},
 	}
 
-	simulateCmd.Flags().BoolP("config", "c", false, "Should include a config file (path defined in the workflow settings file) (default: false)")
 	simulateCmd.Flags().StringP("secrets", "s", "", "Path to the secrets file")
 	simulateCmd.Flags().BoolP("engine-logs", "g", false, "Enable non-fatal engine logging")
 	simulateCmd.Flags().Bool("broadcast", false, "Broadcast transactions to the EVM (default: false)")
