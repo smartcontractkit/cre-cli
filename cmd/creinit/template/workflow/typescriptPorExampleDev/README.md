@@ -9,6 +9,7 @@ Follow the steps below to run the example:
 Start by initializing a new CRE project. This will scaffold the necessary project structure and a template workflow. Run cre init in the directory where you'd like your CRE project to live. Note that workflow names must be exactly 10 characters long (we will relax this requirement in the future).
 
 Example output:
+
 ```
 Project name?: my_cre_project
 ✔ Custom data feed: Typescript updating on-chain data periodically using offchain API data
@@ -19,6 +20,7 @@ Project name?: my_cre_project
 
 You need to add a private key to the .env file. This is specifically required if you want to simulate chain writes. For that to work the key should be valid and funded.
 If your workflow does not do any chain write then you can keep a dummy key as a private key. e.g.
+
 ```
 CRE_ETH_PRIVATE_KEY=0000000000000000000000000000000000000000000000000000000000000001
 ```
@@ -27,15 +29,16 @@ CRE_ETH_PRIVATE_KEY=000000000000000000000000000000000000000000000000000000000000
 
 For local simulation to interact with a chain, you must specify RPC endpoints for the chains you interact with in the `project.yaml` file. This is required for submitting transactions and reading blockchain state.
 
-Note: Only eth sepolia (chain selector `16015286601757825753`) is supported in local simulation
+Note: Only eth sepolia (chain name `ethereum-testnet-sepolia`) is supported in local simulation
 
 Add your preferred RPCs under the `rpcs` section. For chain selectors, refer to https://github.com/smartcontractkit/chain-selectors/blob/main/selectors.yml
 
 ```yaml
 rpcs:
-  - chain-selector: 16015286601757825753
+  - chain-name: ethereum-testnet-sepolia
     url: <Your RPC endpoint to ETH Sepolia>
 ```
+
 Ensure the provided URLs point to valid RPC endpoints for the specified chains. You may use public RPC providers or set up your own node.
 
 ## 4. Set up workflow secrets
@@ -71,6 +74,7 @@ For a quick start, you can also use the pre-deployed contract addresses on Ether
 ## 6. Configure workflow
 
 Configure `config.json` for the workflow
+
 - `schedule` should be set to `"*/3 * * * * *"` for every 3 seconds or any other cron expression you prefer
 - `url` should be set to existing reserves HTTP endpoint API
 - `tokenAddress` should be the SimpleERC20 contract address
@@ -78,17 +82,34 @@ Configure `config.json` for the workflow
 - `proxyAddress` should be the UpdateReservesProxySimplified contract address
 - `balanceReaderAddress` should be the BalanceReader contract address
 - `messageEmitterAddress` should be the MessageEmitter contract address
-- `chainSelector` should be chainID of selected chain (refer to https://github.com/smartcontractkit/chain-selectors/blob/main/selectors.yml)
+- `chainSelectorName` should be human-readable chain name of selected chain (refer to https://github.com/smartcontractkit/chain-selectors/blob/main/selectors.yml)
 - `gasLimit` should be the gas limit of chain write
 
 The config is already populated with deployed contracts in template.
 
+Note: Make sure your `project.yaml` file is pointing to the config.json, example:
+
+```yaml
+local-simulation:
+  user-workflow:
+    workflow-name: "workflow01"
+  workflow-artifacts:
+    workflow-path: "./main.ts"
+    config-path: "./config.json"
+```
 
 ## 7. Simulate the workflow
-Run the command from <b>workflow root directory</b> (Run `cd workflowName` if you are in project root directory)
+
+Run the command from <b>project root directory</b> and pass in the path to the workflow directory.
 
 ```bash
-cre workflow simulate --target local-simulation --config config.json --secrets ../secrets.yaml main.ts
+cre workflow simulate <path-to-workflow-directory> --target local-simulation --secrets ../secrets.yaml --broadcast
+```
+
+For workflow named `workflow01` the exact command would be:
+
+```bash
+cre workflow simulate ./workflow01 --target local-simulation --secrets ../secrets.yaml --broadcast
 ```
 
 After this you will get a set of options similar to:
@@ -116,6 +137,7 @@ Transaction Hash: 0x420721d7d00130a03c5b525b2dbfd42550906ddb3075e8377f9bb5d1a599
 Log Event Index: 0
 
 The output will look like:
+
 ```
 🔗 EVM Trigger Configuration:
 Please provide the transaction hash and event index for the EVM log event.
@@ -133,12 +155,13 @@ Select option 3, and then an additional prompt will come up where you can pass i
 File Path: ./http_trigger_payload.json
 
 The output will look like:
+
 ```
 🔍 HTTP Trigger Configuration:
 Please provide JSON input for the HTTP trigger.
 You can enter a file path or JSON directly
 
-Enter your input: ./http_trigger_payload.json   
+Enter your input: ./http_trigger_payload.json
 Loaded JSON from file: ./http_trigger_payload.json
 Created HTTP trigger payload with 1 fields
 ```

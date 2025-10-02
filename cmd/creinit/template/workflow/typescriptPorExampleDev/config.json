@@ -8,8 +8,8 @@
       "proxyAddress": "0x696A180a2A1F5EAC7014D4ab4891CCB4184275fF",
       "balanceReaderAddress": "0x4b0739c94C1389B55481cb7506c62430cA7211Cf",
       "messageEmitterAddress": "0x1d598672486ecB50685Da5497390571Ac4E93FDc",
-      "chainSelector": "16015286601757825753",
-      "gasLimit": 1000000
+      "chainSelectorName": "ethereum-testnet-sepolia",
+      "gasLimit": "1000000"
     }
   ]
 }
