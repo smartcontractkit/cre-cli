@@ -1,13 +1,16 @@
 package test
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"math/rand"
 	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"testing"
 	"time"
@@ -36,7 +39,6 @@ var CLIPath = os.TempDir() + string(os.PathSeparator) + "cre" + func() string {
 const (
 	TestLogLevelEnvVar = "TEST_LOG_LEVEL" // export this env var before running tests if DEBUG level is needed
 	SethConfigPath     = "seth.toml"
-	TestChainName      = "anvil-devnet"
 	SettingsTarget     = "production-testnet"
 )
 
@@ -121,9 +123,75 @@ func copyFile(src, dst string) error {
 	return err
 }
 
+func copyPath(src, dst string) error {
+	info, err := os.Lstat(src)
+	if err != nil {
+		return err
+	}
+	if info.IsDir() {
+		return copyDir(src, dst)
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		target, err := os.Readlink(src)
+		if err != nil {
+			return err
+		}
+		_ = os.RemoveAll(dst) // replace if exists
+		return os.Symlink(target, dst)
+	}
+	return copyFile(src, dst)
+}
+
+func copyDir(src, dst string) error {
+	// Create the root destination directory with same perms
+	info, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(dst, info.Mode().Perm()); err != nil {
+		return err
+	}
+
+	return filepath.WalkDir(src, func(path string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(dst, rel)
+
+		// Skip the root (already created)
+		if rel == "." {
+			return nil
+		}
+
+		switch {
+		case d.IsDir():
+			fi, err := d.Info()
+			if err != nil {
+				return err
+			}
+			return os.MkdirAll(target, fi.Mode().Perm())
+
+		case d.Type()&os.ModeSymlink != 0:
+			linkTarget, err := os.Readlink(path)
+			if err != nil {
+				return err
+			}
+			_ = os.RemoveAll(target)
+			return os.Symlink(linkTarget, target)
+
+		default:
+			return copyFile(path, target)
+		}
+	})
+}
+
 // Boot Anvil by either loading Anvil state or running a fresh instance that will dump its state on exit
 // Input parameter can be LOAD_ANVIL_STATE=true or DUMP_ANVIL_STATE=false (look at the defined constants)
-func StartAnvil(initState AnvilInitState) (*os.Process, int, error) {
+func StartAnvil(initState AnvilInitState, stateFileName string) (*os.Process, int, error) {
 	// introduce random delay to prevent tests binding to the same port for Anvil
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	minDelay := 1 * time.Millisecond
@@ -145,10 +213,10 @@ func StartAnvil(initState AnvilInitState) (*os.Process, int, error) {
 	args := []string{"--chain-id", "31337"}
 	if initState == LOAD_ANVIL_STATE {
 		// booting up Anvil with pre-baked contracts, required for some E2E tests
-		args = append(args, "--load-state", "anvil-state.json")
+		args = append(args, "--load-state", stateFileName)
 	} else if initState == DUMP_ANVIL_STATE {
 		// start fresh instance of Anvil, then deploy and configure contracts to bake them into the state dump
-		args = append(args, "--dump-state", "anvil-state.json")
+		args = append(args, "--dump-state", stateFileName)
 	} else {
 		return nil, 0, errors.New("unknown anvil init state enum")
 	}
@@ -156,22 +224,34 @@ func StartAnvil(initState AnvilInitState) (*os.Process, int, error) {
 
 	anvil := exec.Command("anvil", args...)
 
+	var outBuf, errBuf bytes.Buffer
+	anvil.Stdout = &outBuf
+	anvil.Stderr = &errBuf
+
 	L.Info().Str("Command", anvil.String()).Msg("Executing anvil")
 	if err := anvil.Start(); err != nil {
 		return nil, 0, errors.New("failed to start Anvil")
 	}
 
 	L.Info().Msg("Checking if Anvil is up and running")
+
+	anvilUp := false
 	for i := 0; i < 100; i++ { // limit retries to 10 seconds
 		conn, err := net.DialTimeout("tcp", "localhost:"+strconv.Itoa(port), 1*time.Second)
 		if err == nil {
+			anvilUp = true
 			conn.Close()
 			break
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
+	if !anvilUp {
+		L.Error().Str("Stdout", outBuf.String()).Str("Stderr", errBuf.String()).Msg("Anvil failed to start")
+		return nil, 0, errors.New("anvil failed to start within the expected time")
+	}
 
 	L.Info().Msg("Anvil is running...")
+	L.Debug().Str("Stdout", outBuf.String()).Str("Stderr", errBuf.String()).Msg("Anvil logs")
 	return anvil.Process, port, nil
 }
 
