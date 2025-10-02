@@ -107,7 +107,6 @@ func createCliEnvFile(envPath string, ethPrivateKey string) error {
 	return nil
 }
 
-<<<<<<< HEAD
 // createWorkflowDirectory creates the workflow directory with test files and workflow.yaml
 func createWorkflowDirectory(
 	projectDirectory string,

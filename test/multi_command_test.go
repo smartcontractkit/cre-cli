@@ -135,4 +135,24 @@ func TestMultiCommandWorkflowHappyPaths(t *testing.T) {
 		// Run simulation happy path workflow
 		multi_command_flows.RunSimulationHappyPath(t, tc)
 	})
+
+	// Run simulation
+	t.Run("SimulationHappyPath", func(t *testing.T) {
+		anvilProc, testEthUrl := initTestEnv(t, "anvil-state-simulator.json")
+		defer StopAnvil(anvilProc)
+
+		// Set dummy API key for authentication
+		t.Setenv(credentials.CreApiKeyVar, "test-api")
+
+		tc := NewTestConfig(t)
+
+		// Use linked Address3 + its key
+		require.NoError(t, createCliEnvFile(tc.EnvFile, constants.TestPrivateKey3), "failed to create env file")
+		require.NoError(t, createProjectSettingsFile(tc.ProjectDirectory+"project.yaml", constants.TestAddress3, testEthUrl), "failed to create project.yaml")
+		require.NoError(t, createWorkflowDirectory(tc.ProjectDirectory, "workflow-simulate", "config.json", "chainreader_workflow"), "failed to create workflow directory")
+		t.Cleanup(tc.Cleanup(t))
+
+		// Run simulation happy path workflow
+		multi_command_flows.RunSimulationHappyPath(t, tc)
+	})
 }
