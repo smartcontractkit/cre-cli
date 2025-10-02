@@ -97,7 +97,9 @@ type handler struct {
 	log            *zerolog.Logger
 	stdin          io.Reader
 	environmentSet *environments.EnvironmentSet
-	validated      bool
+	wrc            *client.WorkflowRegistryV2Client
+
+	validated bool
 }
 
 func newHandler(ctx *runtime.Context, stdin io.Reader) *handler {
@@ -136,6 +138,8 @@ func (h *handler) Execute(in Inputs) error {
 		return fmt.Errorf("inputs not validated")
 	}
 
+	h.displayDetails()
+
 	if in.WorkflowOwnerLabel == "" {
 		if err := prompt.SimplePrompt(h.stdin, "Provide a label for your owner address", func(inputLabel string) error {
 			in.WorkflowOwnerLabel = inputLabel
@@ -143,6 +147,20 @@ func (h *handler) Execute(in Inputs) error {
 		}); err != nil {
 			return err
 		}
+	}
+
+	wrc, err := h.clientFactory.NewWorkflowRegistryV2Client()
+	if err != nil {
+		return fmt.Errorf("failed to create workflow registry client: %w", err)
+	}
+	h.wrc = wrc
+
+	linked, err := h.checkIfAlreadyLinked()
+	if err != nil {
+		return err
+	}
+	if linked {
+		return nil
 	}
 
 	fmt.Printf("Starting linking: owner=%s, label=%s\n", in.WorkflowOwner, in.WorkflowOwnerLabel)
@@ -251,24 +269,21 @@ func (h *handler) linkOwner(resp initiateLinkingResponse) error {
 		return fmt.Errorf("invalid signature hex: %w", err)
 	}
 
-	wrc, err := h.clientFactory.NewWorkflowRegistryV2Client()
-	if err != nil {
-		return fmt.Errorf("wrc init: %w", err)
-	}
-
 	ownerAddr := common.HexToAddress(h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress)
-	if err := wrc.CanLinkOwner(ownerAddr, ts, proofBytes, sigBytes); err != nil {
+	if err := h.wrc.CanLinkOwner(ownerAddr, ts, proofBytes, sigBytes); err != nil {
 		return fmt.Errorf("link request verification failed: %w", err)
 	}
-	txOut, err := wrc.LinkOwner(ts, proofBytes, sigBytes)
+	txOut, err := h.wrc.LinkOwner(ts, proofBytes, sigBytes)
 	if err != nil {
 		return fmt.Errorf("LinkOwner failed: %w", err)
 	}
 
 	switch txOut.Type {
 	case client.Regular:
-		fmt.Printf("Transaction submitted: %s\n", txOut.Hash)
+		fmt.Println("Transaction confirmed")
 		fmt.Printf("View on explorer: \033]8;;%s/tx/%s\033\\%s/tx/%s\033]8;;\033\\\n", h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash, h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash)
+		fmt.Println("\n[OK] web3 address linked to your CRE organization successfully")
+		fmt.Println("\n→ You can now deploy workflows using this address")
 
 	case client.Raw:
 		selector, err := strconv.ParseUint(resp.ChainSelector, 10, 64)
@@ -301,4 +316,28 @@ func (h *handler) linkOwner(resp initiateLinkingResponse) error {
 
 	fmt.Println("Linked successfully")
 	return nil
+}
+
+func (h *handler) checkIfAlreadyLinked() (bool, error) {
+	ownerAddr := common.HexToAddress(h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress)
+	fmt.Println("\nChecking existing registrations...")
+
+	linked, err := h.wrc.IsOwnerLinked(ownerAddr)
+	if err != nil {
+		return false, fmt.Errorf("failed to check owner link status: %w", err)
+	}
+
+	if linked {
+		fmt.Println("web3 address already linked")
+		return true, nil
+	}
+
+	fmt.Println("✓ No existing link found for this address")
+	return false, nil
+}
+
+func (h *handler) displayDetails() {
+	fmt.Println("Linking web3 key to your CRE organization")
+	fmt.Printf("Target : \t\t %s\n", h.settings.User.TargetName)
+	fmt.Printf("✔ Using Address : \t %s\n\n", h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress)
 }

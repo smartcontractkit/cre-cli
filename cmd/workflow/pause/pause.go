@@ -106,6 +106,8 @@ func (h *handler) Execute() error {
 	workflowName := h.inputs.WorkflowName
 	workflowOwner := common.HexToAddress(h.inputs.WorkflowOwner)
 
+	h.displayWorkflowDetails()
+
 	wrc, err := h.clientFactory.NewWorkflowRegistryV2Client()
 	if err != nil {
 		return fmt.Errorf("failed to create workflow registry client: %w", err)
@@ -130,12 +132,16 @@ func (h *handler) Execute() error {
 
 	switch txOut.Type {
 	case client.Regular:
-		fmt.Printf("Transaction confirmed: %s\n", txOut.Hash)
+		fmt.Println("Transaction confirmed")
 		fmt.Printf("View on explorer: \033]8;;%s/tx/%s\033\\%s/tx/%s\033]8;;\033\\\n", h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash, h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash)
+		fmt.Println("[OK] Workflows paused successfully")
+		fmt.Println("\nDetails:")
+		fmt.Printf("   Contract address:\t%s\n", h.environmentSet.WorkflowRegistryAddress)
+		fmt.Printf("   Transaction hash:\t%s\n", txOut.Hash)
+		fmt.Printf("   Workflow Name:\t%s\n", workflowName)
 		for _, w := range workflowIDs {
-			fmt.Printf("Paused workflow IDs: %s\n", hex.EncodeToString(w[:]))
+			fmt.Printf("   Workflow ID:\t%s\n", hex.EncodeToString(w[:]))
 		}
-		fmt.Println("Workflows paused successfully")
 
 	case client.Raw:
 		fmt.Println("")
@@ -192,4 +198,10 @@ func fetchAllWorkflowIDs(
 	}
 
 	return ids, nil
+}
+
+func (h *handler) displayWorkflowDetails() {
+	fmt.Printf("\nPausing Workflow : \t %s\n", h.inputs.WorkflowName)
+	fmt.Printf("Target : \t\t %s\n", h.settings.User.TargetName)
+	fmt.Printf("Owner Address : \t %s\n\n", h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress)
 }

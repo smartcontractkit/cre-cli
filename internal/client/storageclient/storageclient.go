@@ -263,7 +263,7 @@ func (c *Client) UploadArtifactWithRetriesAndGetURL(
 			if err != nil {
 				if strings.Contains(err.Error(), "already exists") {
 					shouldUpload = false
-					c.log.Warn().Msg("Workflow artifact already exists, skipping upload.")
+					c.log.Debug().Msg("Workflow artifact already exists, skipping upload.")
 				} else {
 					return fmt.Errorf("generate presigned post url: %w", err)
 				}

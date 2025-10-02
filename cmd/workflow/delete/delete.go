@@ -114,6 +114,8 @@ func (h *handler) Execute() error {
 	workflowName := h.inputs.WorkflowName
 	workflowOwner := common.HexToAddress(h.inputs.WorkflowOwner)
 
+	h.displayWorkflowDetails()
+
 	wrc, err := h.clientFactory.NewWorkflowRegistryV2Client()
 	if err != nil {
 		return fmt.Errorf("failed to create workflow registry client: %w", err)
@@ -162,9 +164,9 @@ func (h *handler) Execute() error {
 		}
 		switch txOut.Type {
 		case client.Regular:
-			fmt.Printf("Transaction confirmed: %s\n", txOut.Hash)
+			fmt.Println("Transaction confirmed")
 			fmt.Printf("View on explorer: \033]8;;%s/tx/%s\033\\%s/tx/%s\033]8;;\033\\\n", h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash, h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash)
-			fmt.Printf("Deleted workflow ID: %s\n", hex.EncodeToString(wf.WorkflowId[:]))
+			fmt.Printf("[OK] Deleted workflow ID: %s\n", hex.EncodeToString(wf.WorkflowId[:]))
 
 		case client.Raw:
 			fmt.Println("")
@@ -217,4 +219,10 @@ func (h *handler) askForWorkflowDeletionConfirmation(expectedWorkflowName string
 	}
 
 	return result == expectedWorkflowName, nil
+}
+
+func (h *handler) displayWorkflowDetails() {
+	fmt.Printf("\nDeleting Workflow : \t %s\n", h.inputs.WorkflowName)
+	fmt.Printf("Target : \t\t %s\n", h.settings.User.TargetName)
+	fmt.Printf("Owner Address : \t %s\n\n", h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress)
 }

@@ -108,6 +108,8 @@ func (h *handler) Execute() error {
 	workflowName := h.inputs.WorkflowName
 	workflowOwner := h.inputs.WorkflowOwner
 
+	h.displayWorkflowDetails()
+
 	wrc, err := h.clientFactory.NewWorkflowRegistryV2Client()
 	if err != nil {
 		return fmt.Errorf("failed to create WorkflowRegistryClient: %w", err)
@@ -142,8 +144,11 @@ func (h *handler) Execute() error {
 	case client.Regular:
 		fmt.Printf("Transaction confirmed: %s\n", txOut.Hash)
 		fmt.Printf("View on explorer: \033]8;;%s/tx/%s\033\\%s/tx/%s\033]8;;\033\\\n", h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash, h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash)
-		fmt.Printf("Activated workflow ID: %s\n", hex.EncodeToString(latest.WorkflowId[:]))
-		fmt.Println("Workflow activated successfully")
+		fmt.Println("\n[OK] Workflow activated successfully")
+		fmt.Printf("   Contract address:\t%s\n", h.environmentSet.WorkflowRegistryAddress)
+		fmt.Printf("   Transaction hash:\t%s\n", txOut.Hash)
+		fmt.Printf("   Workflow Name:\t%s\n", workflowName)
+		fmt.Printf("   Workflow ID:\t%s\n", hex.EncodeToString(latest.WorkflowId[:]))
 
 	case client.Raw:
 		fmt.Println("")
@@ -164,4 +169,10 @@ func (h *handler) Execute() error {
 		h.log.Warn().Msgf("Unsupported transaction type: %s", txOut.Type)
 	}
 	return nil
+}
+
+func (h *handler) displayWorkflowDetails() {
+	fmt.Printf("\nActivating Workflow : \t %s\n", h.inputs.WorkflowName)
+	fmt.Printf("Target : \t\t %s\n", h.settings.User.TargetName)
+	fmt.Printf("Owner Address : \t %s\n\n", h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress)
 }
