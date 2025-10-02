@@ -4,10 +4,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"math/rand"
 	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"testing"
 	"time"
@@ -119,6 +121,72 @@ func copyFile(src, dst string) error {
 
 	_, err = io.Copy(destFile, sourceFile)
 	return err
+}
+
+func copyPath(src, dst string) error {
+	info, err := os.Lstat(src)
+	if err != nil {
+		return err
+	}
+	if info.IsDir() {
+		return copyDir(src, dst)
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		target, err := os.Readlink(src)
+		if err != nil {
+			return err
+		}
+		_ = os.RemoveAll(dst) // replace if exists
+		return os.Symlink(target, dst)
+	}
+	return copyFile(src, dst)
+}
+
+func copyDir(src, dst string) error {
+	// Create the root destination directory with same perms
+	info, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(dst, info.Mode().Perm()); err != nil {
+		return err
+	}
+
+	return filepath.WalkDir(src, func(path string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(dst, rel)
+
+		// Skip the root (already created)
+		if rel == "." {
+			return nil
+		}
+
+		switch {
+		case d.IsDir():
+			fi, err := d.Info()
+			if err != nil {
+				return err
+			}
+			return os.MkdirAll(target, fi.Mode().Perm())
+
+		case d.Type()&os.ModeSymlink != 0:
+			linkTarget, err := os.Readlink(path)
+			if err != nil {
+				return err
+			}
+			_ = os.RemoveAll(target)
+			return os.Symlink(linkTarget, target)
+
+		default:
+			return copyFile(path, target)
+		}
+	})
 }
 
 // Boot Anvil by either loading Anvil state or running a fresh instance that will dump its state on exit

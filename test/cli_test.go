@@ -2,6 +2,7 @@ package test
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -104,36 +105,45 @@ func createCliEnvFile(envPath string, ethPrivateKey string) error {
 	return nil
 }
 
-<<<<<<< HEAD
 // createWorkflowDirectory creates the workflow directory with test files and workflow.yaml
 func createWorkflowDirectory(
 	projectDirectory string,
 	workflowName string,
 	workflowConfigPath string,
+	workflowDirectoryName string,
 ) error {
 	trimmedName := strings.TrimSpace(workflowName)
-	if len(trimmedName) < 10 {
-		return fmt.Errorf("workflow name %q is too short, minimum length is 10 characters", trimmedName)
+	if len(trimmedName) < 1 {
+		return fmt.Errorf("workflow name %q is too short, minimum length is 1 character", trimmedName)
 	}
 
 	// Get the source workflow directory
 	_, thisFile, _, _ := runtime.Caller(0)
 	testDir := filepath.Dir(thisFile)
-	sourceWorkflowDir := filepath.Join(testDir, "test_project", "blank_workflow")
+	sourceWorkflowDir := filepath.Join(testDir, "test_project", workflowDirectoryName)
 
 	// Create workflow directory in project
-	workflowDir := filepath.Join(projectDirectory, "blank_workflow")
+	workflowDir := filepath.Join(projectDirectory, workflowDirectoryName)
 	if err := os.MkdirAll(workflowDir, 0755); err != nil {
 		return fmt.Errorf("failed to create workflow directory: %w", err)
 	}
 
 	// Copy workflow files
-	files := []string{"main.go", "config.json", "go.mod", "go.sum"}
-	for _, file := range files {
-		src := filepath.Join(sourceWorkflowDir, file)
-		dst := filepath.Join(workflowDir, file)
-		if err := copyFile(src, dst); err != nil {
-			return fmt.Errorf("failed to copy %s: %w", file, err)
+	items := []string{"main.go", "config.json", "go.mod", "go.sum", "contracts"}
+	for _, item := range items {
+		src := filepath.Join(sourceWorkflowDir, item)
+		dst := filepath.Join(workflowDir, item)
+
+		// Skip if the item doesn't exist
+		if _, err := os.Stat(src); err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				continue
+			}
+			return fmt.Errorf("failed to stat %s: %w", item, err)
+		}
+
+		if err := copyPath(src, dst); err != nil {
+			return fmt.Errorf("failed to copy %s: %w", item, err)
 		}
 	}
 
