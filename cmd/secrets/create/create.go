@@ -2,6 +2,7 @@ package create
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -32,9 +33,17 @@ func New(ctx *runtime.Context) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if duration <= 0 || duration > constants.MaxVaultAllowlistDuration {
-				ctx.Logger.Error().Dur("timeout", duration).Msg("invalid timeout: must be > 0 and < 168h (7d)")
-				return fmt.Errorf("invalid --timeout: must be greater than 0 and less than 168h (7d)")
+
+			maxDuration := constants.MaxVaultAllowlistDuration
+			maxHours := int(maxDuration / time.Hour)
+			maxDays := int(maxDuration / (24 * time.Hour))
+			if duration <= 0 || duration > maxDuration {
+				ctx.Logger.Error().
+					Dur("timeout", duration).
+					Dur("maxDuration", maxDuration).
+					Msg(fmt.Sprintf("invalid timeout: must be > 0 and < %dh (%dd)", maxHours, maxDays))
+
+				return fmt.Errorf("invalid --timeout: must be greater than 0 and less than %dh (%dd)", maxHours, maxDays)
 			}
 
 			inputs, err := h.ResolveInputs()

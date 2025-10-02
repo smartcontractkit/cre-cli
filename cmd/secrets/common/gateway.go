@@ -24,6 +24,10 @@ func (g *HTTPClient) Post(body []byte) ([]byte, int, error) {
 	req.Header.Set("Content-Type", "application/jsonrpc")
 	req.Header.Set("Accept", "application/json")
 
+	if g.Client == nil {
+		return nil, 0, fmt.Errorf("HTTP client is not initialized")
+	}
+
 	resp, err := g.Client.Do(req)
 	if err != nil {
 		return nil, 0, fmt.Errorf("HTTP request to gateway failed: %w", err)

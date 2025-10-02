@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
@@ -51,9 +52,17 @@ func New(ctx *runtime.Context) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if duration <= 0 || duration > constants.MaxVaultAllowlistDuration {
-				ctx.Logger.Error().Dur("timeout", duration).Msg("invalid timeout: must be > 0 and < 168h (7d)")
-				return fmt.Errorf("invalid --timeout: must be greater than 0 and less than 168h (7d)")
+
+			maxDuration := constants.MaxVaultAllowlistDuration
+			maxHours := int(maxDuration / time.Hour)
+			maxDays := int(maxDuration / (24 * time.Hour))
+			if duration <= 0 || duration > maxDuration {
+				ctx.Logger.Error().
+					Dur("timeout", duration).
+					Dur("maxDuration", maxDuration).
+					Msg(fmt.Sprintf("invalid timeout: must be > 0 and < %dh (%dd)", maxHours, maxDays))
+
+				return fmt.Errorf("invalid --timeout: must be greater than 0 and less than %dh (%dd)", maxHours, maxDays)
 			}
 
 			inputs, err := ResolveDeleteInputs(secretsFilePath)
@@ -76,13 +85,20 @@ func New(ctx *runtime.Context) *cobra.Command {
 
 // Execute handles the main logic for the 'delete' command.
 func Execute(h *common.Handler, inputs DeleteSecretsInputs, duration time.Duration, ownerType string) error {
+	// Validate and canonicalize owner address
+	owner := strings.TrimSpace(h.OwnerAddress)
+	if !ethcommon.IsHexAddress(owner) {
+		return fmt.Errorf("invalid owner address: %q", h.OwnerAddress)
+	}
+	owner = ethcommon.HexToAddress(owner).Hex() // checksummed string
+
 	// Prepare the list of SecretIdentifiers to be deleted.
 	ptrIDs := make([]*vault.SecretIdentifier, len(inputs))
 	for i, item := range inputs {
 		ptrIDs[i] = &vault.SecretIdentifier{
 			Key:       item.ID,
 			Namespace: item.Namespace,
-			Owner:     h.OwnerAddress,
+			Owner:     owner,
 		}
 	}
 
@@ -181,6 +197,10 @@ func ValidateDeleteInputs(inputs DeleteSecretsInputs) error {
 	validate, err := validation.NewValidator()
 	if err != nil {
 		return fmt.Errorf("failed to create validator: %w", err)
+	}
+
+	if len(inputs) == 0 {
+		return fmt.Errorf("no secrets provided: file contains empty array")
 	}
 
 	for i, item := range inputs {
