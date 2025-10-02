@@ -52,11 +52,11 @@ func (h *handler) Compile() error {
 
 	buildOutput, err := buildCmd.CombinedOutput()
 	if err != nil {
-		h.log.Info().Msg(string(buildOutput))
+		fmt.Println(string(buildOutput))
 		return fmt.Errorf("failed to compile workflow: %w", err)
 	}
 	h.log.Debug().Msgf("Build output: %s", buildOutput)
-	h.log.Info().Msg("Workflow compiled")
+	fmt.Println("Workflow compiled")
 
 	tmpWasmLocation := filepath.Join(workflowRootFolder, tmpWasmFileName)
 	wasmFile, err := os.ReadFile(tmpWasmLocation)

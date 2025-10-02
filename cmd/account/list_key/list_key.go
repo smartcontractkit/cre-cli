@@ -100,29 +100,29 @@ func (h *Handler) Execute(ctx context.Context) error {
 		return fmt.Errorf("fetch workflow owners failed: %w", err)
 	}
 
-	h.log.Info().Msg("\nWorkflow owners retrieved successfully:")
+	fmt.Println("\nWorkflow owners retrieved successfully:")
 	h.logOwners("Linked Owners", respEnvelope.ListWorkflowOwners.LinkedOwners)
 
 	return nil
 }
 
 func (h *Handler) logOwners(label string, owners []WorkflowOwner) {
-	h.log.Info().Msg("")
+	fmt.Println("")
 	if len(owners) == 0 {
-		h.log.Info().Msgf("  No %s found", strings.ToLower(label))
+		fmt.Printf("  No %s found\n", strings.ToLower(label))
 		return
 	}
 
-	h.log.Info().Msgf("%s:", label)
-	h.log.Info().Msg("")
+	fmt.Printf("%s:\n", label)
+	fmt.Println("")
 
 	for i, o := range owners {
-		h.log.Info().Msgf("  %d. %s", i+1, o.WorkflowOwnerLabel)
-		h.log.Info().Msgf("     Owner Address:    	%s", o.WorkflowOwnerAddress)
-		h.log.Info().Msgf("     Status:           	%s", o.VerificationStatus)
-		h.log.Info().Msgf("     Verified At:      	%s", o.VerifiedAt)
-		h.log.Info().Msgf("     Chain Selector:   	%s", o.ChainSelector)
-		h.log.Info().Msgf("     Contract Address: 	%s", o.ContractAddress)
-		h.log.Info().Msg("")
+		fmt.Printf("  %d. %s\n", i+1, o.WorkflowOwnerLabel)
+		fmt.Printf("     Owner Address:    \t%s\n", o.WorkflowOwnerAddress)
+		fmt.Printf("     Status:          \t%s\n", o.VerificationStatus)
+		fmt.Printf("     Verified At:     \t%s\n", o.VerifiedAt)
+		fmt.Printf("     Chain Selector:  \t%s\n", o.ChainSelector)
+		fmt.Printf("     Contract Address:\t%s\n", o.ContractAddress)
+		fmt.Println("")
 	}
 }

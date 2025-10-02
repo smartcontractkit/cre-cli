@@ -3,20 +3,21 @@ package settings
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
 	"github.com/smartcontractkit/cre-cli/internal/constants"
-	"github.com/smartcontractkit/cre-cli/internal/transformation"
+	"github.com/smartcontractkit/cre-cli/internal/context"
 )
 
 // Config names (YAML field paths)
 const (
 	DONFamilySettingName      = "cre-cli.don-family"
-	WorkflowOwnerSettingName  = "user-workflow.workflow-owner-address"
+	WorkflowOwnerSettingName  = "account.workflow-owner-address"
 	WorkflowNameSettingName   = "user-workflow.workflow-name"
+	WorkflowPathSettingName   = "workflow-artifacts.workflow-path"
+	ConfigPathSettingName     = "workflow-artifacts.config-path"
 	SethConfigPathSettingName = "logging.seth-config-path"
 	RegistriesSettingName     = "contracts.registries"
 	KeystoneSettingName       = "contracts.keystone"
@@ -30,7 +31,7 @@ type Flag struct {
 
 type flagNames struct {
 	Owner                Flag
-	CliSettingsFile      Flag
+	ProjectRoot          Flag
 	CliEnvFile           Flag
 	Verbose              Flag
 	Target               Flag
@@ -45,7 +46,7 @@ type flagNames struct {
 
 var Flags = flagNames{
 	Owner:                Flag{"owner", "o"},
-	CliSettingsFile:      Flag{"workflow-settings-file", "S"},
+	ProjectRoot:          Flag{"project-root", "R"},
 	CliEnvFile:           Flag{"env", "e"},
 	Verbose:              Flag{"verbose", "v"},
 	Target:               Flag{"target", "T"},
@@ -71,33 +72,6 @@ func AddSkipConfirmation(cmd *cobra.Command) {
 	cmd.Flags().Bool(Flags.SkipConfirmation.Name, false, "If set, the command will skip the confirmation prompt and proceed with the operation even if it is potentially destructive")
 }
 
-func FindProjectSettingsPath(startDir string) (string, bool, error) {
-	var err error
-
-	if startDir == "" {
-		return "", false, fmt.Errorf("starting directory cannot be empty")
-	}
-
-	cwd := startDir
-
-	for {
-		filePath := filepath.Join(cwd, constants.DefaultProjectSettingsFileName)
-		if _, err = os.Stat(filePath); err == nil {
-			return filePath, true, nil // File exists, return the path and true
-		} else if !os.IsNotExist(err) {
-			return "", false, fmt.Errorf("error checking project settings: %w", err)
-		}
-
-		parentDir := filepath.Dir(cwd)
-		if parentDir == cwd {
-			break // Stop if we can't go up further
-		}
-		cwd = parentDir
-	}
-
-	return "", false, nil
-}
-
 func mergeConfigToViper(v *viper.Viper, filePath string) error {
 	v.SetConfigFile(filePath)
 	err := v.MergeInConfig()
@@ -108,24 +82,10 @@ func mergeConfigToViper(v *viper.Viper, filePath string) error {
 }
 
 // Loads the configuration file (if found) and sets the configuration values via Viper
-func LoadSettingsIntoViper(v *viper.Viper) error {
-	workflowSettingsPath, err := transformation.ResolvePath(v.GetString(Flags.CliSettingsFile.Name))
+func LoadSettingsIntoViper(v *viper.Viper, cmd *cobra.Command) error {
+	projectSettingsPath, err := getProjectSettingsPath()
 	if err != nil {
-		return fmt.Errorf("failed to find workflow settings (%s): %w", constants.DefaultWorkflowSettingsFileName, err)
-	}
-
-	var projectSettingsPath string
-
-	if v.IsSet("projectSettingsPath") {
-		projectSettingsPath, err = transformation.ResolvePath(v.GetString("projectSettingsPath"))
-		if err != nil {
-			return fmt.Errorf("cannot resolve path to project settings (%s): %w", constants.DefaultProjectSettingsFileName, err)
-		}
-	} else {
-		projectSettingsPath, err = getProjectSettingsPath()
-		if err != nil {
-			return fmt.Errorf("failed to find project settings (%s): %w", constants.DefaultProjectSettingsFileName, err)
-		}
+		return fmt.Errorf("failed to find project settings (%s): %w", constants.DefaultProjectSettingsFileName, err)
 	}
 
 	v.SetConfigType("yaml")
@@ -133,9 +93,11 @@ func LoadSettingsIntoViper(v *viper.Viper) error {
 		return fmt.Errorf("failed to load project settings: %w", err)
 	}
 
-	// Step 2: Load workflow settings next (overwrites values from project settings)
-	if err := mergeConfigToViper(v, workflowSettingsPath); err != nil {
-		return fmt.Errorf("failed to load workflow settings: %w", err)
+	if context.IsWorkflowCommand(cmd) {
+		// Step 2: Load workflow settings next (overwrites values from project settings)
+		if err := mergeConfigToViper(v, constants.DefaultWorkflowSettingsFileName); err != nil {
+			return fmt.Errorf("failed to load workflow settings: %w", err)
+		}
 	}
 
 	return nil
@@ -147,7 +109,7 @@ func getProjectSettingsPath() (string, error) {
 		return "", fmt.Errorf("failed to get current working directory: %w", err)
 	}
 
-	path, isFound, err := FindProjectSettingsPath(cwd)
+	path, isFound, err := context.FindProjectSettingsPath(cwd)
 	if err != nil {
 		return "", err
 	}

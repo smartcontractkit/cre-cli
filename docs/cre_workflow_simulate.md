@@ -7,14 +7,21 @@ Simulates a workflow
 This command simulates a workflow.
 
 ```
-cre workflow simulate ./path/to/workflow/main.go [flags]
+cre workflow simulate <workflow-folder-path> [flags]
+```
+
+### Examples
+
+```
+
+		cre workflow simulate ./my-workflow
+		
 ```
 
 ### Options
 
 ```
       --broadcast             Broadcast transactions to the EVM (default: false)
-  -c, --config string         Path to the config file
   -g, --engine-logs           Enable non-fatal engine logging
       --evm-event-index int   EVM trigger log index (0-based) (default -1)
       --evm-tx-hash string    EVM trigger transaction hash (0x...)
@@ -28,10 +35,10 @@ cre workflow simulate ./path/to/workflow/main.go [flags]
 ### Options inherited from parent commands
 
 ```
-  -e, --env string                      Path to .env file which contains sensitive info (default ".env")
-  -T, --target string                   Set the target settings
-  -v, --verbose                         Print DEBUG logs
-  -S, --workflow-settings-file string   Path to CLI workflow settings file (default "workflow.yaml")
+  -e, --env string            Path to .env file which contains sensitive info (default ".env")
+  -R, --project-root string   Path to the project root
+  -T, --target string         Set the target settings
+  -v, --verbose               Print DEBUG logs
 ```
 
 ### SEE ALSO

@@ -80,6 +80,40 @@ func ResolveFilePathOrCreate(input string) (string, error) {
 	return absPath, nil
 }
 
+// ResolveWorkflowPath resolves a workflow directory path that can be:
+// - Absolute path
+// - Relative path (resolved relative to current working directory, which should be the project root)
+// Returns an error if the path doesn't exist or isn't a directory.
+func ResolveWorkflowPath(workflowPath string) (string, error) {
+	if workflowPath == "" {
+		return "", errors.New("workflow path cannot be empty")
+	}
+
+	// Clean the path first
+	cleanPath := filepath.Clean(workflowPath)
+
+	// Resolve to absolute path
+	absPath, err := resolveAbsolutePath(cleanPath)
+	if err != nil {
+		return "", err
+	}
+
+	// Check if the path exists
+	info, err := os.Stat(absPath)
+	if os.IsNotExist(err) {
+		return "", errors.New("workflow directory does not exist")
+	} else if err != nil {
+		return "", err
+	}
+
+	// Check if it's a directory
+	if !info.IsDir() {
+		return "", errors.New("workflow path must be a directory")
+	}
+
+	return absPath, nil
+}
+
 // resolveAbsolutePath expands ~ and converts a path to an absolute path.
 func resolveAbsolutePath(input string) (string, error) {
 	// Expand ~ to home directory

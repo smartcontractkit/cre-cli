@@ -73,6 +73,15 @@ func TestUpload_SuccessAndErrorCases(t *testing.T) {
 	h.inputs.WorkflowName = "test_workflow"
 	h.inputs.DonFamily = "test_label"
 
+	h.settings = createTestSettings(
+		chainsim.TestAddress,
+		"eoa",
+		"test_workflow",
+		"test_label",
+		"",
+		"",
+	)
+
 	mockGraphQL()
 
 	// Mock origin upload response
@@ -141,6 +150,15 @@ func TestUploadArtifactToStorageService_OriginError(t *testing.T) {
 	h.inputs.WorkflowName = "test_workflow"
 	h.inputs.DonFamily = "test_label"
 
+	h.settings = createTestSettings(
+		chainsim.TestAddress,
+		"eoa",
+		"test_workflow",
+		"test_label",
+		"",
+		"",
+	)
+
 	mockGraphQL()
 
 	// Mock origin upload response
@@ -172,6 +190,15 @@ func TestUploadArtifactToStorageService_AlreadyExistsError(t *testing.T) {
 	h.inputs.WorkflowOwner = chainsim.TestAddress
 	h.inputs.WorkflowName = "test_workflow"
 	h.inputs.DonFamily = "test_label"
+
+	h.settings = createTestSettings(
+		chainsim.TestAddress,
+		"eoa",
+		"test_workflow",
+		"test_label",
+		"",
+		"",
+	)
 
 	httpmock.RegisterResponder("POST", "http://graphql.endpoint",
 		func(req *http.Request) (*http.Response, error) {

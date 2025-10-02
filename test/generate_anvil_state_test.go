@@ -2,7 +2,6 @@ package test
 
 import (
 	"crypto/ed25519"
-	"fmt"
 	"os"
 	"os/signal"
 	"strconv"
@@ -53,13 +52,6 @@ func stopAnvilGracefully(anvilProc *os.Process) {
 	} else {
 		L.Info().Msg("Anvil exited gracefully")
 	}
-}
-
-func createBlankProjectSettingFile(projectSettingPath string) error {
-	if err := os.WriteFile(projectSettingPath, nil, 0o600); err != nil {
-		return fmt.Errorf("error writing project.yaml: %w", err)
-	}
-	return nil
 }
 
 // NOTE: this is not really a test, this is a script to re-generated Anvil EVM state dump

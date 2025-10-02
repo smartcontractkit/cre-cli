@@ -70,7 +70,7 @@ func New(logger *zerolog.Logger, v *viper.Viper, cmd *cobra.Command) (*Settings,
 
 	logger.Debug().Msgf("Target:  %s", target)
 
-	err = LoadSettingsIntoViper(v)
+	err = LoadSettingsIntoViper(v, cmd)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load settings: %w", err)
 	}

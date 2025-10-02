@@ -32,7 +32,7 @@ func (h *handler) prepareUpsertParams() (client.RegisterWorkflowV2Parameters, er
 	configURL := h.inputs.ResolveConfigURL("")
 	workflowID := h.workflowArtifact.WorkflowID
 
-	h.log.Info().Str("workflowID", workflowID).Msg("Preparing transaction...")
+	fmt.Printf("Preparing transaction for workflowID: %s\n", workflowID)
 	return client.RegisterWorkflowV2Parameters{
 		WorkflowName: workflowName,
 		Tag:          workflowTag,
@@ -56,26 +56,26 @@ func (h *handler) handleUpsert(params client.RegisterWorkflowV2Parameters) error
 	}
 	switch txOut.Type {
 	case client.Regular:
-		h.log.Info().Msgf("Transaction confirmed: %s", txOut.Hash)
-		h.log.Info().Msgf("View on explorer: %s/tx/%s", h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash)
-		h.log.Info().Msgf("Deployed %s:%s with workflow ID: %s", workflowName, workflowTag, hex.EncodeToString(params.WorkflowID[:]))
-		h.log.Info().Msg("Workflow deployed successfully")
+		fmt.Printf("Transaction confirmed: %s\n", txOut.Hash)
+		fmt.Printf("View on explorer: \033]8;;%s/tx/%s\033\\%s/tx/%s\033]8;;\033\\\n", h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash, h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash)
+		fmt.Printf("Deployed %s:%s with workflow ID: %s\n", workflowName, workflowTag, hex.EncodeToString(params.WorkflowID[:]))
+		fmt.Println("Workflow deployed successfully")
 
 	case client.Raw:
-		h.log.Info().Msg("")
-		h.log.Info().Msg("MSIG workflow deployment transaction prepared!")
-		h.log.Info().Msgf("To Deploy %s:%s with workflow ID: %s", workflowName, workflowTag, hex.EncodeToString(params.WorkflowID[:]))
-		h.log.Info().Msg("")
-		h.log.Info().Msg("Next steps:")
-		h.log.Info().Msg("")
-		h.log.Info().Msg("   1. Submit the following transaction on the target chain:")
-		h.log.Info().Msgf("      Chain:   %s", h.inputs.WorkflowRegistryContractChainName)
-		h.log.Info().Msgf("      Contract Address: %s", txOut.RawTx.To)
-		h.log.Info().Msg("")
-		h.log.Info().Msg("   2. Use the following transaction data:")
-		h.log.Info().Msg("")
-		h.log.Info().Msgf("      %x", txOut.RawTx.Data)
-		h.log.Info().Msg("")
+		fmt.Println("")
+		fmt.Println("MSIG workflow deployment transaction prepared!")
+		fmt.Printf("To Deploy %s:%s with workflow ID: %s\n", workflowName, workflowTag, hex.EncodeToString(params.WorkflowID[:]))
+		fmt.Println("")
+		fmt.Println("Next steps:")
+		fmt.Println("")
+		fmt.Println("   1. Submit the following transaction on the target chain:")
+		fmt.Printf("      Chain:   %s\n", h.inputs.WorkflowRegistryContractChainName)
+		fmt.Printf("      Contract Address: %s\n", txOut.RawTx.To)
+		fmt.Println("")
+		fmt.Println("   2. Use the following transaction data:")
+		fmt.Println("")
+		fmt.Printf("      %x\n", txOut.RawTx.Data)
+		fmt.Println("")
 	default:
 		h.log.Warn().Msgf("Unsupported transaction type: %s", txOut.Type)
 	}

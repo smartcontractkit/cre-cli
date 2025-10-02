@@ -112,19 +112,6 @@ func TestWorkflowDeployCommand(t *testing.T) {
 				wantKey:    "Inputs.ConfigURL",
 				wantDetail: "ConfigURL must be empty or a valid HTTP URL: htp://invalid-url",
 			},
-			{
-				name: "Invalid Secrets URL",
-				inputs: Inputs{
-					WorkflowName:  "valid_workflow",
-					WorkflowOwner: chainsim.TestAddress,
-					BinaryURL:     "https://valid-url.com/binary",
-					SecretsURL:    stringPtr("htp://invalid-url"),
-					DonFamily:     "test_label",
-				},
-				wantErr:    true,
-				wantKey:    "Inputs.SecretsURL",
-				wantDetail: "SecretsURL must be empty or a valid HTTP URL: htp://invalid-url",
-			},
 		}
 
 		for _, tt := range tests {
@@ -134,6 +121,16 @@ func TestWorkflowDeployCommand(t *testing.T) {
 
 				ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
 				handler := newHandler(ctx, buf)
+
+				ctx.Settings = createTestSettings(
+					chainsim.TestAddress,
+					"eoa",
+					"test_workflow",
+					"test_don_family",
+					"testdata/basic_workflow/main.go",
+					"",
+				)
+				handler.settings = ctx.Settings
 
 				handler.inputs = tt.inputs
 				err := handler.ValidateInputs()

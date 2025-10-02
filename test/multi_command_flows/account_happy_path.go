@@ -1,4 +1,4 @@
-package test
+package multi_command_flows
 
 import (
 	"bytes"
@@ -20,15 +20,14 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/test-go/testify/require"
+	"github.com/stretchr/testify/require"
 
 	workflow_registry_v2_wrapper "github.com/smartcontractkit/chainlink-evm/gethwrappers/workflow/generated/workflow_registry_wrapper_v2"
 
 	"github.com/smartcontractkit/cre-cli/internal/constants"
-	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
-	test "github.com/smartcontractkit/cre-cli/test/contracts"
+	"github.com/smartcontractkit/cre-cli/internal/testutil"
 )
 
 type gqlReq struct {
@@ -36,29 +35,10 @@ type gqlReq struct {
 	Variables map[string]any `json:"variables"`
 }
 
-func TestCLIAccountLinkListUnlinkFlow_EOA(t *testing.T) {
-	anvilProc, testEthURL := initTestEnv(t)
-	defer StopAnvil(anvilProc)
-
-	tc := NewTestConfig(t)
-
-	// Use test address for this test
-	require.NoError(t, createCliEnvFile(tc.EnvFile, constants.TestPrivateKey4), "failed to create env file")
-	require.NoError(t, createCliSettingsFile(tc, constants.TestAddress4, "workflow-name", testEthURL), "failed to create settings")
-	require.NoError(t, createBlankProjectSettingFile(tc.ProjectDirectory+"project.yaml"), "failed to create project.yaml")
-	t.Cleanup(tc.Cleanup(t))
-
-	// Pre-baked registry addresses from Anvil state dump
-	t.Setenv(environments.EnvVarWorkflowRegistryAddress, "0x5FbDB2315678afecb367f032d93F642f64180aa3")
-	t.Setenv(environments.EnvVarWorkflowRegistryChainName, TestChainName)
-	t.Setenv(environments.EnvVarCapabilitiesRegistryAddress, "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9")
-	t.Setenv(environments.EnvVarCapabilitiesRegistryChainName, TestChainName)
-
-	// Set dummy API key
-	t.Setenv(credentials.CreApiKeyVar, "test-api")
-
-	registryAddr := os.Getenv(environments.EnvVarWorkflowRegistryAddress)
-	require.NotEmpty(t, registryAddr, "registry address env must be set")
+// RunAccountHappyPath runs the complete account happy path workflow:
+// Link -> List -> Unlink -> List (verify unlinked)
+func RunAccountHappyPath(t *testing.T, tc TestConfig, testEthURL, chainName string) {
+	t.Helper()
 
 	// Track state for dynamic list responses
 	isOwnerLinked := false
@@ -73,6 +53,8 @@ func TestCLIAccountLinkListUnlinkFlow_EOA(t *testing.T) {
 
 		var req gqlReq
 		_ = json.NewDecoder(r.Body).Decode(&req)
+
+		registryAddr := os.Getenv(environments.EnvVarWorkflowRegistryAddress)
 
 		switch {
 		case strings.Contains(req.Query, "InitiateLinking"):
@@ -91,7 +73,7 @@ func TestCLIAccountLinkListUnlinkFlow_EOA(t *testing.T) {
 			environment, _ := request["environment"].(string)
 			requestProcess, _ := request["requestProcess"].(string)
 
-			chainSelector, err := settings.GetChainSelectorByChainName(TestChainName)
+			chainSelector, err := settings.GetChainSelectorByChainName(chainName)
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
 				_ = json.NewEncoder(w).Encode(map[string]any{
@@ -145,7 +127,7 @@ func TestCLIAccountLinkListUnlinkFlow_EOA(t *testing.T) {
 				return
 			}
 
-			chainSelector, err := settings.GetChainSelectorByChainName(TestChainName)
+			chainSelector, err := settings.GetChainSelectorByChainName(chainName)
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
 				_ = json.NewEncoder(w).Encode(map[string]any{
@@ -187,7 +169,7 @@ func TestCLIAccountLinkListUnlinkFlow_EOA(t *testing.T) {
 					"verificationStatus":   "VERIFIED",
 					"verifiedAt":           "2025-09-21T22:05:05.025287Z",
 					"chainSelector": func() string {
-						chainSelector, _ := settings.GetChainSelectorByChainName(TestChainName)
+						chainSelector, _ := settings.GetChainSelectorByChainName(chainName)
 						return strconv.FormatUint(chainSelector, 10)
 					}(),
 					"contractAddress": registryAddr,
@@ -223,18 +205,17 @@ func TestCLIAccountLinkListUnlinkFlow_EOA(t *testing.T) {
 		args := []string{
 			"account", "link-key",
 			tc.GetCliEnvFlag(),
-			tc.GetCliSettingsFlag(),
+			tc.GetProjectRootFlag(),
 			"-l", "owner-label-1",
 			"--" + settings.Flags.SkipConfirmation.Name,
 		}
 		cmd := exec.Command(CLIPath, args...)
-		cmd.Dir = tc.ProjectDirectory
 
 		var stdout, stderr bytes.Buffer
 		cmd.Stdout, cmd.Stderr = &stdout, &stderr
 
 		err := cmd.Run()
-		out := stripANSI(stdout.String() + stderr.String())
+		out := StripANSI(stdout.String() + stderr.String())
 
 		// Test CLI behavior - GraphQL interaction and response parsing
 		require.Contains(t, out, "Starting linking", "should announce linking start")
@@ -268,17 +249,16 @@ func TestCLIAccountLinkListUnlinkFlow_EOA(t *testing.T) {
 		args := []string{
 			"account", "list-key",
 			tc.GetCliEnvFlag(),
-			tc.GetCliSettingsFlag(),
+			tc.GetProjectRootFlag(),
 		}
 		cmd := exec.Command(CLIPath, args...)
-		cmd.Dir = tc.ProjectDirectory
 
 		var stdout, stderr bytes.Buffer
 		cmd.Stdout, cmd.Stderr = &stdout, &stderr
 
 		require.NoError(t, cmd.Run(), "list-key should not fail")
 
-		out := stripANSI(stdout.String() + stderr.String())
+		out := StripANSI(stdout.String() + stderr.String())
 		require.Contains(t, out, "Workflow owners retrieved successfully", "should show success message")
 
 		// Check for linked owner (if link succeeded) or empty list (if link failed at contract level)
@@ -298,17 +278,16 @@ func TestCLIAccountLinkListUnlinkFlow_EOA(t *testing.T) {
 		args := []string{
 			"account", "unlink-key",
 			tc.GetCliEnvFlag(),
-			tc.GetCliSettingsFlag(),
+			tc.GetProjectRootFlag(),
 			"--" + settings.Flags.SkipConfirmation.Name,
 		}
 		cmd := exec.Command(CLIPath, args...)
-		cmd.Dir = tc.ProjectDirectory
 
 		var stdout, stderr bytes.Buffer
 		cmd.Stdout, cmd.Stderr = &stdout, &stderr
 
 		err := cmd.Run()
-		out := stripANSI(stdout.String() + stderr.String())
+		out := StripANSI(stdout.String() + stderr.String())
 
 		// Test CLI behavior for unlink
 		require.Contains(t, out, "Starting unlinking", "should announce unlinking start")
@@ -338,17 +317,16 @@ func TestCLIAccountLinkListUnlinkFlow_EOA(t *testing.T) {
 		args := []string{
 			"account", "list-key",
 			tc.GetCliEnvFlag(),
-			tc.GetCliSettingsFlag(),
+			tc.GetProjectRootFlag(),
 		}
 		cmd := exec.Command(CLIPath, args...)
-		cmd.Dir = tc.ProjectDirectory
 
 		var stdout, stderr bytes.Buffer
 		cmd.Stdout, cmd.Stderr = &stdout, &stderr
 
 		require.NoError(t, cmd.Run(), "list-key should not fail")
 
-		out := stripANSI(stdout.String() + stderr.String())
+		out := StripANSI(stdout.String() + stderr.String())
 		require.Contains(t, out, "Workflow owners retrieved successfully", "should show success message")
 
 		// After unlink, should show no linked owners
@@ -387,7 +365,7 @@ func buildInitiateLinkingEOAResponse(rpcURL, registryAddrHex, ownerHex string, c
 	ownershipProof := "0x" + hex.EncodeToString(sum[:])
 
 	const LinkRequestType uint8 = 0
-	msgDigest, err := test.PreparePayloadForSigning(test.OwnershipProofSignaturePayload{
+	msgDigest, err := testutil.PreparePayloadForSigning(testutil.OwnershipProofSignaturePayload{
 		RequestType:              LinkRequestType,
 		WorkflowOwnerAddress:     common.HexToAddress(ownerHex),
 		ChainID:                  chainID.String(),
@@ -459,7 +437,7 @@ func buildInitiateUnlinkingEOAResponse(rpcURL, registryAddrHex, ownerHex string,
 	ownershipProof := "0x" + hex.EncodeToString(sum[:])
 
 	const LinkRequestType uint8 = 0 // Unlink uses same request type as link
-	msgDigest, err := test.PreparePayloadForSigning(test.OwnershipProofSignaturePayload{
+	msgDigest, err := testutil.PreparePayloadForSigning(testutil.OwnershipProofSignaturePayload{
 		RequestType:              LinkRequestType,
 		WorkflowOwnerAddress:     common.HexToAddress(ownerHex),
 		ChainID:                  chainID.String(),
