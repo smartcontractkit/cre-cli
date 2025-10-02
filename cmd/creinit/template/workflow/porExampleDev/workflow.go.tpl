@@ -101,7 +101,10 @@ func onPORCronTrigger(config *Config, runtime cre.Runtime, outputs *cron.Payload
 }
 
 func onLogTrigger(config *Config, runtime cre.Runtime, payload *bindings.DecodedLog[message_emitter.MessageEmittedDecoded]) (string, error) {
-	return payload.Data.Message, nil
+	logger := runtime.Logger()
+	message := payload.Data.Message
+	logger.Info("Message retrieved from the contract", "message", message)
+	return message, nil
 }
 
 func onHTTPTrigger(config *Config, runtime cre.Runtime, payload *http.Payload) (string, error) {
