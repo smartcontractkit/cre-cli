@@ -233,9 +233,9 @@ func RunAccountHappyPath(t *testing.T, tc TestConfig, testEthURL, chainName stri
 		if err != nil {
 			// If there's a contract-level rejection but CLI handled it properly, that's OK
 			if strings.Contains(out, "function signature") && strings.Contains(out, "linkOwner") {
-				t.Logf("Contract rejected payload but CLI handled GraphQL correctly (expected for test environment)")
+				t.Logf("Contract rejected payload but CLI handled GraphQL correctly (expected for testcontracts environment)")
 			} else if strings.Contains(out, "InvalidOwnershipLink") || strings.Contains(out, "execution reverted") {
-				t.Logf("Contract validation failed but CLI processed GraphQL response correctly (expected for test environment)")
+				t.Logf("Contract validation failed but CLI processed GraphQL response correctly (expected for testcontracts environment)")
 			} else {
 				t.Fatalf("CLI error (not contract rejection): %v\nOutput: %s", err, out)
 			}
@@ -301,9 +301,9 @@ func RunAccountHappyPath(t *testing.T, tc TestConfig, testEthURL, chainName stri
 		if err != nil {
 			// If there's a contract-level rejection but CLI handled it properly, that's OK
 			if strings.Contains(out, "function signature") && strings.Contains(out, "unlinkOwner") {
-				t.Logf("Contract rejected payload but CLI handled GraphQL correctly (expected for test environment)")
+				t.Logf("Contract rejected payload but CLI handled GraphQL correctly (expected for testcontracts environment)")
 			} else if strings.Contains(out, "InvalidOwnershipLink") || strings.Contains(out, "execution reverted") {
-				t.Logf("Contract validation failed but CLI processed GraphQL response correctly (expected for test environment)")
+				t.Logf("Contract validation failed but CLI processed GraphQL response correctly (expected for testcontracts environment)")
 			} else {
 				t.Fatalf("CLI error (not contract rejection): %v\nOutput: %s", err, out)
 			}
