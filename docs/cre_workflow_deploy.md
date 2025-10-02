@@ -23,7 +23,6 @@ cre workflow deploy <workflow-folder-path> [flags]
 ```
   -r, --auto-start      Activate and run the workflow after registration, or pause it (default true)
   -h, --help            help for deploy
-  -k, --keep-alive      Keep previous workflows with same workflow name and owner active (default: false).
   -o, --output string   The output file for the compiled WASM binary encoded in base64 (default "./binary.wasm.br.b64")
       --unsigned        If set, the command will return the raw transaction instead of sending it to the network
       --yes             If set, the command will skip the confirmation prompt and proceed with the operation even if it is potentially destructive

@@ -91,7 +91,6 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	settings.AddRawTxFlag(deployCmd)
 	settings.AddSkipConfirmation(deployCmd)
 	deployCmd.Flags().StringP("output", "o", defaultOutputPath, "The output file for the compiled WASM binary encoded in base64")
-	deployCmd.Flags().BoolP("keep-alive", "k", false, "Keep previous workflows with same workflow name and owner active (default: false).")
 	deployCmd.Flags().BoolP("auto-start", "r", true, "Activate and run the workflow after registration, or pause it")
 
 	return deployCmd
@@ -128,7 +127,7 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 		DonFamily:     h.settings.Workflow.DevPlatformSettings.DonFamily,
 
 		WorkflowPath: h.settings.Workflow.WorkflowArtifactSettings.WorkflowPath,
-		KeepAlive:    v.GetBool("keep-alive"),
+		KeepAlive:    false,
 
 		ConfigPath: h.settings.Workflow.WorkflowArtifactSettings.ConfigPath,
 		OutputPath: v.GetString("output"),
