@@ -73,10 +73,6 @@ func InitWorkflow(config *Config, logger *slog.Logger, secretsProvider cre.Secre
 
 	httpTriggerCfg := &http.Config{}
 
-	logTriggerCfg := &evm.FilterLogTriggerRequest{
-		Addresses: make([][]byte, len(config.EVMs)),
-	}
-
 	workflow := cre.Workflow[*Config]{
 		cre.Handler(
 			cron.Trigger(cronTriggerCfg),
@@ -89,11 +85,6 @@ func InitWorkflow(config *Config, logger *slog.Logger, secretsProvider cre.Secre
 	}
 
 	for i, evmCfg := range config.EVMs {
-		address, err := hex.DecodeString(evmCfg.MessageEmitterAddress[2:])
-		if err != nil {
-			return nil, fmt.Errorf("failed to decode MessageEmitter address %s: %w", evmCfg.MessageEmitterAddress, err)
-		}
-		logTriggerCfg.Addresses[i] = address
 		msgEmitter, err := prepareMessageEmitter(logger, evmCfg)
 		if err != nil {
 			return nil, fmt.Errorf("failed to prepare message emitter: %w", err)
