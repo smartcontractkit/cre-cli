@@ -27,7 +27,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
-	test "github.com/smartcontractkit/cre-cli/test/contracts"
+	"github.com/smartcontractkit/cre-cli/internal/testutil"
 )
 
 type gqlReq struct {
@@ -365,7 +365,7 @@ func buildInitiateLinkingEOAResponse(rpcURL, registryAddrHex, ownerHex string, c
 	ownershipProof := "0x" + hex.EncodeToString(sum[:])
 
 	const LinkRequestType uint8 = 0
-	msgDigest, err := test.PreparePayloadForSigning(test.OwnershipProofSignaturePayload{
+	msgDigest, err := testutil.PreparePayloadForSigning(testutil.OwnershipProofSignaturePayload{
 		RequestType:              LinkRequestType,
 		WorkflowOwnerAddress:     common.HexToAddress(ownerHex),
 		ChainID:                  chainID.String(),
@@ -437,7 +437,7 @@ func buildInitiateUnlinkingEOAResponse(rpcURL, registryAddrHex, ownerHex string,
 	ownershipProof := "0x" + hex.EncodeToString(sum[:])
 
 	const LinkRequestType uint8 = 0 // Unlink uses same request type as link
-	msgDigest, err := test.PreparePayloadForSigning(test.OwnershipProofSignaturePayload{
+	msgDigest, err := testutil.PreparePayloadForSigning(testutil.OwnershipProofSignaturePayload{
 		RequestType:              LinkRequestType,
 		WorkflowOwnerAddress:     common.HexToAddress(ownerHex),
 		ChainID:                  chainID.String(),
