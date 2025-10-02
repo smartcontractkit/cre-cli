@@ -125,7 +125,7 @@ The config is already populated with deployed contracts in template.
 ```bash
 go mod tidy
 
-cre workflow simulate --target local-simulation --secrets ../secrets.yaml <path-to-workflow>
+cre workflow simulate <path-to-workflow> --target local-simulation
 ```
 
 After this you will get a set of options similar to:
