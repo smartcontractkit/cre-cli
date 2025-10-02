@@ -151,7 +151,7 @@ func TestReadMethods(t *testing.T) {
 			return reply, nil
 		}
 
-		runtime := testutils.NewRuntime(t, map[string]string{})
+		runtime := testutils.NewRuntime(t, testutils.Secrets{})
 		reply := ds.ReadData(runtime, datastorage.ReadDataInput{
 			User: common.HexToAddress("0x1234567890abcdef1234567890abcdef12345678"),
 			Key:  "testKey",
@@ -208,7 +208,7 @@ func TestReadMethods(t *testing.T) {
 			return reply, nil
 		}
 
-		runtime := testutils.NewRuntime(t, map[string]string{})
+		runtime := testutils.NewRuntime(t, testutils.Secrets{})
 		reply := ds.GetMultipleReserves(runtime, nil)
 		require.NotNil(t, reply, "GetMultipleReserves should return a non-nil promise")
 
@@ -259,7 +259,7 @@ func TestReadMethods(t *testing.T) {
 			return reply, nil
 		}
 
-		runtime := testutils.NewRuntime(t, map[string]string{})
+		runtime := testutils.NewRuntime(t, testutils.Secrets{})
 		reply := ds.GetTupleReserves(runtime, nil)
 		require.NotNil(t, reply, "GetTupleReserves should return a non-nil promise")
 
@@ -314,7 +314,7 @@ func TestWriteReportMethods(t *testing.T) {
 		}, nil
 	}
 
-	runtime := testutils.NewRuntime(t, map[string]string{})
+	runtime := testutils.NewRuntime(t, testutils.Secrets{})
 
 	reply := ds.WriteReportFromUserData(runtime, datastorage.UserData{
 		Key:   "testKey",
@@ -404,7 +404,7 @@ func TestFilterLogs(t *testing.T) {
 		return &evm.FilterLogsReply{Logs: logs}, nil
 	}
 
-	runtime := testutils.NewRuntime(t, map[string]string{})
+	runtime := testutils.NewRuntime(t, testutils.Secrets{})
 
 	reply := ds.FilterLogsAccessLogged(runtime, &bindings.FilterOptions{
 		BlockHash: bh,
@@ -452,9 +452,39 @@ func TestLogTrigger(t *testing.T) {
 		trigger, err := ds.LogTriggerDataStoredLog(1, evm.ConfidenceLevel_CONFIDENCE_LEVEL_FINALIZED, events)
 		require.NotNil(t, trigger)
 		require.NoError(t, err)
+
+		// Test the Adapt method
+		// We need to encode the non-indexed parameters (Key and Value) into the log data
+		eventData, err := abi.Arguments{ev.Inputs[1], ev.Inputs[2]}.Pack(events[0].Key, events[0].Value)
+		require.NoError(t, err, "Encoding event data should not return an error")
+
+		// Create a mock log that simulates what would be returned by the blockchain
+		mockLog := &evm.Log{
+			Address: ds.Address.Bytes(), // Contract address
+			Topics: [][]byte{
+				ds.Codec.DataStoredLogHash(), // Event signature hash
+				expected1,                    // Sender address (indexed)
+			},
+			Data: eventData, // Encoded Key and Value data
+		}
+
+		// Call Adapt to decode the log
+		decodedLog, err := trigger.Adapt(mockLog)
+		require.NoError(t, err, "Adapt should not return an error")
+		require.NotNil(t, decodedLog, "Decoded log should not be nil")
+
+		// Verify the decoded data matches what we expect
+		require.Equal(t, events[0].Sender, decodedLog.Data.Sender, "Decoded sender should match")
+		require.Equal(t, events[0].Key, decodedLog.Data.Key, "Decoded key should match")
+		require.Equal(t, events[0].Value, decodedLog.Data.Value, "Decoded value should match")
+
+		// Verify the original log is preserved
+		require.Equal(t, mockLog, decodedLog.Log, "Original log should be preserved")
 	})
 	t.Run("dynamic event", func(t *testing.T) {
 		ev := ds.ABI.Events["DynamicEvent"]
+		// indexed (string and bytes) fields are hashed directly
+		// indexed tuple/slice/array fields are hashed by the EncodeDynamicEventTopics function
 		events := []datastorage.DynamicEvent{
 			{
 				Key: "testKey1",
@@ -463,7 +493,7 @@ func TestLogTrigger(t *testing.T) {
 					Value: "userValue1",
 				},
 				Sender:   "testSender1",
-				Metadata: common.HexToHash("metadata1"),
+				Metadata: common.BytesToHash(crypto.Keccak256([]byte("metadata1"))),
 				MetadataArray: [][]byte{
 					[]byte("meta1"),
 					[]byte("meta2"),
@@ -476,7 +506,7 @@ func TestLogTrigger(t *testing.T) {
 					Value: "userValue2",
 				},
 				Sender:   "testSender2",
-				Metadata: common.HexToHash("metadata2"),
+				Metadata: common.BytesToHash(crypto.Keccak256([]byte("metadata2"))),
 				MetadataArray: [][]byte{
 					[]byte("meta3"),
 					[]byte("meta4"),
@@ -489,24 +519,27 @@ func TestLogTrigger(t *testing.T) {
 
 		require.Len(t, encoded, 4, "Trigger should have four topics")
 		require.Equal(t, ds.Codec.DynamicEventLogHash(), encoded[0].Values[0], "First topic value should be DynamicEvent log hash")
+
+		// user data
 		require.Len(t, encoded[1].Values, 2, "Second topic should have two values")
 		packed1, err := abi.Arguments{ev.Inputs[1]}.Pack(events[0].UserData)
-
-		expected1 := crypto.Keccak256(packed1)
 		require.NoError(t, err)
+		expected1 := crypto.Keccak256(packed1)
 		require.Equal(t, expected1, encoded[1].Values[0])
-		packed2, err := abi.Arguments{ev.Inputs[1]}.Pack(events[1].UserData)
 
+		packed2, err := abi.Arguments{ev.Inputs[1]}.Pack(events[1].UserData)
 		expected2 := crypto.Keccak256(packed2)
 		require.NoError(t, err)
 		require.Equal(t, expected2, encoded[1].Values[1])
 
+		// metadata
 		expected3 := events[0].Metadata.Bytes()
 		require.Equal(t, expected3, encoded[2].Values[0])
 
 		expected4 := events[1].Metadata.Bytes()
 		require.Equal(t, expected4, encoded[2].Values[1])
 
+		// metadata array
 		packed3, err := abi.Arguments{ev.Inputs[4]}.Pack(events[0].MetadataArray)
 		expected5 := crypto.Keccak256(packed3)
 		require.NoError(t, err)
@@ -520,6 +553,38 @@ func TestLogTrigger(t *testing.T) {
 		trigger, err := ds.LogTriggerDynamicEventLog(1, evm.ConfidenceLevel_CONFIDENCE_LEVEL_FINALIZED, events)
 		require.NotNil(t, trigger)
 		require.NoError(t, err)
+
+		// Test the Adapt method for DynamicEvent
+		// Encode the non-indexed parameters (Key and Sender) into the log data
+		eventData, err := abi.Arguments{ev.Inputs[0], ev.Inputs[2]}.Pack(events[0].Key, events[0].Sender)
+		require.NoError(t, err, "Encoding DynamicEvent data should not return an error")
+
+		// Create a mock log that simulates what would be returned by the blockchain
+		mockLog := &evm.Log{
+			Address: ds.Address.Bytes(), // Contract address
+			Topics: [][]byte{
+				ds.Codec.DynamicEventLogHash(), // Event signature hash
+				expected1,                      // UserData hash (indexed)
+				expected3,                      // Metadata hash (indexed)
+				expected5,                      // MetadataArray hash (indexed)
+			},
+			Data: eventData, // Encoded Key and Sender data
+		}
+
+		// Call Adapt to decode the log
+		decodedLog, err := trigger.Adapt(mockLog)
+		require.NoError(t, err, "Adapt should not return an error")
+		require.NotNil(t, decodedLog, "Decoded log should not be nil")
+
+		// Verify the decoded data matches what we expect
+		require.Equal(t, events[0].Key, decodedLog.Data.Key, "Decoded key should match")
+		require.Equal(t, events[0].Sender, decodedLog.Data.Sender, "Decoded sender should match")
+		require.Equal(t, common.BytesToHash(expected1), decodedLog.Data.UserData, "UserData should be of type common.Hash and match the expected hash")
+		require.Equal(t, common.BytesToHash(expected3), decodedLog.Data.Metadata, "Metadata should be of type common.Hash and match the expected hash")
+		require.Equal(t, common.BytesToHash(expected5), decodedLog.Data.MetadataArray, "MetadataArray should be of type common.Hash and match the expected hash")
+
+		// Verify the original log is preserved
+		require.Equal(t, mockLog, decodedLog.Log, "Original log should be preserved")
 	})
 }
 
