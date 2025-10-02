@@ -39,12 +39,10 @@ type EVMConfig struct {
 	GasLimit              uint64 `json:"gasLimit"`
 }
 
-// GetChainSelector returns the chain selector for this EVM config
 func (e *EVMConfig) GetChainSelector() (uint64, error) {
 	return evm.ChainSelectorFromName(e.ChainName)
 }
 
-// NewEVMClient creates a new EVM client from the chain name
 func (e *EVMConfig) NewEVMClient() (*evm.Client, error) {
 	chainSelector, err := e.GetChainSelector()
 	if err != nil {
@@ -97,7 +95,6 @@ func InitWorkflow(config *Config, logger *slog.Logger, secretsProvider cre.Secre
 
 	httpTriggerCfg := &http.Config{}
 
-	// Get chain selector for the first EVM config
 	chainSelector, err := config.EVMs[0].GetChainSelector()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get chain selector for %s: %w", config.EVMs[0].ChainName, err)
