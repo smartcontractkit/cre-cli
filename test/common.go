@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"math/rand"
 	"net"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -38,7 +39,6 @@ var CLIPath = os.TempDir() + string(os.PathSeparator) + "cre" + func() string {
 const (
 	TestLogLevelEnvVar = "TEST_LOG_LEVEL" // export this env var before running tests if DEBUG level is needed
 	SethConfigPath     = "seth.toml"
-	TestChainName      = "anvil-devnet"
 	SettingsTarget     = "production-testnet"
 )
 
@@ -187,6 +187,24 @@ func copyDir(src, dst string) error {
 			return copyFile(path, target)
 		}
 	})
+}
+
+// make the RPC URL use 127.0.0.1, not localhost
+func forceIPv4(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return raw
+	}
+	host, port, err := net.SplitHostPort(u.Host)
+	if err != nil {
+		// maybe no port in URL; keep as-is
+		return raw
+	}
+	if host == "localhost" || host == "::1" {
+		u.Host = net.JoinHostPort("127.0.0.1", port)
+		return u.String()
+	}
+	return raw
 }
 
 // Boot Anvil by either loading Anvil state or running a fresh instance that will dump its state on exit

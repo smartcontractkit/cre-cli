@@ -6,6 +6,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	chainselectors "github.com/smartcontractkit/chain-selectors"
+
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
@@ -32,9 +34,9 @@ func TestMultiCommandWorkflowHappyPaths(t *testing.T) {
 
 		// Setup environment variables for pre-baked registries from Anvil state dump
 		t.Setenv(environments.EnvVarWorkflowRegistryAddress, "0x5FbDB2315678afecb367f032d93F642f64180aa3")
-		t.Setenv(environments.EnvVarWorkflowRegistryChainName, TestChainName)
+		t.Setenv(environments.EnvVarWorkflowRegistryChainName, chainselectors.ANVIL_DEVNET.Name)
 		t.Setenv(environments.EnvVarCapabilitiesRegistryAddress, "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9")
-		t.Setenv(environments.EnvVarCapabilitiesRegistryChainName, TestChainName)
+		t.Setenv(environments.EnvVarCapabilitiesRegistryChainName, chainselectors.ANVIL_DEVNET.Name)
 
 		tc := NewTestConfig(t)
 
@@ -58,9 +60,9 @@ func TestMultiCommandWorkflowHappyPaths(t *testing.T) {
 
 		// Setup environment variables for pre-baked registries from Anvil state dump
 		t.Setenv(environments.EnvVarWorkflowRegistryAddress, "0x5FbDB2315678afecb367f032d93F642f64180aa3")
-		t.Setenv(environments.EnvVarWorkflowRegistryChainName, TestChainName)
+		t.Setenv(environments.EnvVarWorkflowRegistryChainName, chainselectors.ANVIL_DEVNET.Name)
 		t.Setenv(environments.EnvVarCapabilitiesRegistryAddress, "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9")
-		t.Setenv(environments.EnvVarCapabilitiesRegistryChainName, TestChainName)
+		t.Setenv(environments.EnvVarCapabilitiesRegistryChainName, chainselectors.ANVIL_DEVNET.Name)
 
 		tc := NewTestConfig(t)
 
@@ -84,9 +86,9 @@ func TestMultiCommandWorkflowHappyPaths(t *testing.T) {
 
 		// Setup environment variables for pre-baked registries from Anvil state dump
 		t.Setenv(environments.EnvVarWorkflowRegistryAddress, "0x5FbDB2315678afecb367f032d93F642f64180aa3")
-		t.Setenv(environments.EnvVarWorkflowRegistryChainName, TestChainName)
+		t.Setenv(environments.EnvVarWorkflowRegistryChainName, chainselectors.ANVIL_DEVNET.Name)
 		t.Setenv(environments.EnvVarCapabilitiesRegistryAddress, "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9")
-		t.Setenv(environments.EnvVarCapabilitiesRegistryChainName, TestChainName)
+		t.Setenv(environments.EnvVarCapabilitiesRegistryChainName, chainselectors.ANVIL_DEVNET.Name)
 
 		tc := NewTestConfig(t)
 
@@ -96,7 +98,7 @@ func TestMultiCommandWorkflowHappyPaths(t *testing.T) {
 		t.Cleanup(tc.Cleanup(t))
 
 		// Run account happy path workflow
-		multi_command_flows.RunAccountHappyPath(t, tc, testEthUrl, TestChainName)
+		multi_command_flows.RunAccountHappyPath(t, tc, testEthUrl, chainselectors.ANVIL_DEVNET.Name)
 	})
 
 	// Run Secrets Happy Path: Create -> Update -> List -> Delete
@@ -115,7 +117,7 @@ func TestMultiCommandWorkflowHappyPaths(t *testing.T) {
 		t.Cleanup(tc.Cleanup(t))
 
 		// Run secrets happy path workflow
-		multi_command_flows.RunSecretsHappyPath(t, tc, TestChainName)
+		multi_command_flows.RunSecretsHappyPath(t, tc, chainselectors.ANVIL_DEVNET.Name)
 	})
 
 	// Run simulation

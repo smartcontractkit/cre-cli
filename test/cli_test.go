@@ -14,6 +14,8 @@ import (
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 
+	chainselectors "github.com/smartcontractkit/chain-selectors"
+
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
@@ -33,14 +35,15 @@ func createProjectSettingsFile(projectSettingPath string, workflowOwner string, 
 	v.Set(fmt.Sprintf("%s.cre-cli.don-family", SettingsTarget), constants.DefaultStagingDonFamily)
 
 	// rpcs
+	ipv4URL := forceIPv4(testEthURL)
 	v.Set(fmt.Sprintf("%s.%s", SettingsTarget, settings.RpcsSettingName), []settings.RpcEndpoint{
 		{
-			ChainName: TestChainName,
-			Url:       testEthURL,
+			ChainName: chainselectors.ANVIL_DEVNET.Name,
+			Url:       ipv4URL,
 		},
 		{
-			Url:       testEthURL,
-			ChainName: "ethereum-testnet-sepolia",
+			Url:       ipv4URL,
+			ChainName: chainselectors.ETHEREUM_TESTNET_SEPOLIA.Name,
 		},
 	})
 
