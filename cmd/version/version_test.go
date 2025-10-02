@@ -1,6 +1,9 @@
 package version_test
 
 import (
+	"io"
+	"os"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -31,14 +34,23 @@ func TestVersionCommand(t *testing.T) {
 		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
 		defer simulatedEnvironment.Close()
 
-		ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
+		// Capture stdout
+		oldStdout := os.Stdout
+		r, w, _ := os.Pipe()
+		os.Stdout = w
+
+		ctx, _ := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
 		cmd := version.New(ctx)
 
 		err := cmd.Execute()
 		assert.NoError(t, err)
 
-		output := buf.String()
-		assert.Contains(t, output, "development", "Output does not match for %s", "Default development build")
+		w.Close()
+		os.Stdout = oldStdout
+		var output strings.Builder
+		_, _ = io.Copy(&output, r)
+
+		assert.Contains(t, output.String(), "development", "Output does not match for %s", "Default development build")
 	})
 
 	for _, tt := range tests {
@@ -48,14 +60,23 @@ func TestVersionCommand(t *testing.T) {
 			simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
 			defer simulatedEnvironment.Close()
 
-			ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
+			// Capture stdout
+			oldStdout := os.Stdout
+			r, w, _ := os.Pipe()
+			os.Stdout = w
+
+			ctx, _ := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
 			cmd := version.New(ctx)
 
 			err := cmd.Execute()
 			assert.NoError(t, err)
 
-			output := buf.String()
-			assert.Contains(t, output, tt.expected, "Output does not match for %s", tt.name)
+			w.Close()
+			os.Stdout = oldStdout
+			var output strings.Builder
+			_, _ = io.Copy(&output, r)
+
+			assert.Contains(t, output.String(), tt.expected, "Output does not match for %s", tt.name)
 		})
 	}
 }

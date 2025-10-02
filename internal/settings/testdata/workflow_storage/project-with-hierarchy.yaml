@@ -3,14 +3,18 @@ production-testnet:
   hierarchy-test: Project
   test-key: projectValue
   cre-cli:
-    don-family: "test-don"
+    don-family: "zone-a"
   user-workflow:
     workflow-owner-address: ""
     workflow-name: ""
+  workflow-artifacts:
+    workflow-language: "go"
+    workflow-path: "./main.go"
+    config-path: "./config.json"
   logging:
     seth-config-path: seth.toml
   rpcs:
-    - chain-name: ethereum-testnet-sepolia-base-1
+    - chain-name: ethereum-testnet-sepolia-arbitrum-1
       url: https://somethingElse.rpc.org
     - chain-name: ethereum-testnet-sepolia
       url: https://something.rpc.org

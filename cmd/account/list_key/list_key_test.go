@@ -3,6 +3,8 @@ package list_key
 import (
 	"context"
 	"errors"
+	"io"
+	"os"
 	"strings"
 	"testing"
 
@@ -50,8 +52,10 @@ func (m *mockGraphQLClient) Execute(_ context.Context, _ *graphql.Request, resp 
 }
 
 func TestExecute_Success(t *testing.T) {
-	logOutput := new(strings.Builder)
-	logger := zerolog.New(logOutput)
+	// Capture stdout
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
 
 	mockResp := mockGraphQLClient{
 		response: struct {
@@ -76,27 +80,38 @@ func TestExecute_Success(t *testing.T) {
 		},
 	}
 
-	h := NewTestHandler(&logger, &mockResp)
+	h := NewTestHandler(nil, &mockResp)
 
 	err := h.Execute(context.Background())
 	require.NoError(t, err)
 
-	output := logOutput.String()
-	assert.Contains(t, output, "Workflow owners retrieved successfully")
-	assert.Contains(t, output, "1. Alice")
+	w.Close()
+	os.Stdout = oldStdout
+	var output strings.Builder
+	_, _ = io.Copy(&output, r)
+
+	assert.Contains(t, output.String(), "Workflow owners retrieved successfully")
+	assert.Contains(t, output.String(), "1. Alice")
 }
 
 func TestExecute_Error(t *testing.T) {
-	logOutput := new(strings.Builder)
-	logger := zerolog.New(logOutput)
+	// Capture stdout
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
 
 	mockErrClient := &mockGraphQLClient{
 		err: errors.New("network error"),
 	}
 
-	h := NewTestHandler(&logger, mockErrClient)
+	h := NewTestHandler(nil, mockErrClient)
 
 	err := h.Execute(context.Background())
+	w.Close()
+	os.Stdout = oldStdout
+	var output strings.Builder
+	_, _ = io.Copy(&output, r)
+
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "fetch workflow owners failed")
 }

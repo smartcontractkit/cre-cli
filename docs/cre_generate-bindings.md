@@ -27,10 +27,9 @@ cre generate-bindings [flags]
 ### Options inherited from parent commands
 
 ```
-  -e, --env string                      Path to .env file which contains sensitive info (default ".env")
-  -T, --target string                   Set the target settings
-  -v, --verbose                         Print DEBUG logs
-  -S, --workflow-settings-file string   Path to CLI workflow settings file (default "workflow.yaml")
+  -e, --env string      Path to .env file which contains sensitive info (default ".env")
+  -T, --target string   Set the target settings
+  -v, --verbose         Print DEBUG logs
 ```
 
 ### SEE ALSO

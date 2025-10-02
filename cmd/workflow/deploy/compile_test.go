@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/jarcoal/httpmock"
@@ -13,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/smartcontractkit/cre-cli/internal/constants"
+	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/testutil/chainsim"
 	"github.com/smartcontractkit/cre-cli/internal/validation"
 )
@@ -41,7 +43,7 @@ func TestCompileCmd(t *testing.T) {
 				},
 				wantError:   true,
 				wantKeys:    []string{"Inputs.WorkflowPath"},
-				wantDetails: []string{"WorkflowPath must be a valid existing file: nonexistent.yaml"},
+				wantDetails: []string{"WorkflowPath must have read access to path: nonexistent.yaml"},
 			},
 			{
 				name: "Invalid ConfigPath",
@@ -91,8 +93,17 @@ func TestCompileCmd(t *testing.T) {
 
 				ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
 				handler := newHandler(ctx, buf)
+
+				ctx.Settings = createTestSettings(
+					chainsim.TestAddress,
+					tt.WorkflowOwnerType,
+					"test_workflow",
+					"test_don_family",
+					tt.cmd.WorkflowPath,
+					tt.cmd.ConfigPath,
+				)
+				handler.settings = ctx.Settings
 				handler.inputs = tt.cmd
-				ctx.Settings.Workflow.UserWorkflowSettings.WorkflowOwnerType = tt.WorkflowOwnerType
 				err := handler.ValidateInputs()
 
 				if tt.wantError {
@@ -182,19 +193,39 @@ func TestCompileCmd(t *testing.T) {
 					simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
 					defer simulatedEnvironment.Close()
 
+					// Capture stdout
+					oldStdout := os.Stdout
+					r, w, _ := os.Pipe()
+					os.Stdout = w
+
 					ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
 					handler := newHandler(ctx, buf)
+
+					ctx.Settings = createTestSettings(
+						chainsim.TestAddress,
+						tt.WorkflowOwnerType,
+						"test_workflow",
+						"test_don_family",
+						tt.inputs.WorkflowPath,
+						tt.inputs.ConfigPath,
+					)
+					handler.settings = ctx.Settings
 					handler.inputs = tt.inputs
-					ctx.Settings.Workflow.UserWorkflowSettings.WorkflowOwnerType = tt.WorkflowOwnerType
 					err := handler.ValidateInputs()
 					require.NoError(t, err)
 
 					err = handler.Execute()
+
+					w.Close()
+					os.Stdout = oldStdout
+					var output strings.Builder
+					_, _ = io.Copy(&output, r)
+
 					require.Error(t, err)
 					assert.ErrorContains(t, err, tt.wantErr)
 
 					if tt.compilationErr != "" {
-						assert.Contains(t, buf.String(), tt.compilationErr)
+						assert.Contains(t, output.String(), tt.compilationErr)
 					}
 				})
 			}
@@ -205,7 +236,15 @@ func TestCompileCmd(t *testing.T) {
 			defer simulatedEnvironment.Close()
 
 			ctx, _ := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
-			ctx.Settings.Workflow.UserWorkflowSettings.WorkflowOwnerType = constants.WorkflowOwnerTypeEOA
+
+			ctx.Settings = createTestSettings(
+				chainsim.TestAddress,
+				constants.WorkflowOwnerTypeEOA,
+				"test_workflow",
+				"test_don_family",
+				"testdata/configless_workflow/main.go",
+				"",
+			)
 
 			httpmock.Activate()
 			t.Cleanup(httpmock.DeactivateAndReset)
@@ -370,10 +409,55 @@ func TestCompileCreatesBase64EncodedFile(t *testing.T) {
 	})
 }
 
+// createTestSettings is a helper function to construct settings for tests
+func createTestSettings(workflowOwnerAddress, workflowOwnerType, workflowName, donFamily, workflowPath, configPath string) *settings.Settings {
+	return &settings.Settings{
+		Workflow: settings.WorkflowSettings{
+			UserWorkflowSettings: struct {
+				WorkflowOwnerAddress string `mapstructure:"workflow-owner-address" yaml:"workflow-owner-address"`
+				WorkflowOwnerType    string `mapstructure:"workflow-owner-type" yaml:"workflow-owner-type"`
+				WorkflowName         string `mapstructure:"workflow-name" yaml:"workflow-name"`
+			}{
+				WorkflowOwnerAddress: workflowOwnerAddress,
+				WorkflowOwnerType:    workflowOwnerType,
+				WorkflowName:         workflowName,
+			},
+			DevPlatformSettings: struct {
+				DonFamily string `mapstructure:"don-family" yaml:"don-family"`
+			}{
+				DonFamily: donFamily,
+			},
+			WorkflowArtifactSettings: struct {
+				WorkflowPath string `mapstructure:"workflow-path" yaml:"workflow-path"`
+				ConfigPath   string `mapstructure:"config-path" yaml:"config-path"`
+			}{
+				WorkflowPath: workflowPath,
+				ConfigPath:   configPath,
+			},
+		},
+		StorageSettings: settings.WorkflowStorageSettings{
+			CREStorage: settings.CREStorageSettings{
+				ServiceTimeout: 0,
+				HTTPTimeout:    0,
+			},
+		},
+	}
+}
+
 func runCompile(simulatedEnvironment *chainsim.SimulatedEnvironment, inputs Inputs, ownerType string) error {
 	ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
-	ctx.Settings.Workflow.UserWorkflowSettings.WorkflowOwnerType = ownerType
 	handler := newHandler(ctx, buf)
+
+	ctx.Settings = createTestSettings(
+		inputs.WorkflowOwner,
+		ownerType,
+		inputs.WorkflowName,
+		inputs.DonFamily,
+		inputs.WorkflowPath,
+		inputs.ConfigPath,
+	)
+	handler.settings = ctx.Settings
+
 	handler.inputs = inputs
 	err := handler.ValidateInputs()
 	if err != nil {

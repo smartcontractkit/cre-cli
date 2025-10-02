@@ -28,10 +28,13 @@ type Inputs struct {
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
 	activateCmd := &cobra.Command{
-		Use:   "activate",
+		Use:   "activate <workflow-folder-path>",
 		Short: "Activates workflow on the Workflow Registry contract",
 		Long:  `Changes workflow status to active on the Workflow Registry contract`,
-		Args:  cobra.NoArgs,
+		Args:  cobra.ExactArgs(1),
+		Example: `
+		cre workflow activate ./my-workflow
+		`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			handler := newHandler(runtimeContext)
 
@@ -128,11 +131,7 @@ func (h *handler) Execute() error {
 
 	latest := workflows[0]
 
-	h.log.Info().
-		Str("Name", workflowName).
-		Str("Owner", workflowOwner).
-		Str("WorkflowID", hex.EncodeToString(latest.WorkflowId[:])).
-		Msg("Activating workflow")
+	fmt.Printf("Activating workflow: Name=%s, Owner=%s, WorkflowID=%s\n", workflowName, workflowOwner, hex.EncodeToString(latest.WorkflowId[:]))
 
 	txOut, err := wrc.ActivateWorkflow(latest.WorkflowId, h.inputs.DonFamily)
 	if err != nil {
@@ -141,26 +140,26 @@ func (h *handler) Execute() error {
 
 	switch txOut.Type {
 	case client.Regular:
-		h.log.Info().Msgf("Transaction confirmed: %s", txOut.Hash)
-		h.log.Info().Msgf("View on explorer: %s/tx/%s", h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash)
-		h.log.Info().Msgf("Activated workflow ID: %s", hex.EncodeToString(latest.WorkflowId[:]))
-		h.log.Info().Msg("Workflow activated successfully")
+		fmt.Printf("Transaction confirmed: %s\n", txOut.Hash)
+		fmt.Printf("View on explorer: \033]8;;%s/tx/%s\033\\%s/tx/%s\033]8;;\033\\\n", h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash, h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash)
+		fmt.Printf("Activated workflow ID: %s\n", hex.EncodeToString(latest.WorkflowId[:]))
+		fmt.Println("Workflow activated successfully")
 
 	case client.Raw:
-		h.log.Info().Msg("")
-		h.log.Info().Msg("MSIG workflow activation transaction prepared!")
-		h.log.Info().Msgf("To Activate %s with workflowID: %s", workflowName, hex.EncodeToString(latest.WorkflowId[:]))
-		h.log.Info().Msg("")
-		h.log.Info().Msg("Next steps:")
-		h.log.Info().Msg("")
-		h.log.Info().Msg("   1. Submit the following transaction on the target chain:")
-		h.log.Info().Msgf("      Chain:   %s", h.inputs.WorkflowRegistryContractChainName)
-		h.log.Info().Msgf("      Contract Address: %s", txOut.RawTx.To)
-		h.log.Info().Msg("")
-		h.log.Info().Msg("   2. Use the following transaction data:")
-		h.log.Info().Msg("")
-		h.log.Info().Msgf("      %x", txOut.RawTx.Data)
-		h.log.Info().Msg("")
+		fmt.Println("")
+		fmt.Println("MSIG workflow activation transaction prepared!")
+		fmt.Printf("To Activate %s with workflowID: %s\n", workflowName, hex.EncodeToString(latest.WorkflowId[:]))
+		fmt.Println("")
+		fmt.Println("Next steps:")
+		fmt.Println("")
+		fmt.Println("   1. Submit the following transaction on the target chain:")
+		fmt.Printf("      Chain:   %s\n", h.inputs.WorkflowRegistryContractChainName)
+		fmt.Printf("      Contract Address: %s\n", txOut.RawTx.To)
+		fmt.Println("")
+		fmt.Println("   2. Use the following transaction data:")
+		fmt.Println("")
+		fmt.Printf("      %x\n", txOut.RawTx.Data)
+		fmt.Println("")
 	default:
 		h.log.Warn().Msgf("Unsupported transaction type: %s", txOut.Type)
 	}

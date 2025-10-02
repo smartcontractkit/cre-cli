@@ -13,10 +13,10 @@ CRE_ETH_PRIVATE_KEY=000000000000000000000000000000000000000000000000000000000000
 ```
 
 ## 2. Simulate the workflow
-Run the command from <b>workflow root directory</b> (Run `cd workflowName` if you are in project root directory)
+Run the command from <b>project root directory</b>
 
 ```bash
-cre workflow simulate --target local-simulation --config config.json main.go
+cre workflow simulate --target local-simulation <path-to-workflow>
 ```
 
 It is recommended to look into other existing examples to see how to write a workflow. You can generate then by running the `cre init` command.

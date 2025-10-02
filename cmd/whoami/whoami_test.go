@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 
@@ -79,8 +80,18 @@ func TestHandlerExecute(t *testing.T) {
 				EnvironmentSet: envSet,
 			}
 
+			// Capture stdout
+			oldStdout := os.Stdout
+			r, w, _ := os.Pipe()
+			os.Stdout = w
+
 			h := whoami.NewHandler(rtCtx)
 			err := h.Execute(context.Background())
+
+			w.Close()
+			os.Stdout = oldStdout
+			var output strings.Builder
+			_, _ = io.Copy(&output, r)
 
 			if tc.wantErr {
 				if err == nil {
@@ -89,14 +100,14 @@ func TestHandlerExecute(t *testing.T) {
 				if !strings.Contains(err.Error(), "graphql request failed") {
 					t.Errorf("expected graphql-failure wrap, got %v", err)
 				}
-				if buf.Len() > 0 {
-					t.Errorf("did not expect logs on error, got %q", buf.String())
+				if output.Len() > 0 {
+					t.Errorf("did not expect logs on error, got %q", output.String())
 				}
 			} else {
 				if err != nil {
 					t.Fatalf("unexpected error: %v", err)
 				}
-				logs := buf.String()
+				logs := output.String()
 				for _, snippet := range tc.wantLogSnips {
 					if !strings.Contains(logs, snippet) {
 						t.Errorf("log output missing %q; full logs:\n%s", snippet, logs)

@@ -36,12 +36,11 @@ func setUpTestSettingsFiles(t *testing.T, v *viper.Viper, workflowTemplatePath s
 	// Workflow settings
 	workflowFilePath := filepath.Join(targetDir, constants.DefaultWorkflowSettingsFileName)
 	require.NoError(t, copyFile(workflowTemplatePath, workflowFilePath))
-	v.Set(settings.Flags.CliSettingsFile.Name, workflowFilePath)
+	v.Set(settings.Flags.ProjectRoot.Name, workflowFilePath)
 
 	// Project settings
 	projectFilePath := filepath.Join(targetDir, constants.DefaultProjectSettingsFileName)
 	require.NoError(t, copyFile(TempProjectSettingsFile, projectFilePath))
-	v.Set("projectSettingsPath", projectFilePath)
 
 	t.Cleanup(func() {
 		os.Remove(workflowFilePath)
@@ -140,7 +139,7 @@ func TestLoadEnvAndSettingsWithWorkflowSettingsFlag(t *testing.T) {
 
 	workflowFilePath := filepath.Join(tempWorkflowDir, constants.DefaultWorkflowSettingsFileName)
 	require.NoError(t, copyFile(workflowTemplatePath, workflowFilePath))
-	v.Set(settings.Flags.CliSettingsFile.Name, workflowFilePath)
+	v.Set(settings.Flags.ProjectRoot.Name, workflowFilePath)
 
 	setUpTestSettingsFiles(t, v, workflowTemplatePath, projectTemplatePath, tempDir)
 	cmd := &cobra.Command{Use: "login"}
@@ -201,7 +200,7 @@ func TestLoadEnvAndMergedSettings(t *testing.T) {
 
 	setUpTestSettingsFiles(t, v, workflowTemplatePath, projectTemplatePath, tempDir)
 
-	cmd := &cobra.Command{Use: "login"}
+	cmd := &cobra.Command{Use: "workflow"}
 	s, err := settings.New(logger, v, cmd)
 	require.NoError(t, err)
 	require.NotNil(t, s)
@@ -211,7 +210,7 @@ func TestLoadEnvAndMergedSettings(t *testing.T) {
 
 	assert.Equal(t, "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266", s.Workflow.UserWorkflowSettings.WorkflowOwnerAddress, "Workflow owner address should be taken from workflow settings")
 	assert.Equal(t, "workflowTest", s.Workflow.UserWorkflowSettings.WorkflowName, "Workflow name should be taken from workflow settings")
-	assert.Equal(t, "test-don", s.Workflow.DevPlatformSettings.DonFamily, "DonFamily should be test-don")
+	assert.Equal(t, "zone-a", s.Workflow.DevPlatformSettings.DonFamily, "DonFamily should be zone-a")
 
 	assert.Equal(t, "seth.toml", s.Workflow.LoggingSettings.SethConfigPath, "Logging seth config path should be set to 'seth.toml'")
 

@@ -9,11 +9,11 @@ A command line tool for testing and managing CRE workflows.
 ### Options
 
 ```
-  -e, --env string                      Path to .env file which contains sensitive info (default ".env")
-  -h, --help                            help for cre
-  -T, --target string                   Set the target settings
-  -v, --verbose                         Print DEBUG logs
-  -S, --workflow-settings-file string   Path to CLI workflow settings file (default "workflow.yaml")
+  -e, --env string            Path to .env file which contains sensitive info (default ".env")
+  -h, --help                  help for cre
+  -R, --project-root string   Path to the project root
+  -T, --target string         Set the target settings
+  -v, --verbose               Print DEBUG logs
 ```
 
 ### SEE ALSO

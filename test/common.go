@@ -3,6 +3,7 @@ package test
 import (
 	"errors"
 	"fmt"
+	"io"
 	"math/rand"
 	"net"
 	"os"
@@ -24,8 +25,19 @@ var (
 	L *zerolog.Logger
 )
 
+// CLI path for testing (also defined in multi_command_flows for their use)
+var CLIPath = os.TempDir() + string(os.PathSeparator) + "cre" + func() string {
+	if os.PathSeparator == '\\' {
+		return ".exe"
+	}
+	return ""
+}()
+
 const (
 	TestLogLevelEnvVar = "TEST_LOG_LEVEL" // export this env var before running tests if DEBUG level is needed
+	SethConfigPath     = "seth.toml"
+	TestChainName      = "anvil-devnet"
+	SettingsTarget     = "production-testnet"
 )
 
 // needed for StartAnvil() function, describes how to boot Anvil
@@ -53,7 +65,6 @@ type TestConfig struct {
 	uid                  string
 	EnvFile              string
 	WorkflowSettingsFile string
-	ProposalDirectory    string
 	ProjectDirectory     string
 }
 
@@ -67,7 +78,6 @@ func NewTestConfig(t *testing.T) *TestConfig {
 		uid:                  uid,
 		EnvFile:              fmt.Sprintf("/tmp/%s/.env", uid),
 		WorkflowSettingsFile: fmt.Sprintf("/tmp/%s/%s", uid, constants.DefaultWorkflowSettingsFileName),
-		ProposalDirectory:    fmt.Sprintf("/tmp/%s/", uid),
 		ProjectDirectory:     fmt.Sprintf("/tmp/%s/", uid),
 	}
 	L.Info().Str("Test", t.Name()).Str("uid", uid).Interface("Config", config).Msg("Created test config")
@@ -78,8 +88,8 @@ func (tc *TestConfig) GetCliEnvFlag() string {
 	return fmt.Sprintf("--%s=%s", settings.Flags.CliEnvFile.Name, tc.EnvFile)
 }
 
-func (tc *TestConfig) GetCliSettingsFlag() string {
-	return fmt.Sprintf("--%s=%s", settings.Flags.CliSettingsFile.Name, tc.WorkflowSettingsFile)
+func (tc *TestConfig) GetProjectRootFlag() string {
+	return fmt.Sprintf("--%s=%s", settings.Flags.ProjectRoot.Name, tc.ProjectDirectory)
 }
 
 func (tc *TestConfig) Cleanup(t *testing.T) func() {
@@ -91,6 +101,24 @@ func (tc *TestConfig) Cleanup(t *testing.T) func() {
 			L.Warn().Str("Test", t.Name()).Str("uid", tc.uid).Msg("Test failed, keeping files for inspection")
 		}
 	}
+}
+
+// copyFile copies a file from src to dst
+func copyFile(src, dst string) error {
+	sourceFile, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer sourceFile.Close()
+
+	destFile, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer destFile.Close()
+
+	_, err = io.Copy(destFile, sourceFile)
+	return err
 }
 
 // Boot Anvil by either loading Anvil state or running a fresh instance that will dump its state on exit

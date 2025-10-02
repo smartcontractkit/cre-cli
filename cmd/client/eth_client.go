@@ -14,7 +14,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/spf13/viper"
 
-	"github.com/smartcontractkit/chainlink-evm/gethwrappers/keystone/generated/capabilities_registry"
+	"github.com/smartcontractkit/chainlink-evm/gethwrappers/workflow/generated/capabilities_registry_wrapper_v2"
 	workflow_registry_wrapper "github.com/smartcontractkit/chainlink-evm/gethwrappers/workflow/generated/workflow_registry_wrapper_v2"
 	"github.com/smartcontractkit/chainlink-testing-framework/seth"
 
@@ -33,12 +33,12 @@ func LoadContracts(l *zerolog.Logger, client *seth.Client) error {
 	client.ContractStore.AddBIN(constants.WorkflowRegistryContractName, common.FromHex(workflow_registry_wrapper.WorkflowRegistryMetaData.Bin))
 	l.Debug().Msgf("Loaded %s contract into ContractStore", constants.WorkflowRegistryContractName)
 
-	abi, err = capabilities_registry.CapabilitiesRegistryMetaData.GetAbi()
+	abi, err = capabilities_registry_wrapper_v2.CapabilitiesRegistryMetaData.GetAbi()
 	if err != nil {
 		return fmt.Errorf("failed to get CapabilitiesRegistry ABI: %w", err)
 	}
 	client.ContractStore.AddABI(constants.CapabilitiesRegistryContractName, *abi)
-	client.ContractStore.AddBIN(constants.CapabilitiesRegistryContractName, common.FromHex(capabilities_registry.CapabilitiesRegistryMetaData.Bin))
+	client.ContractStore.AddBIN(constants.CapabilitiesRegistryContractName, common.FromHex(capabilities_registry_wrapper_v2.CapabilitiesRegistryMetaData.Bin))
 	l.Debug().Msgf("Loaded %s contract into ContractStore", constants.CapabilitiesRegistryContractName)
 
 	return nil
