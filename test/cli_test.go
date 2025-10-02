@@ -17,7 +17,6 @@ import (
 	chainselectors "github.com/smartcontractkit/chain-selectors"
 
 	"github.com/smartcontractkit/cre-cli/internal/constants"
-	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 )
 
@@ -35,14 +34,13 @@ func createProjectSettingsFile(projectSettingPath string, workflowOwner string, 
 	v.Set(fmt.Sprintf("%s.cre-cli.don-family", SettingsTarget), constants.DefaultStagingDonFamily)
 
 	// rpcs
-	ipv4URL := forceIPv4(testEthURL)
 	v.Set(fmt.Sprintf("%s.%s", SettingsTarget, settings.RpcsSettingName), []settings.RpcEndpoint{
 		{
 			ChainName: chainselectors.ANVIL_DEVNET.Name,
-			Url:       ipv4URL,
+			Url:       testEthURL,
 		},
 		{
-			Url:       ipv4URL,
+			Url:       testEthURL,
 			ChainName: chainselectors.ETHEREUM_TESTNET_SEPOLIA.Name,
 		},
 	})
@@ -84,17 +82,6 @@ func createCliEnvFile(envPath string, ethPrivateKey string) error {
 	}
 
 	_, err = writer.WriteString(fmt.Sprintf("%s=%s", settings.CreTargetEnvVar, SettingsTarget))
-	if err != nil {
-		return err
-	}
-
-	_, err = writer.WriteString("\n")
-	if err != nil {
-		return err
-	}
-
-	// use a dummy API key, the actual key is not important for tests
-	_, err = writer.WriteString(fmt.Sprintf("%s=%s", credentials.CreApiKeyVar, "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IkU5MnViMF"))
 	if err != nil {
 		return err
 	}
