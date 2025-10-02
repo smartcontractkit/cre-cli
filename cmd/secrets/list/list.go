@@ -38,7 +38,7 @@ func New(ctx *runtime.Context) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if duration < 0 || duration > constants.MaxVaultAllowlistDuration {
+			if duration <= 0 || duration > constants.MaxVaultAllowlistDuration {
 				ctx.Logger.Error().Dur("timeout", duration).Msg("invalid timeout: must be > 0 and < 168h (7d)")
 				return fmt.Errorf("invalid --timeout: must be greater than 0 and less than 168h (7d)")
 			}
@@ -110,11 +110,9 @@ func Execute(h *common.Handler, namespace string, duration time.Duration, ownerT
 		if err := wrV2Client.AllowlistRequest(digest, duration); err != nil {
 			return fmt.Errorf("allowlist request failed: %w", err)
 		}
-		h.Log.Info().Str("owner", ownerAddr.Hex()).Str("digest", digest).
-			Msg("Digest allowlisted; proceeding to gateway POST")
+		fmt.Printf("\nDigest allowlisted; proceeding to gateway POST: owner=%s, digest=%s\\n", ownerAddr.Hex(), digest)
 	} else {
-		h.Log.Info().Str("owner", ownerAddr.Hex()).Str("digest", digest).
-			Msg("Digest already allowlisted; skipping on-chain allowlist")
+		fmt.Printf("\nDigest already allowlisted; skipping on-chain allowlist: owner=%s, digest=%s\\n", ownerAddr.Hex(), digest)
 	}
 
 	// POST to gateway

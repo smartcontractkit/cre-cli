@@ -222,12 +222,7 @@ func (h *handler) processAbiDirectory(inputs Inputs) error {
 		// Create output file path in contract-specific directory
 		outputFile := filepath.Join(contractOutDir, contractName+".go")
 
-		h.log.Info().
-			Str("abiFile", abiFile).
-			Str("contractName", contractName).
-			Str("packageName", packageName).
-			Str("outputFile", outputFile).
-			Msg("Processing ABI file")
+		fmt.Printf("Processing ABI file: %s, contract: %s, package: %s, output: %s\n", abiFile, contractName, packageName, outputFile)
 
 		err = bindings.GenerateBindings(
 			"", // combinedJSONPath - empty for now
@@ -263,12 +258,7 @@ func (h *handler) processSingleAbi(inputs Inputs) error {
 	// Create output file path in contract-specific directory
 	outputFile := filepath.Join(contractOutDir, contractName+".go")
 
-	h.log.Info().
-		Str("abiFile", inputs.AbiPath).
-		Str("contractName", contractName).
-		Str("packageName", packageName).
-		Str("outputFile", outputFile).
-		Msg("Processing single ABI file")
+	fmt.Printf("Processing single ABI file: %s, contract: %s, package: %s, output: %s\n", inputs.AbiPath, contractName, packageName, outputFile)
 
 	return bindings.GenerateBindings(
 		"", // combinedJSONPath - empty for now
@@ -280,14 +270,7 @@ func (h *handler) processSingleAbi(inputs Inputs) error {
 }
 
 func (h *handler) Execute(inputs Inputs) error {
-	h.log.Info().
-		Str("projectRoot", inputs.ProjectRoot).
-		Str("chainFamily", inputs.ChainFamily).
-		Str("language", inputs.Language).
-		Str("abiPath", inputs.AbiPath).
-		Str("pkgName", inputs.PkgName).
-		Str("outPath", inputs.OutPath).
-		Msg("GenerateBindings would be called here")
+	fmt.Printf("GenerateBindings would be called here: projectRoot=%s, chainFamily=%s, language=%s, abiPath=%s, pkgName=%s, outPath=%s\n", inputs.ProjectRoot, inputs.ChainFamily, inputs.Language, inputs.AbiPath, inputs.PkgName, inputs.OutPath)
 
 	// Validate language
 	switch inputs.Language {

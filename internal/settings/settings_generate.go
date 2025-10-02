@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/smartcontractkit/cre-cli/internal/constants"
+	"github.com/smartcontractkit/cre-cli/internal/context"
 	"github.com/smartcontractkit/cre-cli/internal/prompt"
 )
 
@@ -45,6 +46,8 @@ func GetDefaultReplacements() map[string]string {
 		"StagingDonFamily":           constants.DefaultStagingDonFamily,
 		"ProductionTestnetDonFamily": constants.DefaultProductionTestnetDonFamily,
 		"ProductionDonFamily":        constants.DefaultProductionDonFamily,
+
+		"WorkflowOwnerAddress": "(optional) Multi-signature contract address",
 	}
 }
 
@@ -129,7 +132,7 @@ func GenerateProjectSettingsFile(workingDirectory string, stdin io.Reader) (stri
 }
 
 func FindOrCreateProjectSettings(startDir string, replacements map[string]string) error {
-	_, isFound, err := FindProjectSettingsPath(startDir)
+	_, isFound, err := context.FindProjectSettingsPath(startDir)
 	if err != nil {
 		return err
 	}
@@ -144,11 +147,11 @@ func FindOrCreateProjectSettings(startDir string, replacements map[string]string
 	return nil
 }
 
-func GenerateWorkflowSettingsFile(workingDirectory string, workflowName string, workflowOwnerAddress string) (string, error) {
+func GenerateWorkflowSettingsFile(workingDirectory string, workflowName string, workflowPath string) (string, error) {
 	// Use default replacements.
 	replacements := GetDefaultReplacements()
-	replacements["WorkflowOwnerAddress"] = workflowOwnerAddress
 	replacements["WorkflowName"] = workflowName
+	replacements["WorkflowPath"] = workflowPath
 
 	// Resolve the absolute output path for the workflow settings file.
 	outputPath, err := filepath.Abs(path.Join(workingDirectory, constants.DefaultWorkflowSettingsFileName))

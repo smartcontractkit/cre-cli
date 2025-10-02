@@ -56,7 +56,7 @@ func (h *handler) execute() error {
 	credPath := filepath.Join(home, credentials.ConfigDir, credentials.ConfigFile)
 
 	if h.credentials.Tokens == nil {
-		h.log.Info().Msg("user not logged in")
+		fmt.Println("user not logged in")
 		return nil
 	}
 
@@ -87,6 +87,6 @@ func (h *handler) execute() error {
 		return fmt.Errorf("failed to delete credentials file: %w", err)
 	}
 
-	h.log.Info().Msg("Logged out successfully")
+	fmt.Println("Logged out successfully")
 	return nil
 }

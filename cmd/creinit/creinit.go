@@ -38,27 +38,29 @@ type WorkflowTemplate struct {
 	Folder string
 	Title  string
 	ID     uint32
-	Lang   TemplateLanguage
 }
 
 type LanguageTemplate struct {
-	Title     string
-	Lang      TemplateLanguage
-	Workflows []WorkflowTemplate
+	Title      string
+	Lang       TemplateLanguage
+	EntryPoint string
+	Workflows  []WorkflowTemplate
 }
 
 var languageTemplates = []LanguageTemplate{
 	{
-		Title: "Golang",
-		Lang:  TemplateLangGo,
+		Title:      "Golang",
+		Lang:       TemplateLangGo,
+		EntryPoint: ".",
 		Workflows: []WorkflowTemplate{
 			{Folder: "porExampleDev", Title: "Custom data feed: Updating on-chain data periodically using offchain API data", ID: 1},
 			{Folder: "blankTemplate", Title: "Boilerplate: A barebones template with just the essentials", ID: 2},
 		},
 	},
 	{
-		Title: "Typescript",
-		Lang:  TemplateLangTS,
+		Title:      "Typescript",
+		Lang:       TemplateLangTS,
+		EntryPoint: "./main.ts",
 		Workflows: []WorkflowTemplate{
 			{Folder: "typescriptSimpleExample", Title: "Boilerplate: Typescript Hello World example for a simple workflow", ID: 3},
 			{Folder: "typescriptPorExampleDev", Title: "Custom data feed: Typescript updating on-chain data periodically using offchain API data", ID: 4},
@@ -279,7 +281,7 @@ func (h *handler) Execute(inputs Inputs) error {
 	// Get project name from project root
 	projectName := filepath.Base(projectRoot)
 
-	if err := h.generateWorkflowTemplate(workflowDirectory, tpl, workflowName, projectName); err != nil {
+	if err := h.generateWorkflowTemplate(workflowDirectory, tpl, projectName); err != nil {
 		return fmt.Errorf("failed to scaffold workflow: %w", err)
 	}
 
@@ -294,21 +296,21 @@ func (h *handler) Execute(inputs Inputs) error {
 		}
 	}
 
-	_, err = settings.GenerateWorkflowSettingsFile(workflowDirectory, workflowName, "(optional) Multi-signature contract address")
+	_, err = settings.GenerateWorkflowSettingsFile(workflowDirectory, workflowName, selectedLanguageTemplate.EntryPoint)
 	if err != nil {
 		return fmt.Errorf("failed to generate %s file: %w", constants.DefaultWorkflowSettingsFileName, err)
 	}
 
-	h.log.Info().Msg("\nWorkflow initialized successfully!")
-	h.log.Info().Msg("")
-	h.log.Info().Msg("Next steps:")
-	h.log.Info().Msg("")
-	h.log.Info().Msg("   1. Navigate to your workflow directory to see workflow details:")
-	h.log.Info().Msgf("      cd %s", workflowDirectory)
-	h.log.Info().Msg("")
-	h.log.Info().Msg("   2. To learn more about this template view the README.MD file:")
-	h.log.Info().Msgf("      %s", filepath.Join(workflowDirectory, "README.md"))
-	h.log.Info().Msg("")
+	fmt.Println("\nWorkflow initialized successfully!")
+	fmt.Println("")
+	fmt.Println("Next steps:")
+	fmt.Println("")
+	fmt.Println("   1. Navigate to your workflow directory to see workflow details:")
+	fmt.Printf("      cd %s\n", workflowDirectory)
+	fmt.Println("")
+	fmt.Println("   2. To learn more about this template view the README.MD file:")
+	fmt.Printf("      %s\n", filepath.Join(workflowDirectory, "README.md"))
+	fmt.Println("")
 
 	return nil
 }
@@ -368,7 +370,7 @@ func (h *handler) copySecretsFileIfExists(projectRoot string, template WorkflowT
 
 	// Ensure the secrets file exists in the template directory
 	if _, err := fs.Stat(workflowTemplatesContent, sourceSecretsFilePath); err != nil {
-		h.log.Info().Msg("Secrets file doesn't exist for this template, skipping")
+		fmt.Println("Secrets file doesn't exist for this template, skipping")
 		return nil
 	}
 
@@ -389,9 +391,9 @@ func (h *handler) copySecretsFileIfExists(projectRoot string, template WorkflowT
 }
 
 // Copy the content of template/workflow/{{templateName}} and remove "tpl" extension
-func (h *handler) generateWorkflowTemplate(workingDirectory string, template WorkflowTemplate, workflowName string, projectName string) error {
+func (h *handler) generateWorkflowTemplate(workingDirectory string, template WorkflowTemplate, projectName string) error {
 
-	h.log.Info().Msgf("Generating template: %s", template.Title)
+	fmt.Printf("Generating template: %s\n", template.Title)
 
 	// Construct the path to the specific template directory
 	// When referencing embedded template files, the path is relative and separated by forward slashes
@@ -449,8 +451,7 @@ func (h *handler) generateWorkflowTemplate(workingDirectory string, template Wor
 		}
 
 		// Replace template variables with actual values
-		finalContent := strings.ReplaceAll(string(content), "{{workflowName}}", workflowName)
-		finalContent = strings.ReplaceAll(finalContent, "{{projectName}}", projectName)
+		finalContent := strings.ReplaceAll(string(content), "{{projectName}}", projectName)
 
 		// Ensure the target directory exists
 		if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
@@ -466,7 +467,7 @@ func (h *handler) generateWorkflowTemplate(workingDirectory string, template Wor
 		return nil
 	})
 
-	h.log.Info().Msgf("Files created in %s directory", workingDirectory)
+	fmt.Printf("Files created in %s directory\n", workingDirectory)
 
 	return walkErr
 }
@@ -579,7 +580,7 @@ func (h *handler) generateContractsTemplate(projectRoot string, template Workflo
 		return nil
 	})
 
-	h.log.Info().Msgf("Contracts generated under %s\n", templateContractsPath)
+	fmt.Printf("Contracts generated under %s\n", templateContractsPath)
 
 	return walkErr
 }

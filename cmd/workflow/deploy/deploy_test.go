@@ -135,6 +135,16 @@ func TestWorkflowDeployCommand(t *testing.T) {
 				ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
 				handler := newHandler(ctx, buf)
 
+				ctx.Settings = createTestSettings(
+					chainsim.TestAddress,
+					"eoa",
+					"test_workflow",
+					"test_don_family",
+					"testdata/basic_workflow/main.go",
+					"",
+				)
+				handler.settings = ctx.Settings
+
 				handler.inputs = tt.inputs
 				err := handler.ValidateInputs()
 

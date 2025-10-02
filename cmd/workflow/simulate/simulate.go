@@ -44,7 +44,7 @@ import (
 )
 
 type Inputs struct {
-	WorkflowPath  string                       `validate:"required,file"`
+	WorkflowPath  string                       `validate:"required,path_read"`
 	ConfigPath    string                       `validate:"omitempty,file,ascii,max=97" cli:"--config"`
 	SecretsPath   string                       `validate:"omitempty,file,ascii,max=97" cli:"--secrets"`
 	EngineLogs    bool                         `validate:"omitempty" cli:"--engine-logs"`
@@ -62,14 +62,17 @@ type Inputs struct {
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
 	var simulateCmd = &cobra.Command{
-		Use:   "simulate ./path/to/workflow/main.go",
+		Use:   "simulate <workflow-folder-path>",
 		Short: "Simulates a workflow",
 		Long:  `This command simulates a workflow.`,
 		Args:  cobra.ExactArgs(1),
+		Example: `
+		cre workflow simulate ./my-workflow
+		`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			handler := newHandler(runtimeContext)
 
-			inputs, err := handler.ResolveInputs(args, runtimeContext.Viper, runtimeContext.Settings)
+			inputs, err := handler.ResolveInputs(runtimeContext.Viper, runtimeContext.Settings)
 			if err != nil {
 				return err
 			}
@@ -81,7 +84,6 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 		},
 	}
 
-	simulateCmd.Flags().StringP("config", "c", "", "Path to the config file")
 	simulateCmd.Flags().StringP("secrets", "s", "", "Path to the secrets file")
 	simulateCmd.Flags().BoolP("engine-logs", "g", false, "Enable non-fatal engine logging")
 	simulateCmd.Flags().Bool("broadcast", false, "Broadcast transactions to the EVM (default: false)")
@@ -106,7 +108,7 @@ func newHandler(ctx *runtime.Context) *handler {
 	}
 }
 
-func (h *handler) ResolveInputs(args []string, v *viper.Viper, creSettings *settings.Settings) (Inputs, error) {
+func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) (Inputs, error) {
 	// build clients for each supported chain from settings, skip if rpc is empty
 	clients := make(map[uint64]*ethclient.Client)
 	for _, chain := range SupportedEVM {
@@ -123,7 +125,7 @@ func (h *handler) ResolveInputs(args []string, v *viper.Viper, creSettings *sett
 
 		c, err := ethclient.Dial(rpcURL)
 		if err != nil {
-			h.log.Info().Msgf("failed to create eth client for %s: %v", chainName, err)
+			fmt.Printf("failed to create eth client for %s: %v\n", chainName, err)
 			continue
 		}
 
@@ -140,8 +142,8 @@ func (h *handler) ResolveInputs(args []string, v *viper.Viper, creSettings *sett
 	}
 
 	return Inputs{
-		WorkflowPath:   args[0],
-		ConfigPath:     v.GetString("config"),
+		WorkflowPath:   creSettings.Workflow.WorkflowArtifactSettings.WorkflowPath,
+		ConfigPath:     creSettings.Workflow.WorkflowArtifactSettings.ConfigPath,
 		SecretsPath:    v.GetString("secrets"),
 		EngineLogs:     v.GetBool("engine-logs"),
 		Broadcast:      v.GetBool("broadcast"),
@@ -196,7 +198,7 @@ func (h *handler) Execute(inputs Inputs) error {
 		return fmt.Errorf("failed to compile workflow: %w", err)
 	}
 	h.log.Debug().Msgf("Build output: %s", buildOutput)
-	h.log.Info().Msg("Workflow compiled")
+	fmt.Println("Workflow compiled")
 
 	// Read the compiled workflow binary
 	tmpWasmLocation := filepath.Join(workflowRootFolder, tmpWasmFileName)

@@ -5,51 +5,51 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/testutil"
-	"github.com/smartcontractkit/cre-cli/internal/transformation"
 )
-
-const ValidProjectSettingsFile = `
-production-testnet:
-  hierarchy-test: Project
-  test-key: projectValue
-  cre-cli:
-    don-family: "test-don"
-  user-workflow:
-    workflow-owner-address: ""
-    workflow-name: ""
-  logging:
-    seth-config-path: seth.toml
-  rpcs:
-    - chain-name: "ethereum-testnet-sepolia-arbitrum-1"
-      url: https://somethingElse.rpc.org
-    - chain-name: "ethereum-testnet-sepolia"
-      url: https://something.rpc.org
-
-`
 
 var TempWorkflowSettingsFile = filepath.Join("testdata", "workflow_storage", "workflow-with-hierarchy.yaml")
 var TempProjectSettingsFile = filepath.Join("testdata", "workflow_storage", "project-with-hierarchy.yaml")
 
+func createBlankCommand() *cobra.Command {
+	return &cobra.Command{
+		Use: "workflow",
+	}
+}
+
 func TestSettingsHierarchy(t *testing.T) {
-	//Create project settings file
-	err := os.WriteFile(constants.DefaultProjectSettingsFileName, []byte(ValidProjectSettingsFile), 0600)
-	require.NoError(t, err, "Not able to write project settings file")
+	// Get absolute paths for template files
+	workflowTemplatePath, err := filepath.Abs(TempWorkflowSettingsFile)
+	require.NoError(t, err, "Error when resolving workflow template path")
 
-	absPathWorkflow, err := transformation.ResolvePath(TempWorkflowSettingsFile)
-	require.NoError(t, err, "Error when resolving settings path")
+	projectTemplatePath, err := filepath.Abs(TempProjectSettingsFile)
+	require.NoError(t, err, "Error when resolving project template path")
 
+	// Create temporary directory and change to it
+	tempDir := t.TempDir()
+	restoreWorkingDirectory, err := testutil.ChangeWorkingDirectory(tempDir)
+	require.NoError(t, err, "Error changing working directory")
+	defer restoreWorkingDirectory()
+
+	// Copy test files to the temporary directory
+	workflowFilePath := filepath.Join(tempDir, constants.DefaultWorkflowSettingsFileName)
+	require.NoError(t, copyFile(workflowTemplatePath, workflowFilePath), "Error copying workflow file")
+
+	projectFilePath := filepath.Join(tempDir, constants.DefaultProjectSettingsFileName)
+	require.NoError(t, copyFile(projectTemplatePath, projectFilePath), "Error copying project file")
+
+	// Set up viper and load settings
+	blankCmd := createBlankCommand()
 	v := viper.New()
-	v.Set(settings.Flags.CliSettingsFile.Name, absPathWorkflow)
 	v.Set(settings.CreTargetEnvVar, "production-testnet")
 
-	v.SetConfigFile(constants.DefaultProjectSettingsFileName)
-	err = settings.LoadSettingsIntoViper(v)
+	err = settings.LoadSettingsIntoViper(v, blankCmd)
 	require.NoError(t, err, "Error when loading settings")
 
 	hierarchyVal := v.GetString("production-testnet.hierarchy-test")
@@ -57,27 +57,36 @@ func TestSettingsHierarchy(t *testing.T) {
 
 	testVal := v.GetString("production-testnet.test-key")
 	require.Equal(t, "workflowValue", testVal)
-
-	err = os.Remove(constants.DefaultProjectSettingsFileName)
-	require.NoError(t, err, "Not able to remove settings file")
-
 }
 
 // TODO: happy path unit test, write more edge case tests
 func TestLoadingSettingsForValidFile(t *testing.T) {
-	//Create project settings file
-	err := os.WriteFile(constants.DefaultProjectSettingsFileName, []byte(ValidProjectSettingsFile), 0600)
-	require.NoError(t, err, "Not able to write project settings file")
+	// Get absolute paths for template files
+	workflowTemplatePath, err := filepath.Abs(TempWorkflowSettingsFile)
+	require.NoError(t, err, "Error when resolving workflow template path")
 
-	absPath, err := transformation.ResolvePath(TempWorkflowSettingsFile)
-	require.NoError(t, err, "Error when resolving settings path")
+	projectTemplatePath, err := filepath.Abs(TempProjectSettingsFile)
+	require.NoError(t, err, "Error when resolving project template path")
 
+	// Create temporary directory and change to it
+	tempDir := t.TempDir()
+	restoreWorkingDirectory, err := testutil.ChangeWorkingDirectory(tempDir)
+	require.NoError(t, err, "Error changing working directory")
+	defer restoreWorkingDirectory()
+
+	// Copy test files to the temporary directory
+	workflowFilePath := filepath.Join(tempDir, constants.DefaultWorkflowSettingsFileName)
+	require.NoError(t, copyFile(workflowTemplatePath, workflowFilePath), "Error copying workflow file")
+
+	projectFilePath := filepath.Join(tempDir, constants.DefaultProjectSettingsFileName)
+	require.NoError(t, copyFile(projectTemplatePath, projectFilePath), "Error copying project file")
+
+	// Set up viper and load settings
+	blankCmd := createBlankCommand()
 	v := viper.New()
-	v.Set(settings.Flags.CliSettingsFile.Name, absPath)
 	v.Set(settings.CreTargetEnvVar, "production-testnet")
 
-	v.SetConfigFile(constants.DefaultProjectSettingsFileName)
-	err = settings.LoadSettingsIntoViper(v)
+	err = settings.LoadSettingsIntoViper(v, blankCmd)
 	require.NoError(t, err, "Error when loading settings")
 
 	rpcUrl, err := settings.GetRpcUrlSettings(v, "ethereum-testnet-sepolia-arbitrum-1")
@@ -87,10 +96,6 @@ func TestLoadingSettingsForValidFile(t *testing.T) {
 	rpcUrl, err = settings.GetRpcUrlSettings(v, "ethereum-testnet-sepolia")
 	require.NoError(t, err, "RPC URL not found")
 	require.Equal(t, "https://something.rpc.org", rpcUrl)
-
-	err = os.Remove(constants.DefaultProjectSettingsFileName)
-	require.NoError(t, err, "Not able to remove settings file")
-
 }
 
 func TestLoadEnvFromParent(t *testing.T) {

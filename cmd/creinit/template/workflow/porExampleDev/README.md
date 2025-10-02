@@ -83,8 +83,6 @@ Note: This command must be run from the <b>project root directory</b> where proj
 
 ```bash
 # Navigate to your project root (where project.yaml is located)
-cd ..
-
 # Generate bindings for all contracts
 cre generate-bindings --chain-family=evm
 
@@ -115,13 +113,12 @@ The config is already populated with deployed contracts in template.
 
 
 ## 8. Simulate the workflow
-Run the command from <b>workflow root directory</b> (Run `cd workflowName` if you are in project root directory)
 
 > **Note:** Run `go mod tidy` to update dependencies after generating bindings.
 ```bash
 go mod tidy
 
-cre workflow simulate --target local-simulation --config config.json --secrets ../secrets.yaml main.go
+cre workflow simulate --target local-simulation --secrets ../secrets.yaml <path-to-workflow>
 ```
 
 After this you will get a set of options similar to:

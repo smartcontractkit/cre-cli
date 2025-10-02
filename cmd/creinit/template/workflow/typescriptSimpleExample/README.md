@@ -18,8 +18,8 @@ cd workflowName && bun install
 ```
 
 ## 3. Simulate the workflow
-Run the command from <b>workflow root directory</b> (Run `cd workflowName` if you are in project root directory)
+Run the command from <b>project root directory</b>
 
 ```bash
-cre workflow simulate --target local-simulation --config config.json main.ts
+cre workflow simulate --target local-simulation <path-to-workflow>
 ```

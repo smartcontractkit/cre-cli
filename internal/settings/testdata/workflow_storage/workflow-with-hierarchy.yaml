@@ -5,3 +5,7 @@ production-testnet:
   user-workflow:
     workflow-owner-address: "0xc0ffee254729296a45a3885639AC7E10F9d54979"
     workflow-name: "workflowTest"
+  workflow-artifacts:
+    workflow-language: "go"
+    workflow-path: "./main.go"
+    config-path: "./config.json"

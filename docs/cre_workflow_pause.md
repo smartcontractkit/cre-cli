@@ -7,7 +7,15 @@ Pauses workflow on the Workflow Registry contract
 Changes workflow status to paused on the Workflow Registry contract
 
 ```
-cre workflow pause [flags]
+cre workflow pause <workflow-folder-path> [flags]
+```
+
+### Examples
+
+```
+
+		cre workflow pause ./my-workflow
+		
 ```
 
 ### Options
@@ -21,10 +29,10 @@ cre workflow pause [flags]
 ### Options inherited from parent commands
 
 ```
-  -e, --env string                      Path to .env file which contains sensitive info (default ".env")
-  -T, --target string                   Set the target settings
-  -v, --verbose                         Print DEBUG logs
-  -S, --workflow-settings-file string   Path to CLI workflow settings file (default "workflow.yaml")
+  -e, --env string            Path to .env file which contains sensitive info (default ".env")
+  -R, --project-root string   Path to the project root
+  -T, --target string         Set the target settings
+  -v, --verbose               Print DEBUG logs
 ```
 
 ### SEE ALSO
