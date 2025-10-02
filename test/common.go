@@ -1,6 +1,7 @@
 package test
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -242,22 +243,34 @@ func StartAnvil(initState AnvilInitState, stateFileName string) (*os.Process, in
 
 	anvil := exec.Command("anvil", args...)
 
+	var outBuf, errBuf bytes.Buffer
+	anvil.Stdout = &outBuf
+	anvil.Stderr = &errBuf
+
 	L.Info().Str("Command", anvil.String()).Msg("Executing anvil")
 	if err := anvil.Start(); err != nil {
 		return nil, 0, errors.New("failed to start Anvil")
 	}
 
 	L.Info().Msg("Checking if Anvil is up and running")
+
+	anvilUp := false
 	for i := 0; i < 100; i++ { // limit retries to 10 seconds
 		conn, err := net.DialTimeout("tcp", "localhost:"+strconv.Itoa(port), 1*time.Second)
 		if err == nil {
+			anvilUp = true
 			conn.Close()
 			break
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
+	if !anvilUp {
+		L.Error().Str("Stdout", outBuf.String()).Str("Stderr", errBuf.String()).Msg("Anvil failed to start")
+		return nil, 0, errors.New("anvil failed to start within the expected time")
+	}
 
 	L.Info().Msg("Anvil is running...")
+	L.Debug().Str("Stdout", outBuf.String()).Str("Stderr", errBuf.String()).Msg("Anvil logs")
 	return anvil.Process, port, nil
 }
 
