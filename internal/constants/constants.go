@@ -15,7 +15,7 @@ const (
 	MaxURLLength                                = 200
 	MaxPaginationLimit            uint32        = 100
 	MaxVaultAllowlistDuration     time.Duration = 7 * 24 * time.Hour
-	DefaultVaultAllowlistDuration time.Duration = 2 * 24 * time.Hour // 90 days
+	DefaultVaultAllowlistDuration time.Duration = 2 * 24 * time.Hour // 2 days
 
 	DefaultSethLogLevel = "error"
 
