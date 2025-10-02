@@ -89,10 +89,10 @@ The config is already populated with deployed contracts in template.
 
 ## 7. Simulate the workflow
 
-Run the command from <b>workflow root directory</b> (Run `cd workflowName` if you are in project root directory)
+Run the command from <b>project root directory</b> and pass in the path to the workflow directory.
 
 ```bash
-cre workflow simulate --target local-simulation --config config.json --secrets ../secrets.yaml --broadcast main.ts
+cre workflow simulate ./workflowName --target local-simulation --secrets secrets.yaml --broadcast
 ```
 
 After this you will get a set of options similar to:
