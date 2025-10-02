@@ -65,7 +65,7 @@ func (h *handler) handleUpsert(params client.RegisterWorkflowV2Parameters) error
 		fmt.Printf("   Workflow Name:\t%s\n", workflowName)
 		fmt.Printf("   Workflow ID:\t%s\n", h.workflowArtifact.WorkflowID)
 		fmt.Printf("   Binary URL:\t%s\n", h.inputs.BinaryURL)
-		if *h.inputs.ConfigURL != "" {
+		if h.inputs.ConfigURL != nil && *h.inputs.ConfigURL != "" {
 			fmt.Printf("   Config URL:\t%s\n", *h.inputs.ConfigURL)
 		}
 
