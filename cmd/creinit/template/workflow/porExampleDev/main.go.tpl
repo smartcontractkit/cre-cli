@@ -84,7 +84,7 @@ func InitWorkflow(config *Config, logger *slog.Logger, secretsProvider cre.Secre
 		),
 	}
 
-	for i, evmCfg := range config.EVMs {
+	for _, evmCfg := range config.EVMs {
 		msgEmitter, err := prepareMessageEmitter(logger, evmCfg)
 		if err != nil {
 			return nil, fmt.Errorf("failed to prepare message emitter: %w", err)
