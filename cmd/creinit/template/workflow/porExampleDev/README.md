@@ -27,7 +27,14 @@ CRE_ETH_PRIVATE_KEY=000000000000000000000000000000000000000000000000000000000000
 
 For local simulation to interact with a chain, you must specify RPC endpoints for the chains you interact with in the `project.yaml` file. This is required for submitting transactions and reading blockchain state.
 
-Note: Only eth sepolia (chain name `ethereum-testnet-sepolia`) is supported in local simulation
+Note: The following 7 chains are supported in local simulation (both testnet and mainnet variants):
+- Ethereum (`ethereum-testnet-sepolia`, `ethereum-mainnet`)
+- Base (`ethereum-testnet-sepolia-base-1`, `ethereum-mainnet-base-1`)
+- Avalanche (`avalanche-testnet-fuji`, `avalanche-mainnet`)
+- Polygon (`polygon-testnet-amoy`, `polygon-mainnet`)
+- BNB Chain (`binance-smart-chain-testnet`, `binance-smart-chain-mainnet`)
+- Arbitrum (`ethereum-testnet-sepolia-arbitrum-1`, `ethereum-mainnet-arbitrum-1`)
+- Optimism (`ethereum-testnet-sepolia-optimism-1`, `ethereum-mainnet-optimism-1`)
 
 Add your preferred RPCs under the `rpcs` section. For chain names, refer to https://github.com/smartcontractkit/chain-selectors/blob/main/selectors.yml
 
