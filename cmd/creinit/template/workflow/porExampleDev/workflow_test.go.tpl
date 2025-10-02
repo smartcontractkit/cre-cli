@@ -59,7 +59,9 @@ func TestOnCronTrigger(t *testing.T) {
 	}
 
 	// Mock EVM client
-	evmMock, err := evmmock.NewClientCapability(config.EVMs[0].ChainSelector, t)
+	chainSelector, err := config.EVMs[0].GetChainSelector()
+	require.NoError(t, err)
+	evmMock, err := evmmock.NewClientCapability(chainSelector, t)
 	require.NoError(t, err)
 
 	// Set up contract mocks using generated mock contracts
@@ -121,7 +123,9 @@ func TestOnLogTrigger(t *testing.T) {
 	runtime := testutils.NewRuntime(t, map[string]string{})
 
 	// Mock EVM client
-	evmMock, err := evmmock.NewClientCapability(config.EVMs[0].ChainSelector, t)
+	chainSelector, err := config.EVMs[0].GetChainSelector()
+	require.NoError(t, err)
+	evmMock, err := evmmock.NewClientCapability(chainSelector, t)
 	require.NoError(t, err)
 
 	// Mock MessageEmitter for log trigger
@@ -174,7 +178,9 @@ func TestOnHTTPTrigger(t *testing.T) {
 	}
 
 	// Mock EVM client (same pattern as cron test)
-	evmMock, err := evmmock.NewClientCapability(config.EVMs[0].ChainSelector, t)
+	chainSelector, err := config.EVMs[0].GetChainSelector()
+	require.NoError(t, err)
+	evmMock, err := evmmock.NewClientCapability(chainSelector, t)
 	require.NoError(t, err)
 
 	// Set up contract mocks (same pattern as cron test)
