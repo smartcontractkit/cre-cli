@@ -1,5 +1,3 @@
-//go:build wasip1
-
 package main
 
 import (
@@ -25,7 +23,6 @@ import (
 	"github.com/smartcontractkit/cre-sdk-go/capabilities/networking/http"
 	"github.com/smartcontractkit/cre-sdk-go/capabilities/scheduler/cron"
 	"github.com/smartcontractkit/cre-sdk-go/cre"
-	"github.com/smartcontractkit/cre-sdk-go/cre/wasm"
 )
 
 const (
@@ -332,8 +329,4 @@ func hexToBytes(hexStr string) ([]byte, error) {
 		return nil, fmt.Errorf("invalid hex string: %s", hexStr)
 	}
 	return hex.DecodeString(hexStr[2:])
-}
-
-func main() {
-	wasm.NewRunner(cre.ParseJSON[Config]).Run(InitWorkflow)
 }
