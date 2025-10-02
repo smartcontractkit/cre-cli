@@ -38,7 +38,7 @@ func New(ctx *runtime.Context) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if duration < 0 || duration > constants.MaxVaultAllowlistDuration {
+			if duration <= 0 || duration > constants.MaxVaultAllowlistDuration {
 				ctx.Logger.Error().Dur("timeout", duration).Msg("invalid timeout: must be > 0 and < 168h (7d)")
 				return fmt.Errorf("invalid --timeout: must be greater than 0 and less than 168h (7d)")
 			}
