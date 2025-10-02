@@ -45,8 +45,8 @@ import (
 
 type Inputs struct {
 	WorkflowPath  string                       `validate:"required,path_read"`
-	ConfigPath    string                       `validate:"omitempty,file,ascii,max=97" cli:"--config"`
-	SecretsPath   string                       `validate:"omitempty,file,ascii,max=97" cli:"--secrets"`
+	ConfigPath    string                       `validate:"omitempty,file,ascii,max=97"`
+	SecretsPath   string                       `validate:"omitempty,file,ascii,max=97"`
 	EngineLogs    bool                         `validate:"omitempty" cli:"--engine-logs"`
 	Broadcast     bool                         `validate:"-"`
 	EVMClients    map[uint64]*ethclient.Client `validate:"omitempty"` // multichain clients keyed by selector
@@ -84,7 +84,6 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 		},
 	}
 
-	simulateCmd.Flags().StringP("secrets", "s", "", "Path to the secrets file")
 	simulateCmd.Flags().BoolP("engine-logs", "g", false, "Enable non-fatal engine logging")
 	simulateCmd.Flags().Bool("broadcast", false, "Broadcast transactions to the EVM (default: false)")
 	// Non-interactive flags
@@ -144,7 +143,7 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 	return Inputs{
 		WorkflowPath:   creSettings.Workflow.WorkflowArtifactSettings.WorkflowPath,
 		ConfigPath:     creSettings.Workflow.WorkflowArtifactSettings.ConfigPath,
-		SecretsPath:    v.GetString("secrets"),
+		SecretsPath:    creSettings.Workflow.WorkflowArtifactSettings.SecretsPath,
 		EngineLogs:     v.GetBool("engine-logs"),
 		Broadcast:      v.GetBool("broadcast"),
 		EVMClients:     clients,

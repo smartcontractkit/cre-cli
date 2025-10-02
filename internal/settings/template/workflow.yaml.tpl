@@ -1,21 +1,18 @@
 # ==========================================================================
 # CRE WORKFLOW SETTINGS FILE
 # ==========================================================================
-# This file defines environment-specific workflow settings used by the CRE CLI.
+# Workflow-specific settings for CRE CLI targets.
+# Each target defines user-workflow and workflow-artifacts groups.
+# Settings here override CRE Project Settings File values.
 #
-# Each top-level key is a target (e.g., `production`, `production-testnet`, etc.).
-# You can also define your own custom targets, such as `my-target`, and
-# point the CLI to it via an environment variable.
-#
-# Note: If any setting in this file conflicts with a setting in the CRE Project Settings File,
-# the value defined here in the workflow settings file will take precedence.
-#
-# Below is an example `my-target`:
-#
+# Example custom target:
 # my-target:
-#   user-workflow:   
-#     # Required: The name of the workflow to register with the Workflow Registry contract.
-#     workflow-name: "MyExampleWorkflow"
+#   user-workflow:
+#     workflow-name: "MyExampleWorkflow"    # Required: Workflow Registry name
+#   workflow-artifacts:
+#     workflow-path: "./main.ts"            # Path to workflow entry point
+#     config-path: "./config.yaml"          # Path to config file
+#     secrets-path: "../secrets.yaml"       # Path to secrets file (project root by default)
 
 # ==========================================================================
 local-simulation:
@@ -24,6 +21,7 @@ local-simulation:
   workflow-artifacts:
     workflow-path: "{{WorkflowPath}}"
     config-path: ""
+    secrets-path: ""
 
 # ==========================================================================
 production-testnet:
@@ -32,4 +30,5 @@ production-testnet:
   workflow-artifacts:
     workflow-path: "{{WorkflowPath}}"
     config-path: ""
+    secrets-path: ""
     
