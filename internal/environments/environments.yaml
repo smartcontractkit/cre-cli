@@ -4,7 +4,7 @@ ENVIRONMENTS:
     CRE_CLI_CLIENT_ID: KERrSYowuRhVyXUrI3u7pI8nnY95bIGt
     CRE_CLI_AUDIENCE: https://graphql.cre.dev.internal.cldev.sh/
     CRE_CLI_GRAPHQL_URL: https://graphql-cre-dev.tailf8f749.ts.net/graphql
-    CRE_VAULT_DON_GATEWAY_URL: https://cre-gateway.main.sand.cldev.sh
+    CRE_VAULT_DON_GATEWAY_URL: https://cre-gateway-one-zone-a.main.stage.cldev.sh/
 
     CRE_CLI_WORKFLOW_REGISTRY_ADDRESS: "0xBc9Eb5D8358c9dF4E74fF149E15891F88f0203a6"
     CRE_CLI_WORKFLOW_REGISTRY_CHAIN_NAME: "ethereum-testnet-sepolia-base-1" # base-sepolia
