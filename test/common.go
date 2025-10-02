@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"math/rand"
 	"net"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -187,6 +188,24 @@ func copyDir(src, dst string) error {
 			return copyFile(path, target)
 		}
 	})
+}
+
+// make the RPC URL use 127.0.0.1, not localhost
+func forceIPv4(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return raw
+	}
+	host, port, err := net.SplitHostPort(u.Host)
+	if err != nil {
+		// maybe no port in URL; keep as-is
+		return raw
+	}
+	if host == "localhost" || host == "::1" {
+		u.Host = net.JoinHostPort("127.0.0.1", port)
+		return u.String()
+	}
+	return raw
 }
 
 // Boot Anvil by either loading Anvil state or running a fresh instance that will dump its state on exit

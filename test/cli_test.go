@@ -35,6 +35,7 @@ func createProjectSettingsFile(projectSettingPath string, workflowOwner string, 
 	v.Set(fmt.Sprintf("%s.cre-cli.don-family", SettingsTarget), constants.DefaultStagingDonFamily)
 
 	// rpcs
+	ipv4URL := forceIPv4(testEthURL)
 	v.Set(fmt.Sprintf("%s.%s", SettingsTarget, settings.RpcsSettingName), []settings.RpcEndpoint{
 		{
 			ChainName: chainselectors.ANVIL_DEVNET.Name,
