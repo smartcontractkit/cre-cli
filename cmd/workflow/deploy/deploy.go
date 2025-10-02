@@ -25,9 +25,8 @@ type Inputs struct {
 	WorkflowTag   string `validate:"omitempty,ascii,max=32"`
 	DonFamily     string `validate:"required"`
 
-	BinaryURL  string  `validate:"omitempty,http_url|eq="`
-	ConfigURL  *string `validate:"omitempty,http_url|eq="`
-	SecretsURL *string `validate:"omitempty,http_url|eq="`
+	BinaryURL string  `validate:"omitempty,http_url|eq="`
+	ConfigURL *string `validate:"omitempty,http_url|eq="`
 
 	AutoStart bool
 
@@ -45,13 +44,6 @@ func (i *Inputs) ResolveConfigURL(fallbackURL string) string {
 		return fallbackURL
 	}
 	return *i.ConfigURL
-}
-
-func (i *Inputs) ResolveSecretsURL(fallbackURL string) string {
-	if i.SecretsURL == nil {
-		return fallbackURL
-	}
-	return *i.SecretsURL
 }
 
 type handler struct {
@@ -98,8 +90,6 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 
 	settings.AddRawTxFlag(deployCmd)
 	settings.AddSkipConfirmation(deployCmd)
-	deployCmd.Flags().StringP("secrets-url", "s", "", "URL of the encrypted secrets JSON file")
-	deployCmd.Flags().StringP("source-url", "x", "", "URL of the source code in Gist")
 	deployCmd.Flags().StringP("output", "o", defaultOutputPath, "The output file for the compiled WASM binary encoded in base64")
 	deployCmd.Flags().BoolP("keep-alive", "k", false, "Keep previous workflows with same workflow name and owner active (default: false).")
 	deployCmd.Flags().BoolP("auto-start", "r", true, "Activate and run the workflow after registration, or pause it")
@@ -129,18 +119,11 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 		configURL = &url
 	}
 
-	var secretsURL *string
-	if v.IsSet("secrets-url") {
-		url := v.GetString("secrets-url")
-		secretsURL = &url
-	}
-
 	return Inputs{
 		WorkflowName:  h.settings.Workflow.UserWorkflowSettings.WorkflowName,
 		WorkflowOwner: h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress,
 		WorkflowTag:   h.settings.Workflow.UserWorkflowSettings.WorkflowName,
 		ConfigURL:     configURL,
-		SecretsURL:    secretsURL,
 		AutoStart:     v.GetBool("auto-start"),
 		DonFamily:     h.settings.Workflow.DevPlatformSettings.DonFamily,
 
