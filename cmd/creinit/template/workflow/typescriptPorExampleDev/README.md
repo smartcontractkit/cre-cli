@@ -6,7 +6,7 @@ Follow the steps below to run the example:
 
 ## 1. Initialize CRE project
 
-Start by initializing a new CRE project. This will scaffold the necessary project structure and a template workflow. Run cre init in the directory where you'd like your CRE project to live. Note that workflow names must be exactly 10 characters long (we will relax this requirement in the future).
+Start by initializing a new CRE project. This will scaffold the necessary project structure and a template workflow. Run cre init in the directory where you'd like your CRE project to live.
 
 Example output:
 
@@ -96,6 +96,7 @@ local-simulation:
   workflow-artifacts:
     workflow-path: "./main.ts"
     config-path: "./config.json"
+    secrets-path: "../secrets.yaml"
 ```
 
 ## 7. Simulate the workflow
@@ -103,13 +104,13 @@ local-simulation:
 Run the command from <b>project root directory</b> and pass in the path to the workflow directory.
 
 ```bash
-cre workflow simulate <path-to-workflow-directory> --target local-simulation --secrets ../secrets.yaml
+cre workflow simulate <path-to-workflow-directory> --target local-simulation
 ```
 
 For workflow named `workflow01` the exact command would be:
 
 ```bash
-cre workflow simulate ./workflow01 --target local-simulation --secrets ../secrets.yaml
+cre workflow simulate ./workflow01 --target local-simulation
 ```
 
 After this you will get a set of options similar to:
