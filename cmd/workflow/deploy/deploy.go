@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/rs/zerolog"
@@ -64,6 +65,9 @@ type handler struct {
 	wrc              *client.WorkflowRegistryV2Client
 
 	validated bool
+
+	wg     sync.WaitGroup
+	wrcErr error
 }
 
 var defaultOutputPath = "./binary.wasm.br.b64"
@@ -102,7 +106,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 }
 
 func newHandler(ctx *runtime.Context, stdin io.Reader) *handler {
-	return &handler{
+	h := handler{
 		log:              ctx.Logger,
 		clientFactory:    ctx.ClientFactory,
 		v:                ctx.Viper,
@@ -113,7 +117,21 @@ func newHandler(ctx *runtime.Context, stdin io.Reader) *handler {
 		workflowArtifact: &workflowArtifact{},
 		wrc:              nil,
 		validated:        false,
+		wg:               sync.WaitGroup{},
+		wrcErr:           nil,
 	}
+	h.wg.Add(1)
+	go func() {
+		defer h.wg.Done()
+		wrc, err := h.clientFactory.NewWorkflowRegistryV2Client()
+		if err != nil {
+			h.wrcErr = fmt.Errorf("failed to create workflow registry client: %w", err)
+			return
+		}
+		h.wrc = wrc
+	}()
+
+	return &h
 }
 
 func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
@@ -167,11 +185,10 @@ func (h *handler) Execute() error {
 		return fmt.Errorf("failed to prepare workflow artifact: %w", err)
 	}
 
-	wrc, err := h.clientFactory.NewWorkflowRegistryV2Client()
-	if err != nil {
-		return fmt.Errorf("failed to create workflow registry client: %w", err)
+	h.wg.Wait()
+	if h.wrcErr != nil {
+		return h.wrcErr
 	}
-	h.wrc = wrc
 
 	fmt.Println("\nVerifying ownership...")
 	if h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerType == constants.WorkflowOwnerTypeMSIG {

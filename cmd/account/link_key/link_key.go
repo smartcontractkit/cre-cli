@@ -10,6 +10,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -100,17 +101,34 @@ type handler struct {
 	wrc            *client.WorkflowRegistryV2Client
 
 	validated bool
+
+	wg     sync.WaitGroup
+	wrcErr error
 }
 
 func newHandler(ctx *runtime.Context, stdin io.Reader) *handler {
-	return &handler{
+	h := handler{
 		settings:       ctx.Settings,
 		credentials:    ctx.Credentials,
 		clientFactory:  ctx.ClientFactory,
 		log:            ctx.Logger,
 		environmentSet: ctx.EnvironmentSet,
 		stdin:          stdin,
+		wg:             sync.WaitGroup{},
+		wrcErr:         nil,
 	}
+	h.wg.Add(1)
+	go func() {
+		defer h.wg.Done()
+		wrc, err := h.clientFactory.NewWorkflowRegistryV2Client()
+		if err != nil {
+			h.wrcErr = fmt.Errorf("failed to create workflow registry client: %w", err)
+			return
+		}
+		h.wrc = wrc
+	}()
+
+	return &h
 }
 
 func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
@@ -149,11 +167,10 @@ func (h *handler) Execute(in Inputs) error {
 		}
 	}
 
-	wrc, err := h.clientFactory.NewWorkflowRegistryV2Client()
-	if err != nil {
-		return fmt.Errorf("failed to create workflow registry client: %w", err)
+	h.wg.Wait()
+	if h.wrcErr != nil {
+		return h.wrcErr
 	}
-	h.wrc = wrc
 
 	linked, err := h.checkIfAlreadyLinked()
 	if err != nil {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 	"sort"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/rs/zerolog"
@@ -62,18 +63,37 @@ type handler struct {
 	clientFactory  client.Factory
 	settings       *settings.Settings
 	environmentSet *environments.EnvironmentSet
-	validated      bool
 	inputs         Inputs
+	wrc            *client.WorkflowRegistryV2Client
+
+	validated bool
+
+	wg     sync.WaitGroup
+	wrcErr error
 }
 
 func newHandler(ctx *runtime.Context) *handler {
-	return &handler{
+	h := handler{
 		log:            ctx.Logger,
 		clientFactory:  ctx.ClientFactory,
 		settings:       ctx.Settings,
 		environmentSet: ctx.EnvironmentSet,
 		validated:      false,
+		wg:             sync.WaitGroup{},
+		wrcErr:         nil,
 	}
+	h.wg.Add(1)
+	go func() {
+		defer h.wg.Done()
+		wrc, err := h.clientFactory.NewWorkflowRegistryV2Client()
+		if err != nil {
+			h.wrcErr = fmt.Errorf("failed to create workflow registry client: %w", err)
+			return
+		}
+		h.wrc = wrc
+	}()
+
+	return &h
 }
 
 func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
@@ -110,15 +130,15 @@ func (h *handler) Execute() error {
 
 	h.displayWorkflowDetails()
 
-	wrc, err := h.clientFactory.NewWorkflowRegistryV2Client()
-	if err != nil {
-		return fmt.Errorf("failed to create WorkflowRegistryClient: %w", err)
+	h.wg.Wait()
+	if h.wrcErr != nil {
+		return h.wrcErr
 	}
 
 	ownerAddr := common.HexToAddress(workflowOwner)
 
 	const pageLimit = 200
-	workflows, err := wrc.GetWorkflowListByOwnerAndName(ownerAddr, workflowName, big.NewInt(0), big.NewInt(pageLimit))
+	workflows, err := h.wrc.GetWorkflowListByOwnerAndName(ownerAddr, workflowName, big.NewInt(0), big.NewInt(pageLimit))
 	if err != nil {
 		return fmt.Errorf("failed to get workflow list: %w", err)
 	}
@@ -135,7 +155,7 @@ func (h *handler) Execute() error {
 
 	fmt.Printf("Activating workflow: Name=%s, Owner=%s, WorkflowID=%s\n", workflowName, workflowOwner, hex.EncodeToString(latest.WorkflowId[:]))
 
-	txOut, err := wrc.ActivateWorkflow(latest.WorkflowId, h.inputs.DonFamily)
+	txOut, err := h.wrc.ActivateWorkflow(latest.WorkflowId, h.inputs.DonFamily)
 	if err != nil {
 		return fmt.Errorf("failed to activate workflow: %w", err)
 	}

@@ -9,6 +9,7 @@ import (
 	"math/big"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -59,6 +60,9 @@ type handler struct {
 	wrc            *client.WorkflowRegistryV2Client
 
 	validated bool
+
+	wg     sync.WaitGroup
+	wrcErr error
 }
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
@@ -85,14 +89,28 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 }
 
 func newHandler(ctx *runtime.Context, stdin io.Reader) *handler {
-	return &handler{
+	h := handler{
 		settings:       ctx.Settings,
 		credentials:    ctx.Credentials,
 		clientFactory:  ctx.ClientFactory,
 		log:            ctx.Logger,
 		environmentSet: ctx.EnvironmentSet,
 		stdin:          stdin,
+		wg:             sync.WaitGroup{},
+		wrcErr:         nil,
 	}
+	h.wg.Add(1)
+	go func() {
+		defer h.wg.Done()
+		wrc, err := h.clientFactory.NewWorkflowRegistryV2Client()
+		if err != nil {
+			h.wrcErr = fmt.Errorf("failed to create workflow registry client: %w", err)
+			return
+		}
+		h.wrc = wrc
+	}()
+
+	return &h
 }
 
 func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
@@ -124,11 +142,10 @@ func (h *handler) Execute(in Inputs) error {
 
 	fmt.Printf("Starting unlinking: owner=%s\n", in.WorkflowOwner)
 
-	wrc, err := h.clientFactory.NewWorkflowRegistryV2Client()
-	if err != nil {
-		return fmt.Errorf("failed to create workflow registry client: %w", err)
+	h.wg.Wait()
+	if h.wrcErr != nil {
+		return h.wrcErr
 	}
-	h.wrc = wrc
 
 	linked, err := h.checkIfAlreadyLinked()
 	if err != nil {
@@ -143,7 +160,7 @@ func (h *handler) Execute(in Inputs) error {
 	if !in.SkipConfirmation {
 		deleteWorkflows, err := prompt.YesNoPrompt(
 			h.stdin,
-			"⚠ Warning: Unlink is a destructive action that will wipe out all workflows registered under your owner address. Do you wish to proceed?",
+			"! Warning: Unlink is a destructive action that will wipe out all workflows registered under your owner address. Do you wish to proceed?",
 		)
 		if err != nil {
 			return err
@@ -284,13 +301,7 @@ func (h *handler) checkIfAlreadyLinked() (bool, error) {
 		return false, fmt.Errorf("failed to check owner link status: %w", err)
 	}
 
-	if linked {
-		fmt.Printf("Owner already linked: owner=%s\n", ownerAddr.Hex())
-		return true, nil
-	}
-
-	fmt.Printf("Owner link status: owner=%s, linked=%v\n", ownerAddr.Hex(), linked)
-	return false, nil
+	return linked, nil
 }
 
 func (h *handler) displayDetails() {

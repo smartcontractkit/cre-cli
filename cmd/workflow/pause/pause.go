@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/rs/zerolog"
@@ -60,19 +61,38 @@ type handler struct {
 	log            *zerolog.Logger
 	clientFactory  client.Factory
 	settings       *settings.Settings
-	validated      bool
 	environmentSet *environments.EnvironmentSet
 	inputs         Inputs
+	wrc            *client.WorkflowRegistryV2Client
+
+	validated bool
+
+	wg     sync.WaitGroup
+	wrcErr error
 }
 
 func newHandler(ctx *runtime.Context) *handler {
-	return &handler{
+	h := handler{
 		log:            ctx.Logger,
 		clientFactory:  ctx.ClientFactory,
 		settings:       ctx.Settings,
 		environmentSet: ctx.EnvironmentSet,
 		validated:      false,
+		wg:             sync.WaitGroup{},
+		wrcErr:         nil,
 	}
+	h.wg.Add(1)
+	go func() {
+		defer h.wg.Done()
+		wrc, err := h.clientFactory.NewWorkflowRegistryV2Client()
+		if err != nil {
+			h.wrcErr = fmt.Errorf("failed to create workflow registry client: %w", err)
+			return
+		}
+		h.wrc = wrc
+	}()
+
+	return &h
 }
 
 func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
@@ -108,14 +128,14 @@ func (h *handler) Execute() error {
 
 	h.displayWorkflowDetails()
 
-	wrc, err := h.clientFactory.NewWorkflowRegistryV2Client()
-	if err != nil {
-		return fmt.Errorf("failed to create workflow registry client: %w", err)
+	h.wg.Wait()
+	if h.wrcErr != nil {
+		return h.wrcErr
 	}
 
 	fmt.Printf("Fetching workflows to pause... Name=%s, Owner=%s\n", workflowName, workflowOwner.Hex())
 
-	workflowIDs, err := fetchAllWorkflowIDs(wrc, workflowOwner, workflowName)
+	workflowIDs, err := fetchAllWorkflowIDs(h.wrc, workflowOwner, workflowName)
 	if err != nil {
 		return fmt.Errorf("failed to list workflows: %w", err)
 	}
@@ -125,7 +145,7 @@ func (h *handler) Execute() error {
 
 	fmt.Printf("Processing batch pause... count=%d\n", len(workflowIDs))
 
-	txOut, err := wrc.BatchPauseWorkflows(workflowIDs)
+	txOut, err := h.wrc.BatchPauseWorkflows(workflowIDs)
 	if err != nil {
 		return fmt.Errorf("failed to batch pause workflows: %w", err)
 	}
