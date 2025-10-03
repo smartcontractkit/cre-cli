@@ -8,7 +8,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 )
 
-func (h *handler) UploadArtifacts() error {
+func (h *handler) uploadArtifacts() error {
 	if h.workflowArtifact == nil {
 		return fmt.Errorf("workflowArtifact is nil")
 	}
@@ -35,21 +35,24 @@ func (h *handler) UploadArtifacts() error {
 		storageClient.SetHTTPTimeout(h.settings.StorageSettings.CREStorage.HTTPTimeout)
 	}
 
+	fmt.Printf("✔ Loaded binary from: %s\n", h.inputs.OutputPath)
 	binaryURL, err := storageClient.UploadArtifactWithRetriesAndGetURL(
 		workflowID, storageclient.ArtifactTypeBinary, binaryData, "application/octet-stream")
 	if err != nil {
 		return fmt.Errorf("uploading binary artifact: %w", err)
 	}
+	fmt.Printf("✔ Uploaded binary to: %s\n", binaryURL.UnsignedGetUrl)
 	h.log.Debug().Str("URL", binaryURL.UnsignedGetUrl).Msg("Successfully uploaded workflow binary to CRE Storage Service")
 	if len(configData) > 0 {
+		fmt.Printf("✔ Loaded config from: %s\n", h.inputs.ConfigPath)
 		configURL, err = storageClient.UploadArtifactWithRetriesAndGetURL(
 			workflowID, storageclient.ArtifactTypeConfig, configData, "text/plain")
 		if err != nil {
 			return fmt.Errorf("uploading config artifact: %w", err)
 		}
+		fmt.Printf("✔ Uploaded config to: %s\n", configURL.UnsignedGetUrl)
 		h.log.Debug().Str("URL", configURL.UnsignedGetUrl).Msg("Successfully uploaded workflow config to CRE Storage Service")
 	}
-	fmt.Println("Successfully uploaded workflow artifacts to CRE Storage Service")
 
 	h.inputs.BinaryURL = binaryURL.UnsignedGetUrl
 	h.inputs.ConfigURL = &configURL.UnsignedGetUrl

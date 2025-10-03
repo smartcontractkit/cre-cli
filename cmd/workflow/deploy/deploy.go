@@ -1,8 +1,11 @@
 package deploy
 
 import (
+	"errors"
 	"fmt"
 	"io"
+	"os"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/rs/zerolog"
@@ -14,6 +17,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
+	"github.com/smartcontractkit/cre-cli/internal/prompt"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/validation"
@@ -37,6 +41,8 @@ type Inputs struct {
 
 	WorkflowRegistryContractAddress   string `validate:"required"`
 	WorkflowRegistryContractChainName string `validate:"required"`
+
+	SkipConfirmation bool
 }
 
 func (i *Inputs) ResolveConfigURL(fallbackURL string) string {
@@ -59,6 +65,9 @@ type handler struct {
 	wrc              *client.WorkflowRegistryV2Client
 
 	validated bool
+
+	wg     sync.WaitGroup
+	wrcErr error
 }
 
 var defaultOutputPath = "./binary.wasm.br.b64"
@@ -97,7 +106,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 }
 
 func newHandler(ctx *runtime.Context, stdin io.Reader) *handler {
-	return &handler{
+	h := handler{
 		log:              ctx.Logger,
 		clientFactory:    ctx.ClientFactory,
 		v:                ctx.Viper,
@@ -108,7 +117,21 @@ func newHandler(ctx *runtime.Context, stdin io.Reader) *handler {
 		workflowArtifact: &workflowArtifact{},
 		wrc:              nil,
 		validated:        false,
+		wg:               sync.WaitGroup{},
+		wrcErr:           nil,
 	}
+	h.wg.Add(1)
+	go func() {
+		defer h.wg.Done()
+		wrc, err := h.clientFactory.NewWorkflowRegistryV2Client()
+		if err != nil {
+			h.wrcErr = fmt.Errorf("failed to create workflow registry client: %w", err)
+			return
+		}
+		h.wrc = wrc
+	}()
+
+	return &h
 }
 
 func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
@@ -134,6 +157,7 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 
 		WorkflowRegistryContractChainName: h.environmentSet.WorkflowRegistryChainName,
 		WorkflowRegistryContractAddress:   h.environmentSet.WorkflowRegistryAddress,
+		SkipConfirmation:                  v.GetBool(settings.Flags.SkipConfirmation.Name),
 	}, nil
 }
 
@@ -152,6 +176,8 @@ func (h *handler) ValidateInputs() error {
 }
 
 func (h *handler) Execute() error {
+	h.displayWorkflowDetails()
+
 	if err := h.Compile(); err != nil {
 		return fmt.Errorf("failed to compile workflow: %w", err)
 	}
@@ -159,12 +185,12 @@ func (h *handler) Execute() error {
 		return fmt.Errorf("failed to prepare workflow artifact: %w", err)
 	}
 
-	wrc, err := h.clientFactory.NewWorkflowRegistryV2Client()
-	if err != nil {
-		return fmt.Errorf("failed to create workflow registry client: %w", err)
+	h.wg.Wait()
+	if h.wrcErr != nil {
+		return h.wrcErr
 	}
-	h.wrc = wrc
 
+	fmt.Println("\nVerifying ownership...")
 	if h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerType == constants.WorkflowOwnerTypeMSIG {
 		halt, err := h.autoLinkMSIGAndExit()
 		if err != nil {
@@ -179,9 +205,31 @@ func (h *handler) Execute() error {
 		}
 	}
 
-	if err := h.UploadArtifacts(); err != nil {
+	existsErr := h.workflowExists()
+	if existsErr != nil {
+		if existsErr.Error() == "workflow with name "+h.inputs.WorkflowName+" already exists" {
+			fmt.Printf("Workflow %s already exists\n", h.inputs.WorkflowName)
+			fmt.Println("This will update the existing workflow.")
+			// Ask for user confirmation before updating existing workflow
+			if !h.inputs.SkipConfirmation {
+				confirm, err := prompt.YesNoPrompt(os.Stdin, "Are you sure you want to overwrite the workflow?")
+				if err != nil {
+					return err
+				}
+				if !confirm {
+					return errors.New("deployment cancelled by user")
+				}
+			}
+		} else {
+			return existsErr
+		}
+	}
+
+	fmt.Println("\nUploading files...")
+	if err := h.uploadArtifacts(); err != nil {
 		return fmt.Errorf("failed to upload workflow: %w", err)
 	}
+	fmt.Println("\nPreparing deployment transaction...")
 	if err := h.upsert(); err != nil {
 		return fmt.Errorf("failed to register workflow: %w", err)
 	}
@@ -257,4 +305,24 @@ func (h *handler) tryAutoLink() error {
 	}
 
 	return linkkey.Exec(rtx, lkInputs)
+}
+func (h *handler) workflowExists() error {
+	workflow, err := h.wrc.GetWorkflow(common.HexToAddress(h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress), h.inputs.WorkflowName, h.inputs.WorkflowName)
+	if err != nil {
+		return err
+	}
+	if workflow.WorkflowId == [32]byte(common.Hex2Bytes(h.workflowArtifact.WorkflowID)) {
+		return fmt.Errorf("workflow with id %s already exists", h.workflowArtifact.WorkflowID)
+
+	}
+	if workflow.WorkflowName == h.inputs.WorkflowName {
+		return fmt.Errorf("workflow with name %s already exists", h.inputs.WorkflowName)
+	}
+	return nil
+}
+
+func (h *handler) displayWorkflowDetails() {
+	fmt.Printf("\nDeploying Workflow : \t %s\n", h.inputs.WorkflowName)
+	fmt.Printf("Target : \t\t %s\n", h.settings.User.TargetName)
+	fmt.Printf("Owner Address : \t %s\n\n", h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress)
 }

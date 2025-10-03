@@ -27,13 +27,20 @@ CRE_ETH_PRIVATE_KEY=000000000000000000000000000000000000000000000000000000000000
 
 For local simulation to interact with a chain, you must specify RPC endpoints for the chains you interact with in the `project.yaml` file. This is required for submitting transactions and reading blockchain state.
 
-Note: Only eth sepolia (chain selector `16015286601757825753`) is supported in local simulation
+Note: The following 7 chains are supported in local simulation (both testnet and mainnet variants):
+- Ethereum (`ethereum-testnet-sepolia`, `ethereum-mainnet`)
+- Base (`ethereum-testnet-sepolia-base-1`, `ethereum-mainnet-base-1`)
+- Avalanche (`avalanche-testnet-fuji`, `avalanche-mainnet`)
+- Polygon (`polygon-testnet-amoy`, `polygon-mainnet`)
+- BNB Chain (`binance-smart-chain-testnet`, `binance-smart-chain-mainnet`)
+- Arbitrum (`ethereum-testnet-sepolia-arbitrum-1`, `ethereum-mainnet-arbitrum-1`)
+- Optimism (`ethereum-testnet-sepolia-optimism-1`, `ethereum-mainnet-optimism-1`)
 
-Add your preferred RPCs under the `rpcs` section. For chain selectors, refer to https://github.com/smartcontractkit/chain-selectors/blob/main/selectors.yml
+Add your preferred RPCs under the `rpcs` section. For chain names, refer to https://github.com/smartcontractkit/chain-selectors/blob/main/selectors.yml
 
 ```yaml
 rpcs:
-  - chain-selector: 16015286601757825753
+  - chain-name: ethereum-testnet-sepolia
     url: <Your RPC endpoint to ETH Sepolia>
 ```
 Ensure the provided URLs point to valid RPC endpoints for the specified chains. You may use public RPC providers or set up your own node.
@@ -69,7 +76,7 @@ Deploy the BalanceReader, MessageEmitter, ReserveManager and SimpleERC20 contrac
 For a quick start, you can also use the pre-deployed contract addresses on Ethereum Sepolia—no action required on your part if you're just trying things out.
 
 For completeness, the Solidity source code for these contracts is located under projectRoot/contracts/evm/src.
-- chainID: `16015286601757825753`
+- chain: `ethereum-testnet-sepolia`
 - ReserveManager contract address: `0x073671aE6EAa2468c203fDE3a79dEe0836adF032`
 - SimpleERC20 contract address: `0x4700A50d858Cb281847ca4Ee0938F80DEfB3F1dd`
 - BalanceReader contract address: `0x4b0739c94C1389B55481cb7506c62430cA7211Cf`
@@ -106,7 +113,7 @@ Configure `config.json` for the workflow
 - `proxyAddress` should be the UpdateReservesProxySimplified contract address
 - `balanceReaderAddress` should be the BalanceReader contract address
 - `messageEmitterAddress` should be the MessageEmitter contract address
-- `chainSelector` should be chainID of selected chain (refer to https://github.com/smartcontractkit/chain-selectors/blob/main/selectors.yml)
+- `chainName` should be name of selected chain (refer to https://github.com/smartcontractkit/chain-selectors/blob/main/selectors.yml)
 - `gasLimit` should be the gas limit of chain write
 
 The config is already populated with deployed contracts in template.

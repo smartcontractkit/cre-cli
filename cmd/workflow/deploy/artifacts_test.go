@@ -97,7 +97,7 @@ func TestUpload_SuccessAndErrorCases(t *testing.T) {
 		ConfigData: []byte("configdata"),
 		WorkflowID: "workflow-id",
 	}
-	err := h.UploadArtifacts()
+	err := h.uploadArtifacts()
 	require.NoError(t, err)
 	require.Equal(t, "http://origin/get", h.inputs.BinaryURL)
 	require.Equal(t, "http://origin/get", *h.inputs.ConfigURL)
@@ -108,12 +108,12 @@ func TestUpload_SuccessAndErrorCases(t *testing.T) {
 		ConfigData: nil,
 		WorkflowID: "workflow-id",
 	}
-	err = h.UploadArtifacts()
+	err = h.uploadArtifacts()
 	require.NoError(t, err)
 
 	// Error: workflowArtifact is nil
 	h.workflowArtifact = nil
-	err = h.UploadArtifacts()
+	err = h.uploadArtifacts()
 	require.ErrorContains(t, err, "workflowArtifact is nil")
 
 	// Error: empty BinaryData
@@ -122,7 +122,7 @@ func TestUpload_SuccessAndErrorCases(t *testing.T) {
 		ConfigData: []byte("configdata"),
 		WorkflowID: "workflow-id",
 	}
-	err = h.UploadArtifacts()
+	err = h.uploadArtifacts()
 	require.ErrorContains(t, err, "uploading binary artifact: content is empty for artifactType BINARY")
 
 	// Error: workflowID is empty
@@ -131,7 +131,7 @@ func TestUpload_SuccessAndErrorCases(t *testing.T) {
 		ConfigData: []byte("configdata"),
 		WorkflowID: "",
 	}
-	err = h.UploadArtifacts()
+	err = h.uploadArtifacts()
 	require.ErrorContains(t, err, "workflowID is empty")
 
 }
@@ -173,7 +173,7 @@ func TestUploadArtifactToStorageService_OriginError(t *testing.T) {
 		ConfigData: []byte("configdata"),
 		WorkflowID: "workflow-id",
 	}
-	err := h.UploadArtifacts()
+	err := h.uploadArtifacts()
 	require.ErrorContains(t, err, "upload to origin")
 }
 
@@ -240,7 +240,7 @@ func TestUploadArtifactToStorageService_AlreadyExistsError(t *testing.T) {
 		ConfigData: []byte("configdata"),
 		WorkflowID: "workflow-id",
 	}
-	err := h.UploadArtifacts()
+	err := h.uploadArtifacts()
 	require.NoError(t, err)
 	require.Equal(t, "http://origin/get", h.inputs.BinaryURL)
 	require.Equal(t, "http://origin/get", *h.inputs.ConfigURL)

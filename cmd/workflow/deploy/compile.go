@@ -17,6 +17,7 @@ func (h *handler) Compile() error {
 	if !h.validated {
 		return fmt.Errorf("handler h.inputs not validated")
 	}
+	fmt.Println("Compiling workflow...")
 
 	if h.inputs.OutputPath == "" {
 		h.inputs.OutputPath = defaultOutputPath
@@ -56,7 +57,7 @@ func (h *handler) Compile() error {
 		return fmt.Errorf("failed to compile workflow: %w", err)
 	}
 	h.log.Debug().Msgf("Build output: %s", buildOutput)
-	fmt.Println("Workflow compiled")
+	fmt.Println("Workflow compiled successfully")
 
 	tmpWasmLocation := filepath.Join(workflowRootFolder, tmpWasmFileName)
 	wasmFile, err := os.ReadFile(tmpWasmLocation)
