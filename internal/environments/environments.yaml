@@ -7,7 +7,7 @@ ENVIRONMENTS:
     CRE_VAULT_DON_GATEWAY_URL: https://cre-gateway-one-zone-a.main.stage.cldev.sh/
 
     CRE_CLI_WORKFLOW_REGISTRY_ADDRESS: "0x7e69E853D9Ce50C2562a69823c80E01360019Cef"
-    CRE_CLI_WORKFLOW_REGISTRY_CHAIN_NAME: "ethereum-testnet-sepolia" # base-sepolia
+    CRE_CLI_WORKFLOW_REGISTRY_CHAIN_NAME: "ethereum-testnet-sepolia" # eth-sepolia
     CRE_CLI_WORKFLOW_REGISTRY_CHAIN_EXPLORER_URL: "https://sepolia.etherscan.io"
 
     CRE_CLI_CAPABILITIES_REGISTRY_ADDRESS: "0xbF204e1DfeB4FCB29831CfbA9Abe76E0CF528a8F"
