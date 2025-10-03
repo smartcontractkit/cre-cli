@@ -29,17 +29,16 @@ CRE_ETH_PRIVATE_KEY=000000000000000000000000000000000000000000000000000000000000
 
 For local simulation to interact with a chain, you must specify RPC endpoints for the chains you interact with in the `project.yaml` file. This is required for submitting transactions and reading blockchain state.
 
-Note: Only eth sepolia (chain name `ethereum-testnet-sepolia`) is supported in local simulation
+Note: The following 7 chains are supported in local simulation (both testnet and mainnet variants):
+- Ethereum (`ethereum-testnet-sepolia`, `ethereum-mainnet`)
+- Base (`ethereum-testnet-sepolia-base-1`, `ethereum-mainnet-base-1`)
+- Avalanche (`avalanche-testnet-fuji`, `avalanche-mainnet`)
+- Polygon (`polygon-testnet-amoy`, `polygon-mainnet`)
+- BNB Chain (`binance-smart-chain-testnet`, `binance-smart-chain-mainnet`)
+- Arbitrum (`ethereum-testnet-sepolia-arbitrum-1`, `ethereum-mainnet-arbitrum-1`)
+- Optimism (`ethereum-testnet-sepolia-optimism-1`, `ethereum-mainnet-optimism-1`)
 
-Add your preferred RPCs under the `rpcs` section. For chain selectors, refer to https://github.com/smartcontractkit/chain-selectors/blob/main/selectors.yml
-
-```yaml
-rpcs:
-  - chain-name: ethereum-testnet-sepolia
-    url: <Your RPC endpoint to ETH Sepolia>
-```
-
-Ensure the provided URLs point to valid RPC endpoints for the specified chains. You may use public RPC providers or set up your own node.
+Add your preferred RPCs under the `rpcs` section. For chain names, refer to https://github.com/smartcontractkit/chain-selectors/blob/main/selectors.yml
 
 ## 4. Set up workflow secrets
 
@@ -75,7 +74,7 @@ For a quick start, you can also use the pre-deployed contract addresses on Ether
 
 Configure `config.json` for the workflow
 
-- `schedule` should be set to `"*/3 * * * * *"` for every 3 seconds or any other cron expression you prefer
+- `schedule` should be set to `"*/30 * * * * *"` for every 30 seconds or any other cron expression you prefer
 - `url` should be set to existing reserves HTTP endpoint API
 - `tokenAddress` should be the SimpleERC20 contract address
 - `porAddress` should be the ReserveManager contract address
@@ -107,7 +106,7 @@ Run the command from <b>project root directory</b> and pass in the path to the w
 cre workflow simulate <path-to-workflow-directory> --target local-simulation
 ```
 
-For workflow named `workflow01` the exact command would be:
+For a workflow directory named `workflow01` the exact command would be:
 
 ```bash
 cre workflow simulate ./workflow01 --target local-simulation
