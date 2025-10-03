@@ -162,6 +162,7 @@ func (h *Handler) EncryptSecrets(rawSecrets UpsertSecretsInputs) ([]*vault.Encry
 		return nil, fmt.Errorf("failed to create capabilities registry client: %w", err)
 	}
 
+	// TODO instead of using cap registry, use gql MethodPublicKeyGet
 	encryptionPublicKeyBytes, err := capabilitiesRegistryClient.GetVaultMasterPublicKey(constants.DefaultStagingDonFamily)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch master public key: %w", err)
