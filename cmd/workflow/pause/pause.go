@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/rs/zerolog"
@@ -60,19 +61,38 @@ type handler struct {
 	log            *zerolog.Logger
 	clientFactory  client.Factory
 	settings       *settings.Settings
-	validated      bool
 	environmentSet *environments.EnvironmentSet
 	inputs         Inputs
+	wrc            *client.WorkflowRegistryV2Client
+
+	validated bool
+
+	wg     sync.WaitGroup
+	wrcErr error
 }
 
 func newHandler(ctx *runtime.Context) *handler {
-	return &handler{
+	h := handler{
 		log:            ctx.Logger,
 		clientFactory:  ctx.ClientFactory,
 		settings:       ctx.Settings,
 		environmentSet: ctx.EnvironmentSet,
 		validated:      false,
+		wg:             sync.WaitGroup{},
+		wrcErr:         nil,
 	}
+	h.wg.Add(1)
+	go func() {
+		defer h.wg.Done()
+		wrc, err := h.clientFactory.NewWorkflowRegistryV2Client()
+		if err != nil {
+			h.wrcErr = fmt.Errorf("failed to create workflow registry client: %w", err)
+			return
+		}
+		h.wrc = wrc
+	}()
+
+	return &h
 }
 
 func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
@@ -106,14 +126,16 @@ func (h *handler) Execute() error {
 	workflowName := h.inputs.WorkflowName
 	workflowOwner := common.HexToAddress(h.inputs.WorkflowOwner)
 
-	wrc, err := h.clientFactory.NewWorkflowRegistryV2Client()
-	if err != nil {
-		return fmt.Errorf("failed to create workflow registry client: %w", err)
+	h.displayWorkflowDetails()
+
+	h.wg.Wait()
+	if h.wrcErr != nil {
+		return h.wrcErr
 	}
 
 	fmt.Printf("Fetching workflows to pause... Name=%s, Owner=%s\n", workflowName, workflowOwner.Hex())
 
-	workflowIDs, err := fetchAllWorkflowIDs(wrc, workflowOwner, workflowName)
+	workflowIDs, err := fetchAllWorkflowIDs(h.wrc, workflowOwner, workflowName)
 	if err != nil {
 		return fmt.Errorf("failed to list workflows: %w", err)
 	}
@@ -123,19 +145,23 @@ func (h *handler) Execute() error {
 
 	fmt.Printf("Processing batch pause... count=%d\n", len(workflowIDs))
 
-	txOut, err := wrc.BatchPauseWorkflows(workflowIDs)
+	txOut, err := h.wrc.BatchPauseWorkflows(workflowIDs)
 	if err != nil {
 		return fmt.Errorf("failed to batch pause workflows: %w", err)
 	}
 
 	switch txOut.Type {
 	case client.Regular:
-		fmt.Printf("Transaction confirmed: %s\n", txOut.Hash)
+		fmt.Println("Transaction confirmed")
 		fmt.Printf("View on explorer: \033]8;;%s/tx/%s\033\\%s/tx/%s\033]8;;\033\\\n", h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash, h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash)
+		fmt.Println("[OK] Workflows paused successfully")
+		fmt.Println("\nDetails:")
+		fmt.Printf("   Contract address:\t%s\n", h.environmentSet.WorkflowRegistryAddress)
+		fmt.Printf("   Transaction hash:\t%s\n", txOut.Hash)
+		fmt.Printf("   Workflow Name:\t%s\n", workflowName)
 		for _, w := range workflowIDs {
-			fmt.Printf("Paused workflow IDs: %s\n", hex.EncodeToString(w[:]))
+			fmt.Printf("   Workflow ID:\t%s\n", hex.EncodeToString(w[:]))
 		}
-		fmt.Println("Workflows paused successfully")
 
 	case client.Raw:
 		fmt.Println("")
@@ -192,4 +218,10 @@ func fetchAllWorkflowIDs(
 	}
 
 	return ids, nil
+}
+
+func (h *handler) displayWorkflowDetails() {
+	fmt.Printf("\nPausing Workflow : \t %s\n", h.inputs.WorkflowName)
+	fmt.Printf("Target : \t\t %s\n", h.settings.User.TargetName)
+	fmt.Printf("Owner Address : \t %s\n\n", h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress)
 }

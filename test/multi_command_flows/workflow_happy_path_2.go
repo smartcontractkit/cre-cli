@@ -208,7 +208,7 @@ func RunHappyPath2Workflow(t *testing.T, tc TestConfig) {
 	out := workflowDeployEoaWithoutAutostart(t, tc)
 	require.Contains(t, out, "Workflow compiled", "expected workflow to compile.\nCLI OUTPUT:\n%s", out)
 	require.Contains(t, out, "linked=true", "expected link-status true.\nCLI OUTPUT:\n%s", out)
-	require.Contains(t, out, "Successfully uploaded workflow artifacts", "expected upload to succeed.\nCLI OUTPUT:\n%s", out)
+	require.Contains(t, out, "Uploaded binary", "expected binary upload to succeed.\nCLI OUTPUT:\n%s", out)
 	require.Contains(t, out, "Workflow deployed successfully", "expected deployment success.\nCLI OUTPUT:\n%s", out)
 
 	// Step 1.5: Update workflow.yaml to include config-path for the second deployment
@@ -221,7 +221,7 @@ func RunHappyPath2Workflow(t *testing.T, tc TestConfig) {
 	updateOut := workflowDeployUpdateWithConfig(t, tc)
 	require.Contains(t, updateOut, "Workflow compiled", "expected workflow to compile on update.\nCLI OUTPUT:\n%s", updateOut)
 	require.Contains(t, updateOut, "linked=true", "expected link-status true.\nCLI OUTPUT:\n%s", out)
-	require.Contains(t, updateOut, "Successfully uploaded workflow artifacts", "expected upload to succeed on update.\nCLI OUTPUT:\n%s", updateOut)
+	require.Contains(t, out, "Uploaded binary", "expected config upload to succeed.\nCLI OUTPUT:\n%s", out)
 	require.Contains(t, updateOut, "Workflow deployed successfully", "expected deployment update success.\nCLI OUTPUT:\n%s", updateOut)
 }
 

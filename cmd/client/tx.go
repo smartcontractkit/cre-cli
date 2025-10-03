@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -13,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/rs/zerolog"
 
+	chainselectors "github.com/smartcontractkit/chain-selectors"
 	"github.com/smartcontractkit/chainlink-testing-framework/seth"
 
 	cmdCommon "github.com/smartcontractkit/cre-cli/cmd/common"
@@ -122,11 +124,19 @@ func (c *TxClient) executeTransactionByTxType(txFn func(opts *bind.TransactOpts)
 		if err != nil {
 			return TxOutput{Type: Regular}, err
 		}
+		chainDetails, err := chainselectors.GetChainDetailsByChainIDAndFamily(strconv.FormatInt(c.EthClient.ChainID, 10), chainselectors.FamilyEVM)
+		if err != nil {
+			return TxOutput{Type: Regular}, err
+		}
 		fmt.Println("Transaction details:")
-		fmt.Printf("\n  To:   %s\n", simulateTx.To().Hex())
-		fmt.Printf("\n  Function: %s\n", funName)
-		fmt.Printf("\n  Inputs: %s\n", strings.Join(cmdCommon.ToStringSlice(args), ", "))
-		fmt.Printf("\n  Data: %x\n", simulateTx.Data())
+		fmt.Printf("  Chain Name:\t%s\n", chainDetails.ChainName)
+		fmt.Printf("  To:\t\t%s\n", simulateTx.To().Hex())
+		fmt.Printf("  Function:\t%s\n", funName)
+		fmt.Printf("  Inputs:\n")
+		for i, arg := range cmdCommon.ToStringSlice(args) {
+			fmt.Printf("    [%d]:\t%s\n", i, arg)
+		}
+		fmt.Printf("  Data:\t\t%x\n", simulateTx.Data())
 
 		// Ask for user confirmation before executing the transaction
 		if !c.config.SkipPrompt {
