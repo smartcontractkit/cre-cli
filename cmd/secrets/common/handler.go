@@ -2,7 +2,6 @@ package common
 
 import (
 	"crypto/ecdsa"
-	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -16,14 +15,15 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
-	"golang.org/x/crypto/nacl/box"
 	"google.golang.org/protobuf/encoding/protojson"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/capabilities/actions/vault"
+	vaultcommon "github.com/smartcontractkit/chainlink-common/pkg/capabilities/actions/vault"
 	"github.com/smartcontractkit/chainlink-common/pkg/jsonrpc2"
 	nautilus "github.com/smartcontractkit/chainlink-common/pkg/nodeauth/utils"
 	"github.com/smartcontractkit/chainlink-evm/gethwrappers/workflow/generated/workflow_registry_wrapper_v2"
 	"github.com/smartcontractkit/chainlink/v2/core/capabilities/vault/vaulttypes"
+	"github.com/smartcontractkit/tdh2/go/tdh2/tdh2easy"
 
 	"github.com/smartcontractkit/cre-cli/cmd/client"
 	"github.com/smartcontractkit/cre-cli/internal/constants"
@@ -157,35 +157,57 @@ func (h *Handler) LogMSIGNextSteps(txData string) error {
 
 // EncryptSecrets takes the raw secrets and encrypts them, returning pointers.
 func (h *Handler) EncryptSecrets(rawSecrets UpsertSecretsInputs) ([]*vault.EncryptedSecret, error) {
-	capabilitiesRegistryClient, err := h.ClientFactory.NewCapabilitiesRegistryClient()
+	requestID := uuid.New().String()
+	getPublicKeyRequest := jsonrpc2.Request[vaultcommon.GetPublicKeyRequest]{
+		Version: jsonrpc2.JsonRpcVersion,
+		ID:      requestID,
+		Method:  vaulttypes.MethodPublicKeyGet,      // "vault_publicKey_get"
+		Params:  &vaultcommon.GetPublicKeyRequest{}, // empty payload per current API
+	}
+
+	reqBody, err := json.Marshal(getPublicKeyRequest)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create capabilities registry client: %w", err)
+		return nil, fmt.Errorf("failed to marshal public key request: %w", err)
 	}
 
-	// TODO instead of using cap registry, use gql MethodPublicKeyGet
-	encryptionPublicKeyBytes, err := capabilitiesRegistryClient.GetVaultMasterPublicKey(constants.DefaultStagingDonFamily)
+	respBody, status, err := h.Gw.Post(reqBody)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch master public key: %w", err)
+		return nil, fmt.Errorf("gateway POST failed: %w", err)
+	}
+	if status != http.StatusOK {
+		return nil, fmt.Errorf("gateway returned non-200: %d body=%s", status, string(respBody))
 	}
 
-	if len(encryptionPublicKeyBytes) != 32 {
-		return nil, fmt.Errorf("encryption public key has an invalid length: got %d bytes, want 32", len(encryptionPublicKeyBytes))
+	var rpcResp jsonrpc2.Response[vaultcommon.GetPublicKeyResponse]
+	if err := json.Unmarshal(respBody, &rpcResp); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal public key response: %w", err)
+	}
+	if rpcResp.Error != nil {
+		return nil, fmt.Errorf("vault public key fetch error: %s", rpcResp.Error.Error())
+	}
+	if rpcResp.Version != jsonrpc2.JsonRpcVersion {
+		return nil, fmt.Errorf("jsonrpc version mismatch: got %q", rpcResp.Version)
+	}
+	if rpcResp.ID != requestID {
+		return nil, fmt.Errorf("jsonrpc id mismatch: got %q want %q", rpcResp.ID, requestID)
+	}
+	if rpcResp.Method != vaulttypes.MethodPublicKeyGet {
+		return nil, fmt.Errorf("jsonrpc method mismatch: got %q", rpcResp.Method)
+	}
+	if rpcResp.Result == nil {
+		return nil, fmt.Errorf("empty result in public key response")
 	}
 
-	var encryptionPublicKey [32]byte
-	copy(encryptionPublicKey[:], encryptionPublicKeyBytes)
+	pubKeyHex := rpcResp.Result.PublicKey // already hex per gateway
 
+	// Encrypt each secret with tdh2easy
 	encryptedSecrets := make([]*vault.EncryptedSecret, 0, len(rawSecrets))
-
 	for _, item := range rawSecrets {
-		// encrypt
-		plain := []byte(item.Value)
-		cipher, err := box.SealAnonymous(nil, plain, &encryptionPublicKey, rand.Reader)
+		cipherHex, err := EncryptSecret(item.Value, pubKeyHex)
 		if err != nil {
-			return nil, fmt.Errorf("failed to encrypt secret: %w", err)
+			return nil, fmt.Errorf("failed to encrypt secret (key=%s ns=%s): %w", item.ID, item.Namespace, err)
 		}
 
-		// build identifiers as pointers
 		secID := &vault.SecretIdentifier{
 			Key:       item.ID,
 			Namespace: item.Namespace,
@@ -194,11 +216,31 @@ func (h *Handler) EncryptSecrets(rawSecrets UpsertSecretsInputs) ([]*vault.Encry
 
 		encryptedSecrets = append(encryptedSecrets, &vault.EncryptedSecret{
 			Id:             secID,
-			EncryptedValue: hex.EncodeToString(cipher),
+			EncryptedValue: cipherHex,
 		})
 	}
 
 	return encryptedSecrets, nil
+}
+
+func EncryptSecret(secret, masterPublicKeyHex string) (string, error) {
+	masterPublicKey := tdh2easy.PublicKey{}
+	masterPublicKeyBytes, err := hex.DecodeString(masterPublicKeyHex)
+	if err != nil {
+		return "", fmt.Errorf("failed to decode master public key: %w", err)
+	}
+	if err = masterPublicKey.Unmarshal(masterPublicKeyBytes); err != nil {
+		return "", fmt.Errorf("failed to unmarshal master public key: %w", err)
+	}
+	cipher, err := tdh2easy.Encrypt(&masterPublicKey, []byte(secret))
+	if err != nil {
+		return "", fmt.Errorf("failed to encrypt secret: %w", err)
+	}
+	cipherBytes, err := cipher.Marshal()
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal encrypted secrets to bytes: %w", err)
+	}
+	return hex.EncodeToString(cipherBytes), nil
 }
 
 // Execute is a shared method for both 'create' and 'update' commands.
@@ -344,6 +386,7 @@ func (h *Handler) ParseVaultGatewayResponse(method string, respBody []byte) erro
 		if err := protojson.Unmarshal(rpcResp.Result.Payload, &p); err != nil {
 			return fmt.Errorf("failed to decode create payload: %w", err)
 		}
+
 		for _, r := range p.GetResponses() {
 			id := r.GetId()
 			// Safeguard for nil id
