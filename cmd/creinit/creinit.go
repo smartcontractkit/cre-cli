@@ -62,7 +62,8 @@ var languageTemplates = []LanguageTemplate{
 		Lang:       TemplateLangTS,
 		EntryPoint: "./main.ts",
 		Workflows: []WorkflowTemplate{
-			{Folder: "typescriptSimpleExample", Title: "Development Hello World example for a simple workflow", ID: 3},
+			{Folder: "typescriptSimpleExample", Title: "Boilerplate: Typescript Hello World example for a simple workflow", ID: 3},
+			{Folder: "typescriptPorExampleDev", Title: "Custom data feed: Typescript updating on-chain data periodically using offchain API data", ID: 4},
 		},
 	},
 }
@@ -284,12 +285,12 @@ func (h *handler) Execute(inputs Inputs) error {
 		return fmt.Errorf("failed to scaffold workflow: %w", err)
 	}
 
-	if selectedLanguageTemplate.Lang == TemplateLangGo {
-		// Generate contracts at project level if template has contracts
-		if err := h.generateContractsTemplate(projectRoot, tpl, projectName); err != nil {
-			return fmt.Errorf("failed to scaffold contracts: %w", err)
-		}
+	// Generate contracts at project level if template has contracts
+	if err := h.generateContractsTemplate(projectRoot, tpl, projectName); err != nil {
+		return fmt.Errorf("failed to scaffold contracts: %w", err)
+	}
 
+	if selectedLanguageTemplate.Lang == TemplateLangGo {
 		if err := initializeGoModule(h.log, projectRoot, projectName); err != nil {
 			return fmt.Errorf("failed to initialize Go module: %w", err)
 		}
