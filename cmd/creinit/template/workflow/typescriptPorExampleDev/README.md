@@ -87,7 +87,7 @@ Configure `config.json` for the workflow
 
 The config is already populated with deployed contracts in template.
 
-Note: Make sure your `project.yaml` file is pointing to the config.json, example:
+Note: Make sure your `workflow.yaml` file is pointing to the config.json, example:
 
 ```yaml
 local-simulation:
@@ -103,13 +103,13 @@ local-simulation:
 Run the command from <b>project root directory</b> and pass in the path to the workflow directory.
 
 ```bash
-cre workflow simulate <path-to-workflow-directory> --target local-simulation --secrets ../secrets.yaml --broadcast
+cre workflow simulate <path-to-workflow-directory> --target local-simulation --secrets ../secrets.yaml
 ```
 
 For workflow named `workflow01` the exact command would be:
 
 ```bash
-cre workflow simulate ./workflow01 --target local-simulation --secrets ../secrets.yaml --broadcast
+cre workflow simulate ./workflow01 --target local-simulation --secrets ../secrets.yaml
 ```
 
 After this you will get a set of options similar to:

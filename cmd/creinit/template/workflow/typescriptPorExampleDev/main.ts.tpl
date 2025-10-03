@@ -13,6 +13,7 @@ import {
 	median,
 	Runner,
 	type Runtime,
+	TxStatus,
 } from '@chainlink/cre-sdk'
 import { type Address, decodeFunctionResult, encodeFunctionData, zeroAddress } from 'viem'
 import { z } from 'zod'
@@ -217,16 +218,22 @@ const updateReserves = (
 		.writeReport(runtime, {
 			receiver: evmConfig.proxyAddress,
 			report: reportResponse,
+			gasConfig: {
+				gasLimit: evmConfig.gasLimit,
+			},
 		})
 		.result()
 
-	const txHash = resp.txHash
+	const txStatus = resp.txStatus
 
-	if (!txHash) {
-		throw new Error(`Failed to write report: ${resp.errorMessage}`)
+	if (txStatus !== TxStatus.SUCCESS) {
+		throw new Error(`Failed to write report: ${resp.errorMessage || txStatus}`)
 	}
 
+	const txHash = resp.txHash || new Uint8Array(32)
+
 	runtime.log(`Write report transaction succeeded at txHash: ${bytesToHex(txHash)}`)
+
 	return txHash.toString()
 }
 

@@ -13,7 +13,7 @@ If your workflow does not do any chain write then you can just put any dummy key
 CRE_ETH_PRIVATE_KEY=0000000000000000000000000000000000000000000000000000000000000001
 ```
 
-Note: Make sure your `project.yaml` file is pointing to the config.json, example:
+Note: Make sure your `workflow.yaml` file is pointing to the config.json, example:
 
 ```yaml
 local-simulation:
