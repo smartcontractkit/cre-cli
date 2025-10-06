@@ -194,7 +194,7 @@ func (h *Handler) EncryptSecrets(rawSecrets UpsertSecretsInputs) ([]*vault.Encry
 	if rpcResp.Method != vaulttypes.MethodPublicKeyGet {
 		return nil, fmt.Errorf("jsonrpc method mismatch: got %q", rpcResp.Method)
 	}
-	if rpcResp.Result == nil {
+	if rpcResp.Result == nil || rpcResp.Result.PublicKey == "" {
 		return nil, fmt.Errorf("empty result in public key response")
 	}
 
