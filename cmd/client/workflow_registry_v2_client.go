@@ -163,7 +163,7 @@ func (wrc *WorkflowRegistryV2Client) UpdateAllowedSigners(signers []common.Addre
 	return nil
 }
 
-func (wrc *WorkflowRegistryV2Client) SetDonLimit(donFamily string, limit uint32, enabled bool) error {
+func (wrc *WorkflowRegistryV2Client) SetDonLimit(donFamily string, limit uint32, userDefaultLimit uint32) error {
 	contract, err := workflow_registry_v2_wrapper.NewWorkflowRegistry(wrc.ContractAddress, wrc.EthClient.Client)
 	if err != nil {
 		wrc.Logger.Error().
@@ -174,7 +174,7 @@ func (wrc *WorkflowRegistryV2Client) SetDonLimit(donFamily string, limit uint32,
 	}
 
 	tx, err := wrc.EthClient.Decode(
-		contract.SetDONLimit(wrc.EthClient.NewTXOpts(), donFamily, limit, enabled),
+		contract.SetDONLimit(wrc.EthClient.NewTXOpts(), donFamily, limit, userDefaultLimit),
 	)
 	if err != nil {
 		wrc.Logger.Error().
@@ -373,7 +373,7 @@ func (wrc *WorkflowRegistryV2Client) GetMaxWorkflowsPerDON(donFamily [32]byte) (
 	if err != nil {
 		wrc.Logger.Error().Err(err).Msg("GetMaxWorkflowsPerDON call failed")
 	}
-	return val, err
+	return val.MaxWorkflows, err
 }
 
 func (wrc *WorkflowRegistryV2Client) GetMaxWorkflowsPerUserDON(user common.Address, donFamily [32]byte) (uint32, error) {

@@ -62,7 +62,7 @@ func DeployCapabilitiesRegistry(sethClient *seth.Client, pubKeys []*ed25519.Publ
 		return common.Address{}, err
 	}
 
-	_, err = sethClient.Decode(registry.AddNodeOperators(sethClient.NewTXOpts(), []capabilities_registry_wrapper_v2.CapabilitiesRegistryNodeOperator{
+	_, err = sethClient.Decode(registry.AddNodeOperators(sethClient.NewTXOpts(), []capabilities_registry_wrapper_v2.CapabilitiesRegistryNodeOperatorParams{
 		{
 			Admin: common.HexToAddress(constants.TestAddress),
 			Name:  "operator",
@@ -150,7 +150,7 @@ func DeployTestWorkflowRegistry(t *testing.T, sethClient *seth.Client) (*workflo
 		return nil, err
 	}
 
-	_, err = sethClient.Decode(registry.SetDONLimit(sethClient.NewTXOpts(), constants.DefaultStagingDonFamily, 100, true))
+	_, err = sethClient.Decode(registry.SetDONLimit(sethClient.NewTXOpts(), constants.DefaultStagingDonFamily, 100, 10))
 	if err != nil {
 		return nil, err
 	}
