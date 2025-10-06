@@ -9,6 +9,7 @@ import (
 	"math/big"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -56,7 +57,12 @@ type handler struct {
 	log            *zerolog.Logger
 	stdin          io.Reader
 	environmentSet *environments.EnvironmentSet
-	validated      bool
+	wrc            *client.WorkflowRegistryV2Client
+
+	validated bool
+
+	wg     sync.WaitGroup
+	wrcErr error
 }
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
@@ -83,14 +89,28 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 }
 
 func newHandler(ctx *runtime.Context, stdin io.Reader) *handler {
-	return &handler{
+	h := handler{
 		settings:       ctx.Settings,
 		credentials:    ctx.Credentials,
 		clientFactory:  ctx.ClientFactory,
 		log:            ctx.Logger,
 		environmentSet: ctx.EnvironmentSet,
 		stdin:          stdin,
+		wg:             sync.WaitGroup{},
+		wrcErr:         nil,
 	}
+	h.wg.Add(1)
+	go func() {
+		defer h.wg.Done()
+		wrc, err := h.clientFactory.NewWorkflowRegistryV2Client()
+		if err != nil {
+			h.wrcErr = fmt.Errorf("failed to create workflow registry client: %w", err)
+			return
+		}
+		h.wrc = wrc
+	}()
+
+	return &h
 }
 
 func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
@@ -118,13 +138,29 @@ func (h *handler) Execute(in Inputs) error {
 		return fmt.Errorf("inputs not validated")
 	}
 
+	h.displayDetails()
+
 	fmt.Printf("Starting unlinking: owner=%s\n", in.WorkflowOwner)
+
+	h.wg.Wait()
+	if h.wrcErr != nil {
+		return h.wrcErr
+	}
+
+	linked, err := h.checkIfAlreadyLinked()
+	if err != nil {
+		return err
+	}
+	if !linked {
+		fmt.Println("Your web3 address is not linked, nothing to do")
+		return nil
+	}
 
 	// Check if confirmation should be skipped
 	if !in.SkipConfirmation {
 		deleteWorkflows, err := prompt.YesNoPrompt(
 			h.stdin,
-			"Warning: Unlink is a destructive action that will wipe out all workflows registered under your owner address. Do you wish to proceed?",
+			"! Warning: Unlink is a destructive action that will wipe out all workflows registered under your owner address. Do you wish to proceed?",
 		)
 		if err != nil {
 			return err
@@ -207,23 +243,21 @@ func (h *handler) unlinkOwner(owner string, resp initiateUnlinkingResponse) erro
 		return fmt.Errorf("invalid signature hex: %w", err)
 	}
 
-	wrc, err := h.clientFactory.NewWorkflowRegistryV2Client()
-	if err != nil {
-		return fmt.Errorf("wrc init: %w", err)
-	}
 	addr := common.HexToAddress(owner)
-	if err := wrc.CanUnlinkOwner(addr, ts, sigBytes); err != nil {
+	if err := h.wrc.CanUnlinkOwner(addr, ts, sigBytes); err != nil {
 		return fmt.Errorf("unlink request verification failed: %w", err)
 	}
-	txOut, err := wrc.UnlinkOwner(addr, ts, sigBytes)
+	txOut, err := h.wrc.UnlinkOwner(addr, ts, sigBytes)
 	if err != nil {
 		return fmt.Errorf("UnlinkOwner failed: %w", err)
 	}
 
 	switch txOut.Type {
 	case client.Regular:
-		fmt.Printf("Transaction submitted: %s\n", txOut.Hash)
+		fmt.Println("Transaction confirmed")
 		fmt.Printf("View on explorer: \033]8;;%s/tx/%s\033\\%s/tx/%s\033]8;;\033\\\n", h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash, h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash)
+		fmt.Println("\n[OK] web3 address unlinked from your CRE organization successfully")
+		fmt.Println("\n→ This address can no longer deploy workflows on behalf of your organization")
 
 	case client.Raw:
 		selector, err := strconv.ParseUint(resp.ChainSelector, 10, 64)
@@ -257,4 +291,21 @@ func (h *handler) unlinkOwner(owner string, resp initiateUnlinkingResponse) erro
 
 	fmt.Println("Unlinked successfully")
 	return nil
+}
+
+func (h *handler) checkIfAlreadyLinked() (bool, error) {
+	ownerAddr := common.HexToAddress(h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress)
+
+	linked, err := h.wrc.IsOwnerLinked(ownerAddr)
+	if err != nil {
+		return false, fmt.Errorf("failed to check owner link status: %w", err)
+	}
+
+	return linked, nil
+}
+
+func (h *handler) displayDetails() {
+	fmt.Println("Unlinking web3 key from your CRE organization")
+	fmt.Printf("Target : \t\t %s\n", h.settings.User.TargetName)
+	fmt.Printf("✔ Using Address : \t %s\n\n", h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress)
 }

@@ -56,10 +56,18 @@ func (h *handler) handleUpsert(params client.RegisterWorkflowV2Parameters) error
 	}
 	switch txOut.Type {
 	case client.Regular:
-		fmt.Printf("Transaction confirmed: %s\n", txOut.Hash)
+		fmt.Println("Transaction confirmed")
 		fmt.Printf("View on explorer: \033]8;;%s/tx/%s\033\\%s/tx/%s\033]8;;\033\\\n", h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash, h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash)
-		fmt.Printf("Deployed %s:%s with workflow ID: %s\n", workflowName, workflowTag, hex.EncodeToString(params.WorkflowID[:]))
-		fmt.Println("Workflow deployed successfully")
+		fmt.Println("\n[OK] Workflow deployed successfully")
+		fmt.Println("\nDetails:")
+		fmt.Printf("   Contract address:\t%s\n", h.environmentSet.WorkflowRegistryAddress)
+		fmt.Printf("   Transaction hash:\t%s\n", txOut.Hash)
+		fmt.Printf("   Workflow Name:\t%s\n", workflowName)
+		fmt.Printf("   Workflow ID:\t%s\n", h.workflowArtifact.WorkflowID)
+		fmt.Printf("   Binary URL:\t%s\n", h.inputs.BinaryURL)
+		if h.inputs.ConfigURL != nil && *h.inputs.ConfigURL != "" {
+			fmt.Printf("   Config URL:\t%s\n", *h.inputs.ConfigURL)
+		}
 
 	case client.Raw:
 		fmt.Println("")

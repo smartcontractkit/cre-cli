@@ -36,8 +36,22 @@ type EVMConfig struct {
 	ProxyAddress          string `json:"proxyAddress"`
 	BalanceReaderAddress  string `json:"balanceReaderAddress"`
 	MessageEmitterAddress string `json:"messageEmitterAddress"`
-	ChainSelector         uint64 `json:"chainSelector"`
+	ChainName             string `json:"chainName"`
 	GasLimit              uint64 `json:"gasLimit"`
+}
+
+func (e *EVMConfig) GetChainSelector() (uint64, error) {
+	return evm.ChainSelectorFromName(e.ChainName)
+}
+
+func (e *EVMConfig) NewEVMClient() (*evm.Client, error) {
+	chainSelector, err := e.GetChainSelector()
+	if err != nil {
+		return nil, err
+	}
+	return &evm.Client{
+		ChainSelector: chainSelector,
+	}, nil
 }
 
 type Config struct {
@@ -125,7 +139,7 @@ func onLogTrigger(config *Config, runtime cre.Runtime, payload *bindings.Decoded
 	blockNumber.SetString(payload.Log.BlockNumber.String(), 10)
 	message, err = messageEmitter.GetLastMessage(runtime, lastMessageInput, blockNumber).Await()
 	if err != nil {
-		logger.Error("Could not read from contract", "contract_chain", config.EVMs[0].ChainSelector, "err", err.Error())
+		logger.Error("Could not read from contract", "contract_chain", config.EVMs[0].ChainName, "err", err.Error())
 		return "", err
 	}
 	logger.Info("Message retrieved from the contract", "message", message)
@@ -214,8 +228,9 @@ func doPOR(config *Config, runtime cre.Runtime, runTime time.Time) (string, erro
 }
 
 func prepareMessageEmitter(logger *slog.Logger, evmCfg EVMConfig) (*message_emitter.MessageEmitter, error) {
-	evmClient := &evm.Client{
-		ChainSelector: evmCfg.ChainSelector,
+	evmClient, err := evmCfg.NewEVMClient()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create EVM client for %s: %w", evmCfg.ChainName, err)
 	}
 
 	address := common.HexToAddress(evmCfg.MessageEmitterAddress)
@@ -231,8 +246,9 @@ func prepareMessageEmitter(logger *slog.Logger, evmCfg EVMConfig) (*message_emit
 
 func fetchNativeTokenBalance(runtime cre.Runtime, evmCfg EVMConfig, tokenHolderAddress string) (*big.Int, error) {
 	logger := runtime.Logger()
-	evmClient := &evm.Client{
-		ChainSelector: evmCfg.ChainSelector,
+	evmClient, err := evmCfg.NewEVMClient()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create EVM client for %s: %w", evmCfg.ChainName, err)
 	}
 
 	balanceReaderAddress := common.HexToAddress(evmCfg.BalanceReaderAddress)
@@ -253,13 +269,13 @@ func fetchNativeTokenBalance(runtime cre.Runtime, evmCfg EVMConfig, tokenHolderA
 	}, big.NewInt(8771643)).Await()
 
 	if err != nil {
-		logger.Error("Could not read from contract", "contract_chain", evmCfg.ChainSelector, "err", err.Error())
+		logger.Error("Could not read from contract", "contract_chain", evmCfg.ChainName, "err", err.Error())
 		return nil, err
 	}
 
 	if len(balances) < 1 {
-		logger.Error("No balances returned from contract", "contract_chain", evmCfg.ChainSelector)
-		return nil, fmt.Errorf("no balances returned from contract for chain %d", evmCfg.ChainSelector)
+		logger.Error("No balances returned from contract", "contract_chain", evmCfg.ChainName)
+		return nil, fmt.Errorf("no balances returned from contract for chain %s", evmCfg.ChainName)
 	}
 
 	return balances[0], nil
@@ -271,8 +287,10 @@ func getTotalSupply(config *Config, runtime cre.Runtime) (*big.Int, error) {
 	// Fetch supply from all EVMs in parallel
 	supplyPromises := make([]cre.Promise[*big.Int], len(evms))
 	for i, evmCfg := range evms {
-		evmClient := &evm.Client{
-			ChainSelector: evmCfg.ChainSelector,
+		evmClient, err := evmCfg.NewEVMClient()
+		if err != nil {
+			logger.Error("failed to create EVM client", "chainName", evmCfg.ChainName, "err", err)
+			return nil, fmt.Errorf("failed to create EVM client for %s: %w", evmCfg.ChainName, err)
 		}
 
 		address := common.HexToAddress(evmCfg.TokenAddress)
@@ -290,8 +308,8 @@ func getTotalSupply(config *Config, runtime cre.Runtime) (*big.Int, error) {
 	for i, promise := range supplyPromises {
 		supply, err := promise.Await()
 		if err != nil {
-			selector := evms[i].ChainSelector
-			logger.Error("Could not read from contract", "contract_chain", selector, "err", err.Error())
+			chainName := evms[i].ChainName
+			logger.Error("Could not read from contract", "contract_chain", chainName, "err", err.Error())
 			return nil, err
 		}
 
@@ -305,9 +323,12 @@ func updateReserves(config *Config, runtime cre.Runtime, totalSupply *big.Int, t
 	evmCfg := config.EVMs[0]
 	logger := runtime.Logger()
 	logger.Info("Updating reserves", "totalSupply", totalSupply, "totalReserveScaled", totalReserveScaled)
-	evmClient := &evm.Client{
-		ChainSelector: evmCfg.ChainSelector,
+
+	evmClient, err := evmCfg.NewEVMClient()
+	if err != nil {
+		return fmt.Errorf("failed to create EVM client for %s: %w", evmCfg.ChainName, err)
 	}
+
 	reserveManager, err := reserve_manager.NewReserveManager(evmClient, common.HexToAddress(evmCfg.ProxyAddress), nil)
 	if err != nil {
 		return fmt.Errorf("failed to create reserve manager: %w", err)

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 	"sort"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/rs/zerolog"
@@ -62,18 +63,37 @@ type handler struct {
 	clientFactory  client.Factory
 	settings       *settings.Settings
 	environmentSet *environments.EnvironmentSet
-	validated      bool
 	inputs         Inputs
+	wrc            *client.WorkflowRegistryV2Client
+
+	validated bool
+
+	wg     sync.WaitGroup
+	wrcErr error
 }
 
 func newHandler(ctx *runtime.Context) *handler {
-	return &handler{
+	h := handler{
 		log:            ctx.Logger,
 		clientFactory:  ctx.ClientFactory,
 		settings:       ctx.Settings,
 		environmentSet: ctx.EnvironmentSet,
 		validated:      false,
+		wg:             sync.WaitGroup{},
+		wrcErr:         nil,
 	}
+	h.wg.Add(1)
+	go func() {
+		defer h.wg.Done()
+		wrc, err := h.clientFactory.NewWorkflowRegistryV2Client()
+		if err != nil {
+			h.wrcErr = fmt.Errorf("failed to create workflow registry client: %w", err)
+			return
+		}
+		h.wrc = wrc
+	}()
+
+	return &h
 }
 
 func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
@@ -108,15 +128,17 @@ func (h *handler) Execute() error {
 	workflowName := h.inputs.WorkflowName
 	workflowOwner := h.inputs.WorkflowOwner
 
-	wrc, err := h.clientFactory.NewWorkflowRegistryV2Client()
-	if err != nil {
-		return fmt.Errorf("failed to create WorkflowRegistryClient: %w", err)
+	h.displayWorkflowDetails()
+
+	h.wg.Wait()
+	if h.wrcErr != nil {
+		return h.wrcErr
 	}
 
 	ownerAddr := common.HexToAddress(workflowOwner)
 
 	const pageLimit = 200
-	workflows, err := wrc.GetWorkflowListByOwnerAndName(ownerAddr, workflowName, big.NewInt(0), big.NewInt(pageLimit))
+	workflows, err := h.wrc.GetWorkflowListByOwnerAndName(ownerAddr, workflowName, big.NewInt(0), big.NewInt(pageLimit))
 	if err != nil {
 		return fmt.Errorf("failed to get workflow list: %w", err)
 	}
@@ -133,7 +155,7 @@ func (h *handler) Execute() error {
 
 	fmt.Printf("Activating workflow: Name=%s, Owner=%s, WorkflowID=%s\n", workflowName, workflowOwner, hex.EncodeToString(latest.WorkflowId[:]))
 
-	txOut, err := wrc.ActivateWorkflow(latest.WorkflowId, h.inputs.DonFamily)
+	txOut, err := h.wrc.ActivateWorkflow(latest.WorkflowId, h.inputs.DonFamily)
 	if err != nil {
 		return fmt.Errorf("failed to activate workflow: %w", err)
 	}
@@ -142,8 +164,11 @@ func (h *handler) Execute() error {
 	case client.Regular:
 		fmt.Printf("Transaction confirmed: %s\n", txOut.Hash)
 		fmt.Printf("View on explorer: \033]8;;%s/tx/%s\033\\%s/tx/%s\033]8;;\033\\\n", h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash, h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash)
-		fmt.Printf("Activated workflow ID: %s\n", hex.EncodeToString(latest.WorkflowId[:]))
-		fmt.Println("Workflow activated successfully")
+		fmt.Println("\n[OK] Workflow activated successfully")
+		fmt.Printf("   Contract address:\t%s\n", h.environmentSet.WorkflowRegistryAddress)
+		fmt.Printf("   Transaction hash:\t%s\n", txOut.Hash)
+		fmt.Printf("   Workflow Name:\t%s\n", workflowName)
+		fmt.Printf("   Workflow ID:\t%s\n", hex.EncodeToString(latest.WorkflowId[:]))
 
 	case client.Raw:
 		fmt.Println("")
@@ -164,4 +189,10 @@ func (h *handler) Execute() error {
 		h.log.Warn().Msgf("Unsupported transaction type: %s", txOut.Type)
 	}
 	return nil
+}
+
+func (h *handler) displayWorkflowDetails() {
+	fmt.Printf("\nActivating Workflow : \t %s\n", h.inputs.WorkflowName)
+	fmt.Printf("Target : \t\t %s\n", h.settings.User.TargetName)
+	fmt.Printf("Owner Address : \t %s\n\n", h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress)
 }

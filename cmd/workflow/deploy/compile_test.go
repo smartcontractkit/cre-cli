@@ -430,6 +430,7 @@ func createTestSettings(workflowOwnerAddress, workflowOwnerType, workflowName, d
 			WorkflowArtifactSettings: struct {
 				WorkflowPath string `mapstructure:"workflow-path" yaml:"workflow-path"`
 				ConfigPath   string `mapstructure:"config-path" yaml:"config-path"`
+				SecretsPath  string `mapstructure:"secrets-path" yaml:"secrets-path"`
 			}{
 				WorkflowPath: workflowPath,
 				ConfigPath:   configPath,

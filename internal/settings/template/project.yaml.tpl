@@ -1,30 +1,18 @@
 # ==========================================================================
 # CRE PROJECT SETTINGS FILE
 # ==========================================================================
-# This file defines environment-specific targets used by the CRE CLI.
-# Each top-level key is a target (e.g., `production`, `production-testnet`, etc.).
+# Project-specific settings for CRE CLI targets.
+# Each target defines cre-cli, account, and rpcs groups.
 #
-# You can define your own custom target names, such as `my-target`, and point
-# the CLI to it via an environment variable.
-#
-# Below is an example `my-target`:
-#
+# Example custom target:
 # my-target:
 #   cre-cli:
-#     # Required: Workflow DON ID used for registering and operating workflows.
-#     don-family: "small"
+#     don-family: "zone-a"                          # Required: Workflow DON Family
 #   account:
-#     # Optional: The address of the workflow owner (wallet or MSIG contract).
-#     # Used to establish ownership for encrypting the workflow's secrets.
-#     # If omitted, defaults to an empty string.
-#     workflow-owner-address: "0x1234567890abcdef1234567890abcdef12345678"
-#   logging:
-#     # Optional: Path to the seth configuration file (TOML). Used for logging configuration.
-#     seth-config-path: "/path/to/seth-config.toml"
+#     workflow-owner-address: "0x123..."            # Optional: Owner wallet/MSIG address (used for --unsigned transactions)
 #   rpcs:
-#     # Required: Map each used chain selector to a corresponding RPC URL (HTTPS)
-#     - chain-name: ethereum-mainnet
-#       url: "https://sepolia.infura.io/v3/YOUR_API_KEY"
+#     - chain-name: ethereum-mainnet                # Required: Chain RPC endpoints
+#       url: "https://mainnet.infura.io/v3/KEY"
 
 # ==========================================================================
 local-simulation:
@@ -38,8 +26,6 @@ production-testnet:
     don-family: "{{ProductionTestnetDonFamily}}"
   account:
     workflow-owner-address: "{{WorkflowOwnerAddress}}"
-  logging:
-    seth-config-path: {{SethConfigPath}}
   rpcs:
     - chain-name: {{EthSepoliaChainName}}
       url: {{EthSepoliaRpcUrl}}
