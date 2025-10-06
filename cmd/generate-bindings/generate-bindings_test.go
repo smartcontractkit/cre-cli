@@ -73,11 +73,10 @@ func TestResolveInputs_DefaultFallbacks(t *testing.T) {
 
 	// Test with minimal input (only chain-family)
 	v := viper.New()
-	v.Set("chain-family", "evm")
 	v.Set("language", "go")  // Default from StringP
 	v.Set("pkg", "bindings") // Default from StringP
 
-	inputs, err := handler.ResolveInputs([]string{}, v)
+	inputs, err := handler.ResolveInputs([]string{"evm"}, v)
 	require.NoError(t, err)
 
 	// Use filepath.EvalSymlinks to handle macOS /var vs /private/var symlink issues
@@ -108,11 +107,10 @@ func TestResolveInputs_CustomProjectRoot(t *testing.T) {
 	// Test with custom project root
 	v := viper.New()
 	v.Set("project-root", tempDir)
-	v.Set("chain-family", "evm")
 	v.Set("language", "go")  // Default from StringP
 	v.Set("pkg", "bindings") // Default from StringP
 
-	_, err = handler.ResolveInputs([]string{}, v)
+	_, err = handler.ResolveInputs([]string{"evm"}, v)
 	require.Error(t, err)
 
 	expectedErrMsg := fmt.Sprintf("contracts folder not found in project root: %s", tempDir)
@@ -153,11 +151,10 @@ func TestResolveInputs_EmptyProjectRoot(t *testing.T) {
 	// Test with empty project root (should use current directory)
 	v := viper.New()
 	v.Set("project-root", "")
-	v.Set("chain-family", "evm")
 	v.Set("language", "go")  // Default from StringP
 	v.Set("pkg", "bindings") // Default from StringP
 
-	inputs, err := handler.ResolveInputs([]string{}, v)
+	inputs, err := handler.ResolveInputs([]string{"evm"}, v)
 	require.NoError(t, err)
 
 	// Use filepath.EvalSymlinks to handle macOS /var vs /private/var symlink issues
