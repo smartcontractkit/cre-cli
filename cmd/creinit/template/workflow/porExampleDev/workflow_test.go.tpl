@@ -11,6 +11,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm"
+	"github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm/bindings"
 	evmmock "github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm/mock"
 	"github.com/smartcontractkit/cre-sdk-go/capabilities/networking/http"
 	httpmock "github.com/smartcontractkit/cre-sdk-go/capabilities/networking/http/mock"
@@ -28,7 +29,7 @@ var anyExecutionTime = time.Unix(1752514917, 0)
 
 func TestInitWorkflow(t *testing.T) {
 	config := makeTestConfig(t)
-	runtime := testutils.NewRuntime(t, map[string]string{})
+	runtime := testutils.NewRuntime(t, testutils.Secrets{})
 
 	workflow, err := InitWorkflow(config, runtime.Logger(), nil)
 	require.NoError(t, err)
@@ -39,8 +40,10 @@ func TestInitWorkflow(t *testing.T) {
 
 func TestOnCronTrigger(t *testing.T) {
 	config := makeTestConfig(t)
-	runtime := testutils.NewRuntime(t, map[string]string{
-		"/SECRET_ADDRESS": "0x1234567890123456789012345678901234567890",
+	runtime := testutils.NewRuntime(t, testutils.Secrets{
+		"": {
+			"SECRET_ADDRESS": "0x9876543210987654321098765432109876543210",
+		},
 	})
 
 	// Mock HTTP client for POR data
@@ -120,7 +123,7 @@ func TestOnCronTrigger(t *testing.T) {
 
 func TestOnLogTrigger(t *testing.T) {
 	config := makeTestConfig(t)
-	runtime := testutils.NewRuntime(t, map[string]string{})
+	runtime := testutils.NewRuntime(t, testutils.Secrets{})
 
 	// Mock EVM client
 	chainSelector, err := config.EVMs[0].GetChainSelector()
@@ -143,12 +146,21 @@ func TestOnLogTrigger(t *testing.T) {
 		Topics: [][]byte{
 			common.HexToHash("0x1234567890123456789012345678901234567890123456789012345678901234").Bytes(), // event signature
 			common.HexToHash("0x000000000000000000000000abcdefabcdefabcdefabcdefabcdefabcdefabcd").Bytes(), // emitter address (padded)
-			common.HexToHash("0x5678567856785678567856785678567856785678567856785678567856785678").Bytes(), // additional topic
+			common.HexToHash("0x000000000000000000000000000000000000000000000000000000006716eb80").Bytes(), // additional topic
 		},
 		Data: []byte{},
 	}
 
-	result, err := onLogTrigger(config, runtime, mockLog)
+	mockLogDecoded := &bindings.DecodedLog[message_emitter.MessageEmittedDecoded]{
+		Log: mockLog,
+		Data: message_emitter.MessageEmittedDecoded{
+			Emitter:   common.HexToAddress("0xabcdefabcdefabcdefabcdefabcdefabcdefabcd"),
+			Message:   "Test message from contract",
+			Timestamp: big.NewInt(1728200000),
+		},
+	}
+
+	result, err := onLogTrigger(config, runtime, mockLogDecoded)
 	require.NoError(t, err)
 	require.Equal(t, "Test message from contract", result)
 
@@ -159,8 +171,10 @@ func TestOnLogTrigger(t *testing.T) {
 
 func TestOnHTTPTrigger(t *testing.T) {
 	config := makeTestConfig(t)
-	runtime := testutils.NewRuntime(t, map[string]string{
-		"/SECRET_ADDRESS": "0x9876543210987654321098765432109876543210",
+	runtime := testutils.NewRuntime(t, testutils.Secrets{
+		"": {
+			"SECRET_ADDRESS": "0x9876543210987654321098765432109876543210",
+		},
 	})
 
 	// Mock HTTP client for POR data

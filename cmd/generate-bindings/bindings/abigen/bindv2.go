@@ -365,6 +365,7 @@ func BindV2(types []string, abis []string, bytecodes []string, pkg string, libs 
 		"decapitalise":       decapitalise,
 		"ispointertype":      isPointerType,
 		"underlyingbindtype": underlyingBindType,
+		"isDynTopicType":     isDynTopicType,
 	}
 	tmpl := template.Must(template.New("").Funcs(funcs).Parse(templateContent))
 	if err := tmpl.Execute(buffer, data); err != nil {
@@ -390,5 +391,18 @@ func sanitizeStructNames(structs map[string]*tmplStruct, contracts map[string]*t
 		for _, contractName := range contractNames {
 			structName.Name = strings.TrimPrefix(structName.Name, contractName)
 		}
+	}
+}
+
+// If an event has indexed dynamic types, then its hashed and stored on chain.
+// It cannot be decoded from the onchain log.
+// This function deteremine's if an indexed field should be represented as its type or as common.Hash while decoding the onchain log.
+// If it is a dynamic type, then it should be represented as common.Hash
+func isDynTopicType(t abi.Type) bool {
+	switch t.T {
+	case abi.TupleTy, abi.StringTy, abi.BytesTy, abi.SliceTy, abi.ArrayTy:
+		return true
+	default:
+		return false
 	}
 }
