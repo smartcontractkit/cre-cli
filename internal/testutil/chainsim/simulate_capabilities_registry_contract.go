@@ -65,11 +65,11 @@ func DeployCapabilitiesRegistry(t *testing.T, deployerAddress string, ethClient 
 
 	capabilityId := capability.CapabilityId
 
-	var nodeOperator capabilities_registry_wrapper_v2.CapabilitiesRegistryNodeOperator
+	var nodeOperator capabilities_registry_wrapper_v2.CapabilitiesRegistryNodeOperatorParams
 	nodeOperator.Admin = common.HexToAddress(deployerAddress)
 	nodeOperator.Name = "test-nop"
 
-	tx, err = ethClient.Decode(capRegInstance.AddNodeOperators(ethClient.NewTXOpts(), []capabilities_registry_wrapper_v2.CapabilitiesRegistryNodeOperator{nodeOperator}))
+	tx, err = ethClient.Decode(capRegInstance.AddNodeOperators(ethClient.NewTXOpts(), []capabilities_registry_wrapper_v2.CapabilitiesRegistryNodeOperatorParams{nodeOperator}))
 	err = ethClient.DecodeSendErr(err)
 	chain.Backend.Commit()
 	require.NoError(t, err, "Failed to add node operators")

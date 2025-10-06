@@ -40,7 +40,7 @@ func DeployWorkflowRegistry(t *testing.T, ethClient *seth.Client, chain *Simulat
 	chain.Backend.Commit()
 	require.NoError(t, err, "Failed to update authorized addresses")
 
-	err = workflowRegistryClient.SetDonLimit(constants.DefaultProductionDonFamily, 1000, true)
+	err = workflowRegistryClient.SetDonLimit(constants.DefaultProductionDonFamily, 1000, 100)
 	chain.Backend.Commit()
 	require.NoError(t, err, "Failed to update allowed DONs")
 

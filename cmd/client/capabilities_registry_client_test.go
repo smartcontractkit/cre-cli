@@ -26,7 +26,7 @@ type MockCapabilitiesRegistry struct {
 	mock.Mock
 }
 
-func (m *MockCapabilitiesRegistry) GetDONsInFamily(opts *bind.CallOpts, donFamily string) ([]*big.Int, error) {
+func (m *MockCapabilitiesRegistry) GetDONsInFamily(opts *bind.CallOpts, donFamily string, start *big.Int, limit *big.Int) ([]*big.Int, error) {
 	args := m.Called(opts, donFamily)
 	return args.Get(0).([]*big.Int), args.Error(1)
 }

@@ -18,7 +18,7 @@ import (
 // ICapabilitiesRegistry is an interface that defines the methods we need to call
 // on the generated capabilities registry contract.
 type ICapabilitiesRegistry interface {
-	GetDONsInFamily(opts *bind.CallOpts, donFamily string) ([]*big.Int, error)
+	GetDONsInFamily(opts *bind.CallOpts, donFamily string, start *big.Int, limit *big.Int) ([]*big.Int, error)
 	GetDON(opts *bind.CallOpts, donId uint32) (capv2.CapabilitiesRegistryDONInfo, error)
 }
 
@@ -58,7 +58,7 @@ func (wrapper *CapabilitiesRegistryClient) GetVaultMasterPublicKey(donFamily str
 		Str("DON Family", donFamily).
 		Msg("Starting to fetch Vault DON master public key to be able to encrypt secrets (ensure you are connected to a stable RPC provider)")
 
-	donIds, err := wrapper.Cr.GetDONsInFamily(nil, donFamily)
+	donIds, err := wrapper.Cr.GetDONsInFamily(nil, donFamily, big.NewInt(0), big.NewInt(100))
 	if err != nil {
 		return nil, fmt.Errorf("error getting DONs in family %s: %w", donFamily, err)
 	}
