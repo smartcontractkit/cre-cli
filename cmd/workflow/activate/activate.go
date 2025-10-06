@@ -19,6 +19,10 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/validation"
 )
 
+const (
+	WorkflowStatusPaused = uint8(1)
+)
+
 type Inputs struct {
 	WorkflowName                      string `validate:"workflow_name"`
 	WorkflowOwner                     string `validate:"workflow_owner"`
@@ -152,6 +156,11 @@ func (h *handler) Execute() error {
 	})
 
 	latest := workflows[0]
+
+	// Validate precondition: workflow must be in paused state
+	if latest.Status != WorkflowStatusPaused {
+		return fmt.Errorf("workflow is already active, cancelling transaction")
+	}
 
 	fmt.Printf("Activating workflow: Name=%s, Owner=%s, WorkflowID=%s\n", workflowName, workflowOwner, hex.EncodeToString(latest.WorkflowId[:]))
 
