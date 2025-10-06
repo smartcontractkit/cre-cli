@@ -58,10 +58,10 @@ func TestE2EInit_DevPoRTemplate(t *testing.T) {
 		require.FileExists(t, filepath.Join(workflowDirectory, f), "missing workflow file %q", f)
 	}
 
-	// cre generate-bindings --chain-family=evm
+	// cre generate-bindings
 	stdout.Reset()
 	stderr.Reset()
-	bindingsCmd := exec.Command(CLIPath, "generate-bindings", "--chain-family=evm")
+	bindingsCmd := exec.Command(CLIPath, "generate-bindings", "evm")
 	bindingsCmd.Dir = projectRoot
 	bindingsCmd.Stdout = &stdout
 	bindingsCmd.Stderr = &stderr

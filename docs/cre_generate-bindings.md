@@ -10,14 +10,19 @@ Each contract gets its own package subdirectory to avoid naming conflicts.
 For example, IERC20.abi generates bindings in generated/ierc20/ package.
 
 ```
-cre generate-bindings [flags]
+cre generate-bindings <chain-family> [flags]
+```
+
+### Examples
+
+```
+  cre generate-bindings evm
 ```
 
 ### Options
 
 ```
   -a, --abi string            Path to ABI directory (defaults to contracts/{chain-family}/src/abi/)
-  -c, --chain-family string   Chain family (evm) (default "evm")
   -h, --help                  help for generate-bindings
   -l, --language string       Target language (go) (default "go")
   -k, --pkg string            Base package name (each contract gets its own subdirectory) (default "bindings")

@@ -27,13 +27,14 @@ type Inputs struct {
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
 	var generateBindingsCmd = &cobra.Command{
-		Use:   "generate-bindings",
+		Use:   "generate-bindings <chain-family>",
 		Short: "Generate bindings from contract ABI",
 		Long: `This command generates bindings from contract ABI files.
 Supports EVM chain family and Go language.
 Each contract gets its own package subdirectory to avoid naming conflicts.
 For example, IERC20.abi generates bindings in generated/ierc20/ package.`,
-		Args: cobra.NoArgs,
+		Example: "  cre generate-bindings evm",
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			handler := newHandler(runtimeContext)
 
@@ -50,14 +51,9 @@ For example, IERC20.abi generates bindings in generated/ierc20/ package.`,
 	}
 
 	generateBindingsCmd.Flags().StringP("project-root", "p", "", "Path to project root directory (defaults to current directory)")
-	generateBindingsCmd.Flags().StringP("chain-family", "c", "evm", "Chain family (evm)")
 	generateBindingsCmd.Flags().StringP("language", "l", "go", "Target language (go)")
 	generateBindingsCmd.Flags().StringP("abi", "a", "", "Path to ABI directory (defaults to contracts/{chain-family}/src/abi/)")
 	generateBindingsCmd.Flags().StringP("pkg", "k", "bindings", "Base package name (each contract gets its own subdirectory)")
-
-	if err := generateBindingsCmd.MarkFlagRequired("chain-family"); err != nil {
-		return nil
-	}
 
 	return generateBindingsCmd
 }
@@ -92,8 +88,8 @@ func (h *handler) ResolveInputs(args []string, v *viper.Viper) (Inputs, error) {
 		return Inputs{}, fmt.Errorf("contracts folder not found in project root: %s", contractsPath)
 	}
 
-	// Chain family is required, default is evm
-	chainFamily := v.GetString("chain-family")
+	// Chain family is now a positional argument
+	chainFamily := args[0]
 
 	// Language defaults are handled by StringP
 	language := v.GetString("language")

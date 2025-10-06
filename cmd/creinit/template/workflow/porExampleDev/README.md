@@ -89,7 +89,7 @@ Note: This command must be run from the <b>project root directory</b> where proj
 ```bash
 # Navigate to your project root (where project.yaml is located)
 # Generate bindings for all contracts
-cre generate-bindings --chain-family=evm
+cre generate-bindings evm
 
 # The bindings will be generated in contracts/evm/src/generated/
 # Each contract gets its own package subdirectory:
