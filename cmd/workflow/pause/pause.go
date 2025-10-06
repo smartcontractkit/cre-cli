@@ -20,6 +20,10 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/validation"
 )
 
+const (
+	WorkflowStatusActive = uint8(0)
+)
+
 type Inputs struct {
 	WorkflowName                      string `validate:"workflow_name"`
 	WorkflowOwner                     string `validate:"workflow_owner"`
@@ -135,17 +139,29 @@ func (h *handler) Execute() error {
 
 	fmt.Printf("Fetching workflows to pause... Name=%s, Owner=%s\n", workflowName, workflowOwner.Hex())
 
-	workflowIDs, err := fetchAllWorkflowIDs(h.wrc, workflowOwner, workflowName)
+	workflows, err := fetchAllWorkflows(h.wrc, workflowOwner, workflowName)
 	if err != nil {
 		return fmt.Errorf("failed to list workflows: %w", err)
 	}
-	if len(workflowIDs) == 0 {
+	if len(workflows) == 0 {
 		return fmt.Errorf("no workflows found for name %q and owner %q", workflowName, workflowOwner.Hex())
 	}
 
-	fmt.Printf("Processing batch pause... count=%d\n", len(workflowIDs))
+	// Validate precondition: only pause workflows that are currently active
+	var activeWorkflowIDs [][32]byte
+	for _, workflow := range workflows {
+		if workflow.Status == WorkflowStatusActive {
+			activeWorkflowIDs = append(activeWorkflowIDs, workflow.WorkflowId)
+		}
+	}
 
-	txOut, err := h.wrc.BatchPauseWorkflows(workflowIDs)
+	if len(activeWorkflowIDs) == 0 {
+		return fmt.Errorf("workflow is already paused, cancelling transaction")
+	}
+
+	fmt.Printf("Processing batch pause... count=%d\n", len(activeWorkflowIDs))
+
+	txOut, err := h.wrc.BatchPauseWorkflows(activeWorkflowIDs)
 	if err != nil {
 		return fmt.Errorf("failed to batch pause workflows: %w", err)
 	}
@@ -159,7 +175,7 @@ func (h *handler) Execute() error {
 		fmt.Printf("   Contract address:\t%s\n", h.environmentSet.WorkflowRegistryAddress)
 		fmt.Printf("   Transaction hash:\t%s\n", txOut.Hash)
 		fmt.Printf("   Workflow Name:\t%s\n", workflowName)
-		for _, w := range workflowIDs {
+		for _, w := range activeWorkflowIDs {
 			fmt.Printf("   Workflow ID:\t%s\n", hex.EncodeToString(w[:]))
 		}
 
@@ -184,18 +200,18 @@ func (h *handler) Execute() error {
 	return nil
 }
 
-func fetchAllWorkflowIDs(
+func fetchAllWorkflows(
 	wrc interface {
 		GetWorkflowListByOwnerAndName(owner common.Address, workflowName string, start, limit *big.Int) ([]workflow_registry_v2_wrapper.WorkflowRegistryWorkflowMetadataView, error)
 	},
 	owner common.Address,
 	name string,
-) ([][32]byte, error) {
-	const pageSize = int64(100)
+) ([]workflow_registry_v2_wrapper.WorkflowRegistryWorkflowMetadataView, error) {
+	const pageSize = int64(200)
 	var (
-		start = big.NewInt(0)
-		limit = big.NewInt(pageSize)
-		ids   = make([][32]byte, 0, pageSize)
+		start     = big.NewInt(0)
+		limit     = big.NewInt(pageSize)
+		workflows = make([]workflow_registry_v2_wrapper.WorkflowRegistryWorkflowMetadataView, 0, pageSize)
 	)
 
 	for {
@@ -207,9 +223,7 @@ func fetchAllWorkflowIDs(
 			break
 		}
 
-		for _, m := range list {
-			ids = append(ids, m.WorkflowId)
-		}
+		workflows = append(workflows, list...)
 
 		start = big.NewInt(start.Int64() + int64(len(list)))
 		if int64(len(list)) < pageSize {
@@ -217,7 +231,7 @@ func fetchAllWorkflowIDs(
 		}
 	}
 
-	return ids, nil
+	return workflows, nil
 }
 
 func (h *handler) displayWorkflowDetails() {
