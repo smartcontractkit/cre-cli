@@ -102,8 +102,34 @@ func onPORCronTrigger(config *Config, runtime cre.Runtime, outputs *cron.Payload
 
 func onLogTrigger(config *Config, runtime cre.Runtime, payload *bindings.DecodedLog[message_emitter.MessageEmittedDecoded]) (string, error) {
 	logger := runtime.Logger()
+
+	// use the decoded event log to get the event message
 	message := payload.Data.Message
+	logger.Info("Message retrieved from the event log", "message", message)
+
+	// the event message can also be retrieved from the contract itself
+	// below is an example of how to read from the contract
+	messageEmitter, err := prepareMessageEmitter(logger, config.EVMs[0])
+	if err != nil {
+		return "", fmt.Errorf("failed to prepare message emitter: %w", err)
+	}
+
+	// use the decoded event log to get the emitter address
+	// the emitter address is not a dynamic type, so it can be decoded from log even though its indexed
+	emitter := payload.Data.Emitter
+	lastMessageInput := message_emitter.GetLastMessageInput{
+		Emitter: common.Address(emitter),
+	}
+
+	blockNumber := new(big.Int)
+	blockNumber.SetString(payload.Log.BlockNumber.String(), 10)
+	message, err = messageEmitter.GetLastMessage(runtime, lastMessageInput, blockNumber).Await()
+	if err != nil {
+		logger.Error("Could not read from contract", "contract_chain", config.EVMs[0].ChainSelector, "err", err.Error())
+		return "", err
+	}
 	logger.Info("Message retrieved from the contract", "message", message)
+
 	return message, nil
 }
 

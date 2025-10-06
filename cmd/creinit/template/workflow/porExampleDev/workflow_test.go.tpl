@@ -142,7 +142,7 @@ func TestOnLogTrigger(t *testing.T) {
 		Topics: [][]byte{
 			common.HexToHash("0x1234567890123456789012345678901234567890123456789012345678901234").Bytes(), // event signature
 			common.HexToHash("0x000000000000000000000000abcdefabcdefabcdefabcdefabcdefabcdefabcd").Bytes(), // emitter address (padded)
-			common.HexToHash("0x5678567856785678567856785678567856785678567856785678567856785678").Bytes(), // additional topic
+			common.HexToHash("0x000000000000000000000000000000000000000000000000000000006716eb80").Bytes(), // additional topic
 		},
 		Data: []byte{},
 	}
@@ -150,7 +150,9 @@ func TestOnLogTrigger(t *testing.T) {
 	mockLogDecoded := &bindings.DecodedLog[message_emitter.MessageEmittedDecoded]{
 		Log: mockLog,
 		Data: message_emitter.MessageEmittedDecoded{
-			Message: "Test message from contract",
+			Emitter:   common.HexToAddress("0xabcdefabcdefabcdefabcdefabcdefabcdefabcd"),
+			Message:   "Test message from contract",
+			Timestamp: big.NewInt(1728200000),
 		},
 	}
 
