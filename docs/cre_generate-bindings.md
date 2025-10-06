@@ -10,7 +10,7 @@ Each contract gets its own package subdirectory to avoid naming conflicts.
 For example, IERC20.abi generates bindings in generated/ierc20/ package.
 
 ```
-cre generate-bindings <chain-family> [flags]
+cre generate-bindings <chain-family> [optional flags]
 ```
 
 ### Examples

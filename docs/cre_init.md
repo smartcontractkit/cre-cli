@@ -7,7 +7,7 @@ Initialize a new workflow project or add a workflow to an existing one
 Initialize or extend a workflow project by setting up core files, gathering any missing details, and scaffolding the chosen template.
 
 ```
-cre init [flags]
+cre init [optional flags]
 ```
 
 ### Options

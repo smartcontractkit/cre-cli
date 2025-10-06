@@ -7,7 +7,7 @@ Unlink a public key address from your account
 Unlink a previously linked public key address from your account, performing any pre-unlink cleanup.
 
 ```
-cre account unlink-key [flags]
+cre account unlink-key [optional flags]
 ```
 
 ### Options

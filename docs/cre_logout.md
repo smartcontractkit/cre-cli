@@ -7,7 +7,7 @@ Revoke authentication tokens and remove local credentials
 Invalidates the current authentication tokens and deletes stored credentials.
 
 ```
-cre logout [flags]
+cre logout [optional flags]
 ```
 
 ### Options

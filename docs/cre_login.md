@@ -7,7 +7,7 @@ Start authentication flow
 Opens browser for user login and saves credentials.
 
 ```
-cre login [flags]
+cre login [optional flags]
 ```
 
 ### Options
