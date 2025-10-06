@@ -7,7 +7,7 @@ Deploys a workflow to the Workflow Registry contract
 Compiles the workflow, uploads the artifacts, and registers the workflow in the Workflow Registry contract.
 
 ```
-cre workflow deploy <workflow-folder-path> [flags]
+cre workflow deploy <workflow-folder-path> [optional flags]
 ```
 
 ### Examples

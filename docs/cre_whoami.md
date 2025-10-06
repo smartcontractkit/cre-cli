@@ -7,7 +7,7 @@ Show your current account details
 Fetches your account details (email and organization ID).
 
 ```
-cre whoami [flags]
+cre whoami [optional flags]
 ```
 
 ### Options

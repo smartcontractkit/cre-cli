@@ -7,7 +7,7 @@ Link a public key address to your account
 Link a public key address to your account for workflow operations.
 
 ```
-cre account link-key [flags]
+cre account link-key [optional flags]
 ```
 
 ### Options

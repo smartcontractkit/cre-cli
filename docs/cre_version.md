@@ -7,7 +7,7 @@ Print the cre version
 This command prints the current version of the cre
 
 ```
-cre version [flags]
+cre version [optional flags]
 ```
 
 ### Options

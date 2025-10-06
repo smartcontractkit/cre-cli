@@ -7,7 +7,7 @@ List workflow owners
 Fetches workflow owners linked to your organisation
 
 ```
-cre account list-key [flags]
+cre account list-key [optional flags]
 ```
 
 ### Options

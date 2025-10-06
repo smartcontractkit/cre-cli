@@ -7,7 +7,7 @@ Simulates a workflow
 This command simulates a workflow.
 
 ```
-cre workflow simulate <workflow-folder-path> [flags]
+cre workflow simulate <workflow-folder-path> [optional flags]
 ```
 
 ### Examples
