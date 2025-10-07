@@ -117,7 +117,7 @@ func NewSethClientWithSimulated(
 			// Fast priority will add a 20% buffer on top of what the node suggests
 			// we will use last 20 block to estimate block congestion and further bump gas price suggested by the node
 			// we retry 10 times if gas estimation RPC calls fail
-			WithGasPriceEstimations(true, 20, seth.Priority_Fast, 10)
+			WithGasPriceEstimations(true, 20, seth.Priority_Standard, 1)
 		if rpc != "" {
 			sethClientBuilder.WithRpcUrl(rpc)
 		} else {
