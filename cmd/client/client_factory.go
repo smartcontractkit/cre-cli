@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/rs/zerolog"
 	"github.com/spf13/viper"
 
@@ -16,7 +15,6 @@ import (
 )
 
 type Factory interface {
-	NewCapabilitiesRegistryClient() (*CapabilitiesRegistryClient, error)
 	NewWorkflowRegistryV2Client() (*WorkflowRegistryV2Client, error)
 	GetTxType() TxType
 	GetSkipConfirmation() bool
@@ -32,24 +30,6 @@ func NewFactory(logger *zerolog.Logger, viper *viper.Viper) Factory {
 		logger: logger,
 		viper:  viper,
 	}
-}
-
-func (f *factoryImpl) NewCapabilitiesRegistryClient() (*CapabilitiesRegistryClient, error) {
-	environmentSet, err := environments.New()
-	if err != nil {
-		return nil, fmt.Errorf("failed to load environment details: %w", err)
-	}
-	f.logger.Debug().
-		Str("Address", environmentSet.CapabilitiesRegistryAddress).
-		Str("Chain Name", environmentSet.CapabilitiesRegistryChainName).
-		Msg("Selected Capabilities Registry")
-
-	ethClient, err := f.newEthClient(environmentSet.CapabilitiesRegistryChainName)
-	if err != nil {
-		return nil, err
-	}
-
-	return NewCapabilitiesRegistryClient(f.logger, ethClient, common.HexToAddress(environmentSet.CapabilitiesRegistryAddress)), nil
 }
 
 func (f *factoryImpl) NewWorkflowRegistryV2Client() (*WorkflowRegistryV2Client, error) {

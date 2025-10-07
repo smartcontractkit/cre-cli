@@ -20,8 +20,6 @@ const (
 	EnvVarWorkflowRegistryAddress          = "CRE_CLI_WORKFLOW_REGISTRY_ADDRESS"
 	EnvVarWorkflowRegistryChainName        = "CRE_CLI_WORKFLOW_REGISTRY_CHAIN_NAME"
 	EnvVarWorkflowRegistryChainExplorerURL = "CRE_CLI_WORKFLOW_REGISTRY_CHAIN_EXPLORER_URL"
-	EnvVarCapabilitiesRegistryAddress      = "CRE_CLI_CAPABILITIES_REGISTRY_ADDRESS"
-	EnvVarCapabilitiesRegistryChainName    = "CRE_CLI_CAPABILITIES_REGISTRY_CHAIN_NAME"
 
 	DefaultEnv = "STAGING"
 )
@@ -39,8 +37,6 @@ type EnvironmentSet struct {
 	WorkflowRegistryAddress          string `yaml:"CRE_CLI_WORKFLOW_REGISTRY_ADDRESS"`
 	WorkflowRegistryChainName        string `yaml:"CRE_CLI_WORKFLOW_REGISTRY_CHAIN_NAME"`
 	WorkflowRegistryChainExplorerURL string `yaml:"CRE_CLI_WORKFLOW_REGISTRY_CHAIN_EXPLORER_URL"`
-	CapabilitiesRegistryAddress      string `yaml:"CRE_CLI_CAPABILITIES_REGISTRY_ADDRESS"`
-	CapabilitiesRegistryChainName    string `yaml:"CRE_CLI_CAPABILITIES_REGISTRY_CHAIN_NAME"`
 }
 
 type fileFormat struct {
@@ -86,15 +82,9 @@ func NewEnvironmentSet(ff *fileFormat, envName string) *EnvironmentSet {
 	if v := os.Getenv(EnvVarWorkflowRegistryAddress); v != "" {
 		set.WorkflowRegistryAddress = v
 	}
-	if v := os.Getenv(EnvVarCapabilitiesRegistryAddress); v != "" {
-		set.CapabilitiesRegistryAddress = v
-	}
 
 	if v := os.Getenv(EnvVarWorkflowRegistryChainName); v != "" {
 		set.WorkflowRegistryChainName = v
-	}
-	if v := os.Getenv(EnvVarCapabilitiesRegistryChainName); v != "" {
-		set.CapabilitiesRegistryChainName = v
 	}
 
 	return &set

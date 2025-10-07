@@ -5,9 +5,8 @@ import (
 )
 
 const (
-	WorkflowRegistryContractName     = "WorkflowRegistry"
-	CapabilitiesRegistryContractName = "CapabilitiesRegistry"
-	BalanceReaderContractName        = "BalanceReader"
+	WorkflowRegistryContractName = "WorkflowRegistry"
+	BalanceReaderContractName    = "BalanceReader"
 
 	MaxBinarySize                               = 20 * 1024 * 1024
 	MaxConfigSize                               = 5 * 1024 * 1024
