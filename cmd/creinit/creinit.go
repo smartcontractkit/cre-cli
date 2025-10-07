@@ -70,7 +70,6 @@ var languageTemplates = []LanguageTemplate{
 }
 
 type Inputs struct {
-	ProjectPath  string `validate:"omitempty"`
 	ProjectName  string `validate:"omitempty,project_name" cli:"project-name"`
 	TemplateID   uint32 `validate:"omitempty,min=0"`
 	WorkflowName string `validate:"omitempty,workflow_name" cli:"workflow-name"`
@@ -97,7 +96,6 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 		},
 	}
 
-	initCmd.Flags().StringP("project-path", "P", "", "Relative path to project root")
 	initCmd.Flags().StringP("project-name", "p", "", "Name for the new project")
 	initCmd.Flags().StringP("workflow-name", "w", "", "Name for the new workflow")
 	initCmd.Flags().Uint32P("template-id", "t", 0, "ID of the workflow template to use")
@@ -123,7 +121,6 @@ func newHandler(ctx *runtime.Context, stdin io.Reader) *handler {
 
 func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 	return Inputs{
-		ProjectPath:  v.GetString("project-path"),
 		ProjectName:  v.GetString("project-name"),
 		TemplateID:   v.GetUint32("template-id"),
 		WorkflowName: v.GetString("workflow-name"),
@@ -149,14 +146,11 @@ func (h *handler) Execute(inputs Inputs) error {
 		return fmt.Errorf("handler inputs not validated")
 	}
 
-	startDir := inputs.ProjectPath
-	if startDir == "" {
-		cwd, err := os.Getwd()
-		if err != nil {
-			return fmt.Errorf("unable to get working directory: %w", err)
-		}
-		startDir = cwd
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("unable to get working directory: %w", err)
 	}
+	startDir := cwd
 
 	projectRoot, existingProjectLanguage, err := func(dir string) (string, string, error) {
 		for {

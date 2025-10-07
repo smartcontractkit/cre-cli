@@ -71,7 +71,6 @@ func TestInitExecuteFlows(t *testing.T) {
 	cases := []struct {
 		name                string
 		projectNameFlag     string
-		projectPathFlag     string
 		templateIDFlag      uint32
 		workflowNameFlag    string
 		mockResponses       []string
@@ -80,20 +79,18 @@ func TestInitExecuteFlows(t *testing.T) {
 		expectTemplateFiles []string
 	}{
 		{
-			name:                "explicit project+path, default template via prompt, custom workflow via prompt",
+			name:                "explicit project, default template via prompt, custom workflow via prompt",
 			projectNameFlag:     "myproj",
-			projectPathFlag:     "services",
 			templateIDFlag:      0,
 			workflowNameFlag:    "",
 			mockResponses:       []string{"", "", "myworkflow"},
-			expectProjectDirRel: filepath.Join("services", "myproj"),
+			expectProjectDirRel: "myproj",
 			expectWorkflowName:  "myworkflow",
 			expectTemplateFiles: GetTemplateFileList(),
 		},
 		{
 			name:                "only project, default template+workflow via prompt",
 			projectNameFlag:     "alpha",
-			projectPathFlag:     "",
 			templateIDFlag:      0,
 			workflowNameFlag:    "",
 			mockResponses:       []string{"", "", "default-wf"},
@@ -104,7 +101,6 @@ func TestInitExecuteFlows(t *testing.T) {
 		{
 			name:                "no flags: prompt project, blank template, prompt workflow",
 			projectNameFlag:     "",
-			projectPathFlag:     "",
 			templateIDFlag:      0,
 			workflowNameFlag:    "",
 			mockResponses:       []string{"projX", "1", "", "workflow-X"},
@@ -115,7 +111,6 @@ func TestInitExecuteFlows(t *testing.T) {
 		{
 			name:                "workflow-name flag only, default template, no workflow prompt",
 			projectNameFlag:     "projFlag",
-			projectPathFlag:     "",
 			templateIDFlag:      0,
 			workflowNameFlag:    "flagged-wf",
 			mockResponses:       []string{"", ""},
@@ -126,7 +121,6 @@ func TestInitExecuteFlows(t *testing.T) {
 		{
 			name:                "template-id flag only, no template prompt",
 			projectNameFlag:     "tplProj",
-			projectPathFlag:     "",
 			templateIDFlag:      2,
 			workflowNameFlag:    "",
 			mockResponses:       []string{"workflow-Tpl"},
@@ -146,13 +140,7 @@ func TestInitExecuteFlows(t *testing.T) {
 			require.NoError(t, err)
 			defer restoreCwd()
 
-			var absProjectPath string
-			if tc.projectPathFlag != "" {
-				absProjectPath = filepath.Join(tempDir, tc.projectPathFlag)
-			}
-
 			inputs := Inputs{
-				ProjectPath:  absProjectPath,
 				ProjectName:  tc.projectNameFlag,
 				TemplateID:   tc.templateIDFlag,
 				WorkflowName: tc.workflowNameFlag,
@@ -190,7 +178,6 @@ func TestInsideExistingProjectAddsWorkflow(t *testing.T) {
 	_ = os.Remove(constants.DefaultEnvFileName)
 
 	inputs := Inputs{
-		ProjectPath:  "",
 		ProjectName:  "",
 		TemplateID:   2,
 		WorkflowName: "",
@@ -223,7 +210,6 @@ func TestInitWithTypescriptTemplateSkipsGoScaffold(t *testing.T) {
 	defer restoreCwd()
 
 	inputs := Inputs{
-		ProjectPath:  "",
 		ProjectName:  "tsProj",
 		TemplateID:   3, // TypeScript template
 		WorkflowName: "",
@@ -264,7 +250,6 @@ func TestInsideExistingProjectAddsTypescriptWorkflowSkipsGoScaffold(t *testing.T
 	_ = os.Remove(constants.DefaultEnvFileName)
 
 	inputs := Inputs{
-		ProjectPath:  "",
 		ProjectName:  "",
 		TemplateID:   3, // TypeScript template
 		WorkflowName: "",
