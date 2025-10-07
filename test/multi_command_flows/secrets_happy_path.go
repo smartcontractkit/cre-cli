@@ -46,8 +46,6 @@ func RunSecretsHappyPath(t *testing.T, tc TestConfig, chainName string) {
 	// Set up environment variables for pre-deployed contracts
 	t.Setenv(environments.EnvVarWorkflowRegistryAddress, "0x5FbDB2315678afecb367f032d93F642f64180aa3")
 	t.Setenv(environments.EnvVarWorkflowRegistryChainName, chainName)
-	t.Setenv(environments.EnvVarCapabilitiesRegistryAddress, "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9")
-	t.Setenv(environments.EnvVarCapabilitiesRegistryChainName, chainName)
 
 	// Set up a mock server to simulate the vault gateway
 	// Set dummy API key

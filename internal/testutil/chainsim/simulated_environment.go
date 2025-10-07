@@ -23,8 +23,7 @@ type SimulatedEnvironment struct {
 }
 
 type SimulatedContracts struct {
-	CapabilitiesRegistry SimulatedCapabilitiesRegistry
-	WorkflowRegistry     SimulatedWorkflowRegistry
+	WorkflowRegistry SimulatedWorkflowRegistry
 }
 
 func NewSimulatedEnvironment(t *testing.T) *SimulatedEnvironment {
@@ -33,11 +32,9 @@ func NewSimulatedEnvironment(t *testing.T) *SimulatedEnvironment {
 	chain := NewSimulatedChain()
 	simulatedClient := NewSimulatedClient(t, chain, logger)
 
-	capabilitiesRegistryContract := DeployCapabilitiesRegistry(t, TestAddress, simulatedClient, chain, logger)
 	workflowRegistryContract := DeployWorkflowRegistry(t, simulatedClient, chain, logger)
 	simulatedContracts := SimulatedContracts{
-		CapabilitiesRegistry: capabilitiesRegistryContract,
-		WorkflowRegistry:     workflowRegistryContract,
+		WorkflowRegistry: workflowRegistryContract,
 	}
 
 	simulatedEnvironment := SimulatedEnvironment{

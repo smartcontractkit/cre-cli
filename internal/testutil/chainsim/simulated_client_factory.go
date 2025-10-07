@@ -22,10 +22,6 @@ func NewSimulatedClientFactory(logger *zerolog.Logger, ethClient *seth.Client, s
 	}
 }
 
-func (f *testFactoryImpl) NewCapabilitiesRegistryClient() (*client.CapabilitiesRegistryClient, error) {
-	return client.NewCapabilitiesRegistryClient(f.logger, f.ethClient, f.simulatedContracts.CapabilitiesRegistry.Contract), nil
-}
-
 func (f *testFactoryImpl) NewWorkflowRegistryV2Client() (*client.WorkflowRegistryV2Client, error) {
 	txcConfig := client.TxClientConfig{
 		TxType:       client.Regular,

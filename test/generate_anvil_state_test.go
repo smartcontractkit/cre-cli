@@ -1,7 +1,6 @@
 package test
 
 import (
-	"crypto/ed25519"
 	"os"
 	"os/signal"
 	"strconv"
@@ -10,8 +9,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-
-	p2ptypes "github.com/smartcontractkit/libocr/ragep2p/types"
 
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	test "github.com/smartcontractkit/cre-cli/test/contracts"
@@ -92,12 +89,6 @@ func TestGenerateAnvilState(t *testing.T) {
 	_, err := test.DeployTestWorkflowRegistry(t, sethClient)
 	if err != nil {
 		t.Fatalf("failed to deploy and configure WorkflowRegistry: %v", err)
-	}
-
-	_, pubKey, peerId := test.CreateTestSigner()
-	_, err = test.DeployCapabilitiesRegistry(sethClient, []*ed25519.PublicKey{&pubKey}, []p2ptypes.PeerID{peerId})
-	if err != nil {
-		t.Fatalf("failed to deploy and configure CapabilitiesRegistry: %v", err)
 	}
 }
 
