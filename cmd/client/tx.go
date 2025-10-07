@@ -154,15 +154,17 @@ func (c *TxClient) executeTransactionByTxType(txFn func(opts *bind.TransactOpts)
 		fmt.Printf("  Data:\t\t%x\n", simulateTx.Data())
 		// Calculate and print total cost for sending the transaction on-chain
 		if gasErr == nil {
-			gasPrice, gasPriceErr := c.EthClient.Client.SuggestGasPrice(c.EthClient.Context)
+			gasPriceWei, gasPriceErr := c.EthClient.Client.SuggestGasPrice(c.EthClient.Context)
 			if gasPriceErr != nil {
 				c.Logger.Warn().Err(gasPriceErr).Msg("Failed to fetch gas price")
 			} else {
-				totalCost := new(big.Int).Mul(new(big.Int).SetUint64(estimatedGas), gasPrice)
+				gasPriceGwei := new(big.Float).Quo(new(big.Float).SetInt(gasPriceWei), big.NewFloat(1e9))
+				totalCost := new(big.Int).Mul(new(big.Int).SetUint64(estimatedGas), gasPriceWei)
 				// Convert from wei to ether for display
 				etherValue := new(big.Float).Quo(new(big.Float).SetInt(totalCost), big.NewFloat(1e18))
+
 				fmt.Println("Estimated Cost:")
-				fmt.Printf("  Gas Price:      %s wei\n", gasPrice.String())
+				fmt.Printf("  Gas Price:      %s gwei\n", gasPriceGwei.Text('f', 8))
 				fmt.Printf("  Total Cost:     %s ETH\n", etherValue.Text('f', 8))
 			}
 		}
