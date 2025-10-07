@@ -21,9 +21,6 @@ const testYAML = `ENVIRONMENTS:
     CRE_CLI_WORKFLOW_REGISTRY_ADDRESS: "0x51D3acf4526e014deBf9884159A57f63Fc0Ca49D"
     CRE_CLI_WORKFLOW_REGISTRY_CHAIN_NAME: "ethereum-testnet-sepolia-base-1"
 
-    CRE_CLI_CAPABILITIES_REGISTRY_ADDRESS: "0x02471a03A86ac92DE793af303E9f756f0aE60677"
-    CRE_CLI_CAPABILITIES_REGISTRY_CHAIN_NAME: "ethereum-testnet-sepolia"
-
   STAGING:
     CRE_CLI_AUTH_BASE: https://staging.auth0
     CRE_CLI_COGNITO_URL: https://staging.cognito
@@ -34,9 +31,6 @@ const testYAML = `ENVIRONMENTS:
 
     CRE_CLI_WORKFLOW_REGISTRY_ADDRESS: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     CRE_CLI_WORKFLOW_REGISTRY_CHAIN_NAME: "ethereum-mainnet"
-
-    CRE_CLI_CAPABILITIES_REGISTRY_ADDRESS: "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
-    CRE_CLI_CAPABILITIES_REGISTRY_CHAIN_NAME: "polygon-mainnet"
 `
 
 func TestLoadEnvironmentFile(t *testing.T) {
@@ -74,12 +68,6 @@ func TestLoadEnvironmentFile(t *testing.T) {
 	if sbx.WorkflowRegistryChainName != "ethereum-testnet-sepolia-base-1" {
 		t.Errorf("WorkflowRegistryChainName = %q; want ethereum-testnet-sepolia-base-1", sbx.WorkflowRegistryChainName)
 	}
-	if sbx.CapabilitiesRegistryAddress != "0x02471a03A86ac92DE793af303E9f756f0aE60677" {
-		t.Errorf("CapabilitiesRegistryAddress = %q; want 0x02471a03A86ac92DE793af303E9f756f0aE60677", sbx.CapabilitiesRegistryAddress)
-	}
-	if sbx.CapabilitiesRegistryChainName != "ethereum-testnet-sepolia" {
-		t.Errorf("CapabilitiesRegistryChainName = %q; want ethereum-testnet-sepolia", sbx.CapabilitiesRegistryChainName)
-	}
 }
 
 func TestNewEnvironmentSet_FallbackAndOverrides(t *testing.T) {
@@ -90,10 +78,8 @@ func TestNewEnvironmentSet_FallbackAndOverrides(t *testing.T) {
 			GraphQLURL: "d",
 			Audience:   "aa",
 
-			WorkflowRegistryAddress:       "0xsandbox_wr",
-			WorkflowRegistryChainName:     "ethereum-testnet-sepolia",
-			CapabilitiesRegistryAddress:   "0xsandbox_cap",
-			CapabilitiesRegistryChainName: "ethereum-testnet-sepolia-base-1",
+			WorkflowRegistryAddress:   "0xsandbox_wr",
+			WorkflowRegistryChainName: "ethereum-testnet-sepolia",
 		},
 		"STAGING": {
 			AuthBase:   "g",
@@ -101,10 +87,8 @@ func TestNewEnvironmentSet_FallbackAndOverrides(t *testing.T) {
 			GraphQLURL: "i",
 			Audience:   "bb",
 
-			WorkflowRegistryAddress:       "0xstaging_wr",
-			WorkflowRegistryChainName:     "polygon-mainnet",
-			CapabilitiesRegistryAddress:   "0xstaging_cap",
-			CapabilitiesRegistryChainName: "ethereum-mainnet",
+			WorkflowRegistryAddress:   "0xstaging_wr",
+			WorkflowRegistryChainName: "polygon-mainnet",
 		},
 	}}
 
@@ -122,9 +106,7 @@ func TestNewEnvironmentSet_FallbackAndOverrides(t *testing.T) {
 	}
 	t.Setenv(EnvVarAudience, "")
 	t.Setenv(EnvVarWorkflowRegistryAddress, "")
-	t.Setenv(EnvVarCapabilitiesRegistryAddress, "")
 	t.Setenv(EnvVarWorkflowRegistryChainName, "")
-	t.Setenv(EnvVarCapabilitiesRegistryChainName, "")
 
 	set2 := NewEnvironmentSet(ff, "STAGING")
 	if set2.ClientID != "h" {
@@ -136,20 +118,12 @@ func TestNewEnvironmentSet_FallbackAndOverrides(t *testing.T) {
 	if set2.WorkflowRegistryChainName != "polygon-mainnet" {
 		t.Errorf("WorkflowRegistryChainName = %q; want polygon-mainnet", set2.WorkflowRegistryChainName)
 	}
-	if set2.CapabilitiesRegistryAddress != "0xstaging_cap" {
-		t.Errorf("CapabilitiesRegistryAddress = %q; want 0xstaging_cap", set2.CapabilitiesRegistryAddress)
-	}
-	if set2.CapabilitiesRegistryChainName != "ethereum-mainnet" {
-		t.Errorf("CapabilitiesRegistryChainName = %q; want ethereum-mainnet", set2.CapabilitiesRegistryChainName)
-	}
 
 	t.Setenv(EnvVarClientID, "override-id")
 	t.Setenv(EnvVarAuthBase, "override-auth")
 	t.Setenv(EnvVarAudience, "override-aud")
 	t.Setenv(EnvVarWorkflowRegistryAddress, "0xoverride_wr")
-	t.Setenv(EnvVarCapabilitiesRegistryAddress, "0xoverride_cap")
 	t.Setenv(EnvVarWorkflowRegistryChainName, "ethereum-testnet-arbitrum-1")
-	t.Setenv(EnvVarCapabilitiesRegistryChainName, "ethereum-testnet-optimism-1")
 
 	set3 := NewEnvironmentSet(ff, "STAGING")
 	if set3.ClientID != "override-id" {
@@ -164,14 +138,8 @@ func TestNewEnvironmentSet_FallbackAndOverrides(t *testing.T) {
 	if set3.WorkflowRegistryAddress != "0xoverride_wr" {
 		t.Errorf("WorkflowRegistryAddress = %q; want 0xoverride_wr", set3.WorkflowRegistryAddress)
 	}
-	if set3.CapabilitiesRegistryAddress != "0xoverride_cap" {
-		t.Errorf("CapabilitiesRegistryAddress = %q; want 0xoverride_cap", set3.CapabilitiesRegistryAddress)
-	}
 	if set3.WorkflowRegistryChainName != "ethereum-testnet-arbitrum-1" {
 		t.Errorf("WorkflowRegistryChainName = %q; want ethereum-testnet-arbitrum-1", set3.WorkflowRegistryChainName)
-	}
-	if set3.CapabilitiesRegistryChainName != "ethereum-testnet-optimism-1" {
-		t.Errorf("CapabilitiesRegistryChainName = %q; want ethereum-testnet-optimism-1", set3.CapabilitiesRegistryChainName)
 	}
 
 }

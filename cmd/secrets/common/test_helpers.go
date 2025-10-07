@@ -39,11 +39,6 @@ func (m *MockClientFactory) GetSkipConfirmation() bool {
 	panic("not used in these tests")
 }
 
-func (m *MockClientFactory) NewCapabilitiesRegistryClient() (*client.CapabilitiesRegistryClient, error) {
-	args := m.Called()
-	return args.Get(0).(*client.CapabilitiesRegistryClient), args.Error(1)
-}
-
 func (m *MockClientFactory) NewWorkflowRegistryV2Client() (*client.WorkflowRegistryV2Client, error) {
 	args := m.Called()
 	var c *client.WorkflowRegistryV2Client

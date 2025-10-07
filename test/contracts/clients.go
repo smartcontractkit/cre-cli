@@ -1,9 +1,6 @@
 package test
 
 import (
-	"context"
-	"crypto/ed25519"
-	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -17,16 +14,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/protobuf/proto"
 
-	"github.com/smartcontractkit/chainlink-common/pkg/capabilities/actions/vault"
-	vaultcfgpb "github.com/smartcontractkit/chainlink-common/pkg/capabilities/pb"
-	"github.com/smartcontractkit/chainlink-common/pkg/types/core"
-	"github.com/smartcontractkit/chainlink-evm/gethwrappers/workflow/generated/capabilities_registry_wrapper_v2"
 	"github.com/smartcontractkit/chainlink-evm/gethwrappers/workflow/generated/workflow_registry_wrapper_v2"
-	valuespb "github.com/smartcontractkit/chainlink-protos/cre/go/values/pb"
 	"github.com/smartcontractkit/chainlink-testing-framework/seth"
-	p2ptypes "github.com/smartcontractkit/libocr/ragep2p/types"
 
 	"github.com/smartcontractkit/cre-cli/cmd/client"
 	"github.com/smartcontractkit/cre-cli/internal/constants"
@@ -40,92 +30,6 @@ func DeployBalanceReader(sethClient *seth.Client) (common.Address, error) {
 	)
 	if err != nil {
 		return common.Address{}, fmt.Errorf("failed to deploy BalanceReader contract: %w", err)
-	}
-
-	return deployedContract.Address, nil
-}
-
-func DeployCapabilitiesRegistry(sethClient *seth.Client, pubKeys []*ed25519.PublicKey, p2pIds []p2ptypes.PeerID) (common.Address, error) {
-	deployedContract, err := sethClient.DeployContractFromContractStore(
-		sethClient.NewTXOpts(),
-		constants.CapabilitiesRegistryContractName,
-		capabilities_registry_wrapper_v2.CapabilitiesRegistryConstructorParams{
-			CanAddOneNodeDONs: true,
-		},
-	)
-	if err != nil {
-		return common.Address{}, fmt.Errorf("failed to deploy CapabilitiesRegistry contract: %w", err)
-	}
-
-	registry, err := capabilities_registry_wrapper_v2.NewCapabilitiesRegistry(deployedContract.Address, sethClient.Client)
-	if err != nil {
-		return common.Address{}, err
-	}
-
-	_, err = sethClient.Decode(registry.AddNodeOperators(sethClient.NewTXOpts(), []capabilities_registry_wrapper_v2.CapabilitiesRegistryNodeOperatorParams{
-		{
-			Admin: common.HexToAddress(constants.TestAddress),
-			Name:  "operator",
-		},
-	}))
-	if err != nil {
-		return common.Address{}, fmt.Errorf("failed to add node operators to CapabilitiesRegistry: %w", err)
-	}
-
-	_, err = sethClient.Decode(registry.AddCapabilities(sethClient.NewTXOpts(), []capabilities_registry_wrapper_v2.CapabilitiesRegistryCapability{
-		{
-			CapabilityId:          vault.CapabilityID,
-			ConfigurationContract: common.HexToAddress("0x0"),
-			Metadata:              []byte{0x01, 0x02, 0x03}, // Example metadata, should be replaced with actual metadata
-		},
-	}))
-	if err != nil {
-		return common.Address{}, fmt.Errorf("failed to add capabilities to CapabilitiesRegistry: %w", err)
-	}
-
-	_, err = sethClient.Decode(registry.AddNodes(sethClient.NewTXOpts(), []capabilities_registry_wrapper_v2.CapabilitiesRegistryNodeParams{
-		{
-			NodeOperatorId:      1,
-			Signer:              [32]byte(crypto.Keccak256([]byte(uuid.New().String()))),
-			P2pId:               p2pIds[0],
-			EncryptionPublicKey: [32]byte(crypto.Keccak256([]byte(uuid.New().String()))),
-			CsaKey:              [32]byte(*pubKeys[0]),
-			CapabilityIds:       []string{vault.CapabilityID},
-		},
-	}))
-	if err != nil {
-		return common.Address{}, fmt.Errorf("failed to add nodes to CapabilitiesRegistry: %w", err)
-	}
-
-	vaultCfgBytes, err := buildVaultCapabilityConfigBytes([]byte(*pubKeys[0]))
-	if err != nil {
-		return common.Address{}, fmt.Errorf("failed to build vault capability config bytes: %w", err)
-	}
-
-	_, err = sethClient.Decode(registry.AddDONs(sethClient.NewTXOpts(), []capabilities_registry_wrapper_v2.CapabilitiesRegistryNewDONParams{
-		{
-			Name:        "zone-a",
-			DonFamilies: []string{constants.DefaultStagingDonFamily},
-			Config:      []byte{0x01, 0x02, 0x03}, // Example config, should be replaced with actual config
-			CapabilityConfigurations: []capabilities_registry_wrapper_v2.CapabilitiesRegistryCapabilityConfiguration{
-				{
-					CapabilityId: vault.CapabilityID,
-					Config:       vaultCfgBytes,
-				},
-			},
-			Nodes:            [][32]byte{p2pIds[0]},
-			F:                0,
-			IsPublic:         true,
-			AcceptsWorkflows: true,
-		},
-	}))
-	if err != nil {
-		return common.Address{}, fmt.Errorf("failed to add DONs to CapabilitiesRegistry: %w", err)
-	}
-
-	_, err = sethClient.Decode(registry.SetDONFamilies(sethClient.NewTXOpts(), 1, []string{constants.DefaultStagingDonFamily}, nil))
-	if err != nil {
-		return common.Address{}, fmt.Errorf("failed to set DON families in CapabilitiesRegistry: %w", err)
 	}
 
 	return deployedContract.Address, nil
@@ -217,65 +121,6 @@ func DeployTestWorkflowRegistry(t *testing.T, sethClient *seth.Client) (*workflo
 	}
 
 	return registry, nil
-}
-
-// Helper function to create test Ed25519 signer and keys
-func CreateTestSigner() (*core.Ed25519Signer, ed25519.PublicKey, p2ptypes.PeerID) {
-	// Generate a private key for signing
-	csaPubKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
-	if err != nil {
-		panic("Failed to generate Ed25519 key pair: " + err.Error())
-	}
-
-	// Generate a separate public key for p2pId
-	p2pIdKey, _, err := ed25519.GenerateKey(rand.Reader)
-	if err != nil {
-		panic("Failed to generate Ed25519 p2pId: " + err.Error())
-	}
-
-	// Create PeerID from ed25519 public key
-	p2pId, err := p2ptypes.PeerIDFromPublicKey(p2pIdKey)
-	if err != nil {
-		panic("Failed to create PeerID from public key: " + err.Error())
-	}
-
-	// Create ed25519 signer from the mock node's csa private key
-	signFn := func(ctx context.Context, account string, data []byte) (signed []byte, err error) {
-		return ed25519.Sign(privateKey, data), nil
-	}
-
-	signer, err := core.NewEd25519Signer(hex.EncodeToString(csaPubKey), signFn)
-	if err != nil {
-		panic("Failed to create Ed25519Signer: " + err.Error())
-	}
-
-	return signer, csaPubKey, p2pId
-}
-
-type OwnershipProofSignaturePayload struct {
-	RequestType              uint8          // should be uint8 in Solidity, 1 byte
-	WorkflowOwnerAddress     common.Address // should be 20 bytes in Solidity, address type
-	ChainID                  string         // should be uint256 in Solidity, chain-selectors provide it as a string
-	WorkflowRegistryContract common.Address // address of the WorkflowRegistry contract, should be 20 bytes in Solidity
-	Version                  string         // should be dynamic type in Solidity (string)
-	ValidityTimestamp        time.Time      // should be uint256 in Solidity
-	OwnershipProofHash       common.Hash    // should be bytes32 in Solidity, 32 bytes hash of the ownership proof
-}
-
-// buildVaultCapabilityConfigBytes builds the protobuf-encoded CapabilityConfig bytes
-// setting DefaultConfig["VaultPublicKey"] = <pubKeyBytes>.
-func buildVaultCapabilityConfigBytes(raw []byte) ([]byte, error) {
-	if len(raw) != 32 {
-		return nil, fmt.Errorf("VaultPublicKey must be 32 bytes, got %d", len(raw))
-	}
-	cfg := &vaultcfgpb.CapabilityConfig{
-		DefaultConfig: &valuespb.Map{
-			Fields: map[string]*valuespb.Value{
-				"VaultPublicKey": {Value: &valuespb.Value_BytesValue{BytesValue: raw}},
-			},
-		},
-	}
-	return proto.Marshal(cfg)
 }
 
 func NewSethClientWithContracts(t *testing.T, logger *zerolog.Logger, rpcUrl string, chainId uint64, configFile string) *seth.Client {

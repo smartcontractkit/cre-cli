@@ -35,8 +35,6 @@ func TestMultiCommandWorkflowHappyPaths(t *testing.T) {
 		// Setup environment variables for pre-baked registries from Anvil state dump
 		t.Setenv(environments.EnvVarWorkflowRegistryAddress, "0x5FbDB2315678afecb367f032d93F642f64180aa3")
 		t.Setenv(environments.EnvVarWorkflowRegistryChainName, chainselectors.ANVIL_DEVNET.Name)
-		t.Setenv(environments.EnvVarCapabilitiesRegistryAddress, "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9")
-		t.Setenv(environments.EnvVarCapabilitiesRegistryChainName, chainselectors.ANVIL_DEVNET.Name)
 
 		tc := NewTestConfig(t)
 
@@ -61,8 +59,6 @@ func TestMultiCommandWorkflowHappyPaths(t *testing.T) {
 		// Setup environment variables for pre-baked registries from Anvil state dump
 		t.Setenv(environments.EnvVarWorkflowRegistryAddress, "0x5FbDB2315678afecb367f032d93F642f64180aa3")
 		t.Setenv(environments.EnvVarWorkflowRegistryChainName, chainselectors.ANVIL_DEVNET.Name)
-		t.Setenv(environments.EnvVarCapabilitiesRegistryAddress, "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9")
-		t.Setenv(environments.EnvVarCapabilitiesRegistryChainName, chainselectors.ANVIL_DEVNET.Name)
 
 		tc := NewTestConfig(t)
 
@@ -87,8 +83,6 @@ func TestMultiCommandWorkflowHappyPaths(t *testing.T) {
 		// Setup environment variables for pre-baked registries from Anvil state dump
 		t.Setenv(environments.EnvVarWorkflowRegistryAddress, "0x5FbDB2315678afecb367f032d93F642f64180aa3")
 		t.Setenv(environments.EnvVarWorkflowRegistryChainName, chainselectors.ANVIL_DEVNET.Name)
-		t.Setenv(environments.EnvVarCapabilitiesRegistryAddress, "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9")
-		t.Setenv(environments.EnvVarCapabilitiesRegistryChainName, chainselectors.ANVIL_DEVNET.Name)
 
 		tc := NewTestConfig(t)
 
