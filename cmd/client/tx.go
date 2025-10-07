@@ -4,10 +4,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/big"
 	"os"
 	"strconv"
 	"strings"
 
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -128,6 +130,19 @@ func (c *TxClient) executeTransactionByTxType(txFn func(opts *bind.TransactOpts)
 		if err != nil {
 			return TxOutput{Type: Regular}, err
 		}
+		msg := ethereum.CallMsg{
+			From:     c.EthClient.Addresses[0],
+			To:       simulateTx.To(),
+			Gas:      0,
+			GasPrice: nil,
+			Value:    simulateTx.Value(),
+			Data:     simulateTx.Data(),
+		}
+		estimatedGas, gasErr := c.EthClient.Client.EstimateGas(c.EthClient.Context, msg)
+		if gasErr != nil {
+			c.Logger.Warn().Err(gasErr).Msg("Failed to estimate gas usage")
+		}
+
 		fmt.Println("Transaction details:")
 		fmt.Printf("  Chain Name:\t%s\n", chainDetails.ChainName)
 		fmt.Printf("  To:\t\t%s\n", simulateTx.To().Hex())
@@ -137,6 +152,22 @@ func (c *TxClient) executeTransactionByTxType(txFn func(opts *bind.TransactOpts)
 			fmt.Printf("    [%d]:\t%s\n", i, arg)
 		}
 		fmt.Printf("  Data:\t\t%x\n", simulateTx.Data())
+		// Calculate and print total cost for sending the transaction on-chain
+		if gasErr == nil {
+			gasPriceWei, gasPriceErr := c.EthClient.Client.SuggestGasPrice(c.EthClient.Context)
+			if gasPriceErr != nil {
+				c.Logger.Warn().Err(gasPriceErr).Msg("Failed to fetch gas price")
+			} else {
+				gasPriceGwei := new(big.Float).Quo(new(big.Float).SetInt(gasPriceWei), big.NewFloat(1e9))
+				totalCost := new(big.Int).Mul(new(big.Int).SetUint64(estimatedGas), gasPriceWei)
+				// Convert from wei to ether for display
+				etherValue := new(big.Float).Quo(new(big.Float).SetInt(totalCost), big.NewFloat(1e18))
+
+				fmt.Println("Estimated Cost:")
+				fmt.Printf("  Gas Price:      %s gwei\n", gasPriceGwei.Text('f', 8))
+				fmt.Printf("  Total Cost:     %s ETH\n", etherValue.Text('f', 8))
+			}
+		}
 
 		// Ask for user confirmation before executing the transaction
 		if !c.config.SkipPrompt {
