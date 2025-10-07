@@ -30,7 +30,7 @@ func TestE2EInit_DevPoRTemplate(t *testing.T) {
 
 	initArgs := []string{
 		"init",
-		"--project-path", tempDir,
+		"--project-root", tempDir,
 		"--project-name", projectName,
 		"--template-id", templateID,
 		"--workflow-name", workflowName,
