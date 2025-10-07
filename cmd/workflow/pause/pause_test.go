@@ -42,7 +42,7 @@ func TestWorkflowPauseCommand(t *testing.T) {
 				}),
 				wantErr:    true,
 				wantKey:    "Inputs.WorkflowName",
-				wantDetail: "WorkflowName must be non-empty and no longer than 64 characters: ",
+				wantDetail: "WorkflowName must be non-empty, no longer than 64 characters, and contain only letters (a-z, A-Z), numbers (0-9), dashes (-), and underscores (_): ",
 			},
 			{
 				name: "Workflow Name Too Long",
@@ -52,7 +52,7 @@ func TestWorkflowPauseCommand(t *testing.T) {
 				}),
 				wantErr:    true,
 				wantKey:    "Inputs.WorkflowName",
-				wantDetail: "WorkflowName must be non-empty and no longer than 64 characters: this_is_a_really_long_workflow_name_that_exceeds_the_maximum_allowed_length_of_64_chars",
+				wantDetail: "WorkflowName must be non-empty, no longer than 64 characters, and contain only letters (a-z, A-Z), numbers (0-9), dashes (-), and underscores (_): this_is_a_really_long_workflow_name_that_exceeds_the_maximum_allowed_length_of_64_chars",
 			},
 			{
 				name: "Invalid Workflow Owner - Missing 0x Prefix",
