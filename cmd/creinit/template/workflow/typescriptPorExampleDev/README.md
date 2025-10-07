@@ -26,8 +26,17 @@ CRE_ETH_PRIVATE_KEY=000000000000000000000000000000000000000000000000000000000000
 ```
 
 ## 3. Install dependencies
+
+If `bun` is not already installed, see https://bun.com/docs/installation for installing in your environment.
+
+```bash
+cd <workflow-name> && bun install
 ```
-cd workflowName && bun install
+
+Example: For a workflow directory named `workflow01` the command would be:
+
+```bash
+cd workflow01 && bun install
 ```
 
 ## 4. Configure RPC endpoints

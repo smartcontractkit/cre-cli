@@ -26,11 +26,13 @@ local-simulation:
 
 ## 2. Install dependencies
 
+If `bun` is not already installed, see https://bun.com/docs/installation for installing in your environment.
+
 ```bash
 cd <workflow-name> && bun install
 ```
 
-Example: For workflow named `hello-world` the command would be:
+Example: For a workflow directory named `hello-world` the command would be:
 
 ```bash
 cd hello-world && bun install
