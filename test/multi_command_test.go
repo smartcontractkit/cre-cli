@@ -102,6 +102,8 @@ func TestMultiCommandWorkflowHappyPaths(t *testing.T) {
 
 		// Set dummy API key for authentication
 		t.Setenv(credentials.CreApiKeyVar, "test-api")
+		t.Setenv("TESTID_ENV", "testval")
+		t.Setenv("TESTID_ENV_UPDATED", "testval2")
 
 		tc := NewTestConfig(t)
 

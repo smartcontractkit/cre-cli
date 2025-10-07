@@ -11,6 +11,7 @@ import (
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v2"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/capabilities/actions/vault"
 	"github.com/smartcontractkit/chainlink-common/pkg/jsonrpc2"
@@ -32,6 +33,13 @@ type DeleteSecretItem struct {
 
 // DeleteSecretsInputs holds the secrets to be deleted.
 type DeleteSecretsInputs []DeleteSecretItem
+
+// secretsNames:
+//   - SECRET_NAME1
+//   - SECRET_NAME2
+type SecretsDeleteYamlConfig struct {
+	SecretsNames []string `yaml:"secretsNames"`
+}
 
 // New creates and returns the 'secrets delete' cobra command.
 func New(ctx *runtime.Context) *cobra.Command {
@@ -178,18 +186,26 @@ func ResolveDeleteInputs(secretsFilePath string) (DeleteSecretsInputs, error) {
 		return nil, fmt.Errorf("failed to read secrets file: %w", err)
 	}
 
-	var secrets DeleteSecretsInputs
-	if err := json.Unmarshal(fileContent, &secrets); err != nil {
-		return nil, fmt.Errorf("failed to parse JSON input from file: %w", err)
+	var cfg SecretsDeleteYamlConfig
+	if err := yaml.Unmarshal(fileContent, &cfg); err != nil {
+		return nil, fmt.Errorf("failed to parse YAML: %w", err)
+	}
+	if len(cfg.SecretsNames) == 0 {
+		return nil, fmt.Errorf("YAML must contain a non-empty 'secretsNames' list")
 	}
 
-	// Set default namespace if not provided.
-	for i := range secrets {
-		if secrets[i].Namespace == "" {
-			secrets[i].Namespace = "main"
+	out := make(DeleteSecretsInputs, 0, len(cfg.SecretsNames))
+	for _, id := range cfg.SecretsNames {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			return nil, fmt.Errorf("'secretsNames' list contains an empty id")
 		}
+		out = append(out, DeleteSecretItem{
+			ID:        id,
+			Namespace: "main",
+		})
 	}
-	return secrets, nil
+	return out, nil
 }
 
 // ValidateDeleteInputs validates the delete input structure.

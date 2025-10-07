@@ -16,6 +16,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"google.golang.org/protobuf/encoding/protojson"
+	"gopkg.in/yaml.v2"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/capabilities/actions/vault"
 	vaultcommon "github.com/smartcontractkit/chainlink-common/pkg/capabilities/actions/vault"
@@ -40,6 +41,10 @@ type SecretItem struct {
 	ID        string `json:"id" validate:"required"`
 	Value     string `json:"value" validate:"required"`
 	Namespace string `json:"namespace"`
+}
+
+type SecretsYamlConfig struct {
+	SecretsNames map[string][]string `yaml:"secretsNames"`
 }
 
 type Handler struct {
@@ -84,17 +89,40 @@ func (h *Handler) ResolveInputs() (UpsertSecretsInputs, error) {
 		return nil, fmt.Errorf("failed to read secrets file: %w", err)
 	}
 
-	var secrets UpsertSecretsInputs
-	if err := json.Unmarshal(fileContent, &secrets); err != nil {
-		return nil, fmt.Errorf("failed to parse JSON input from file: %w", err)
+	var cfg SecretsYamlConfig
+	if err := yaml.Unmarshal(fileContent, &cfg); err != nil {
+		return nil, fmt.Errorf("failed to parse YAML: %w", err)
+	}
+	if len(cfg.SecretsNames) == 0 {
+		return nil, fmt.Errorf("YAML must contain a non-empty 'secretsNames' map")
 	}
 
-	for i := range secrets {
-		if secrets[i].Namespace == "" {
-			secrets[i].Namespace = "main"
+	out := make(UpsertSecretsInputs, 0, len(cfg.SecretsNames))
+
+	for id, values := range cfg.SecretsNames {
+		if len(values) == 0 {
+			return nil, fmt.Errorf("secret %q has no values", id)
 		}
+		if len(values) != 1 {
+			return nil, fmt.Errorf("secret %q must have exactly one env var name; got %d", id, len(values))
+		}
+
+		envName := strings.TrimSpace(values[0])
+		if envName == "" {
+			return nil, fmt.Errorf("secret %q has an empty env var name", id)
+		}
+		envVal, ok := os.LookupEnv(envName)
+		if !ok {
+			return nil, fmt.Errorf("environment variable %q for secret %q not found; please export it", envName, id)
+		}
+
+		out = append(out, SecretItem{
+			ID:        id,
+			Value:     envVal,
+			Namespace: "main",
+		})
 	}
-	return secrets, nil
+	return out, nil
 }
 
 // ValidateInputs validates the input structure.

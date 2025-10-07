@@ -13,6 +13,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
+	"gopkg.in/yaml.v2"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/capabilities/actions/vault"
 	"github.com/smartcontractkit/chainlink/v2/core/capabilities/vault/vaulttypes"
@@ -189,24 +190,27 @@ func RunSecretsHappyPath(t *testing.T, tc TestConfig, chainName string) {
 	})
 }
 
-// secretsCreateEoa writes a minimal secrets.json and invokes:
+// secretsCreateEoa writes a minimal secrets.yaml and invokes:
 //
-//	cre secrets create <secrets.json> <env-flag> <settings-flag>
+//	cre secrets create <secrets.yaml> <env-flag> <settings-flag>
 //
 // It returns whether an allowlist success log was observed and the output.
 func secretsCreateEoa(t *testing.T, tc TestConfig) (bool, string) {
 	t.Helper()
 
-	// write secrets.json under the project root
-	secretsPayload := []common.SecretItem{
-		{ID: "testid", Value: "testval", Namespace: "main"},
+	// write secrets.yaml under the project root
+	cfg := common.SecretsYamlConfig{
+		SecretsNames: map[string][]string{
+			"testid": {"TESTID_ENV"},
+		},
 	}
-	b, err := json.MarshalIndent(secretsPayload, "", "  ")
-	require.NoError(t, err, "marshal secrets.json")
+
+	b, err := yaml.Marshal(cfg)
+	require.NoError(t, err, "marshal secrets.yaml")
 
 	projectDir := getProjectDirectory(tc)
-	secretsPath := filepath.Join(projectDir, "secrets.json")
-	require.NoError(t, os.WriteFile(secretsPath, b, 0o600), "write secrets.json")
+	secretsPath := filepath.Join(projectDir, "secrets.yaml")
+	require.NoError(t, os.WriteFile(secretsPath, b, 0o600), "write secrets.yaml")
 
 	// build CLI args
 	args := []string{
@@ -231,24 +235,28 @@ func secretsCreateEoa(t *testing.T, tc TestConfig) (bool, string) {
 	return allowed, StripANSI(out)
 }
 
-// secretsUpdateEoa writes an updated secrets.json and invokes:
+// secretsUpdateEoa writes an updated secrets.yaml and invokes:
 //
-//	cre secrets update <secrets.json> <env-flag> <settings-flag>
+//	cre secrets update <secrets.yaml> <env-flag> <settings-flag>
 //
 // It returns whether an allowlist success log was observed and the output.
 func secretsUpdateEoa(t *testing.T, tc TestConfig) (bool, string) {
 	t.Helper()
 
 	// re-write secrets.json with updated value (same id, different namespace)
-	secretsPayload := []common.SecretItem{
-		{ID: "testid", Value: "updated-val", Namespace: "testns"},
+	// write secrets.yaml under the project root
+	cfg := common.SecretsYamlConfig{
+		SecretsNames: map[string][]string{
+			"testid": {"TESTID_ENV_UPDATED"},
+		},
 	}
-	b, err := json.MarshalIndent(secretsPayload, "", "  ")
-	require.NoError(t, err, "marshal secrets.json")
+
+	b, err := yaml.Marshal(cfg)
+	require.NoError(t, err, "marshal secrets.yaml")
 
 	projectDir := getProjectDirectory(tc)
-	secretsPath := filepath.Join(projectDir, "secrets.json")
-	require.NoError(t, os.WriteFile(secretsPath, b, 0o600), "write secrets.json")
+	secretsPath := filepath.Join(projectDir, "secrets.yaml")
+	require.NoError(t, os.WriteFile(secretsPath, b, 0o600), "write secrets.yaml")
 
 	args := []string{
 		"secrets", "update",
@@ -306,15 +314,16 @@ func secretsListEoa(t *testing.T, tc TestConfig, ns string) (bool, string) {
 func secretsDeleteEoa(t *testing.T, tc TestConfig, ns string) (bool, string) {
 	t.Helper()
 
-	payload := []delete.DeleteSecretItem{
-		{ID: "testid", Namespace: ns},
+	cfg := delete.SecretsDeleteYamlConfig{
+		SecretsNames: []string{"testid"},
 	}
-	b, err := json.MarshalIndent(payload, "", "  ")
-	require.NoError(t, err, "marshal delete secrets json")
+
+	b, err := yaml.Marshal(cfg)
+	require.NoError(t, err, "marshal delete secrets yaml")
 
 	projectDir := getProjectDirectory(tc)
-	delPath := filepath.Join(projectDir, "secrets-delete.json")
-	require.NoError(t, os.WriteFile(delPath, b, 0o600), "write secrets-delete.json")
+	delPath := filepath.Join(projectDir, "secrets-delete.yaml")
+	require.NoError(t, os.WriteFile(delPath, b, 0o600), "write secrets-delete.yaml")
 
 	args := []string{
 		"secrets", "delete",
