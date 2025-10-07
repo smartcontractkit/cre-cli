@@ -18,6 +18,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	pb "github.com/smartcontractkit/chainlink-protos/cre/go/sdk"
+	pbvalues "github.com/smartcontractkit/chainlink-protos/cre/go/values"
 	"github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm"
 	"github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm/bindings"
 	"github.com/smartcontractkit/cre-sdk-go/capabilities/networking/http"
@@ -139,8 +140,8 @@ func onLogTrigger(config *Config, runtime cre.Runtime, payload *bindings.Decoded
 		Emitter: common.Address(emitter),
 	}
 
-	blockNumber := new(big.Int)
-	blockNumber.SetString(payload.Log.BlockNumber.String(), 10)
+	blockNumber := pbvalues.ProtoToBigInt(payload.Log.BlockNumber)
+	logger.Info("Block number of event log", "blockNumber", blockNumber)
 	message, err = messageEmitter.GetLastMessage(runtime, lastMessageInput, blockNumber).Await()
 	if err != nil {
 		logger.Error("Could not read from contract", "contract_chain", config.EVMs[0].ChainName, "err", err.Error())
