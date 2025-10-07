@@ -20,6 +20,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/prompt"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
+	"github.com/smartcontractkit/cre-cli/internal/validation"
 )
 
 //go:embed template/workflow/**/*
@@ -69,10 +70,10 @@ var languageTemplates = []LanguageTemplate{
 }
 
 type Inputs struct {
-	ProjectPath  string
-	ProjectName  string
-	TemplateID   uint32
-	WorkflowName string
+	ProjectPath  string `validate:"omitempty"`
+	ProjectName  string `validate:"omitempty,project_name" cli:"project-name"`
+	TemplateID   uint32 `validate:"omitempty,min=0"`
+	WorkflowName string `validate:"omitempty,workflow_name" cli:"workflow-name"`
 }
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
@@ -130,7 +131,15 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 }
 
 func (h *handler) ValidateInputs(inputs Inputs) error {
-	// TODO: This should call go-validators
+	validator, err := validation.NewValidator()
+	if err != nil {
+		return fmt.Errorf("failed to create validator: %w", err)
+	}
+
+	if err := validator.Struct(inputs); err != nil {
+		return fmt.Errorf("validation failed: %w", err)
+	}
+
 	h.validated = true
 	return nil
 }
@@ -171,7 +180,11 @@ func (h *handler) Execute(inputs Inputs) error {
 		projName := inputs.ProjectName
 		if projName == "" {
 			if err := prompt.SimplePrompt(h.stdin, "Project name?", func(in string) error {
-				projName = filepath.Join(in, "/")
+				trimmed := strings.TrimSpace(in)
+				if err := validation.IsValidProjectName(trimmed); err != nil {
+					return err
+				}
+				projName = filepath.Join(trimmed, "/")
 				return nil
 			}); err != nil {
 				return err
@@ -246,10 +259,10 @@ func (h *handler) Execute(inputs Inputs) error {
 	if workflowName == "" {
 		const maxAttempts = 3
 		for attempts := 1; attempts <= maxAttempts; attempts++ {
-			inputErr := prompt.SimplePrompt(h.stdin, "Workflow name? (1+ character)", func(in string) error {
+			inputErr := prompt.SimplePrompt(h.stdin, "Workflow name?", func(in string) error {
 				trimmed := strings.TrimSpace(in)
-				if len(trimmed) < 1 {
-					return errors.New("workflow name must be at least 1 character long")
+				if err := validation.IsValidWorkflowName(trimmed); err != nil {
+					return err
 				}
 				workflowName = trimmed
 				return nil
