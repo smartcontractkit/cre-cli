@@ -158,7 +158,7 @@ func (c *TxClient) executeTransactionByTxType(txFn func(opts *bind.TransactOpts)
 			if gasPriceErr != nil {
 				c.Logger.Warn().Err(gasPriceErr).Msg("Failed to fetch gas price")
 			} else {
-				totalCost := new(big.Int).Mul(big.NewInt(int64(estimatedGas)), gasPrice)
+				totalCost := new(big.Int).Mul(new(big.Int).SetUint64(estimatedGas), gasPrice)
 				// Convert from wei to ether for display
 				etherValue := new(big.Float).Quo(new(big.Float).SetInt(totalCost), big.NewFloat(1e18))
 				fmt.Println("Estimated Cost:")
