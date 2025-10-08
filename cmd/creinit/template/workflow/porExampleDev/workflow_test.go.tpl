@@ -9,7 +9,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
+	pb "github.com/smartcontractkit/chainlink-protos/cre/go/values/pb"
 	"github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm"
 	"github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm/bindings"
 	evmmock "github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm/mock"
@@ -141,6 +143,10 @@ func TestOnLogTrigger(t *testing.T) {
 		return "Test message from contract", nil
 	}
 
+	msgEmitterAbi, err := message_emitter.MessageEmitterMetaData.GetAbi()
+	require.NoError(t, err)
+	eventData, err := abi.Arguments{msgEmitterAbi.Events["MessageEmitted"].Inputs[2]}.Pack("Test message from contract")
+	require.NoError(t, err, "Encoding event data should not return an error")
 	// Create a mock log payload
 	mockLog := &evm.Log{
 		Topics: [][]byte{
@@ -148,7 +154,8 @@ func TestOnLogTrigger(t *testing.T) {
 			common.HexToHash("0x000000000000000000000000abcdefabcdefabcdefabcdefabcdefabcdefabcd").Bytes(), // emitter address (padded)
 			common.HexToHash("0x000000000000000000000000000000000000000000000000000000006716eb80").Bytes(), // additional topic
 		},
-		Data: []byte{},
+		Data:        eventData, // this is not used by the test as we pass in mockLogDecoded, but encoding here for consistency
+		BlockNumber: pb.NewBigIntFromInt(big.NewInt(100)),
 	}
 
 	mockLogDecoded := &bindings.DecodedLog[message_emitter.MessageEmittedDecoded]{
@@ -156,7 +163,7 @@ func TestOnLogTrigger(t *testing.T) {
 		Data: message_emitter.MessageEmittedDecoded{
 			Emitter:   common.HexToAddress("0xabcdefabcdefabcdefabcdefabcdefabcdefabcd"),
 			Message:   "Test message from contract",
-			Timestamp: big.NewInt(1728200000),
+			Timestamp: big.NewInt(100),
 		},
 	}
 
@@ -167,6 +174,7 @@ func TestOnLogTrigger(t *testing.T) {
 	// Verify expected log messages
 	logs := runtime.GetLogs()
 	assertLogContains(t, logs, `msg="Message retrieved from the contract"`)
+	assertLogContains(t, logs, `blockNumber=100`)
 }
 
 func TestOnHTTPTrigger(t *testing.T) {
