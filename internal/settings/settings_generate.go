@@ -48,6 +48,8 @@ func GetDefaultReplacements() map[string]string {
 		"ProductionDonFamily":        constants.DefaultProductionDonFamily,
 
 		"WorkflowOwnerAddress": "(optional) Multi-signature contract address",
+		"ConfigPath":           "./config.json",
+		"SecretsPath":          "../secrets.yaml",
 	}
 }
 
