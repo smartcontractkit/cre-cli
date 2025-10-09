@@ -35,6 +35,18 @@ func DeployBalanceReader(sethClient *seth.Client) (common.Address, error) {
 	return deployedContract.Address, nil
 }
 
+func DeployWERC20Mock(sethClient *seth.Client) (common.Address, error) {
+	deployedContract, err := sethClient.DeployContractFromContractStore(
+		sethClient.NewTXOpts(),
+		constants.WERC20MockContractName,
+	)
+	if err != nil {
+		return common.Address{}, fmt.Errorf("failed to deploy WERC20Mock contract: %w", err)
+	}
+
+	return deployedContract.Address, nil
+}
+
 // deployTestWorkflowRegistry deploys the WorkflowRegistry contract using the provided Seth client.
 func DeployTestWorkflowRegistry(t *testing.T, sethClient *seth.Client) (*workflow_registry_wrapper_v2.WorkflowRegistry, error) {
 	deployedContract, err := sethClient.DeployContractFromContractStore(

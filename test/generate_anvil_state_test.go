@@ -144,4 +144,9 @@ func TestGenerateAnvilStateForSimulator(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to deploy and configure BalanceReader: %v", err)
 	}
+
+	_, err = test.DeployWERC20Mock(sethClient)
+	if err != nil {
+		t.Fatalf("failed to deploy and configure WERC20Mock: %v", err)
+	}
 }

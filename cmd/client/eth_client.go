@@ -12,6 +12,9 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient/simulated"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/rs/zerolog"
+	"github.com/smartcontractkit/chainlink-evm/gethwrappers/shared/generated/latest/werc20_mock"
+	"github.com/smartcontractkit/chainlink-evm/gethwrappers/workflow/generated/mock_forwarder"
+	"github.com/smartcontractkit/chainlink-evm/gethwrappers/workflow/generated/reserve_manager"
 	"github.com/spf13/viper"
 
 	"github.com/smartcontractkit/chainlink-evm/gethwrappers/keystone/generated/balance_reader"
@@ -48,6 +51,30 @@ func LoadContracts(l *zerolog.Logger, client *seth.Client) error {
 	client.ContractStore.AddABI(constants.BalanceReaderContractName, *abi)
 	client.ContractStore.AddBIN(constants.BalanceReaderContractName, common.FromHex(balance_reader.BalanceReaderMetaData.Bin))
 	l.Debug().Msgf("Loaded %s contract into ContractStore", constants.BalanceReaderContractName)
+
+	abi, err = werc20_mock.WERC20MockMetaData.GetAbi()
+	if err != nil {
+		return fmt.Errorf("failed to get WERC20Mock ABI: %w", err)
+	}
+	client.ContractStore.AddABI(constants.WERC20MockContractName, *abi)
+	client.ContractStore.AddBIN(constants.WERC20MockContractName, common.FromHex(werc20_mock.WERC20MockMetaData.Bin))
+	l.Debug().Msgf("Loaded %s contract into ContractStore", constants.WERC20MockContractName)
+
+	abi, err = reserve_manager.ReserveManagerMetaData.GetAbi()
+	if err != nil {
+		return fmt.Errorf("failed to get ReserveManager ABI: %w", err)
+	}
+	client.ContractStore.AddABI(constants.ReserveManagerContractName, *abi)
+	client.ContractStore.AddBIN(constants.ReserveManagerContractName, common.FromHex(reserve_manager.ReserveManagerMetaData.Bin))
+	l.Debug().Msgf("Loaded %s contract into ContractStore", constants.ReserveManagerContractName)
+
+	abi, err = mock_forwarder.MockKeystoneForwarderMetaData.GetAbi()
+	if err != nil {
+		return fmt.Errorf("failed to get MockKeystoneForwarder ABI: %w", err)
+	}
+	client.ContractStore.AddABI(constants.MockKeystoneForwarderContractName, *abi)
+	client.ContractStore.AddBIN(constants.MockKeystoneForwarderContractName, common.FromHex(mock_forwarder.MockKeystoneForwarderMetaData.Bin))
+	l.Debug().Msgf("Loaded %s contract into ContractStore", constants.MockKeystoneForwarderContractName)
 
 	return nil
 }
