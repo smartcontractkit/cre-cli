@@ -5,8 +5,11 @@ import (
 )
 
 const (
-	WorkflowRegistryContractName = "WorkflowRegistry"
-	BalanceReaderContractName    = "BalanceReader"
+	WorkflowRegistryContractName      = "WorkflowRegistry"
+	BalanceReaderContractName         = "BalanceReader"
+	WERC20MockContractName            = "WERC20Mock"
+	ReserveManagerContractName        = "ReserveManager"
+	MockKeystoneForwarderContractName = "MockKeystoneForwarder"
 
 	MaxBinarySize                               = 20 * 1024 * 1024
 	MaxConfigSize                               = 5 * 1024 * 1024

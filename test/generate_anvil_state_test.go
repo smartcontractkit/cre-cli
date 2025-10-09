@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/smartcontractkit/cre-cli/internal/constants"
-	test "github.com/smartcontractkit/cre-cli/test/contracts"
+	testcontracts "github.com/smartcontractkit/cre-cli/test/contracts"
 )
 
 func initGenerateEnv(t *testing.T) (*os.Process, string) {
@@ -85,8 +85,8 @@ func TestGenerateAnvilState(t *testing.T) {
 	t.Cleanup(tc.Cleanup(t))
 
 	// deploy and config contracts on Anvil
-	sethClient := test.NewSethClientWithContracts(t, L, testEthUrl, constants.TestAnvilChainID, SethConfigPath)
-	_, err := test.DeployTestWorkflowRegistry(t, sethClient)
+	sethClient := testcontracts.NewSethClientWithContracts(t, L, testEthUrl, constants.TestAnvilChainID, SethConfigPath)
+	_, err := testcontracts.DeployTestWorkflowRegistry(t, sethClient)
 	if err != nil {
 		t.Fatalf("failed to deploy and configure WorkflowRegistry: %v", err)
 	}
@@ -103,7 +103,7 @@ func TestGenerateAnvilState(t *testing.T) {
 // multiple helper functions available in test files
 
 func TestGenerateAnvilStateForSimulator(t *testing.T) {
-	t.Skip("Re-enable this test only when it's required to re-generate Anvil state dump")
+	//t.Skip("Re-enable this test only when it's required to re-generate Anvil state dump")
 
 	anvilProc, testEthUrl := initGenerateEnvForSimulator(t)
 	defer stopAnvilGracefully(anvilProc)
@@ -112,9 +112,24 @@ func TestGenerateAnvilStateForSimulator(t *testing.T) {
 	t.Cleanup(tc.Cleanup(t))
 
 	// deploy and config contracts on Anvil
-	sethClient := test.NewSethClientWithContracts(t, L, testEthUrl, constants.TestAnvilChainID, SethConfigPath)
-	_, err := test.DeployBalanceReader(sethClient)
+	sethClient := testcontracts.NewSethClientWithContracts(t, L, testEthUrl, constants.TestAnvilChainID, SethConfigPath)
+	_, err := testcontracts.DeployBalanceReader(sethClient)
 	if err != nil {
 		t.Fatalf("failed to deploy and configure BalanceReader: %v", err)
+	}
+
+	_, err = testcontracts.DeployWERC20Mock(sethClient)
+	if err != nil {
+		t.Fatalf("failed to deploy and configure WERC20Mock: %v", err)
+	}
+
+	_, err = testcontracts.DeployReserveManager(sethClient)
+	if err != nil {
+		t.Fatalf("failed to deploy and configure ReserveManager: %v", err)
+	}
+
+	_, err = testcontracts.DeployMockKeystoneForwarder(sethClient)
+	if err != nil {
+		t.Fatalf("failed to deploy and configure MockForwarder: %v", err)
 	}
 }

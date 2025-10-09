@@ -133,6 +133,6 @@ func TestMultiCommandWorkflowHappyPaths(t *testing.T) {
 		t.Cleanup(tc.Cleanup(t))
 
 		// Run simulation happy path workflow
-		multi_command_flows.RunSimulationHappyPath(t, tc)
+		multi_command_flows.RunSimulationHappyPath(t, tc, tc.ProjectDirectory)
 	})
 }
