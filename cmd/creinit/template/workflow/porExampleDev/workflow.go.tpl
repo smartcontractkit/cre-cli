@@ -33,8 +33,7 @@ const (
 // EVMConfig holds per-chain configuration.
 type EVMConfig struct {
 	TokenAddress          string `json:"tokenAddress"`
-	PORAddress            string `json:"porAddress"`
-	ProxyAddress          string `json:"proxyAddress"`
+	ReserveManagerAddress string `json:"reserveManagerAddress"`
 	BalanceReaderAddress  string `json:"balanceReaderAddress"`
 	MessageEmitterAddress string `json:"messageEmitterAddress"`
 	ChainName             string `json:"chainName"`
@@ -334,7 +333,7 @@ func updateReserves(config *Config, runtime cre.Runtime, totalSupply *big.Int, t
 		return fmt.Errorf("failed to create EVM client for %s: %w", evmCfg.ChainName, err)
 	}
 
-	reserveManager, err := reserve_manager.NewReserveManager(evmClient, common.HexToAddress(evmCfg.ProxyAddress), nil)
+	reserveManager, err := reserve_manager.NewReserveManager(evmClient, common.HexToAddress(evmCfg.ReserveManagerAddress), nil)
 	if err != nil {
 		return fmt.Errorf("failed to create reserve manager: %w", err)
 	}
