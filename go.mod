@@ -28,8 +28,8 @@ require (
 	github.com/smartcontractkit/chainlink-protos/workflows/go v0.0.0-20250908151016-bf310cf85379
 	github.com/smartcontractkit/chainlink-testing-framework/seth v1.51.2
 	github.com/smartcontractkit/chainlink/v2 v2.27.3-0.20250911192521-511b944309b4
-	github.com/smartcontractkit/cre-sdk-go v0.8.1-0.20251009112032-821dc9e2287b
-	github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm v0.8.1-0.20251009112032-821dc9e2287b
+	github.com/smartcontractkit/cre-sdk-go v0.9.0
+	github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm v0.9.0
 	github.com/smartcontractkit/tdh2/go/tdh2 v0.0.0-20250624150019-e49f7e125e6b
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/viper v1.20.1

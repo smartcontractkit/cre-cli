@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
@@ -100,6 +101,11 @@ func (h *Handler) ResolveInputs() (UpsertSecretsInputs, error) {
 	out := make(UpsertSecretsInputs, 0, len(cfg.SecretsNames))
 
 	for id, values := range cfg.SecretsNames {
+		// Validate the ID’s UTF-8
+		if !utf8.ValidString(id) {
+			return nil, fmt.Errorf("secret id %q contains invalid UTF-8", id)
+		}
+
 		if len(values) == 0 {
 			return nil, fmt.Errorf("secret %q has no values", id)
 		}
@@ -114,6 +120,11 @@ func (h *Handler) ResolveInputs() (UpsertSecretsInputs, error) {
 		envVal, ok := os.LookupEnv(envName)
 		if !ok {
 			return nil, fmt.Errorf("environment variable %q for secret %q not found; please export it", envName, id)
+		}
+
+		// Validate the secret value’s UTF-8
+		if !utf8.ValidString(envVal) {
+			return nil, fmt.Errorf("value for secret %q (env %q) contains invalid UTF-8", id, envName)
 		}
 
 		out = append(out, SecretItem{

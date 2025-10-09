@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/google/uuid"
@@ -200,6 +201,11 @@ func ResolveDeleteInputs(secretsFilePath string) (DeleteSecretsInputs, error) {
 		if id == "" {
 			return nil, fmt.Errorf("'secretsNames' list contains an empty id")
 		}
+		// Validate the ID’s UTF-8
+		if !utf8.ValidString(id) {
+			return nil, fmt.Errorf("secret id %q contains invalid UTF-8", id)
+		}
+
 		out = append(out, DeleteSecretItem{
 			ID:        id,
 			Namespace: "main",
