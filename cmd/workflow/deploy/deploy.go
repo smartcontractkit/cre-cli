@@ -12,7 +12,6 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	linkkey "github.com/smartcontractkit/cre-cli/cmd/account/link_key"
 	"github.com/smartcontractkit/cre-cli/cmd/client"
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
@@ -236,76 +235,6 @@ func (h *handler) Execute() error {
 	return nil
 }
 
-func (h *handler) ensureOwnerLinkedOrFail() error {
-	ownerAddr := common.HexToAddress(h.inputs.WorkflowOwner)
-
-	linked, err := h.wrc.IsOwnerLinked(ownerAddr)
-	if err != nil {
-		return fmt.Errorf("failed to check owner link status: %w", err)
-	}
-
-	fmt.Printf("Workflow owner link status: owner=%s, linked=%v\n", ownerAddr.Hex(), linked)
-
-	if linked {
-		return nil
-	}
-
-	fmt.Printf("Owner not linked. Attempting auto-link: owner=%s\n", ownerAddr.Hex())
-	if err := h.tryAutoLink(); err != nil {
-		return fmt.Errorf("auto-link attempt failed: %w", err)
-	}
-
-	if linked, err = h.wrc.IsOwnerLinked(ownerAddr); err != nil {
-		return fmt.Errorf("linked via auto-link, but failed to verify link status: %w", err)
-	} else if !linked {
-		return fmt.Errorf("auto-link executed but owner still not linked")
-	}
-
-	fmt.Printf("Auto-link successful: owner=%s\n", ownerAddr.Hex())
-	return nil
-}
-
-func (h *handler) autoLinkMSIGAndExit() (halt bool, err error) {
-	ownerAddr := common.HexToAddress(h.inputs.WorkflowOwner)
-
-	linked, err := h.wrc.IsOwnerLinked(ownerAddr)
-	if err != nil {
-		return false, fmt.Errorf("failed to check owner link status: %w", err)
-	}
-
-	if linked {
-		fmt.Printf("MSIG owner already linked. Continuing deploy: owner=%s\n", ownerAddr.Hex())
-		return false, nil
-	}
-
-	fmt.Printf("MSIG workflow owner link status: owner=%s, linked=%v\n", ownerAddr.Hex(), linked)
-	fmt.Printf("MSIG owner: attempting auto-link... owner=%s\n", ownerAddr.Hex())
-
-	if err := h.tryAutoLink(); err != nil {
-		return false, fmt.Errorf("MSIG auto-link attempt failed: %w", err)
-	}
-
-	fmt.Println("MSIG auto-link initiated. Halting deploy. Submit the multisig transaction, then re-run deploy.")
-	return true, nil
-}
-
-func (h *handler) tryAutoLink() error {
-	rtx := &runtime.Context{
-		Settings:       h.settings,
-		Credentials:    h.credentials,
-		ClientFactory:  h.clientFactory,
-		Logger:         h.log,
-		EnvironmentSet: h.environmentSet,
-	}
-
-	lkInputs := linkkey.Inputs{
-		WorkflowOwner:                   h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress,
-		WorkflowRegistryContractAddress: h.inputs.WorkflowRegistryContractAddress,
-		WorkflowOwnerLabel:              "",
-	}
-
-	return linkkey.Exec(rtx, lkInputs)
-}
 func (h *handler) workflowExists() error {
 	workflow, err := h.wrc.GetWorkflow(common.HexToAddress(h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress), h.inputs.WorkflowName, h.inputs.WorkflowName)
 	if err != nil {
