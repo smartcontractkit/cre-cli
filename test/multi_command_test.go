@@ -121,6 +121,14 @@ func TestMultiCommandWorkflowHappyPaths(t *testing.T) {
 		anvilProc, testEthUrl := initTestEnv(t, "anvil-state-simulator.json")
 		defer StopAnvil(anvilProc)
 
+		// Etch the MockKeystoneForwarder runtime at the supported Sepolia forwarder addr
+		const sepoliaForwarder = "0x15fC6ae953E024d975e77382eEeC56A9101f9F88"
+		code := readDeployedBytecodeHex(
+			t,
+			"MockKeystoneForwarder.json",
+		)
+		anvilSetCode(t, testEthUrl, sepoliaForwarder, code)
+
 		// Set dummy API key for authentication
 		t.Setenv(credentials.CreApiKeyVar, "test-api")
 
@@ -129,10 +137,10 @@ func TestMultiCommandWorkflowHappyPaths(t *testing.T) {
 		// Use linked Address3 + its key
 		require.NoError(t, createCliEnvFile(tc.EnvFile, constants.TestPrivateKey3), "failed to create env file")
 		require.NoError(t, createProjectSettingsFile(tc.ProjectDirectory+"project.yaml", constants.TestAddress3, testEthUrl), "failed to create project.yaml")
-		require.NoError(t, createWorkflowDirectory(tc.ProjectDirectory, "workflow-simulate", "config.json", "chainreader_workflow"), "failed to create workflow directory")
+		require.NoError(t, createWorkflowDirectory(tc.ProjectDirectory, "workflow-simulate", "config.json", "por_workflow"), "failed to create workflow directory")
 		t.Cleanup(tc.Cleanup(t))
 
 		// Run simulation happy path workflow
-		multi_command_flows.RunSimulationHappyPath(t, tc)
+		multi_command_flows.RunSimulationHappyPath(t, tc, tc.ProjectDirectory)
 	})
 }

@@ -1,0 +1,14 @@
+{
+  "schedule": "*/30 * * * * *",
+  "url": "https://api.real-time-reserves.verinumus.io/v1/chainlink/proof-of-reserves/TrueUSD",
+  "evms": [
+    {
+      "tokenAddress": "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
+      "reserveManagerAddress": "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
+      "balanceReaderAddress": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+      "messageEmitterAddress": "0x1d598672486ecB50685Da5497390571Ac4E93FDc",
+      "chainName": "ethereum-testnet-sepolia",
+      "gasLimit": 1000000
+    }
+  ]
+}

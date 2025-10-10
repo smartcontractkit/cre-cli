@@ -1,4 +1,4 @@
-package test
+package testcontracts
 
 import (
 	"crypto/sha256"
@@ -30,6 +30,42 @@ func DeployBalanceReader(sethClient *seth.Client) (common.Address, error) {
 	)
 	if err != nil {
 		return common.Address{}, fmt.Errorf("failed to deploy BalanceReader contract: %w", err)
+	}
+
+	return deployedContract.Address, nil
+}
+
+func DeployWERC20Mock(sethClient *seth.Client) (common.Address, error) {
+	deployedContract, err := sethClient.DeployContractFromContractStore(
+		sethClient.NewTXOpts(),
+		constants.WERC20MockContractName,
+	)
+	if err != nil {
+		return common.Address{}, fmt.Errorf("failed to deploy WERC20Mock contract: %w", err)
+	}
+
+	return deployedContract.Address, nil
+}
+
+func DeployReserveManager(sethClient *seth.Client) (common.Address, error) {
+	deployedContract, err := sethClient.DeployContractFromContractStore(
+		sethClient.NewTXOpts(),
+		constants.ReserveManagerContractName,
+	)
+	if err != nil {
+		return common.Address{}, fmt.Errorf("failed to deploy ReserveManager contract: %w", err)
+	}
+
+	return deployedContract.Address, nil
+}
+
+func DeployMockKeystoneForwarder(sethClient *seth.Client) (common.Address, error) {
+	deployedContract, err := sethClient.DeployContractFromContractStore(
+		sethClient.NewTXOpts(),
+		constants.MockKeystoneForwarderContractName,
+	)
+	if err != nil {
+		return common.Address{}, fmt.Errorf("failed to deploy MockForwarder contract: %w", err)
 	}
 
 	return deployedContract.Address, nil
