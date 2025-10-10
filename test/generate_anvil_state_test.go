@@ -103,7 +103,7 @@ func TestGenerateAnvilState(t *testing.T) {
 // multiple helper functions available in test files
 
 func TestGenerateAnvilStateForSimulator(t *testing.T) {
-	//t.Skip("Re-enable this test only when it's required to re-generate Anvil state dump")
+	t.Skip("Re-enable this test only when it's required to re-generate Anvil state dump")
 
 	anvilProc, testEthUrl := initGenerateEnvForSimulator(t)
 	defer stopAnvilGracefully(anvilProc)
