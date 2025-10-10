@@ -130,12 +130,11 @@ func TestPackAllowlistRequestTxData_Success_With0x(t *testing.T) {
 	_, err := rand.Read(d[:])
 	require.NoError(t, err)
 
-	digestHex := "0x" + hex.EncodeToString(d[:])
 	dur := 15 * time.Minute
 	start := time.Now().Unix()
 
 	// call
-	dataHex, err := h.PackAllowlistRequestTxData(digestHex, dur)
+	dataHex, err := h.PackAllowlistRequestTxData(d, dur)
 	require.NoError(t, err)
 	require.NotEmpty(t, dataHex)
 
@@ -181,17 +180,7 @@ func TestPackAllowlistRequestTxData_Success_No0x(t *testing.T) {
 	_, err := rand.Read(d[:])
 	require.NoError(t, err)
 
-	digestHex := hex.EncodeToString(d[:]) // no 0x prefix
-	dataHex, err := h.PackAllowlistRequestTxData(digestHex, 1*time.Minute)
+	dataHex, err := h.PackAllowlistRequestTxData(d, 1*time.Minute)
 	require.NoError(t, err)
 	require.NotEmpty(t, dataHex)
-}
-
-func TestPackAllowlistRequestTxData_InvalidDigest(t *testing.T) {
-	h, _, _ := newMockHandler(t)
-
-	// too short -> invalid
-	_, err := h.PackAllowlistRequestTxData("0xdeadbeef", 10*time.Minute)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid request digest")
 }

@@ -3,9 +3,7 @@ package client
 import (
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"math/big"
-	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -642,7 +640,7 @@ func (wrc *WorkflowRegistryV2Client) validateReceiptAndEvent(
 
 // IsRequestAllowlisted queries the registry to check if a given (owner, requestDigest) is allowlisted.
 // requestDigestHex may include or omit the 0x prefix.
-func (wrc *WorkflowRegistryV2Client) IsRequestAllowlisted(owner common.Address, requestDigestHex string) (bool, error) {
+func (wrc *WorkflowRegistryV2Client) IsRequestAllowlisted(owner common.Address, digest [32]byte) (bool, error) {
 	var contract workflowRegistryV2Contract
 	if wrc.Wr != nil {
 		contract = wrc.Wr
@@ -655,16 +653,10 @@ func (wrc *WorkflowRegistryV2Client) IsRequestAllowlisted(owner common.Address, 
 		contract = c
 	}
 
-	reqDigest, err := HexToBytes32(requestDigestHex)
-	if err != nil {
-		wrc.Logger.Error().Err(err).Msg("Invalid request digest for IsRequestAllowlisted")
-		return false, err
-	}
-
 	var allowlisted bool
-	_, err = callContractMethodV2(wrc, func() (string, error) {
+	_, err := callContractMethodV2(wrc, func() (string, error) {
 		var callErr error
-		allowlisted, callErr = contract.IsRequestAllowlisted(wrc.EthClient.NewCallOpts(), owner, reqDigest)
+		allowlisted, callErr = contract.IsRequestAllowlisted(wrc.EthClient.NewCallOpts(), owner, digest)
 		return "", callErr
 	})
 	if err != nil {
@@ -677,7 +669,7 @@ func (wrc *WorkflowRegistryV2Client) IsRequestAllowlisted(owner common.Address, 
 
 	wrc.Logger.Info().
 		Str("owner", owner.Hex()).
-		Str("digest", requestDigestHex).
+		Str("digest", hex.EncodeToString(digest[:])).
 		Bool("allowlisted", allowlisted).
 		Msg("IsRequestAllowlisted query succeeded")
 
@@ -686,7 +678,7 @@ func (wrc *WorkflowRegistryV2Client) IsRequestAllowlisted(owner common.Address, 
 
 // AllowlistRequest sends the request digest to the WorkflowRegistry allowlist with a default expiry of now + 10 minutes.
 // `requestDigestHex` should be the hex string produced by utils.CalculateRequestDigest(...), with or without "0x".
-func (wrc *WorkflowRegistryV2Client) AllowlistRequest(requestDigestHex string, duration time.Duration) error {
+func (wrc *WorkflowRegistryV2Client) AllowlistRequest(requestDigest [32]byte, duration time.Duration) error {
 	var contract workflowRegistryV2Contract
 	if wrc.Wr != nil {
 		contract = wrc.Wr
@@ -699,20 +691,13 @@ func (wrc *WorkflowRegistryV2Client) AllowlistRequest(requestDigestHex string, d
 		contract = c
 	}
 
-	// Convert hex digest -> [32]byte
-	reqDigest, err := HexToBytes32(requestDigestHex)
-	if err != nil {
-		wrc.Logger.Error().Err(err).Msg("Invalid request digest for AllowlistRequest")
-		return err
-	}
-
 	// #nosec G115 -- int64 to uint32 conversion; Unix() returns seconds since epoch, which fits in uint32 until 2106
 	deadline := uint32(time.Now().Add(duration).Unix())
 
 	// Send tx; keep the same "callContractMethodV2" pattern you used for read-only calls.
 	// Here we return the tx hash string to the helper (it may log/track it).
-	_, err = callContractMethodV2(wrc, func() (string, error) {
-		tx, txErr := contract.AllowlistRequest(wrc.EthClient.NewTXOpts(), reqDigest, deadline)
+	_, err := callContractMethodV2(wrc, func() (string, error) {
+		tx, txErr := contract.AllowlistRequest(wrc.EthClient.NewTXOpts(), requestDigest, deadline)
 		if txErr != nil {
 			return "", txErr
 		}
@@ -725,26 +710,10 @@ func (wrc *WorkflowRegistryV2Client) AllowlistRequest(requestDigestHex string, d
 	}
 
 	wrc.Logger.Info().
-		Str("digest", requestDigestHex).
+		Str("digest", hex.EncodeToString(requestDigest[:])).
 		Str("deadline", time.Unix(int64(deadline), 0).UTC().Format(time.RFC3339)).
 		Msg("AllowlistRequest submitted")
 	return nil
-}
-
-// HexToBytes32 converts a hex string (with or without 0x prefix) to a [32]byte.
-// Returns an error if the input isn't precisely 32 bytes after decoding.
-func HexToBytes32(h string) ([32]byte, error) {
-	var out [32]byte
-	h = strings.TrimPrefix(h, "0x")
-	b, err := hex.DecodeString(h)
-	if err != nil {
-		return out, fmt.Errorf("invalid hex for digest: %w", err)
-	}
-	if len(b) != 32 {
-		return out, fmt.Errorf("digest must be 32 bytes, got %d", len(b))
-	}
-	copy(out[:], b)
-	return out, nil
 }
 
 func callContractMethodV2[T any](wrc *WorkflowRegistryV2Client, contractMethod func() (T, error)) (T, error) {
