@@ -168,21 +168,28 @@ func (h *Handler) PackAllowlistRequestTxData(reqDigest [32]byte, duration time.D
 	return hex.EncodeToString(data), nil
 }
 
-func (h *Handler) LogMSIGNextSteps(txData string) error {
+func (h *Handler) LogMSIGNextSteps(txData string, digest [32]byte, requestID string) error {
 	fmt.Println("")
 	fmt.Println("MSIG transaction prepared!")
 	fmt.Println("")
 	fmt.Println("Next steps:")
 	fmt.Println("")
 	fmt.Println("   1. Submit the following transaction on the target chain:")
-	fmt.Printf("      Chain:   %s\n", h.EnvironmentSet.WorkflowRegistryChainName)
+	fmt.Printf("      Chain:            %s\n", h.EnvironmentSet.WorkflowRegistryChainName)
 	fmt.Printf("      Contract Address: %s\n", h.EnvironmentSet.WorkflowRegistryAddress)
 	fmt.Println("")
 	fmt.Println("   2. Use the following transaction data:")
 	fmt.Println("")
 	fmt.Printf("      %s\n", txData)
 	fmt.Println("")
-	fmt.Println("   3. Run the same command again without the --unsigned flag once transaction is finalized onchain")
+	fmt.Println("   3. Save these values; you will need them on the second run:")
+	fmt.Printf("      Request ID: %s\n", requestID)
+	fmt.Printf("      Digest:     0x%x\n", digest)
+	fmt.Println("")
+	fmt.Println("   4. After the transaction is finalized on-chain, run the SAME command again,")
+	fmt.Println("      adding the --request-id flag with the value above, e.g.:")
+	fmt.Println("")
+	fmt.Println("      cre secrets delete <secrets-file> --request-id=", requestID)
 	fmt.Println("")
 	return nil
 }
@@ -293,11 +300,28 @@ func CalculateDigest[I any](r jsonrpc2.Request[I]) ([32]byte, error) {
 
 // Execute is a shared method for both 'create' and 'update' commands.
 // It encapsulates the core logic of validation, encryption, and sending data.
-func (h *Handler) Execute(inputs UpsertSecretsInputs, method string, duration time.Duration, ownerType string) error {
+func (h *Handler) Execute(
+	inputs UpsertSecretsInputs,
+	method string,
+	duration time.Duration,
+	ownerType string,
+	requestIDFlag string,
+) error {
 	// Encrypt the secrets
 	encSecrets, err := h.EncryptSecrets(inputs)
 	if err != nil {
 		return fmt.Errorf("failed to encrypt secrets: %w", err)
+	}
+
+	// Resolve request ID (reuse if provided)
+	var requestID string
+	if strings.TrimSpace(requestIDFlag) != "" {
+		if _, err := uuid.Parse(strings.TrimSpace(requestIDFlag)); err != nil {
+			return fmt.Errorf("--request-id must be a valid UUID: %w", err)
+		}
+		requestID = strings.TrimSpace(requestIDFlag)
+	} else {
+		requestID = uuid.New().String()
 	}
 
 	var (
@@ -307,9 +331,6 @@ func (h *Handler) Execute(inputs UpsertSecretsInputs, method string, duration ti
 
 	switch method {
 	case vaulttypes.MethodSecretsCreate:
-		requestID := uuid.New().String()
-
-		// Build typed JSON-RPC request
 		req := jsonrpc2.Request[vault.CreateSecretsRequest]{
 			Version: jsonrpc2.JsonRpcVersion,
 			ID:      requestID,
@@ -319,21 +340,17 @@ func (h *Handler) Execute(inputs UpsertSecretsInputs, method string, duration ti
 				EncryptedSecrets: encSecrets,
 			},
 		}
-
 		d, err := CalculateDigest(req)
 		if err != nil {
 			return fmt.Errorf("failed to calculate create digest: %w", err)
 		}
-
 		digest = d
-
 		requestBody, err = json.Marshal(req)
 		if err != nil {
 			return fmt.Errorf("failed to marshal JSON-RPC request: %w", err)
 		}
+
 	case vaulttypes.MethodSecretsUpdate:
-		requestID := uuid.New().String()
-		// Build typed JSON-RPC request
 		req := jsonrpc2.Request[vault.UpdateSecretsRequest]{
 			Version: jsonrpc2.JsonRpcVersion,
 			ID:      requestID,
@@ -343,52 +360,60 @@ func (h *Handler) Execute(inputs UpsertSecretsInputs, method string, duration ti
 				EncryptedSecrets: encSecrets,
 			},
 		}
-
 		d, err := CalculateDigest(req)
 		if err != nil {
 			return fmt.Errorf("failed to calculate update digest: %w", err)
 		}
-
 		digest = d
-
 		requestBody, err = json.Marshal(req)
 		if err != nil {
 			return fmt.Errorf("failed to marshal JSON-RPC request: %w", err)
 		}
+
 	default:
-		return fmt.Errorf("unsupported method %q (expected \"vault.secrets.create\" or \"vault.secrets.update\")", method)
+		return fmt.Errorf("unsupported method %q (expected %q or %q)", method, vaulttypes.MethodSecretsCreate, vaulttypes.MethodSecretsUpdate)
 	}
 
-	// if unsigned, prepare the tx data and return
-	if ownerType == constants.WorkflowOwnerTypeMSIG {
+	// MSIG first run: owner is MSIG and NO --request-id. Only print steps & exit.
+	if ownerType == constants.WorkflowOwnerTypeMSIG && strings.TrimSpace(requestIDFlag) == "" {
 		txData, err := h.PackAllowlistRequestTxData(digest, duration)
 		if err != nil {
 			return fmt.Errorf("failed to pack allowlist tx: %w", err)
 		}
-		if err := h.LogMSIGNextSteps(txData); err != nil {
+		if err := h.LogMSIGNextSteps(txData, digest, requestID); err != nil {
 			return fmt.Errorf("failed to log MSIG steps: %w", err)
 		}
 		return nil
 	}
 
-	// Register the digest on-chain
+	// From here on, we're in the "call the DON" path.
+	// If --request-id is provided for ANY owner type: do NOT allowlist; only proceed if allowlisted.
+	// Else (EOA path): auto-allowlist if needed.
 	wrV2Client, err := h.ClientFactory.NewWorkflowRegistryV2Client()
 	if err != nil {
 		return fmt.Errorf("create workflow registry client failed: %w", err)
 	}
 	ownerAddr := common.HexToAddress(h.OwnerAddress)
+
 	allowlisted, err := wrV2Client.IsRequestAllowlisted(ownerAddr, digest)
 	if err != nil {
 		return fmt.Errorf("allowlist check failed: %w", err)
 	}
 
-	if !allowlisted {
-		if err := wrV2Client.AllowlistRequest(digest, duration); err != nil {
-			return fmt.Errorf("allowlist request failed: %w", err)
+	if strings.TrimSpace(requestIDFlag) != "" {
+		if !allowlisted {
+			return fmt.Errorf("on-chain request for request-id %q is not finalized (digest not allowlisted). Do not call the vault DON yet. Finalize the on-chain allowlist tx, then rerun this command with the same --request-id", requestIDFlag)
 		}
-		fmt.Printf("\nDigest allowlisted; proceeding to gateway POST: owner=%s, digest=%x\n", ownerAddr.Hex(), digest)
+		fmt.Printf("\nDigest allowlisted; proceeding to gateway POST: owner=%s, requestID=%s, digest=0x%x\n", ownerAddr.Hex(), requestID, digest)
 	} else {
-		fmt.Printf("\nDigest already allowlisted; skipping on-chain allowlist: owner=%s, digest=%x\n", ownerAddr.Hex(), digest)
+		if !allowlisted {
+			if err := wrV2Client.AllowlistRequest(digest, duration); err != nil {
+				return fmt.Errorf("allowlist request failed: %w", err)
+			}
+			fmt.Printf("\nDigest allowlisted; proceeding to gateway POST: owner=%s, requestID=%s, digest=0x%x\n", ownerAddr.Hex(), requestID, digest)
+		} else {
+			fmt.Printf("\nDigest already allowlisted; skipping on-chain allowlist: owner=%s, requestID=%s, digest=0x%x\n", ownerAddr.Hex(), requestID, digest)
+		}
 	}
 
 	// POST to gateway

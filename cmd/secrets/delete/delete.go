@@ -45,8 +45,8 @@ type SecretsDeleteYamlConfig struct {
 func New(ctx *runtime.Context) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "delete [SECRETS_FILE_PATH]",
-		Short:   "Deletes secrets from a JSON file provided as a positional argument.",
-		Example: "cre secrets delete my-secrets.json",
+		Short:   "Deletes secrets from a YAML file provided as a positional argument.",
+		Example: "cre secrets delete my-secrets.yaml",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			secretsFilePath := args[0]
@@ -73,26 +73,32 @@ func New(ctx *runtime.Context) *cobra.Command {
 				return fmt.Errorf("invalid --timeout: must be greater than 0 and less than %dh (%dd)", maxHours, maxDays)
 			}
 
-			inputs, err := ResolveDeleteInputs(secretsFilePath)
+			reqIDFlag, err := cmd.Flags().GetString("request-id")
 			if err != nil {
 				return err
 			}
 
+			// Parse input file
+			inputs, err := ResolveDeleteInputs(secretsFilePath)
+			if err != nil {
+				return err
+			}
 			if err := ValidateDeleteInputs(inputs); err != nil {
 				return err
 			}
 
-			return Execute(h, inputs, duration, ctx.Settings.Workflow.UserWorkflowSettings.WorkflowOwnerType)
+			return Execute(h, inputs, duration, ctx.Settings.Workflow.UserWorkflowSettings.WorkflowOwnerType, strings.TrimSpace(reqIDFlag))
 		},
 	}
 
 	settings.AddRawTxFlag(cmd)
+	cmd.Flags().String("request-id", "", "Reuse a specific request ID (UUID) for this operation. When provided, the command will not create a new ID and will only proceed if the corresponding on-chain allowlist entry is already finalized.")
 
 	return cmd
 }
 
 // Execute handles the main logic for the 'delete' command.
-func Execute(h *common.Handler, inputs DeleteSecretsInputs, duration time.Duration, ownerType string) error {
+func Execute(h *common.Handler, inputs DeleteSecretsInputs, duration time.Duration, ownerType string, requestIDFlag string) error {
 	// Validate and canonicalize owner address
 	owner := strings.TrimSpace(h.OwnerAddress)
 	if !ethcommon.IsHexAddress(owner) {
@@ -110,8 +116,18 @@ func Execute(h *common.Handler, inputs DeleteSecretsInputs, duration time.Durati
 		}
 	}
 
-	requestID := uuid.New().String()
-	// Use the ID and prepare the JSON RPC request
+	// Resolve request ID: either from flag or freshly generated
+	var requestID string
+	if requestIDFlag != "" {
+		if _, err := uuid.Parse(requestIDFlag); err != nil {
+			return fmt.Errorf("--request-id must be a valid UUID: %w", err)
+		}
+		requestID = requestIDFlag
+	} else {
+		requestID = uuid.New().String()
+	}
+
+	// Build JSON-RPC request using the resolved requestID
 	deleteSecretsRequest := jsonrpc2.Request[vault.DeleteSecretsRequest]{
 		Version: jsonrpc2.JsonRpcVersion,
 		ID:      requestID,
@@ -122,30 +138,34 @@ func Execute(h *common.Handler, inputs DeleteSecretsInputs, duration time.Durati
 		},
 	}
 
-	digest, err := common.CalculateDigest(deleteSecretsRequest)
-	if err != nil {
-		return fmt.Errorf("failed to calculate request digest: %w", err)
-	}
-
 	requestBody, err := json.Marshal(deleteSecretsRequest)
 	if err != nil {
 		return fmt.Errorf("failed to marshal JSON-RPC request: %w", err)
 	}
 
-	// if unsigned, prepare the tx data and return
-	if ownerType == constants.WorkflowOwnerTypeMSIG {
+	// Compute the digest from this exact payload (requestID included)
+	digest, err := common.CalculateDigest(deleteSecretsRequest)
+	if err != nil {
+		return fmt.Errorf("failed to calculate request digest: %w", err)
+	}
+
+	// MSIG first step: owner is MSIG and user did NOT pass --request-id.
+	// We only prepare/log the tx and stop here.
+	if ownerType == constants.WorkflowOwnerTypeMSIG && requestIDFlag == "" {
 		txData, err := h.PackAllowlistRequestTxData(digest, duration)
 		if err != nil {
 			return fmt.Errorf("failed to pack allowlist tx: %w", err)
 		}
-		if err := h.LogMSIGNextSteps(txData); err != nil {
+		if err := h.LogMSIGNextSteps(txData, digest, requestID); err != nil {
 			return fmt.Errorf("failed to log MSIG steps: %w", err)
 		}
 		return nil
 	}
-	// TODO double check: for the 2nd step of MSIG, we shouldnt require private key and shouldnt require unsigned flag
 
-	// Register the digest on-chain
+	// From here on, we are in the "call the DON" path:
+	// - EOA normal run (no --request-id): may allowlist automatically.
+	// - MSIG second step (with --request-id): do NOT allowlist, only proceed if already allowlisted.
+	// - Any run with --request-id: do NOT allowlist, only proceed if already allowlisted.
 	wrV2Client, err := h.ClientFactory.NewWorkflowRegistryV2Client()
 	if err != nil {
 		return fmt.Errorf("create workflow registry client failed: %w", err)
@@ -156,13 +176,21 @@ func Execute(h *common.Handler, inputs DeleteSecretsInputs, duration time.Durati
 		return fmt.Errorf("allowlist check failed: %w", err)
 	}
 
-	if !allowlisted {
-		if err := wrV2Client.AllowlistRequest(digest, duration); err != nil {
-			return fmt.Errorf("allowlist request failed: %w", err)
+	if requestIDFlag != "" {
+		if !allowlisted {
+			return fmt.Errorf("on-chain request for request-id %q is not finalized (digest not allowlisted). Do NOT call the vault DON yet. Finalize the on-chain allowlist tx, then rerun this command with the same --request-id", requestIDFlag)
 		}
-		fmt.Printf("\nDigest allowlisted; proceeding to gateway POST: owner=%s, digest=%x\n", ownerAddr.Hex(), digest)
+		fmt.Printf("\nDigest allowlisted; proceeding to gateway POST: owner=%s, requestID=%s, digest=0x%x\n", ownerAddr.Hex(), requestID, digest)
 	} else {
-		fmt.Printf("\nDigest already allowlisted; skipping on-chain allowlist: owner=%s, digest=%x\n", ownerAddr.Hex(), digest)
+		// No --request-id flag: EOA path may allowlist automatically
+		if !allowlisted {
+			if err := wrV2Client.AllowlistRequest(digest, duration); err != nil {
+				return fmt.Errorf("allowlist request failed: %w", err)
+			}
+			fmt.Printf("\nDigest allowlisted; proceeding to gateway POST: owner=%s, requestID=%s, digest=0x%x\n", ownerAddr.Hex(), requestID, digest)
+		} else {
+			fmt.Printf("\nDigest already allowlisted; skipping on-chain allowlist: owner=%s, requestID=%s, digest=0x%x\n", ownerAddr.Hex(), requestID, digest)
+		}
 	}
 
 	// POST to gateway
@@ -175,10 +203,9 @@ func Execute(h *common.Handler, inputs DeleteSecretsInputs, duration time.Durati
 	}
 
 	return h.ParseVaultGatewayResponse(vaulttypes.MethodSecretsDelete, respBody)
-
 }
 
-// ResolveDeleteInputs unmarshals the JSON string into the DeleteSecretsInputs struct.
+// ResolveDeleteInputs unmarshals the YAML string into the DeleteSecretsInputs struct.
 func ResolveDeleteInputs(secretsFilePath string) (DeleteSecretsInputs, error) {
 	fileContent, err := os.ReadFile(secretsFilePath)
 	if err != nil {

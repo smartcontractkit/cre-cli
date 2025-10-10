@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
@@ -20,7 +21,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 )
 
-// cre secrets list --namespace main --timeout 1h
+// cre secrets list --timeout 1h
 func New(ctx *runtime.Context) *cobra.Command {
 	var namespace string
 
@@ -51,24 +52,52 @@ func New(ctx *runtime.Context) *cobra.Command {
 				return fmt.Errorf("invalid --timeout: must be greater than 0 and less than %dh (%dd)", maxHours, maxDays)
 			}
 
-			return Execute(h, namespace, duration, ctx.Settings.Workflow.UserWorkflowSettings.WorkflowOwnerType)
+			reqIDFlag, err := cmd.Flags().GetString("request-id")
+			if err != nil {
+				return err
+			}
+
+			return Execute(
+				h,
+				namespace,
+				duration,
+				ctx.Settings.Workflow.UserWorkflowSettings.WorkflowOwnerType,
+				strings.TrimSpace(reqIDFlag),
+			)
 		},
 	}
 
 	cmd.Flags().StringVar(&namespace, "namespace", "main", "Namespace to list (default: main)")
+	cmd.Flags().String("request-id", "", "Reuse a specific request ID (UUID) for this operation. When provided, the command will not create a new ID and will only proceed if the corresponding on-chain allowlist entry is already finalized.")
 	settings.AddRawTxFlag(cmd)
 
 	return cmd
 }
 
-// Execute performs: derive digest → (optional MSIG path) → allowlist digest → POST → parse.
-func Execute(h *common.Handler, namespace string, duration time.Duration, ownerType string) error {
-	owner := h.OwnerAddress
+// Execute performs: derive digest → (optional MSIG first step) → allowlist/don rules → POST → parse.
+func Execute(h *common.Handler, namespace string, duration time.Duration, ownerType string, requestIDFlag string) error {
 	if namespace == "" {
 		namespace = "main"
 	}
 
-	requestID := uuid.New().String()
+	// Validate and canonicalize owner address (checksummed)
+	owner := strings.TrimSpace(h.OwnerAddress)
+	if !ethcommon.IsHexAddress(owner) {
+		return fmt.Errorf("invalid owner address: %q", h.OwnerAddress)
+	}
+	owner = ethcommon.HexToAddress(owner).Hex()
+
+	// Resolve request ID: either from flag or freshly generated
+	var requestID string
+	if requestIDFlag != "" {
+		if _, err := uuid.Parse(requestIDFlag); err != nil {
+			return fmt.Errorf("--request-id must be a valid UUID: %w", err)
+		}
+		requestID = requestIDFlag
+	} else {
+		requestID = uuid.New().String()
+	}
+
 	req := jsonrpc2.Request[vault.ListSecretIdentifiersRequest]{
 		Version: jsonrpc2.JsonRpcVersion,
 		ID:      requestID,
@@ -90,36 +119,49 @@ func Execute(h *common.Handler, namespace string, duration time.Duration, ownerT
 		return fmt.Errorf("failed to marshal JSON-RPC request: %w", err)
 	}
 
-	// MSIG path: provide next steps and exit before making a gateway call.
-	if ownerType == constants.WorkflowOwnerTypeMSIG {
+	// MSIG first step: owner is MSIG and user did NOT pass --request-id.
+	// We only prepare/log the tx and stop here.
+	if ownerType == constants.WorkflowOwnerTypeMSIG && requestIDFlag == "" {
 		txData, err := h.PackAllowlistRequestTxData(digest, duration)
 		if err != nil {
 			return fmt.Errorf("failed to pack allowlist tx: %w", err)
 		}
-		if err := h.LogMSIGNextSteps(txData); err != nil {
+		if err := h.LogMSIGNextSteps(txData, digest, requestID); err != nil {
 			return fmt.Errorf("failed to log MSIG steps: %w", err)
 		}
 		return nil
 	}
 
-	// Allowlist digest on-chain (or skip if already allowlisted).
+	// From here on, we are in the "call the DON" path:
+	// - EOA normal run (no --request-id): may allowlist automatically.
+	// - MSIG second step (with --request-id): do NOT allowlist, only proceed if already allowlisted.
+	// - Any run with --request-id: do NOT allowlist, only proceed if already allowlisted.
 	wrV2Client, err := h.ClientFactory.NewWorkflowRegistryV2Client()
 	if err != nil {
 		return fmt.Errorf("create workflow registry client failed: %w", err)
 	}
 	ownerAddr := ethcommon.HexToAddress(owner)
+
 	allowlisted, err := wrV2Client.IsRequestAllowlisted(ownerAddr, digest)
 	if err != nil {
 		return fmt.Errorf("allowlist check failed: %w", err)
 	}
 
-	if !allowlisted {
-		if err := wrV2Client.AllowlistRequest(digest, duration); err != nil {
-			return fmt.Errorf("allowlist request failed: %w", err)
+	if requestIDFlag != "" {
+		if !allowlisted {
+			return fmt.Errorf("on-chain request for request-id %q is not finalized (digest not allowlisted); do not call the vault DON yet; finalize the on-chain allowlist tx, then rerun this command with the same --request-id", requestIDFlag)
 		}
-		fmt.Printf("\nDigest allowlisted; proceeding to gateway POST: owner=%s, digest=%x\\n", ownerAddr.Hex(), digest)
+		fmt.Printf("\nDigest allowlisted; proceeding to gateway POST: owner=%s, requestID=%s, digest=0x%x\n", ownerAddr.Hex(), requestID, digest)
 	} else {
-		fmt.Printf("\nDigest already allowlisted; skipping on-chain allowlist: owner=%s, digest=%x\\n", ownerAddr.Hex(), digest)
+		// No --request-id flag: EOA path may allowlist automatically
+		if !allowlisted {
+			if err := wrV2Client.AllowlistRequest(digest, duration); err != nil {
+				return fmt.Errorf("allowlist request failed: %w", err)
+			}
+			fmt.Printf("\nDigest allowlisted; proceeding to gateway POST: owner=%s, requestID=%s, digest=0x%x\n", ownerAddr.Hex(), requestID, digest)
+		} else {
+			fmt.Printf("\nDigest already allowlisted; skipping on-chain allowlist: owner=%s, requestID=%s, digest=0x%x\n", ownerAddr.Hex(), requestID, digest)
+		}
 	}
 
 	// POST to gateway
