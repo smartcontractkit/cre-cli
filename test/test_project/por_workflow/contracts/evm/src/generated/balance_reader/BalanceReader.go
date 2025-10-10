@@ -179,7 +179,7 @@ func (c BalanceReader) GetNativeBalances(
 	var bn cre.Promise[*pb.BigInt]
 	if blockNumber == nil {
 		promise := c.client.HeaderByNumber(runtime, &evm.HeaderByNumberRequest{
-			BlockNumber: pb.NewBigIntFromInt(big.NewInt(rpc.FinalizedBlockNumber.Int64())),
+			BlockNumber: bindings.FinalizedBlockNumber,
 		})
 
 		bn = cre.Then(promise, func(finalizedBlock *evm.HeaderByNumberReply) (*pb.BigInt, error) {
@@ -216,7 +216,7 @@ func (c BalanceReader) TypeAndVersion(
 	var bn cre.Promise[*pb.BigInt]
 	if blockNumber == nil {
 		promise := c.client.HeaderByNumber(runtime, &evm.HeaderByNumberRequest{
-			BlockNumber: pb.NewBigIntFromInt(big.NewInt(rpc.FinalizedBlockNumber.Int64())),
+			BlockNumber: bindings.FinalizedBlockNumber,
 		})
 
 		bn = cre.Then(promise, func(finalizedBlock *evm.HeaderByNumberReply) (*pb.BigInt, error) {

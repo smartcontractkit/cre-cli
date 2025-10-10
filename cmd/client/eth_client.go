@@ -12,18 +12,18 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient/simulated"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/rs/zerolog"
-	workflow_registry_wrapper "github.com/smartcontractkit/chainlink-evm/gethwrappers/workflow/generated/workflow_registry_wrapper_v2"
-	"github.com/smartcontractkit/chainlink-testing-framework/seth"
 	"github.com/spf13/viper"
-
-	cmdCommon "github.com/smartcontractkit/cre-cli/cmd/common"
-	"github.com/smartcontractkit/cre-cli/internal/constants"
-	"github.com/smartcontractkit/cre-cli/internal/settings"
 
 	"github.com/smartcontractkit/chainlink-evm/gethwrappers/keystone/generated/balance_reader"
 	"github.com/smartcontractkit/chainlink-evm/gethwrappers/shared/generated/latest/werc20_mock"
 	"github.com/smartcontractkit/chainlink-evm/gethwrappers/workflow/generated/mock_forwarder"
 	"github.com/smartcontractkit/chainlink-evm/gethwrappers/workflow/generated/reserve_manager"
+	workflow_registry_wrapper "github.com/smartcontractkit/chainlink-evm/gethwrappers/workflow/generated/workflow_registry_wrapper_v2"
+	"github.com/smartcontractkit/chainlink-testing-framework/seth"
+
+	cmdCommon "github.com/smartcontractkit/cre-cli/cmd/common"
+	"github.com/smartcontractkit/cre-cli/internal/constants"
+	"github.com/smartcontractkit/cre-cli/internal/settings"
 )
 
 func LoadContracts(l *zerolog.Logger, client *seth.Client) error {

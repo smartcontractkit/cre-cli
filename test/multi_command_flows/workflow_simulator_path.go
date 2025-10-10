@@ -44,7 +44,7 @@ func startMockPORServer(t *testing.T) *httptest.Server {
 		resp := porResponse{
 			AccountName: "mock-account",
 			TotalTrust:  1.0,
-			TotalToken:  123.456, // your workflow scales this to 1e18 later
+			TotalToken:  123.456,
 			Ripcord:     false,
 			UpdatedAt:   time.Now().UTC(),
 		}
@@ -69,7 +69,7 @@ func patchWorkflowConfigURL(t *testing.T, projectRoot string, workflowName strin
 
 	out, err := json.MarshalIndent(cfg, "", "  ")
 	require.NoError(t, err, "marshal patched config")
-	require.NoError(t, os.WriteFile(cfgPath, out, 0o644), "write patched config")
+	require.NoError(t, os.WriteFile(cfgPath, out, 0600), "write patched config")
 }
 
 // Simulates a workflow
@@ -78,12 +78,12 @@ func RunSimulationHappyPath(t *testing.T, tc TestConfig, projectDir string) {
 
 	t.Run("Simulate", func(t *testing.T) {
 		srv := startMockPORServer(t)
-		patchWorkflowConfigURL(t, projectDir, "chainreader_workflow", srv.URL)
+		patchWorkflowConfigURL(t, projectDir, "por_workflow", srv.URL)
 
 		// Build CLI args
 		args := []string{
 			"workflow", "simulate",
-			"chainreader_workflow",
+			"por_workflow",
 			tc.GetCliEnvFlag(),
 			tc.GetProjectRootFlag(),
 			"--non-interactive",
@@ -105,9 +105,13 @@ func RunSimulationHappyPath(t *testing.T, tc TestConfig, projectDir string) {
 
 		out := StripANSI(stdout.String() + stderr.String())
 
-		require.Contains(t, out, "Workflow compiledsadf", "expected workflow to compile.\nCLI OUTPUT:\n%s", out)
+		require.Contains(t, out, "Workflow compiled", "expected workflow to compile.\nCLI OUTPUT:\n%s", out)
 		require.Contains(t, out, "Simulator Initialized", "expected workflow to initialize.\nCLI OUTPUT:\n%s", out)
 		require.Contains(t, out, "Getting native balances", "expected workflow to read from balance reader.\nCLI OUTPUT:\n%s", out)
+		require.Contains(t, out, "fetching por", "expected http capability success.\nCLI OUTPUT:\n%s", out)
+		require.Contains(t, out, "totalSupply=", "expected ERC20 chain reader success.\nCLI OUTPUT:\n%s", out)
+		require.Contains(t, out, "Write report succeeded", "expected chain writer success.\nCLI OUTPUT:\n%s", out)
+
 		require.Contains(t, out, "Workflow Simulation Result", "expected simulation success.\nCLI OUTPUT:\n%s", out)
 	})
 }

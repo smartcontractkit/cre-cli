@@ -139,7 +139,6 @@ func createWorkflowDirectory(
 
 	// Create workflow.yaml file using viper
 	workflowSettingsPath := filepath.Join(workflowDir, constants.DefaultWorkflowSettingsFileName)
-	fmt.Println("Creating workflow settings file at", workflowSettingsPath)
 
 	v := viper.New()
 

@@ -11,9 +11,9 @@ import (
 	"math/big"
 	"time"
 
-	"t/contracts/evm/src/generated/balance_reader"
-	"t/contracts/evm/src/generated/ierc20"
-	"t/contracts/evm/src/generated/reserve_manager"
+	"por_workflow/contracts/evm/src/generated/balance_reader"
+	"por_workflow/contracts/evm/src/generated/ierc20"
+	"por_workflow/contracts/evm/src/generated/reserve_manager"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/shopspring/decimal"
@@ -22,10 +22,7 @@ import (
 	"github.com/smartcontractkit/cre-sdk-go/capabilities/networking/http"
 	"github.com/smartcontractkit/cre-sdk-go/capabilities/scheduler/cron"
 	"github.com/smartcontractkit/cre-sdk-go/cre"
-)
-
-const (
-	SecretName = "SECRET_ADDRESS"
+	"github.com/smartcontractkit/cre-sdk-go/cre/wasm"
 )
 
 // EVMConfig holds per-chain configuration.
@@ -80,8 +77,6 @@ func InitWorkflow(config *Config, logger *slog.Logger, secretsProvider cre.Secre
 		Schedule: config.Schedule,
 	}
 
-	httpTriggerCfg := &http.Config{}
-
 	workflow := cre.Workflow[*Config]{
 		cre.Handler(
 			cron.Trigger(cronTriggerCfg),
@@ -124,27 +119,16 @@ func doPOR(config *Config, runtime cre.Runtime, runTime time.Time) (string, erro
 	}
 	logger.Info("Native token balance", "token", config.EVMs[0].TokenAddress, "balance", nativeTokenBalance)
 
-	//secretReq := &pb.SecretRequest{
-	//	Id: SecretName,
-	//}
-	//
-	//secretAddress, err := runtime.GetSecret(secretReq).Await()
-	//if err != nil {
-	//	logger.Error(fmt.Sprintf("failed to get secret address: %v", err))
-	//	return "", err
-	//}
-	//secretAddressBalance, err := fetchNativeTokenBalance(runtime, config.EVMs[0], secretAddress.Value)
-
-	secretAddressBalance, err := fetchNativeTokenBalance(runtime, config.EVMs[0], "0x5FbDB2315678afecb367f032d93F642f64180aa3") // hardcoded for local testing
+	secretAddressBalance, err := fetchNativeTokenBalance(runtime, config.EVMs[0], "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266") // hardcoded for local testing
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch secret address balance: %w", err)
 	}
 	logger.Info("Secret address balance", "balance", secretAddressBalance)
 
 	// Update reserves
-	//if err := updateReserves(config, runtime, totalSupply, totalReserveScaled); err != nil {
-	//	return "", fmt.Errorf("failed to update reserves: %w", err)
-	//}
+	if err := updateReserves(config, runtime, totalSupply, totalReserveScaled); err != nil {
+		return "", fmt.Errorf("failed to update reserves: %w", err)
+	}
 
 	return reserveInfo.TotalReserve.String(), nil
 }
@@ -171,7 +155,7 @@ func fetchNativeTokenBalance(runtime cre.Runtime, evmCfg EVMConfig, tokenHolderA
 	logger.Info("Getting native balances", "address", evmCfg.BalanceReaderAddress, "tokenAddress", tokenHolderAddress)
 	balances, err := balanceReader.GetNativeBalances(runtime, balance_reader.GetNativeBalancesInput{
 		Addresses: []common.Address{common.Address(tokenAddress)},
-	}, big.NewInt(1)).Await()
+	}, big.NewInt(4)).Await()
 
 	if err != nil {
 		logger.Error("Could not read from contract", "contract_chain", evmCfg.ChainName, "err", err.Error())
@@ -204,7 +188,7 @@ func getTotalSupply(config *Config, runtime cre.Runtime) (*big.Int, error) {
 			logger.Error("failed to create token", "address", evmCfg.TokenAddress, "err", err)
 			return nil, fmt.Errorf("failed to create token for address %s: %w", evmCfg.TokenAddress, err)
 		}
-		evmTotalSupplyPromise := token.TotalSupply(runtime, big.NewInt(1))
+		evmTotalSupplyPromise := token.TotalSupply(runtime, big.NewInt(4))
 		supplyPromises[i] = evmTotalSupplyPromise
 	}
 
