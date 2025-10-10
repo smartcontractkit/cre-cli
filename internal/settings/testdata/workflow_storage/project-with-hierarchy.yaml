@@ -1,5 +1,5 @@
 # DO NOT CHANGE
-production-testnet:
+staging:
   hierarchy-test: Project
   test-key: projectValue
   cre-cli:

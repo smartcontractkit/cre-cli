@@ -91,7 +91,7 @@ func TestLoadEnvAndSettingsEmptyTarget(t *testing.T) {
 
 func TestLoadEnvAndSettings(t *testing.T) {
 	envVars := map[string]string{
-		settings.CreTargetEnvVar:     "production-testnet",
+		settings.CreTargetEnvVar:     "staging",
 		settings.EthPrivateKeyEnvVar: "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
 	}
 
@@ -112,13 +112,13 @@ func TestLoadEnvAndSettings(t *testing.T) {
 	cmd := &cobra.Command{Use: "login"}
 	s, err := settings.New(logger, v, cmd)
 	require.NoError(t, err)
-	assert.Equal(t, "production-testnet", s.User.TargetName)
+	assert.Equal(t, "staging", s.User.TargetName)
 	assert.Equal(t, "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80", s.User.EthPrivateKey)
 }
 
 func TestLoadEnvAndSettingsWithWorkflowSettingsFlag(t *testing.T) {
 	envVars := map[string]string{
-		settings.CreTargetEnvVar:     "production-testnet",
+		settings.CreTargetEnvVar:     "staging",
 		settings.EthPrivateKeyEnvVar: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
 	}
 
@@ -145,7 +145,7 @@ func TestLoadEnvAndSettingsWithWorkflowSettingsFlag(t *testing.T) {
 	cmd := &cobra.Command{Use: "login"}
 	s, err := settings.New(logger, v, cmd)
 	require.NoError(t, err)
-	assert.Equal(t, "production-testnet", s.User.TargetName)
+	assert.Equal(t, "staging", s.User.TargetName)
 	assert.Equal(t, "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80", s.User.EthPrivateKey)
 }
 
@@ -169,19 +169,19 @@ func TestInlineEnvTakesPrecedenceOverDotEnv(t *testing.T) {
 	v, logger := createTestContext(t, envVars, tempDir)
 
 	setUpTestSettingsFiles(t, v, workflowTemplatePath, projectTemplatePath, tempDir)
-	os.Setenv(settings.CreTargetEnvVar, "production-testnet")
+	os.Setenv(settings.CreTargetEnvVar, "staging")
 	defer os.Unsetenv(settings.CreTargetEnvVar)
 
 	cmd := &cobra.Command{Use: "login"}
 	s, err := settings.New(logger, v, cmd)
 	require.NoError(t, err)
-	assert.Equal(t, "production-testnet", s.User.TargetName)
+	assert.Equal(t, "staging", s.User.TargetName)
 	assert.Equal(t, "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80", s.User.EthPrivateKey)
 }
 
 func TestLoadEnvAndMergedSettings(t *testing.T) {
 	envVars := map[string]string{
-		settings.CreTargetEnvVar:     "production-testnet",
+		settings.CreTargetEnvVar:     "staging",
 		settings.EthPrivateKeyEnvVar: "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
 	}
 

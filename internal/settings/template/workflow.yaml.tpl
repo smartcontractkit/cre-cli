@@ -24,7 +24,7 @@ local-simulation:
     secrets-path: "{{SecretsPath}}"
 
 # ==========================================================================
-production-testnet:
+staging:
   user-workflow:
     workflow-name: "{{WorkflowName}}"
   workflow-artifacts:

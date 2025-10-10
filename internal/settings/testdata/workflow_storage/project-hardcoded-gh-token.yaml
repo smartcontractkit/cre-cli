@@ -1,4 +1,4 @@
-production-testnet:
+staging:
   cre-cli:
     don-family: "zone-a"
   logging:

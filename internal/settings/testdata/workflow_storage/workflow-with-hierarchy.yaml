@@ -1,5 +1,5 @@
 # DO NOT CHANGE
-production-testnet:
+staging:
   hierarchy-test: Workflow
   test-key: workflowValue
   user-workflow:
