@@ -278,7 +278,7 @@ func EncryptSecret(secret, masterPublicKeyHex string) (string, error) {
 func CalculateDigest[I any](r jsonrpc2.Request[I]) ([32]byte, error) {
 	b, err := json.Marshal(r.Params)
 	if err != nil {
-		return [32]byte{}, fmt.Errorf("failed to marshal create seed: %w", err)
+		return [32]byte{}, fmt.Errorf("failed to marshal json request params: %w", err)
 	}
 
 	req := jsonrpc2.Request[json.RawMessage]{
@@ -346,7 +346,7 @@ func (h *Handler) Execute(inputs UpsertSecretsInputs, method string, duration ti
 
 		d, err := CalculateDigest(req)
 		if err != nil {
-			return fmt.Errorf("failed to calculate create digest: %w", err)
+			return fmt.Errorf("failed to calculate update digest: %w", err)
 		}
 
 		digest = d
