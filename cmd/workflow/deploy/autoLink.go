@@ -6,12 +6,17 @@ import (
 	"strings"
 	"time"
 
+	"github.com/avast/retry-go/v4"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/machinebox/graphql"
 
 	linkkey "github.com/smartcontractkit/cre-cli/cmd/account/link_key"
 	"github.com/smartcontractkit/cre-cli/internal/client/graphqlclient"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
+)
+
+const (
+	VerificationStatusSuccessful = "VERIFICATION_SUCCESSFULL"
 )
 
 // ensureOwnerLinkedOrFail checks if the owner is linked and attempts auto-link if needed
@@ -41,25 +46,7 @@ func (h *handler) ensureOwnerLinkedOrFail() error {
 		return fmt.Errorf("auto-link attempt failed: %w", err)
 	}
 
-	// Verify link with retry (blockchain state might take time to propagate)
-	const maxRetries = 5
-	const retryDelay = 1 * time.Second
-
-	for i := 0; i < maxRetries; i++ {
-		if linked, err = h.wrc.IsOwnerLinked(ownerAddr); err != nil {
-			return fmt.Errorf("linked via auto-link, but failed to verify link status: %w", err)
-		} else if linked {
-			fmt.Printf("Auto-link successful: owner=%s\n", ownerAddr.Hex())
-			break
-		}
-
-		if i < maxRetries-1 {
-			fmt.Printf("Waiting for blockchain state to propagate... (attempt %d/%d)\n", i+1, maxRetries)
-			time.Sleep(retryDelay)
-		} else {
-			return fmt.Errorf("auto-link executed but owner still not linked after %d attempts", maxRetries)
-		}
-	}
+	fmt.Printf("Auto-link successful: owner=%s\n", ownerAddr.Hex())
 
 	// Wait for linking process to complete
 	if err := h.waitForBackendLinkProcessing(ownerAddr); err != nil {
@@ -115,13 +102,14 @@ func (h *handler) tryAutoLink() error {
 	return linkkey.Exec(rtx, lkInputs)
 }
 
-// checkLinkStatusViaGraphQL checks if the owner is linked by querying the service
+// checkLinkStatusViaGraphQL checks if the owner is linked and verified by querying the service
 func (h *handler) checkLinkStatusViaGraphQL(ownerAddr common.Address) (bool, error) {
 	const query = `
 	query {
 		listWorkflowOwners(filters: { linkStatus: LINKED_ONLY }) {
 			linkedOwners {
 				workflowOwnerAddress
+				verificationStatus
 			}
 		}
 	}`
@@ -131,6 +119,7 @@ func (h *handler) checkLinkStatusViaGraphQL(ownerAddr common.Address) (bool, err
 		ListWorkflowOwners struct {
 			LinkedOwners []struct {
 				WorkflowOwnerAddress string `json:"workflowOwnerAddress"`
+				VerificationStatus   string `json:"verificationStatus"`
 			} `json:"linkedOwners"`
 		} `json:"listWorkflowOwners"`
 	}
@@ -143,7 +132,10 @@ func (h *handler) checkLinkStatusViaGraphQL(ownerAddr common.Address) (bool, err
 	ownerHex := strings.ToLower(ownerAddr.Hex())
 	for _, linkedOwner := range resp.ListWorkflowOwners.LinkedOwners {
 		if strings.ToLower(linkedOwner.WorkflowOwnerAddress) == ownerHex {
-			return true, nil
+			// Check if verification status is successful
+			if linkedOwner.VerificationStatus == VerificationStatusSuccessful {
+				return true, nil
+			}
 		}
 	}
 
@@ -152,26 +144,33 @@ func (h *handler) checkLinkStatusViaGraphQL(ownerAddr common.Address) (bool, err
 
 // waitForBackendLinkProcessing polls the service until the link is processed
 func (h *handler) waitForBackendLinkProcessing(ownerAddr common.Address) error {
-	const maxRetries = 5
-	const retryInterval = 1 * time.Second
-
 	fmt.Printf("Waiting for linking process to complete: owner=%s\n", ownerAddr.Hex())
 
-	for i := 0; i < maxRetries; i++ {
-		linked, err := h.checkLinkStatusViaGraphQL(ownerAddr)
-		if err != nil {
-			h.log.Warn().Err(err).Int("attempt", i+1).Int("maxRetries", maxRetries).Msg("Failed to check link status")
-			// Continue retrying on errors as they might be temporary
-		} else if linked {
-			fmt.Printf("Linking process confirmed: owner=%s (attempt %d/%d)\n", ownerAddr.Hex(), i+1, maxRetries)
-			return nil
-		}
+	err := retry.Do(
+		func() error {
+			linked, err := h.checkLinkStatusViaGraphQL(ownerAddr)
+			if err != nil {
+				h.log.Warn().Err(err).Msg("Failed to check link status")
+				return err // Return error to trigger retry
+			}
+			if !linked {
+				return fmt.Errorf("owner not yet linked and verified")
+			}
+			return nil // Success - owner is linked and verified
+		},
+		retry.Attempts(10),
+		retry.Delay(1*time.Second),
+		retry.LastErrorOnly(true),
+		retry.OnRetry(func(n uint, err error) {
+			h.log.Debug().Uint("attempt", n+1).Uint("maxAttempts", 10).Err(err).Msg("Retrying link status check")
+			fmt.Printf("Waiting for linking process... (attempt %d/%d)\n", n+1, 10)
+		}),
+	)
 
-		if i < maxRetries-1 { // Don't print on the last attempt
-			fmt.Printf("Waiting for linking process... (attempt %d/%d)\n", i+1, maxRetries)
-			time.Sleep(retryInterval)
-		}
+	if err != nil {
+		return fmt.Errorf("linking process timeout after 10 attempts: %w", err)
 	}
 
-	return fmt.Errorf("linking process timeout after %d attempts (waited %v)", maxRetries, time.Duration(maxRetries)*retryInterval)
+	fmt.Printf("Linking process confirmed: owner=%s\n", ownerAddr.Hex())
+	return nil
 }

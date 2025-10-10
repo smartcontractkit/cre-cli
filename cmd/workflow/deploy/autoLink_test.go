@@ -37,6 +37,7 @@ func TestCheckLinkStatusViaGraphQL(t *testing.T) {
 						"linkedOwners": []map[string]string{
 							{
 								"workflowOwnerAddress": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+								"verificationStatus":   VerificationStatusSuccessful,
 							},
 						},
 					},
@@ -67,6 +68,7 @@ func TestCheckLinkStatusViaGraphQL(t *testing.T) {
 						"linkedOwners": []map[string]string{
 							{
 								"workflowOwnerAddress": "0x1234567890123456789012345678901234567890",
+								"verificationStatus":   VerificationStatusSuccessful,
 							},
 						},
 					},
@@ -84,12 +86,31 @@ func TestCheckLinkStatusViaGraphQL(t *testing.T) {
 						"linkedOwners": []map[string]string{
 							{
 								"workflowOwnerAddress": "0xF39FD6E51AAD88F6F4CE6AB8827279CFFFB92266", // Uppercase
+								"verificationStatus":   VerificationStatusSuccessful,
 							},
 						},
 					},
 				},
 			},
 			expectedResult: true,
+			expectError:    false,
+		},
+		{
+			name:         "Owner linked but verification not successful",
+			ownerAddress: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+			mockResponse: map[string]any{
+				"data": map[string]any{
+					"listWorkflowOwners": map[string]any{
+						"linkedOwners": []map[string]string{
+							{
+								"workflowOwnerAddress": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+								"verificationStatus":   "VERIFICATION_PENDING",
+							},
+						},
+					},
+				},
+			},
+			expectedResult: false,
 			expectError:    false,
 		},
 		{
@@ -163,6 +184,7 @@ func TestWaitForBackendLinkProcessing(t *testing.T) {
 							"linkedOwners": []map[string]string{
 								{
 									"workflowOwnerAddress": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+									"verificationStatus":   VerificationStatusSuccessful,
 								},
 							},
 						},
@@ -198,6 +220,7 @@ func TestWaitForBackendLinkProcessing(t *testing.T) {
 							"linkedOwners": []map[string]string{
 								{
 									"workflowOwnerAddress": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+									"verificationStatus":   VerificationStatusSuccessful,
 								},
 							},
 						},
@@ -238,6 +261,7 @@ func TestWaitForBackendLinkProcessing(t *testing.T) {
 							"linkedOwners": []map[string]string{
 								{
 									"workflowOwnerAddress": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+									"verificationStatus":   VerificationStatusSuccessful,
 								},
 							},
 						},
