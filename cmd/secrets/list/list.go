@@ -12,7 +12,6 @@ import (
 
 	"github.com/smartcontractkit/chainlink-common/pkg/capabilities/actions/vault"
 	"github.com/smartcontractkit/chainlink-common/pkg/jsonrpc2"
-	nautilus "github.com/smartcontractkit/chainlink-common/pkg/nodeauth/utils"
 	"github.com/smartcontractkit/chainlink/v2/core/capabilities/vault/vaulttypes"
 
 	"github.com/smartcontractkit/cre-cli/cmd/secrets/common"
@@ -69,12 +68,6 @@ func Execute(h *common.Handler, namespace string, duration time.Duration, ownerT
 		namespace = "main"
 	}
 
-	seed := &vault.ListSecretIdentifiersRequest{
-		Owner:     owner,
-		Namespace: namespace,
-	}
-	digest := nautilus.CalculateRequestDigest(seed)
-
 	requestID := uuid.New().String()
 	req := jsonrpc2.Request[vault.ListSecretIdentifiersRequest]{
 		Version: jsonrpc2.JsonRpcVersion,
@@ -85,6 +78,11 @@ func Execute(h *common.Handler, namespace string, duration time.Duration, ownerT
 			Owner:     owner,
 			Namespace: namespace,
 		},
+	}
+
+	digest, err := common.CalculateDigest(req)
+	if err != nil {
+		return fmt.Errorf("failed to calculate request digest: %w", err)
 	}
 
 	body, err := json.Marshal(req)
@@ -119,9 +117,9 @@ func Execute(h *common.Handler, namespace string, duration time.Duration, ownerT
 		if err := wrV2Client.AllowlistRequest(digest, duration); err != nil {
 			return fmt.Errorf("allowlist request failed: %w", err)
 		}
-		fmt.Printf("\nDigest allowlisted; proceeding to gateway POST: owner=%s, digest=%s\\n", ownerAddr.Hex(), digest)
+		fmt.Printf("\nDigest allowlisted; proceeding to gateway POST: owner=%s, digest=%x\\n", ownerAddr.Hex(), digest)
 	} else {
-		fmt.Printf("\nDigest already allowlisted; skipping on-chain allowlist: owner=%s, digest=%s\\n", ownerAddr.Hex(), digest)
+		fmt.Printf("\nDigest already allowlisted; skipping on-chain allowlist: owner=%s, digest=%x\\n", ownerAddr.Hex(), digest)
 	}
 
 	// POST to gateway

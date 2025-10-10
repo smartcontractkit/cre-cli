@@ -22,7 +22,6 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/capabilities/actions/vault"
 	vaultcommon "github.com/smartcontractkit/chainlink-common/pkg/capabilities/actions/vault"
 	"github.com/smartcontractkit/chainlink-common/pkg/jsonrpc2"
-	nautilus "github.com/smartcontractkit/chainlink-common/pkg/nodeauth/utils"
 	"github.com/smartcontractkit/chainlink-evm/gethwrappers/workflow/generated/workflow_registry_wrapper_v2"
 	"github.com/smartcontractkit/chainlink/v2/core/capabilities/vault/vaulttypes"
 	"github.com/smartcontractkit/tdh2/go/tdh2/tdh2easy"
@@ -153,22 +152,16 @@ func (h *Handler) ValidateInputs(inputs UpsertSecretsInputs) error {
 }
 
 // TODO: use TxType interface
-func (h *Handler) PackAllowlistRequestTxData(reqDigestStr string, duration time.Duration) (string, error) {
+func (h *Handler) PackAllowlistRequestTxData(reqDigest [32]byte, duration time.Duration) (string, error) {
 	contractABI, err := abi.JSON(strings.NewReader(workflow_registry_wrapper_v2.WorkflowRegistryMetaData.ABI))
 	if err != nil {
 		return "", fmt.Errorf("failed to parse workflow registry v2 ABI: %w", err)
 	}
 
-	reqDigestBytes, err := client.HexToBytes32(reqDigestStr)
-	if err != nil {
-		h.Log.Error().Err(err).Msg("invalid request digest for AllowlistRequest")
-		return "", fmt.Errorf("invalid request digest for AllowlistRequest: %w", err)
-	}
-
 	// #nosec G115 -- int64 to uint32 conversion; Unix() returns seconds since epoch, which fits in uint32 until 2106
 	deadline := uint32(time.Now().Add(duration).Unix())
 
-	data, err := contractABI.Pack("allowlistRequest", reqDigestBytes, deadline)
+	data, err := contractABI.Pack("allowlistRequest", reqDigest, deadline)
 	if err != nil {
 		return "", fmt.Errorf("failed to pack data for allowlistRequest: %w", err)
 	}
@@ -282,6 +275,22 @@ func EncryptSecret(secret, masterPublicKeyHex string) (string, error) {
 	return hex.EncodeToString(cipherBytes), nil
 }
 
+func CalculateDigest[I any](r jsonrpc2.Request[I]) ([32]byte, error) {
+	b, err := json.Marshal(r.Params)
+	if err != nil {
+		return [32]byte{}, fmt.Errorf("failed to marshal create seed: %w", err)
+	}
+
+	req := jsonrpc2.Request[json.RawMessage]{
+		Version: r.Version,
+		ID:      r.ID,
+		Method:  r.Method,
+		Params:  (*json.RawMessage)(&b),
+	}
+
+	return vaulttypes.DigestForRequest(req)
+}
+
 // Execute is a shared method for both 'create' and 'update' commands.
 // It encapsulates the core logic of validation, encryption, and sending data.
 func (h *Handler) Execute(inputs UpsertSecretsInputs, method string, duration time.Duration, ownerType string) error {
@@ -293,20 +302,13 @@ func (h *Handler) Execute(inputs UpsertSecretsInputs, method string, duration ti
 
 	var (
 		requestBody []byte
-		digest      string
+		digest      [32]byte
 	)
 
 	switch method {
 	case vaulttypes.MethodSecretsCreate:
-		// Seed with empty RequestId
-		seed := vault.CreateSecretsRequest{
-			EncryptedSecrets: encSecrets,
-		}
-
-		// Generate the 16-char digest hash with the Request object with empty RequestId
-		digest = nautilus.CalculateRequestDigest(&seed)
-
 		requestID := uuid.New().String()
+
 		// Build typed JSON-RPC request
 		req := jsonrpc2.Request[vault.CreateSecretsRequest]{
 			Version: jsonrpc2.JsonRpcVersion,
@@ -318,20 +320,18 @@ func (h *Handler) Execute(inputs UpsertSecretsInputs, method string, duration ti
 			},
 		}
 
+		d, err := CalculateDigest(req)
+		if err != nil {
+			return fmt.Errorf("failed to calculate create digest: %w", err)
+		}
+
+		digest = d
+
 		requestBody, err = json.Marshal(req)
 		if err != nil {
 			return fmt.Errorf("failed to marshal JSON-RPC request: %w", err)
 		}
-
 	case vaulttypes.MethodSecretsUpdate:
-		// Seed with empty RequestId
-		seed := vault.UpdateSecretsRequest{
-			EncryptedSecrets: encSecrets,
-		}
-
-		// Generate the 16-char digest hash with the Request object with empty RequestId
-		digest = nautilus.CalculateRequestDigest(&seed)
-
 		requestID := uuid.New().String()
 		// Build typed JSON-RPC request
 		req := jsonrpc2.Request[vault.UpdateSecretsRequest]{
@@ -344,11 +344,17 @@ func (h *Handler) Execute(inputs UpsertSecretsInputs, method string, duration ti
 			},
 		}
 
+		d, err := CalculateDigest(req)
+		if err != nil {
+			return fmt.Errorf("failed to calculate create digest: %w", err)
+		}
+
+		digest = d
+
 		requestBody, err = json.Marshal(req)
 		if err != nil {
 			return fmt.Errorf("failed to marshal JSON-RPC request: %w", err)
 		}
-
 	default:
 		return fmt.Errorf("unsupported method %q (expected \"vault.secrets.create\" or \"vault.secrets.update\")", method)
 	}
@@ -380,9 +386,9 @@ func (h *Handler) Execute(inputs UpsertSecretsInputs, method string, duration ti
 		if err := wrV2Client.AllowlistRequest(digest, duration); err != nil {
 			return fmt.Errorf("allowlist request failed: %w", err)
 		}
-		fmt.Printf("\nDigest allowlisted; proceeding to gateway POST: owner=%s, digest=%s\n", ownerAddr.Hex(), digest)
+		fmt.Printf("\nDigest allowlisted; proceeding to gateway POST: owner=%s, digest=%x\n", ownerAddr.Hex(), digest)
 	} else {
-		fmt.Printf("\nDigest already allowlisted; skipping on-chain allowlist: owner=%s, digest=%s\n", ownerAddr.Hex(), digest)
+		fmt.Printf("\nDigest already allowlisted; skipping on-chain allowlist: owner=%s, digest=%x\n", ownerAddr.Hex(), digest)
 	}
 
 	// POST to gateway

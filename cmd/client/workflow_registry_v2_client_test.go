@@ -2,9 +2,7 @@ package client
 
 import (
 	"errors"
-	"strings"
 	"testing"
-	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -46,23 +44,13 @@ func newTestWRC(t *testing.T) *WorkflowRegistryV2Client {
 	}
 }
 
-func mustBytes32(t *testing.T, h string) [32]byte {
-	t.Helper()
-	out, err := HexToBytes32(h)
-	if err != nil {
-		t.Fatalf("HexToBytes32(%q) failed: %v", h, err)
-	}
-	return out
-}
-
 func TestIsRequestAllowlisted_Success(t *testing.T) {
 	wrc := newTestWRC(t)
 	mc := new(mockWorkflowRegistryV2Contract)
 	wrc.Wr = mc
 
 	owner := common.HexToAddress("0xabc0000000000000000000000000000000000abc")
-	digestHex := "0x" + strings.Repeat("11", 32)
-	reqDigest := mustBytes32(t, digestHex)
+	reqDigest := [32]byte{0: 1}
 
 	mc.On(
 		"IsRequestAllowlisted",
@@ -71,7 +59,7 @@ func TestIsRequestAllowlisted_Success(t *testing.T) {
 		reqDigest,
 	).Return(true, nil).Once()
 
-	ok, err := wrc.IsRequestAllowlisted(owner, digestHex)
+	ok, err := wrc.IsRequestAllowlisted(owner, reqDigest)
 	assert.NoError(t, err)
 	assert.True(t, ok)
 
@@ -84,8 +72,7 @@ func TestIsRequestAllowlisted_ContractError(t *testing.T) {
 	wrc.Wr = mc
 
 	owner := common.HexToAddress("0xdef0000000000000000000000000000000000def")
-	digestHex := "0x" + strings.Repeat("22", 32)
-	reqDigest := mustBytes32(t, digestHex)
+	reqDigest := [32]byte{0: 1}
 
 	mc.On(
 		"IsRequestAllowlisted",
@@ -94,56 +81,12 @@ func TestIsRequestAllowlisted_ContractError(t *testing.T) {
 		reqDigest,
 	).Return(false, errors.New("revert: not allowed")).Once()
 
-	ok, err := wrc.IsRequestAllowlisted(owner, digestHex)
+	ok, err := wrc.IsRequestAllowlisted(owner, reqDigest)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "not allowed")
 	assert.False(t, ok)
 
 	mc.AssertExpectations(t)
-}
-
-func TestIsRequestAllowlisted_InvalidDigest(t *testing.T) {
-	wrc := newTestWRC(t)
-	wrc.Wr = new(mockWorkflowRegistryV2Contract)
-
-	// 31 bytes (too short)
-	bad := "0x" + strings.Repeat("aa", 31)
-	ok, err := wrc.IsRequestAllowlisted(common.HexToAddress("0x1"), bad)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "digest must be 32 bytes")
-	assert.False(t, ok)
-}
-
-func TestAllowlistRequest_InvalidDigest(t *testing.T) {
-	wrc := newTestWRC(t)
-	wrc.Wr = new(mockWorkflowRegistryV2Contract)
-
-	bad := "0x" + strings.Repeat("ff", 31) // 31 bytes
-	err := wrc.AllowlistRequest(bad, 10*time.Hour)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "digest must be 32 bytes")
-}
-
-func TestHexToBytes32_Success(t *testing.T) {
-	h := "0x" + strings.Repeat("ab", 32) // exactly 32 bytes
-	out, err := HexToBytes32(h)
-	assert.NoError(t, err)
-	// simple sanity check: first and last bytes match expected
-	assert.Equal(t, byte(0xab), out[0])
-	assert.Equal(t, byte(0xab), out[31])
-}
-
-func TestHexToBytes32_InvalidHex(t *testing.T) {
-	_, err := HexToBytes32("0xzz") // invalid
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid hex")
-}
-
-func TestHexToBytes32_WrongLength(t *testing.T) {
-	// 30 bytes
-	_, err := HexToBytes32("0x" + strings.Repeat("aa", 30))
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "digest must be 32 bytes")
 }
 
 func TestCallContractMethodV2_ErrorWrapped(t *testing.T) {
