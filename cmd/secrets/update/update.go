@@ -18,8 +18,8 @@ import (
 func New(ctx *runtime.Context) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "update [SECRETS_FILE_PATH]",
-		Short:   "Updates existing secrets from a JSON file provided as a positional argument.",
-		Example: "cre secrets update my-secrets.json",
+		Short:   "Updates existing secrets from a YAML file provided as a positional argument.",
+		Example: "cre secrets update my-secrets.yaml",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			secretsFilePath := args[0]
@@ -35,8 +35,8 @@ func New(ctx *runtime.Context) *cobra.Command {
 			}
 
 			maxDuration := constants.MaxVaultAllowlistDuration
-			maxHours := int(constants.MaxVaultAllowlistDuration / time.Hour)
-			maxDays := int(constants.MaxVaultAllowlistDuration / (24 * time.Hour))
+			maxHours := int(maxDuration / time.Hour)
+			maxDays := int(maxDuration / (24 * time.Hour))
 			if duration <= 0 || duration > maxDuration {
 				ctx.Logger.Error().
 					Dur("timeout", duration).
@@ -44,6 +44,11 @@ func New(ctx *runtime.Context) *cobra.Command {
 					Msg(fmt.Sprintf("invalid timeout: must be > 0 and < %dh (%dd)", maxHours, maxDays))
 
 				return fmt.Errorf("invalid --timeout: must be greater than 0 and less than %dh (%dd)", maxHours, maxDays)
+			}
+
+			reqIDFlag, err := cmd.Flags().GetString("request-id")
+			if err != nil {
+				return err
 			}
 
 			inputs, err := h.ResolveInputs()
@@ -55,11 +60,19 @@ func New(ctx *runtime.Context) *cobra.Command {
 				return err
 			}
 
-			return h.Execute(inputs, vaulttypes.MethodSecretsUpdate, duration, ctx.Settings.Workflow.UserWorkflowSettings.WorkflowOwnerType)
+			// Pass request-id flag through to shared handler Execute
+			return h.Execute(
+				inputs,
+				vaulttypes.MethodSecretsUpdate,
+				duration,
+				ctx.Settings.Workflow.UserWorkflowSettings.WorkflowOwnerType,
+				reqIDFlag,
+			)
 		},
 	}
 
 	settings.AddRawTxFlag(cmd)
+	cmd.Flags().String("request-id", "", "Reuse a specific request ID (UUID). When provided, the command will not create a new ID and will only proceed if the corresponding on-chain allowlist entry is already finalized.")
 
 	return cmd
 }
