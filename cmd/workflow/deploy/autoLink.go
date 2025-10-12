@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	VerificationStatusSuccessful = "VERIFICATION_SUCCESSFULL"
+	VerificationStatusSuccessful = "VERIFICATION_SUCCESSFULL" //nolint:misspell // Intentional misspelling to match external API
 )
 
 // ensureOwnerLinkedOrFail checks if the owner is linked and attempts auto-link if needed

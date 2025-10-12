@@ -129,13 +129,19 @@ func TestCheckLinkStatusViaGraphQL(t *testing.T) {
 			// Create mock GraphQL server
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				var req mockGraphQLRequest
-				json.NewDecoder(r.Body).Decode(&req)
+				if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+					http.Error(w, err.Error(), http.StatusBadRequest)
+					return
+				}
 
 				// Verify the query contains listWorkflowOwners
 				assert.Contains(t, req.Query, "listWorkflowOwners")
 
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(tt.mockResponse)
+				if err := json.NewEncoder(w).Encode(tt.mockResponse); err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
 			}))
 			defer server.Close()
 
@@ -282,18 +288,24 @@ func TestWaitForBackendLinkProcessing(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if requestCount < maxRequests {
 					w.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(w).Encode(tt.responses[requestCount])
+					if err := json.NewEncoder(w).Encode(tt.responses[requestCount]); err != nil {
+						http.Error(w, err.Error(), http.StatusInternalServerError)
+						return
+					}
 					requestCount++
 				} else {
 					// For timeout tests, keep returning empty responses
 					w.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(w).Encode(map[string]any{
+					if err := json.NewEncoder(w).Encode(map[string]any{
 						"data": map[string]any{
 							"listWorkflowOwners": map[string]any{
 								"linkedOwners": []map[string]string{},
 							},
 						},
-					})
+					}); err != nil {
+						http.Error(w, err.Error(), http.StatusInternalServerError)
+						return
+					}
 				}
 			}))
 			defer server.Close()
