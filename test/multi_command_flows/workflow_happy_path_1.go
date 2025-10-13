@@ -91,7 +91,7 @@ func workflowDeployEoaWithMockStorage(t *testing.T, tc TestConfig) string {
 							"linkedOwners": []map[string]string{
 								{
 									"workflowOwnerAddress": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
-									"verificationStatus":   "VERIFICATION_STATUS_SUCCESSFULL",
+									"verificationStatus":   "VERIFICATION_STATUS_SUCCESSFULL", //nolint:misspell // Intentional misspelling to match external API
 								},
 							},
 						},

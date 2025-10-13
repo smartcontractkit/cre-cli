@@ -127,10 +127,8 @@ func (h *handler) checkLinkStatusViaGraphQL(ownerAddr common.Address) (bool, err
 	}
 
 	ownerHex := strings.ToLower(ownerAddr.Hex())
-	ownerFound := false
 	for _, linkedOwner := range resp.ListWorkflowOwners.LinkedOwners {
 		if strings.ToLower(linkedOwner.WorkflowOwnerAddress) == ownerHex {
-			ownerFound = true
 			// Check if verification status is successful
 			if linkedOwner.VerificationStatus == VerificationStatusSuccessful {
 				h.log.Debug().
@@ -148,11 +146,9 @@ func (h *handler) checkLinkStatusViaGraphQL(ownerAddr common.Address) (bool, err
 		}
 	}
 
-	if !ownerFound {
-		h.log.Debug().
-			Str("ownerAddress", ownerAddr.Hex()).
-			Msg("Owner not found in linked owners list")
-	}
+	h.log.Debug().
+		Str("ownerAddress", ownerAddr.Hex()).
+		Msg("Owner not found in linked owners list")
 
 	return false, nil
 }
