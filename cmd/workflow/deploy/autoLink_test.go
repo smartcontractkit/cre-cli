@@ -151,6 +151,11 @@ func TestCheckLinkStatusViaGraphQL(t *testing.T) {
 			defer simulatedEnvironment.Close()
 
 			ctx, _ := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
+			// Set up mock credentials for GraphQL client
+			ctx.Credentials = &credentials.Credentials{
+				APIKey:   "test-api-key",
+				AuthType: credentials.AuthTypeApiKey,
+			}
 			h := newHandler(ctx, nil)
 			h.inputs.WorkflowOwner = tt.ownerAddress
 			h.environmentSet.GraphQLURL = server.URL + "/graphql"
@@ -311,23 +316,23 @@ func TestWaitForBackendLinkProcessing(t *testing.T) {
 			}))
 			defer server.Close()
 
-		// Create test environment
-		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
-		defer simulatedEnvironment.Close()
+			// Create test environment
+			simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
+			defer simulatedEnvironment.Close()
 
-		ctx, _ := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
-		// Set up mock credentials for GraphQL client
-		ctx.Credentials = &credentials.Credentials{
-			APIKey:   "test-api-key",
-			AuthType: credentials.AuthTypeApiKey,
-		}
-		h := newHandler(ctx, nil)
-		h.inputs.WorkflowOwner = tt.ownerAddress
-		h.environmentSet.GraphQLURL = server.URL + "/graphql"
+			ctx, _ := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
+			// Set up mock credentials for GraphQL client
+			ctx.Credentials = &credentials.Credentials{
+				APIKey:   "test-api-key",
+				AuthType: credentials.AuthTypeApiKey,
+			}
+			h := newHandler(ctx, nil)
+			h.inputs.WorkflowOwner = tt.ownerAddress
+			h.environmentSet.GraphQLURL = server.URL + "/graphql"
 
-		// Test the function
-		ownerAddr := common.HexToAddress(tt.ownerAddress)
-		err := h.waitForBackendLinkProcessing(ownerAddr)
+			// Test the function
+			ownerAddr := common.HexToAddress(tt.ownerAddress)
+			err := h.waitForBackendLinkProcessing(ownerAddr)
 
 			if tt.expectError {
 				assert.Error(t, err)
