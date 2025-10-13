@@ -8,12 +8,11 @@
   },
   "license": "UNLICENSED",
   "dependencies": {
-    "@chainlink/cre-sdk": "0.0.5-alpha",
+    "@chainlink/cre-sdk": "0.0.8-alpha",
     "viem": "2.34.0",
     "zod": "3.25.76"
   },
   "devDependencies": {
-    "@types/bun": "1.2.21",
-    "@types/node": "24.3.1"
+    "@types/bun": "1.2.21"
   }
 }
