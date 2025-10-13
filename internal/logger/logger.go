@@ -14,8 +14,8 @@ func New(opts ...Option) *zerolog.Logger {
 	config := &Config{
 		output:       os.Stdout,
 		level:        zerolog.InfoLevel,
-		excludeParts: []string{zerolog.TimestampFieldName, zerolog.LevelFieldName},
-		isDev:        true,
+		excludeParts: []string{},
+		isDev:        false,
 	}
 
 	// Apply options
@@ -26,7 +26,7 @@ func New(opts ...Option) *zerolog.Logger {
 	// Create logger
 	logger := zerolog.New(config.output).
 		Level(config.level).
-		With().
+		With().Timestamp().
 		Logger()
 
 	// Pretty logging for development
@@ -44,6 +44,5 @@ func NewConsoleLogger() *zerolog.Logger {
 	return New(
 		WithLevel(DefaultLogLevel),
 		WithOutput(os.Stderr),
-		WithConsoleWriter(true),
 	)
 }
