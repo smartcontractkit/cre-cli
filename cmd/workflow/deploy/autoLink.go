@@ -158,12 +158,12 @@ func (h *handler) waitForBackendLinkProcessing(ownerAddr common.Address) error {
 			}
 			return nil // Success - owner is linked and verified
 		},
-		retry.Attempts(10),
-		retry.Delay(1*time.Second),
+		retry.Attempts(5),
+		retry.Delay(3*time.Second),
 		retry.LastErrorOnly(true),
 		retry.OnRetry(func(n uint, err error) {
-			h.log.Debug().Uint("attempt", n+1).Uint("maxAttempts", 10).Err(err).Msg("Retrying link status check")
-			fmt.Printf("Waiting for linking process... (attempt %d/%d)\n", n+1, 10)
+			h.log.Debug().Uint("attempt", n+1).Uint("maxAttempts", 5).Err(err).Msg("Retrying link status check")
+			fmt.Printf("Waiting for linking process... (attempt %d/%d)\n", n+1, 5)
 		}),
 	)
 
