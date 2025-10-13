@@ -16,7 +16,6 @@ import (
 
 	"github.com/smartcontractkit/chainlink-common/pkg/capabilities/actions/vault"
 	"github.com/smartcontractkit/chainlink-common/pkg/jsonrpc2"
-	nautilus "github.com/smartcontractkit/chainlink-common/pkg/nodeauth/utils"
 	"github.com/smartcontractkit/chainlink/v2/core/capabilities/vault/vaulttypes"
 
 	"github.com/smartcontractkit/cre-cli/cmd/secrets/common"
@@ -111,12 +110,6 @@ func Execute(h *common.Handler, inputs DeleteSecretsInputs, duration time.Durati
 		}
 	}
 
-	seed := vault.DeleteSecretsRequest{
-		Ids: ptrIDs, // order is significant
-	}
-	// Generate the 16-char digest hash, this is the Request object with empty RequestId
-	digest := nautilus.CalculateRequestDigest(&seed)
-
 	requestID := uuid.New().String()
 	// Use the ID and prepare the JSON RPC request
 	deleteSecretsRequest := jsonrpc2.Request[vault.DeleteSecretsRequest]{
@@ -127,6 +120,11 @@ func Execute(h *common.Handler, inputs DeleteSecretsInputs, duration time.Durati
 			RequestId: requestID,
 			Ids:       ptrIDs,
 		},
+	}
+
+	digest, err := common.CalculateDigest(deleteSecretsRequest)
+	if err != nil {
+		return fmt.Errorf("failed to calculate request digest: %w", err)
 	}
 
 	requestBody, err := json.Marshal(deleteSecretsRequest)
@@ -162,9 +160,9 @@ func Execute(h *common.Handler, inputs DeleteSecretsInputs, duration time.Durati
 		if err := wrV2Client.AllowlistRequest(digest, duration); err != nil {
 			return fmt.Errorf("allowlist request failed: %w", err)
 		}
-		fmt.Printf("\nDigest allowlisted; proceeding to gateway POST: owner=%s, digest=%s\n", ownerAddr.Hex(), digest)
+		fmt.Printf("\nDigest allowlisted; proceeding to gateway POST: owner=%s, digest=%x\n", ownerAddr.Hex(), digest)
 	} else {
-		fmt.Printf("\nDigest already allowlisted; skipping on-chain allowlist: owner=%s, digest=%s\n", ownerAddr.Hex(), digest)
+		fmt.Printf("\nDigest already allowlisted; skipping on-chain allowlist: owner=%s, digest=%x\n", ownerAddr.Hex(), digest)
 	}
 
 	// POST to gateway

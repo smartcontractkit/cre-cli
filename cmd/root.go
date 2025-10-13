@@ -166,13 +166,16 @@ func isLoadEnvAndSettings(cmd *cobra.Command) bool {
 func isLoadCredentials(cmd *cobra.Command) bool {
 	// It is not expected to have the credentials loaded when running the following commands
 	var excludedCommands = map[string]struct{}{
-		"version":    {},
-		"login":      {},
-		"bash":       {},
-		"fish":       {},
-		"powershell": {},
-		"zsh":        {},
-		"help":       {},
+		"version":           {},
+		"login":             {},
+		"bash":              {},
+		"fish":              {},
+		"powershell":        {},
+		"zsh":               {},
+		"help":              {},
+		"init":              {},
+		"simulate":          {},
+		"generate-bindings": {},
 	}
 
 	_, exists := excludedCommands[cmd.Name()]
