@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	VerificationStatusSuccessful = "VERIFICATION_SUCCESSFULL" //nolint:misspell // Intentional misspelling to match external API
+	VerificationStatusSuccessful = "VERIFICATION_STATUS_SUCCESSFULL" //nolint:misspell // Intentional misspelling to match external API
 )
 
 // ensureOwnerLinkedOrFail checks if the owner is linked and attempts auto-link if needed
@@ -130,13 +130,31 @@ func (h *handler) checkLinkStatusViaGraphQL(ownerAddr common.Address) (bool, err
 	}
 
 	ownerHex := strings.ToLower(ownerAddr.Hex())
+	ownerFound := false
 	for _, linkedOwner := range resp.ListWorkflowOwners.LinkedOwners {
 		if strings.ToLower(linkedOwner.WorkflowOwnerAddress) == ownerHex {
+			ownerFound = true
 			// Check if verification status is successful
 			if linkedOwner.VerificationStatus == VerificationStatusSuccessful {
+				h.log.Debug().
+					Str("ownerAddress", linkedOwner.WorkflowOwnerAddress).
+					Str("verificationStatus", linkedOwner.VerificationStatus).
+					Msg("Owner found and verified")
 				return true, nil
 			}
+			h.log.Debug().
+				Str("ownerAddress", linkedOwner.WorkflowOwnerAddress).
+				Str("verificationStatus", linkedOwner.VerificationStatus).
+				Str("expectedStatus", VerificationStatusSuccessful).
+				Msg("Owner found but verification status not successful")
+			return false, nil
 		}
+	}
+
+	if !ownerFound {
+		h.log.Debug().
+			Str("ownerAddress", ownerAddr.Hex()).
+			Msg("Owner not found in linked owners list")
 	}
 
 	return false, nil
@@ -144,6 +162,9 @@ func (h *handler) checkLinkStatusViaGraphQL(ownerAddr common.Address) (bool, err
 
 // waitForBackendLinkProcessing polls the service until the link is processed
 func (h *handler) waitForBackendLinkProcessing(ownerAddr common.Address) error {
+	const maxAttempts = 5
+	const retryDelay = 3 * time.Second
+
 	fmt.Printf("Waiting for linking process to complete: owner=%s\n", ownerAddr.Hex())
 
 	err := retry.Do(
@@ -158,17 +179,17 @@ func (h *handler) waitForBackendLinkProcessing(ownerAddr common.Address) error {
 			}
 			return nil // Success - owner is linked and verified
 		},
-		retry.Attempts(5),
-		retry.Delay(3*time.Second),
+		retry.Attempts(maxAttempts),
+		retry.Delay(retryDelay),
 		retry.LastErrorOnly(true),
 		retry.OnRetry(func(n uint, err error) {
-			h.log.Debug().Uint("attempt", n+1).Uint("maxAttempts", 5).Err(err).Msg("Retrying link status check")
-			fmt.Printf("Waiting for linking process... (attempt %d/%d)\n", n+1, 5)
+			h.log.Debug().Uint("attempt", n+1).Uint("maxAttempts", maxAttempts).Err(err).Msg("Retrying link status check")
+			fmt.Printf("Waiting for linking process... (attempt %d/%d)\n", n+1, maxAttempts)
 		}),
 	)
 
 	if err != nil {
-		return fmt.Errorf("linking process timeout after 10 attempts: %w", err)
+		return fmt.Errorf("linking process timeout after %d attempts: %w", maxAttempts, err)
 	}
 
 	fmt.Printf("Linking process confirmed: owner=%s\n", ownerAddr.Hex())
