@@ -37,7 +37,6 @@ func (h *handler) ensureOwnerLinkedOrFail() error {
 			return fmt.Errorf("failed to verify linking process: %w", err)
 		}
 
-		time.Sleep(2 * time.Second)
 		return nil
 	}
 
@@ -52,8 +51,6 @@ func (h *handler) ensureOwnerLinkedOrFail() error {
 	if err := h.waitForBackendLinkProcessing(ownerAddr); err != nil {
 		return fmt.Errorf("linking process failed: %w", err)
 	}
-
-	time.Sleep(2 * time.Second)
 
 	return nil
 }

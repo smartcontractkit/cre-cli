@@ -83,6 +83,23 @@ func workflowDeployEoaWithMockStorage(t *testing.T, tc TestConfig) string {
 				_ = json.NewEncoder(w).Encode(resp)
 				return
 			}
+			if strings.Contains(req.Query, "listWorkflowOwners") {
+				// Mock response for link verification check
+				resp := map[string]any{
+					"data": map[string]any{
+						"listWorkflowOwners": map[string]any{
+							"linkedOwners": []map[string]string{
+								{
+									"workflowOwnerAddress": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+									"verificationStatus":   "VERIFICATION_STATUS_SUCCESSFULL",
+								},
+							},
+						},
+					},
+				}
+				_ = json.NewEncoder(w).Encode(resp)
+				return
+			}
 			// Fallback error
 			w.WriteHeader(http.StatusBadRequest)
 			_ = json.NewEncoder(w).Encode(map[string]any{
