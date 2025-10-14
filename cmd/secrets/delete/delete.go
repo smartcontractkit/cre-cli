@@ -156,7 +156,7 @@ func Execute(h *common.Handler, inputs DeleteSecretsInputs, duration time.Durati
 		if err != nil {
 			return fmt.Errorf("failed to pack allowlist tx: %w", err)
 		}
-		if err := h.LogMSIGNextSteps(txData, digest, requestID); err != nil {
+		if err := h.LogMSIGNextSteps(txData, requestID); err != nil {
 			return fmt.Errorf("failed to log MSIG steps: %w", err)
 		}
 		return nil

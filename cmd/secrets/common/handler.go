@@ -168,7 +168,7 @@ func (h *Handler) PackAllowlistRequestTxData(reqDigest [32]byte, duration time.D
 	return hex.EncodeToString(data), nil
 }
 
-func (h *Handler) LogMSIGNextSteps(txData string, digest [32]byte, requestID string) error {
+func (h *Handler) LogMSIGNextSteps(txData string, requestID string) error {
 	fmt.Println("")
 	fmt.Println("MSIG transaction prepared!")
 	fmt.Println("")
@@ -184,12 +184,11 @@ func (h *Handler) LogMSIGNextSteps(txData string, digest [32]byte, requestID str
 	fmt.Println("")
 	fmt.Println("   3. Save these values; you will need them on the second run:")
 	fmt.Printf("      Request ID: %s\n", requestID)
-	fmt.Printf("      Digest:     0x%x\n", digest)
 	fmt.Println("")
 	fmt.Println("   4. After the transaction is finalized on-chain, run the SAME command again,")
-	fmt.Println("      adding the --request-id flag with the value above, e.g.:")
+	fmt.Println("      adding the --request-id flag with the value above, e.g. for create:")
 	fmt.Println("")
-	fmt.Println("      cre secrets delete <secrets-file> --request-id=", requestID)
+	fmt.Println("      cre secrets create <secrets-file> --request-id=", requestID)
 	fmt.Println("")
 	return nil
 }
@@ -295,7 +294,33 @@ func CalculateDigest[I any](r jsonrpc2.Request[I]) ([32]byte, error) {
 		Params:  (*json.RawMessage)(&b),
 	}
 
-	return vaulttypes.DigestForRequest(req)
+	digestStr, err := req.Digest()
+	if err != nil {
+		return [32]byte{}, fmt.Errorf("failed to calculate digest: %w", err)
+	}
+
+	digestBytes32, err := HexToBytes32(digestStr)
+	if err != nil {
+		return [32]byte{}, fmt.Errorf("failed to convert digest hex to [32]byte: %w", err)
+	}
+
+	return digestBytes32, nil
+}
+
+// HexToBytes32 converts a hex string (with or without 0x prefix) to a [32]byte.
+// Returns an error if the input isn't precisely 32 bytes after decoding.
+func HexToBytes32(h string) ([32]byte, error) {
+	var out [32]byte
+	h = strings.TrimPrefix(h, "0x")
+	b, err := hex.DecodeString(h)
+	if err != nil {
+		return out, fmt.Errorf("invalid hex for digest: %w", err)
+	}
+	if len(b) != 32 {
+		return out, fmt.Errorf("digest must be 32 bytes, got %d", len(b))
+	}
+	copy(out[:], b)
+	return out, nil
 }
 
 // Execute is a shared method for both 'create' and 'update' commands.
@@ -380,7 +405,7 @@ func (h *Handler) Execute(
 		if err != nil {
 			return fmt.Errorf("failed to pack allowlist tx: %w", err)
 		}
-		if err := h.LogMSIGNextSteps(txData, digest, requestID); err != nil {
+		if err := h.LogMSIGNextSteps(txData, requestID); err != nil {
 			return fmt.Errorf("failed to log MSIG steps: %w", err)
 		}
 		return nil
