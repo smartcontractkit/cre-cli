@@ -57,6 +57,23 @@ func workflowDeployEoaWithoutAutostart(t *testing.T, tc TestConfig) string {
 				_ = json.NewEncoder(w).Encode(resp)
 				return
 			}
+			if strings.Contains(req.Query, "listWorkflowOwners") {
+				// Mock response for link verification check
+				resp := map[string]any{
+					"data": map[string]any{
+						"listWorkflowOwners": map[string]any{
+							"linkedOwners": []map[string]string{
+								{
+									"workflowOwnerAddress": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+									"verificationStatus":   "VERIFICATION_STATUS_SUCCESSFULL", //nolint:misspell // Intentional misspelling to match external API
+								},
+							},
+						},
+					},
+				}
+				_ = json.NewEncoder(w).Encode(resp)
+				return
+			}
 			// Fallback error
 			w.WriteHeader(http.StatusBadRequest)
 			_ = json.NewEncoder(w).Encode(map[string]any{
@@ -141,6 +158,23 @@ func workflowDeployUpdateWithConfig(t *testing.T, tc TestConfig) string {
 					"data": map[string]any{
 						"generateUnsignedGetUrlForArtifact": map[string]any{
 							"unsignedGetUrl": srv.URL + "/get",
+						},
+					},
+				}
+				_ = json.NewEncoder(w).Encode(resp)
+				return
+			}
+			if strings.Contains(req.Query, "listWorkflowOwners") {
+				// Mock response for link verification check
+				resp := map[string]any{
+					"data": map[string]any{
+						"listWorkflowOwners": map[string]any{
+							"linkedOwners": []map[string]string{
+								{
+									"workflowOwnerAddress": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+									"verificationStatus":   "VERIFICATION_STATUS_SUCCESSFULL", //nolint:misspell // Intentional misspelling to match external API
+								},
+							},
 						},
 					},
 				}
