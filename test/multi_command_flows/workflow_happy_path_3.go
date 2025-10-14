@@ -143,15 +143,12 @@ func workflowDeployUnsigned(t *testing.T, tc TestConfig, projectRootFlag, workfl
 		tc.GetCliEnvFlag(),
 		projectRootFlag,
 		"--unsigned",
+		"--owner-label", "test-owner-label",
 		"--" + settings.Flags.SkipConfirmation.Name,
 	}
 
 	cmd := exec.Command(CLIPath, args...)
 	// Let CLI handle context switching - don't set cmd.Dir manually
-
-	// Provide stdin input for the auto-link label prompt
-	stdin := strings.NewReader("test-owner-label\n")
-	cmd.Stdin = stdin
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
@@ -183,7 +180,7 @@ func workflowDeployWithConfigAndLinkedKey(t *testing.T, tc TestConfig, projectRo
 							"linkedOwners": []map[string]string{
 								{
 									"workflowOwnerAddress": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
-									"verificationStatus":   "VERIFICATION_STATUS_SUCCESSFULL",
+									"verificationStatus":   "VERIFICATION_STATUS_SUCCESSFULL", //nolint
 								},
 							},
 						},
