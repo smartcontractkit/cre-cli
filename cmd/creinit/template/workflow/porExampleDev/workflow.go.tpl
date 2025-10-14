@@ -156,10 +156,10 @@ func onHTTPTrigger(config *Config, runtime cre.Runtime, payload *http.Payload) (
 	logger := runtime.Logger()
 	logger.Info("Raw HTTP trigger received")
 
-	// If there’s no input, fall back to “now”.
+	// If there's no input, fall back to "now".
 	if len(payload.Input) == 0 {
 		logger.Warn("HTTP trigger payload is empty; defaulting execution time to now")
-		return doPOR(config, runtime, time.Now().UTC())
+		return doPOR(config, runtime, runtime.Now().UTC())
 	}
 
 	// Log the raw JSON for debugging (human-readable).
@@ -174,7 +174,7 @@ func onHTTPTrigger(config *Config, runtime cre.Runtime, payload *http.Payload) (
 
 	// Provide a sensible default if the field is missing/zero.
 	if req.ExecutionTime.IsZero() {
-		req.ExecutionTime = time.Now().UTC()
+		req.ExecutionTime = runtime.Now().UTC()
 	}
 
 	logger.Info("Parsed HTTP trigger received", "payload", req)
