@@ -9,6 +9,7 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/ethereum/go-ethereum/rpc"
 	"{{projectName}}/contracts/evm/src/generated/balance_reader"
 	"{{projectName}}/contracts/evm/src/generated/ierc20"
 	"{{projectName}}/contracts/evm/src/generated/message_emitter"
@@ -270,7 +271,7 @@ func fetchNativeTokenBalance(runtime cre.Runtime, evmCfg EVMConfig, tokenHolderA
 	logger.Info("Getting native balances", "address", evmCfg.BalanceReaderAddress, "tokenAddress", tokenHolderAddress)
 	balances, err := balanceReader.GetNativeBalances(runtime, balance_reader.GetNativeBalancesInput{
 		Addresses: []common.Address{common.Address(tokenAddress)},
-	}, big.NewInt(8771643)).Await()
+	}, big.NewInt(rpc.FinalizedBlockNumber.Int64())).Await()
 
 	if err != nil {
 		logger.Error("Could not read from contract", "contract_chain", evmCfg.ChainName, "err", err.Error())
@@ -303,7 +304,7 @@ func getTotalSupply(config *Config, runtime cre.Runtime) (*big.Int, error) {
 			logger.Error("failed to create token", "address", evmCfg.TokenAddress, "err", err)
 			return nil, fmt.Errorf("failed to create token for address %s: %w", evmCfg.TokenAddress, err)
 		}
-		evmTotalSupplyPromise := token.TotalSupply(runtime, big.NewInt(8771643))
+		evmTotalSupplyPromise := token.TotalSupply(runtime, big.NewInt(rpc.FinalizedBlockNumber.Int64()))
 		supplyPromises[i] = evmTotalSupplyPromise
 	}
 
