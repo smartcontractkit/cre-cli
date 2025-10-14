@@ -340,13 +340,15 @@ func (h *Handler) Execute(
 
 	// Resolve request ID (reuse if provided)
 	var requestID string
-	if strings.TrimSpace(requestIDFlag) != "" {
-		if _, err := uuid.Parse(strings.TrimSpace(requestIDFlag)); err != nil {
+	rid := strings.TrimSpace(requestIDFlag)
+	if rid == "" {
+		requestID = uuid.New().String()
+	} else {
+		id, err := uuid.Parse(rid)
+		if err != nil {
 			return fmt.Errorf("--request-id must be a valid UUID: %w", err)
 		}
-		requestID = strings.TrimSpace(requestIDFlag)
-	} else {
-		requestID = uuid.New().String()
+		requestID = id.String() // canonical form
 	}
 
 	var (
@@ -399,8 +401,8 @@ func (h *Handler) Execute(
 		return fmt.Errorf("unsupported method %q (expected %q or %q)", method, vaulttypes.MethodSecretsCreate, vaulttypes.MethodSecretsUpdate)
 	}
 
-	// MSIG first run: owner is MSIG and NO --request-id. Only print steps & exit.
-	if ownerType == constants.WorkflowOwnerTypeMSIG && strings.TrimSpace(requestIDFlag) == "" {
+	// MSIG first run: owner is MSIG and no request-id. Only print steps & exit.
+	if ownerType == constants.WorkflowOwnerTypeMSIG && rid == "" {
 		txData, err := h.PackAllowlistRequestTxData(digest, duration)
 		if err != nil {
 			return fmt.Errorf("failed to pack allowlist tx: %w", err)
@@ -425,12 +427,8 @@ func (h *Handler) Execute(
 		return fmt.Errorf("allowlist check failed: %w", err)
 	}
 
-	if strings.TrimSpace(requestIDFlag) != "" {
-		if !allowlisted {
-			return fmt.Errorf("on-chain request for request-id %q is not finalized (digest not allowlisted). Do not call the vault DON yet. Finalize the on-chain allowlist tx, then rerun this command with the same --request-id", requestIDFlag)
-		}
-		fmt.Printf("\nDigest allowlisted; proceeding to gateway POST: owner=%s, requestID=%s, digest=0x%x\n", ownerAddr.Hex(), requestID, digest)
-	} else {
+	if rid == "" {
+		// first time run: no --request-id
 		if !allowlisted {
 			if err := wrV2Client.AllowlistRequest(digest, duration); err != nil {
 				return fmt.Errorf("allowlist request failed: %w", err)
@@ -439,6 +437,13 @@ func (h *Handler) Execute(
 		} else {
 			fmt.Printf("\nDigest already allowlisted; skipping on-chain allowlist: owner=%s, requestID=%s, digest=0x%x\n", ownerAddr.Hex(), requestID, digest)
 		}
+	} else {
+		// second time run: users provided --request-id
+		if !allowlisted {
+			return fmt.Errorf("on-chain request for request-id %q is not finalized (digest not allowlisted). Do not call the vault DON yet. Finalize the on-chain allowlist tx, then rerun this command with the same --request-id", requestIDFlag)
+		}
+		fmt.Printf("\nDigest allowlisted; proceeding to gateway POST: owner=%s, requestID=%s, digest=0x%x\n", ownerAddr.Hex(), requestID, digest)
+
 	}
 
 	// POST to gateway
