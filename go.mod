@@ -2,8 +2,6 @@ module github.com/smartcontractkit/cre-cli
 
 go 1.24.5
 
-toolchain go1.24.6
-
 require (
 	github.com/BurntSushi/toml v1.4.0
 	github.com/andybalholm/brotli v1.1.1
@@ -23,7 +21,7 @@ require (
 	github.com/rs/zerolog v1.33.0
 	github.com/smartcontractkit/chain-selectors v1.0.72
 	github.com/smartcontractkit/chainlink-common v0.9.6-0.20251009153055-c381b51a6d6e
-	github.com/smartcontractkit/chainlink-evm/gethwrappers v0.0.0-20251003185510-17234095940f
+	github.com/smartcontractkit/chainlink-evm/gethwrappers v0.0.0-20251008202116-f62843574a48
 	github.com/smartcontractkit/chainlink-protos/cre/go v0.0.0-20250911124514-5874cc6d62b2
 	github.com/smartcontractkit/chainlink-protos/workflows/go v0.0.0-20251008185222-47a7460f5207
 	github.com/smartcontractkit/chainlink-testing-framework/seth v1.51.2
