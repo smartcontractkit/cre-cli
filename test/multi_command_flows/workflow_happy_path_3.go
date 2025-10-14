@@ -174,6 +174,24 @@ func workflowDeployWithConfigAndLinkedKey(t *testing.T, tc TestConfig, projectRo
 			var req graphQLRequest
 			_ = json.NewDecoder(r.Body).Decode(&req)
 
+			// Handle listWorkflowOwners query for link verification
+			if strings.Contains(req.Query, "listWorkflowOwners") {
+				// Return the owner as linked and verified
+				resp := map[string]any{
+					"data": map[string]any{
+						"listWorkflowOwners": map[string]any{
+							"linkedOwners": []map[string]string{
+								{
+									"workflowOwnerAddress": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+									"verificationStatus":   "VERIFICATION_STATUS_SUCCESSFULL",
+								},
+							},
+						},
+					},
+				}
+				_ = json.NewEncoder(w).Encode(resp)
+				return
+			}
 			// Respond based on the mutation in the query
 			if strings.Contains(req.Query, "GeneratePresignedPostUrlForArtifact") {
 				// Return presigned POST URL + fields (pointing back to this server)
