@@ -23,7 +23,7 @@ local-simulation:
 # ==========================================================================
 staging:
   cre-cli:
-    don-family: "{{ProductionTestnetDonFamily}}"
+    don-family: "{{StagingDonFamily}}"
   account:
     workflow-owner-address: "{{WorkflowOwnerAddress}}"
   rpcs:

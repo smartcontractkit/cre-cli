@@ -21,11 +21,12 @@ cre workflow deploy <workflow-folder-path> [optional flags]
 ### Options
 
 ```
-  -r, --auto-start      Activate and run the workflow after registration, or pause it (default true)
-  -h, --help            help for deploy
-  -o, --output string   The output file for the compiled WASM binary encoded in base64 (default "./binary.wasm.br.b64")
-      --unsigned        If set, the command will return the raw transaction instead of sending it to the network
-      --yes             If set, the command will skip the confirmation prompt and proceed with the operation even if it is potentially destructive
+  -r, --auto-start           Activate and run the workflow after registration, or pause it (default true)
+  -h, --help                 help for deploy
+  -o, --output string        The output file for the compiled WASM binary encoded in base64 (default "./binary.wasm.br.b64")
+  -l, --owner-label string   Label for the workflow owner (used during auto-link if owner is not already linked)
+      --unsigned             If set, the command will return the raw transaction instead of sending it to the network
+      --yes                  If set, the command will skip the confirmation prompt and proceed with the operation even if it is potentially destructive
 ```
 
 ### Options inherited from parent commands
