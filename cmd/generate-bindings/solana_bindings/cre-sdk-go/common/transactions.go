@@ -421,7 +421,6 @@ func GetAccountDataBorshInto(ctx context.Context, solanaGoClient *rpc.Client, ac
 	if err != nil {
 		return err
 	}
-	fmt.Println("resp.Value.Data.GetBinary()", resp.Value.Data.GetBinary())
 	return bin.NewBorshDecoder(resp.Value.Data.GetBinary()).Decode(data)
 }
 

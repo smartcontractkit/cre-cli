@@ -58,3 +58,52 @@ func UnmarshalDataAccount(buf []byte) (*DataAccount, error) {
 	}
 	return obj, nil
 }
+
+type UpdateResponse struct {
+	Data string `json:"data"`
+}
+
+func (obj UpdateResponse) MarshalWithEncoder(encoder *binary.Encoder) (err error) {
+	// Serialize `Data`:
+	err = encoder.Encode(obj.Data)
+	if err != nil {
+		return errors.NewField("Data", err)
+	}
+	return nil
+}
+
+func (obj UpdateResponse) Marshal() ([]byte, error) {
+	buf := bytes.NewBuffer(nil)
+	encoder := binary.NewBorshEncoder(buf)
+	err := obj.MarshalWithEncoder(encoder)
+	if err != nil {
+		return nil, fmt.Errorf("error while encoding UpdateResponse: %w", err)
+	}
+	return buf.Bytes(), nil
+}
+
+func (obj *UpdateResponse) UnmarshalWithDecoder(decoder *binary.Decoder) (err error) {
+	// Deserialize `Data`:
+	err = decoder.Decode(&obj.Data)
+	if err != nil {
+		return errors.NewField("Data", err)
+	}
+	return nil
+}
+
+func (obj *UpdateResponse) Unmarshal(buf []byte) error {
+	err := obj.UnmarshalWithDecoder(binary.NewBorshDecoder(buf))
+	if err != nil {
+		return fmt.Errorf("error while unmarshaling UpdateResponse: %w", err)
+	}
+	return nil
+}
+
+func UnmarshalUpdateResponse(buf []byte) (*UpdateResponse, error) {
+	obj := new(UpdateResponse)
+	err := obj.Unmarshal(buf)
+	if err != nil {
+		return nil, err
+	}
+	return obj, nil
+}

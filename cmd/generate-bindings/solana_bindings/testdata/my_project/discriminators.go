@@ -13,7 +13,9 @@ var ()
 
 // Instruction discriminators
 var (
-	Instruction_GetInputData            = [8]byte{30, 17, 181, 230, 219, 1, 5, 138}
-	Instruction_GetInputDataFromAccount = [8]byte{252, 167, 101, 102, 225, 136, 200, 189}
-	Instruction_Initialize              = [8]byte{175, 175, 109, 31, 13, 152, 155, 237}
+	Instruction_GetInputData              = [8]byte{30, 17, 181, 230, 219, 1, 5, 138}
+	Instruction_GetInputDataFromAccount   = [8]byte{252, 167, 101, 102, 225, 136, 200, 189}
+	Instruction_Initialize                = [8]byte{175, 175, 109, 31, 13, 152, 155, 237}
+	Instruction_UpdateData                = [8]byte{62, 209, 63, 231, 204, 93, 148, 123}
+	Instruction_UpdateDataWithTypedReturn = [8]byte{120, 243, 28, 212, 77, 134, 156, 68}
 )

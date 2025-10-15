@@ -123,3 +123,81 @@ func NewInitializeInstruction(
 		buf__.Bytes(),
 	), nil
 }
+
+// Builds a "update_data" instruction.
+func NewUpdateDataInstruction(
+	// Params:
+	newDataParam string,
+
+	// Accounts:
+	dataAccountAccount solanago.PublicKey,
+) (solanago.Instruction, error) {
+	buf__ := new(bytes.Buffer)
+	enc__ := binary.NewBorshEncoder(buf__)
+
+	// Encode the instruction discriminator.
+	err := enc__.WriteBytes(Instruction_UpdateData[:], false)
+	if err != nil {
+		return nil, fmt.Errorf("failed to write instruction discriminator: %w", err)
+	}
+	{
+		// Serialize `newDataParam`:
+		err = enc__.Encode(newDataParam)
+		if err != nil {
+			return nil, errors.NewField("newDataParam", err)
+		}
+	}
+	accounts__ := solanago.AccountMetaSlice{}
+
+	// Add the accounts to the instruction.
+	{
+		// Account 0 "data_account": Writable, Non-signer, Required
+		accounts__.Append(solanago.NewAccountMeta(dataAccountAccount, true, false))
+	}
+
+	// Create the instruction.
+	return solanago.NewInstruction(
+		ProgramID,
+		accounts__,
+		buf__.Bytes(),
+	), nil
+}
+
+// Builds a "update_data_with_typed_return" instruction.
+func NewUpdateDataWithTypedReturnInstruction(
+	// Params:
+	newDataParam string,
+
+	// Accounts:
+	dataAccountAccount solanago.PublicKey,
+) (solanago.Instruction, error) {
+	buf__ := new(bytes.Buffer)
+	enc__ := binary.NewBorshEncoder(buf__)
+
+	// Encode the instruction discriminator.
+	err := enc__.WriteBytes(Instruction_UpdateDataWithTypedReturn[:], false)
+	if err != nil {
+		return nil, fmt.Errorf("failed to write instruction discriminator: %w", err)
+	}
+	{
+		// Serialize `newDataParam`:
+		err = enc__.Encode(newDataParam)
+		if err != nil {
+			return nil, errors.NewField("newDataParam", err)
+		}
+	}
+	accounts__ := solanago.AccountMetaSlice{}
+
+	// Add the accounts to the instruction.
+	{
+		// Account 0 "data_account": Writable, Non-signer, Required
+		accounts__.Append(solanago.NewAccountMeta(dataAccountAccount, true, false))
+	}
+
+	// Create the instruction.
+	return solanago.NewInstruction(
+		ProgramID,
+		accounts__,
+		buf__.Bytes(),
+	), nil
+}
