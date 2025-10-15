@@ -31,25 +31,19 @@ import (
 // RootCmd represents the base command when called without any subcommands
 var RootCmd = newRootCommand()
 
-// runtimeContextForTelemetry stores the runtime context for telemetry emission
 var runtimeContextForTelemetry *runtime.Context
 
-// executingCommand tracks the command currently being executed for telemetry
 var executingCommand *cobra.Command
 
 func Execute() {
-	// Execute the command and capture exit code
 	err := RootCmd.Execute()
 
-	// If there was an error and we tracked a command, emit telemetry for failure
 	if err != nil && executingCommand != nil && runtimeContextForTelemetry != nil {
 		telemetry.EmitCommandEvent(gocontext.Background(), executingCommand, 1, runtimeContextForTelemetry)
 	}
 
-	// Brief wait to allow telemetry goroutine to start
 	time.Sleep(100 * time.Millisecond)
 
-	// Exit with appropriate code
 	if err != nil {
 		os.Exit(1)
 	}
@@ -60,7 +54,6 @@ func newRootCommand() *cobra.Command {
 	rootViper := createViper()
 	runtimeContext := runtime.NewContext(rootLogger, rootViper)
 
-	// Store runtime context for telemetry
 	runtimeContextForTelemetry = runtimeContext
 
 	rootCmd := &cobra.Command{
@@ -73,7 +66,6 @@ func newRootCommand() *cobra.Command {
 		// this will be inherited by all submodules and all their commands
 
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			// Track the command being executed for telemetry
 			executingCommand = cmd
 
 			log := runtimeContext.Logger
@@ -125,7 +117,6 @@ func newRootCommand() *cobra.Command {
 		},
 
 		PersistentPostRun: func(cmd *cobra.Command, args []string) {
-			// Emit telemetry event for successful command execution (exit code 0)
 			telemetry.EmitCommandEvent(gocontext.Background(), cmd, 0, runtimeContext)
 		},
 	}
