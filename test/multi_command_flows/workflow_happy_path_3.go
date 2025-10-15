@@ -37,10 +37,6 @@ func workflowInit(t *testing.T, projectRootFlag, projectName, workflowName strin
 	require.Len(t, parts, 2, "invalid project root flag format")
 	cmd.Dir = parts[1]
 
-	// Provide stdin input for potential "overwrite directory?" prompt
-	stdin := strings.NewReader("\n") // Hit enter to select default (Yes)
-	cmd.Stdin = stdin
-
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 
