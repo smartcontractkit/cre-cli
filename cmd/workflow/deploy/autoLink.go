@@ -31,12 +31,17 @@ func (h *handler) ensureOwnerLinkedOrFail() error {
 	fmt.Printf("Workflow owner link status: owner=%s, linked=%v\n", ownerAddr.Hex(), linked)
 
 	if linked {
-		// Even if link shows as confirmed, verify processing is complete
-		fmt.Println("Link confirmed, verifying linking process...")
-		if err := h.waitForBackendLinkProcessing(ownerAddr); err != nil {
-			return fmt.Errorf("failed to verify linking process: %w", err)
+		// Owner is linked on contract, now verify it's linked to the current user's account
+		linkedToCurrentUser, err := h.checkLinkStatusViaGraphQL(ownerAddr)
+		if err != nil {
+			return fmt.Errorf("failed to validate key ownership: %w", err)
 		}
 
+		if !linkedToCurrentUser {
+			return fmt.Errorf("key %s is linked to another account. Please use a different owner address", ownerAddr.Hex())
+		}
+
+		fmt.Println("Key ownership verified")
 		return nil
 	}
 
@@ -65,7 +70,17 @@ func (h *handler) autoLinkMSIGAndExit() (halt bool, err error) {
 	}
 
 	if linked {
-		fmt.Printf("MSIG owner already linked. Continuing deploy: owner=%s\n", ownerAddr.Hex())
+		// Owner is linked on contract, now verify it's linked to the current user's account
+		linkedToCurrentUser, err := h.checkLinkStatusViaGraphQL(ownerAddr)
+		if err != nil {
+			return false, fmt.Errorf("failed to validate MSIG key ownership: %w", err)
+		}
+
+		if !linkedToCurrentUser {
+			return false, fmt.Errorf("MSIG key %s is linked to another account. Please use a different owner address", ownerAddr.Hex())
+		}
+
+		fmt.Printf("MSIG key ownership verified. Continuing deploy: owner=%s\n", ownerAddr.Hex())
 		return false, nil
 	}
 

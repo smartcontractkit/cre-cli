@@ -35,7 +35,7 @@ func NewTestSettings(v *viper.Viper, logger *zerolog.Logger) (*settings.Settings
 	}
 
 	v.Set(settings.Flags.ProjectRoot.Name, projectFile)
-	v.Set(settings.CreTargetEnvVar, "production-testnet")
+	v.Set(settings.CreTargetEnvVar, "staging")
 
 	cmd := &cobra.Command{Use: "login"}
 	testSettings, err := settings.New(logger, v, cmd)

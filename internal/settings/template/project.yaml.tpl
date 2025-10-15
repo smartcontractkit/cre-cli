@@ -21,7 +21,7 @@ local-simulation:
       url: {{EthSepoliaRpcUrl}}
 
 # ==========================================================================
-production-testnet:
+staging:
   cre-cli:
     don-family: "{{ProductionTestnetDonFamily}}"
   account:

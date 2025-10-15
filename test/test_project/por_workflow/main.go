@@ -1,3 +1,5 @@
+//go:build wasip1
+
 package main
 
 import (
@@ -9,26 +11,18 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/ethereum/go-ethereum/rpc"
-	"{{projectName}}/contracts/evm/src/generated/balance_reader"
-	"{{projectName}}/contracts/evm/src/generated/ierc20"
-	"{{projectName}}/contracts/evm/src/generated/message_emitter"
-	"{{projectName}}/contracts/evm/src/generated/reserve_manager"
+	"por_workflow/contracts/evm/src/generated/balance_reader"
+	"por_workflow/contracts/evm/src/generated/ierc20"
+	"por_workflow/contracts/evm/src/generated/reserve_manager"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/shopspring/decimal"
 
-	pb "github.com/smartcontractkit/chainlink-protos/cre/go/sdk"
-	pbvalues "github.com/smartcontractkit/chainlink-protos/cre/go/values"
 	"github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm"
-	"github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm/bindings"
 	"github.com/smartcontractkit/cre-sdk-go/capabilities/networking/http"
 	"github.com/smartcontractkit/cre-sdk-go/capabilities/scheduler/cron"
 	"github.com/smartcontractkit/cre-sdk-go/cre"
-)
-
-const (
-	SecretName = "SECRET_ADDRESS"
+	"github.com/smartcontractkit/cre-sdk-go/cre/wasm"
 )
 
 // EVMConfig holds per-chain configuration.
@@ -83,33 +77,11 @@ func InitWorkflow(config *Config, logger *slog.Logger, secretsProvider cre.Secre
 		Schedule: config.Schedule,
 	}
 
-	httpTriggerCfg := &http.Config{}
-
 	workflow := cre.Workflow[*Config]{
 		cre.Handler(
 			cron.Trigger(cronTriggerCfg),
 			onPORCronTrigger,
 		),
-		cre.Handler(
-			http.Trigger(httpTriggerCfg),
-			onHTTPTrigger,
-		),
-	}
-
-	for _, evmCfg := range config.EVMs {
-		msgEmitter, err := prepareMessageEmitter(logger, evmCfg)
-		if err != nil {
-			return nil, fmt.Errorf("failed to prepare message emitter: %w", err)
-		}
-		chainSelector, err := evmCfg.GetChainSelector()
-		if err != nil {
-			return nil, fmt.Errorf("failed to get chain selector: %w", err)
-		}
-		trigger, err := msgEmitter.LogTriggerMessageEmittedLog(chainSelector, evm.ConfidenceLevel_CONFIDENCE_LEVEL_LATEST, []message_emitter.MessageEmitted{})
-		if err != nil {
-			return nil, fmt.Errorf("failed to create message emitted trigger: %w", err)
-		}
-		workflow = append(workflow, cre.Handler(trigger, onLogTrigger))
 	}
 
 	return workflow, nil
@@ -117,68 +89,6 @@ func InitWorkflow(config *Config, logger *slog.Logger, secretsProvider cre.Secre
 
 func onPORCronTrigger(config *Config, runtime cre.Runtime, outputs *cron.Payload) (string, error) {
 	return doPOR(config, runtime, outputs.ScheduledExecutionTime.AsTime())
-}
-
-func onLogTrigger(config *Config, runtime cre.Runtime, payload *bindings.DecodedLog[message_emitter.MessageEmittedDecoded]) (string, error) {
-	logger := runtime.Logger()
-
-	// use the decoded event log to get the event message
-	message := payload.Data.Message
-	logger.Info("Message retrieved from the event log", "message", message)
-
-	// the event message can also be retrieved from the contract itself
-	// below is an example of how to read from the contract
-	messageEmitter, err := prepareMessageEmitter(logger, config.EVMs[0])
-	if err != nil {
-		return "", fmt.Errorf("failed to prepare message emitter: %w", err)
-	}
-
-	// use the decoded event log to get the emitter address
-	// the emitter address is not a dynamic type, so it can be decoded from log even though its indexed
-	emitter := payload.Data.Emitter
-	lastMessageInput := message_emitter.GetLastMessageInput{
-		Emitter: common.Address(emitter),
-	}
-
-	blockNumber := pbvalues.ProtoToBigInt(payload.Log.BlockNumber)
-	logger.Info("Block number of event log", "blockNumber", blockNumber)
-	message, err = messageEmitter.GetLastMessage(runtime, lastMessageInput, blockNumber).Await()
-	if err != nil {
-		logger.Error("Could not read from contract", "contract_chain", config.EVMs[0].ChainName, "err", err.Error())
-		return "", err
-	}
-	logger.Info("Message retrieved from the contract", "message", message)
-
-	return message, nil
-}
-
-func onHTTPTrigger(config *Config, runtime cre.Runtime, payload *http.Payload) (string, error) {
-	logger := runtime.Logger()
-	logger.Info("Raw HTTP trigger received")
-
-	// If there's no input, fall back to "now".
-	if len(payload.Input) == 0 {
-		logger.Warn("HTTP trigger payload is empty; defaulting execution time to now")
-		return doPOR(config, runtime, runtime.Now().UTC())
-	}
-
-	// Log the raw JSON for debugging (human-readable).
-	logger.Info("Payload bytes", "payloadBytes", string(payload.Input))
-
-	// Unmarshal raw JSON bytes directly into your struct.
-	var req HTTPTriggerPayload
-	if err := json.Unmarshal(payload.Input, &req); err != nil {
-		logger.Error("failed to unmarshal http trigger payload", "err", err)
-		return "", err
-	}
-
-	// Provide a sensible default if the field is missing/zero.
-	if req.ExecutionTime.IsZero() {
-		req.ExecutionTime = runtime.Now().UTC()
-	}
-
-	logger.Info("Parsed HTTP trigger received", "payload", req)
-	return doPOR(config, runtime, req.ExecutionTime)
 }
 
 func doPOR(config *Config, runtime cre.Runtime, runTime time.Time) (string, error) {
@@ -209,16 +119,7 @@ func doPOR(config *Config, runtime cre.Runtime, runTime time.Time) (string, erro
 	}
 	logger.Info("Native token balance", "token", config.EVMs[0].TokenAddress, "balance", nativeTokenBalance)
 
-	secretReq := &pb.SecretRequest{
-		Id: SecretName,
-	}
-
-	secretAddress, err := runtime.GetSecret(secretReq).Await()
-	if err != nil {
-		logger.Error(fmt.Sprintf("failed to get secret address: %v", err))
-		return "", err
-	}
-	secretAddressBalance, err := fetchNativeTokenBalance(runtime, config.EVMs[0], secretAddress.Value)
+	secretAddressBalance, err := fetchNativeTokenBalance(runtime, config.EVMs[0], "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266") // hardcoded for local testing
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch secret address balance: %w", err)
 	}
@@ -230,23 +131,6 @@ func doPOR(config *Config, runtime cre.Runtime, runTime time.Time) (string, erro
 	}
 
 	return reserveInfo.TotalReserve.String(), nil
-}
-
-func prepareMessageEmitter(logger *slog.Logger, evmCfg EVMConfig) (*message_emitter.MessageEmitter, error) {
-	evmClient, err := evmCfg.NewEVMClient()
-	if err != nil {
-		return nil, fmt.Errorf("failed to create EVM client for %s: %w", evmCfg.ChainName, err)
-	}
-
-	address := common.HexToAddress(evmCfg.MessageEmitterAddress)
-
-	messageEmitter, err := message_emitter.NewMessageEmitter(evmClient, address, nil)
-	if err != nil {
-		logger.Error("failed to create message emitter", "address", evmCfg.MessageEmitterAddress, "err", err)
-		return nil, fmt.Errorf("failed to create message emitter for address %s: %w", evmCfg.MessageEmitterAddress, err)
-	}
-
-	return messageEmitter, nil
 }
 
 func fetchNativeTokenBalance(runtime cre.Runtime, evmCfg EVMConfig, tokenHolderAddress string) (*big.Int, error) {
@@ -271,7 +155,7 @@ func fetchNativeTokenBalance(runtime cre.Runtime, evmCfg EVMConfig, tokenHolderA
 	logger.Info("Getting native balances", "address", evmCfg.BalanceReaderAddress, "tokenAddress", tokenHolderAddress)
 	balances, err := balanceReader.GetNativeBalances(runtime, balance_reader.GetNativeBalancesInput{
 		Addresses: []common.Address{common.Address(tokenAddress)},
-	}, big.NewInt(rpc.FinalizedBlockNumber.Int64())).Await()
+	}, big.NewInt(4)).Await()
 
 	if err != nil {
 		logger.Error("Could not read from contract", "contract_chain", evmCfg.ChainName, "err", err.Error())
@@ -304,7 +188,7 @@ func getTotalSupply(config *Config, runtime cre.Runtime) (*big.Int, error) {
 			logger.Error("failed to create token", "address", evmCfg.TokenAddress, "err", err)
 			return nil, fmt.Errorf("failed to create token for address %s: %w", evmCfg.TokenAddress, err)
 		}
-		evmTotalSupplyPromise := token.TotalSupply(runtime, big.NewInt(rpc.FinalizedBlockNumber.Int64()))
+		evmTotalSupplyPromise := token.TotalSupply(runtime, big.NewInt(4))
 		supplyPromises[i] = evmTotalSupplyPromise
 	}
 
@@ -384,4 +268,8 @@ func hexToBytes(hexStr string) ([]byte, error) {
 		return nil, fmt.Errorf("invalid hex string: %s", hexStr)
 	}
 	return hex.DecodeString(hexStr[2:])
+}
+
+func main() {
+	wasm.NewRunner(cre.ParseJSON[Config]).Run(InitWorkflow)
 }
