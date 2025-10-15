@@ -433,16 +433,16 @@ func (h *Handler) Execute(
 			if err := wrV2Client.AllowlistRequest(digest, duration); err != nil {
 				return fmt.Errorf("allowlist request failed: %w", err)
 			}
-			fmt.Printf("\nDigest allowlisted; proceeding to gateway POST: owner=%s, requestID=%s, digest=0x%x\n", ownerAddr.Hex(), requestID, digest)
+			fmt.Printf("Digest allowlisted; proceeding to gateway POST: owner=%s, requestID=%s, digest=0x%x\n", ownerAddr.Hex(), requestID, digest)
 		} else {
-			fmt.Printf("\nDigest already allowlisted; skipping on-chain allowlist: owner=%s, requestID=%s, digest=0x%x\n", ownerAddr.Hex(), requestID, digest)
+			fmt.Printf("Digest already allowlisted; skipping on-chain allowlist: owner=%s, requestID=%s, digest=0x%x\n", ownerAddr.Hex(), requestID, digest)
 		}
 	} else {
 		// second time run: users provided --request-id
 		if !allowlisted {
 			return fmt.Errorf("on-chain request for request-id %q is not finalized (digest not allowlisted). Do not call the vault DON yet. Finalize the on-chain allowlist tx, then rerun this command with the same --request-id", requestIDFlag)
 		}
-		fmt.Printf("\nDigest allowlisted; proceeding to gateway POST: owner=%s, requestID=%s, digest=0x%x\n", ownerAddr.Hex(), requestID, digest)
+		fmt.Printf("Digest allowlisted; proceeding to gateway POST: owner=%s, requestID=%s, digest=0x%x\n", ownerAddr.Hex(), requestID, digest)
 
 	}
 
@@ -497,13 +497,9 @@ func (h *Handler) ParseVaultGatewayResponse(method string, respBody []byte) erro
 			if r.GetSuccess() {
 				fmt.Printf("Secret created: secret_id=%s, owner=%s, namespace=%s\n", key, owner, ns)
 			} else {
-				h.Log.Error().
-					Str("secret_id", key).
-					Str("owner", owner).
-					Str("namespace", ns).
-					Bool("success", false).
-					Str("error", r.GetError()).
-					Msg("secret create failed")
+				fmt.Printf("Secret create failed: secret_id=%s owner=%s namespace=%s success=%t error=%s\n",
+					key, owner, ns, false, r.GetError(),
+				)
 			}
 		}
 	case vaulttypes.MethodSecretsUpdate:
@@ -520,13 +516,9 @@ func (h *Handler) ParseVaultGatewayResponse(method string, respBody []byte) erro
 			if r.GetSuccess() {
 				fmt.Printf("Secret updated: secret_id=%s, owner=%s, namespace=%s\n", key, owner, ns)
 			} else {
-				h.Log.Error().
-					Str("secret_id", key).
-					Str("owner", owner).
-					Str("namespace", ns).
-					Bool("success", false).
-					Str("error", r.GetError()).
-					Msg("secret update failed")
+				fmt.Printf("Secret update failed: secret_id=%s owner=%s namespace=%s success=%t error=%s\n",
+					key, owner, ns, false, r.GetError(),
+				)
 			}
 		}
 	case vaulttypes.MethodSecretsDelete:
@@ -543,13 +535,9 @@ func (h *Handler) ParseVaultGatewayResponse(method string, respBody []byte) erro
 			if r.GetSuccess() {
 				fmt.Printf("Secret deleted: secret_id=%s, owner=%s, namespace=%s\n", key, owner, ns)
 			} else {
-				h.Log.Error().
-					Str("secret_id", key).
-					Str("owner", owner).
-					Str("namespace", ns).
-					Bool("success", false).
-					Str("error", r.GetError()).
-					Msg("secret delete failed")
+				fmt.Printf("Secret delete failed: secret_id=%s owner=%s namespace=%s success=%t error=%s\n",
+					key, owner, ns, false, r.GetError(),
+				)
 			}
 		}
 	case vaulttypes.MethodSecretsList:
@@ -559,10 +547,9 @@ func (h *Handler) ParseVaultGatewayResponse(method string, respBody []byte) erro
 		}
 
 		if !p.GetSuccess() {
-			h.Log.Error().
-				Bool("success", false).
-				Str("error", p.GetError()).
-				Msg("list secrets failed")
+			fmt.Printf("secret list failed: success=%t error=%s\n",
+				false, p.GetError(),
+			)
 			break
 		}
 
