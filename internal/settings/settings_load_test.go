@@ -47,15 +47,15 @@ func TestSettingsHierarchy(t *testing.T) {
 	// Set up viper and load settings
 	blankCmd := createBlankCommand()
 	v := viper.New()
-	v.Set(settings.CreTargetEnvVar, "production-testnet")
+	v.Set(settings.CreTargetEnvVar, "staging")
 
 	err = settings.LoadSettingsIntoViper(v, blankCmd)
 	require.NoError(t, err, "Error when loading settings")
 
-	hierarchyVal := v.GetString("production-testnet.hierarchy-test")
+	hierarchyVal := v.GetString("staging.hierarchy-test")
 	require.Equal(t, "Workflow", hierarchyVal)
 
-	testVal := v.GetString("production-testnet.test-key")
+	testVal := v.GetString("staging.test-key")
 	require.Equal(t, "workflowValue", testVal)
 }
 
@@ -84,7 +84,7 @@ func TestLoadingSettingsForValidFile(t *testing.T) {
 	// Set up viper and load settings
 	blankCmd := createBlankCommand()
 	v := viper.New()
-	v.Set(settings.CreTargetEnvVar, "production-testnet")
+	v.Set(settings.CreTargetEnvVar, "staging")
 
 	err = settings.LoadSettingsIntoViper(v, blankCmd)
 	require.NoError(t, err, "Error when loading settings")

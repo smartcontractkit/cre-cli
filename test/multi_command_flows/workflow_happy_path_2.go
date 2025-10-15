@@ -261,7 +261,7 @@ func RunHappyPath2Workflow(t *testing.T, tc TestConfig) {
 
 // updateWorkflowConfigPath updates the config-path in the workflow.yaml file
 func updateWorkflowConfigPath(projectRootFlag, configPath string) error {
-	const SettingsTarget = "production-testnet"
+	const SettingsTarget = "staging"
 
 	// Extract directory path from flag format "--project-root=/path/..."
 	parts := strings.Split(projectRootFlag, "=")
