@@ -1,8 +1,10 @@
 package cmd
 
 import (
+	gocontext "context"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
@@ -23,13 +25,32 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/logger"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
+	"github.com/smartcontractkit/cre-cli/internal/telemetry"
 )
 
 // RootCmd represents the base command when called without any subcommands
 var RootCmd = newRootCommand()
 
+// runtimeContextForTelemetry stores the runtime context for telemetry emission
+var runtimeContextForTelemetry *runtime.Context
+
+// executingCommand tracks the command currently being executed for telemetry
+var executingCommand *cobra.Command
+
 func Execute() {
-	if err := RootCmd.Execute(); err != nil {
+	// Execute the command and capture exit code
+	err := RootCmd.Execute()
+
+	// If there was an error and we tracked a command, emit telemetry for failure
+	if err != nil && executingCommand != nil && runtimeContextForTelemetry != nil {
+		telemetry.EmitCommandEvent(gocontext.Background(), executingCommand, 1, runtimeContextForTelemetry)
+	}
+
+	// Brief wait to allow telemetry goroutine to start
+	time.Sleep(100 * time.Millisecond)
+
+	// Exit with appropriate code
+	if err != nil {
 		os.Exit(1)
 	}
 }
@@ -38,6 +59,9 @@ func newRootCommand() *cobra.Command {
 	rootLogger := createLogger()
 	rootViper := createViper()
 	runtimeContext := runtime.NewContext(rootLogger, rootViper)
+
+	// Store runtime context for telemetry
+	runtimeContextForTelemetry = runtimeContext
 
 	rootCmd := &cobra.Command{
 		Use:   "cre",
@@ -49,6 +73,9 @@ func newRootCommand() *cobra.Command {
 		// this will be inherited by all submodules and all their commands
 
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			// Track the command being executed for telemetry
+			executingCommand = cmd
+
 			log := runtimeContext.Logger
 			v := runtimeContext.Viper
 
@@ -95,6 +122,11 @@ func newRootCommand() *cobra.Command {
 			}
 
 			return nil
+		},
+
+		PersistentPostRun: func(cmd *cobra.Command, args []string) {
+			// Emit telemetry event for successful command execution (exit code 0)
+			telemetry.EmitCommandEvent(gocontext.Background(), cmd, 0, runtimeContext)
 		},
 	}
 
