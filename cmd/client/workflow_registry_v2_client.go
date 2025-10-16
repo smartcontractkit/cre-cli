@@ -667,7 +667,7 @@ func (wrc *WorkflowRegistryV2Client) IsRequestAllowlisted(owner common.Address, 
 		return false, err
 	}
 
-	wrc.Logger.Info().
+	wrc.Logger.Debug().
 		Str("owner", owner.Hex()).
 		Str("digest", hex.EncodeToString(digest[:])).
 		Bool("allowlisted", allowlisted).
@@ -709,7 +709,7 @@ func (wrc *WorkflowRegistryV2Client) AllowlistRequest(requestDigest [32]byte, du
 		return err
 	}
 
-	wrc.Logger.Info().
+	wrc.Logger.Debug().
 		Str("digest", hex.EncodeToString(requestDigest[:])).
 		Str("deadline", time.Unix(int64(deadline), 0).UTC().Format(time.RFC3339)).
 		Msg("AllowlistRequest submitted")

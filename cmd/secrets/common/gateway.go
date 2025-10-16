@@ -28,7 +28,7 @@ func (g *HTTPClient) Post(body []byte) ([]byte, int, error) {
 	}
 	delay := g.RetryDelay
 	if delay == 0 {
-		delay = 3 * time.Second
+		delay = 4 * time.Second
 	}
 
 	var respBody []byte
@@ -50,7 +50,7 @@ func (g *HTTPClient) Post(body []byte) ([]byte, int, error) {
 		retry.Delay(delay),
 		retry.LastErrorOnly(true),
 		retry.OnRetry(func(n uint, err error) {
-			fmt.Printf("Waiting for block confirmation and retrying gateway POST (attempt %d/%d): %v", n+1, attempts, err)
+			fmt.Printf("Waiting for block confirmation and sending to vault (attempt %d/%d): %v \n", n+1, attempts, err)
 		}),
 	)
 
