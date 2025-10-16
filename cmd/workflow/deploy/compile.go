@@ -11,7 +11,6 @@ import (
 	"github.com/andybalholm/brotli"
 
 	cmdcommon "github.com/smartcontractkit/cre-cli/cmd/common"
-	"github.com/smartcontractkit/cre-cli/internal/transformation"
 )
 
 func (h *handler) Compile() error {
@@ -72,13 +71,7 @@ func (h *handler) Compile() error {
 	}
 	h.log.Debug().Msg("WASM binary compressed")
 
-	// Resolve output path relative to project root
-	outputPath, err := transformation.ResolvePathRelativeTo(h.inputs.OutputPath, h.projectRootDir)
-	if err != nil {
-		return fmt.Errorf("failed to resolve output path: %w", err)
-	}
-
-	if err = encodeToBase64AndSaveToFile(&compressedFile, outputPath); err != nil {
+	if err = encodeToBase64AndSaveToFile(&compressedFile, h.inputs.OutputPath); err != nil {
 		return fmt.Errorf("failed to base64 encode the WASM binary: %w", err)
 	}
 	h.log.Debug().Msg("WASM binary encoded")

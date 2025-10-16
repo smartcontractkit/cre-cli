@@ -275,7 +275,7 @@ func TestResolvePathRelativeTo(t *testing.T) {
 
 	// Create a test file
 	testFile := filepath.Join(tempBase, "test.txt")
-	if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
+	if err := os.WriteFile(testFile, []byte("test"), 0600); err != nil {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
@@ -428,7 +428,7 @@ func TestResolvePathRelativeTo_WorkflowScenario(t *testing.T) {
 	}
 
 	payloadFile := filepath.Join(dataDir, "payload.json")
-	if err := os.WriteFile(payloadFile, []byte(`{"test": "data"}`), 0644); err != nil {
+	if err := os.WriteFile(payloadFile, []byte(`{"test": "data"}`), 0600); err != nil {
 		t.Fatalf("Failed to create payload file: %v", err)
 	}
 
