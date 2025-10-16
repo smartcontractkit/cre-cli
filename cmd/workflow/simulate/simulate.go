@@ -40,6 +40,7 @@ import (
 	cmdcommon "github.com/smartcontractkit/cre-cli/cmd/common"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
+	"github.com/smartcontractkit/cre-cli/internal/transformation"
 	"github.com/smartcontractkit/cre-cli/internal/validation"
 )
 
@@ -96,14 +97,16 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 }
 
 type handler struct {
-	log       *zerolog.Logger
-	validated bool
+	log            *zerolog.Logger
+	projectRootDir string
+	validated      bool
 }
 
 func newHandler(ctx *runtime.Context) *handler {
 	return &handler{
-		log:       ctx.Logger,
-		validated: false,
+		log:            ctx.Logger,
+		projectRootDir: ctx.ProjectRootDir,
+		validated:      false,
 	}
 }
 
@@ -236,7 +239,7 @@ func (h *handler) Execute(inputs Inputs) error {
 	// if logger instance is set to DEBUG, that means verbosity flag is set by the user
 	verbosity := h.log.GetLevel() == zerolog.DebugLevel
 
-	return run(ctx, wasmFileBinary, config, secrets, inputs, verbosity)
+	return run(ctx, wasmFileBinary, config, secrets, inputs, verbosity, h.projectRootDir)
 }
 
 // run instantiates the engine, starts it and blocks until the context is canceled.
@@ -245,6 +248,7 @@ func run(
 	binary, config, secrets []byte,
 	inputs Inputs,
 	verbosity bool,
+	projectRootDir string,
 ) error {
 	logCfg := logger.Config{Level: getLevel(verbosity, zapcore.InfoLevel)}
 	baseLggr, err := logCfg.New()
@@ -352,9 +356,9 @@ func run(
 
 	getTriggerCaps := func() *ManualTriggers { return triggerCaps }
 	if inputs.NonInteractive {
-		triggerInfoAndBeforeStart.BeforeStart = makeBeforeStartNonInteractive(triggerInfoAndBeforeStart, inputs, getTriggerCaps)
+		triggerInfoAndBeforeStart.BeforeStart = makeBeforeStartNonInteractive(triggerInfoAndBeforeStart, inputs, getTriggerCaps, projectRootDir)
 	} else {
-		triggerInfoAndBeforeStart.BeforeStart = makeBeforeStartInteractive(triggerInfoAndBeforeStart, inputs, getTriggerCaps)
+		triggerInfoAndBeforeStart.BeforeStart = makeBeforeStartInteractive(triggerInfoAndBeforeStart, inputs, getTriggerCaps, projectRootDir)
 	}
 
 	waitFn := func(context.Context, simulator.RunnerConfig, *capabilities.Registry, []services.Service) {
@@ -480,7 +484,7 @@ type TriggerInfoAndBeforeStart struct {
 }
 
 // makeBeforeStartInteractive builds the interactive BeforeStart closure
-func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs, triggerCapsGetter func() *ManualTriggers) func(context.Context, simulator.RunnerConfig, *capabilities.Registry, []services.Service, []*pb.TriggerSubscription) {
+func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs, triggerCapsGetter func() *ManualTriggers, projectRootDir string) func(context.Context, simulator.RunnerConfig, *capabilities.Registry, []services.Service, []*pb.TriggerSubscription) {
 	return func(
 		ctx context.Context,
 		cfg simulator.RunnerConfig,
@@ -518,7 +522,7 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 				return triggerCaps.ManualCronTrigger.ManualTrigger(ctx, triggerRegistrationID, time.Now())
 			}
 		case trigger == "http-trigger@1.0.0-alpha":
-			payload, err := getHTTPTriggerPayload()
+			payload, err := getHTTPTriggerPayload(projectRootDir)
 			if err != nil {
 				fmt.Printf("failed to get HTTP trigger payload: %v\n", err)
 				os.Exit(1)
@@ -561,7 +565,7 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 }
 
 // makeBeforeStartNonInteractive builds the non-interactive BeforeStart closure
-func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs, triggerCapsGetter func() *ManualTriggers) func(context.Context, simulator.RunnerConfig, *capabilities.Registry, []services.Service, []*pb.TriggerSubscription) {
+func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs, triggerCapsGetter func() *ManualTriggers, projectRootDir string) func(context.Context, simulator.RunnerConfig, *capabilities.Registry, []services.Service, []*pb.TriggerSubscription) {
 	return func(
 		ctx context.Context,
 		cfg simulator.RunnerConfig,
@@ -597,7 +601,7 @@ func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inp
 				fmt.Println("--http-payload is required for http-trigger@1.0.0-alpha in non-interactive mode")
 				os.Exit(1)
 			}
-			payload, err := getHTTPTriggerPayloadFromInput(inputs.HTTPPayload)
+			payload, err := getHTTPTriggerPayloadFromInput(inputs.HTTPPayload, projectRootDir)
 			if err != nil {
 				fmt.Printf("failed to parse HTTP trigger payload: %v\n", err)
 				os.Exit(1)
@@ -711,7 +715,7 @@ func getUserTriggerChoice(ctx context.Context, triggerSub []*pb.TriggerSubscript
 }
 
 // getHTTPTriggerPayload prompts user for HTTP trigger data
-func getHTTPTriggerPayload() (*httptypedapi.Payload, error) {
+func getHTTPTriggerPayload(projectRootDir string) (*httptypedapi.Payload, error) {
 	fmt.Println("\n🔍 HTTP Trigger Configuration:")
 	fmt.Println("Please provide JSON input for the HTTP trigger.")
 	fmt.Println("You can enter a file path or JSON directly.")
@@ -731,17 +735,23 @@ func getHTTPTriggerPayload() (*httptypedapi.Payload, error) {
 
 	var jsonData map[string]interface{}
 
-	// Check if input is a file path
-	if _, err := os.Stat(input); err == nil {
-		// It's a file path
-		data, err := os.ReadFile(input)
+	// Check if input is a file path (not inline JSON)
+	if !strings.HasPrefix(input, "{") && !strings.HasPrefix(input, "[") {
+		// Resolve path relative to project root
+		resolvedPath, err := transformation.ResolvePathRelativeTo(input, projectRootDir)
 		if err != nil {
-			return nil, fmt.Errorf("failed to read file %s: %w", input, err)
+			return nil, fmt.Errorf("failed to resolve file path: %w", err)
+		}
+
+		// It's a file path
+		data, err := os.ReadFile(resolvedPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read file %s: %w", resolvedPath, err)
 		}
 		if err := json.Unmarshal(data, &jsonData); err != nil {
-			return nil, fmt.Errorf("failed to parse JSON from file %s: %w", input, err)
+			return nil, fmt.Errorf("failed to parse JSON from file %s: %w", resolvedPath, err)
 		}
-		fmt.Printf("Loaded JSON from file: %s\n", input)
+		fmt.Printf("Loaded JSON from file: %s\n", resolvedPath)
 	} else {
 		// It's direct JSON input
 		if err := json.Unmarshal([]byte(input), &jsonData); err != nil {
@@ -859,41 +869,33 @@ func getEVMTriggerLog(ctx context.Context, ethClient *ethclient.Client) (*evm.Lo
 }
 
 // getHTTPTriggerPayloadFromInput builds an HTTP trigger payload from a JSON string or a file path (optionally prefixed with '@')
-func getHTTPTriggerPayloadFromInput(input string) (*httptypedapi.Payload, error) {
+func getHTTPTriggerPayloadFromInput(input string, projectRootDir string) (*httptypedapi.Payload, error) {
 	trimmed := strings.TrimSpace(input)
 	if trimmed == "" {
 		return nil, fmt.Errorf("empty http payload input")
 	}
 
+	// Strip optional "@" prefix for file paths
+	trimmed = strings.TrimPrefix(trimmed, "@")
+
 	var raw []byte
-	if strings.HasPrefix(trimmed, "@") {
-		path := strings.TrimPrefix(trimmed, "@")
-		data, err := os.ReadFile(path)
+	// Check if it looks like a file path (not inline JSON)
+	if !strings.HasPrefix(trimmed, "{") && !strings.HasPrefix(trimmed, "[") {
+		// Resolve path relative to project root
+		resolvedPath, err := transformation.ResolvePathRelativeTo(trimmed, projectRootDir)
 		if err != nil {
-			return nil, fmt.Errorf("failed to read file %s: %w", path, err)
+			return nil, fmt.Errorf("failed to resolve file path: %w", err)
+		}
+
+		data, err := os.ReadFile(resolvedPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read file %s: %w", resolvedPath, err)
 		}
 		raw = data
 	} else {
-		if _, err := os.Stat(trimmed); err == nil {
-			data, err := os.ReadFile(trimmed)
-			if err != nil {
-				return nil, fmt.Errorf("failed to read file %s: %w", trimmed, err)
-			}
-			raw = data
-		} else {
-			raw = []byte(trimmed)
-		}
+		// Inline JSON
+		raw = []byte(trimmed)
 	}
-
-	//var jsonData map[string]interface{}
-	//if err := json.Unmarshal(raw, &jsonData); err != nil {
-	//	return nil, fmt.Errorf("failed to parse JSON: %w", err)
-	//}
-
-	//structPB, err := structpb.NewStruct(jsonData)
-	//if err != nil {
-	//	return nil, fmt.Errorf("failed to convert to protobuf struct: %w", err)
-	//}
 
 	return &httptypedapi.Payload{Input: raw}, nil
 }

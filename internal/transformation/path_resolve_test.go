@@ -258,3 +258,228 @@ func TestResolveWorkflowPath(t *testing.T) {
 		})
 	}
 }
+
+func TestResolvePathRelativeTo(t *testing.T) {
+	// Create a temp directory to use as base
+	tempBase, err := os.MkdirTemp("", "test_base_dir_*")
+	if err != nil {
+		t.Fatalf("Failed to create temp base directory: %v", err)
+	}
+	defer os.RemoveAll(tempBase)
+
+	// Create a subdirectory in the temp base
+	subDir := filepath.Join(tempBase, "subdir")
+	if err := os.Mkdir(subDir, os.ModePerm); err != nil {
+		t.Fatalf("Failed to create subdirectory: %v", err)
+	}
+
+	// Create a test file
+	testFile := filepath.Join(tempBase, "test.txt")
+	if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	tests := []struct {
+		name    string
+		path    string
+		baseDir string
+		want    string
+		wantErr bool
+	}{
+		{
+			name:    "Empty path returns empty string",
+			path:    "",
+			baseDir: tempBase,
+			want:    "",
+			wantErr: false,
+		},
+		{
+			name:    "Absolute path returns unchanged",
+			path:    "/absolute/path/to/file.json",
+			baseDir: tempBase,
+			want:    "/absolute/path/to/file.json",
+			wantErr: false,
+		},
+		{
+			name:    "Relative path with ./ prefix",
+			path:    "./data.json",
+			baseDir: tempBase,
+			want:    filepath.Join(tempBase, "data.json"),
+			wantErr: false,
+		},
+		{
+			name:    "Relative path without prefix",
+			path:    "data.json",
+			baseDir: tempBase,
+			want:    filepath.Join(tempBase, "data.json"),
+			wantErr: false,
+		},
+		{
+			name:    "Relative path with subdirectory",
+			path:    "subdir/data.json",
+			baseDir: tempBase,
+			want:    filepath.Join(tempBase, "subdir", "data.json"),
+			wantErr: false,
+		},
+		{
+			name:    "Relative path with ../ parent reference",
+			path:    "../sibling/data.json",
+			baseDir: subDir,
+			want:    filepath.Join(tempBase, "sibling", "data.json"),
+			wantErr: false,
+		},
+		{
+			name:    "Complex relative path",
+			path:    "./foo/../bar/./baz.txt",
+			baseDir: tempBase,
+			want:    filepath.Join(tempBase, "bar", "baz.txt"),
+			wantErr: false,
+		},
+		{
+			name:    "Path with multiple slashes",
+			path:    "foo//bar///file.json",
+			baseDir: tempBase,
+			want:    filepath.Join(tempBase, "foo", "bar", "file.json"),
+			wantErr: false,
+		},
+		{
+			name:    "Existing file path",
+			path:    "test.txt",
+			baseDir: tempBase,
+			want:    testFile,
+			wantErr: false,
+		},
+		{
+			name:    "Non-existing file path (should still resolve)",
+			path:    "nonexistent.json",
+			baseDir: tempBase,
+			want:    filepath.Join(tempBase, "nonexistent.json"),
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ResolvePathRelativeTo(tt.path, tt.baseDir)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ResolvePathRelativeTo() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+
+			// Clean both paths for comparison (handles OS-specific path separators)
+			gotCleaned := filepath.Clean(got)
+			wantCleaned := filepath.Clean(tt.want)
+
+			if gotCleaned != wantCleaned {
+				t.Errorf("ResolvePathRelativeTo() = %v, want %v", gotCleaned, wantCleaned)
+			}
+
+			// For non-empty paths, verify the result is absolute
+			if tt.path != "" && !filepath.IsAbs(got) && !tt.wantErr {
+				t.Errorf("ResolvePathRelativeTo() returned non-absolute path: %v", got)
+			}
+		})
+	}
+}
+
+func TestResolvePathRelativeTo_ErrorCases(t *testing.T) {
+	tests := []struct {
+		name    string
+		path    string
+		baseDir string
+		wantErr bool
+	}{
+		{
+			name:    "Empty base directory with relative path",
+			path:    "./data.json",
+			baseDir: "",
+			wantErr: false, // filepath.Join handles empty base as current dir
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := ResolvePathRelativeTo(tt.path, tt.baseDir)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ResolvePathRelativeTo() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestResolvePathRelativeTo_WorkflowScenario(t *testing.T) {
+	// Simulate the actual workflow scenario
+	// Project structure:
+	//   /project-root/
+	//     data/payload.json
+	//     workflows/my-workflow/
+	//       workflow.yaml
+
+	projectRoot, err := os.MkdirTemp("", "project_root_*")
+	if err != nil {
+		t.Fatalf("Failed to create project root: %v", err)
+	}
+	defer os.RemoveAll(projectRoot)
+
+	// Create data directory and file
+	dataDir := filepath.Join(projectRoot, "data")
+	if err := os.Mkdir(dataDir, os.ModePerm); err != nil {
+		t.Fatalf("Failed to create data directory: %v", err)
+	}
+
+	payloadFile := filepath.Join(dataDir, "payload.json")
+	if err := os.WriteFile(payloadFile, []byte(`{"test": "data"}`), 0644); err != nil {
+		t.Fatalf("Failed to create payload file: %v", err)
+	}
+
+	// Create workflows directory
+	workflowsDir := filepath.Join(projectRoot, "workflows")
+	if err := os.Mkdir(workflowsDir, os.ModePerm); err != nil {
+		t.Fatalf("Failed to create workflows directory: %v", err)
+	}
+
+	workflowDir := filepath.Join(workflowsDir, "my-workflow")
+	if err := os.Mkdir(workflowDir, os.ModePerm); err != nil {
+		t.Fatalf("Failed to create workflow directory: %v", err)
+	}
+
+	tests := []struct {
+		name         string
+		userInput    string
+		expectedPath string
+	}{
+		{
+			name:         "Relative path from project root",
+			userInput:    "./data/payload.json",
+			expectedPath: payloadFile,
+		},
+		{
+			name:         "Relative path without leading ./",
+			userInput:    "data/payload.json",
+			expectedPath: payloadFile,
+		},
+		{
+			name:         "Absolute path unchanged",
+			userInput:    payloadFile,
+			expectedPath: payloadFile,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ResolvePathRelativeTo(tt.userInput, projectRoot)
+			if err != nil {
+				t.Errorf("ResolvePathRelativeTo() error = %v", err)
+				return
+			}
+
+			if filepath.Clean(got) != filepath.Clean(tt.expectedPath) {
+				t.Errorf("ResolvePathRelativeTo() = %v, want %v", got, tt.expectedPath)
+			}
+
+			if _, err := os.Stat(got); os.IsNotExist(err) {
+				t.Errorf("Resolved path does not exist: %v", got)
+			}
+		})
+	}
+}

@@ -114,6 +114,29 @@ func ResolveWorkflowPath(workflowPath string) (string, error) {
 	return absPath, nil
 }
 
+// ResolvePathRelativeTo resolves a file path relative to a base directory.
+// If the path is already absolute, it returns it unchanged.
+// If the path is relative, it resolves it against the baseDir.
+func ResolvePathRelativeTo(path string, baseDir string) (string, error) {
+	if path == "" {
+		return "", nil
+	}
+
+	// If already absolute, return as-is
+	if filepath.IsAbs(path) {
+		return path, nil
+	}
+
+	// Resolve relative path against base directory
+	absPath := filepath.Join(baseDir, path)
+	absPath, err := filepath.Abs(absPath)
+	if err != nil {
+		return "", errors.New("failed to resolve absolute path: " + err.Error())
+	}
+
+	return absPath, nil
+}
+
 // resolveAbsolutePath expands ~ and converts a path to an absolute path.
 func resolveAbsolutePath(input string) (string, error) {
 	// Expand ~ to home directory

@@ -72,11 +72,15 @@ func newRootCommand() *cobra.Command {
 			if isLoadEnvAndSettings(cmd) {
 				// Set execution context (project root + workflow directory if applicable)
 				projectRootFlag := runtimeContext.Viper.GetString(settings.Flags.ProjectRoot.Name)
-				if err := context.SetExecutionContext(cmd, args, projectRootFlag, rootLogger); err != nil {
+				projectRoot, err := context.SetExecutionContext(cmd, args, projectRootFlag, rootLogger)
+				if err != nil {
 					return err
 				}
 
-				err := runtimeContext.AttachSettings(cmd)
+				// Store project root in runtime context for path resolution
+				runtimeContext.ProjectRootDir = projectRoot
+
+				err = runtimeContext.AttachSettings(cmd)
 				if err != nil {
 					return fmt.Errorf("%w", err)
 				}

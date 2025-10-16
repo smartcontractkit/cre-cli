@@ -308,7 +308,7 @@ test-profile:
 			}
 
 			cmd := tt.cmdSetup()
-			err := SetExecutionContext(cmd, tt.args, projectRootFlag, &logger)
+			projectRoot, err := SetExecutionContext(cmd, tt.args, projectRootFlag, &logger)
 
 			if tt.expectError {
 				require.Error(t, err)
@@ -319,6 +319,15 @@ test-profile:
 			}
 
 			require.NoError(t, err)
+
+			// Verify project root was returned correctly
+			if expectedDir != "" {
+				resolvedProjectRoot, err := filepath.EvalSymlinks(projectRoot)
+				require.NoError(t, err)
+				resolvedExpectedDir, err := filepath.EvalSymlinks(expectedDir)
+				require.NoError(t, err)
+				assert.Equal(t, resolvedExpectedDir, resolvedProjectRoot, "returned project root should match expected directory")
+			}
 
 			// Verify we're in the correct directory
 			if expectedDir != "" {
