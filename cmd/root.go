@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	gocontext "context"
 	"fmt"
 	"os"
 	"time"
@@ -39,7 +38,7 @@ func Execute() {
 	err := RootCmd.Execute()
 
 	if err != nil && executingCommand != nil && runtimeContextForTelemetry != nil {
-		telemetry.EmitCommandEvent(gocontext.Background(), executingCommand, 1, runtimeContextForTelemetry)
+		telemetry.EmitCommandEvent(executingCommand, 1, runtimeContextForTelemetry)
 	}
 
 	time.Sleep(100 * time.Millisecond)
@@ -117,7 +116,7 @@ func newRootCommand() *cobra.Command {
 		},
 
 		PersistentPostRun: func(cmd *cobra.Command, args []string) {
-			telemetry.EmitCommandEvent(gocontext.Background(), cmd, 0, runtimeContext)
+			telemetry.EmitCommandEvent(cmd, 0, runtimeContext)
 		},
 	}
 

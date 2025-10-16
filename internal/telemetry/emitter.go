@@ -25,7 +25,7 @@ const (
 
 // EmitCommandEvent emits a user event for command execution
 // This function is completely silent and never blocks command execution
-func EmitCommandEvent(ctx context.Context, cmd *cobra.Command, exitCode int, runtimeCtx *runtime.Context) {
+func EmitCommandEvent(cmd *cobra.Command, exitCode int, runtimeCtx *runtime.Context) {
 	// Run in a goroutine to avoid blocking
 	go func() {
 		// Recover from any panics to prevent crashes
