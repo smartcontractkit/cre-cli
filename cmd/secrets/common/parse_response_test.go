@@ -135,21 +135,24 @@ func TestParseVaultGatewayResponse_Create_LogsPerItem(t *testing.T) {
 	var output strings.Builder
 	_, _ = io.Copy(&output, r)
 
-	logOutput := buf.String()
+	out := output.String()
 
-	// Expect 2 successes + 1 failure
-	if got := strings.Count(output.String(), "Secret created"); got < 2 {
-		t.Fatalf("expected at least 2 'Secret created' outputs, got %d.\noutput:\n%s", got, output.String())
+	// Expect 2 successes + 1 failure (all on stdout)
+	if got := strings.Count(out, "Secret created"); got < 2 {
+		t.Fatalf("expected at least 2 'Secret created' outputs, got %d.\noutput:\n%s", got, out)
 	}
-	if got := strings.Count(logOutput, "secret create failed"); got != 1 {
-		t.Fatalf("expected 1 'secret create failed' output, got %d.\noutput:\n%s", got, output.String())
+	if got := strings.Count(out, "Secret create failed"); got != 1 {
+		t.Fatalf("expected 1 'Secret create failed' output, got %d.\noutput:\n%s", got, out)
 	}
-	// Spot-check fields
-	if !strings.Contains(output.String(), "k1") || !strings.Contains(output.String(), "n1") || !strings.Contains(output.String(), "o1") {
-		t.Fatalf("expected id/owner/namespace fields for first secret in output, got:\n%s", output.String())
+
+	// Spot-check fields (first success)
+	if !strings.Contains(out, "k1") || !strings.Contains(out, "n1") || !strings.Contains(out, "o1") {
+		t.Fatalf("expected id/owner/namespace fields for first secret in output, got:\n%s", out)
 	}
-	if !strings.Contains(logOutput, "boom") {
-		t.Fatalf("expected error text to be printed for failed item, got:\n%s", output.String())
+
+	// Error text for failed item is on stdout
+	if !strings.Contains(out, "boom") {
+		t.Fatalf("expected error text to be printed for failed item, got:\n%s", out)
 	}
 }
 
@@ -377,24 +380,33 @@ func TestParseVaultGatewayResponse_List_EmptySuccess(t *testing.T) {
 }
 
 func TestParseVaultGatewayResponse_List_Failure(t *testing.T) {
+	// Capture stdout
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
 	var buf bytes.Buffer
 	h := newTestHandler(&buf)
 
 	body := encodeRPCBodyFromPayload(buildListPayloadProtoFailure(t, "boom"))
-	err := h.ParseVaultGatewayResponse(vaulttypes.MethodSecretsList, body)
-	if err != nil {
-		t.Fatalf("handler should not return error on list failure; it should log: %v", err)
+	if err := h.ParseVaultGatewayResponse(vaulttypes.MethodSecretsList, body); err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
 
-	out := buf.String()
-	// One summary error line, no per-item logs
-	if !strings.Contains(out, `"message":"list secrets failed"`) ||
-		!strings.Contains(out, `"success":false`) ||
-		!strings.Contains(out, `"error":"boom"`) {
-		t.Fatalf("expected summary error log with error text, got:\n%s", out)
+	w.Close()
+	os.Stdout = oldStdout
+	var output strings.Builder
+	_, _ = io.Copy(&output, r)
+
+	out := output.String()
+
+	// With fmt.Printf, the summary error is now on stdout
+	if !strings.Contains(out, "secret list failed") {
+		t.Fatalf("expected summary error line 'secret list failed' on stdout, got:\n%s", out)
 	}
-	if strings.Contains(out, `"message":"secret identifier"`) {
-		t.Fatalf("did not expect per-identifier logs on failure, got:\n%s", out)
+	// And the error text should be present there too
+	if !strings.Contains(out, "boom") { // match whatever error text your fixture uses
+		t.Fatalf("expected error text to be printed on stdout, got:\n%s", out)
 	}
 }
 

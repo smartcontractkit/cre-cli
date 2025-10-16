@@ -180,16 +180,16 @@ func Execute(h *common.Handler, inputs DeleteSecretsInputs, duration time.Durati
 		if !allowlisted {
 			return fmt.Errorf("on-chain request for request-id %q is not finalized (digest not allowlisted). Do NOT call the vault DON yet. Finalize the on-chain allowlist tx, then rerun this command with the same --request-id", requestIDFlag)
 		}
-		fmt.Printf("\nDigest allowlisted; proceeding to gateway POST: owner=%s, requestID=%s, digest=0x%x\n", ownerAddr.Hex(), requestID, digest)
+		fmt.Printf("Digest allowlisted; proceeding to gateway POST: owner=%s, requestID=%s, digest=0x%x\n", ownerAddr.Hex(), requestID, digest)
 	} else {
 		// No --request-id flag: EOA path may allowlist automatically
 		if !allowlisted {
 			if err := wrV2Client.AllowlistRequest(digest, duration); err != nil {
 				return fmt.Errorf("allowlist request failed: %w", err)
 			}
-			fmt.Printf("\nDigest allowlisted; proceeding to gateway POST: owner=%s, requestID=%s, digest=0x%x\n", ownerAddr.Hex(), requestID, digest)
+			fmt.Printf("Digest allowlisted; proceeding to gateway POST: owner=%s, requestID=%s, digest=0x%x\n", ownerAddr.Hex(), requestID, digest)
 		} else {
-			fmt.Printf("\nDigest already allowlisted; skipping on-chain allowlist: owner=%s, requestID=%s, digest=0x%x\n", ownerAddr.Hex(), requestID, digest)
+			fmt.Printf("Digest already allowlisted; skipping on-chain allowlist: owner=%s, requestID=%s, digest=0x%x\n", ownerAddr.Hex(), requestID, digest)
 		}
 	}
 
