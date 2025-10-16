@@ -41,6 +41,7 @@ type Inputs struct {
 	WorkflowRegistryContractAddress   string `validate:"required"`
 	WorkflowRegistryContractChainName string `validate:"required"`
 
+	OwnerLabel       string `validate:"omitempty"`
 	SkipConfirmation bool
 }
 
@@ -100,6 +101,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	settings.AddSkipConfirmation(deployCmd)
 	deployCmd.Flags().StringP("output", "o", defaultOutputPath, "The output file for the compiled WASM binary encoded in base64")
 	deployCmd.Flags().BoolP("auto-start", "r", true, "Activate and run the workflow after registration, or pause it")
+	deployCmd.Flags().StringP("owner-label", "l", "", "Label for the workflow owner (used during auto-link if owner is not already linked)")
 
 	return deployCmd
 }
@@ -156,6 +158,7 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 
 		WorkflowRegistryContractChainName: h.environmentSet.WorkflowRegistryChainName,
 		WorkflowRegistryContractAddress:   h.environmentSet.WorkflowRegistryAddress,
+		OwnerLabel:                        v.GetString("owner-label"),
 		SkipConfirmation:                  v.GetBool(settings.Flags.SkipConfirmation.Name),
 	}, nil
 }
