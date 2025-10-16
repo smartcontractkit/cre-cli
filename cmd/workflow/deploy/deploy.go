@@ -63,7 +63,6 @@ type handler struct {
 	environmentSet   *environments.EnvironmentSet
 	workflowArtifact *workflowArtifact
 	wrc              *client.WorkflowRegistryV2Client
-	projectRootDir   string
 
 	validated bool
 
@@ -118,7 +117,6 @@ func newHandler(ctx *runtime.Context, stdin io.Reader) *handler {
 		environmentSet:   ctx.EnvironmentSet,
 		workflowArtifact: &workflowArtifact{},
 		wrc:              nil,
-		projectRootDir:   ctx.ProjectRootDir,
 		validated:        false,
 		wg:               sync.WaitGroup{},
 		wrcErr:           nil,
