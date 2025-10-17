@@ -77,10 +77,14 @@ type Inputs struct {
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
 	var initCmd = &cobra.Command{
-		Use:   "init",
-		Short: "Initialize a new workflow project or add a workflow to an existing one",
-		Long:  "Initialize or extend a workflow project by setting up core files, gathering any missing details, and scaffolding the chosen template.",
-		Args:  cobra.NoArgs,
+		Use:     "init",
+		Aliases: []string{"new"},
+		Short:   "Initialize a new cre project (recommended starting point)",
+		Long: `Initialize a new CRE project or add a workflow to an existing one.
+
+This sets up the project structure, configuration, and starter files so you can
+build, test, and deploy workflows quickly.`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			handler := newHandler(runtimeContext, cmd.InOrStdin())
 
