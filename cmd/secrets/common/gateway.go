@@ -39,9 +39,9 @@ func (g *HTTPClient) Post(body []byte) ([]byte, int, error) {
 			b, s, e := g.postOnce(body)
 			respBody, status = b, s
 
-			// 1) If transport error -> no retry
+			// 1) If transport error -> retry
 			if e != nil {
-				return retry.Unrecoverable(fmt.Errorf("gateway request failed: %w", e))
+				return fmt.Errorf("gateway request failed: %w", e) // retry-go will retry
 			}
 
 			// 2) If non-200 and body contains "not allowlisted" -> retry

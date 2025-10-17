@@ -131,7 +131,7 @@ func Execute(h *common.Handler, namespace string, duration time.Duration, ownerT
 		if err != nil {
 			return fmt.Errorf("failed to pack allowlist tx: %w", err)
 		}
-		return h.LogMSIGNextSteps(txData, digest, filename)
+		return h.LogMSIGNextSteps(txData, digest, bundlePath)
 	}
 
 	// ---------------- EOA: allowlist (if needed) and POST ----------------
