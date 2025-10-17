@@ -20,6 +20,7 @@ type Context struct {
 	Settings       *settings.Settings
 	Credentials    *credentials.Credentials
 	EnvironmentSet *environments.EnvironmentSet
+	ProjectRootDir string
 }
 
 func NewContext(logger *zerolog.Logger, viper *viper.Viper) *Context {

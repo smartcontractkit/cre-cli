@@ -13,23 +13,21 @@ import (
 )
 
 // SetExecutionContext sets the appropriate execution context for commands
-// It first sets the project context, then if it's a workflow command with exactly one argument,
-// it changes to the specific workflow directory
-func SetExecutionContext(cmd *cobra.Command, args []string, projectRootFlag string, logger *zerolog.Logger) error {
+func SetExecutionContext(cmd *cobra.Command, args []string, projectRootFlag string, logger *zerolog.Logger) (string, error) {
 	// Check if project-root flag is set
 	var projectPath string
 	if projectRootFlag != "" {
 		// Resolve the path (handles both relative and absolute paths)
 		resolvedPath, err := filepath.Abs(projectRootFlag)
 		if err != nil {
-			return fmt.Errorf("failed to resolve project root path '%s': %w", projectRootFlag, err)
+			return "", fmt.Errorf("failed to resolve project root path '%s': %w", projectRootFlag, err)
 		}
 
 		// Check if path exists
 		if _, err := os.Stat(resolvedPath); os.IsNotExist(err) {
-			return fmt.Errorf("project root path does not exist: %s", resolvedPath)
+			return "", fmt.Errorf("project root path does not exist: %s", resolvedPath)
 		} else if err != nil {
-			return fmt.Errorf("failed to check project root path '%s': %w", resolvedPath, err)
+			return "", fmt.Errorf("failed to check project root path '%s': %w", resolvedPath, err)
 		}
 
 		projectPath = resolvedPath
@@ -37,21 +35,27 @@ func SetExecutionContext(cmd *cobra.Command, args []string, projectRootFlag stri
 
 	// First, set the project context (change to project root)
 	if err := SetProjectContext(projectPath); err != nil {
-		return fmt.Errorf("failed to set project context: %w", err)
+		return "", fmt.Errorf("failed to set project context: %w", err)
+	}
+
+	// Capture the project root directory
+	projectRoot, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("failed to get project root directory: %w", err)
 	}
 
 	// Then, if it's a workflow command with exactly one argument, change to the workflow directory
 	if IsWorkflowCommand(cmd) && len(args) == 1 {
 		workflowDir, err := transformation.ResolveWorkflowPath(args[0])
 		if err != nil {
-			return fmt.Errorf("failed to resolve workflow directory path '%s': %w", args[0], err)
+			return "", fmt.Errorf("failed to resolve workflow directory path '%s': %w", args[0], err)
 		}
 		if err := os.Chdir(workflowDir); err != nil {
-			return fmt.Errorf("failed to change directory to %s: %w", workflowDir, err)
+			return "", fmt.Errorf("failed to change directory to %s: %w", workflowDir, err)
 		}
 	}
 
-	return nil
+	return projectRoot, nil
 }
 
 // SetProjectContext sets the current working directory to the project root
