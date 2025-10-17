@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 
+	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/spf13/viper"
 
 	chainSelectors "github.com/smartcontractkit/chain-selectors"
@@ -80,7 +81,20 @@ func GetWorkflowOwner(v *viper.Viper) (ownerAddress string, ownerType string, er
 	}
 
 	if v.IsSet(Flags.RawTxFlag.Name) {
+		// TODO if owner is not set in settings, we should error out instead of returning empty
 		return v.GetString(fmt.Sprintf("%s.%s", target, WorkflowOwnerSettingName)), constants.WorkflowOwnerTypeMSIG, nil
+	}
+
+	// if owner is set in settings, use it
+	if v.IsSet(fmt.Sprintf("%s.%s", target, WorkflowOwnerSettingName)) {
+		owner := v.GetString(fmt.Sprintf("%s.%s", target, WorkflowOwnerSettingName))
+		if owner != "" {
+			if !ethcommon.IsHexAddress(owner) {
+				return "", "", fmt.Errorf("invalid owner address in settings %q: %q", WorkflowOwnerSettingName, owner)
+			}
+			// canonical (checksummed)
+			return ethcommon.HexToAddress(owner).Hex(), constants.WorkflowOwnerTypeMSIG, nil
+		}
 	}
 
 	if v.IsSet(Flags.Owner.Name) {

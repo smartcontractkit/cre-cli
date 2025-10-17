@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/BurntSushi/toml"
@@ -90,7 +91,12 @@ func NewEthClientFromEnv(v *viper.Viper, l *zerolog.Logger, ethUrl string) (*set
 			return nil, fmt.Errorf("invalid private key: %w", err)
 		}
 	}
-	client, err := NewSethClient(sethConfigPath, ethUrl, []string{normPrivKey}, ethChainID)
+
+	keys := []string{}
+	if k := strings.TrimSpace(normPrivKey); k != "" {
+		keys = []string{k}
+	}
+	client, err := NewSethClient(sethConfigPath, ethUrl, keys, ethChainID)
 	l.Debug().Str("Seth config", sethConfigPath).Uint64("Chain ID", ethChainID).Msg("Setting up connectivity client based on RPC URL and private key info")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Seth client: %w", err)
