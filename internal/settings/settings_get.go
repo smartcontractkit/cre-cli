@@ -1,6 +1,7 @@
 package settings
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -80,12 +81,27 @@ func GetWorkflowOwner(v *viper.Viper) (ownerAddress string, ownerType string, er
 		return "", "", err
 	}
 
+	// if --unsigned flag is set, owner must be set in settings
 	if v.IsSet(Flags.RawTxFlag.Name) {
-		// TODO if owner is not set in settings, we should error out instead of returning empty
-		return v.GetString(fmt.Sprintf("%s.%s", target, WorkflowOwnerSettingName)), constants.WorkflowOwnerTypeMSIG, nil
+		key := fmt.Sprintf("%s.%s", target, WorkflowOwnerSettingName)
+
+		if v.IsSet(key) {
+			owner := strings.TrimSpace(v.GetString(key))
+			if owner != "" {
+				return owner, constants.WorkflowOwnerTypeMSIG, nil
+			}
+		}
+
+		// Not set or empty -> print error and stop
+		msg := fmt.Sprintf(
+			"missing workflow owner: when using --%s you must set %q in your config",
+			Flags.RawTxFlag.Name, key,
+		)
+		fmt.Fprintln(os.Stderr, msg)
+		return "", "", errors.New(msg)
 	}
 
-	// if owner is set in settings, use it
+	// if owner is set in settings, use it, higher priority than private key
 	if v.IsSet(fmt.Sprintf("%s.%s", target, WorkflowOwnerSettingName)) {
 		owner := v.GetString(fmt.Sprintf("%s.%s", target, WorkflowOwnerSettingName))
 		if owner != "" {
@@ -97,6 +113,7 @@ func GetWorkflowOwner(v *viper.Viper) (ownerAddress string, ownerType string, er
 		}
 	}
 
+	// TODO I dont think the owner flag is enabled anywhere, remove?
 	if v.IsSet(Flags.Owner.Name) {
 		ownerFlag := v.GetString(Flags.Owner.Name)
 		if ownerFlag != "" {

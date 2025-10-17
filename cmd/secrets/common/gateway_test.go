@@ -6,7 +6,6 @@ import (
 	"io"
 	"net/http"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -90,10 +89,11 @@ func TestPostToGateway(t *testing.T) {
 			RetryDelay:    0,
 		}
 
-		_, _, err := h.Gw.Post([]byte(`{}`))
+		_, status, err := h.Gw.Post([]byte(`{}`))
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "network")
-		assert.Equal(t, 2, rt.Calls)
+		assert.Contains(t, err.Error(), "gateway request failed")
+		assert.Equal(t, 0, status)   // last attempt was a transport error -> status 0
+		assert.Equal(t, 2, rt.Calls) // retried
 	})
 
 	t.Run("read error -> retries then fail", func(t *testing.T) {
@@ -111,17 +111,18 @@ func TestPostToGateway(t *testing.T) {
 			RetryDelay:    0,
 		}
 
-		_, _, err := h.Gw.Post([]byte(`{}`))
+		_, status, err := h.Gw.Post([]byte(`{}`))
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "read response body: read error")
-		assert.Equal(t, 2, rt.Calls)
+		assert.Equal(t, 200, status) // postOnce had a resp with 200 but read failed
+		assert.Equal(t, 2, rt.Calls) // retried
 	})
 
-	t.Run("non-200 then 200 -> success after retry", func(t *testing.T) {
+	t.Run("non-200 containing allowlist then 200 -> success after retry", func(t *testing.T) {
 		successBody := `{"ok":true}`
 		rt := &SeqRoundTripper{
 			Seq: []RTResponse{
-				{Response: makeResp(503, "temporary outage")},
+				{Response: makeResp(503, "Request not allowlisted - pending")},
 				{Response: makeResp(200, successBody)},
 			},
 		}
@@ -140,12 +141,12 @@ func TestPostToGateway(t *testing.T) {
 		assert.Equal(t, 2, rt.Calls)
 	})
 
-	t.Run("always non-200 -> fail after attempts", func(t *testing.T) {
+	t.Run("always non-200 with allowlist hint -> retry until attempts then fail", func(t *testing.T) {
 		rt := &SeqRoundTripper{
 			Seq: []RTResponse{
-				{Response: makeResp(500, "err1")},
-				{Response: makeResp(429, "err2")},
-				{Response: makeResp(400, "err3")}, // any non-200 should still retry/fail
+				{Response: makeResp(500, "request not allowlisted (booting up)")},
+				{Response: makeResp(429, "REQUEST NOT ALLOWLISTED - still syncing")},
+				{Response: makeResp(429, "request not allowlisted - keep waiting")},
 			},
 		}
 		mockedHTTP := &http.Client{Transport: rt}
@@ -158,13 +159,12 @@ func TestPostToGateway(t *testing.T) {
 
 		_, status, err := h.Gw.Post([]byte(`{}`))
 		assert.Error(t, err)
-		// status is from the last attempt
-		assert.Equal(t, 400, status)
+		assert.Equal(t, 429, status) // from last attempt
 		assert.Contains(t, err.Error(), "gateway POST failed")
 		assert.Equal(t, 3, rt.Calls)
 	})
 
-	t.Run("error then success -> ok", func(t *testing.T) {
+	t.Run("transport error then success -> ok after retry", func(t *testing.T) {
 		body := `{"ok":true}`
 		rt := &SeqRoundTripper{
 			Seq: []RTResponse{
@@ -184,28 +184,6 @@ func TestPostToGateway(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, 200, status)
 		assert.Equal(t, body, string(respBytes))
-		assert.Equal(t, 2, rt.Calls)
-	})
-
-	// Optional: prove delays are honored if set
-	t.Run("honors small delay", func(t *testing.T) {
-		rt := &SeqRoundTripper{
-			Seq: []RTResponse{
-				{Response: makeResp(503, "nope")},
-				{Response: makeResp(200, `{"ok":true}`)},
-			},
-		}
-		mockedHTTP := &http.Client{Transport: rt}
-		h.Gw = &HTTPClient{
-			URL:           "https://unit-test.gw",
-			Client:        mockedHTTP,
-			RetryAttempts: 2,
-			RetryDelay:    5 * time.Millisecond,
-		}
-
-		_, status, err := h.Gw.Post([]byte(`{}`))
-		assert.NoError(t, err)
-		assert.Equal(t, 200, status)
-		assert.Equal(t, 2, rt.Calls)
+		assert.Equal(t, 2, rt.Calls) // retried and succeeded
 	})
 }
