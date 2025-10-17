@@ -71,9 +71,11 @@ func createCliEnvFile(envPath string, ethPrivateKey string) error {
 	if err != nil {
 		return err
 	}
-	_, err = writer.WriteString(fmt.Sprintf("%s=%s", settings.EthPrivateKeyEnvVar, ethPrivateKey))
-	if err != nil {
-		return err
+	if strings.TrimSpace(ethPrivateKey) != "" {
+		_, err = writer.WriteString(fmt.Sprintf("%s=%s\n", settings.EthPrivateKeyEnvVar, ethPrivateKey))
+		if err != nil {
+			return err
+		}
 	}
 
 	_, err = writer.WriteString("\n")
