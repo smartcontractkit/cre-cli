@@ -38,25 +38,36 @@ func (g *HTTPClient) Post(body []byte) ([]byte, int, error) {
 		func() error {
 			b, s, e := g.postOnce(body)
 			respBody, status = b, s
+
+			// 1) If transport error -> no retry
 			if e != nil {
-				return e // retry on any error
+				return retry.Unrecoverable(fmt.Errorf("gateway request failed: %w", e))
 			}
+
+			// 2) If non-200 and body contains "not allowlisted" -> retry
 			if s != http.StatusOK {
-				return fmt.Errorf("gateway returned non-200: %d", s) // retry on any non-200
+				lower := bytes.ToLower(b)
+				if bytes.Contains(lower, []byte("request not allowlisted")) {
+					return fmt.Errorf("gateway not allowlisted yet (status=%d)", s)
+				}
+				// 3) Any other non-200 -> no retry
+				return retry.Unrecoverable(fmt.Errorf("gateway returned non-200 (no allowlist hint): %d", s))
 			}
-			return nil // success
+
+			// 4) Success
+			return nil
 		},
-		retry.Attempts(attempts),
+		retry.Attempts(uint(attempts)),
 		retry.Delay(delay),
 		retry.LastErrorOnly(true),
 		retry.OnRetry(func(n uint, err error) {
-			fmt.Printf("Waiting for block confirmation and sending to vault (attempt %d/%d): %v \n", n+1, attempts, err)
+			fmt.Printf("Waiting for on-chain allowlist finalization... (attempt %d/%d): %v\n", n+1, attempts, err)
 		}),
 	)
 
 	if err != nil {
 		// Return the last seen body/status to aid debugging.
-		return respBody, status, fmt.Errorf("gateway POST failed after %d attempts: %w", attempts, err)
+		return respBody, status, fmt.Errorf("gateway POST failed: %w", err)
 	}
 	return respBody, status, nil
 }

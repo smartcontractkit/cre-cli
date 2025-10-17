@@ -18,7 +18,7 @@ import (
 func New(ctx *runtime.Context) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "update [SECRETS_FILE_PATH]",
-		Short:   "Updates existing secrets from a YAML file provided as a positional argument.",
+		Short:   "Updates existing secrets from a file provided as a positional argument.",
 		Example: "cre secrets update my-secrets.yaml",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -46,11 +46,6 @@ func New(ctx *runtime.Context) *cobra.Command {
 				return fmt.Errorf("invalid --timeout: must be greater than 0 and less than %dh (%dd)", maxHours, maxDays)
 			}
 
-			reqIDFlag, err := cmd.Flags().GetString("request-id")
-			if err != nil {
-				return err
-			}
-
 			inputs, err := h.ResolveInputs()
 			if err != nil {
 				return err
@@ -60,19 +55,16 @@ func New(ctx *runtime.Context) *cobra.Command {
 				return err
 			}
 
-			// Pass request-id flag through to shared handler Execute
 			return h.Execute(
 				inputs,
 				vaulttypes.MethodSecretsUpdate,
 				duration,
 				ctx.Settings.Workflow.UserWorkflowSettings.WorkflowOwnerType,
-				reqIDFlag,
 			)
 		},
 	}
 
 	settings.AddRawTxFlag(cmd)
-	cmd.Flags().String("request-id", "", "Reuse a specific request ID (UUID). When provided, the command will not create a new ID and will only proceed if the corresponding on-chain allowlist entry is already finalized.")
 
 	return cmd
 }

@@ -7,6 +7,7 @@ import (
 
 	"github.com/smartcontractkit/cre-cli/cmd/secrets/create"
 	"github.com/smartcontractkit/cre-cli/cmd/secrets/delete"
+	"github.com/smartcontractkit/cre-cli/cmd/secrets/execute"
 	"github.com/smartcontractkit/cre-cli/cmd/secrets/list"
 	"github.com/smartcontractkit/cre-cli/cmd/secrets/update"
 	"github.com/smartcontractkit/cre-cli/internal/constants"
@@ -35,6 +36,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	secretsCmd.AddCommand(update.New(runtimeContext))
 	secretsCmd.AddCommand(delete.New(runtimeContext))
 	secretsCmd.AddCommand(list.New(runtimeContext))
+	secretsCmd.AddCommand(execute.New(runtimeContext))
 
 	return secretsCmd
 }
