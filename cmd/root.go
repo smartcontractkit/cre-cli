@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
@@ -23,13 +24,26 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/logger"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
+	"github.com/smartcontractkit/cre-cli/internal/telemetry"
 )
 
 // RootCmd represents the base command when called without any subcommands
 var RootCmd = newRootCommand()
 
+var runtimeContextForTelemetry *runtime.Context
+
+var executingCommand *cobra.Command
+
 func Execute() {
-	if err := RootCmd.Execute(); err != nil {
+	err := RootCmd.Execute()
+
+	if err != nil && executingCommand != nil && runtimeContextForTelemetry != nil {
+		telemetry.EmitCommandEvent(executingCommand, 1, runtimeContextForTelemetry)
+	}
+
+	time.Sleep(100 * time.Millisecond)
+
+	if err != nil {
 		os.Exit(1)
 	}
 }
@@ -38,6 +52,8 @@ func newRootCommand() *cobra.Command {
 	rootLogger := createLogger()
 	rootViper := createViper()
 	runtimeContext := runtime.NewContext(rootLogger, rootViper)
+
+	runtimeContextForTelemetry = runtimeContext
 
 	rootCmd := &cobra.Command{
 		Use:   "cre",
@@ -49,6 +65,8 @@ func newRootCommand() *cobra.Command {
 		// this will be inherited by all submodules and all their commands
 
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			executingCommand = cmd
+
 			log := runtimeContext.Logger
 			v := runtimeContext.Viper
 
@@ -95,6 +113,10 @@ func newRootCommand() *cobra.Command {
 			}
 
 			return nil
+		},
+
+		PersistentPostRun: func(cmd *cobra.Command, args []string) {
+			telemetry.EmitCommandEvent(cmd, 0, runtimeContext)
 		},
 	}
 
