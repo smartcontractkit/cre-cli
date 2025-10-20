@@ -20,8 +20,8 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	var secretsCmd = &cobra.Command{
 		Use:    "secrets",
 		Short:  "Handles secrets management",
-		Hidden: true,
-		Long:   `Create, update, delete secrets in Vault DON.`,
+		Hidden: false,
+		Long:   `Create, update, delete, list secrets in Vault DON.`,
 	}
 
 	// Persistent flag available to all subcommands.

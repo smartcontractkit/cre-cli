@@ -204,7 +204,7 @@ func ResolveDeleteInputs(secretsFilePath string) (DeleteSecretsInputs, error) {
 
 	var cfg SecretsDeleteYamlConfig
 	if err := yaml.Unmarshal(fileContent, &cfg); err != nil {
-		return nil, fmt.Errorf("failed to parse YAML: %w", err)
+		return nil, fmt.Errorf("check your YAML format for deletion: %w", err)
 	}
 	if len(cfg.SecretsNames) == 0 {
 		return nil, fmt.Errorf("YAML must contain a non-empty 'secretsNames' list")

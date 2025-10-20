@@ -191,7 +191,7 @@ func (h *Handler) LogMSIGNextSteps(txData string, digest [32]byte, bundlePath st
 	fmt.Println("")
 	fmt.Println("   4. After the transaction is finalized on-chain, run:")
 	fmt.Println("")
-	fmt.Println("      cre secrets execute", bundlePath)
+	fmt.Println("      cre secrets execute", bundlePath, "--unsigned")
 	fmt.Println("")
 	return nil
 }

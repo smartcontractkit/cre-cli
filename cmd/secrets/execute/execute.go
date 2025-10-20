@@ -12,7 +12,9 @@ import (
 	"github.com/smartcontractkit/chainlink/v2/core/capabilities/vault/vaulttypes"
 
 	"github.com/smartcontractkit/cre-cli/cmd/secrets/common"
+	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
+	"github.com/smartcontractkit/cre-cli/internal/settings"
 )
 
 // New creates the 'secrets execute' command that performs MSIG step 2 for any method.
@@ -24,6 +26,10 @@ func New(ctx *runtime.Context) *cobra.Command {
 		Example: "cre secrets execute 157364...af4d5.json",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if ctx.Settings.Workflow.UserWorkflowSettings.WorkflowOwnerType != constants.WorkflowOwnerTypeMSIG {
+				return fmt.Errorf("execute command is only supported for MSIG workflow owner type, add --unsigned flag")
+			}
+
 			bundlePath := args[0]
 
 			ext := strings.ToLower(filepath.Ext(bundlePath))
@@ -31,13 +37,12 @@ func New(ctx *runtime.Context) *cobra.Command {
 				return fmt.Errorf("execute expects a bundle .json file; got %q", ext)
 			}
 
-			// Build a handler for env/owner/gateway; the path here is the bundle path (not used by ResolveInputs).
 			h, err := common.NewHandler(ctx, bundlePath)
 			if err != nil {
 				return err
 			}
 
-			// Load the bundle
+			// Load the bundle, error if missing fields in json
 			b, err := common.LoadBundle(bundlePath)
 			if err != nil {
 				return fmt.Errorf("failed to load bundle: %w", err)
@@ -87,6 +92,8 @@ func New(ctx *runtime.Context) *cobra.Command {
 			return h.ParseVaultGatewayResponse(b.Method, respBody)
 		},
 	}
+
+	settings.AddRawTxFlag(cmd)
 
 	return cmd
 }

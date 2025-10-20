@@ -82,11 +82,10 @@ func GetWorkflowOwner(v *viper.Viper) (ownerAddress string, ownerType string, er
 	}
 
 	// if --unsigned flag is set, owner must be set in settings
+	ownerKey := fmt.Sprintf("%s.%s", target, WorkflowOwnerSettingName)
 	if v.IsSet(Flags.RawTxFlag.Name) {
-		key := fmt.Sprintf("%s.%s", target, WorkflowOwnerSettingName)
-
-		if v.IsSet(key) {
-			owner := strings.TrimSpace(v.GetString(key))
+		if v.IsSet(ownerKey) {
+			owner := strings.TrimSpace(v.GetString(ownerKey))
 			if owner != "" {
 				return owner, constants.WorkflowOwnerTypeMSIG, nil
 			}
@@ -95,38 +94,35 @@ func GetWorkflowOwner(v *viper.Viper) (ownerAddress string, ownerType string, er
 		// Not set or empty -> print error and stop
 		msg := fmt.Sprintf(
 			"missing workflow owner: when using --%s you must set %q in your config",
-			Flags.RawTxFlag.Name, key,
+			Flags.RawTxFlag.Name, ownerKey,
 		)
 		fmt.Fprintln(os.Stderr, msg)
 		return "", "", errors.New(msg)
 	}
 
-	// if owner is set in settings, use it, higher priority than private key
-	if v.IsSet(fmt.Sprintf("%s.%s", target, WorkflowOwnerSettingName)) {
-		owner := v.GetString(fmt.Sprintf("%s.%s", target, WorkflowOwnerSettingName))
-		if owner != "" {
-			if !ethcommon.IsHexAddress(owner) {
-				return "", "", fmt.Errorf("invalid owner address in settings %q: %q", WorkflowOwnerSettingName, owner)
-			}
-			// canonical (checksummed)
-			return ethcommon.HexToAddress(owner).Hex(), constants.WorkflowOwnerTypeMSIG, nil
-		}
-	}
-
-	// TODO I dont think the owner flag is enabled anywhere, remove?
-	if v.IsSet(Flags.Owner.Name) {
-		ownerFlag := v.GetString(Flags.Owner.Name)
-		if ownerFlag != "" {
-			v.Set(fmt.Sprintf("%s.%s", target, WorkflowOwnerSettingName), ownerFlag)
-		}
-		return ownerFlag, constants.WorkflowOwnerTypeMSIG, nil
-	}
-
+	// unsigned is not set, it is EOA path
 	rawPrivKey := v.GetString(EthPrivateKeyEnvVar)
 	normPrivKey := NormalizeHexKey(rawPrivKey)
 	ownerAddress, err = ethkeys.DeriveEthAddressFromPrivateKey(normPrivKey)
 	if err != nil {
 		return "", "", err
+	}
+
+	// if owner is also set in settings, owner and private key should match
+	if v.IsSet(ownerKey) {
+		cfgOwner := strings.TrimSpace(v.GetString(ownerKey))
+		if cfgOwner != "" {
+			// Validate cfgOwner and compare to derived ownerAddress
+			derived := ethcommon.HexToAddress(ownerAddress)
+			fromCfg := ethcommon.HexToAddress(cfgOwner)
+			if derived != fromCfg {
+				return "", "", fmt.Errorf(
+					"settings owner %q does not match address derived from private key %q. "+
+						"remove owner in settings if you are using EOA",
+					fromCfg.Hex(), derived.Hex(),
+				)
+			}
+		}
 	}
 
 	return ownerAddress, constants.WorkflowOwnerTypeEOA, nil

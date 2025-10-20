@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/BurntSushi/toml"
@@ -84,18 +83,17 @@ func NewEthClientFromEnv(v *viper.Viper, l *zerolog.Logger, ethUrl string) (*set
 	}
 	rawPrivKey := v.GetString(settings.EthPrivateKeyEnvVar)
 	normPrivKey := settings.NormalizeHexKey(rawPrivKey)
+
+	keys := []string{}
 	if normPrivKey == "" {
 		l.Debug().Msg("No private key provided, all commands that write to chain will work only in unsigned mode")
 	} else {
 		if err := cmdCommon.ValidatePrivateKey(normPrivKey); err != nil {
 			return nil, fmt.Errorf("invalid private key: %w", err)
 		}
+		keys = []string{normPrivKey}
 	}
 
-	keys := []string{}
-	if k := strings.TrimSpace(normPrivKey); k != "" {
-		keys = []string{k}
-	}
 	client, err := NewSethClient(sethConfigPath, ethUrl, keys, ethChainID)
 	l.Debug().Str("Seth config", sethConfigPath).Uint64("Chain ID", ethChainID).Msg("Setting up connectivity client based on RPC URL and private key info")
 	if err != nil {

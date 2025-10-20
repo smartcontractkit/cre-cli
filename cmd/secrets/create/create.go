@@ -18,7 +18,7 @@ import (
 func New(ctx *runtime.Context) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "create [SECRETS_FILE_PATH]",
-		Short:   "Creates secrets from a YAML file (EOA or MSIG step 1).",
+		Short:   "Creates secrets from a YAML file.",
 		Example: "cre secrets create my-secrets.yaml",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
