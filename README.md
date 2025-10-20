@@ -4,7 +4,7 @@
     </a>
 
 [![License](https://img.shields.io/badge/license-MIT-blue)](https://github.com/smartcontractkit/cre-cli/blob/main/README.md)
-[![CRE Documentation](https://img.shields.io/static/v1?label=CRE&message=latest&color=blue)](https://chain.link/chainlink-runtime-environment)
+[![CRE Documentation](https://img.shields.io/static/v1?label=CRE&message=Home&color=blue)](https://chain.link/chainlink-runtime-environment)
 
 </div>
 
