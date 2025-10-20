@@ -369,7 +369,7 @@ func run(
 			baseLggr.Errorw("Trigger to run not selected")
 			os.Exit(1)
 		}
-		baseLggr.Infow("Running trigger", "trigger", triggerInfoAndBeforeStart.TriggerToRun.GetId())
+		baseLggr.Debugw("Running trigger", "trigger", triggerInfoAndBeforeStart.TriggerToRun.GetId())
 		err := triggerInfoAndBeforeStart.TriggerFunc()
 		if err != nil {
 			baseLggr.Errorw("Failed to run trigger", "trigger", triggerInfoAndBeforeStart.TriggerToRun.GetId(), "error", err)
@@ -378,7 +378,7 @@ func run(
 
 		select {
 		case <-executionFinishedCh:
-			baseLggr.Infow("Execution finished signal received")
+			baseLggr.Debugw("Execution finished signal received")
 		case <-ctx.Done():
 			baseLggr.Infow("Received interrupt signal, stopping execution")
 		case <-time.After(WorkflowExecutionTimeout):
@@ -388,7 +388,7 @@ func run(
 	simulatorCleanup := func(ctx context.Context, cfg simulator.RunnerConfig, registry *capabilities.Registry, services []services.Service) {
 		for _, service := range services {
 			if service.Name() == "WorkflowEngine.WorkflowEngineV2" {
-				baseLggr.Info("Skipping WorkflowEngineV2")
+				baseLggr.Debug("Skipping WorkflowEngineV2")
 				continue
 			}
 
@@ -430,7 +430,7 @@ func run(
 					baseLggr.Errorw("Failed to initialize simulator", "error", err)
 					os.Exit(1)
 				}
-				baseLggr.Info("Simulator Initialized")
+				baseLggr.Debugw("Simulator Initialized")
 				fmt.Println()
 				close(initializedCh)
 			},
