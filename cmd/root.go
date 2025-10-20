@@ -159,7 +159,7 @@ Available Commands:
 
 {{- /* Ungrouped commands (if any) */}}
 {{- if hasUngrouped .}}
-Other Commands:
+Other:
 {{- range .Commands}}{{if (and (not .Hidden) (.IsAvailableCommand) (eq .GroupID ""))}}
   {{rpad .Name .NamePadding}}  {{.Short}}
 {{- end}}{{end}}
