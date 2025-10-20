@@ -432,8 +432,18 @@ func (w *telemetryWriter) mapWorkflowStatus(status string) string {
 	}
 }
 
-// formatSimulationLog formats simulation logs with consistent styling
-func formatSimulationLog(message string, fields ...interface{}) {
+// LogLevel represents different log levels for simulation logs
+type LogLevel string
+
+const (
+	LogLevelDebug   LogLevel = "DEBUG"
+	LogLevelInfo    LogLevel = "INFO"
+	LogLevelWarning LogLevel = "WARNING"
+	LogLevelError   LogLevel = "ERROR"
+)
+
+// formatSimulationLog formats simulation logs with consistent styling and different levels
+func formatSimulationLog(level LogLevel, message string, fields ...interface{}) {
 	// Get current timestamp
 	timestamp := time.Now().Format("2006-01-02T15:04:05Z")
 
@@ -452,19 +462,36 @@ func formatSimulationLog(message string, fields ...interface{}) {
 		}
 	}
 
-	// Use the same color scheme as USER LOG
+	// Get color for the log level
+	var levelColor string
+	switch level {
+	case LogLevelDebug:
+		levelColor = COLOR_BLUE
+	case LogLevelInfo:
+		levelColor = COLOR_BRIGHT_CYAN
+	case LogLevelWarning:
+		levelColor = COLOR_YELLOW
+	case LogLevelError:
+		levelColor = COLOR_RED
+	default:
+		levelColor = COLOR_BRIGHT_CYAN
+	}
+
+	// Format with level-specific color
 	fmt.Printf("%s%s%s %s[SIMULATION]%s %s\n",
-		COLOR_BLUE, timestamp, COLOR_RESET, COLOR_BRIGHT_CYAN, COLOR_RESET, formattedMessage)
+		COLOR_BLUE, timestamp, COLOR_RESET, levelColor, COLOR_RESET, formattedMessage)
 }
 
-// formatWarningLog formats warning logs with orange color
-func formatWarningLog(message string) {
-	// Get current timestamp
-	timestamp := time.Now().Format("2006-01-02T15:04:05Z")
+func formatSimulationInfo(message string, fields ...interface{}) {
+	formatSimulationLog(LogLevelInfo, message, fields...)
+}
 
-	// Use orange color for warnings
-	fmt.Printf("%s%s%s %s[WARNING]%s %s\n",
-		COLOR_BLUE, timestamp, COLOR_RESET, COLOR_YELLOW, COLOR_RESET, message)
+func formatSimulationWarning(message string, fields ...interface{}) {
+	formatSimulationLog(LogLevelWarning, message, fields...)
+}
+
+func formatSimulationError(message string, fields ...interface{}) {
+	formatSimulationLog(LogLevelError, message, fields...)
 }
 
 // highlightLogLevels highlights INFO, WARN, ERROR in log messages

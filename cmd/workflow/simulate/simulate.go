@@ -170,7 +170,7 @@ func (h *handler) ValidateInputs(inputs Inputs) error {
 	if err := runRPCHealthCheck(inputs.EVMClients); err != nil {
 		// we don't block execution, just show the error to the user
 		// because some RPCs in settings might not be used in workflow and some RPCs might have hiccups
-		formatWarningLog(fmt.Sprintf("some RPCs in setting is not functioning properly, please check: %v", err))
+		formatSimulationWarning(fmt.Sprintf("some RPCs in settings are not functioning properly, please check: %v", err))
 	}
 
 	h.validated = true
@@ -246,18 +246,8 @@ func run(
 	inputs Inputs,
 	verbosity bool,
 ) error {
-	logCfg := logger.Config{Level: getLevel(verbosity, zapcore.InfoLevel)}
-	baseLggr, err := logCfg.New()
-	if err != nil {
-		return fmt.Errorf("failed to create logger: %w", err)
-	}
-
+	// Create a minimal logger that discards output since we handle all logging through custom formatters
 	engineLogCfg := logger.Config{Level: zapcore.FatalLevel}
-
-	if inputs.EngineLogs {
-		engineLogCfg.Level = logCfg.Level
-	}
-
 	engineLog, err := engineLogCfg.New()
 	if err != nil {
 		return fmt.Errorf("failed to create engine logger: %w", err)
@@ -362,44 +352,44 @@ func run(
 
 		// Manual trigger execution
 		if triggerInfoAndBeforeStart.TriggerFunc == nil {
-			baseLggr.Errorw("Trigger function not initialized")
+			formatSimulationError("Trigger function not initialized")
 			os.Exit(1)
 		}
 		if triggerInfoAndBeforeStart.TriggerToRun == nil {
-			baseLggr.Errorw("Trigger to run not selected")
+			formatSimulationError("Trigger to run not selected")
 			os.Exit(1)
 		}
-		formatSimulationLog("Running trigger", "trigger", triggerInfoAndBeforeStart.TriggerToRun.GetId())
+		formatSimulationInfo("Running trigger", "trigger", triggerInfoAndBeforeStart.TriggerToRun.GetId())
 		err := triggerInfoAndBeforeStart.TriggerFunc()
 		if err != nil {
-			baseLggr.Errorw("Failed to run trigger", "trigger", triggerInfoAndBeforeStart.TriggerToRun.GetId(), "error", err)
+			formatSimulationError("Failed to run trigger", "trigger", triggerInfoAndBeforeStart.TriggerToRun.GetId(), "error", err)
 			os.Exit(1)
 		}
 
 		select {
 		case <-executionFinishedCh:
-			formatSimulationLog("Execution finished signal received")
+			formatSimulationInfo("Execution finished signal received")
 		case <-ctx.Done():
-			baseLggr.Infow("Received interrupt signal, stopping execution")
+			formatSimulationInfo("Received interrupt signal, stopping execution")
 		case <-time.After(WorkflowExecutionTimeout):
-			baseLggr.Infow("Timeout waiting for execution to finish")
+			formatSimulationWarning("Timeout waiting for execution to finish")
 		}
 	}
 	simulatorCleanup := func(ctx context.Context, cfg simulator.RunnerConfig, registry *capabilities.Registry, services []services.Service) {
 		for _, service := range services {
 			if service.Name() == "WorkflowEngine.WorkflowEngineV2" {
-				formatSimulationLog("Skipping WorkflowEngineV2")
+				formatSimulationInfo("Skipping WorkflowEngineV2")
 				continue
 			}
 
 			if err := service.Close(); err != nil {
-				baseLggr.Errorw("Failed to close service", "service", service.Name(), "error", err)
+				formatSimulationError("Failed to close service", "service", service.Name(), "error", err)
 			}
 		}
 
 		err = cleanupBeholder()
 		if err != nil {
-			baseLggr.Warnw("Failed to cleanup beholder", "error", err)
+			formatSimulationWarning("Failed to cleanup beholder", "error", err)
 		}
 	}
 	emptyHook := func(context.Context, simulator.RunnerConfig, *capabilities.Registry, []services.Service) {}
@@ -427,10 +417,10 @@ func run(
 		LifecycleHooks: v2.LifecycleHooks{
 			OnInitialized: func(err error) {
 				if err != nil {
-					baseLggr.Errorw("Failed to initialize simulator", "error", err)
+					formatSimulationError("Failed to initialize simulator", "error", err)
 					os.Exit(1)
 				}
-				formatSimulationLog("Simulator Initialized")
+				formatSimulationInfo("Simulator Initialized")
 				fmt.Println()
 				close(initializedCh)
 			},
