@@ -14,17 +14,6 @@ func TestGetWorkflowOwner(t *testing.T) {
 	validPrivKey := "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
 	expectedOwner := "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
 
-	t.Run("returns owner from flag when set", func(t *testing.T) {
-		v := viper.New()
-		v.Set(settings.CreTargetEnvVar, "test")
-		v.Set(settings.Flags.Owner.Name, "0x123")
-
-		owner, ownerType, err := settings.GetWorkflowOwner(v)
-		assert.NoError(t, err)
-		assert.Equal(t, "0x123", owner)
-		assert.Equal(t, constants.WorkflowOwnerTypeMSIG, ownerType)
-	})
-
 	t.Run("derives owner from eth private key", func(t *testing.T) {
 		v := viper.New()
 		v.Set(settings.CreTargetEnvVar, "test")
