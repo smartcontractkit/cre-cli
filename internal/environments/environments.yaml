@@ -23,10 +23,10 @@ ENVIRONMENTS:
 
   PRODUCTION:
 #    TODO update the following centralized variables.
-    CRE_CLI_AUTH_BASE: https://login-stage.cre.cldev.cloud
-    CRE_CLI_CLIENT_ID: pKF1lgw56KKUo5LCl8kEREtVY50YB2Gd
-    CRE_CLI_AUDIENCE: https://graphql.cre.stage.internal.cldev.sh/
-    CRE_CLI_GRAPHQL_URL: https://graphql-cre-stage.tailf8f749.ts.net/graphql
+    CRE_CLI_AUTH_BASE: https://login.chain.link/
+    CRE_CLI_CLIENT_ID: vMqPqJ3ApbeN8jNeA42Dn4UxbkfhQQkW
+    CRE_CLI_AUDIENCE: https://api.cre.chain.link/
+    CRE_CLI_GRAPHQL_URL: https://api.cre.chain.link/graphql
     CRE_VAULT_DON_GATEWAY_URL: https://cre-gateway-one-zone-a.main.stage.cldev.sh/
 
     CRE_CLI_WORKFLOW_REGISTRY_ADDRESS: "0x4ac54353fa4fa961afcc5ec4b118596d3305e7e5"
