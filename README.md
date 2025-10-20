@@ -1,3 +1,13 @@
+<div style="text-align:center" align="center">
+    <a href="https://chain.link" target="_blank">
+        <img src="https://raw.githubusercontent.com/smartcontractkit/chainlink/develop/docs/logo-chainlink-blue.svg" width="225" alt="Chainlink logo">
+    </a>
+
+[![License](https://img.shields.io/badge/license-MIT-blue)](https://github.com/smartcontractkit/cre-cli/blob/main/README.md)
+[![CRE Documentation](https://img.shields.io/static/v1?label=CRE&message=latest&color=blue)](https://chain.link/chainlink-runtime-environment)
+
+</div>
+
 # Chainlink Runtime Environment (CRE) - CLI Tool
 
 Note this README is for CRE developers only, if you are a CRE user, please ask Dev Services team for the user guide.
