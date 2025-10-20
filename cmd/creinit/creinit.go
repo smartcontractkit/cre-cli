@@ -55,7 +55,7 @@ var languageTemplates = []LanguageTemplate{
 		EntryPoint: ".",
 		Workflows: []WorkflowTemplate{
 			{Folder: "porExampleDev", Title: "Custom data feed: Updating on-chain data periodically using offchain API data", ID: 1},
-			{Folder: "blankTemplate", Title: "Boilerplate: A barebones template with just the essentials", ID: 2},
+			{Folder: "blankTemplate", Title: "Helloworld: A Golang Hello World example", ID: 2},
 		},
 	},
 	{
@@ -63,7 +63,7 @@ var languageTemplates = []LanguageTemplate{
 		Lang:       TemplateLangTS,
 		EntryPoint: "./main.ts",
 		Workflows: []WorkflowTemplate{
-			{Folder: "typescriptSimpleExample", Title: "Boilerplate: Typescript Hello World example for a simple workflow", ID: 3},
+			{Folder: "typescriptSimpleExample", Title: "Helloworld: Typescript Hello World example", ID: 3},
 			{Folder: "typescriptPorExampleDev", Title: "Custom data feed: Typescript updating on-chain data periodically using offchain API data", ID: 4},
 		},
 	},
