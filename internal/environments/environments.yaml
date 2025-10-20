@@ -22,9 +22,9 @@ ENVIRONMENTS:
     CRE_CLI_WORKFLOW_REGISTRY_CHAIN_EXPLORER_URL: "https://sepolia.etherscan.io"
 
   PRODUCTION:
-    CRE_CLI_AUTH_BASE: https://login.chain.link/
+    CRE_CLI_AUTH_BASE: https://login.chain.link
     CRE_CLI_CLIENT_ID: vMqPqJ3ApbeN8jNeA42Dn4UxbkfhQQkW
-    CRE_CLI_AUDIENCE: https://api.cre.chain.link/
+    CRE_CLI_AUDIENCE: https://api.cre.chain.link
     CRE_CLI_GRAPHQL_URL: https://api.cre.chain.link/graphql
     CRE_VAULT_DON_GATEWAY_URL: https://01.gateway.zone-a.cre.chain.link
 
