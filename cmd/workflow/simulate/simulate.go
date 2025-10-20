@@ -633,14 +633,6 @@ func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inp
 	}
 }
 
-// getLevel returns the default zapcore.Level unless verbosity flag is set by the user, then it sets it to DebugLevel
-func getLevel(verbosity bool, defaultLevel zapcore.Level) zapcore.Level {
-	if verbosity {
-		return zapcore.DebugLevel
-	}
-	return defaultLevel
-}
-
 // setupCustomBeholder sets up beholder with our custom telemetry writer
 func setupCustomBeholder(lggr logger.Logger, verbosity bool) error {
 	writer := &telemetryWriter{lggr: lggr, verbose: verbosity}
