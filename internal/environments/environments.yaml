@@ -22,12 +22,11 @@ ENVIRONMENTS:
     CRE_CLI_WORKFLOW_REGISTRY_CHAIN_EXPLORER_URL: "https://sepolia.etherscan.io"
 
   PRODUCTION:
-#    TODO update the following centralized variables.
     CRE_CLI_AUTH_BASE: https://login.chain.link/
     CRE_CLI_CLIENT_ID: vMqPqJ3ApbeN8jNeA42Dn4UxbkfhQQkW
     CRE_CLI_AUDIENCE: https://api.cre.chain.link/
     CRE_CLI_GRAPHQL_URL: https://api.cre.chain.link/graphql
-    CRE_VAULT_DON_GATEWAY_URL: https://cre-gateway-one-zone-a.main.stage.cldev.sh/
+    CRE_VAULT_DON_GATEWAY_URL: https://cre-gateway-one-zone-a.main.stage.cldev.sh/ # TODO update
 
     CRE_CLI_WORKFLOW_REGISTRY_ADDRESS: "0x4ac54353fa4fa961afcc5ec4b118596d3305e7e5"
     CRE_CLI_WORKFLOW_REGISTRY_CHAIN_NAME: "ethereum-mainnet"
