@@ -88,7 +88,6 @@ func RunSimulationHappyPath(t *testing.T, tc TestConfig, projectDir string) {
 			tc.GetProjectRootFlag(),
 			"--non-interactive",
 			"--trigger-index=0",
-			"-v",
 		}
 
 		cmd := exec.Command(CLIPath, args...)
@@ -107,7 +106,7 @@ func RunSimulationHappyPath(t *testing.T, tc TestConfig, projectDir string) {
 		out := StripANSI(stdout.String() + stderr.String())
 
 		require.Contains(t, out, "Workflow compiled", "expected workflow to compile.\nCLI OUTPUT:\n%s", out)
-		require.Contains(t, out, "Simulator Initialized", "expected workflow to initialize.\nCLI OUTPUT:\n%s", out)
+		require.Contains(t, out, "[SIMULATION] Simulator Initialized", "expected workflow to initialize.\nCLI OUTPUT:\n%s", out)
 		require.Contains(t, out, "Getting native balances", "expected workflow to read from balance reader.\nCLI OUTPUT:\n%s", out)
 		require.Contains(t, out, "fetching por", "expected http capability success.\nCLI OUTPUT:\n%s", out)
 		require.Contains(t, out, "totalSupply=", "expected ERC20 chain reader success.\nCLI OUTPUT:\n%s", out)

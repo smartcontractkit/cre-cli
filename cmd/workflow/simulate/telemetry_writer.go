@@ -432,6 +432,41 @@ func (w *telemetryWriter) mapWorkflowStatus(status string) string {
 	}
 }
 
+// formatSimulationLog formats simulation logs with consistent styling
+func formatSimulationLog(message string, fields ...interface{}) {
+	// Get current timestamp
+	timestamp := time.Now().Format("2006-01-02T15:04:05Z")
+
+	// Format fields if provided
+	formattedMessage := message
+	if len(fields) > 0 {
+		// Convert fields to key=value pairs
+		var fieldPairs []string
+		for i := 0; i < len(fields); i += 2 {
+			if i+1 < len(fields) {
+				fieldPairs = append(fieldPairs, fmt.Sprintf("%v=%v", fields[i], fields[i+1]))
+			}
+		}
+		if len(fieldPairs) > 0 {
+			formattedMessage = message + " " + strings.Join(fieldPairs, " ")
+		}
+	}
+
+	// Use the same color scheme as USER LOG
+	fmt.Printf("%s%s%s %s[SIMULATION]%s %s\n",
+		COLOR_BLUE, timestamp, COLOR_RESET, COLOR_BRIGHT_CYAN, COLOR_RESET, formattedMessage)
+}
+
+// formatWarningLog formats warning logs with orange color
+func formatWarningLog(message string) {
+	// Get current timestamp
+	timestamp := time.Now().Format("2006-01-02T15:04:05Z")
+
+	// Use orange color for warnings
+	fmt.Printf("%s%s%s %s[WARNING]%s %s\n",
+		COLOR_BLUE, timestamp, COLOR_RESET, COLOR_YELLOW, COLOR_RESET, message)
+}
+
 // highlightLogLevels highlights INFO, WARN, ERROR in log messages
 func highlightLogLevels(msg, levelColor string) string {
 	// Replace level keywords with colored versions
