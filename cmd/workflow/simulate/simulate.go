@@ -170,7 +170,7 @@ func (h *handler) ValidateInputs(inputs Inputs) error {
 	if err := runRPCHealthCheck(inputs.EVMClients); err != nil {
 		// we don't block execution, just show the error to the user
 		// because some RPCs in settings might not be used in workflow and some RPCs might have hiccups
-		h.log.Error().Msgf("some RPCs in setting is not functioning properly, please check: %v", err)
+		formatWarningLog(fmt.Sprintf("some RPCs in setting is not functioning properly, please check: %v", err))
 	}
 
 	h.validated = true
@@ -369,7 +369,7 @@ func run(
 			baseLggr.Errorw("Trigger to run not selected")
 			os.Exit(1)
 		}
-		baseLggr.Debugw("Running trigger", "trigger", triggerInfoAndBeforeStart.TriggerToRun.GetId())
+		formatSimulationLog("Running trigger", "trigger", triggerInfoAndBeforeStart.TriggerToRun.GetId())
 		err := triggerInfoAndBeforeStart.TriggerFunc()
 		if err != nil {
 			baseLggr.Errorw("Failed to run trigger", "trigger", triggerInfoAndBeforeStart.TriggerToRun.GetId(), "error", err)
@@ -378,7 +378,7 @@ func run(
 
 		select {
 		case <-executionFinishedCh:
-			baseLggr.Debugw("Execution finished signal received")
+			formatSimulationLog("Execution finished signal received")
 		case <-ctx.Done():
 			baseLggr.Infow("Received interrupt signal, stopping execution")
 		case <-time.After(WorkflowExecutionTimeout):
@@ -388,7 +388,7 @@ func run(
 	simulatorCleanup := func(ctx context.Context, cfg simulator.RunnerConfig, registry *capabilities.Registry, services []services.Service) {
 		for _, service := range services {
 			if service.Name() == "WorkflowEngine.WorkflowEngineV2" {
-				baseLggr.Debug("Skipping WorkflowEngineV2")
+				formatSimulationLog("Skipping WorkflowEngineV2")
 				continue
 			}
 
@@ -430,7 +430,7 @@ func run(
 					baseLggr.Errorw("Failed to initialize simulator", "error", err)
 					os.Exit(1)
 				}
-				baseLggr.Debugw("Simulator Initialized")
+				formatSimulationLog("Simulator Initialized")
 				fmt.Println()
 				close(initializedCh)
 			},
