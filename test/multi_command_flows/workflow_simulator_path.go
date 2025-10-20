@@ -88,6 +88,7 @@ func RunSimulationHappyPath(t *testing.T, tc TestConfig, projectDir string) {
 			tc.GetProjectRootFlag(),
 			"--non-interactive",
 			"--trigger-index=0",
+			"-v",
 		}
 
 		cmd := exec.Command(CLIPath, args...)
