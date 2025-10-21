@@ -36,6 +36,10 @@ func loadWorkflowSettings(logger *zerolog.Logger, v *viper.Viper, cmd *cobra.Com
 		return WorkflowSettings{}, err
 	}
 
+	if !v.IsSet(target) {
+		return WorkflowSettings{}, fmt.Errorf("target not found: %s", target)
+	}
+
 	getSetting := func(settingsKey string) string {
 		keyWithTarget := fmt.Sprintf("%s.%s", target, settingsKey)
 		if !v.IsSet(keyWithTarget) {
