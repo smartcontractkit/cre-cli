@@ -212,7 +212,7 @@ func (h *handler) Execute() error {
 		// Workflow artifacts deletion will be handled by a background cleanup process.
 	}
 	if len(errs) > 0 {
-		return fmt.Errorf("failed to delete some workflows: %v", errors.Join(errs...))
+		return fmt.Errorf("failed to delete some workflows: %w", errors.Join(errs...))
 	}
 	fmt.Println("Workflows deleted successfully.")
 	return nil
