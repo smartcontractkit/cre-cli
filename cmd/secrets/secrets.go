@@ -7,6 +7,7 @@ import (
 
 	"github.com/smartcontractkit/cre-cli/cmd/secrets/create"
 	"github.com/smartcontractkit/cre-cli/cmd/secrets/delete"
+	"github.com/smartcontractkit/cre-cli/cmd/secrets/execute"
 	"github.com/smartcontractkit/cre-cli/cmd/secrets/list"
 	"github.com/smartcontractkit/cre-cli/cmd/secrets/update"
 	"github.com/smartcontractkit/cre-cli/internal/constants"
@@ -19,8 +20,8 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	var secretsCmd = &cobra.Command{
 		Use:    "secrets",
 		Short:  "Handles secrets management",
-		Hidden: true,
-		Long:   `Create, update, delete secrets in Vault DON.`,
+		Hidden: false,
+		Long:   `Create, update, delete, list secrets in Vault DON.`,
 	}
 
 	// Persistent flag available to all subcommands.
@@ -35,6 +36,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	secretsCmd.AddCommand(update.New(runtimeContext))
 	secretsCmd.AddCommand(delete.New(runtimeContext))
 	secretsCmd.AddCommand(list.New(runtimeContext))
+	secretsCmd.AddCommand(execute.New(runtimeContext))
 
 	return secretsCmd
 }
