@@ -24,10 +24,10 @@ ENVIRONMENTS:
   PRODUCTION:
     CRE_CLI_AUTH_BASE: https://login.chain.link
     CRE_CLI_CLIENT_ID: vMqPqJ3ApbeN8jNeA42Dn4UxbkfhQQkW
-    CRE_CLI_AUDIENCE: https://api.cre.chain.link
+    CRE_CLI_AUDIENCE: https://api.cre.chain.link/
     CRE_CLI_GRAPHQL_URL: https://api.cre.chain.link/graphql
     CRE_VAULT_DON_GATEWAY_URL: https://01.gateway.zone-a.cre.chain.link
 
-    CRE_CLI_WORKFLOW_REGISTRY_ADDRESS: "0x4ac54353fa4fa961afcc5ec4b118596d3305e7e5"
+    CRE_CLI_WORKFLOW_REGISTRY_ADDRESS: "0x4Ac54353FA4Fa961AfcC5ec4B118596d3305E7e5"
     CRE_CLI_WORKFLOW_REGISTRY_CHAIN_NAME: "ethereum-mainnet"
     CRE_CLI_WORKFLOW_REGISTRY_CHAIN_EXPLORER_URL: "https://etherscan.io"
