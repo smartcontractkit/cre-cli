@@ -21,7 +21,7 @@ require (
 	github.com/rs/zerolog v1.33.0
 	github.com/smartcontractkit/chain-selectors v1.0.73
 	github.com/smartcontractkit/chainlink-common v0.9.6-0.20251013174613-b1fd7ca40326
-	github.com/smartcontractkit/chainlink-evm/gethwrappers v0.0.0-20251008202116-f62843574a48
+	github.com/smartcontractkit/chainlink-evm/gethwrappers v0.0.0-20251015115541-729ba0b2b1c1
 	github.com/smartcontractkit/chainlink-protos/cre/go v0.0.0-20251015031344-a653ed4c82a0
 	github.com/smartcontractkit/chainlink-protos/workflows/go v0.0.0-20251015031344-a653ed4c82a0
 	github.com/smartcontractkit/chainlink-testing-framework/seth v1.51.2
