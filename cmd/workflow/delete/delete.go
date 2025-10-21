@@ -2,6 +2,7 @@ package delete
 
 import (
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -173,7 +174,7 @@ func (h *handler) Execute() error {
 	}
 
 	fmt.Printf("Deleting %d workflow(s)...\n", len(allWorkflows))
-	var errors []error
+	var errs []error
 	for _, wf := range allWorkflows {
 		txOut, err := h.wrc.DeleteWorkflow(wf.WorkflowId)
 		if err != nil {
@@ -181,7 +182,7 @@ func (h *handler) Execute() error {
 				Err(err).
 				Str("workflowId", hex.EncodeToString(wf.WorkflowId[:])).
 				Msg("Failed to delete workflow")
-			errors = append(errors, err)
+			errs = append(errs, err)
 			continue
 		}
 		switch txOut.Type {
@@ -210,8 +211,8 @@ func (h *handler) Execute() error {
 
 		// Workflow artifacts deletion will be handled by a background cleanup process.
 	}
-	if len(errors) > 0 {
-		return fmt.Errorf("failed to delete some workflows: %v", errors)
+	if len(errs) > 0 {
+		return fmt.Errorf("failed to delete some workflows: %v", errors.Join(errs...))
 	}
 	fmt.Println("Workflows deleted successfully.")
 	return nil
