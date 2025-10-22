@@ -13,9 +13,7 @@ cre workflow deploy <workflow-folder-path> [optional flags]
 ### Examples
 
 ```
-
-		cre workflow deploy ./my-workflow
-		
+cre workflow deploy ./my-workflow
 ```
 
 ### Options

@@ -13,9 +13,7 @@ cre workflow activate <workflow-folder-path> [optional flags]
 ### Examples
 
 ```
-
-		cre workflow activate ./my-workflow
-		
+cre workflow activate ./my-workflow
 ```
 
 ### Options

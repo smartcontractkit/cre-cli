@@ -13,9 +13,7 @@ cre workflow simulate <workflow-folder-path> [optional flags]
 ### Examples
 
 ```
-
-		cre workflow simulate ./my-workflow
-		
+cre workflow simulate ./my-workflow
 ```
 
 ### Options

@@ -13,9 +13,7 @@ cre workflow pause <workflow-folder-path> [optional flags]
 ### Examples
 
 ```
-
-		cre workflow pause ./my-workflow
-		
+cre workflow pause ./my-workflow
 ```
 
 ### Options

@@ -13,9 +13,7 @@ cre workflow delete <workflow-folder-path> [optional flags]
 ### Examples
 
 ```
-
-		cre workflow delete ./my-workflow
-		
+cre workflow delete ./my-workflow
 ```
 
 ### Options

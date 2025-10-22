@@ -139,36 +139,83 @@ func newRootCommand() *cobra.Command {
 	rootCmd.SetHelpTemplate(`{{with (or .Long .Short)}}{{.}}{{end}}
 
 Usage:
+{{- if .Runnable}}
+  {{.UseLine}}
+{{- else if .HasAvailableSubCommands}}
   {{.CommandPath}} [command]
+{{- end}}
+
+{{- /* Only show Available Commands if there are any */}}
+{{- if .HasAvailableSubCommands}}
 
 Available Commands:
+{{- $groupsUsed := false -}}
 {{- $firstGroup := true -}}
+
 {{- range $grp := .Groups}}
-{{- $has := false}}
-{{- range $.Commands}}{{if (and (not .Hidden) (.IsAvailableCommand) (eq .GroupID $grp.ID))}}{{- $has = true}}{{end}}{{end}}
-{{- if $has}}
-{{- if $firstGroup}}
-{{"\n"}}{{- $firstGroup = false -}}
-{{end}}
+  {{- $has := false -}}
+  {{- range $.Commands}}
+    {{- if (and (not .Hidden) (.IsAvailableCommand) (eq .GroupID $grp.ID))}}{{- $has = true}}{{- end}}
+  {{- end}}
+  {{- if $has}}
+    {{- $groupsUsed = true -}}
+    {{- if $firstGroup}}{{- $firstGroup = false -}}{{end}}
 {{printf "%s:" $grp.Title}}
-{{- range $.Commands}}{{if (and (not .Hidden) (.IsAvailableCommand) (eq .GroupID $grp.ID))}}
+    {{- range $.Commands}}
+      {{- if (and (not .Hidden) (.IsAvailableCommand) (eq .GroupID $grp.ID))}}
   {{rpad .Name .NamePadding}}  {{.Short}}
-{{- end}}{{end}}
-{{end}}
+      {{- end}}
+    {{- end}}
+  {{- end}}
 {{- end}}
 
-{{- /* Ungrouped commands (if any) */}}
-{{- if hasUngrouped .}}
+{{- if $groupsUsed }}
+  {{- /* Groups are in use; show ungrouped as "Other" if any */}}
+  {{- if hasUngrouped .}}
 Other:
-{{- range .Commands}}{{if (and (not .Hidden) (.IsAvailableCommand) (eq .GroupID ""))}}
+    {{- range .Commands}}
+      {{- if (and (not .Hidden) (.IsAvailableCommand) (eq .GroupID ""))}}
   {{rpad .Name .NamePadding}}  {{.Short}}
-{{- end}}{{end}}
-{{- end}}
+      {{- end}}
+    {{- end}}
+  {{- end}}
+{{- else }}
+  {{- /* No groups at this level; show a flat list with no "Other" header */}}
+  {{- range .Commands}}
+    {{- if (and (not .Hidden) (.IsAvailableCommand))}}
+  {{rpad .Name .NamePadding}}  {{.Short}}
+    {{- end}}
+  {{- end}}
+{{- end }}
+{{- end }}
+
+{{- /* Examples (if any) */}}
+{{- if .HasExample}}
+
+Examples:
+{{.Example}}
+{{- end }}
+
+{{- /* Flags (local) */}}
+{{- $local := (.LocalFlags.FlagUsagesWrapped 100 | trimTrailingWhitespaces) -}}
+{{- if $local }}
 
 Flags:
-{{.LocalFlags.FlagUsagesWrapped 100 | trimTrailingWhitespaces}}
+{{$local}}
+{{- end }}
+
+{{- /* Global / inherited flags */}}
+{{- $inherited := (.InheritedFlags.FlagUsagesWrapped 100 | trimTrailingWhitespaces) -}}
+{{- if $inherited }}
+
+Global Flags:
+{{$inherited}}
+{{- end }}
+
+{{- if .HasAvailableSubCommands }}
 
 Use "{{.CommandPath}} [command] --help" for more information about a command.
+{{- end }}
 
 💡 Tip: New here? Run:
   cre init
@@ -223,6 +270,7 @@ Use "{{.CommandPath}} [command] --help" for more information about a command.
 	rootCmd.AddGroup(&cobra.Group{ID: "getting-started", Title: "Getting Started"})
 	rootCmd.AddGroup(&cobra.Group{ID: "account", Title: "Account"})
 	rootCmd.AddGroup(&cobra.Group{ID: "workflow", Title: "Workflow"})
+	rootCmd.AddGroup(&cobra.Group{ID: "secret", Title: "Secret"})
 
 	initCmd.GroupID = "getting-started"
 
@@ -231,9 +279,8 @@ Use "{{.CommandPath}} [command] --help" for more information about a command.
 	accountCmd.GroupID = "account"
 	whoamiCmd.GroupID = "account"
 
-	secretsCmd.GroupID = "workflow"
+	secretsCmd.GroupID = "secret"
 	workflowCmd.GroupID = "workflow"
-	genBindingsCmd.GroupID = "workflow"
 
 	rootCmd.AddCommand(
 		initCmd,
