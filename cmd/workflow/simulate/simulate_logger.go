@@ -243,7 +243,7 @@ func FormatStepRef(stepRef string) string {
 // CleanLogMessage removes structured log patterns from messages
 func CleanLogMessage(msg string) string {
 	// Remove structured log patterns from the message
-	// Common patterns: time=..., timestamp=..., ts=..., level=..., msg=...
+	// Common patterns: time=..., timestamp=..., ts=..., level=...
 	msg = strings.TrimSpace(msg)
 
 	// Remove time=... patterns
@@ -261,14 +261,6 @@ func CleanLogMessage(msg string) string {
 	// Remove level=... patterns
 	levelPattern := regexp.MustCompile(`level=\S+\s*`)
 	msg = levelPattern.ReplaceAllString(msg, "")
-
-	// Remove msg="..." patterns (with quotes)
-	msgPattern := regexp.MustCompile(`msg="[^"]*"\s*`)
-	msg = msgPattern.ReplaceAllString(msg, "")
-
-	// Remove msg=... patterns (without quotes)
-	msgPatternNoQuotes := regexp.MustCompile(`msg=\S+\s*`)
-	msg = msgPatternNoQuotes.ReplaceAllString(msg, "")
 
 	return strings.TrimSpace(msg)
 }
