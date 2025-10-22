@@ -20,12 +20,12 @@ require (
 	github.com/manifoldco/promptui v0.9.0
 	github.com/rs/zerolog v1.33.0
 	github.com/smartcontractkit/chain-selectors v1.0.75
-	github.com/smartcontractkit/chainlink-common v0.9.6-0.20251020192327-c433c5906b14
-	github.com/smartcontractkit/chainlink-evm/gethwrappers v0.0.0-20251015115541-729ba0b2b1c1
+	github.com/smartcontractkit/chainlink-common v0.9.6-0.20251022080338-3fe067fa640a
+	github.com/smartcontractkit/chainlink-evm/gethwrappers v0.0.0-20251022075638-49d961001d1b
 	github.com/smartcontractkit/chainlink-protos/cre/go v0.0.0-20251015031344-a653ed4c82a0
 	github.com/smartcontractkit/chainlink-protos/workflows/go v0.0.0-20251020004840-4638e4262066
 	github.com/smartcontractkit/chainlink-testing-framework/seth v1.51.3
-	github.com/smartcontractkit/chainlink/v2 8f5976d12e2078c084efc8cf9ee3709a62438604
+	github.com/smartcontractkit/chainlink/v2 v2.29.1-cre-beta.0.0.20251022185825-8f5976d12e20
 	github.com/smartcontractkit/cre-sdk-go v0.9.1-0.20251014224816-6630913617a9
 	github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm v0.9.1-0.20251014224816-6630913617a9
 	github.com/smartcontractkit/tdh2/go/tdh2 v0.0.0-20250624150019-e49f7e125e6b
@@ -286,11 +286,11 @@ require (
 	github.com/smartcontractkit/chainlink-ccip/chains/solana/gobindings v0.0.0-20250912190424-fd2e35d7deb5 // indirect
 	github.com/smartcontractkit/chainlink-common/pkg/chipingress v0.0.9-0.20251020192327-c433c5906b14 // indirect
 	github.com/smartcontractkit/chainlink-data-streams v0.1.6 // indirect
-	github.com/smartcontractkit/chainlink-evm v0.3.4-0.20251020152820-5fb041bf92b7 // indirect
+	github.com/smartcontractkit/chainlink-evm v0.3.4-0.20251022075638-49d961001d1b // indirect
 	github.com/smartcontractkit/chainlink-framework/capabilities v0.0.0-20250818175541-3389ac08a563 // indirect
-	github.com/smartcontractkit/chainlink-framework/chains v0.0.0-20250717121125-2350c82883e2 // indirect
+	github.com/smartcontractkit/chainlink-framework/chains v0.0.0-20251021173435-e86785845942 // indirect
 	github.com/smartcontractkit/chainlink-framework/metrics v0.0.0-20251020150604-8ab84f7bad1a // indirect
-	github.com/smartcontractkit/chainlink-framework/multinode v0.0.0-20250729142306-508e798f6a5d // indirect
+	github.com/smartcontractkit/chainlink-framework/multinode v0.0.0-20251021173435-e86785845942 // indirect
 	github.com/smartcontractkit/chainlink-protos/billing/go v0.0.0-20251020004840-4638e4262066 // indirect
 	github.com/smartcontractkit/chainlink-protos/linking-service/go v0.0.0-20251002192024-d2ad9222409b // indirect
 	github.com/smartcontractkit/chainlink-protos/storage-service v0.3.0 // indirect
