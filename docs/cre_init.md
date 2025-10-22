@@ -1,10 +1,13 @@
 ## cre init
 
-Initialize a new workflow project or add a workflow to an existing one
+Initialize a new cre project (recommended starting point)
 
 ### Synopsis
 
-Initialize or extend a workflow project by setting up core files, gathering any missing details, and scaffolding the chosen template.
+Initialize a new CRE project or add a workflow to an existing one.
+
+This sets up the project structure, configuration, and starter files so you can
+build, test, and deploy workflows quickly.
 
 ```
 cre init [optional flags]
@@ -24,8 +27,8 @@ cre init [optional flags]
 ```
   -e, --env string            Path to .env file which contains sensitive info (default ".env")
   -R, --project-root string   Path to the project root
-  -T, --target string         Set the target settings
-  -v, --verbose               Print DEBUG logs
+  -T, --target string         Use target settings from YAML config
+  -v, --verbose               Run command in VERBOSE mode
 ```
 
 ### SEE ALSO

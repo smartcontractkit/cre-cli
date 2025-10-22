@@ -24,9 +24,9 @@ cre secrets create my-secrets.yaml
 ```
   -e, --env string            Path to .env file which contains sensitive info (default ".env")
   -R, --project-root string   Path to the project root
-  -T, --target string         Set the target settings
+  -T, --target string         Use target settings from YAML config
       --timeout duration      Timeout for secrets operations (e.g. 30m, 2h, 48h). (default 48h0m0s)
-  -v, --verbose               Print DEBUG logs
+  -v, --verbose               Run command in VERBOSE mode
 ```
 
 ### SEE ALSO

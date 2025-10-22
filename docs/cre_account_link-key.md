@@ -24,8 +24,8 @@ cre account link-key [optional flags]
 ```
   -e, --env string            Path to .env file which contains sensitive info (default ".env")
   -R, --project-root string   Path to the project root
-  -T, --target string         Set the target settings
-  -v, --verbose               Print DEBUG logs
+  -T, --target string         Use target settings from YAML config
+  -v, --verbose               Run command in VERBOSE mode
 ```
 
 ### SEE ALSO
