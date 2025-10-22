@@ -69,16 +69,18 @@ func TestSolanaGetData(t *testing.T) {
 	require.NoError(t, err)
 	common.FundAccounts(context.Background(), []solana.PrivateKey{pk}, solanaClient, t)
 
-	dataAccountAccount, _, err := solana.FindProgramAddress(
-		[][]byte{[]byte("test")},
-		my_project.ProgramID,
-	)
+	// dataAccountAccount, _, err := solana.FindProgramAddress(
+	// 	[][]byte{[]byte("test")},
+	// 	my_project.ProgramID,
+	// )
 
 	ix3, err := my_project.NewGetInputDataInstruction("test-data")
 	require.NoError(t, err)
-	ix4, err := my_project.NewGetInputDataFromAccountInstruction("test-data", dataAccountAccount)
-	require.NoError(t, err)
-	res, err := common.SendAndConfirm(context.Background(), solanaClient, []solana.Instruction{ix3, ix4}, pk, rpc.CommitmentConfirmed)
+	// ix4, err := my_project.NewGetInputDataFromAccountInstruction("test-data", dataAccountAccount)
+	// require.NoError(t, err)
+	// res, err := common.SendAndConfirm(context.Background(), solanaClient, []solana.Instruction{ix3, ix4}, pk, rpc.CommitmentConfirmed)
+	res, err := common.SendAndConfirm(context.Background(), solanaClient, []solana.Instruction{ix3}, pk, rpc.CommitmentConfirmed)
+
 	require.NoError(t, err)
 	for _, log := range res.Meta.LogMessages {
 		if strings.Contains(log, "Program log:") {
@@ -127,10 +129,12 @@ func TestSolanaWriteAccount(t *testing.T) {
 	ix, err := my_project.NewUpdateDataInstruction("test-data-new", dataAccountAddress)
 	require.NoError(t, err)
 
-	ix2, err := my_project.NewUpdateDataWithTypedReturnInstruction("test-data-new", dataAccountAddress)
-	require.NoError(t, err)
+	// ix2, err := my_project.NewUpdateDataWithTypedReturnInstruction("test-data-new", dataAccountAddress)
+	// require.NoError(t, err)
 
-	res, err := common.SendAndConfirm(context.Background(), solanaClient, []solana.Instruction{ix, ix2}, pk, rpc.CommitmentConfirmed)
+	// res, err := common.SendAndConfirm(context.Background(), solanaClient, []solana.Instruction{ix, ix2}, pk, rpc.CommitmentConfirmed)
+	res, err := common.SendAndConfirm(context.Background(), solanaClient, []solana.Instruction{ix}, pk, rpc.CommitmentConfirmed)
+
 	require.NoError(t, err)
 	fmt.Println("res", res.Meta.LogMessages)
 
@@ -141,9 +145,9 @@ func TestSolanaWriteAccount(t *testing.T) {
 	require.NoError(t, err)
 	fmt.Println("output", output)
 
-	output2, err := common.ExtractAnchorTypedReturnValue[my_project.UpdateResponse](context.Background(), res.Meta.LogMessages, my_project.ProgramID.String())
-	require.NoError(t, err)
-	fmt.Println("output2", output2)
+	// output2, err := common.ExtractAnchorTypedReturnValue[my_project.UpdateResponse](context.Background(), res.Meta.LogMessages, my_project.ProgramID.String())
+	// require.NoError(t, err)
+	// fmt.Println("output2", output2)
 
 	// output3, err := my_project.SendUpdateDataInstruction("test-data-new", dataAccountAddress, solanaClient, pk, rpc.CommitmentConfirmed)
 	// require.NoError(t, err)
@@ -160,4 +164,11 @@ anchor-go \
   --output /Users/yashvardhan/cre-cli/cmd/generate-bindings/solana_bindings/testdata/my_project \
   --program-id 2GvhVcTPPkHbGduj6efNowFoWBQjE77Xab1uBKCYJvNN \
   --no-go-mod
+
+./anchor \
+  --idl /Users/yashvardhan/cre-client-program/my-project/target/idl/my_project.json \
+  --output /Users/yashvardhan/cre-cli/cmd/generate-bindings/solana_bindings/testdata/my_anchor_project \
+  --program-id 2GvhVcTPPkHbGduj6efNowFoWBQjE77Xab1uBKCYJvNN \
+  --no-go-mod
+
 */

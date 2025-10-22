@@ -9,6 +9,9 @@ import (
 	errors "github.com/gagliardetto/anchor-go/errors"
 	binary "github.com/gagliardetto/binary"
 	solanago "github.com/gagliardetto/solana-go"
+	sdk "github.com/smartcontractkit/chainlink-protos/cre/go/sdk"
+	solana "github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana_bindings/cre-sdk-go/capabilities/blockchain/solana"
+	cre "github.com/smartcontractkit/cre-sdk-go/cre"
 )
 
 // Builds a "get_input_data" instruction.
@@ -38,6 +41,31 @@ func NewGetInputDataInstruction(
 		accounts__,
 		buf__.Bytes(),
 	), nil
+}
+func WriteReportFromGetInputDataInstruction(
+	runtime cre.Runtime,
+
+	inputParam string,
+) cre.Promise[*solana.WriteReportReply] {
+	ix, _ := NewGetInputDataInstruction(inputParam)
+
+	data, err := ix.Data()
+	if err != nil {
+		return cre.PromiseFromResult[*solana.WriteReportReply](nil, err)
+	}
+	promise := runtime.GenerateReport(&sdk.ReportRequest{
+		EncodedPayload: data,
+		EncoderName:    "solana",
+		HashingAlgo:    "sha256",
+		SigningAlgo:    "ed25519",
+	})
+
+	return cre.ThenPromise(promise, func(report *cre.Report) cre.Promise[*solana.WriteReportReply] {
+		return c.client.WriteReport(runtime, &solana.WriteCreReportRequest{
+			Receiver: ProgramID.Bytes(),
+			Report:   report,
+		})
+	})
 }
 
 // Builds a "initialize" instruction.
@@ -84,6 +112,37 @@ func NewInitializeInstruction(
 		buf__.Bytes(),
 	), nil
 }
+func WriteReportFromInitializeInstruction(
+	runtime cre.Runtime,
+
+	// Params:
+	inputParam string,
+
+	// Accounts:
+	dataAccountAccount solanago.PublicKey,
+	userAccount solanago.PublicKey,
+	systemProgramAccount solanago.PublicKey,
+) cre.Promise[*solana.WriteReportReply] {
+	ix, _ := NewInitializeInstruction(inputParam, dataAccountAccount, userAccount, systemProgramAccount)
+
+	data, err := ix.Data()
+	if err != nil {
+		return cre.PromiseFromResult[*solana.WriteReportReply](nil, err)
+	}
+	promise := runtime.GenerateReport(&sdk.ReportRequest{
+		EncodedPayload: data,
+		EncoderName:    "solana",
+		HashingAlgo:    "sha256",
+		SigningAlgo:    "ed25519",
+	})
+
+	return cre.ThenPromise(promise, func(report *cre.Report) cre.Promise[*solana.WriteReportReply] {
+		return c.client.WriteReport(runtime, &solana.WriteCreReportRequest{
+			Receiver: ProgramID.Bytes(),
+			Report:   report,
+		})
+	})
+}
 
 // Builds a "log_access" instruction.
 func NewLogAccessInstruction(
@@ -124,6 +183,35 @@ func NewLogAccessInstruction(
 		buf__.Bytes(),
 	), nil
 }
+func WriteReportFromLogAccessInstruction(
+	runtime cre.Runtime,
+
+	// Params:
+	messageParam string,
+
+	// Accounts:
+	userAccount solanago.PublicKey,
+) cre.Promise[*solana.WriteReportReply] {
+	ix, _ := NewLogAccessInstruction(messageParam, userAccount)
+
+	data, err := ix.Data()
+	if err != nil {
+		return cre.PromiseFromResult[*solana.WriteReportReply](nil, err)
+	}
+	promise := runtime.GenerateReport(&sdk.ReportRequest{
+		EncodedPayload: data,
+		EncoderName:    "solana",
+		HashingAlgo:    "sha256",
+		SigningAlgo:    "ed25519",
+	})
+
+	return cre.ThenPromise(promise, func(report *cre.Report) cre.Promise[*solana.WriteReportReply] {
+		return c.client.WriteReport(runtime, &solana.WriteCreReportRequest{
+			Receiver: ProgramID.Bytes(),
+			Report:   report,
+		})
+	})
+}
 
 // Builds a "update_data" instruction.
 func NewUpdateDataInstruction(
@@ -162,6 +250,35 @@ func NewUpdateDataInstruction(
 		accounts__,
 		buf__.Bytes(),
 	), nil
+}
+func WriteReportFromUpdateDataInstruction(
+	runtime cre.Runtime,
+
+	// Params:
+	newDataParam string,
+
+	// Accounts:
+	dataAccountAccount solanago.PublicKey,
+) cre.Promise[*solana.WriteReportReply] {
+	ix, _ := NewUpdateDataInstruction(newDataParam, dataAccountAccount)
+
+	data, err := ix.Data()
+	if err != nil {
+		return cre.PromiseFromResult[*solana.WriteReportReply](nil, err)
+	}
+	promise := runtime.GenerateReport(&sdk.ReportRequest{
+		EncodedPayload: data,
+		EncoderName:    "solana",
+		HashingAlgo:    "sha256",
+		SigningAlgo:    "ed25519",
+	})
+
+	return cre.ThenPromise(promise, func(report *cre.Report) cre.Promise[*solana.WriteReportReply] {
+		return c.client.WriteReport(runtime, &solana.WriteCreReportRequest{
+			Receiver: ProgramID.Bytes(),
+			Report:   report,
+		})
+	})
 }
 
 type GetInputDataInstruction struct {

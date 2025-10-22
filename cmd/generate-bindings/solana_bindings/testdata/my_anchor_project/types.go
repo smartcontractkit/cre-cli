@@ -7,9 +7,16 @@ import (
 	"bytes"
 	"fmt"
 	errors "github.com/gagliardetto/anchor-go/errors"
+	idl "github.com/gagliardetto/anchor-go/idl"
 	binary "github.com/gagliardetto/binary"
 	solanago "github.com/gagliardetto/solana-go"
+	solana "github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana_bindings/cre-sdk-go/capabilities/blockchain/solana"
 )
+
+type MyProject struct {
+	IDL    *idl.Idl
+	client *solana.Client
+}
 
 type AccessLogged struct {
 	Caller  solanago.PublicKey `json:"caller"`
