@@ -144,11 +144,10 @@ func NewSethClientWithSimulated(
 		// if full flexibility is not needed we create a client with reasonable defaults
 		// if you need to further tweak them, please refer to https://github.com/smartcontractkit/chainlink-testing-framework/blob/main/seth/README.md
 		sethClientBuilder = seth.NewClientBuilder().
-			WithProtections(true, false, seth.MustMakeDuration(1*time.Minute)).
-			// Fast priority will add a 20% buffer on top of what the node suggests
-			// we will use last 20 block to estimate block congestion and further bump gas price suggested by the node
-			// we retry 10 times if gas estimation RPC calls fail
-			WithGasPriceEstimations(true, 20, seth.Priority_Standard, 1)
+			WithProtections(false, false, seth.MustMakeDuration(1*time.Minute)).
+			// Auto priority will use what the blockchain node suggests
+			// estimationBlocks and attemptCount can be disregarded for Auto priority
+			WithGasPriceEstimations(false, 20, seth.Priority_Auto, 1)
 		if rpc != "" {
 			sethClientBuilder.WithRpcUrl(rpc)
 		} else {
