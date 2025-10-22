@@ -28,7 +28,7 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/beholder"
 	"github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/chain-capabilities/evm"
 	httptypedapi "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/triggers/http"
-	chainlinklogger "github.com/smartcontractkit/chainlink-common/pkg/logger"
+	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	"github.com/smartcontractkit/chainlink-common/pkg/services"
 	pb "github.com/smartcontractkit/chainlink-protos/cre/go/sdk"
 	"github.com/smartcontractkit/chainlink-protos/cre/go/values"
@@ -246,13 +246,13 @@ func run(
 	inputs Inputs,
 	verbosity bool,
 ) error {
-	// Create simulation logger for formatted output
+	logCfg := logger.Config{Level: getLevel(verbosity, zapcore.InfoLevel)}
 	simLogger := NewSimulationLogger(verbosity)
 
-	engineLogCfg := chainlinklogger.Config{Level: zapcore.FatalLevel}
+	engineLogCfg := logger.Config{Level: zapcore.FatalLevel}
 
 	if inputs.EngineLogs {
-		engineLogCfg.Level = getLevel(verbosity, zapcore.InfoLevel)
+		engineLogCfg.Level = logCfg.Level
 	}
 
 	engineLog, err := engineLogCfg.New()
@@ -266,7 +266,7 @@ func run(
 
 	var triggerCaps *ManualTriggers
 	simulatorInitialize := func(ctx context.Context, cfg simulator.RunnerConfig) (*capabilities.Registry, []services.Service) {
-		lggr := chainlinklogger.Sugared(cfg.Lggr)
+		lggr := logger.Sugared(cfg.Lggr)
 		// Create the registry and fake capabilities with specific loggers
 		registryLggr := lggr.Named("Registry")
 		registry := capabilities.NewRegistry(registryLggr)
@@ -650,7 +650,7 @@ func getLevel(verbosity bool, defaultLevel zapcore.Level) zapcore.Level {
 }
 
 // setupCustomBeholder sets up beholder with our custom telemetry writer
-func setupCustomBeholder(lggr chainlinklogger.Logger, verbosity bool, simLogger *SimulationLogger) error {
+func setupCustomBeholder(lggr logger.Logger, verbosity bool, simLogger *SimulationLogger) error {
 	writer := &telemetryWriter{lggr: lggr, verbose: verbosity, simLogger: simLogger}
 
 	client, err := beholder.NewWriterClient(writer)
