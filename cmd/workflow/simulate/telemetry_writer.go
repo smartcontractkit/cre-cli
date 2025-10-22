@@ -13,18 +13,6 @@ import (
 	pb "github.com/smartcontractkit/chainlink-protos/workflows/go/events"
 )
 
-// Color constants for consistent styling
-const (
-	COLOR_RESET       = "\033[0m"
-	COLOR_RED         = "\033[91m" // Bright Red
-	COLOR_GREEN       = "\033[32m" // Green
-	COLOR_YELLOW      = "\033[33m" // Yellow
-	COLOR_BLUE        = "\033[34m" // Blue
-	COLOR_MAGENTA     = "\033[35m" // Magenta
-	COLOR_CYAN        = "\033[36m" // Cyan
-	COLOR_BRIGHT_CYAN = "\033[96m" // Bright Cyan
-)
-
 // entity types for clarity and organization
 const (
 	entityUserLogs           = "workflows.v1.UserLogs"
@@ -39,6 +27,7 @@ type telemetryWriter struct {
 	lggr                 logger.Logger
 	verbose              bool
 	failureEventReceived bool
+	simLogger            *SimulationLogger
 }
 
 // TelemetryLog represents the JSON structure of telemetry logs from beholder
@@ -197,31 +186,15 @@ func (w *telemetryWriter) handleWorkflowEvent(telLog TelemetryLog, eventType str
 				w.lggr.Errorf("Failed to unmarshal workflow started event: %v", err)
 				return
 			}
-			timestamp := formatTimestamp(workflowEvent.Timestamp)
-			fmt.Printf("%s%s%s %s[WORKFLOW]%s WorkflowExecutionStarted\n",
-				COLOR_BLUE, timestamp, COLOR_RESET, COLOR_MAGENTA, COLOR_RESET)
+			timestamp := FormatTimestamp(workflowEvent.Timestamp)
+			w.simLogger.PrintTimestampedLog(timestamp, "WORKFLOW", "WorkflowExecutionStarted", ColorMagenta)
+
 			// Display trigger information
 			if workflowEvent.TriggerID != "" {
 				fmt.Printf("  TriggerID: %s\n", workflowEvent.TriggerID)
 			}
 			// Display workflow metadata if available
-			if workflowEvent.M != nil {
-				if workflowEvent.M.WorkflowName != "" {
-					fmt.Printf("  WorkflowName: %s\n", workflowEvent.M.WorkflowName)
-				}
-				if workflowEvent.M.WorkflowID != "" {
-					fmt.Printf("  WorkflowID: %s\n", workflowEvent.M.WorkflowID)
-				}
-				if workflowEvent.M.WorkflowExecutionID != "" {
-					fmt.Printf("  ExecutionID: %s\n", workflowEvent.M.WorkflowExecutionID)
-				}
-				if workflowEvent.M.WorkflowOwner != "" {
-					fmt.Printf("  WorkflowOwner: %s\n", workflowEvent.M.WorkflowOwner)
-				}
-				if workflowEvent.M.Version != "" {
-					fmt.Printf("  Version: %s\n", workflowEvent.M.Version)
-				}
-			}
+			w.simLogger.PrintWorkflowMetadata(workflowEvent.M)
 		} else {
 			// Handle finished event
 			var finishedEvent pb.WorkflowExecutionFinished
@@ -229,29 +202,12 @@ func (w *telemetryWriter) handleWorkflowEvent(telLog TelemetryLog, eventType str
 				w.lggr.Errorf("Failed to unmarshal workflow finished event: %v", err)
 				return
 			}
-			timestamp := formatTimestamp(finishedEvent.Timestamp)
+			timestamp := FormatTimestamp(finishedEvent.Timestamp)
 			status := w.mapWorkflowStatus(finishedEvent.Status)
-			color := getColor(status)
-			fmt.Printf("%s%s%s %s[WORKFLOW]%s WorkflowExecutionFinished - Status: %s%s%s\n",
-				COLOR_BLUE, timestamp, COLOR_RESET, COLOR_MAGENTA, COLOR_RESET, color, status, COLOR_RESET)
+			w.simLogger.PrintTimestampedLogWithStatus(timestamp, "WORKFLOW", "WorkflowExecutionFinished - Status: ", status)
+
 			// Display additional workflow metadata if available
-			if finishedEvent.M != nil {
-				if finishedEvent.M.WorkflowName != "" {
-					fmt.Printf("  WorkflowName: %s\n", finishedEvent.M.WorkflowName)
-				}
-				if finishedEvent.M.WorkflowID != "" {
-					fmt.Printf("  WorkflowID: %s\n", finishedEvent.M.WorkflowID)
-				}
-				if finishedEvent.M.WorkflowExecutionID != "" {
-					fmt.Printf("  ExecutionID: %s\n", finishedEvent.M.WorkflowExecutionID)
-				}
-				if finishedEvent.M.WorkflowOwner != "" {
-					fmt.Printf("  WorkflowOwner: %s\n", finishedEvent.M.WorkflowOwner)
-				}
-				if finishedEvent.M.Version != "" {
-					fmt.Printf("  Version: %s\n", finishedEvent.M.Version)
-				}
-			}
+			w.simLogger.PrintWorkflowMetadata(finishedEvent.M)
 		}
 	}
 }
@@ -272,11 +228,10 @@ func (w *telemetryWriter) handleCapabilityEvent(telLog TelemetryLog, eventType s
 				w.lggr.Errorf("Failed to unmarshal capability started event: %v", err)
 				return
 			}
-			timestamp := formatTimestamp(capEvent.Timestamp)
-			capability := formatCapability(capEvent.CapabilityID)
-			stepRef := formatStepRef(capEvent.StepRef)
-			fmt.Printf("%s%s%s %s[STARTED]%s         step[%s]   Capability: %s\n",
-				COLOR_BLUE, timestamp, COLOR_RESET, COLOR_YELLOW, COLOR_RESET, stepRef, capability)
+			timestamp := FormatTimestamp(capEvent.Timestamp)
+			capability := FormatCapability(capEvent.CapabilityID)
+			stepRef := FormatStepRef(capEvent.StepRef)
+			w.simLogger.PrintStepLog(timestamp, "SIMULATOR", stepRef, capability, "STARTED")
 		} else {
 			// Handle finished event
 			var finishedEvent pb.CapabilityExecutionFinished
@@ -284,16 +239,14 @@ func (w *telemetryWriter) handleCapabilityEvent(telLog TelemetryLog, eventType s
 				w.lggr.Errorf("Failed to unmarshal capability finished event: %v", err)
 				return
 			}
-			timestamp := formatTimestamp(finishedEvent.Timestamp)
-			capability := formatCapability(finishedEvent.CapabilityID)
-			status := mapCapabilityStatus(finishedEvent.Status)
+			timestamp := FormatTimestamp(finishedEvent.Timestamp)
+			capability := FormatCapability(finishedEvent.CapabilityID)
+			status := MapCapabilityStatus(finishedEvent.Status)
 			if status == "FAILED" || status == "ERRORED" {
 				w.failureEventReceived = true
 			}
-			color := getColor(status)
-			stepRef := formatStepRef(finishedEvent.StepRef)
-			fmt.Printf("%s%s%s %s[%s]%s         step[%s]   Capability: %s\n",
-				COLOR_BLUE, timestamp, COLOR_RESET, color, status, COLOR_RESET, stepRef, capability)
+			stepRef := FormatStepRef(finishedEvent.StepRef)
+			w.simLogger.PrintStepLog(timestamp, "SIMULATOR", stepRef, capability, status)
 		}
 	}
 }
@@ -302,113 +255,20 @@ func (w *telemetryWriter) handleCapabilityEvent(telLog TelemetryLog, eventType s
 func (w *telemetryWriter) formatUserLogs(logs *pb.UserLogs) {
 	// Display each log line
 	for _, logLine := range logs.LogLines {
-		timestamp := ""
-		if logLine.NodeTimestamp != "" {
-			// Try to parse and format timestamp
-			if t, err := time.Parse(time.RFC3339Nano, logLine.NodeTimestamp); err == nil {
-				timestamp = t.Format("2006-01-02T15:04:05Z")
-			} else {
-				timestamp = logLine.NodeTimestamp
-			}
-		}
-
 		// Format the log message
-		level := getLogLevel(logLine.Message)
-		msg := cleanLogMessage(logLine.Message)
-		levelColor := getColor(level)
+		level := GetLogLevel(logLine.Message)
+		msg := CleanLogMessage(logLine.Message)
+		levelColor := GetColor(level)
 
 		// Highlight level keywords in the message
-		highlightedMsg := highlightLogLevels(msg, levelColor)
+		highlightedMsg := HighlightLogLevels(msg, levelColor)
 
-		if timestamp != "" {
-			fmt.Printf("%s%s%s %s[USER LOG]%s %s\n", COLOR_BLUE, timestamp, COLOR_RESET, levelColor, COLOR_RESET, highlightedMsg)
-		} else {
-			fmt.Printf("%s[USER LOG]%s %s\n", levelColor, COLOR_RESET, highlightedMsg)
-		}
+		// Always use current timestamp for consistency with other logs
+		w.simLogger.PrintTimestampedLog(time.Now().Format("2006-01-02T15:04:05Z"), "USER LOG", highlightedMsg, ColorBrightCyan)
 	}
 }
 
 // Helper functions for formatting
-
-func getLogLevel(msg string) string {
-	msgLower := strings.ToLower(msg)
-	if strings.Contains(msgLower, "level=error") || strings.Contains(msgLower, "error") {
-		return "ERROR"
-	} else if strings.Contains(msgLower, "level=warn") || strings.Contains(msgLower, "warning") {
-		return "WARN"
-	} else if strings.Contains(msgLower, "level=debug") {
-		return "DEBUG"
-	}
-	return "INFO"
-}
-
-func getColor(level string) string {
-	switch level {
-	case "ERROR":
-		return COLOR_RED
-	case "WARN":
-		return COLOR_YELLOW
-	case "INFO":
-		return COLOR_BRIGHT_CYAN
-	case "DEBUG":
-		return COLOR_BLUE
-	case "SUCCESS":
-		return COLOR_GREEN
-	case "FAILED", "ERRORED":
-		return COLOR_RED
-	case "STARTED":
-		return COLOR_YELLOW
-	case "COMPLETED":
-		return COLOR_CYAN
-	default:
-		return COLOR_CYAN
-	}
-}
-
-func formatStepRef(stepRef string) string {
-	if stepRef == "-1" {
-		return "0" // TODO: for some reason, stepRef is -1 for the first step?
-	}
-	return stepRef
-}
-
-func cleanLogMessage(msg string) string {
-	// Just return the message as-is, since it's already the actual log content
-	// The protobuf UserLogs.LogLine.Message field contains the clean message
-	return strings.TrimSpace(msg)
-}
-
-// formatTimestamp converts RFC3339Nano timestamp to simple format
-func formatTimestamp(timestamp string) string {
-	if t, err := time.Parse(time.RFC3339Nano, timestamp); err == nil {
-		return t.Format("2006-01-02T15:04:05Z")
-	}
-	return timestamp
-}
-
-// formatCapability extracts capability name from full ID
-func formatCapability(capabilityID string) string {
-	// Extract just the capability name (e.g., "http-actions@0.1.0"
-	return capabilityID
-}
-
-// mapCapabilityStatus maps internal status to display format (for capabilities)
-func mapCapabilityStatus(status string) string {
-	switch strings.ToLower(status) {
-	case "completed":
-		return "SUCCESS"
-	case "success":
-		return "SUCCESS"
-	case "failed", "error":
-		return "FAILED"
-	case "errored":
-		return "ERRORED"
-	case "started":
-		return "STARTED"
-	default:
-		return strings.ToUpper(status)
-	}
-}
 
 // mapWorkflowStatus maps workflow status to display format (different from capability status)
 func (w *telemetryWriter) mapWorkflowStatus(status string) string {
@@ -430,76 +290,4 @@ func (w *telemetryWriter) mapWorkflowStatus(status string) string {
 	default:
 		return strings.ToUpper(status)
 	}
-}
-
-// LogLevel represents different log levels for simulation logs
-type LogLevel string
-
-const (
-	LogLevelDebug   LogLevel = "DEBUG"
-	LogLevelInfo    LogLevel = "INFO"
-	LogLevelWarning LogLevel = "WARNING"
-	LogLevelError   LogLevel = "ERROR"
-)
-
-// formatSimulationLog formats simulation logs with consistent styling and different levels
-func formatSimulationLog(level LogLevel, message string, fields ...interface{}) {
-	// Get current timestamp
-	timestamp := time.Now().Format("2006-01-02T15:04:05Z")
-
-	// Format fields if provided
-	formattedMessage := message
-	if len(fields) > 0 {
-		// Convert fields to key=value pairs
-		var fieldPairs []string
-		for i := 0; i < len(fields); i += 2 {
-			if i+1 < len(fields) {
-				fieldPairs = append(fieldPairs, fmt.Sprintf("%v=%v", fields[i], fields[i+1]))
-			}
-		}
-		if len(fieldPairs) > 0 {
-			formattedMessage = message + " " + strings.Join(fieldPairs, " ")
-		}
-	}
-
-	// Get color for the log level
-	var levelColor string
-	switch level {
-	case LogLevelDebug:
-		levelColor = COLOR_BLUE
-	case LogLevelInfo:
-		levelColor = COLOR_BRIGHT_CYAN
-	case LogLevelWarning:
-		levelColor = COLOR_YELLOW
-	case LogLevelError:
-		levelColor = COLOR_RED
-	default:
-		levelColor = COLOR_BRIGHT_CYAN
-	}
-
-	// Format with level-specific color
-	fmt.Printf("%s%s%s %s[SIMULATION]%s %s\n",
-		COLOR_BLUE, timestamp, COLOR_RESET, levelColor, COLOR_RESET, formattedMessage)
-}
-
-func formatSimulationInfo(message string, fields ...interface{}) {
-	formatSimulationLog(LogLevelInfo, message, fields...)
-}
-
-func formatSimulationWarning(message string, fields ...interface{}) {
-	formatSimulationLog(LogLevelWarning, message, fields...)
-}
-
-func formatSimulationError(message string, fields ...interface{}) {
-	formatSimulationLog(LogLevelError, message, fields...)
-}
-
-// highlightLogLevels highlights INFO, WARN, ERROR in log messages
-func highlightLogLevels(msg, levelColor string) string {
-	// Replace level keywords with colored versions
-	msg = strings.ReplaceAll(msg, "level=INFO", levelColor+"level=INFO"+COLOR_RESET)
-	msg = strings.ReplaceAll(msg, "level=WARN", levelColor+"level=WARN"+COLOR_RESET)
-	msg = strings.ReplaceAll(msg, "level=ERROR", levelColor+"level=ERROR"+COLOR_RESET)
-	msg = strings.ReplaceAll(msg, "level=DEBUG", levelColor+"level=DEBUG"+COLOR_RESET)
-	return msg
 }

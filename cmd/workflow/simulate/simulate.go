@@ -28,7 +28,7 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/beholder"
 	"github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/chain-capabilities/evm"
 	httptypedapi "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/triggers/http"
-	"github.com/smartcontractkit/chainlink-common/pkg/logger"
+	chainlinklogger "github.com/smartcontractkit/chainlink-common/pkg/logger"
 	"github.com/smartcontractkit/chainlink-common/pkg/services"
 	pb "github.com/smartcontractkit/chainlink-protos/cre/go/sdk"
 	"github.com/smartcontractkit/chainlink-protos/cre/go/values"
@@ -170,7 +170,7 @@ func (h *handler) ValidateInputs(inputs Inputs) error {
 	if err := runRPCHealthCheck(inputs.EVMClients); err != nil {
 		// we don't block execution, just show the error to the user
 		// because some RPCs in settings might not be used in workflow and some RPCs might have hiccups
-		formatSimulationWarning(fmt.Sprintf("some RPCs in settings are not functioning properly, please check: %v", err))
+		fmt.Printf("Warning: some RPCs in settings are not functioning properly, please check: %v\n", err)
 	}
 
 	h.validated = true
@@ -246,8 +246,15 @@ func run(
 	inputs Inputs,
 	verbosity bool,
 ) error {
-	// Create a minimal logger that discards output since we handle all logging through custom formatters
-	engineLogCfg := logger.Config{Level: zapcore.FatalLevel}
+	// Create simulation logger for formatted output
+	simLogger := NewSimulationLogger(verbosity)
+
+	engineLogCfg := chainlinklogger.Config{Level: zapcore.FatalLevel}
+
+	if inputs.EngineLogs {
+		engineLogCfg.Level = getLevel(verbosity, zapcore.InfoLevel)
+	}
+
 	engineLog, err := engineLogCfg.New()
 	if err != nil {
 		return fmt.Errorf("failed to create engine logger: %w", err)
@@ -259,7 +266,7 @@ func run(
 
 	var triggerCaps *ManualTriggers
 	simulatorInitialize := func(ctx context.Context, cfg simulator.RunnerConfig) (*capabilities.Registry, []services.Service) {
-		lggr := logger.Sugared(cfg.Lggr)
+		lggr := chainlinklogger.Sugared(cfg.Lggr)
 		// Create the registry and fake capabilities with specific loggers
 		registryLggr := lggr.Named("Registry")
 		registry := capabilities.NewRegistry(registryLggr)
@@ -280,7 +287,7 @@ func run(
 
 		if cfg.EnableBeholder {
 			beholderLggr := lggr.Named("Beholder")
-			err := setupCustomBeholder(beholderLggr, verbosity)
+			err := setupCustomBeholder(beholderLggr, verbosity, simLogger)
 			if err != nil {
 				fmt.Printf("Failed to setup beholder: %v\n", err)
 				os.Exit(1)
@@ -302,6 +309,7 @@ func run(
 		}
 
 		triggerLggr := lggr.Named("TriggerCapabilities")
+		var err error
 		triggerCaps, err = NewManualTriggerCapabilities(ctx, triggerLggr, registry, manualTriggerCapConfig, !inputs.Broadcast)
 		if err != nil {
 			fmt.Printf("failed to create trigger capabilities: %v\n", err)
@@ -352,44 +360,44 @@ func run(
 
 		// Manual trigger execution
 		if triggerInfoAndBeforeStart.TriggerFunc == nil {
-			formatSimulationError("Trigger function not initialized")
+			simLogger.Error("Trigger function not initialized")
 			os.Exit(1)
 		}
 		if triggerInfoAndBeforeStart.TriggerToRun == nil {
-			formatSimulationError("Trigger to run not selected")
+			simLogger.Error("Trigger to run not selected")
 			os.Exit(1)
 		}
-		formatSimulationInfo("Running trigger", "trigger", triggerInfoAndBeforeStart.TriggerToRun.GetId())
+		simLogger.Info("Running trigger", "trigger", triggerInfoAndBeforeStart.TriggerToRun.GetId())
 		err := triggerInfoAndBeforeStart.TriggerFunc()
 		if err != nil {
-			formatSimulationError("Failed to run trigger", "trigger", triggerInfoAndBeforeStart.TriggerToRun.GetId(), "error", err)
+			simLogger.Error("Failed to run trigger", "trigger", triggerInfoAndBeforeStart.TriggerToRun.GetId(), "error", err)
 			os.Exit(1)
 		}
 
 		select {
 		case <-executionFinishedCh:
-			formatSimulationInfo("Execution finished signal received")
+			simLogger.Info("Execution finished signal received")
 		case <-ctx.Done():
-			formatSimulationInfo("Received interrupt signal, stopping execution")
+			simLogger.Info("Received interrupt signal, stopping execution")
 		case <-time.After(WorkflowExecutionTimeout):
-			formatSimulationWarning("Timeout waiting for execution to finish")
+			simLogger.Warn("Timeout waiting for execution to finish")
 		}
 	}
 	simulatorCleanup := func(ctx context.Context, cfg simulator.RunnerConfig, registry *capabilities.Registry, services []services.Service) {
 		for _, service := range services {
 			if service.Name() == "WorkflowEngine.WorkflowEngineV2" {
-				formatSimulationInfo("Skipping WorkflowEngineV2")
+				simLogger.Info("Skipping WorkflowEngineV2")
 				continue
 			}
 
 			if err := service.Close(); err != nil {
-				formatSimulationError("Failed to close service", "service", service.Name(), "error", err)
+				simLogger.Error("Failed to close service", "service", service.Name(), "error", err)
 			}
 		}
 
-		err = cleanupBeholder()
+		err := cleanupBeholder()
 		if err != nil {
-			formatSimulationWarning("Failed to cleanup beholder", "error", err)
+			simLogger.Warn("Failed to cleanup beholder", "error", err)
 		}
 	}
 	emptyHook := func(context.Context, simulator.RunnerConfig, *capabilities.Registry, []services.Service) {}
@@ -417,10 +425,10 @@ func run(
 		LifecycleHooks: v2.LifecycleHooks{
 			OnInitialized: func(err error) {
 				if err != nil {
-					formatSimulationError("Failed to initialize simulator", "error", err)
+					simLogger.Error("Failed to initialize simulator", "error", err)
 					os.Exit(1)
 				}
-				formatSimulationInfo("Simulator Initialized")
+				simLogger.Info("Simulator Initialized")
 				fmt.Println()
 				close(initializedCh)
 			},
@@ -633,9 +641,17 @@ func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inp
 	}
 }
 
+// getLevel returns the default zapcore.Level unless verbosity flag is set by the user, then it sets it to DebugLevel
+func getLevel(verbosity bool, defaultLevel zapcore.Level) zapcore.Level {
+	if verbosity {
+		return zapcore.DebugLevel
+	}
+	return defaultLevel
+}
+
 // setupCustomBeholder sets up beholder with our custom telemetry writer
-func setupCustomBeholder(lggr logger.Logger, verbosity bool) error {
-	writer := &telemetryWriter{lggr: lggr, verbose: verbosity}
+func setupCustomBeholder(lggr chainlinklogger.Logger, verbosity bool, simLogger *SimulationLogger) error {
+	writer := &telemetryWriter{lggr: lggr, verbose: verbosity, simLogger: simLogger}
 
 	client, err := beholder.NewWriterClient(writer)
 	if err != nil {
