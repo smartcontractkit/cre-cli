@@ -40,7 +40,7 @@ func TestMultiCommandHappyPaths(t *testing.T) {
 
 		// Use linked Address3 + its key
 		require.NoError(t, createCliEnvFile(tc.EnvFile, constants.TestPrivateKey3), "failed to create env file")
-		require.NoError(t, createProjectSettingsFile(tc.ProjectDirectory+"project.yaml", constants.TestAddress3, testEthUrl), "failed to create project.yaml")
+		require.NoError(t, createProjectSettingsFile(tc.ProjectDirectory+"project.yaml", "", testEthUrl), "failed to create project.yaml")
 		require.NoError(t, createWorkflowDirectory(tc.ProjectDirectory, "happy-path-1-workflow", "", "blank_workflow"), "failed to create workflow directory")
 		t.Cleanup(tc.Cleanup(t))
 
@@ -64,7 +64,7 @@ func TestMultiCommandHappyPaths(t *testing.T) {
 
 		// Use linked Address3 + its key
 		require.NoError(t, createCliEnvFile(tc.EnvFile, constants.TestPrivateKey3), "failed to create env file")
-		require.NoError(t, createProjectSettingsFile(tc.ProjectDirectory+"project.yaml", constants.TestAddress3, testEthUrl), "failed to create project.yaml")
+		require.NoError(t, createProjectSettingsFile(tc.ProjectDirectory+"project.yaml", "", testEthUrl), "failed to create project.yaml")
 		require.NoError(t, createWorkflowDirectory(tc.ProjectDirectory, "happy-path-2-workflow", "", "blank_workflow"), "failed to create workflow directory")
 		t.Cleanup(tc.Cleanup(t))
 
@@ -112,7 +112,7 @@ func TestMultiCommandHappyPaths(t *testing.T) {
 
 		// Use linked Address3 + its key
 		require.NoError(t, createCliEnvFile(tc.EnvFile, constants.TestPrivateKey3), "failed to create env file")
-		require.NoError(t, createProjectSettingsFile(tc.ProjectDirectory+"project.yaml", constants.TestAddress3, testEthUrl), "failed to create project.yaml")
+		require.NoError(t, createProjectSettingsFile(tc.ProjectDirectory+"project.yaml", "", testEthUrl), "failed to create project.yaml")
 		require.NoError(t, createWorkflowDirectory(tc.ProjectDirectory, "happy-path-3b-workflow", "./config.json", "blank_workflow"), "failed to create workflow directory with config")
 		t.Cleanup(tc.Cleanup(t))
 
@@ -136,7 +136,7 @@ func TestMultiCommandHappyPaths(t *testing.T) {
 
 		// Use test address for this test
 		require.NoError(t, createCliEnvFile(tc.EnvFile, constants.TestPrivateKey4), "failed to create env file")
-		require.NoError(t, createProjectSettingsFile(tc.ProjectDirectory+"project.yaml", constants.TestAddress4, testEthUrl), "failed to create project.yaml")
+		require.NoError(t, createProjectSettingsFile(tc.ProjectDirectory+"project.yaml", "", testEthUrl), "failed to create project.yaml")
 		t.Cleanup(tc.Cleanup(t))
 
 		// Run account happy path workflow
@@ -157,11 +157,32 @@ func TestMultiCommandHappyPaths(t *testing.T) {
 
 		// Use linked Address3 + its key
 		require.NoError(t, createCliEnvFile(tc.EnvFile, constants.TestPrivateKey3), "failed to create env file")
-		require.NoError(t, createProjectSettingsFile(tc.ProjectDirectory+"project.yaml", constants.TestAddress3, testEthUrl), "failed to create project.yaml")
+		require.NoError(t, createProjectSettingsFile(tc.ProjectDirectory+"project.yaml", "", testEthUrl), "failed to create project.yaml")
 		t.Cleanup(tc.Cleanup(t))
 
 		// Run secrets happy path workflow
 		multi_command_flows.RunSecretsHappyPath(t, tc, chainselectors.ANVIL_DEVNET.Name)
+	})
+
+	// Run Secrets List with Unsigned
+	t.Run("SecretsListMsig", func(t *testing.T) {
+		anvilProc, testEthUrl := initTestEnv(t, "anvil-state.json")
+		defer StopAnvil(anvilProc)
+
+		// Set dummy API key for authentication
+		t.Setenv(credentials.CreApiKeyVar, "test-api")
+		t.Setenv("TESTID_ENV", "testval")
+		t.Setenv("TESTID_ENV_UPDATED", "testval2")
+
+		tc := NewTestConfig(t)
+
+		// Use linked Address3 as owner, but no private key
+		require.NoError(t, createCliEnvFile(tc.EnvFile, ""), "failed to create env file")
+		require.NoError(t, createProjectSettingsFile(tc.ProjectDirectory+"project.yaml", constants.TestAddress3, testEthUrl), "failed to create project.yaml")
+		t.Cleanup(tc.Cleanup(t))
+
+		// Run secrets list unsigned
+		multi_command_flows.RunSecretsListMsig(t, tc, chainselectors.ANVIL_DEVNET.Name)
 	})
 
 	// Run simulation
@@ -184,7 +205,7 @@ func TestMultiCommandHappyPaths(t *testing.T) {
 
 		// Use linked Address3 + its key
 		require.NoError(t, createCliEnvFile(tc.EnvFile, constants.TestPrivateKey3), "failed to create env file")
-		require.NoError(t, createProjectSettingsFile(tc.ProjectDirectory+"project.yaml", constants.TestAddress3, testEthUrl), "failed to create project.yaml")
+		require.NoError(t, createProjectSettingsFile(tc.ProjectDirectory+"project.yaml", "", testEthUrl), "failed to create project.yaml")
 		require.NoError(t, createWorkflowDirectory(tc.ProjectDirectory, "workflow-simulate", "config.json", "por_workflow"), "failed to create workflow directory")
 		t.Cleanup(tc.Cleanup(t))
 

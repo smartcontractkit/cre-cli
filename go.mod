@@ -24,12 +24,13 @@ require (
 	github.com/smartcontractkit/chainlink-evm/gethwrappers v0.0.0-20251015115541-729ba0b2b1c1
 	github.com/smartcontractkit/chainlink-protos/cre/go v0.0.0-20251015031344-a653ed4c82a0
 	github.com/smartcontractkit/chainlink-protos/workflows/go v0.0.0-20251015031344-a653ed4c82a0
-	github.com/smartcontractkit/chainlink-testing-framework/seth v1.51.2
+	github.com/smartcontractkit/chainlink-testing-framework/seth v1.51.3
 	github.com/smartcontractkit/chainlink/v2 v2.27.3-0.20251014195127-4f0de6b0019d
 	github.com/smartcontractkit/cre-sdk-go v0.9.1-0.20251014224816-6630913617a9
 	github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm v0.9.1-0.20251014224816-6630913617a9
 	github.com/smartcontractkit/tdh2/go/tdh2 v0.0.0-20250624150019-e49f7e125e6b
 	github.com/spf13/cobra v1.9.1
+	github.com/spf13/pflag v1.0.6
 	github.com/spf13/viper v1.20.1
 	github.com/stretchr/testify v1.10.0
 	github.com/test-go/testify v1.1.4
@@ -305,7 +306,6 @@ require (
 	github.com/sourcegraph/conc v0.3.0 // indirect
 	github.com/spf13/afero v1.14.0 // indirect
 	github.com/spf13/cast v1.7.1 // indirect
-	github.com/spf13/pflag v1.0.6 // indirect
 	github.com/stephenlacy/go-ethereum-hdwallet v0.0.0-20230913225845-a4fa94429863 // indirect
 	github.com/streamingfast/logging v0.0.0-20230608130331-f22c91403091 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
