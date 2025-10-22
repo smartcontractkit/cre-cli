@@ -251,6 +251,15 @@ mutation InitiateLinking($request: InitiateLinkingRequest!) {
 
 	if err := graphqlclient.New(h.credentials, h.environmentSet, h.log).
 		Execute(ctx, req, &container); err != nil {
+		s := strings.ToLower(err.Error())
+		if strings.Contains(s, "unauthorized") {
+			unauthorizedMsg := `✖ Deployment blocked: your organization is not authorized to deploy workflows.
+During private Beta, only approved organizations can deploy workflows to CRE environment.
+
+→ If you believe this is an error or would like to request access, please visit:
+https://docs.cre.link/request-deployment-access`
+			return initiateLinkingResponse{}, fmt.Errorf("\n%s\n%w", unauthorizedMsg, err)
+		}
 		return initiateLinkingResponse{}, fmt.Errorf("graphql request failed: %w", err)
 	}
 
