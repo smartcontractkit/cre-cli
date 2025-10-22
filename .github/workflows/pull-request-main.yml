@@ -10,7 +10,7 @@ on:
 env:
   # Ensure that a cached go version is used:
   # https://github.com/actions/runner-images/blob/main/images/ubuntu/Ubuntu2404-Readme.md#go
-  GO_VERSION: 1.24
+  GO_VERSION: 1.25.3
 
 jobs:
   ci-lint:
