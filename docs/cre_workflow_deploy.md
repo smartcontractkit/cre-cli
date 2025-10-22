@@ -13,9 +13,7 @@ cre workflow deploy <workflow-folder-path> [optional flags]
 ### Examples
 
 ```
-
-		cre workflow deploy ./my-workflow
-		
+cre workflow deploy ./my-workflow
 ```
 
 ### Options
@@ -34,8 +32,8 @@ cre workflow deploy <workflow-folder-path> [optional flags]
 ```
   -e, --env string            Path to .env file which contains sensitive info (default ".env")
   -R, --project-root string   Path to the project root
-  -T, --target string         Set the target settings
-  -v, --verbose               Print DEBUG logs
+  -T, --target string         Use target settings from YAML config
+  -v, --verbose               Run command in VERBOSE mode
 ```
 
 ### SEE ALSO

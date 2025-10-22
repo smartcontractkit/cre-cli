@@ -34,13 +34,11 @@ type Inputs struct {
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
 	deleteCmd := &cobra.Command{
-		Use:   "delete <workflow-folder-path>",
-		Short: "Deletes all versions of a workflow from the Workflow Registry",
-		Long:  "Deletes all workflow versions matching the given name and owner address.",
-		Args:  cobra.ExactArgs(1),
-		Example: `
-		cre workflow delete ./my-workflow
-		`,
+		Use:     "delete <workflow-folder-path>",
+		Short:   "Deletes all versions of a workflow from the Workflow Registry",
+		Long:    "Deletes all workflow versions matching the given name and owner address.",
+		Args:    cobra.ExactArgs(1),
+		Example: `cre workflow delete ./my-workflow`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			handler := newHandler(runtimeContext, cmd.InOrStdin())
 
