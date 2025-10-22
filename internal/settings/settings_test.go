@@ -235,6 +235,36 @@ func makeCmd(use string, defineBroadcast bool, args ...string) *cobra.Command {
 	return cmd
 }
 
+func TestLoadEnvAndSettingsInvalidTarget(t *testing.T) {
+	envVars := map[string]string{
+		settings.EthPrivateKeyEnvVar: "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
+	}
+
+	workflowTemplatePath, err := filepath.Abs(TempWorkflowSettingsFile)
+	require.NoError(t, err)
+
+	projectTemplatePath, err := filepath.Abs(TempProjectSettingsFile)
+	require.NoError(t, err)
+
+	tempDir := t.TempDir()
+	restoreWorkingDirectory, err := testutil.ChangeWorkingDirectory(tempDir)
+	require.NoError(t, err)
+	defer restoreWorkingDirectory()
+
+	v, logger := createTestContext(t, envVars, tempDir)
+
+	setUpTestSettingsFiles(t, v, workflowTemplatePath, projectTemplatePath, tempDir)
+
+	v.Set(settings.Flags.Target.Name, "nonexistent-target")
+
+	cmd := &cobra.Command{Use: "workflow"}
+	s, err := settings.New(logger, v, cmd)
+
+	assert.Error(t, err, "Expected error due to invalid target")
+	assert.Contains(t, err.Error(), "target not found: nonexistent-target", "Expected target not found error")
+	assert.Nil(t, s, "Settings object should be nil on error")
+}
+
 func TestShouldSkipGetOwner(t *testing.T) {
 	t.Parallel()
 
