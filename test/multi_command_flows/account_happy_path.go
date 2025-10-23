@@ -45,7 +45,7 @@ func RunAccountHappyPath(t *testing.T, tc TestConfig, testEthURL, chainName stri
 
 	// GraphQL server that supports InitiateLinking, InitiateUnlinking, and listWorkflowOwners
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !(strings.HasPrefix(r.URL.Path, "/graphql") && r.Method == http.MethodPost) {
+		if !strings.HasPrefix(r.URL.Path, "/graphql") || r.Method != http.MethodPost {
 			w.WriteHeader(http.StatusNotFound)
 			_, _ = w.Write([]byte("not found"))
 			return
