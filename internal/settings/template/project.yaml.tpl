@@ -30,8 +30,6 @@ staging-settings:
 production-settings:
   cre-cli:
     don-family: "{{StagingDonFamily}}"
-  account:
-    workflow-owner-address: "{{WorkflowOwnerAddress}}"
   rpcs:
     - chain-name: {{EthSepoliaChainName}}
       url: {{EthSepoliaRpcUrl}}
