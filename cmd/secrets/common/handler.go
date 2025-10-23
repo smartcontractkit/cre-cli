@@ -21,7 +21,6 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/capabilities/actions/vault"
-	vaultcommon "github.com/smartcontractkit/chainlink-common/pkg/capabilities/actions/vault"
 	"github.com/smartcontractkit/chainlink-common/pkg/jsonrpc2"
 	"github.com/smartcontractkit/chainlink-evm/gethwrappers/workflow/generated/workflow_registry_wrapper_v2"
 	"github.com/smartcontractkit/chainlink/v2/core/capabilities/vault/vaulttypes"
@@ -199,11 +198,11 @@ func (h *Handler) LogMSIGNextSteps(txData string, digest [32]byte, bundlePath st
 // EncryptSecrets takes the raw secrets and encrypts them, returning pointers.
 func (h *Handler) EncryptSecrets(rawSecrets UpsertSecretsInputs) ([]*vault.EncryptedSecret, error) {
 	requestID := uuid.New().String()
-	getPublicKeyRequest := jsonrpc2.Request[vaultcommon.GetPublicKeyRequest]{
+	getPublicKeyRequest := jsonrpc2.Request[vault.GetPublicKeyRequest]{
 		Version: jsonrpc2.JsonRpcVersion,
 		ID:      requestID,
 		Method:  vaulttypes.MethodPublicKeyGet,
-		Params:  &vaultcommon.GetPublicKeyRequest{},
+		Params:  &vault.GetPublicKeyRequest{},
 	}
 
 	reqBody, err := json.Marshal(getPublicKeyRequest)
@@ -219,7 +218,7 @@ func (h *Handler) EncryptSecrets(rawSecrets UpsertSecretsInputs) ([]*vault.Encry
 		return nil, fmt.Errorf("gateway returned non-200: %d body=%s", status, string(respBody))
 	}
 
-	var rpcResp jsonrpc2.Response[vaultcommon.GetPublicKeyResponse]
+	var rpcResp jsonrpc2.Response[vault.GetPublicKeyResponse]
 	if err := json.Unmarshal(respBody, &rpcResp); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal public key response: %w", err)
 	}

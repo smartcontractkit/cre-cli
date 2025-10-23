@@ -21,7 +21,7 @@ func IsValidWASM(fl validator.FieldLevel) bool {
 	path := field.String()
 
 	// Check if the file has a valid extension (.wasm or .wasm.br)
-	if !(strings.HasSuffix(path, ".wasm") || strings.HasSuffix(path, ".wasm.br")) {
+	if !strings.HasSuffix(path, ".wasm") && !strings.HasSuffix(path, ".wasm.br") {
 		return false
 	}
 

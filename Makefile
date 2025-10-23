@@ -47,9 +47,9 @@ goreleaser-dev-build:
 	$(GORELEASER) build --snapshot --clean --config=$(GORELEASER_CONFIG)
 
 install-tools: install-foundry
-	asdf plugin-add golang https://github.com/kennyp/asdf-golang.git
+	asdf plugin add golang https://github.com/kennyp/asdf-golang.git
 	asdf plugin add golangci-lint https://github.com/hypnoglow/asdf-golangci-lint.git
-	asdf plugin-add goreleaser https://github.com/kforsthoevel/asdf-goreleaser.git
+	asdf plugin add goreleaser https://github.com/kforsthoevel/asdf-goreleaser.git
 	asdf install
 
 install-foundry:

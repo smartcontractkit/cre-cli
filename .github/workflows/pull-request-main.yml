@@ -21,14 +21,14 @@ jobs:
       actions: read
     steps:
       - name: ci-lint
-        uses: smartcontractkit/.github/actions/ci-lint-go@01d931b0455a754d12e7143cc54a5a3521a8f6f6 # ci-lint-go@0.3.1
+        uses: smartcontractkit/.github/actions/ci-lint-go@31f7a923a25f7672641b5099cbb85ce4a984fc05 # ci-lint-go@3.1.0
         with:
-          golangci-lint-args: --timeout 10m --out-format checkstyle:golangci-lint-report.xml
           only-new-issues: false
           aws-region: ${{ secrets.AWS_REGION }}
           use-gati: "true"
           aws-role-arn-gati: ${{ secrets.AWS_OIDC_DEV_PLATFORM_READ_REPOS_EXTERNAL_TOKEN_ISSUER_ROLE_ARN }}
           aws-lambda-url-gati: ${{ secrets.AWS_DEV_SERVICES_TOKEN_ISSUER_LAMBDA_URL }}
+          golangci-lint-config: .golangci.yml
 
   ci-lint-misc:
     runs-on: ubuntu-latest

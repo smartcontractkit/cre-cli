@@ -211,13 +211,14 @@ func StartAnvil(initState AnvilInitState, stateFileName string) (*os.Process, in
 		return nil, 0, errors.New("failed to close listener")
 	}
 	args := []string{"--chain-id", "31337"}
-	if initState == LOAD_ANVIL_STATE {
+	switch initState {
+	case LOAD_ANVIL_STATE:
 		// booting up Anvil with pre-baked contracts, required for some E2E tests
 		args = append(args, "--load-state", stateFileName)
-	} else if initState == DUMP_ANVIL_STATE {
+	case DUMP_ANVIL_STATE:
 		// start fresh instance of Anvil, then deploy and configure contracts to bake them into the state dump
 		args = append(args, "--dump-state", stateFileName)
-	} else {
+	default:
 		return nil, 0, errors.New("unknown anvil init state enum")
 	}
 	args = append(args, "--port", strconv.Itoa(port))

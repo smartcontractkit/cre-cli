@@ -2,7 +2,6 @@ package creinit
 
 import (
 	"embed"
-	_ "embed"
 	"errors"
 	"fmt"
 	"io"
