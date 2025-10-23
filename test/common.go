@@ -39,7 +39,7 @@ var CLIPath = os.TempDir() + string(os.PathSeparator) + "cre" + func() string {
 const (
 	TestLogLevelEnvVar = "TEST_LOG_LEVEL" // export this env var before running tests if DEBUG level is needed
 	SethConfigPath     = "seth.toml"
-	SettingsTarget     = "staging"
+	SettingsTarget     = "staging-settings"
 )
 
 // needed for StartAnvil() function, describes how to boot Anvil

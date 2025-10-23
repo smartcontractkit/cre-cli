@@ -116,7 +116,7 @@ For a list of all commands and their descriptions, please refer to the [docs](do
 To simulate a workflow, you can use the `cre workflow simulate` command. This command allows you to run a workflow locally without deploying it.
 
 ```bash
-cre workflow simulate <path-to-workflow> --target=local-simulation
+cre workflow simulate <path-to-workflow> --target=staging-settings
 ```
 
 

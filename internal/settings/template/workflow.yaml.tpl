@@ -15,16 +15,17 @@
 #     secrets-path: "../secrets.yaml"       # Path to secrets file (project root by default)
 
 # ==========================================================================
-local-simulation:
+staging-settings:
   user-workflow:
     workflow-name: "{{WorkflowName}}"
   workflow-artifacts:
     workflow-path: "{{WorkflowPath}}"
     config-path: "{{ConfigPath}}"
     secrets-path: "{{SecretsPath}}"
+    
 
 # ==========================================================================
-staging:
+production-settings:
   user-workflow:
     workflow-name: "{{WorkflowName}}"
   workflow-artifacts:
