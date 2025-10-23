@@ -328,8 +328,6 @@ func isLoadCredentials(cmd *cobra.Command) bool {
 		"powershell":        {},
 		"zsh":               {},
 		"help":              {},
-		"init":              {},
-		"simulate":          {},
 		"generate-bindings": {},
 	}
 
