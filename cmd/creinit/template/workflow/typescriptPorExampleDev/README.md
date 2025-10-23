@@ -101,7 +101,7 @@ The config is already populated with deployed contracts in template.
 Note: Make sure your `workflow.yaml` file is pointing to the config.json, example:
 
 ```yaml
-local-simulation:
+staging-settings:
   user-workflow:
     workflow-name: "workflow01"
   workflow-artifacts:

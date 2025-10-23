@@ -5,5 +5,5 @@
 ###############################################################################
 # Ethereum private key or 1Password reference (e.g. op://vault/item/field)
 CRE_ETH_PRIVATE_KEY={{EthPrivateKey}}
-# Profile to use for this environment (e.g. local-simulation, production, staging)
-CRE_TARGET=local-simulation
+# Target to use for this environment (e.g. staging-settings, production-settings, my-target)
+CRE_TARGET=staging-settings
