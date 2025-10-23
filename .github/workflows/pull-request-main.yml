@@ -23,7 +23,6 @@ jobs:
       - name: ci-lint
         uses: smartcontractkit/.github/actions/ci-lint-go@31f7a923a25f7672641b5099cbb85ce4a984fc05 # ci-lint-go@3.1.0
         with:
-          golangci-lint-args: --timeout 10m --out-format checkstyle:golangci-lint-report.xml
           only-new-issues: false
           aws-region: ${{ secrets.AWS_REGION }}
           use-gati: "true"
