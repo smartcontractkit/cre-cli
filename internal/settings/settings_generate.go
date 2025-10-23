@@ -49,7 +49,7 @@ func GetDefaultReplacements() map[string]string {
 
 		"WorkflowOwnerAddress": "(optional) Multi-signature contract address",
 		"ConfigPath":           "./config.json",
-		"SecretsPath":          "../secrets.yaml",
+		"SecretsPath":          "",
 	}
 }
 

@@ -45,29 +45,7 @@ rpcs:
 ```
 Ensure the provided URLs point to valid RPC endpoints for the specified chains. You may use public RPC providers or set up your own node.
 
-## 4. Set up workflow secrets
-
-This template workflow demonstrates the use of secrets. To configure them, a separate file containing the secret names is required. For this template, a secrets.yaml file is already provided in the workflow root directory with all necessary entries.
-
-To simulate how secrets are accessed, you need to define them in your environment. Below is an example based on the generated secrets.yaml.
-
-```bash
-export SECRET_ADDRESS_ALL="0xMySecretAddress"
-```
-
-Or you may append the secret value to your existing `.env` file and then it will be automatically loaded by the CLI:
-
-```bash
-SECRET_ADDRESS_ALL=0xMySecretAddress
-```
-
-Note in our example the secret address is used to read a balance from. You can use the address of our deployed contract 0x4700A50d858Cb281847ca4Ee0938F80DEfB3F1dd.
-
-```bash
-export SECRET_ADDRESS_ALL="0x4700A50d858Cb281847ca4Ee0938F80DEfB3F1dd"
-```
-
-## 5. Deploy contracts
+## 4. Deploy contracts
 
 Deploy the BalanceReader, MessageEmitter, ReserveManager and SimpleERC20 contracts. You can either do this on a local chain or on a testnet using tools like cast/foundry.
 
@@ -80,11 +58,11 @@ For completeness, the Solidity source code for these contracts is located under 
 - BalanceReader contract address: `0x4b0739c94C1389B55481cb7506c62430cA7211Cf`
 - MessageEmitter contract address: `0x1d598672486ecB50685Da5497390571Ac4E93FDc`
 
-## 6. Generate contract bindings
+## 5. [Optional] Generate contract bindings
 
 To enable seamless interaction between the workflow and the contracts, Go bindings need to be generated from the contract ABIs. These ABIs are located in projectRoot/contracts/src/abi. Use the cre generate-bindings command to generate the bindings.
 
-Note: This command must be run from the <b>project root directory</b> where project.yaml is located. The CLI looks for a contracts folder and a go.mod file in this directory.
+Note: Bindings for the template is pre-generated, so you can skip this step if there is no abi/contract changes. This command must be run from the <b>project root directory</b> where project.yaml is located. The CLI looks for a contracts folder and a go.mod file in this directory.
 
 ```bash
 # Navigate to your project root (where project.yaml is located)
@@ -101,14 +79,13 @@ cre generate-bindings evm
 
 This will create Go binding files for all the contracts (ReserveManager, SimpleERC20, BalanceReader, MessageEmitter, etc.) that can be imported and used in your workflow.
 
-## 7. Configure workflow
+## 6. Configure workflow
 
 Configure `config.json` for the workflow
 - `schedule` should be set to `"*/3 * * * * *"` for every 3 seconds or any other cron expression you prefer
 - `url` should be set to existing reserves HTTP endpoint API
 - `tokenAddress` should be the SimpleERC20 contract address
-- `porAddress` should be the ReserveManager contract address
-- `proxyAddress` should be the UpdateReservesProxySimplified contract address
+- `reserveManagerAddress` should be the ReserveManager contract address
 - `balanceReaderAddress` should be the BalanceReader contract address
 - `messageEmitterAddress` should be the MessageEmitter contract address
 - `chainName` should be name of selected chain (refer to https://github.com/smartcontractkit/chain-selectors/blob/main/selectors.yml)
@@ -125,11 +102,11 @@ local-simulation:
   workflow-artifacts:
     workflow-path: "."
     config-path: "./config.json"
-    secrets-path: "../secrets.yaml"
+    secrets-path: ""
 ```
 
 
-## 8. Simulate the workflow
+## 7. Simulate the workflow
 
 > **Note:** Run `go mod tidy` to update dependencies after generating bindings.
 ```bash
@@ -144,18 +121,17 @@ After this you will get a set of options similar to:
 🚀 Workflow simulation ready. Please select a trigger:
 1. cron-trigger@1.0.0 Trigger
 2. evm:ChainSelector:16015286601757825753@1.0.0 LogTrigger
-3. http-trigger@1.0.0-alpha Trigger
 
-Enter your choice (1-3):
+Enter your choice (1-2):
 ```
 
 You can simulate each of the following triggers types as follows
 
-### 8a. Simulating Cron Trigger Workflows
+### 7a. Simulating Cron Trigger Workflows
 
 Select option 1, and the workflow should immediately execute.
 
-### 8b. Simulating Log Trigger Workflows
+### 7b. Simulating Log Trigger Workflows
 
 Select option 2, and then two additional prompts will come up and you can pass in the example inputs:
 
@@ -171,21 +147,4 @@ Enter event index (0-based): 0
 Fetching transaction receipt for transaction 0x420721d7d00130a03c5b525b2dbfd42550906ddb3075e8377f9bb5d1a5992f8e...
 Found log event at index 0: contract=0x1d598672486ecB50685Da5497390571Ac4E93FDc, topics=3
 Created EVM trigger log for transaction 0x420721d7d00130a03c5b525b2dbfd42550906ddb3075e8377f9bb5d1a5992f8e, event 0
-```
-
-### 8c. Simulating HTTP Trigger Workflows
-
-Select option 3, and then an additional prompt will come up where you can pass in:
-
-File Path: ./http_trigger_payload.json
-
-The output will look like:
-```
-🔍 HTTP Trigger Configuration:
-Please provide JSON input for the HTTP trigger.
-You can enter a file path or JSON directly
-
-Enter your input: ./http_trigger_payload.json   
-Loaded JSON from file: ./http_trigger_payload.json
-Created HTTP trigger payload with 1 fields
 ```
