@@ -204,7 +204,6 @@ jobs:
           # Anvil developer key, not a secret
           PRIVATE_KEY: "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
         shell: bash
-        #TODO (DEVSVCS-2016) clean the GOLANG_PROTOBUF_REGISTRATION_CONFLICT flag
         run: |
           cd chainlink/system-tests/tests/smoke/cre
           go mod download
@@ -213,7 +212,7 @@ jobs:
           go run main.go download capabilities --output-dir ../ --gh-token-env-var-name GITHUB_READ_TOKEN --names cron --version v1.0.2-alpha 1>&2 && \
           popd > /dev/null
           # run the test
-          GOLANG_PROTOBUF_REGISTRATION_CONFLICT=warn go test github.com/smartcontractkit/chainlink/system-tests/tests/smoke/cre -v -run "^(TestCRE_OCR3_PoR_Workflow_SingleDon_MultipleWriters_MockedPrice)$" -timeout 30m -count=1 -test.parallel=1
+          go test github.com/smartcontractkit/chainlink/system-tests/tests/smoke/cre -v -run "^(TestCRE_OCR3_PoR_Workflow_SingleDon_MultipleWriters_MockedPrice)$" -timeout 30m -count=1 -test.parallel=1
 
       - name: Publish Artifacts
         if: failure()
