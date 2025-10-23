@@ -2,8 +2,7 @@
 
 # Go parameters
 COMMIT_SHA = $(shell git rev-parse HEAD)
-#TODO (DEVSVCS-2016) clean the GOLANG_PROTOBUF_REGISTRATION_CONFLICT flag
-GOCMD=GOLANG_PROTOBUF_REGISTRATION_CONFLICT=warn go
+GOCMD=go
 GORELEASER=goreleaser
 GOLANGCI_LINT=golangci-lint
 GOBUILD=$(GOCMD) build
@@ -11,8 +10,7 @@ GOCLEAN=$(GOCMD) clean
 GOTEST=$(GOCMD) test
 GOGET=$(GOCMD) get
 GORUN=$(GOCMD) run
-#TODO (DEVSVCS-2016) clean the conflictPolicy=ignore flag
-BUILD_FLAGS=-ldflags "-w -X 'github.com/smartcontractkit/cre-cli/cmd/version.Version=build $(COMMIT_SHA)' -X google.golang.org/protobuf/reflect/protoregistry.conflictPolicy=ignore"
+BUILD_FLAGS=-ldflags "-w -X 'github.com/smartcontractkit/cre-cli/cmd/version.Version=build $(COMMIT_SHA)'"
 BINARY_NAME=cre
 ADMIN_BINARY_NAME=cre-admin
 GENDOC_BINARY_NAME=gendoc-cli
