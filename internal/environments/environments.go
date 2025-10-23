@@ -21,7 +21,7 @@ const (
 	EnvVarWorkflowRegistryChainName        = "CRE_CLI_WORKFLOW_REGISTRY_CHAIN_NAME"
 	EnvVarWorkflowRegistryChainExplorerURL = "CRE_CLI_WORKFLOW_REGISTRY_CHAIN_EXPLORER_URL"
 
-	DefaultEnv = "STAGING"
+	DefaultEnv = "PRODUCTION"
 )
 
 //go:embed environments.yaml
