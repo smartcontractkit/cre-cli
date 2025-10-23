@@ -28,6 +28,7 @@ jobs:
           use-gati: "true"
           aws-role-arn-gati: ${{ secrets.AWS_OIDC_DEV_PLATFORM_READ_REPOS_EXTERNAL_TOKEN_ISSUER_ROLE_ARN }}
           aws-lambda-url-gati: ${{ secrets.AWS_DEV_SERVICES_TOKEN_ISSUER_LAMBDA_URL }}
+          golangci-lint-config: .golangci.yml
 
   ci-lint-misc:
     runs-on: ubuntu-latest
