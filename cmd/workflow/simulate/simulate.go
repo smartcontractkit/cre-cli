@@ -168,7 +168,7 @@ func (h *handler) ValidateInputs(inputs Inputs) error {
 	if err := runRPCHealthCheck(inputs.EVMClients); err != nil {
 		// we don't block execution, just show the error to the user
 		// because some RPCs in settings might not be used in workflow and some RPCs might have hiccups
-		h.log.Error().Msgf("some RPCs in setting is not functioning properly, please check: %v", err)
+		fmt.Printf("Warning: some RPCs in settings are not functioning properly, please check: %v\n", err)
 	}
 
 	h.validated = true
@@ -245,10 +245,7 @@ func run(
 	verbosity bool,
 ) error {
 	logCfg := logger.Config{Level: getLevel(verbosity, zapcore.InfoLevel)}
-	baseLggr, err := logCfg.New()
-	if err != nil {
-		return fmt.Errorf("failed to create logger: %w", err)
-	}
+	simLogger := NewSimulationLogger(verbosity)
 
 	engineLogCfg := logger.Config{Level: zapcore.FatalLevel}
 
@@ -288,7 +285,7 @@ func run(
 
 		if cfg.EnableBeholder {
 			beholderLggr := lggr.Named("Beholder")
-			err := setupCustomBeholder(beholderLggr, verbosity)
+			err := setupCustomBeholder(beholderLggr, verbosity, simLogger)
 			if err != nil {
 				fmt.Printf("Failed to setup beholder: %v\n", err)
 				os.Exit(1)
@@ -310,6 +307,7 @@ func run(
 		}
 
 		triggerLggr := lggr.Named("TriggerCapabilities")
+		var err error
 		triggerCaps, err = NewManualTriggerCapabilities(ctx, triggerLggr, registry, manualTriggerCapConfig, !inputs.Broadcast)
 		if err != nil {
 			fmt.Printf("failed to create trigger capabilities: %v\n", err)
@@ -360,44 +358,44 @@ func run(
 
 		// Manual trigger execution
 		if triggerInfoAndBeforeStart.TriggerFunc == nil {
-			baseLggr.Errorw("Trigger function not initialized")
+			simLogger.Error("Trigger function not initialized")
 			os.Exit(1)
 		}
 		if triggerInfoAndBeforeStart.TriggerToRun == nil {
-			baseLggr.Errorw("Trigger to run not selected")
+			simLogger.Error("Trigger to run not selected")
 			os.Exit(1)
 		}
-		baseLggr.Infow("Running trigger", "trigger", triggerInfoAndBeforeStart.TriggerToRun.GetId())
+		simLogger.Info("Running trigger", "trigger", triggerInfoAndBeforeStart.TriggerToRun.GetId())
 		err := triggerInfoAndBeforeStart.TriggerFunc()
 		if err != nil {
-			baseLggr.Errorw("Failed to run trigger", "trigger", triggerInfoAndBeforeStart.TriggerToRun.GetId(), "error", err)
+			simLogger.Error("Failed to run trigger", "trigger", triggerInfoAndBeforeStart.TriggerToRun.GetId(), "error", err)
 			os.Exit(1)
 		}
 
 		select {
 		case <-executionFinishedCh:
-			baseLggr.Infow("Execution finished signal received")
+			simLogger.Info("Execution finished signal received")
 		case <-ctx.Done():
-			baseLggr.Infow("Received interrupt signal, stopping execution")
+			simLogger.Info("Received interrupt signal, stopping execution")
 		case <-time.After(WorkflowExecutionTimeout):
-			baseLggr.Infow("Timeout waiting for execution to finish")
+			simLogger.Warn("Timeout waiting for execution to finish")
 		}
 	}
 	simulatorCleanup := func(ctx context.Context, cfg simulator.RunnerConfig, registry *capabilities.Registry, services []services.Service) {
 		for _, service := range services {
 			if service.Name() == "WorkflowEngine.WorkflowEngineV2" {
-				baseLggr.Info("Skipping WorkflowEngineV2")
+				simLogger.Info("Skipping WorkflowEngineV2")
 				continue
 			}
 
 			if err := service.Close(); err != nil {
-				baseLggr.Errorw("Failed to close service", "service", service.Name(), "error", err)
+				simLogger.Error("Failed to close service", "service", service.Name(), "error", err)
 			}
 		}
 
-		err = cleanupBeholder()
+		err := cleanupBeholder()
 		if err != nil {
-			baseLggr.Warnw("Failed to cleanup beholder", "error", err)
+			simLogger.Warn("Failed to cleanup beholder", "error", err)
 		}
 	}
 	emptyHook := func(context.Context, simulator.RunnerConfig, *capabilities.Registry, []services.Service) {}
@@ -425,10 +423,10 @@ func run(
 		LifecycleHooks: v2.LifecycleHooks{
 			OnInitialized: func(err error) {
 				if err != nil {
-					baseLggr.Errorw("Failed to initialize simulator", "error", err)
+					simLogger.Error("Failed to initialize simulator", "error", err)
 					os.Exit(1)
 				}
-				baseLggr.Info("Simulator Initialized")
+				simLogger.Info("Simulator Initialized")
 				fmt.Println()
 				close(initializedCh)
 			},
@@ -650,8 +648,8 @@ func getLevel(verbosity bool, defaultLevel zapcore.Level) zapcore.Level {
 }
 
 // setupCustomBeholder sets up beholder with our custom telemetry writer
-func setupCustomBeholder(lggr logger.Logger, verbosity bool) error {
-	writer := &telemetryWriter{lggr: lggr, verbose: verbosity}
+func setupCustomBeholder(lggr logger.Logger, verbosity bool, simLogger *SimulationLogger) error {
+	writer := &telemetryWriter{lggr: lggr, verbose: verbosity, simLogger: simLogger}
 
 	client, err := beholder.NewWriterClient(writer)
 	if err != nil {
