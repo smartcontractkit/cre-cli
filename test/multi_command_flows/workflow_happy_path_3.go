@@ -264,7 +264,7 @@ func workflowDeployWithConfigAndLinkedKey(t *testing.T, tc TestConfig, projectRo
 
 // updateProjectSettings updates the project.yaml file with test settings
 func updateProjectSettings(projectRootFlag, ownerAddress, ethUrl string) error {
-	const SettingsTarget = "staging"
+	const SettingsTarget = "staging-settings"
 
 	// Extract directory path from flag format "--project-root=/path/..."
 	parts := strings.Split(projectRootFlag, "=")
