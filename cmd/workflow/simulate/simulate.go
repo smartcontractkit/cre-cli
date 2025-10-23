@@ -62,13 +62,11 @@ type Inputs struct {
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
 	var simulateCmd = &cobra.Command{
-		Use:   "simulate <workflow-folder-path>",
-		Short: "Simulates a workflow",
-		Long:  `This command simulates a workflow.`,
-		Args:  cobra.ExactArgs(1),
-		Example: `
-		cre workflow simulate ./my-workflow
-		`,
+		Use:     "simulate <workflow-folder-path>",
+		Short:   "Simulates a workflow",
+		Long:    `This command simulates a workflow.`,
+		Args:    cobra.ExactArgs(1),
+		Example: `cre workflow simulate ./my-workflow`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			handler := newHandler(runtimeContext)
 

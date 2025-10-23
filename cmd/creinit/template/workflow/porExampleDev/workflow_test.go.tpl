@@ -36,16 +36,14 @@ func TestInitWorkflow(t *testing.T) {
 	workflow, err := InitWorkflow(config, runtime.Logger(), nil)
 	require.NoError(t, err)
 
-	require.Len(t, workflow, 3) // cron, log, and http triggers
+	require.Len(t, workflow, 2) // cron, log triggers
 	require.Equal(t, cron.Trigger(&cron.Config{}).CapabilityID(), workflow[0].CapabilityID())
 }
 
 func TestOnCronTrigger(t *testing.T) {
 	config := makeTestConfig(t)
 	runtime := testutils.NewRuntime(t, testutils.Secrets{
-		"": {
-			"SECRET_ADDRESS": "0x9876543210987654321098765432109876543210",
-		},
+		"": {},
 	})
 
 	// Mock HTTP client for POR data
@@ -120,7 +118,6 @@ func TestOnCronTrigger(t *testing.T) {
 	assertLogContains(t, logs, `msg=TotalSupply`)
 	assertLogContains(t, logs, `msg=TotalReserveScaled`)
 	assertLogContains(t, logs, `msg="Native token balance"`)
-	assertLogContains(t, logs, `msg="Secret address balance"`)
 }
 
 func TestOnLogTrigger(t *testing.T) {
@@ -175,81 +172,6 @@ func TestOnLogTrigger(t *testing.T) {
 	logs := runtime.GetLogs()
 	assertLogContains(t, logs, `msg="Message retrieved from the contract"`)
 	assertLogContains(t, logs, `blockNumber=100`)
-}
-
-func TestOnHTTPTrigger(t *testing.T) {
-	config := makeTestConfig(t)
-	runtime := testutils.NewRuntime(t, testutils.Secrets{
-		"": {
-			"SECRET_ADDRESS": "0x9876543210987654321098765432109876543210",
-		},
-	})
-
-	// Mock HTTP client for POR data
-	httpMock, err := httpmock.NewClientCapability(t)
-	require.NoError(t, err)
-	httpMock.SendRequest = func(ctx context.Context, input *http.Request) (*http.Response, error) {
-		porResponse := `{
-			"accountName": "TrueUSD",
-			"totalTrust": 2000000.0,
-			"totalToken": 2000000.0,
-			"ripcord": false,
-			"updatedAt": "2023-01-01T00:00:00Z"
-		}`
-		return &http.Response{Body: []byte(porResponse)}, nil
-	}
-
-	// Mock EVM client (same pattern as cron test)
-	chainSelector, err := config.EVMs[0].GetChainSelector()
-	require.NoError(t, err)
-	evmMock, err := evmmock.NewClientCapability(chainSelector, t)
-	require.NoError(t, err)
-
-	// Set up contract mocks (same pattern as cron test)
-	evmCfg := config.EVMs[0]
-
-	balanceReaderMock := balance_reader.NewBalanceReaderMock(
-		common.HexToAddress(evmCfg.BalanceReaderAddress),
-		evmMock,
-	)
-	balanceReaderMock.GetNativeBalances = func(input balance_reader.GetNativeBalancesInput) ([]*big.Int, error) {
-		// Return mock balance for each address (same number as input addresses)
-		balances := make([]*big.Int, len(input.Addresses))
-		for i := range input.Addresses {
-			balances[i] = big.NewInt(750000000000000000) // 0.75 ETH in wei (higher for HTTP test)
-		}
-		return balances, nil
-	}
-
-	ierc20Mock := ierc20.NewIERC20Mock(
-		common.HexToAddress(evmCfg.TokenAddress),
-		evmMock,
-	)
-	ierc20Mock.TotalSupply = func() (*big.Int, error) {
-		return big.NewInt(2000000000000000000), nil // 2 tokens with 18 decimals (higher for HTTP test)
-	}
-
-	evmMock.WriteReport = func(ctx context.Context, input *evm.WriteReportRequest) (*evm.WriteReportReply, error) {
-		return &evm.WriteReportReply{
-			TxHash: common.HexToHash("0x9876543210fedcba9876543210fedcba9876543210fedcba9876543210fedcba").Bytes(),
-		}, nil
-	}
-
-	// Test with empty payload (should default to now)
-	result, err := onHTTPTrigger(config, runtime, &http.Payload{Input: []byte{}})
-	require.NoError(t, err)
-	require.Equal(t, "2000000", result)
-
-	// Test with JSON payload
-	httpPayload := HTTPTriggerPayload{
-		ExecutionTime: anyExecutionTime,
-	}
-	payloadBytes, err := json.Marshal(httpPayload)
-	require.NoError(t, err)
-
-	result2, err := onHTTPTrigger(config, runtime, &http.Payload{Input: payloadBytes})
-	require.NoError(t, err)
-	require.Equal(t, "2000000", result2)
 }
 
 //go:embed config.json

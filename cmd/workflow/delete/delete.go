@@ -2,6 +2,7 @@ package delete
 
 import (
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -33,13 +34,11 @@ type Inputs struct {
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
 	deleteCmd := &cobra.Command{
-		Use:   "delete <workflow-folder-path>",
-		Short: "Deletes all versions of a workflow from the Workflow Registry",
-		Long:  "Deletes all workflow versions matching the given name and owner address.",
-		Args:  cobra.ExactArgs(1),
-		Example: `
-		cre workflow delete ./my-workflow
-		`,
+		Use:     "delete <workflow-folder-path>",
+		Short:   "Deletes all versions of a workflow from the Workflow Registry",
+		Long:    "Deletes all workflow versions matching the given name and owner address.",
+		Args:    cobra.ExactArgs(1),
+		Example: `cre workflow delete ./my-workflow`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			handler := newHandler(runtimeContext, cmd.InOrStdin())
 
@@ -173,6 +172,7 @@ func (h *handler) Execute() error {
 	}
 
 	fmt.Printf("Deleting %d workflow(s)...\n", len(allWorkflows))
+	var errs []error
 	for _, wf := range allWorkflows {
 		txOut, err := h.wrc.DeleteWorkflow(wf.WorkflowId)
 		if err != nil {
@@ -180,6 +180,7 @@ func (h *handler) Execute() error {
 				Err(err).
 				Str("workflowId", hex.EncodeToString(wf.WorkflowId[:])).
 				Msg("Failed to delete workflow")
+			errs = append(errs, err)
 			continue
 		}
 		switch txOut.Type {
@@ -207,6 +208,9 @@ func (h *handler) Execute() error {
 		}
 
 		// Workflow artifacts deletion will be handled by a background cleanup process.
+	}
+	if len(errs) > 0 {
+		return fmt.Errorf("failed to delete some workflows: %w", errors.Join(errs...))
 	}
 	fmt.Println("Workflows deleted successfully.")
 	return nil

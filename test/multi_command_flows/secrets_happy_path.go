@@ -190,6 +190,50 @@ func RunSecretsHappyPath(t *testing.T, tc TestConfig, chainName string) {
 	})
 }
 
+// RunSecretsListMsig on unsigned
+func RunSecretsListMsig(t *testing.T, tc TestConfig, chainName string) {
+	t.Helper()
+
+	// Set up environment variables for pre-deployed contracts
+	t.Setenv(environments.EnvVarWorkflowRegistryAddress, "0x5FbDB2315678afecb367f032d93F642f64180aa3")
+	t.Setenv(environments.EnvVarWorkflowRegistryChainName, chainName)
+
+	// Set up a mock server to simulate the vault gateway
+	// Set dummy API key
+	t.Setenv(credentials.CreApiKeyVar, "test-api")
+
+	t.Run("ListMsig", func(t *testing.T) {
+		out := secretsListMsig(t, tc)
+		require.Contains(t, out, "MSIG transaction prepared", "expected transaction prepared.\nCLI OUTPUT:\n%s", out)
+	})
+}
+
+//	cre secrets list <env-flag> <settings-flag> --unsigned
+//
+// It returns the output.
+func secretsListMsig(t *testing.T, tc TestConfig) string {
+	t.Helper()
+
+	// build CLI args
+	args := []string{
+		"secrets", "list",
+		tc.GetCliEnvFlag(),
+		tc.GetProjectRootFlag(),
+		"--unsigned",
+	}
+	cmd := exec.Command(CLIPath, args...)
+	// Let CLI handle context switching - don't set cmd.Dir manually
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	_ = cmd.Run()
+	out := stdout.String() + stderr.String()
+
+	return StripANSI(out)
+}
+
 // secretsCreateEoa writes a minimal secrets.yaml and invokes:
 //
 //	cre secrets create <secrets.yaml> <env-flag> <settings-flag>

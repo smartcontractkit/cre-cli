@@ -10,12 +10,12 @@ import (
 )
 
 const testYAML = `ENVIRONMENTS:
-  SANDBOX:
+  DEVELOPMENT:
     CRE_CLI_AUTH_BASE: https://auth0.test
     CRE_CLI_COGNITO_URL: https://cognito.test
     CRE_CLI_CLIENT_ID: test-id
     CRE_CLI_GRAPHQL_URL: https://graphql.test
-    CRE_CLI_AUDIENCE: sandbox-aud
+    CRE_CLI_AUDIENCE: development-aud
     CRE_CLI_USER_POOL_ID: pool-id
 
     CRE_CLI_WORKFLOW_REGISTRY_ADDRESS: "0x51D3acf4526e014deBf9884159A57f63Fc0Ca49D"
@@ -45,9 +45,9 @@ func TestLoadEnvironmentFile(t *testing.T) {
 		t.Fatalf("LoadEnvironmentFile returned error: %v", err)
 	}
 
-	sbx, ok := ff.Envs["SANDBOX"]
+	sbx, ok := ff.Envs["DEVELOPMENT"]
 	if !ok {
-		t.Fatal("SANDBOX environment missing")
+		t.Fatal("DEVELOPMENT environment missing")
 	}
 	if sbx.AuthBase != "https://auth0.test" {
 		t.Errorf("AuthBase = %q; want https://auth0.test", sbx.AuthBase)
@@ -58,8 +58,8 @@ func TestLoadEnvironmentFile(t *testing.T) {
 	if sbx.GraphQLURL != "https://graphql.test" {
 		t.Errorf("GraphQLURL = %q; want https://graphql.test", sbx.GraphQLURL)
 	}
-	if sbx.Audience != "sandbox-aud" {
-		t.Errorf("Audience = %q; want sandbox-aud", sbx.Audience)
+	if sbx.Audience != "development-aud" {
+		t.Errorf("Audience = %q; want development-aud", sbx.Audience)
 	}
 
 	if sbx.WorkflowRegistryAddress != "0x51D3acf4526e014deBf9884159A57f63Fc0Ca49D" {
@@ -72,13 +72,13 @@ func TestLoadEnvironmentFile(t *testing.T) {
 
 func TestNewEnvironmentSet_FallbackAndOverrides(t *testing.T) {
 	ff := &fileFormat{Envs: map[string]EnvironmentSet{
-		"SANDBOX": {
+		"DEVELOPMENT": {
 			AuthBase:   "b",
 			ClientID:   "c",
 			GraphQLURL: "d",
 			Audience:   "aa",
 
-			WorkflowRegistryAddress:   "0xsandbox_wr",
+			WorkflowRegistryAddress:   "0xdevelopment_wr",
 			WorkflowRegistryChainName: "ethereum-testnet-sepolia",
 		},
 		"STAGING": {
@@ -97,7 +97,7 @@ func TestNewEnvironmentSet_FallbackAndOverrides(t *testing.T) {
 	t.Setenv(EnvVarGraphQLURL, "")
 	t.Setenv(EnvVarAudience, "")
 
-	set := NewEnvironmentSet(ff, "SANDBOX")
+	set := NewEnvironmentSet(ff, "DEVELOPMENT")
 	if set.AuthBase != "b" {
 		t.Errorf("fallback AuthBase = %q; want b", set.AuthBase)
 	}

@@ -39,8 +39,7 @@ jobs:
       - name: Generate docs
         env:
           GITHUB_TOKEN: ${{ steps.setup-github-token.outputs.access-token }}
-        #TODO (DEVSVCS-2016) clean the GOLANG_PROTOBUF_REGISTRATION_CONFLICT flag
-        run: GOLANG_PROTOBUF_REGISTRATION_CONFLICT=warn go run gendoc/main.go
+        run: go run gendoc/main.go
 
       # Compare if generated docs are different from the docs on this git branch
       - name: Compare generated docs

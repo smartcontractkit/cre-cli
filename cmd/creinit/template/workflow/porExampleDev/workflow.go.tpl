@@ -18,17 +18,12 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/shopspring/decimal"
 
-	pb "github.com/smartcontractkit/chainlink-protos/cre/go/sdk"
 	pbvalues "github.com/smartcontractkit/chainlink-protos/cre/go/values"
 	"github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm"
 	"github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm/bindings"
 	"github.com/smartcontractkit/cre-sdk-go/capabilities/networking/http"
 	"github.com/smartcontractkit/cre-sdk-go/capabilities/scheduler/cron"
 	"github.com/smartcontractkit/cre-sdk-go/cre"
-)
-
-const (
-	SecretName = "SECRET_ADDRESS"
 )
 
 // EVMConfig holds per-chain configuration.
@@ -83,16 +78,10 @@ func InitWorkflow(config *Config, logger *slog.Logger, secretsProvider cre.Secre
 		Schedule: config.Schedule,
 	}
 
-	httpTriggerCfg := &http.Config{}
-
 	workflow := cre.Workflow[*Config]{
 		cre.Handler(
 			cron.Trigger(cronTriggerCfg),
 			onPORCronTrigger,
-		),
-		cre.Handler(
-			http.Trigger(httpTriggerCfg),
-			onHTTPTrigger,
 		),
 	}
 
@@ -116,7 +105,7 @@ func InitWorkflow(config *Config, logger *slog.Logger, secretsProvider cre.Secre
 }
 
 func onPORCronTrigger(config *Config, runtime cre.Runtime, outputs *cron.Payload) (string, error) {
-	return doPOR(config, runtime, outputs.ScheduledExecutionTime.AsTime())
+	return doPOR(config, runtime)
 }
 
 func onLogTrigger(config *Config, runtime cre.Runtime, payload *bindings.DecodedLog[message_emitter.MessageEmittedDecoded]) (string, error) {
@@ -152,36 +141,7 @@ func onLogTrigger(config *Config, runtime cre.Runtime, payload *bindings.Decoded
 	return message, nil
 }
 
-func onHTTPTrigger(config *Config, runtime cre.Runtime, payload *http.Payload) (string, error) {
-	logger := runtime.Logger()
-	logger.Info("Raw HTTP trigger received")
-
-	// If there's no input, fall back to "now".
-	if len(payload.Input) == 0 {
-		logger.Warn("HTTP trigger payload is empty; defaulting execution time to now")
-		return doPOR(config, runtime, runtime.Now().UTC())
-	}
-
-	// Log the raw JSON for debugging (human-readable).
-	logger.Info("Payload bytes", "payloadBytes", string(payload.Input))
-
-	// Unmarshal raw JSON bytes directly into your struct.
-	var req HTTPTriggerPayload
-	if err := json.Unmarshal(payload.Input, &req); err != nil {
-		logger.Error("failed to unmarshal http trigger payload", "err", err)
-		return "", err
-	}
-
-	// Provide a sensible default if the field is missing/zero.
-	if req.ExecutionTime.IsZero() {
-		req.ExecutionTime = runtime.Now().UTC()
-	}
-
-	logger.Info("Parsed HTTP trigger received", "payload", req)
-	return doPOR(config, runtime, req.ExecutionTime)
-}
-
-func doPOR(config *Config, runtime cre.Runtime, runTime time.Time) (string, error) {
+func doPOR(config *Config, runtime cre.Runtime) (string, error) {
 	logger := runtime.Logger()
 	// Fetch PoR
 	logger.Info("fetching por", "url", config.URL, "evms", config.EVMs)
@@ -208,21 +168,6 @@ func doPOR(config *Config, runtime cre.Runtime, runTime time.Time) (string, erro
 		return "", fmt.Errorf("failed to fetch native token balance: %w", err)
 	}
 	logger.Info("Native token balance", "token", config.EVMs[0].TokenAddress, "balance", nativeTokenBalance)
-
-	secretReq := &pb.SecretRequest{
-		Id: SecretName,
-	}
-
-	secretAddress, err := runtime.GetSecret(secretReq).Await()
-	if err != nil {
-		logger.Error(fmt.Sprintf("failed to get secret address: %v", err))
-		return "", err
-	}
-	secretAddressBalance, err := fetchNativeTokenBalance(runtime, config.EVMs[0], secretAddress.Value)
-	if err != nil {
-		return "", fmt.Errorf("failed to fetch secret address balance: %w", err)
-	}
-	logger.Info("Secret address balance", "balance", secretAddressBalance)
 
 	// Update reserves
 	if err := updateReserves(config, runtime, totalSupply, totalReserveScaled); err != nil {

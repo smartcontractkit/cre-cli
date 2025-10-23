@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -20,7 +21,6 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/capabilities/actions/vault"
-	vaultcommon "github.com/smartcontractkit/chainlink-common/pkg/capabilities/actions/vault"
 	"github.com/smartcontractkit/chainlink-common/pkg/jsonrpc2"
 	"github.com/smartcontractkit/chainlink-evm/gethwrappers/workflow/generated/workflow_registry_wrapper_v2"
 	"github.com/smartcontractkit/chainlink/v2/core/capabilities/vault/vaulttypes"
@@ -67,7 +67,8 @@ func NewHandler(ctx *runtime.Context, secretsFilePath string) (*Handler, error) 
 			return nil, fmt.Errorf("failed to decode the provided private key: %w", err)
 		}
 	} else {
-		fmt.Println("No EthPrivateKey found in settings; assuming a multisig request.")
+		ctx.Logger.Debug().Msg("No EthPrivateKey found in settings; assuming a multisig request.")
+
 	}
 
 	h := &Handler{
@@ -82,8 +83,14 @@ func NewHandler(ctx *runtime.Context, secretsFilePath string) (*Handler, error) 
 	return h, nil
 }
 
-// ResolveInputs unmarshals the JSON string into the UpsertSecretsInputs struct.
+// ResolveInputs loads secrets from a YAML file.
+// Errors if the path is not .yaml/.yml — MSIG step 2 is handled by `cre secrets execute`.
 func (h *Handler) ResolveInputs() (UpsertSecretsInputs, error) {
+	ext := strings.ToLower(filepath.Ext(h.SecretsFilePath))
+	if ext != ".yaml" && ext != ".yml" {
+		return nil, fmt.Errorf("expected a YAML file; for MSIG step 2 use `cre secrets execute <bundle.json>`")
+	}
+
 	fileContent, err := os.ReadFile(h.SecretsFilePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read secrets file: %w", err)
@@ -100,7 +107,6 @@ func (h *Handler) ResolveInputs() (UpsertSecretsInputs, error) {
 	out := make(UpsertSecretsInputs, 0, len(cfg.SecretsNames))
 
 	for id, values := range cfg.SecretsNames {
-		// Validate the ID’s UTF-8
 		if !utf8.ValidString(id) {
 			return nil, fmt.Errorf("secret id %q contains invalid UTF-8", id)
 		}
@@ -120,8 +126,6 @@ func (h *Handler) ResolveInputs() (UpsertSecretsInputs, error) {
 		if !ok {
 			return nil, fmt.Errorf("environment variable %q for secret %q not found; please export it", envName, id)
 		}
-
-		// Validate the secret value’s UTF-8
 		if !utf8.ValidString(envVal) {
 			return nil, fmt.Errorf("value for secret %q (env %q) contains invalid UTF-8", id, envName)
 		}
@@ -141,13 +145,11 @@ func (h *Handler) ValidateInputs(inputs UpsertSecretsInputs) error {
 	if err != nil {
 		return fmt.Errorf("failed to create validator: %w", err)
 	}
-
 	for i, item := range inputs {
 		if err := validate.Struct(item); err != nil {
 			return fmt.Errorf("validation failed for SecretItem at index %d: %w", i, err)
 		}
 	}
-
 	return nil
 }
 
@@ -158,7 +160,7 @@ func (h *Handler) PackAllowlistRequestTxData(reqDigest [32]byte, duration time.D
 		return "", fmt.Errorf("failed to parse workflow registry v2 ABI: %w", err)
 	}
 
-	// #nosec G115 -- int64 to uint32 conversion; Unix() returns seconds since epoch, which fits in uint32 until 2106
+	// #nosec G115
 	deadline := uint32(time.Now().Add(duration).Unix())
 
 	data, err := contractABI.Pack("allowlistRequest", reqDigest, deadline)
@@ -168,7 +170,7 @@ func (h *Handler) PackAllowlistRequestTxData(reqDigest [32]byte, duration time.D
 	return hex.EncodeToString(data), nil
 }
 
-func (h *Handler) LogMSIGNextSteps(txData string, requestID string) error {
+func (h *Handler) LogMSIGNextSteps(txData string, digest [32]byte, bundlePath string) error {
 	fmt.Println("")
 	fmt.Println("MSIG transaction prepared!")
 	fmt.Println("")
@@ -182,13 +184,13 @@ func (h *Handler) LogMSIGNextSteps(txData string, requestID string) error {
 	fmt.Println("")
 	fmt.Printf("      %s\n", txData)
 	fmt.Println("")
-	fmt.Println("   3. Save these values; you will need them on the second run:")
-	fmt.Printf("      Request ID: %s\n", requestID)
+	fmt.Println("   3. Save this bundle file; you will need it on the second run:")
+	fmt.Printf("      Bundle Path: %s\n", bundlePath)
+	fmt.Printf("      Digest:      0x%s\n", hex.EncodeToString(digest[:]))
 	fmt.Println("")
-	fmt.Println("   4. After the transaction is finalized on-chain, run the SAME command again,")
-	fmt.Println("      adding the --request-id flag with the value above, e.g. for create:")
+	fmt.Println("   4. After the transaction is finalized on-chain, run:")
 	fmt.Println("")
-	fmt.Println("      cre secrets create <secrets-file> --request-id=", requestID)
+	fmt.Println("      cre secrets execute", bundlePath, "--unsigned")
 	fmt.Println("")
 	return nil
 }
@@ -196,11 +198,11 @@ func (h *Handler) LogMSIGNextSteps(txData string, requestID string) error {
 // EncryptSecrets takes the raw secrets and encrypts them, returning pointers.
 func (h *Handler) EncryptSecrets(rawSecrets UpsertSecretsInputs) ([]*vault.EncryptedSecret, error) {
 	requestID := uuid.New().String()
-	getPublicKeyRequest := jsonrpc2.Request[vaultcommon.GetPublicKeyRequest]{
+	getPublicKeyRequest := jsonrpc2.Request[vault.GetPublicKeyRequest]{
 		Version: jsonrpc2.JsonRpcVersion,
 		ID:      requestID,
-		Method:  vaulttypes.MethodPublicKeyGet,      // "vault_publicKey_get"
-		Params:  &vaultcommon.GetPublicKeyRequest{}, // empty payload per current API
+		Method:  vaulttypes.MethodPublicKeyGet,
+		Params:  &vault.GetPublicKeyRequest{},
 	}
 
 	reqBody, err := json.Marshal(getPublicKeyRequest)
@@ -216,7 +218,7 @@ func (h *Handler) EncryptSecrets(rawSecrets UpsertSecretsInputs) ([]*vault.Encry
 		return nil, fmt.Errorf("gateway returned non-200: %d body=%s", status, string(respBody))
 	}
 
-	var rpcResp jsonrpc2.Response[vaultcommon.GetPublicKeyResponse]
+	var rpcResp jsonrpc2.Response[vault.GetPublicKeyResponse]
 	if err := json.Unmarshal(respBody, &rpcResp); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal public key response: %w", err)
 	}
@@ -236,28 +238,24 @@ func (h *Handler) EncryptSecrets(rawSecrets UpsertSecretsInputs) ([]*vault.Encry
 		return nil, fmt.Errorf("empty result in public key response")
 	}
 
-	pubKeyHex := rpcResp.Result.PublicKey // already hex per gateway
+	pubKeyHex := rpcResp.Result.PublicKey
 
-	// Encrypt each secret with tdh2easy
 	encryptedSecrets := make([]*vault.EncryptedSecret, 0, len(rawSecrets))
 	for _, item := range rawSecrets {
 		cipherHex, err := EncryptSecret(item.Value, pubKeyHex)
 		if err != nil {
 			return nil, fmt.Errorf("failed to encrypt secret (key=%s ns=%s): %w", item.ID, item.Namespace, err)
 		}
-
 		secID := &vault.SecretIdentifier{
 			Key:       item.ID,
 			Namespace: item.Namespace,
 			Owner:     h.OwnerAddress,
 		}
-
 		encryptedSecrets = append(encryptedSecrets, &vault.EncryptedSecret{
 			Id:             secID,
 			EncryptedValue: cipherHex,
 		})
 	}
-
 	return encryptedSecrets, nil
 }
 
@@ -286,29 +284,23 @@ func CalculateDigest[I any](r jsonrpc2.Request[I]) ([32]byte, error) {
 	if err != nil {
 		return [32]byte{}, fmt.Errorf("failed to marshal json request params: %w", err)
 	}
-
 	req := jsonrpc2.Request[json.RawMessage]{
 		Version: r.Version,
 		ID:      r.ID,
 		Method:  r.Method,
 		Params:  (*json.RawMessage)(&b),
 	}
-
 	digestStr, err := req.Digest()
 	if err != nil {
 		return [32]byte{}, fmt.Errorf("failed to calculate digest: %w", err)
 	}
-
 	digestBytes32, err := HexToBytes32(digestStr)
 	if err != nil {
 		return [32]byte{}, fmt.Errorf("failed to convert digest hex to [32]byte: %w", err)
 	}
-
 	return digestBytes32, nil
 }
 
-// HexToBytes32 converts a hex string (with or without 0x prefix) to a [32]byte.
-// Returns an error if the input isn't precisely 32 bytes after decoding.
 func HexToBytes32(h string) ([32]byte, error) {
 	var out [32]byte
 	h = strings.TrimPrefix(h, "0x")
@@ -323,33 +315,21 @@ func HexToBytes32(h string) ([32]byte, error) {
 	return out, nil
 }
 
-// Execute is a shared method for both 'create' and 'update' commands.
-// It encapsulates the core logic of validation, encryption, and sending data.
+// Execute is shared for 'create' and 'update' (YAML-only).
+// - MSIG => step 1: build request, save bundle, print instructions
+// - EOA  => build request, allowlist if needed, POST
 func (h *Handler) Execute(
 	inputs UpsertSecretsInputs,
 	method string,
 	duration time.Duration,
 	ownerType string,
-	requestIDFlag string,
 ) error {
-	// Encrypt the secrets
+	// Build from YAML inputs
 	encSecrets, err := h.EncryptSecrets(inputs)
 	if err != nil {
 		return fmt.Errorf("failed to encrypt secrets: %w", err)
 	}
-
-	// Resolve request ID (reuse if provided)
-	var requestID string
-	rid := strings.TrimSpace(requestIDFlag)
-	if rid == "" {
-		requestID = uuid.New().String()
-	} else {
-		id, err := uuid.Parse(rid)
-		if err != nil {
-			return fmt.Errorf("--request-id must be a valid UUID: %w", err)
-		}
-		requestID = id.String() // canonical form
-	}
+	requestID := uuid.New().String()
 
 	var (
 		requestBody []byte
@@ -367,13 +347,10 @@ func (h *Handler) Execute(
 				EncryptedSecrets: encSecrets,
 			},
 		}
-		d, err := CalculateDigest(req)
-		if err != nil {
+		if digest, err = CalculateDigest(req); err != nil {
 			return fmt.Errorf("failed to calculate create digest: %w", err)
 		}
-		digest = d
-		requestBody, err = json.Marshal(req)
-		if err != nil {
+		if requestBody, err = json.Marshal(req); err != nil {
 			return fmt.Errorf("failed to marshal JSON-RPC request: %w", err)
 		}
 
@@ -387,13 +364,10 @@ func (h *Handler) Execute(
 				EncryptedSecrets: encSecrets,
 			},
 		}
-		d, err := CalculateDigest(req)
-		if err != nil {
+		if digest, err = CalculateDigest(req); err != nil {
 			return fmt.Errorf("failed to calculate update digest: %w", err)
 		}
-		digest = d
-		requestBody, err = json.Marshal(req)
-		if err != nil {
+		if requestBody, err = json.Marshal(req); err != nil {
 			return fmt.Errorf("failed to marshal JSON-RPC request: %w", err)
 		}
 
@@ -401,21 +375,31 @@ func (h *Handler) Execute(
 		return fmt.Errorf("unsupported method %q (expected %q or %q)", method, vaulttypes.MethodSecretsCreate, vaulttypes.MethodSecretsUpdate)
 	}
 
-	// MSIG first run: owner is MSIG and no request-id. Only print steps & exit.
-	if ownerType == constants.WorkflowOwnerTypeMSIG && rid == "" {
+	// MSIG step 1: write bundle & exit
+	if ownerType == constants.WorkflowOwnerTypeMSIG {
+		baseDir := filepath.Dir(h.SecretsFilePath)
+		filename := DeriveBundleFilename(digest) // <digest>.json
+		bundlePath := filepath.Join(baseDir, filename)
+
+		ub := &UnsignedBundle{
+			RequestID:   requestID,
+			Method:      method,
+			DigestHex:   "0x" + hex.EncodeToString(digest[:]),
+			RequestBody: requestBody,
+			CreatedAt:   time.Now().UTC(),
+		}
+		if err := SaveBundle(bundlePath, ub); err != nil {
+			return fmt.Errorf("failed to save unsigned bundle at %s: %w", bundlePath, err)
+		}
+
 		txData, err := h.PackAllowlistRequestTxData(digest, duration)
 		if err != nil {
 			return fmt.Errorf("failed to pack allowlist tx: %w", err)
 		}
-		if err := h.LogMSIGNextSteps(txData, requestID); err != nil {
-			return fmt.Errorf("failed to log MSIG steps: %w", err)
-		}
-		return nil
+		return h.LogMSIGNextSteps(txData, digest, bundlePath)
 	}
 
-	// From here on, we're in the "call the DON" path.
-	// If --request-id is provided for ANY owner type: do NOT allowlist; only proceed if allowlisted.
-	// Else (EOA path): auto-allowlist if needed.
+	// EOA: allowlist (if needed) and POST
 	wrV2Client, err := h.ClientFactory.NewWorkflowRegistryV2Client()
 	if err != nil {
 		return fmt.Errorf("create workflow registry client failed: %w", err)
@@ -426,27 +410,15 @@ func (h *Handler) Execute(
 	if err != nil {
 		return fmt.Errorf("allowlist check failed: %w", err)
 	}
-
-	if rid == "" {
-		// first time run: no --request-id
-		if !allowlisted {
-			if err := wrV2Client.AllowlistRequest(digest, duration); err != nil {
-				return fmt.Errorf("allowlist request failed: %w", err)
-			}
-			fmt.Printf("Digest allowlisted; proceeding to gateway POST: owner=%s, requestID=%s, digest=0x%x\n", ownerAddr.Hex(), requestID, digest)
-		} else {
-			fmt.Printf("Digest already allowlisted; skipping on-chain allowlist: owner=%s, requestID=%s, digest=0x%x\n", ownerAddr.Hex(), requestID, digest)
+	if !allowlisted {
+		if err := wrV2Client.AllowlistRequest(digest, duration); err != nil {
+			return fmt.Errorf("allowlist request failed: %w", err)
 		}
+		fmt.Printf("Digest allowlisted; proceeding to gateway POST: owner=%s, digest=0x%x\n", ownerAddr.Hex(), digest)
 	} else {
-		// second time run: users provided --request-id
-		if !allowlisted {
-			return fmt.Errorf("on-chain request for request-id %q is not finalized (digest not allowlisted). Do not call the vault DON yet. Finalize the on-chain allowlist tx, then rerun this command with the same --request-id", requestIDFlag)
-		}
-		fmt.Printf("Digest allowlisted; proceeding to gateway POST: owner=%s, requestID=%s, digest=0x%x\n", ownerAddr.Hex(), requestID, digest)
-
+		fmt.Printf("Digest already allowlisted; proceeding to gateway POST: owner=%s, digest=0x%x\n", ownerAddr.Hex(), digest)
 	}
 
-	// POST to gateway
 	respBody, status, err := h.Gw.Post(requestBody)
 	if err != nil {
 		return err
@@ -454,7 +426,6 @@ func (h *Handler) Execute(
 	if status != http.StatusOK {
 		return fmt.Errorf("gateway returned a non-200 status code: %d", status)
 	}
-
 	return h.ParseVaultGatewayResponse(method, respBody)
 }
 

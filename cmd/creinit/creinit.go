@@ -2,7 +2,6 @@ package creinit
 
 import (
 	"embed"
-	_ "embed"
 	"errors"
 	"fmt"
 	"io"
@@ -35,10 +34,16 @@ const (
 	TemplateLangTS TemplateLanguage = "typescript"
 )
 
+const (
+	HelloWorldTemplate string = "HelloWorld"
+	PoRTemplate        string = "PoR"
+)
+
 type WorkflowTemplate struct {
 	Folder string
 	Title  string
 	ID     uint32
+	Name   string
 }
 
 type LanguageTemplate struct {
@@ -54,8 +59,8 @@ var languageTemplates = []LanguageTemplate{
 		Lang:       TemplateLangGo,
 		EntryPoint: ".",
 		Workflows: []WorkflowTemplate{
-			{Folder: "porExampleDev", Title: "Custom data feed: Updating on-chain data periodically using offchain API data", ID: 1},
-			{Folder: "blankTemplate", Title: "Boilerplate: A barebones template with just the essentials", ID: 2},
+			{Folder: "porExampleDev", Title: "Custom data feed: Updating on-chain data periodically using offchain API data", ID: 1, Name: PoRTemplate},
+			{Folder: "blankTemplate", Title: "Helloworld: A Golang Hello World example", ID: 2, Name: HelloWorldTemplate},
 		},
 	},
 	{
@@ -63,8 +68,8 @@ var languageTemplates = []LanguageTemplate{
 		Lang:       TemplateLangTS,
 		EntryPoint: "./main.ts",
 		Workflows: []WorkflowTemplate{
-			{Folder: "typescriptSimpleExample", Title: "Boilerplate: Typescript Hello World example for a simple workflow", ID: 3},
-			{Folder: "typescriptPorExampleDev", Title: "Custom data feed: Typescript updating on-chain data periodically using offchain API data", ID: 4},
+			{Folder: "typescriptSimpleExample", Title: "Helloworld: Typescript Hello World example", ID: 3, Name: HelloWorldTemplate},
+			{Folder: "typescriptPorExampleDev", Title: "Custom data feed: Typescript updating on-chain data periodically using offchain API data", ID: 4, Name: PoRTemplate},
 		},
 	},
 }
@@ -77,10 +82,14 @@ type Inputs struct {
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
 	var initCmd = &cobra.Command{
-		Use:   "init",
-		Short: "Initialize a new workflow project or add a workflow to an existing one",
-		Long:  "Initialize or extend a workflow project by setting up core files, gathering any missing details, and scaffolding the chosen template.",
-		Args:  cobra.NoArgs,
+		Use:     "init",
+		Aliases: []string{"new"},
+		Short:   "Initialize a new cre project (recommended starting point)",
+		Long: `Initialize a new CRE project or add a workflow to an existing one.
+
+This sets up the project structure, configuration, and starter files so you can
+build, test, and deploy workflows quickly.`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			handler := newHandler(runtimeContext, cmd.InOrStdin())
 
@@ -207,12 +216,12 @@ func (h *handler) Execute(inputs Inputs) error {
 		}
 	}
 
-	var tpl WorkflowTemplate
+	var selectedWorkflowTemplate WorkflowTemplate
 	var selectedLanguageTemplate LanguageTemplate
 	var workflowTemplates []WorkflowTemplate
 	if inputs.TemplateID != 0 {
 		var findErr error
-		tpl, selectedLanguageTemplate, findErr = h.getWorkflowTemplateByID(inputs.TemplateID)
+		selectedWorkflowTemplate, selectedLanguageTemplate, findErr = h.getWorkflowTemplateByID(inputs.TemplateID)
 		if findErr != nil {
 			return fmt.Errorf("invalid template ID %d: %w", inputs.TemplateID, findErr)
 		}
@@ -242,7 +251,7 @@ func (h *handler) Execute(inputs Inputs) error {
 		workflowTitles := h.extractWorkflowTitles(workflowTemplates)
 		if err := prompt.SelectPrompt(h.stdin, "Pick a workflow template", workflowTitles, func(choice string) error {
 			selected, selErr := h.getWorkflowTemplateByTitle(choice, workflowTemplates)
-			tpl = selected
+			selectedWorkflowTemplate = selected
 			return selErr
 		}); err != nil {
 			return fmt.Errorf("template selection aborted: %w", err)
@@ -281,19 +290,19 @@ func (h *handler) Execute(inputs Inputs) error {
 		return err
 	}
 
-	if err := h.copySecretsFileIfExists(projectRoot, tpl); err != nil {
+	if err := h.copySecretsFileIfExists(projectRoot, selectedWorkflowTemplate); err != nil {
 		return fmt.Errorf("failed to copy secrets file: %w", err)
 	}
 
 	// Get project name from project root
 	projectName := filepath.Base(projectRoot)
 
-	if err := h.generateWorkflowTemplate(workflowDirectory, tpl, projectName); err != nil {
+	if err := h.generateWorkflowTemplate(workflowDirectory, selectedWorkflowTemplate, projectName); err != nil {
 		return fmt.Errorf("failed to scaffold workflow: %w", err)
 	}
 
 	// Generate contracts at project level if template has contracts
-	if err := h.generateContractsTemplate(projectRoot, tpl, projectName); err != nil {
+	if err := h.generateContractsTemplate(projectRoot, selectedWorkflowTemplate, projectName); err != nil {
 		return fmt.Errorf("failed to scaffold contracts: %w", err)
 	}
 
@@ -312,12 +321,22 @@ func (h *handler) Execute(inputs Inputs) error {
 	fmt.Println("")
 	fmt.Println("Next steps:")
 	fmt.Println("")
-	fmt.Println("   1. Navigate to your workflow directory to see workflow details:")
-	fmt.Printf("      cd %s\n", workflowDirectory)
-	fmt.Println("")
-	fmt.Println("   2. To learn more about this template view the README.MD file:")
-	fmt.Printf("      %s\n", filepath.Join(workflowDirectory, "README.md"))
-	fmt.Println("")
+
+	if selectedWorkflowTemplate.Name == HelloWorldTemplate {
+		fmt.Println("   1. Navigate to your project directory:")
+		fmt.Printf("      cd %s\n", projectRoot)
+		fmt.Println("")
+		fmt.Println("   2. Run the worfklow on your machine:")
+		fmt.Printf("      `cre workflow simulate %s`\n", workflowName)
+		fmt.Println("")
+	} else {
+		fmt.Println("   1. Navigate to your workflow directory to see workflow details:")
+		fmt.Printf("      cd %s\n", workflowDirectory)
+		fmt.Println("")
+		fmt.Println("   2. To learn more about this template view the README.MD file:")
+		fmt.Printf("      %s\n", filepath.Join(workflowDirectory, "README.md"))
+		fmt.Println("")
+	}
 
 	return nil
 }
