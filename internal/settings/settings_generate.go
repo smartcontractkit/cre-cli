@@ -48,7 +48,7 @@ func GetDefaultReplacements() map[string]string {
 		"ProductionDonFamily":        constants.DefaultProductionDonFamily,
 
 		"ConfigPath":  "./config.json",
-		"SecretsPath": "../secrets.yaml",
+		"SecretsPath": "",
 	}
 }
 
