@@ -136,7 +136,8 @@ func newRootCommand() *cobra.Command {
 		return false
 	})
 
-	rootCmd.SetHelpTemplate(`{{with (or .Long .Short)}}{{.}}{{end}}
+	rootCmd.SetHelpTemplate(`
+{{- with (or .Long .Short)}}{{.}}{{end}}
 
 Usage:
 {{- if .Runnable}}
@@ -145,58 +146,65 @@ Usage:
   {{.CommandPath}} [command]
 {{- end}}
 
-{{- /* Only show Available Commands if there are any */}}
+{{- /* ============================================ */}}
+{{- /* Available Commands Section                 */}}
+{{- /* ============================================ */}}
 {{- if .HasAvailableSubCommands}}
 
 Available Commands:
-{{- $groupsUsed := false -}}
-{{- $firstGroup := true -}}
+  {{- $groupsUsed := false -}}
+  {{- $firstGroup := true -}}
 
-{{- range $grp := .Groups}}
-  {{- $has := false -}}
-  {{- range $.Commands}}
-    {{- if (and (not .Hidden) (.IsAvailableCommand) (eq .GroupID $grp.ID))}}{{- $has = true}}{{- end}}
-  {{- end}}
-  {{- if $has}}
-    {{- $groupsUsed = true -}}
-    {{- if $firstGroup}}{{- $firstGroup = false -}}{{end}}
-{{printf "%s:" $grp.Title}}
+  {{- range $grp := .Groups}}
+    {{- $has := false -}}
     {{- range $.Commands}}
       {{- if (and (not .Hidden) (.IsAvailableCommand) (eq .GroupID $grp.ID))}}
-  {{rpad .Name .NamePadding}}  {{.Short}}
+        {{- $has = true}}
       {{- end}}
     {{- end}}
-  {{- end}}
+    
+    {{- if $has}}
+      {{- $groupsUsed = true -}}
+      {{- if $firstGroup}}{{- $firstGroup = false -}}{{else}}
+
 {{- end}}
 
-{{- if $groupsUsed }}
-  {{- /* Groups are in use; show ungrouped as "Other" if any */}}
-  {{- if hasUngrouped .}}
-Other:
-    {{- range .Commands}}
-      {{- if (and (not .Hidden) (.IsAvailableCommand) (eq .GroupID ""))}}
-  {{rpad .Name .NamePadding}}  {{.Short}}
+  {{printf "%s:" $grp.Title}}
+      {{- range $.Commands}}
+        {{- if (and (not .Hidden) (.IsAvailableCommand) (eq .GroupID $grp.ID))}}
+    {{rpad .Name .NamePadding}}  {{.Short}}
+        {{- end}}
       {{- end}}
     {{- end}}
   {{- end}}
-{{- else }}
-  {{- /* No groups at this level; show a flat list with no "Other" header */}}
-  {{- range .Commands}}
-    {{- if (and (not .Hidden) (.IsAvailableCommand))}}
-  {{rpad .Name .NamePadding}}  {{.Short}}
+
+  {{- if $groupsUsed }}
+    {{- /* Groups are in use; show ungrouped as "Other" if any */}}
+    {{- if hasUngrouped .}}
+
+  Other:
+      {{- range .Commands}}
+        {{- if (and (not .Hidden) (.IsAvailableCommand) (eq .GroupID ""))}}
+    {{rpad .Name .NamePadding}}  {{.Short}}
+        {{- end}}
+      {{- end}}
     {{- end}}
-  {{- end}}
-{{- end }}
+  {{- else }}
+    {{- /* No groups at this level; show a flat list with no "Other" header */}}
+    {{- range .Commands}}
+      {{- if (and (not .Hidden) (.IsAvailableCommand))}}
+    {{rpad .Name .NamePadding}}  {{.Short}}
+      {{- end}}
+    {{- end}}
+  {{- end }}
 {{- end }}
 
-{{- /* Examples (if any) */}}
 {{- if .HasExample}}
 
 Examples:
 {{.Example}}
 {{- end }}
 
-{{- /* Flags (local) */}}
 {{- $local := (.LocalFlags.FlagUsagesWrapped 100 | trimTrailingWhitespaces) -}}
 {{- if $local }}
 
@@ -204,7 +212,6 @@ Flags:
 {{$local}}
 {{- end }}
 
-{{- /* Global / inherited flags */}}
 {{- $inherited := (.InheritedFlags.FlagUsagesWrapped 100 | trimTrailingWhitespaces) -}}
 {{- if $inherited }}
 
