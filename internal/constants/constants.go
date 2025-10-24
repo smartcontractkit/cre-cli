@@ -32,9 +32,9 @@ const (
 	DefaultBaseSepoliaChainName = "ethereum-testnet-sepolia-base-1" // Base Sepolia
 	DefaultEthMainnetChainName  = "ethereum-mainnet"                // Eth Mainnet
 
-	DefaultEthSepoliaRpcUrl  = "https://sepolia.infura.io/v3/YOUR_API_KEY" // ETH Sepolia
-	DefaultBaseSepoliaRpcUrl = "<select your own rpc url>"                 // Base Sepolia
-	DefaultEthMainnetRpcUrl  = "<select your own rpc url>"                 // ETH Mainnet
+	DefaultEthSepoliaRpcUrl  = "https://sepolia.infura.io/v3/<YOUR-PROJECT-ID>" // ETH Sepolia
+	DefaultBaseSepoliaRpcUrl = "<select your own rpc url>"                      // Base Sepolia
+	DefaultEthMainnetRpcUrl  = "https://mainnet.infura.io/v3/<YOUR-PROJECT-ID>" // ETH Mainnet
 
 	DefaultStagingDonFamily           = "zone-a" // Keystone team has to define this
 	DefaultProductionTestnetDonFamily = "zone-a" // Keystone team has to define this
