@@ -8,9 +8,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/denisbrodbeck/machineid"
 	"github.com/machinebox/graphql"
 	"github.com/rs/zerolog"
 
+	"github.com/smartcontractkit/cre-cli/cmd/version"
 	"github.com/smartcontractkit/cre-cli/internal/auth"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
@@ -44,7 +46,14 @@ func (c *Client) Execute(ctx context.Context, req *graphql.Request, resp any) er
 		return fmt.Errorf("credentials not provided")
 	}
 	req.Header.Set("User-Agent", "cre-cli")
-	err := c.refreshTokenIfNeeded(ctx)
+	req.Header.Set("X-CLI-Version", version.Version)
+	machineID, err := machineid.ProtectedID("cre-cli")
+	if err != nil {
+		c.log.Warn().Err(err).Msg("could not determine machine id")
+	} else {
+		req.Header.Set("X-Machine-Id", machineID)
+	}
+	err = c.refreshTokenIfNeeded(ctx)
 	if err != nil {
 		return fmt.Errorf("token validity check failed: %w", err)
 	}
