@@ -1,6 +1,7 @@
 package common
 
 import (
+	"context"
 	"crypto/ecdsa"
 	"encoding/hex"
 	"encoding/json"
@@ -16,7 +17,10 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/google/uuid"
+	"github.com/machinebox/graphql"
 	"github.com/rs/zerolog"
+	"github.com/smartcontractkit/cre-cli/internal/client/graphqlclient"
+	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"google.golang.org/protobuf/encoding/protojson"
 	"gopkg.in/yaml.v2"
 
@@ -55,6 +59,8 @@ type Handler struct {
 	OwnerAddress    string
 	EnvironmentSet  *environments.EnvironmentSet
 	Gw              GatewayClient
+	Wrc             *client.WorkflowRegistryV2Client
+	Credentials     *credentials.Credentials
 }
 
 // NewHandler creates a new handler instance.
@@ -78,8 +84,16 @@ func NewHandler(ctx *runtime.Context, secretsFilePath string) (*Handler, error) 
 		PrivateKey:      pk,
 		OwnerAddress:    ctx.Settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress,
 		EnvironmentSet:  ctx.EnvironmentSet,
+		Credentials:     ctx.Credentials,
 	}
 	h.Gw = &HTTPClient{URL: h.EnvironmentSet.GatewayURL, Client: &http.Client{Timeout: 10 * time.Second}}
+
+	wrc, err := h.ClientFactory.NewWorkflowRegistryV2Client()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create workflow registry client: %w", err)
+	}
+	h.Wrc = wrc
+
 	return h, nil
 }
 
@@ -324,6 +338,11 @@ func (h *Handler) Execute(
 	duration time.Duration,
 	ownerType string,
 ) error {
+	fmt.Println("Verifying ownership...")
+	if err := h.EnsureOwnerLinkedOrFail(); err != nil {
+		return err
+	}
+
 	// Build from YAML inputs
 	encSecrets, err := h.EncryptSecrets(inputs)
 	if err != nil {
@@ -400,18 +419,14 @@ func (h *Handler) Execute(
 	}
 
 	// EOA: allowlist (if needed) and POST
-	wrV2Client, err := h.ClientFactory.NewWorkflowRegistryV2Client()
-	if err != nil {
-		return fmt.Errorf("create workflow registry client failed: %w", err)
-	}
 	ownerAddr := common.HexToAddress(h.OwnerAddress)
 
-	allowlisted, err := wrV2Client.IsRequestAllowlisted(ownerAddr, digest)
+	allowlisted, err := h.Wrc.IsRequestAllowlisted(ownerAddr, digest)
 	if err != nil {
 		return fmt.Errorf("allowlist check failed: %w", err)
 	}
 	if !allowlisted {
-		if err := wrV2Client.AllowlistRequest(digest, duration); err != nil {
+		if err := h.Wrc.AllowlistRequest(digest, duration); err != nil {
 			return fmt.Errorf("allowlist request failed: %w", err)
 		}
 		fmt.Printf("Digest allowlisted; proceeding to gateway POST: owner=%s, digest=0x%x\n", ownerAddr.Hex(), digest)
@@ -544,4 +559,88 @@ func (h *Handler) ParseVaultGatewayResponse(method string, respBody []byte) erro
 	}
 
 	return nil
+}
+
+// EnsureOwnerLinkedOrFail TODO this reuses the same logic as in autoLink.go which is tied to deploy; consider refactoring to avoid duplication
+func (h *Handler) EnsureOwnerLinkedOrFail() error {
+	ownerAddr := common.HexToAddress(h.OwnerAddress)
+
+	linked, err := h.Wrc.IsOwnerLinked(ownerAddr)
+	if err != nil {
+		return fmt.Errorf("failed to check owner link status: %w", err)
+	}
+
+	fmt.Printf("Workflow owner link status: owner=%s, linked=%v\n", ownerAddr.Hex(), linked)
+
+	if linked {
+		// Owner is linked on contract, now verify it's linked to the current user's account
+		linkedToCurrentUser, err := h.checkLinkStatusViaGraphQL(ownerAddr)
+		if err != nil {
+			return fmt.Errorf("failed to validate key ownership: %w", err)
+		}
+
+		if !linkedToCurrentUser {
+			return fmt.Errorf("key %s is linked to another account. Please use a different owner address", ownerAddr.Hex())
+		}
+
+		fmt.Println("Key ownership verified")
+		return nil
+	}
+
+	return fmt.Errorf("Owner not linked. Run the following command to link owner %s: cre account link-key\n", ownerAddr.Hex())
+}
+
+// checkLinkStatusViaGraphQL checks if the owner is linked and verified by querying the service
+func (h *Handler) checkLinkStatusViaGraphQL(ownerAddr common.Address) (bool, error) {
+	const query = `
+	query {
+		listWorkflowOwners(filters: { linkStatus: LINKED_ONLY }) {
+			linkedOwners {
+				workflowOwnerAddress
+				verificationStatus
+			}
+		}
+	}`
+
+	req := graphql.NewRequest(query)
+	var resp struct {
+		ListWorkflowOwners struct {
+			LinkedOwners []struct {
+				WorkflowOwnerAddress string `json:"workflowOwnerAddress"`
+				VerificationStatus   string `json:"verificationStatus"`
+			} `json:"linkedOwners"`
+		} `json:"listWorkflowOwners"`
+	}
+
+	gql := graphqlclient.New(h.Credentials, h.EnvironmentSet, h.Log)
+	if err := gql.Execute(context.Background(), req, &resp); err != nil {
+		return false, fmt.Errorf("GraphQL query failed: %w", err)
+	}
+
+	ownerHex := strings.ToLower(ownerAddr.Hex())
+	for _, linkedOwner := range resp.ListWorkflowOwners.LinkedOwners {
+		if strings.ToLower(linkedOwner.WorkflowOwnerAddress) == ownerHex {
+			// Check if verification status is successful
+			//nolint:misspell // Intentional misspelling to match external API
+			if linkedOwner.VerificationStatus == "VERIFICATION_STATUS_SUCCESSFULL" {
+				h.Log.Debug().
+					Str("ownerAddress", linkedOwner.WorkflowOwnerAddress).
+					Str("verificationStatus", linkedOwner.VerificationStatus).
+					Msg("Owner found and verified")
+				return true, nil
+			}
+			h.Log.Debug().
+				Str("ownerAddress", linkedOwner.WorkflowOwnerAddress).
+				Str("verificationStatus", linkedOwner.VerificationStatus).
+				Str("expectedStatus", "VERIFICATION_STATUS_SUCCESSFULL"). //nolint:misspell // Intentional misspelling to match external API
+				Msg("Owner found but verification status not successful")
+			return false, nil
+		}
+	}
+
+	h.Log.Debug().
+		Str("ownerAddress", ownerAddr.Hex()).
+		Msg("Owner not found in linked owners list")
+
+	return false, nil
 }

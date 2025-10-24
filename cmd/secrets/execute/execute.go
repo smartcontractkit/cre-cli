@@ -65,13 +65,9 @@ func New(ctx *runtime.Context) *cobra.Command {
 				return fmt.Errorf("invalid bundle digest: %w", err)
 			}
 
-			wrV2Client, err := h.ClientFactory.NewWorkflowRegistryV2Client()
-			if err != nil {
-				return fmt.Errorf("create workflow registry client failed: %w", err)
-			}
 			ownerAddr := ethcommon.HexToAddress(h.OwnerAddress)
 
-			allowlisted, err := wrV2Client.IsRequestAllowlisted(ownerAddr, digest)
+			allowlisted, err := h.Wrc.IsRequestAllowlisted(ownerAddr, digest)
 			if err != nil {
 				return fmt.Errorf("allowlist check failed: %w", err)
 			}
