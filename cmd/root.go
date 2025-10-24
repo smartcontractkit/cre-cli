@@ -225,8 +225,10 @@ Use "{{.CommandPath}} [command] --help" for more information about a command.
 {{- end }}
 
 💡 Tip: New here? Run:
-  cre init
-  to create your first cre project.
+  $ cre login
+    to login into your cre account, then:
+  $ cre init
+    to create your first cre project.
 
 📘 Need more help?
   Visit https://docs.chain.link/cre
