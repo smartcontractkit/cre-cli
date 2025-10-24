@@ -7,16 +7,12 @@ import (
 	"bytes"
 	"fmt"
 	errors "github.com/gagliardetto/anchor-go/errors"
-	idl "github.com/gagliardetto/anchor-go/idl"
 	binary "github.com/gagliardetto/binary"
 	solanago "github.com/gagliardetto/solana-go"
+	sdk "github.com/smartcontractkit/chainlink-protos/cre/go/sdk"
 	solana "github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana_bindings/cre-sdk-go/capabilities/blockchain/solana"
+	cre "github.com/smartcontractkit/cre-sdk-go/cre"
 )
-
-type MyProject struct {
-	IDL    *idl.Idl
-	client *solana.Client
-}
 
 type AccessLogged struct {
 	Caller  solanago.PublicKey `json:"caller"`
@@ -78,8 +74,30 @@ func UnmarshalAccessLogged(buf []byte) (*AccessLogged, error) {
 	return obj, nil
 }
 
+func (c *MyProject) WriteReportFromAccessLogged(runtime cre.Runtime, input AccessLogged) cre.Promise[*solana.WriteReportReply] {
+	encoded, err := input.Marshal()
+	if err != nil {
+		return cre.PromiseFromResult[*solana.WriteReportReply](nil, err)
+	}
+
+	promise := runtime.GenerateReport(&sdk.ReportRequest{
+		EncodedPayload: encoded,
+		EncoderName:    "solana",
+		HashingAlgo:    "sha256",
+		SigningAlgo:    "ed25519",
+	})
+
+	return cre.ThenPromise(promise, func(report *cre.Report) cre.Promise[*solana.WriteReportReply] {
+		return c.client.WriteReport(runtime, &solana.WriteCreReportRequest{
+			Receiver: ProgramID.Bytes(),
+			Report:   report,
+		})
+	})
+}
+
 type DataAccount struct {
-	Data string `json:"data"`
+	Data  string       `json:"data"`
+	Data2 DataAccount2 `json:"data2"`
 }
 
 func (obj DataAccount) MarshalWithEncoder(encoder *binary.Encoder) (err error) {
@@ -87,6 +105,11 @@ func (obj DataAccount) MarshalWithEncoder(encoder *binary.Encoder) (err error) {
 	err = encoder.Encode(obj.Data)
 	if err != nil {
 		return errors.NewField("Data", err)
+	}
+	// Serialize `Data2`:
+	err = encoder.Encode(obj.Data2)
+	if err != nil {
+		return errors.NewField("Data2", err)
 	}
 	return nil
 }
@@ -107,6 +130,11 @@ func (obj *DataAccount) UnmarshalWithDecoder(decoder *binary.Decoder) (err error
 	if err != nil {
 		return errors.NewField("Data", err)
 	}
+	// Deserialize `Data2`:
+	err = decoder.Decode(&obj.Data2)
+	if err != nil {
+		return errors.NewField("Data2", err)
+	}
 	return nil
 }
 
@@ -125,6 +153,97 @@ func UnmarshalDataAccount(buf []byte) (*DataAccount, error) {
 		return nil, err
 	}
 	return obj, nil
+}
+
+func (c *MyProject) WriteReportFromDataAccount(runtime cre.Runtime, input DataAccount) cre.Promise[*solana.WriteReportReply] {
+	encoded, err := input.Marshal()
+	if err != nil {
+		return cre.PromiseFromResult[*solana.WriteReportReply](nil, err)
+	}
+
+	promise := runtime.GenerateReport(&sdk.ReportRequest{
+		EncodedPayload: encoded,
+		EncoderName:    "solana",
+		HashingAlgo:    "sha256",
+		SigningAlgo:    "ed25519",
+	})
+
+	return cre.ThenPromise(promise, func(report *cre.Report) cre.Promise[*solana.WriteReportReply] {
+		return c.client.WriteReport(runtime, &solana.WriteCreReportRequest{
+			Receiver: ProgramID.Bytes(),
+			Report:   report,
+		})
+	})
+}
+
+type DataAccount2 struct {
+	Data2 string `json:"data2"`
+}
+
+func (obj DataAccount2) MarshalWithEncoder(encoder *binary.Encoder) (err error) {
+	// Serialize `Data2`:
+	err = encoder.Encode(obj.Data2)
+	if err != nil {
+		return errors.NewField("Data2", err)
+	}
+	return nil
+}
+
+func (obj DataAccount2) Marshal() ([]byte, error) {
+	buf := bytes.NewBuffer(nil)
+	encoder := binary.NewBorshEncoder(buf)
+	err := obj.MarshalWithEncoder(encoder)
+	if err != nil {
+		return nil, fmt.Errorf("error while encoding DataAccount2: %w", err)
+	}
+	return buf.Bytes(), nil
+}
+
+func (obj *DataAccount2) UnmarshalWithDecoder(decoder *binary.Decoder) (err error) {
+	// Deserialize `Data2`:
+	err = decoder.Decode(&obj.Data2)
+	if err != nil {
+		return errors.NewField("Data2", err)
+	}
+	return nil
+}
+
+func (obj *DataAccount2) Unmarshal(buf []byte) error {
+	err := obj.UnmarshalWithDecoder(binary.NewBorshDecoder(buf))
+	if err != nil {
+		return fmt.Errorf("error while unmarshaling DataAccount2: %w", err)
+	}
+	return nil
+}
+
+func UnmarshalDataAccount2(buf []byte) (*DataAccount2, error) {
+	obj := new(DataAccount2)
+	err := obj.Unmarshal(buf)
+	if err != nil {
+		return nil, err
+	}
+	return obj, nil
+}
+
+func (c *MyProject) WriteReportFromDataAccount2(runtime cre.Runtime, input DataAccount2) cre.Promise[*solana.WriteReportReply] {
+	encoded, err := input.Marshal()
+	if err != nil {
+		return cre.PromiseFromResult[*solana.WriteReportReply](nil, err)
+	}
+
+	promise := runtime.GenerateReport(&sdk.ReportRequest{
+		EncodedPayload: encoded,
+		EncoderName:    "solana",
+		HashingAlgo:    "sha256",
+		SigningAlgo:    "ed25519",
+	})
+
+	return cre.ThenPromise(promise, func(report *cre.Report) cre.Promise[*solana.WriteReportReply] {
+		return c.client.WriteReport(runtime, &solana.WriteCreReportRequest{
+			Receiver: ProgramID.Bytes(),
+			Report:   report,
+		})
+	})
 }
 
 type DataUpdated struct {
@@ -185,4 +304,25 @@ func UnmarshalDataUpdated(buf []byte) (*DataUpdated, error) {
 		return nil, err
 	}
 	return obj, nil
+}
+
+func (c *MyProject) WriteReportFromDataUpdated(runtime cre.Runtime, input DataUpdated) cre.Promise[*solana.WriteReportReply] {
+	encoded, err := input.Marshal()
+	if err != nil {
+		return cre.PromiseFromResult[*solana.WriteReportReply](nil, err)
+	}
+
+	promise := runtime.GenerateReport(&sdk.ReportRequest{
+		EncodedPayload: encoded,
+		EncoderName:    "solana",
+		HashingAlgo:    "sha256",
+		SigningAlgo:    "ed25519",
+	})
+
+	return cre.ThenPromise(promise, func(report *cre.Report) cre.Promise[*solana.WriteReportReply] {
+		return c.client.WriteReport(runtime, &solana.WriteCreReportRequest{
+			Receiver: ProgramID.Bytes(),
+			Report:   report,
+		})
+	})
 }

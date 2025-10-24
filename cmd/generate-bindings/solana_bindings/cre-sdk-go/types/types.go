@@ -13,6 +13,7 @@ import (
 
 	"github.com/gagliardetto/solana-go"
 	"github.com/lib/pq"
+	codec "github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana_bindings/cre-sdk-go/codec"
 )
 
 type PublicKey solana.PublicKey
@@ -129,7 +130,7 @@ type Decoder interface {
 	Decode(_ context.Context, raw []byte, into any, itemType string) error
 }
 
-type EventIdl IdlEvent
+type EventIdl codec.EventIDLTypes
 
 func (e *EventIdl) Scan(src interface{}) error {
 	return scanJSON("EventIdl", e, src)
@@ -284,5 +285,25 @@ func (rs ReplayStatus) String() string {
 		return "Complete"
 	default:
 		return fmt.Sprintf("invalid status: %d", rs) // Handle unknown cases
+	}
+}
+
+func GetIdlEvent(idlTypes *codec.IdlTypeDefSlice, eventName string) EventIdl {
+	myevent := codec.IdlEvent{}
+	for _, typDefs := range *idlTypes {
+		if typDefs.Name != eventName {
+			continue
+		}
+		fields := *typDefs.Type.Fields
+		for _, field := range fields {
+			myevent.Fields = append(myevent.Fields, codec.IdlEventField{
+				Name: field.Name,
+				Type: field.Type,
+			})
+		}
+	}
+	return EventIdl{
+		Event: myevent,
+		Types: *idlTypes,
 	}
 }

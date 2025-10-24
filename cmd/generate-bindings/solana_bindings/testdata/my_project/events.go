@@ -6,9 +6,7 @@ package my_project
 import (
 	"fmt"
 	binary "github.com/gagliardetto/binary"
-	"github.com/gagliardetto/anchor-go/idl"
 	solanatypes "github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana_bindings/cre-sdk-go/types"
-	solana "github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana_bindings/cre-sdk-go/capabilities/blockchain/solana"
 )
 
 func ParseAnyEvent(eventData []byte) (any, error) {
@@ -85,33 +83,6 @@ func DecodeEvent_AccessLogged(event solanatypes.Log) (*AccessLogged, error) {
 		return nil, err
 	}
 	return res, nil
-}
-
-type DataUpdatedTrigger struct {
-	cre.Trigger[*solanatypes.Log, *solanatypes.Log] // Embed the raw trigger
-	// contract                        *DataStorage // Keep reference for decoding
-}
-
-type MyProject struct {
-	IDL *idl.Idl
-}
-
-func LogTrigger_DataUpdated(chainSelector uint64, filters []DataUpdated) (cre.Trigger[*solanatypes.Log, *solanatypes.Log], error) {
-	
-	// use filters sent by user to create subkeypaths and subkeyfilters
-
-	rawTrigger := solana.LogTrigger(chainSelector, &solana.FilterLogTriggerRequest{
-		Address:       ProgramID,
-		EventName:     "DataUpdated",
-		EventSig:      Event_DataUpdated,
-		EventIdl:      nil,
-		// SubkeyPaths:   [][]string{{"sender"}},
-		// SubkeyFilters: []SubkeyFilterCriteria{{SubkeyIndex: 0, Comparers: []primitives.ValueComparator{{Type: primitives.ValueComparatorType_EQUAL, Value: filters[0].Sender.String()}}}},
-	})
-	return &DataUpdatedTrigger{
-		Trigger: rawTrigger,
-		contract: c,
-	}, nil
 }
 
 /*

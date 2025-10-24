@@ -6,6 +6,10 @@ package my_project
 import (
 	"fmt"
 	binary "github.com/gagliardetto/binary"
+	solana "github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana_bindings/cre-sdk-go/capabilities/blockchain/solana"
+	bindings "github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana_bindings/cre-sdk-go/capabilities/blockchain/solana/bindings"
+	types "github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana_bindings/cre-sdk-go/types"
+	cre "github.com/smartcontractkit/cre-sdk-go/cre"
 )
 
 func ParseAnyEvent(eventData []byte) (any, error) {
@@ -51,6 +55,49 @@ func ParseEvent_AccessLogged(eventData []byte) (*AccessLogged, error) {
 	return event, nil
 }
 
+func DecodeEvent_AccessLogged(event types.Log) (*AccessLogged, error) {
+	res, err := ParseEvent_AccessLogged(event.Data)
+	if err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
+type AccessLoggedTrigger struct {
+	cre.Trigger[*solana.Log, *solana.Log]
+}
+
+func (t *AccessLoggedTrigger) Adapt(l *solana.Log) (*bindings.DecodedLog[AccessLogged], error) {
+	decoded, err := DecodeEvent_AccessLogged(l)
+	if err != nil {
+		return nil, err
+	}
+	return &bindings.DecodedLog[AccessLogged]{
+		Data: *decoded,
+		Log:  l,
+	}, nil
+}
+
+func (c *MyProject) LogTrigger_AccessLogged(chainSelector uint64, subKeyPathAndValue []solana.SubKeyPathAndFilter) (cre.Trigger[*solana.Log, *bindings.DecodedLog[AccessLogged]], error) {
+	if len(subKeyPathAndValue) > 4 {
+		return nil, fmt.Errorf("too many subkey path and value pairs: %d", len(subKeyPathAndValue))
+	}
+	subKeyPaths, subKeyFilters, err := bindings.ValidateSubKeyPathAndValueExactNoPtr[AccessLogged](subKeyPathAndValue)
+	if err != nil {
+		return nil, fmt.Errorf("failed to validate subkey path and value: %w", err)
+	}
+	eventIdl := types.GetIdlEvent(c.IdlTypes, "AccessLogged")
+	rawTrigger := solana.LogTrigger(chainSelector, &solana.FilterLogTriggerRequest{
+		Address:       types.PublicKey(ProgramID),
+		EventIdl:      eventIdl,
+		EventName:     "AccessLogged",
+		EventSig:      Event_AccessLogged,
+		SubkeyFilters: subKeyFilters,
+		SubkeyPaths:   subKeyPaths,
+	})
+	return &AccessLoggedTrigger{Trigger: rawTrigger}, nil
+}
+
 func ParseEvent_DataUpdated(eventData []byte) (*DataUpdated, error) {
 	decoder := binary.NewBorshDecoder(eventData)
 	discriminator, err := decoder.ReadDiscriminator()
@@ -66,4 +113,47 @@ func ParseEvent_DataUpdated(eventData []byte) (*DataUpdated, error) {
 		return nil, fmt.Errorf("failed to unmarshal event of type DataUpdated: %w", err)
 	}
 	return event, nil
+}
+
+func DecodeEvent_DataUpdated(event types.Log) (*DataUpdated, error) {
+	res, err := ParseEvent_DataUpdated(event.Data)
+	if err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
+type DataUpdatedTrigger struct {
+	cre.Trigger[*solana.Log, *solana.Log]
+}
+
+func (t *DataUpdatedTrigger) Adapt(l *solana.Log) (*bindings.DecodedLog[DataUpdated], error) {
+	decoded, err := DecodeEvent_DataUpdated(l)
+	if err != nil {
+		return nil, err
+	}
+	return &bindings.DecodedLog[DataUpdated]{
+		Data: *decoded,
+		Log:  l,
+	}, nil
+}
+
+func (c *MyProject) LogTrigger_DataUpdated(chainSelector uint64, subKeyPathAndValue []solana.SubKeyPathAndFilter) (cre.Trigger[*solana.Log, *bindings.DecodedLog[DataUpdated]], error) {
+	if len(subKeyPathAndValue) > 4 {
+		return nil, fmt.Errorf("too many subkey path and value pairs: %d", len(subKeyPathAndValue))
+	}
+	subKeyPaths, subKeyFilters, err := bindings.ValidateSubKeyPathAndValueExactNoPtr[DataUpdated](subKeyPathAndValue)
+	if err != nil {
+		return nil, fmt.Errorf("failed to validate subkey path and value: %w", err)
+	}
+	eventIdl := types.GetIdlEvent(c.IdlTypes, "DataUpdated")
+	rawTrigger := solana.LogTrigger(chainSelector, &solana.FilterLogTriggerRequest{
+		Address:       types.PublicKey(ProgramID),
+		EventIdl:      eventIdl,
+		EventName:     "DataUpdated",
+		EventSig:      Event_DataUpdated,
+		SubkeyFilters: subKeyFilters,
+		SubkeyPaths:   subKeyPaths,
+	})
+	return &DataUpdatedTrigger{Trigger: rawTrigger}, nil
 }

@@ -22,3 +22,7 @@ type WriteCreReportRequest struct {
 
 	Report *cre.Report
 }
+
+func LogTrigger(chainSelector uint64, config *FilterLogTriggerRequest) cre.Trigger[*Log, *Log] {
+	return nil
+}
