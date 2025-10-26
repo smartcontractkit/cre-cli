@@ -27,6 +27,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/telemetry"
+	"github.com/smartcontractkit/cre-cli/update"
 )
 
 // RootCmd represents the base command when called without any subcommands
@@ -119,6 +120,10 @@ func newRootCommand() *cobra.Command {
 
 		PersistentPostRun: func(cmd *cobra.Command, args []string) {
 			telemetry.EmitCommandEvent(cmd, 0, runtimeContext)
+		},
+
+		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+			go update.CheckForUpdates(version.Version, runtimeContext.Logger)
 		},
 	}
 
