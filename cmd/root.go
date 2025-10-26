@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
+	"sync" // <-- IMPORT SYNC
 
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
@@ -37,14 +37,27 @@ var runtimeContextForTelemetry *runtime.Context
 
 var executingCommand *cobra.Command
 
+// --- ADDED WaitGroup ---
+var updateCheckWG sync.WaitGroup
+var telemetryWG sync.WaitGroup // <-- ADDED TELEMETRY WAITGROUP
+
 func Execute() {
 	err := RootCmd.Execute()
 
 	if err != nil && executingCommand != nil && runtimeContextForTelemetry != nil {
-		telemetry.EmitCommandEvent(executingCommand, 1, runtimeContextForTelemetry)
+		// --- WRAP TELEMETRY IN WAITGROUP ---
+		telemetryWG.Add(1)
+		go func() {
+			defer telemetryWG.Done()
+			telemetry.EmitCommandEvent(executingCommand, 1, runtimeContextForTelemetry)
+		}()
 	}
 
-	time.Sleep(100 * time.Millisecond)
+	// --- USE WaitGroup INSTEAD OF SLEEP ---
+	// Wait for the update check goroutine to finish
+	updateCheckWG.Wait()
+	// --- WAIT FOR TELEMETRY TO FINISH ---
+	telemetryWG.Wait()
 
 	if err != nil {
 		os.Exit(1)
@@ -89,6 +102,17 @@ func newRootCommand() *cobra.Command {
 				runtimeContext.ClientFactory = client.NewFactory(&newLogger, v)
 			}
 
+			// --- RUN UPDATE CHECK IN GOROUTINE WITH WAITGROUP ---
+			if cmd.Name() != "bash" && cmd.Name() != "zsh" && cmd.Name() != "fish" && cmd.Name() != "powershell" {
+				// Add 1 to the WaitGroup
+				updateCheckWG.Add(1)
+				go func() {
+					// Signal Done() when this goroutine finishes
+					defer updateCheckWG.Done()
+					update.CheckForUpdates(version.Version, runtimeContext.Logger)
+				}()
+			}
+
 			// load env vars from .env file and settings from yaml files
 			if isLoadEnvAndSettings(cmd) {
 				// Set execution context (project root + workflow directory if applicable)
@@ -115,17 +139,16 @@ func newRootCommand() *cobra.Command {
 				return fmt.Errorf("failed to load environment details: %w", err)
 			}
 
-			// Run update check
-			// Skip running this for completion commands
-			if cmd.Name() != "bash" && cmd.Name() != "zsh" && cmd.Name() != "fish" && cmd.Name() != "powershell" {
-				go update.CheckForUpdates(version.Version, runtimeContext.Logger)
-			}
-
 			return nil
 		},
 
 		PersistentPostRun: func(cmd *cobra.Command, args []string) {
-			telemetry.EmitCommandEvent(cmd, 0, runtimeContext)
+			// Wrap telemetry in waitgroup so it doesn't get terminated on short execution commands (i.e. version)
+			telemetryWG.Add(1)
+			go func() {
+				defer telemetryWG.Done()
+				telemetry.EmitCommandEvent(cmd, 0, runtimeContext)
+			}()
 		},
 	}
 
