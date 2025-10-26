@@ -115,15 +115,17 @@ func newRootCommand() *cobra.Command {
 				return fmt.Errorf("failed to load environment details: %w", err)
 			}
 
+			// Run update check
+			// Skip running this for completion commands
+			if cmd.Name() != "bash" && cmd.Name() != "zsh" && cmd.Name() != "fish" && cmd.Name() != "powershell" {
+				go update.CheckForUpdates(version.Version, runtimeContext.Logger)
+			}
+
 			return nil
 		},
 
 		PersistentPostRun: func(cmd *cobra.Command, args []string) {
 			telemetry.EmitCommandEvent(cmd, 0, runtimeContext)
-		},
-
-		PersistentPreRun: func(cmd *cobra.Command, args []string) {
-			go update.CheckForUpdates(version.Version, runtimeContext.Logger)
 		},
 	}
 

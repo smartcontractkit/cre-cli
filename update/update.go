@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings" // <-- Import strings package
 	"time"
 
 	"github.com/Masterminds/semver/v3"
@@ -130,6 +131,13 @@ func fetchLatestVersionFromGitHub(logger *zerolog.Logger) (string, error) {
 // block the main CLI execution.
 // It now accepts your application's logger.
 func CheckForUpdates(currentVersion string, logger *zerolog.Logger) {
+
+	// --- THIS IS THE FIX ---
+	// The parser fails on "version v0.5.1-alpha".
+	// It must be a valid semver string, like "v0.5.1-alpha".
+	// This is just for testing. Remove this line for production.
+	// currentVersion = "v0.5.1-alpha" // <-- REMOVED THE HARDCODED LINE
+
 	// --- TESTING HOOK ---
 	// Allow forcing the check even for "development" version
 	forceCheck := os.Getenv("CRE_FORCE_UPDATE_CHECK") == "1"
@@ -139,9 +147,17 @@ func CheckForUpdates(currentVersion string, logger *zerolog.Logger) {
 	}
 	// --- END TESTING HOOK ---
 
-	currentSemVer, err := semver.NewVersion(currentVersion)
+	// --- FIX: Clean the version string ---
+	// The version string might be "version v0.7.3-alpha".
+	// We need to strip the "version" prefix and any spaces.
+	cleanedVersion := strings.Replace(currentVersion, "version", "", 1)
+	cleanedVersion = strings.TrimSpace(cleanedVersion)
+	// Now, cleanedVersion should be "v0.7.3-alpha"
+
+	currentSemVer, err := semver.NewVersion(cleanedVersion) // <-- USE cleanedVersion
 	if err != nil {
-		logger.Debug().Msgf("Failed to parse current version '%s': %v", currentVersion, err)
+		// Log *both* the original and the cleaned string for debugging
+		logger.Debug().Msgf("Failed to parse current version (original: '%s', cleaned: '%s'): %v", currentVersion, cleanedVersion, err)
 		return
 	}
 	logger.Debug().Msgf("Current version parsed as: %s", currentSemVer.String())
@@ -165,7 +181,7 @@ func CheckForUpdates(currentVersion string, logger *zerolog.Logger) {
 	needsCheck := now.Sub(cache.LastCheck) > cacheDuration
 	latestVersionString := cache.LatestVersion
 
-	if needsCheck {
+	if needsCheck || forceCheck { // Added forceCheck here to always fetch when testing
 		logger.Debug().Msg("Cache expired or empty. Fetching from GitHub.")
 		newLatestVersion, fetchErr := fetchLatestVersionFromGitHub(logger)
 		if fetchErr != nil {
