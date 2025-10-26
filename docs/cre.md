@@ -6,6 +6,10 @@ CRE CLI tool
 
 A command line tool for building, testing and managing Chainlink Runtime Environment (CRE) workflows.
 
+```
+cre [optional flags]
+```
+
 ### Options
 
 ```
