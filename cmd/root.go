@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"sync" // <-- IMPORT SYNC
+	"sync"
 
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
@@ -37,15 +37,14 @@ var runtimeContextForTelemetry *runtime.Context
 
 var executingCommand *cobra.Command
 
-// --- ADDED WaitGroup ---
 var updateCheckWG sync.WaitGroup
-var telemetryWG sync.WaitGroup // <-- ADDED TELEMETRY WAITGROUP
+var telemetryWG sync.WaitGroup
 
 func Execute() {
 	err := RootCmd.Execute()
 
 	if err != nil && executingCommand != nil && runtimeContextForTelemetry != nil {
-		// --- WRAP TELEMETRY IN WAITGROUP ---
+
 		telemetryWG.Add(1)
 		go func() {
 			defer telemetryWG.Done()
@@ -53,10 +52,8 @@ func Execute() {
 		}()
 	}
 
-	// --- USE WaitGroup INSTEAD OF SLEEP ---
-	// Wait for the update check goroutine to finish
+	// Wait for the update check goroutine and telemetry to finish
 	updateCheckWG.Wait()
-	// --- WAIT FOR TELEMETRY TO FINISH ---
 	telemetryWG.Wait()
 
 	if err != nil {
@@ -80,6 +77,15 @@ func newRootCommand() *cobra.Command {
 		DisableAutoGenTag: true,
 		// this will be inherited by all submodules and all their commands
 
+		// By defining a Run func, we force PersistentPreRunE to execute
+		// even when 'cre' is called with no subcommand
+		// this enable to check for update and display if needed
+		Run: func(cmd *cobra.Command, args []string) {
+			// Wait for the update check to finish before printing help - this way it doesn't display update warning in the middle of output
+			updateCheckWG.Wait()
+			cmd.Help()
+		},
+
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			executingCommand = cmd
 
@@ -102,12 +108,11 @@ func newRootCommand() *cobra.Command {
 				runtimeContext.ClientFactory = client.NewFactory(&newLogger, v)
 			}
 
-			// --- RUN UPDATE CHECK IN GOROUTINE WITH WAITGROUP ---
+			//Check latest version - don't check for autocompletion cmd call
 			if cmd.Name() != "bash" && cmd.Name() != "zsh" && cmd.Name() != "fish" && cmd.Name() != "powershell" {
-				// Add 1 to the WaitGroup
+
 				updateCheckWG.Add(1)
 				go func() {
-					// Signal Done() when this goroutine finishes
 					defer updateCheckWG.Done()
 					update.CheckForUpdates(version.Version, runtimeContext.Logger)
 				}()
@@ -143,7 +148,6 @@ func newRootCommand() *cobra.Command {
 		},
 
 		PersistentPostRun: func(cmd *cobra.Command, args []string) {
-			// Wrap telemetry in waitgroup so it doesn't get terminated on short execution commands (i.e. version)
 			telemetryWG.Add(1)
 			go func() {
 				defer telemetryWG.Done()
@@ -351,6 +355,7 @@ func isLoadEnvAndSettings(cmd *cobra.Command) bool {
 		"powershell":        {},
 		"zsh":               {},
 		"help":              {},
+		"cre":               {},
 	}
 
 	_, exists := excludedCommands[cmd.Name()]
@@ -368,6 +373,7 @@ func isLoadCredentials(cmd *cobra.Command) bool {
 		"zsh":               {},
 		"help":              {},
 		"generate-bindings": {},
+		"cre":               {},
 	}
 
 	_, exists := excludedCommands[cmd.Name()]

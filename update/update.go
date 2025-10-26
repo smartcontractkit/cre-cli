@@ -7,11 +7,11 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings" // <-- Import strings package
+	"strings"
 	"time"
 
 	"github.com/Masterminds/semver/v3"
-	"github.com/rs/zerolog" // <-- ADDED IMPORT
+	"github.com/rs/zerolog"
 )
 
 const (
@@ -22,8 +22,6 @@ const (
 	cacheFileName = "update.json"
 	cacheDirName  = ".cre"
 )
-
-// Logger interface is removed. We now use zerolog.Logger directly.
 
 // githubRelease is a minimal struct to parse the JSON response
 // from the GitHub releases API.
@@ -37,8 +35,6 @@ type cacheState struct {
 	LastCheck     time.Time `json:"last_check"`
 }
 
-// getCachePath returns the platform-specific path to the cache file.
-// This now uses ~/.cre/update.json as requested.
 func getCachePath(logger *zerolog.Logger) (string, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
@@ -48,7 +44,6 @@ func getCachePath(logger *zerolog.Logger) (string, error) {
 	return filepath.Join(homeDir, cacheDirName, cacheFileName), nil
 }
 
-// loadCache reads the cache file from disk.
 func loadCache(path string, logger *zerolog.Logger) (*cacheState, error) {
 	logger.Debug().Msgf("Loading cache from %s", path)
 	data, err := os.ReadFile(path)
@@ -71,7 +66,6 @@ func loadCache(path string, logger *zerolog.Logger) (*cacheState, error) {
 	return &state, nil
 }
 
-// saveCache writes the cache state to disk.
 func saveCache(path string, state cacheState, logger *zerolog.Logger) error {
 	logger.Debug().Msgf("Saving cache to %s", path)
 	data, err := json.Marshal(state)
@@ -79,7 +73,6 @@ func saveCache(path string, state cacheState, logger *zerolog.Logger) error {
 		return err
 	}
 
-	// Ensure the directory ~/.cre exists
 	if err := os.MkdirAll(filepath.Dir(path), 0750); err != nil {
 		return err
 	}
@@ -87,7 +80,6 @@ func saveCache(path string, state cacheState, logger *zerolog.Logger) error {
 	return os.WriteFile(path, data, 0640)
 }
 
-// fetchLatestVersionFromGitHub performs the actual network request.
 func fetchLatestVersionFromGitHub(logger *zerolog.Logger) (string, error) {
 	client := &http.Client{
 		Timeout: timeout,
@@ -129,34 +121,23 @@ func fetchLatestVersionFromGitHub(logger *zerolog.Logger) (string, error) {
 // message to os.Stderr.
 // This function is designed to be run in a goroutine so it doesn't
 // block the main CLI execution.
-// It now accepts your application's logger.
 func CheckForUpdates(currentVersion string, logger *zerolog.Logger) {
 
-	// --- THIS IS THE FIX ---
-	// The parser fails on "version v0.5.1-alpha".
-	// It must be a valid semver string, like "v0.5.1-alpha".
-	// This is just for testing. Remove this line for production.
-	// currentVersion = "v0.5.1-alpha" // <-- REMOVED THE HARDCODED LINE
-
-	// --- TESTING HOOK ---
 	// Allow forcing the check even for "development" version
 	forceCheck := os.Getenv("CRE_FORCE_UPDATE_CHECK") == "1"
 	if currentVersion == "development" && !forceCheck {
 		logger.Debug().Msg("Current version is 'development', skipping update check. (Set CRE_FORCE_UPDATE_CHECK=1 to override)")
 		return
 	}
-	// --- END TESTING HOOK ---
 
-	// --- FIX: Clean the version string ---
 	// The version string might be "version v0.7.3-alpha".
 	// We need to strip the "version" prefix and any spaces.
 	cleanedVersion := strings.Replace(currentVersion, "version", "", 1)
 	cleanedVersion = strings.TrimSpace(cleanedVersion)
 	// Now, cleanedVersion should be "v0.7.3-alpha"
 
-	currentSemVer, err := semver.NewVersion(cleanedVersion) // <-- USE cleanedVersion
+	currentSemVer, err := semver.NewVersion(cleanedVersion)
 	if err != nil {
-		// Log *both* the original and the cleaned string for debugging
 		logger.Debug().Msgf("Failed to parse current version (original: '%s', cleaned: '%s'): %v", currentVersion, cleanedVersion, err)
 		return
 	}
@@ -200,7 +181,6 @@ func CheckForUpdates(currentVersion string, logger *zerolog.Logger) {
 		logger.Debug().Msgf("Using cached latest version: %s", latestVersionString)
 	}
 
-	// Always compare, even with cached data
 	if latestVersionString == "" {
 		logger.Debug().Msg("No latest version available to compare.")
 		return
