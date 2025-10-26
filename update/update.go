@@ -17,7 +17,7 @@ import (
 const (
 	githubAPIURL  = "https://api.github.com/repos/smartcontractkit/cre-cli/releases/latest"
 	repoURL       = "https://github.com/smartcontractkit/cre-cli/releases"
-	timeout       = 2 * time.Second
+	timeout       = 6 * time.Second
 	cacheDuration = 24 * time.Hour
 	cacheFileName = "update.json"
 	cacheDirName  = ".cre"
