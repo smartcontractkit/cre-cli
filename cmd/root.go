@@ -312,40 +312,40 @@ Use "{{.CommandPath}} [command] --help" for more information about a command.
 func isLoadEnvAndSettings(cmd *cobra.Command) bool {
 	// It is not expected to have the .env and the settings file when running the following commands
 	var excludedCommands = map[string]struct{}{
-		"version":           {},
-		"login":             {},
-		"logout":            {},
-		"whoami":            {},
-		"list-key":          {},
-		"init":              {},
-		"generate-bindings": {},
-		"bash":              {},
-		"fish":              {},
-		"powershell":        {},
-		"zsh":               {},
-		"help":              {},
-		"update":            {},
+		"cre version":               {},
+		"cre login":                 {},
+		"cre logout":                {},
+		"cre whoami":                {},
+		"cre account list-key":      {},
+		"cre init":                  {},
+		"cre generate-bindings":     {},
+		"cre completion bash":       {},
+		"cre completion fish":       {},
+		"cre completion powershell": {},
+		"cre completion zsh":        {},
+		"cre help":                  {},
+		"cre update":                {},
 	}
 
-	_, exists := excludedCommands[cmd.Name()]
+	_, exists := excludedCommands[cmd.CommandPath()]
 	return !exists
 }
 
 func isLoadCredentials(cmd *cobra.Command) bool {
 	// It is not expected to have the credentials loaded when running the following commands
 	var excludedCommands = map[string]struct{}{
-		"version":           {},
-		"login":             {},
-		"bash":              {},
-		"fish":              {},
-		"powershell":        {},
-		"zsh":               {},
-		"help":              {},
-		"generate-bindings": {},
-		"update":            {},
+		"cre version":               {},
+		"cre login":                 {},
+		"cre completion bash":       {},
+		"cre completion fish":       {},
+		"cre completion powershell": {},
+		"cre completion zsh":        {},
+		"cre help":                  {},
+		"cre generate-bindings":     {},
+		"cre update":                {},
 	}
 
-	_, exists := excludedCommands[cmd.Name()]
+	_, exists := excludedCommands[cmd.CommandPath()]
 	return !exists
 }
 
