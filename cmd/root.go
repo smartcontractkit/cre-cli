@@ -79,7 +79,7 @@ func newRootCommand() *cobra.Command {
 
 		// By defining a Run func, we force PersistentPreRunE to execute
 		// even when 'cre' is called with no subcommand
-		// this enable to check for update and display if needed
+		// this enables to check for update and display if needed
 		Run: func(cmd *cobra.Command, args []string) {
 			// Wait for the update check to finish before printing help - this way it doesn't display update warning in the middle of output
 			updateCheckWG.Wait()
@@ -111,7 +111,7 @@ func newRootCommand() *cobra.Command {
 				runtimeContext.ClientFactory = client.NewFactory(&newLogger, v)
 			}
 
-			//Check latest version - don't check for autocompletion cmd call
+			// Check latest version - don't check for autocompletion cmd call
 			if cmd.Name() != "bash" && cmd.Name() != "zsh" && cmd.Name() != "fish" && cmd.Name() != "powershell" {
 
 				updateCheckWG.Add(1)
