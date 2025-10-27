@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	osruntime "runtime"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -30,7 +31,8 @@ type releaseInfo struct {
 }
 
 func getLatestTag() (string, error) {
-	resp, err := http.Get("https://api.github.com/repos/" + repo + "/releases/latest")
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Get("https://api.github.com/repos/" + repo + "/releases/latest")
 	if err != nil {
 		return "", err
 	}
@@ -85,7 +87,8 @@ func getAssetName() (asset string, platform string, err error) {
 }
 
 func downloadFile(url, dest string) error {
-	resp, err := http.Get(url) //nolint:gosec
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Get(url)
 	if err != nil {
 		return err
 	}
@@ -114,10 +117,8 @@ func extractBinary(assetPath string) (string, error) {
 		return untar(assetPath)
 	} else if filepath.Ext(assetPath) == ".zip" {
 		return unzip(assetPath)
-	} else {
-		return "", fmt.Errorf("unsupported archive type: %s", filepath.Ext(assetPath))
-
 	}
+	return "", fmt.Errorf("unsupported archive type: %s", filepath.Ext(assetPath))
 }
 
 func untar(assetPath string) (string, error) {
@@ -183,7 +184,7 @@ func untar(assetPath string) (string, error) {
 			if err != nil && !errors.Is(err, io.EOF) {
 				closeErr := out.Close()
 				if closeErr != nil {
-					return "", fmt.Errorf("copy error: %w; additionally, close error: %v", err, closeErr)
+					return "", fmt.Errorf("copy error: %w; additionally, close error: %w", err, closeErr)
 				}
 				return "", err
 			}
@@ -255,7 +256,7 @@ func unzip(assetPath string) (string, error) {
 				closeErr := out.Close()
 				if closeErr != nil {
 					// Optionally, combine both errors
-					return "", fmt.Errorf("copy error: %w; additionally, close error: %v", err, closeErr)
+					return "", fmt.Errorf("copy error: %w; additionally, close error: %w", err, closeErr)
 				}
 				return "", err
 			}
@@ -295,63 +296,55 @@ func replaceSelf(newBin string) error {
 	return os.Rename(newBin, self)
 }
 
-func Run() {
+func Run() error {
 	fmt.Println("Updating cre CLI...")
 	tag, err := getLatestTag()
 	if err != nil {
-		fmt.Println("Error fetching latest version:", err)
-		return
+		return fmt.Errorf("error fetching latest version: %w", err)
 	}
 	asset, _, err := getAssetName()
 	if err != nil {
-		fmt.Println("Error determining asset name:", err)
-		return
+		return fmt.Errorf("error determining asset name: %w", err)
 	}
 	url := fmt.Sprintf("https://github.com/%s/releases/download/%s/%s", repo, tag, asset)
 	tmpDir, err := os.MkdirTemp("", "cre_update_")
 	if err != nil {
-		fmt.Println("Error creating temp dir:", err)
-		return
+		return fmt.Errorf("error creating temp dir: %w", err)
 	}
 	defer func(path string) {
-		err := os.RemoveAll(path)
-		if err != nil {
-			fmt.Println("Error cleaning up temp dir:", err)
-			return
-		}
+		_ = os.RemoveAll(path)
 	}(tmpDir)
 	assetPath := filepath.Join(tmpDir, asset)
 	fmt.Println("Downloading:", url)
 	if err := downloadFile(url, assetPath); err != nil {
-		fmt.Println("Download failed:", err)
-		return
+		return fmt.Errorf("download failed: %w", err)
 	}
 	binPath, err := extractBinary(assetPath)
 	if err != nil {
-		fmt.Println("Extraction failed:", err)
-		return
+		return fmt.Errorf("extraction failed: %w", err)
 	}
 	if err := os.Chmod(binPath, 0755); err != nil {
-		fmt.Println("Failed to set permissions:", err)
-		return
+		return fmt.Errorf("failed to set permissions: %w", err)
 	}
 	if err := replaceSelf(binPath); err != nil {
-		fmt.Println("Failed to replace binary:", err)
-		return
+		return fmt.Errorf("failed to replace binary: %w", err)
 	}
 	fmt.Println("cre CLI updated to", tag)
 	cmd := exec.Command(cliName, "version")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	_ = cmd.Run()
+	if err := cmd.Run(); err != nil {
+		fmt.Println("Failed to run version command:", err)
+	}
+	return nil
 }
 
 func New(_ *runtime.Context) *cobra.Command {
 	var versionCmd = &cobra.Command{
 		Use:   "update",
 		Short: "Update the cre CLI to the latest version",
-		Run: func(cmd *cobra.Command, args []string) {
-			Run()
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return Run()
 		},
 	}
 
