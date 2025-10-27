@@ -18,6 +18,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/cmd/login"
 	"github.com/smartcontractkit/cre-cli/cmd/logout"
 	"github.com/smartcontractkit/cre-cli/cmd/secrets"
+	"github.com/smartcontractkit/cre-cli/cmd/update"
 	"github.com/smartcontractkit/cre-cli/cmd/version"
 	"github.com/smartcontractkit/cre-cli/cmd/whoami"
 	"github.com/smartcontractkit/cre-cli/cmd/workflow"
@@ -274,6 +275,7 @@ Use "{{.CommandPath}} [command] --help" for more information about a command.
 	genBindingsCmd := generatebindings.New(runtimeContext)
 	accountCmd := account.New(runtimeContext)
 	whoamiCmd := whoami.New(runtimeContext)
+	updateCmd := update.New(runtimeContext)
 
 	// Define groups (order controls display order)
 	rootCmd.AddGroup(&cobra.Group{ID: "getting-started", Title: "Getting Started"})
@@ -301,6 +303,7 @@ Use "{{.CommandPath}} [command] --help" for more information about a command.
 		secretsCmd,
 		workflowCmd,
 		genBindingsCmd,
+		updateCmd,
 	)
 
 	return rootCmd
@@ -321,6 +324,7 @@ func isLoadEnvAndSettings(cmd *cobra.Command) bool {
 		"powershell":        {},
 		"zsh":               {},
 		"help":              {},
+		"update":            {},
 	}
 
 	_, exists := excludedCommands[cmd.Name()]
@@ -338,6 +342,7 @@ func isLoadCredentials(cmd *cobra.Command) bool {
 		"zsh":               {},
 		"help":              {},
 		"generate-bindings": {},
+		"update":            {},
 	}
 
 	_, exists := excludedCommands[cmd.Name()]
