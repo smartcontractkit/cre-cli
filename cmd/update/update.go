@@ -349,7 +349,7 @@ func Run() {
 func New(_ *runtime.Context) *cobra.Command {
 	var versionCmd = &cobra.Command{
 		Use:   "update",
-		Short: "Self-update the cre CLI to the latest version",
+		Short: "Update the cre CLI to the latest version",
 		Run: func(cmd *cobra.Command, args []string) {
 			Run()
 		},
