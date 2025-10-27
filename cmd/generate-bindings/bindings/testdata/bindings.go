@@ -47,6 +47,7 @@ var (
 	_ = cre.ResponseBufferTooSmall
 	_ = rpc.API{}
 	_ = json.Unmarshal
+	_ = reflect.Bool
 )
 
 var DataStorageMetaData = &bind.MetaData{
