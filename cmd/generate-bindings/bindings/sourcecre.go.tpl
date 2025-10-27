@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"reflect"
 	"strings"
 
 	ethereum "github.com/ethereum/go-ethereum"
@@ -300,6 +301,10 @@ func (c *Codec) Encode{{.Normalized.Name}}Topics(
     {{- if $inp.Indexed }}
     var {{ decapitalise $inp.Name }}Rule []interface{}
     for _, v := range values {
+		if reflect.ValueOf(v.{{capitalise $inp.Name}}).IsZero() {
+			{{ decapitalise $inp.Name }}Rule = append({{ decapitalise $inp.Name }}Rule, common.Hash{})
+			continue
+		}
 		fieldVal, err := bindings.PrepareTopicArg(evt.Inputs[{{$idx}}], v.{{capitalise $inp.Name}})
 		if err != nil {
 			return nil, err
@@ -327,7 +332,12 @@ func (c *Codec) Encode{{.Normalized.Name}}Topics(
     for i, hashList := range rawTopics {
         bs := make([][]byte, len(hashList))
         for j, h := range hashList {
-            bs[j] = h.Bytes()
+			// don't include empty bytes if hashed value is 0x0
+            if reflect.ValueOf(h).IsZero() {
+				bs[j] = []byte{}
+			} else {
+				bs[j] = h.Bytes()
+			}
         }
         topics[i+1] = &evm.TopicValues{Values: bs}
     }

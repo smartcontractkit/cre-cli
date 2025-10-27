@@ -583,6 +583,46 @@ func TestLogTrigger(t *testing.T) {
 		// Verify the original log is preserved
 		require.Equal(t, mockLog, decodedLog.Log, "Original log should be preserved")
 	})
+
+	t.Run("dynamic event with empty fields", func(t *testing.T) {
+		ev := ds.ABI.Events["DynamicEvent"]
+		events := []datastorage.DynamicEventTopics{
+			{
+				UserData: datastorage.UserData{
+					Key:   "userKey1",
+					Value: "userValue1",
+				},
+			},
+			{
+				Metadata: common.BytesToHash(crypto.Keccak256([]byte("metadata"))),
+			},
+		}
+		encoded, err := ds.Codec.EncodeDynamicEventTopics(ev, events)
+		require.NoError(t, err, "Encoding DynamicEvent topics should not return an error")
+		require.Len(t, encoded, 4, "Trigger should have four topics")
+		require.Equal(t, ds.Codec.DynamicEventLogHash(), encoded[0].Values[0], "First topic value should be DynamicEvent log hash")
+		packed1, err := abi.Arguments{ev.Inputs[1]}.Pack(events[0].UserData)
+		require.NoError(t, err)
+		expected1 := crypto.Keccak256(packed1)
+		require.Equal(t, expected1, encoded[1].Values[0], "First value should be the UserData hash")
+		require.Equal(t, []byte{}, encoded[1].Values[1], "Second value should be an empty byte array")
+		require.Equal(t, []byte{}, encoded[2].Values[0], "Second value should be an empty byte array")
+		require.Equal(t, events[1].Metadata.Bytes(), encoded[2].Values[1], "Second value should be a populated byte array")
+		require.Equal(t, []byte{}, encoded[3].Values[0], "Third value should be an empty byte array")
+		require.Equal(t, []byte{}, encoded[3].Values[1], "Fourth value should be an empty byte array")
+	})
+
+	t.Run("simple event with empty fields", func(t *testing.T) {
+		ev := ds.ABI.Events["DataStored"]
+		events := []datastorage.DataStoredTopics{
+			{},
+		}
+		encoded, err := ds.Codec.EncodeDataStoredTopics(ev, events)
+		require.NoError(t, err, "Encoding DataStored topics should not return an error")
+		require.Len(t, encoded, 2, "Trigger should have two topics")
+		require.Equal(t, ds.Codec.DataStoredLogHash(), encoded[0].Values[0], "First topic value should be DataStored log hash")
+		require.Equal(t, []byte{}, encoded[1].Values[0], "Second value should be an empty byte array")
+	})
 }
 
 func newDataStorage(t *testing.T) *datastorage.DataStorage {

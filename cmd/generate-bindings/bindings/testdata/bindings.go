@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"reflect"
 	"strings"
 
 	ethereum "github.com/ethereum/go-ethereum"
@@ -445,6 +446,10 @@ func (c *Codec) EncodeAccessLoggedTopics(
 ) ([]*evm.TopicValues, error) {
 	var callerRule []interface{}
 	for _, v := range values {
+		if reflect.ValueOf(v.Caller).IsZero() {
+			callerRule = append(callerRule, common.Hash{})
+			continue
+		}
 		fieldVal, err := bindings.PrepareTopicArg(evt.Inputs[0], v.Caller)
 		if err != nil {
 			return nil, err
@@ -466,7 +471,12 @@ func (c *Codec) EncodeAccessLoggedTopics(
 	for i, hashList := range rawTopics {
 		bs := make([][]byte, len(hashList))
 		for j, h := range hashList {
-			bs[j] = h.Bytes()
+			// don't include empty bytes if hashed value is 0x0
+			if reflect.ValueOf(h).IsZero() {
+				bs[j] = []byte{}
+			} else {
+				bs[j] = h.Bytes()
+			}
 		}
 		topics[i+1] = &evm.TopicValues{Values: bs}
 	}
@@ -512,6 +522,10 @@ func (c *Codec) EncodeDataStoredTopics(
 ) ([]*evm.TopicValues, error) {
 	var senderRule []interface{}
 	for _, v := range values {
+		if reflect.ValueOf(v.Sender).IsZero() {
+			senderRule = append(senderRule, common.Hash{})
+			continue
+		}
 		fieldVal, err := bindings.PrepareTopicArg(evt.Inputs[0], v.Sender)
 		if err != nil {
 			return nil, err
@@ -533,7 +547,12 @@ func (c *Codec) EncodeDataStoredTopics(
 	for i, hashList := range rawTopics {
 		bs := make([][]byte, len(hashList))
 		for j, h := range hashList {
-			bs[j] = h.Bytes()
+			// don't include empty bytes if hashed value is 0x0
+			if reflect.ValueOf(h).IsZero() {
+				bs[j] = []byte{}
+			} else {
+				bs[j] = h.Bytes()
+			}
 		}
 		topics[i+1] = &evm.TopicValues{Values: bs}
 	}
@@ -579,6 +598,10 @@ func (c *Codec) EncodeDynamicEventTopics(
 ) ([]*evm.TopicValues, error) {
 	var userDataRule []interface{}
 	for _, v := range values {
+		if reflect.ValueOf(v.UserData).IsZero() {
+			userDataRule = append(userDataRule, common.Hash{})
+			continue
+		}
 		fieldVal, err := bindings.PrepareTopicArg(evt.Inputs[1], v.UserData)
 		if err != nil {
 			return nil, err
@@ -587,6 +610,10 @@ func (c *Codec) EncodeDynamicEventTopics(
 	}
 	var metadataRule []interface{}
 	for _, v := range values {
+		if reflect.ValueOf(v.Metadata).IsZero() {
+			metadataRule = append(metadataRule, common.Hash{})
+			continue
+		}
 		fieldVal, err := bindings.PrepareTopicArg(evt.Inputs[3], v.Metadata)
 		if err != nil {
 			return nil, err
@@ -595,6 +622,10 @@ func (c *Codec) EncodeDynamicEventTopics(
 	}
 	var metadataArrayRule []interface{}
 	for _, v := range values {
+		if reflect.ValueOf(v.MetadataArray).IsZero() {
+			metadataArrayRule = append(metadataArrayRule, common.Hash{})
+			continue
+		}
 		fieldVal, err := bindings.PrepareTopicArg(evt.Inputs[4], v.MetadataArray)
 		if err != nil {
 			return nil, err
@@ -618,7 +649,12 @@ func (c *Codec) EncodeDynamicEventTopics(
 	for i, hashList := range rawTopics {
 		bs := make([][]byte, len(hashList))
 		for j, h := range hashList {
-			bs[j] = h.Bytes()
+			// don't include empty bytes if hashed value is 0x0
+			if reflect.ValueOf(h).IsZero() {
+				bs[j] = []byte{}
+			} else {
+				bs[j] = h.Bytes()
+			}
 		}
 		topics[i+1] = &evm.TopicValues{Values: bs}
 	}
@@ -675,7 +711,12 @@ func (c *Codec) EncodeNoFieldsTopics(
 	for i, hashList := range rawTopics {
 		bs := make([][]byte, len(hashList))
 		for j, h := range hashList {
-			bs[j] = h.Bytes()
+			// don't include empty bytes if hashed value is 0x0
+			if reflect.ValueOf(h).IsZero() {
+				bs[j] = []byte{}
+			} else {
+				bs[j] = h.Bytes()
+			}
 		}
 		topics[i+1] = &evm.TopicValues{Values: bs}
 	}
