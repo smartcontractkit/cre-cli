@@ -77,7 +77,7 @@ func saveCache(path string, state cacheState, logger *zerolog.Logger) error {
 		return err
 	}
 
-	return os.WriteFile(path, data, 0640)
+	return os.WriteFile(path, data, 0600)
 }
 
 func fetchLatestVersionFromGitHub(logger *zerolog.Logger) (string, error) {

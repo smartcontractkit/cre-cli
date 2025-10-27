@@ -83,7 +83,10 @@ func newRootCommand() *cobra.Command {
 		Run: func(cmd *cobra.Command, args []string) {
 			// Wait for the update check to finish before printing help - this way it doesn't display update warning in the middle of output
 			updateCheckWG.Wait()
-			cmd.Help()
+			err := cmd.Help()
+			if err != nil {
+				fmt.Errorf("%w", err) //TODO - surface this error
+			}
 		},
 
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
