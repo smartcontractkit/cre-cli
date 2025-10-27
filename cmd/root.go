@@ -27,7 +27,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/telemetry"
-	"github.com/smartcontractkit/cre-cli/update"
+	"github.com/smartcontractkit/cre-cli/internal/update"
 )
 
 // RootCmd represents the base command when called without any subcommands
