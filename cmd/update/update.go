@@ -110,14 +110,13 @@ func downloadFile(url, dest string) error {
 }
 
 func extractBinary(assetPath string) (string, error) {
-	archiveType := filepath.Ext(assetPath)
-	switch archiveType {
-	case ".zip":
-		return unzip(assetPath)
-	case ".tar.gz":
+	if strings.HasSuffix(assetPath, ".tar.gz") {
 		return untar(assetPath)
-	default:
-		return "", fmt.Errorf("unsupported archive type: %s", archiveType)
+	} else if filepath.Ext(assetPath) == ".zip" {
+		return unzip(assetPath)
+	} else {
+		return "", fmt.Errorf("unsupported archive type: %s", filepath.Ext(assetPath))
+
 	}
 }
 
@@ -182,22 +181,22 @@ func untar(assetPath string) (string, error) {
 			const maxExtractSize = 200 * 1024 * 1024
 			written, err := io.CopyN(out, tr, maxExtractSize+1)
 			if err != nil && !errors.Is(err, io.EOF) {
-				err := out.Close()
-				if err != nil {
-					return "", err
+				closeErr := out.Close()
+				if closeErr != nil {
+					return "", fmt.Errorf("copy error: %w; additionally, close error: %v", err, closeErr)
 				}
 				return "", err
 			}
 			if written > maxExtractSize {
-				err := out.Close()
-				if err != nil {
-					return "", err
+				closeErr := out.Close()
+				if closeErr != nil {
+					return "", closeErr
 				}
 				return "", fmt.Errorf("extracted file exceeds maximum allowed size")
 			}
-			err = out.Close()
-			if err != nil {
-				return "", err
+			closeErr := out.Close()
+			if closeErr != nil {
+				return "", closeErr
 			}
 			return outPath, nil
 		}
@@ -253,26 +252,27 @@ func unzip(assetPath string) (string, error) {
 			const maxExtractSize = 200 * 1024 * 1024
 			written, err := io.CopyN(out, rc, maxExtractSize+1)
 			if err != nil && !errors.Is(err, io.EOF) {
-				err := out.Close()
-				if err != nil {
-					return "", err
+				closeErr := out.Close()
+				if closeErr != nil {
+					// Optionally, combine both errors
+					return "", fmt.Errorf("copy error: %w; additionally, close error: %v", err, closeErr)
 				}
 				return "", err
 			}
 			if written > maxExtractSize {
-				err := out.Close()
-				if err != nil {
-					return "", err
+				closeErr := out.Close()
+				if closeErr != nil {
+					return "", closeErr
 				}
 				return "", fmt.Errorf("extracted file exceeds maximum allowed size")
 			}
-			err = out.Close()
-			if err != nil {
-				return "", err
+			closeErr := out.Close()
+			if closeErr != nil {
+				return "", closeErr
 			}
-			err = rc.Close()
-			if err != nil {
-				return "", err
+			closeErr = rc.Close()
+			if closeErr != nil {
+				return "", closeErr
 			}
 			return outPath, nil
 		}
