@@ -1,6 +1,7 @@
 package update
 
 import (
+	"archive/tar"
 	"archive/zip"
 	"compress/gzip"
 	"encoding/json"
@@ -33,7 +34,12 @@ func getLatestTag() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			fmt.Println("Error closing response body:", err)
+		}
+	}(resp.Body)
 	var info releaseInfo
 	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
 		return "", err
@@ -44,10 +50,10 @@ func getLatestTag() (string, error) {
 	return info.TagName, nil
 }
 
-func getAssetName() (string, string, error) {
+func getAssetName() (asset string, platform string, err error) {
 	osName := osruntime.GOOS
 	arch := osruntime.GOARCH
-	var platform, ext string
+	var ext string
 	switch osName {
 	case "darwin":
 		platform = "darwin"
@@ -74,77 +80,204 @@ func getAssetName() (string, string, error) {
 	default:
 		return "", "", fmt.Errorf("unsupported architecture: %s", arch)
 	}
-	asset := fmt.Sprintf("%s_%s_%s%s", cliName, platform, archName, ext)
+	asset = fmt.Sprintf("%s_%s_%s%s", cliName, platform, archName, ext)
 	return asset, platform, nil
 }
 
 func downloadFile(url, dest string) error {
-	resp, err := http.Get(url)
+	resp, err := http.Get(url) //nolint:gosec
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			fmt.Println("Error closing response body:", err)
+		}
+	}(resp.Body)
 	out, err := os.Create(dest)
 	if err != nil {
 		return err
 	}
-	defer out.Close()
+	defer func(out *os.File) {
+		err := out.Close()
+		if err != nil {
+			fmt.Println("Error closing out file:", err)
+		}
+	}(out)
 	_, err = io.Copy(out, resp.Body)
 	return err
 }
 
-func extractBinary(assetPath, platform, tag string) (string, error) {
-	// Returns path to extracted binary
-	outDir := filepath.Dir(assetPath)
-	var binName string
-	if platform == "linux" {
-		// .tar.gz
-		f, err := os.Open(assetPath)
-		if err != nil {
-			return "", err
-		}
-		defer f.Close()
-		gz, err := gzip.NewReader(f)
-		if err != nil {
-			return "", err
-		}
-		defer gz.Close()
-		// Untar
-		return untar(gz, outDir)
-	} else {
-		// .zip
-		zr, err := zip.OpenReader(assetPath)
-		if err != nil {
-			return "", err
-		}
-		defer zr.Close()
-		for _, f := range zr.File {
-			if strings.Contains(f.Name, cliName) {
-				binName = f.Name
-				outPath := filepath.Join(outDir, binName)
-				rc, err := f.Open()
-				if err != nil {
-					return "", err
-				}
-				defer rc.Close()
-				out, err := os.Create(outPath)
-				if err != nil {
-					return "", err
-				}
-				defer out.Close()
-				if _, err := io.Copy(out, rc); err != nil {
-					return "", err
-				}
-				return outPath, nil
-			}
-		}
-		return "", errors.New("binary not found in zip")
+func extractBinary(assetPath string) (string, error) {
+	archiveType := filepath.Ext(assetPath)
+	switch archiveType {
+	case ".zip":
+		return unzip(assetPath)
+	case ".tar.gz":
+		return untar(assetPath)
+	default:
+		return "", fmt.Errorf("unsupported archive type: %s", archiveType)
 	}
 }
 
-func untar(r io.Reader, outDir string) (string, error) {
-	// Minimal tar.gz extraction for cre binary
-	return "", errors.New("untar not implemented")
+func untar(assetPath string) (string, error) {
+	// .tar.gz
+	outDir := filepath.Dir(assetPath)
+	f, err := os.Open(assetPath)
+	if err != nil {
+		return "", err
+	}
+	defer func(f *os.File) {
+		err := f.Close()
+		if err != nil {
+			fmt.Println("Error closing file:", err)
+		}
+	}(f)
+	gz, err := gzip.NewReader(f)
+	if err != nil {
+		return "", err
+	}
+	defer func(gz *gzip.Reader) {
+		err := gz.Close()
+		if err != nil {
+			fmt.Println("Error closing gzip reader:", err)
+		}
+	}(gz)
+	// Untar
+	tr := tar.NewReader(gz)
+	var binName string
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return "", err
+		}
+		if strings.Contains(hdr.Name, cliName) && hdr.Typeflag == tar.TypeReg {
+			binName = hdr.Name
+			cleanName := filepath.Clean(binName)
+			if strings.Contains(cleanName, "..") || filepath.IsAbs(cleanName) {
+				return "", fmt.Errorf("tar entry contains forbidden path elements: %s", cleanName)
+			}
+			outPath := filepath.Join(outDir, cleanName)
+			absOutDir, err := filepath.Abs(outDir)
+			if err != nil {
+				return "", err
+			}
+			absOutPath, err := filepath.Abs(outPath)
+			if err != nil {
+				return "", err
+			}
+			if !strings.HasPrefix(absOutPath, absOutDir+string(os.PathSeparator)) && absOutPath != absOutDir {
+				return "", fmt.Errorf("tar extraction outside of output directory: %s", absOutPath)
+			}
+			out, err := os.Create(outPath)
+			if err != nil {
+				return "", err
+			}
+
+			// Limit extraction to 200 MB
+			const maxExtractSize = 200 * 1024 * 1024
+			written, err := io.CopyN(out, tr, maxExtractSize+1)
+			if err != nil && !errors.Is(err, io.EOF) {
+				err := out.Close()
+				if err != nil {
+					return "", err
+				}
+				return "", err
+			}
+			if written > maxExtractSize {
+				err := out.Close()
+				if err != nil {
+					return "", err
+				}
+				return "", fmt.Errorf("extracted file exceeds maximum allowed size")
+			}
+			err = out.Close()
+			if err != nil {
+				return "", err
+			}
+			return outPath, nil
+		}
+	}
+	return "", errors.New("binary not found in tar.gz")
+
+}
+
+func unzip(assetPath string) (string, error) {
+	// .zip
+	outDir := filepath.Dir(assetPath)
+	var binName string
+	zr, err := zip.OpenReader(assetPath)
+	if err != nil {
+		return "", err
+	}
+	defer func(zr *zip.ReadCloser) {
+		err := zr.Close()
+		if err != nil {
+			fmt.Println("Error closing zip reader:", err)
+		}
+	}(zr)
+	for _, f := range zr.File {
+		if strings.Contains(f.Name, cliName) {
+			binName = f.Name
+			cleanName := filepath.Clean(binName)
+			// Check that zip entry is not absolute and does not contain ".."
+			if strings.Contains(cleanName, "..") || filepath.IsAbs(cleanName) {
+				return "", fmt.Errorf("zip entry contains forbidden path elements: %s", cleanName)
+			}
+			outPath := filepath.Join(outDir, cleanName)
+			absOutDir, err := filepath.Abs(outDir)
+			if err != nil {
+				return "", err
+			}
+			absOutPath, err := filepath.Abs(outPath)
+			if err != nil {
+				return "", err
+			}
+			// Ensure extracted file is within the intended directory
+			if !strings.HasPrefix(absOutPath, absOutDir+string(os.PathSeparator)) && absOutPath != absOutDir {
+				return "", fmt.Errorf("zip extraction outside of output directory: %s", absOutPath)
+			}
+			rc, err := f.Open()
+			if err != nil {
+				return "", err
+			}
+			out, err := os.Create(outPath)
+			if err != nil {
+				return "", err
+			}
+			// Limit extraction to 200 MB
+			const maxExtractSize = 200 * 1024 * 1024
+			written, err := io.CopyN(out, rc, maxExtractSize+1)
+			if err != nil && !errors.Is(err, io.EOF) {
+				err := out.Close()
+				if err != nil {
+					return "", err
+				}
+				return "", err
+			}
+			if written > maxExtractSize {
+				err := out.Close()
+				if err != nil {
+					return "", err
+				}
+				return "", fmt.Errorf("extracted file exceeds maximum allowed size")
+			}
+			err = out.Close()
+			if err != nil {
+				return "", err
+			}
+			err = rc.Close()
+			if err != nil {
+				return "", err
+			}
+			return outPath, nil
+		}
+	}
+	return "", errors.New("binary not found in zip")
 }
 
 func replaceSelf(newBin string) error {
@@ -169,7 +302,7 @@ func Run() {
 		fmt.Println("Error fetching latest version:", err)
 		return
 	}
-	asset, platform, err := getAssetName()
+	asset, _, err := getAssetName()
 	if err != nil {
 		fmt.Println("Error determining asset name:", err)
 		return
@@ -180,14 +313,20 @@ func Run() {
 		fmt.Println("Error creating temp dir:", err)
 		return
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func(path string) {
+		err := os.RemoveAll(path)
+		if err != nil {
+			fmt.Println("Error cleaning up temp dir:", err)
+			return
+		}
+	}(tmpDir)
 	assetPath := filepath.Join(tmpDir, asset)
 	fmt.Println("Downloading:", url)
 	if err := downloadFile(url, assetPath); err != nil {
 		fmt.Println("Download failed:", err)
 		return
 	}
-	binPath, err := extractBinary(assetPath, platform, tag)
+	binPath, err := extractBinary(assetPath)
 	if err != nil {
 		fmt.Println("Extraction failed:", err)
 		return
@@ -207,7 +346,7 @@ func Run() {
 	_ = cmd.Run()
 }
 
-func New(runtimeContext *runtime.Context) *cobra.Command {
+func New(_ *runtime.Context) *cobra.Command {
 	var versionCmd = &cobra.Command{
 		Use:   "update",
 		Short: "Self-update the cre CLI to the latest version",

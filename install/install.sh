@@ -82,6 +82,12 @@ if [ -z "$LATEST_TAG" ]; then
   fail "Could not fetch the latest release version from GitHub."
 fi
 
+if [[ $# = 0 ]]; then
+  echo "Installing $cli_name version $LATEST_TAG for $PLATFORM/$ARCH_NAME..."
+else
+  LATEST_TAG=$1
+fi
+
 # 4. Construct Download URL and Download asset
 ASSET="${cli_name}_${PLATFORM}_${ARCH_NAME}"
 # Determine the file extension based on OS
