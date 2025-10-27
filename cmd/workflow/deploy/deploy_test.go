@@ -126,7 +126,6 @@ func TestWorkflowDeployCommand(t *testing.T) {
 					chainsim.TestAddress,
 					"eoa",
 					"test_workflow",
-					"test_don_family",
 					"testdata/basic_workflow/main.go",
 					"",
 				)

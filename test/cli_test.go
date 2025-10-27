@@ -23,15 +23,10 @@ import (
 func createProjectSettingsFile(projectSettingPath string, workflowOwner string, testEthURL string) error {
 	v := viper.New()
 
-	v.Set(fmt.Sprintf("%s.%s", SettingsTarget, settings.DONFamilySettingName), constants.DefaultStagingDonFamily)
-
 	// account fields
 	if workflowOwner != "" {
 		v.Set(fmt.Sprintf("%s.account.workflow-owner-address", SettingsTarget), workflowOwner)
 	}
-
-	// cre-cli fields
-	v.Set(fmt.Sprintf("%s.cre-cli.don-family", SettingsTarget), constants.DefaultStagingDonFamily)
 
 	// rpcs
 	v.Set(fmt.Sprintf("%s.%s", SettingsTarget, settings.RpcsSettingName), []settings.RpcEndpoint{
