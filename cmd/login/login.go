@@ -84,6 +84,7 @@ func (h *handler) execute() error {
 	}
 
 	fmt.Println("Login completed successfully")
+	fmt.Println("To get started, run: cre init")
 	return nil
 }
 
