@@ -2,7 +2,6 @@ package creinit
 
 import (
 	"embed"
-	_ "embed"
 	"errors"
 	"fmt"
 	"io"
@@ -323,18 +322,20 @@ func (h *handler) Execute(inputs Inputs) error {
 	fmt.Println("Next steps:")
 	fmt.Println("")
 
-	if selectedWorkflowTemplate.Name == HelloWorldTemplate {
+	if selectedLanguageTemplate.Lang == TemplateLangGo && selectedWorkflowTemplate.Name == HelloWorldTemplate {
+		// Go HelloWorld template is simulatable without any additional setup
 		fmt.Println("   1. Navigate to your project directory:")
 		fmt.Printf("      cd %s\n", projectRoot)
 		fmt.Println("")
-		fmt.Println("   2. Run the worfklow on your machine:")
-		fmt.Printf("      `cre workflow simulate %s`\n", workflowName)
+		fmt.Println("   2. Run the workflow on your machine:")
+		fmt.Printf("      cre workflow simulate %s\n", workflowName)
 		fmt.Println("")
 	} else {
+		// TS templates and Go PoR templates require additional setup, e.g. bun install, RPCs, etc.
 		fmt.Println("   1. Navigate to your workflow directory to see workflow details:")
 		fmt.Printf("      cd %s\n", workflowDirectory)
 		fmt.Println("")
-		fmt.Println("   2. To learn more about this template view the README.MD file:")
+		fmt.Println("   2. Follow the README.MD for installation, RPC setup, and workflow details:")
 		fmt.Printf("      %s\n", filepath.Join(workflowDirectory, "README.md"))
 		fmt.Println("")
 	}

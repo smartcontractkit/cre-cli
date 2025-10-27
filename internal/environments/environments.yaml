@@ -1,5 +1,5 @@
 ENVIRONMENTS:
-  SANDBOX:
+  DEVELOPMENT:
     CRE_CLI_AUTH_BASE: https://login-dev.cre.cldev.cloud
     CRE_CLI_CLIENT_ID: KERrSYowuRhVyXUrI3u7pI8nnY95bIGt
     CRE_CLI_AUDIENCE: https://graphql.cre.dev.internal.cldev.sh/

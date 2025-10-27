@@ -16,7 +16,7 @@ CRE_ETH_PRIVATE_KEY=000000000000000000000000000000000000000000000000000000000000
 Note: Make sure your `workflow.yaml` file is pointing to the config.json, example:
 
 ```yaml
-local-simulation:
+staging-settings:
   user-workflow:
     workflow-name: "hello-world"
   workflow-artifacts:
@@ -43,11 +43,11 @@ cd hello-world && bun install
 Run the command from <b>project root directory</b>
 
 ```bash
-cre workflow simulate <path-to-workflow-directory> --target local-simulation
+cre workflow simulate <path-to-workflow-directory> --target=staging-settings
 ```
 
 Example: For workflow named `hello-world` the command would be:
 
 ```bash
-cre workflow simulate ./hello-world --target local-simulation
+cre workflow simulate ./hello-world --target=staging-settings
 ```

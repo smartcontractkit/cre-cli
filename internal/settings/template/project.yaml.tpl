@@ -15,19 +15,19 @@
 #       url: "https://mainnet.infura.io/v3/KEY"
 
 # ==========================================================================
-local-simulation:
+staging-settings:
+  cre-cli:
+    don-family: "{{StagingDonFamily}}"
   rpcs:
     - chain-name: {{EthSepoliaChainName}}
       url: {{EthSepoliaRpcUrl}}
 
 # ==========================================================================
-staging:
+production-settings:
   cre-cli:
     don-family: "{{StagingDonFamily}}"
-  account:
-    workflow-owner-address: "{{WorkflowOwnerAddress}}"
   rpcs:
     - chain-name: {{EthSepoliaChainName}}
       url: {{EthSepoliaRpcUrl}}
-    - chain-name: {{BaseSepoliaChainName}}
-      url: {{BaseSepoliaRpcUrl}}
+    - chain-name: {{EthMainnetChainName}}
+      url: {{EthMainnetRpcUrl}}
