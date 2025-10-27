@@ -349,7 +349,6 @@ const onLogTrigger = (runtime: Runtime<Config>, payload: EVMLog): string => {
 
 const initWorkflow = (config: Config) => {
 	const cronTrigger = new cre.capabilities.CronCapability()
-	const httpTrigger = new cre.capabilities.HTTPCapability()
 	const network = getNetwork({
 		chainFamily: 'evm',
 		chainSelectorName: config.evms[0].chainSelectorName,
