@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"reflect"
 	"strings"
 
 	ethereum "github.com/ethereum/go-ethereum"
@@ -46,6 +47,7 @@ var (
 	_ = cre.ResponseBufferTooSmall
 	_ = rpc.API{}
 	_ = json.Unmarshal
+	_ = reflect.Bool
 )
 
 var EmptyContractMetaData = &bind.MetaData{
@@ -61,6 +63,14 @@ var EmptyContractMetaData = &bind.MetaData{
 // Errors
 
 // Events
+// The <Event>Topics struct should be used as a filter (for log triggers).
+// Note: It is only possible to filter on indexed fields.
+// Indexed (string and bytes) fields will be of type common.Hash.
+// They need to he (crypto.Keccak256) hashed and passed in.
+// Indexed (tuple/slice/array) fields can be passed in as is, the Encode<Event>Topics function will handle the hashing.
+//
+// The <Event>Decoded struct will be the result of calling decode (Adapt) on the log trigger result.
+// Indexed dynamic type fields will be of type common.Hash.
 
 // Main Binding Type for EmptyContract
 type EmptyContract struct {
