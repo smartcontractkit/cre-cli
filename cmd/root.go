@@ -52,8 +52,7 @@ func Execute() {
 		}()
 	}
 
-	// Wait for the update check goroutine and telemetry to finish
-	updateCheckWG.Wait()
+	// Wait for the  telemetry to finish
 	telemetryWG.Wait()
 
 	if err != nil {
@@ -68,6 +67,17 @@ func newRootCommand() *cobra.Command {
 
 	runtimeContextForTelemetry = runtimeContext
 
+	// By defining a Run func, we force PersistentPreRunE to execute
+	// even when 'cre', 'workflow', etc is called with no subcommand
+	// this enables to check for update and display if needed
+	helpRunE := func(cmd *cobra.Command, args []string) error {
+		err := cmd.Help()
+		if err != nil {
+			return fmt.Errorf("fail to show help: %w", err)
+		}
+		return nil
+	}
+
 	rootCmd := &cobra.Command{
 		Use:   "cre",
 		Short: "CRE CLI tool",
@@ -77,16 +87,12 @@ func newRootCommand() *cobra.Command {
 		DisableAutoGenTag: true,
 		// this will be inherited by all submodules and all their commands
 
-		// By defining a Run func, we force PersistentPreRunE to execute
-		// even when 'cre' is called with no subcommand
-		// this enables to check for update and display if needed
-		Run: func(cmd *cobra.Command, args []string) {
-			// Wait for the update check to finish before printing help - this way it doesn't display update warning in the middle of output
-			updateCheckWG.Wait()
+		RunE: func(cmd *cobra.Command, args []string) error {
 			err := cmd.Help()
 			if err != nil {
-				fmt.Errorf("%w", err) //TODO - surface this error
+				return fmt.Errorf("fail to show help: %w", err)
 			}
+			return nil
 		},
 
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
@@ -151,6 +157,8 @@ func newRootCommand() *cobra.Command {
 		},
 
 		PersistentPostRun: func(cmd *cobra.Command, args []string) {
+
+			updateCheckWG.Wait()
 			telemetryWG.Add(1)
 			go func() {
 				defer telemetryWG.Done()
@@ -312,6 +320,11 @@ Use "{{.CommandPath}} [command] --help" for more information about a command.
 	accountCmd := account.New(runtimeContext)
 	whoamiCmd := whoami.New(runtimeContext)
 
+	rootCmd.RunE = helpRunE
+	secretsCmd.RunE = helpRunE
+	workflowCmd.RunE = helpRunE
+	accountCmd.RunE = helpRunE
+
 	// Define groups (order controls display order)
 	rootCmd.AddGroup(&cobra.Group{ID: "getting-started", Title: "Getting Started"})
 	rootCmd.AddGroup(&cobra.Group{ID: "account", Title: "Account"})
@@ -359,6 +372,9 @@ func isLoadEnvAndSettings(cmd *cobra.Command) bool {
 		"zsh":               {},
 		"help":              {},
 		"cre":               {},
+		"account":           {},
+		"secrets":           {},
+		"workflow":          {},
 	}
 
 	_, exists := excludedCommands[cmd.Name()]
@@ -377,6 +393,9 @@ func isLoadCredentials(cmd *cobra.Command) bool {
 		"help":              {},
 		"generate-bindings": {},
 		"cre":               {},
+		"account":           {},
+		"secrets":           {},
+		"workflow":          {},
 	}
 
 	_, exists := excludedCommands[cmd.Name()]
