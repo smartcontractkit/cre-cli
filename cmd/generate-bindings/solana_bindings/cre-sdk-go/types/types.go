@@ -288,7 +288,7 @@ func (rs ReplayStatus) String() string {
 	}
 }
 
-func GetIdlEvent(idlTypes *codec.IdlTypeDefSlice, eventName string) EventIdl {
+func GetIdlEvent(idlTypes *codec.IdlTypeDefSlice, eventName string) (EventIdl, error) {
 	myevent := codec.IdlEvent{}
 	for _, typDefs := range *idlTypes {
 		if typDefs.Name != eventName {
@@ -302,8 +302,11 @@ func GetIdlEvent(idlTypes *codec.IdlTypeDefSlice, eventName string) EventIdl {
 			})
 		}
 	}
+	if len(myevent.Fields) == 0 {
+		return EventIdl{}, fmt.Errorf("event %s has no fields", eventName)
+	}
 	return EventIdl{
 		Event: myevent,
 		Types: *idlTypes,
-	}
+	}, nil
 }

@@ -9,12 +9,15 @@ import (
 	codec "github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana_bindings/cre-sdk-go/codec"
 )
 
+var IDL = "{\"address\":\"2GvhVcTPPkHbGduj6efNowFoWBQjE77Xab1uBKCYJvNN\",\"metadata\":{\"name\":\"my_project\",\"version\":\"0.1.0\",\"spec\":\"0.1.0\",\"description\":\"Created with Anchor\"},\"instructions\":[{\"name\":\"get_input_data\",\"discriminator\":[30,17,181,230,219,1,5,138],\"accounts\":[],\"args\":[{\"name\":\"input\",\"type\":\"string\"}]},{\"name\":\"initialize\",\"discriminator\":[175,175,109,31,13,152,155,237],\"accounts\":[{\"name\":\"data_account\",\"writable\":true,\"pda\":{\"seeds\":[{\"kind\":\"const\",\"value\":[116,101,115,116]}]}},{\"name\":\"user\",\"writable\":true,\"signer\":true},{\"name\":\"system_program\",\"address\":\"11111111111111111111111111111111\"}],\"args\":[{\"name\":\"input\",\"type\":\"string\"}]},{\"name\":\"log_access\",\"discriminator\":[196,55,194,24,5,224,161,204],\"accounts\":[{\"name\":\"user\",\"docs\":[\"The caller — whoever invokes the instruction.\"],\"signer\":true}],\"args\":[{\"name\":\"message\",\"type\":\"string\"}]},{\"name\":\"update_data\",\"discriminator\":[62,209,63,231,204,93,148,123],\"accounts\":[{\"name\":\"data_account\",\"writable\":true,\"pda\":{\"seeds\":[{\"kind\":\"const\",\"value\":[116,101,115,116]}]}}],\"args\":[{\"name\":\"new_data\",\"type\":\"string\"}]}],\"accounts\":[{\"name\":\"DataAccount\",\"discriminator\":[85,240,182,158,76,7,18,233]}],\"events\":[{\"name\":\"AccessLogged\",\"discriminator\":[243,53,225,71,64,120,109,25]},{\"name\":\"DataUpdated\",\"discriminator\":[110,104,69,204,253,168,30,91]}],\"errors\":[{\"code\":6000,\"name\":\"DataTooLong\",\"msg\":\"Data too long\"}],\"types\":[{\"name\":\"AccessLogged\",\"type\":{\"kind\":\"struct\",\"fields\":[{\"name\":\"caller\",\"type\":\"pubkey\"},{\"name\":\"message\",\"type\":\"string\"}]}},{\"name\":\"DataAccount\",\"type\":{\"kind\":\"struct\",\"fields\":[{\"name\":\"data\",\"type\":\"string\"},{\"name\":\"data2\",\"type\":{\"defined\":{\"name\":\"DataAccount2\"}}}]}},{\"name\":\"DataAccount2\",\"type\":{\"kind\":\"struct\",\"fields\":[{\"name\":\"data2\",\"type\":\"string\"}]}},{\"name\":\"DataUpdated\",\"type\":{\"kind\":\"struct\",\"fields\":[{\"name\":\"sender\",\"type\":\"pubkey\"},{\"name\":\"value\",\"type\":\"string\"}]}}]}"
+
 type MyProject struct {
 	IdlTypes *codec.IdlTypeDefSlice
 	client   *solana.Client
+	Codec    MyProjectCodec
 }
 
-var IDL = "{\"address\":\"2GvhVcTPPkHbGduj6efNowFoWBQjE77Xab1uBKCYJvNN\",\"metadata\":{\"name\":\"my_project\",\"version\":\"0.1.0\",\"spec\":\"0.1.0\",\"description\":\"Created with Anchor\"},\"instructions\":[{\"name\":\"get_input_data\",\"discriminator\":[30,17,181,230,219,1,5,138],\"accounts\":[],\"args\":[{\"name\":\"input\",\"type\":\"string\"}]},{\"name\":\"initialize\",\"discriminator\":[175,175,109,31,13,152,155,237],\"accounts\":[{\"name\":\"data_account\",\"writable\":true,\"pda\":{\"seeds\":[{\"kind\":\"const\",\"value\":[116,101,115,116]}]}},{\"name\":\"user\",\"writable\":true,\"signer\":true},{\"name\":\"system_program\",\"address\":\"11111111111111111111111111111111\"}],\"args\":[{\"name\":\"input\",\"type\":\"string\"}]},{\"name\":\"log_access\",\"discriminator\":[196,55,194,24,5,224,161,204],\"accounts\":[{\"name\":\"user\",\"docs\":[\"The caller — whoever invokes the instruction.\"],\"signer\":true}],\"args\":[{\"name\":\"message\",\"type\":\"string\"}]},{\"name\":\"update_data\",\"discriminator\":[62,209,63,231,204,93,148,123],\"accounts\":[{\"name\":\"data_account\",\"writable\":true,\"pda\":{\"seeds\":[{\"kind\":\"const\",\"value\":[116,101,115,116]}]}}],\"args\":[{\"name\":\"new_data\",\"type\":\"string\"}]}],\"accounts\":[{\"name\":\"DataAccount\",\"discriminator\":[85,240,182,158,76,7,18,233]}],\"events\":[{\"name\":\"AccessLogged\",\"discriminator\":[243,53,225,71,64,120,109,25]},{\"name\":\"DataUpdated\",\"discriminator\":[110,104,69,204,253,168,30,91]}],\"errors\":[{\"code\":6000,\"name\":\"DataTooLong\",\"msg\":\"Data too long\"}],\"types\":[{\"name\":\"AccessLogged\",\"type\":{\"kind\":\"struct\",\"fields\":[{\"name\":\"caller\",\"type\":\"pubkey\"},{\"name\":\"message\",\"type\":\"string\"}]}},{\"name\":\"DataAccount\",\"type\":{\"kind\":\"struct\",\"fields\":[{\"name\":\"data\",\"type\":\"string\"},{\"name\":\"data2\",\"type\":{\"defined\":{\"name\":\"DataAccount2\"}}}]}},{\"name\":\"DataAccount2\",\"type\":{\"kind\":\"struct\",\"fields\":[{\"name\":\"data2\",\"type\":\"string\"}]}},{\"name\":\"DataUpdated\",\"type\":{\"kind\":\"struct\",\"fields\":[{\"name\":\"sender\",\"type\":\"pubkey\"},{\"name\":\"value\",\"type\":\"string\"}]}}]}"
+type Codec struct{}
 
 func NewMyProject(client *solana.Client) (*MyProject, error) {
 	idlTypes := codec.IdlTypeDefSlice
@@ -23,7 +26,12 @@ func NewMyProject(client *solana.Client) (*MyProject, error) {
 		return nil, err
 	}
 	return &MyProject{
+		Codec:    &Codec{},
 		IdlTypes: idlTypes,
 		client:   client,
 	}, nil
+}
+
+type MyProjectCodec interface {
+	DecodeDataAccount(data []byte) (*DataAccount, error)
 }

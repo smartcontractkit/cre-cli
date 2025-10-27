@@ -74,23 +74,50 @@ func UnmarshalAccessLogged(buf []byte) (*AccessLogged, error) {
 	return obj, nil
 }
 
-func (c *DataStorage) WriteReportFromAccessLogged(runtime cre.Runtime, input AccessLogged) cre.Promise[*solana.WriteReportReply] {
-	encoded, err := input.Marshal()
+func (c *Codec) EncodeAccessLoggedStruct(in AccessLogged) ([]byte, error) {
+	return in.Marshal()
+}
+
+func (c *DataStorage) WriteReportFromAccessLogged(
+	runtime cre.Runtime,
+	input AccessLogged,
+	accountList []solanago.PublicKey,
+) cre.Promise[*solana.WriteReportReply] {
+	encodedInput, err := c.Codec.EncodeAccessLoggedStruct(input)
 	if err != nil {
 		return cre.PromiseFromResult[*solana.WriteReportReply](nil, err)
 	}
 
+	encodedAccountList, err := EncodeAccountList(accountList)
+	if err != nil {
+		return cre.PromiseFromResult[*solana.WriteReportReply](nil, err)
+	}
+
+	fwdReport := ForwarderReport{
+		AccountHash: encodedAccountList,
+		Payload:     encodedInput,
+	}
+
+	encodedFwdReport, err := fwdReport.Marshal()
+	if err != nil {
+		return cre.PromiseFromResult[*solana.WriteReportReply](nil, err)
+	}
 	promise := runtime.GenerateReport(&sdk.ReportRequest{
-		EncodedPayload: encoded,
+		EncodedPayload: encodedFwdReport,
 		EncoderName:    "solana",
 		HashingAlgo:    "sha256",
 		SigningAlgo:    "ed25519",
 	})
 
+	typedAccountList := make([]solana.PublicKey, len(accountList))
+	for i, account := range accountList {
+		typedAccountList[i] = solana.PublicKey(account)
+	}
 	return cre.ThenPromise(promise, func(report *cre.Report) cre.Promise[*solana.WriteReportReply] {
 		return c.client.WriteReport(runtime, &solana.WriteCreReportRequest{
-			Receiver: ProgramID.Bytes(),
-			Report:   report,
+			AccountList: typedAccountList,
+			Receiver:    ProgramID.Bytes(),
+			Report:      report,
 		})
 	})
 }
@@ -166,23 +193,50 @@ func UnmarshalDataAccount(buf []byte) (*DataAccount, error) {
 	return obj, nil
 }
 
-func (c *DataStorage) WriteReportFromDataAccount(runtime cre.Runtime, input DataAccount) cre.Promise[*solana.WriteReportReply] {
-	encoded, err := input.Marshal()
+func (c *Codec) EncodeDataAccountStruct(in DataAccount) ([]byte, error) {
+	return in.Marshal()
+}
+
+func (c *DataStorage) WriteReportFromDataAccount(
+	runtime cre.Runtime,
+	input DataAccount,
+	accountList []solanago.PublicKey,
+) cre.Promise[*solana.WriteReportReply] {
+	encodedInput, err := c.Codec.EncodeDataAccountStruct(input)
 	if err != nil {
 		return cre.PromiseFromResult[*solana.WriteReportReply](nil, err)
 	}
 
+	encodedAccountList, err := EncodeAccountList(accountList)
+	if err != nil {
+		return cre.PromiseFromResult[*solana.WriteReportReply](nil, err)
+	}
+
+	fwdReport := ForwarderReport{
+		AccountHash: encodedAccountList,
+		Payload:     encodedInput,
+	}
+
+	encodedFwdReport, err := fwdReport.Marshal()
+	if err != nil {
+		return cre.PromiseFromResult[*solana.WriteReportReply](nil, err)
+	}
 	promise := runtime.GenerateReport(&sdk.ReportRequest{
-		EncodedPayload: encoded,
+		EncodedPayload: encodedFwdReport,
 		EncoderName:    "solana",
 		HashingAlgo:    "sha256",
 		SigningAlgo:    "ed25519",
 	})
 
+	typedAccountList := make([]solana.PublicKey, len(accountList))
+	for i, account := range accountList {
+		typedAccountList[i] = solana.PublicKey(account)
+	}
 	return cre.ThenPromise(promise, func(report *cre.Report) cre.Promise[*solana.WriteReportReply] {
 		return c.client.WriteReport(runtime, &solana.WriteCreReportRequest{
-			Receiver: ProgramID.Bytes(),
-			Report:   report,
+			AccountList: typedAccountList,
+			Receiver:    ProgramID.Bytes(),
+			Report:      report,
 		})
 	})
 }
@@ -280,23 +334,50 @@ func UnmarshalDynamicEvent(buf []byte) (*DynamicEvent, error) {
 	return obj, nil
 }
 
-func (c *DataStorage) WriteReportFromDynamicEvent(runtime cre.Runtime, input DynamicEvent) cre.Promise[*solana.WriteReportReply] {
-	encoded, err := input.Marshal()
+func (c *Codec) EncodeDynamicEventStruct(in DynamicEvent) ([]byte, error) {
+	return in.Marshal()
+}
+
+func (c *DataStorage) WriteReportFromDynamicEvent(
+	runtime cre.Runtime,
+	input DynamicEvent,
+	accountList []solanago.PublicKey,
+) cre.Promise[*solana.WriteReportReply] {
+	encodedInput, err := c.Codec.EncodeDynamicEventStruct(input)
 	if err != nil {
 		return cre.PromiseFromResult[*solana.WriteReportReply](nil, err)
 	}
 
+	encodedAccountList, err := EncodeAccountList(accountList)
+	if err != nil {
+		return cre.PromiseFromResult[*solana.WriteReportReply](nil, err)
+	}
+
+	fwdReport := ForwarderReport{
+		AccountHash: encodedAccountList,
+		Payload:     encodedInput,
+	}
+
+	encodedFwdReport, err := fwdReport.Marshal()
+	if err != nil {
+		return cre.PromiseFromResult[*solana.WriteReportReply](nil, err)
+	}
 	promise := runtime.GenerateReport(&sdk.ReportRequest{
-		EncodedPayload: encoded,
+		EncodedPayload: encodedFwdReport,
 		EncoderName:    "solana",
 		HashingAlgo:    "sha256",
 		SigningAlgo:    "ed25519",
 	})
 
+	typedAccountList := make([]solana.PublicKey, len(accountList))
+	for i, account := range accountList {
+		typedAccountList[i] = solana.PublicKey(account)
+	}
 	return cre.ThenPromise(promise, func(report *cre.Report) cre.Promise[*solana.WriteReportReply] {
 		return c.client.WriteReport(runtime, &solana.WriteCreReportRequest{
-			Receiver: ProgramID.Bytes(),
-			Report:   report,
+			AccountList: typedAccountList,
+			Receiver:    ProgramID.Bytes(),
+			Report:      report,
 		})
 	})
 }
@@ -338,23 +419,50 @@ func UnmarshalNoFields(buf []byte) (*NoFields, error) {
 	return obj, nil
 }
 
-func (c *DataStorage) WriteReportFromNoFields(runtime cre.Runtime, input NoFields) cre.Promise[*solana.WriteReportReply] {
-	encoded, err := input.Marshal()
+func (c *Codec) EncodeNoFieldsStruct(in NoFields) ([]byte, error) {
+	return in.Marshal()
+}
+
+func (c *DataStorage) WriteReportFromNoFields(
+	runtime cre.Runtime,
+	input NoFields,
+	accountList []solanago.PublicKey,
+) cre.Promise[*solana.WriteReportReply] {
+	encodedInput, err := c.Codec.EncodeNoFieldsStruct(input)
 	if err != nil {
 		return cre.PromiseFromResult[*solana.WriteReportReply](nil, err)
 	}
 
+	encodedAccountList, err := EncodeAccountList(accountList)
+	if err != nil {
+		return cre.PromiseFromResult[*solana.WriteReportReply](nil, err)
+	}
+
+	fwdReport := ForwarderReport{
+		AccountHash: encodedAccountList,
+		Payload:     encodedInput,
+	}
+
+	encodedFwdReport, err := fwdReport.Marshal()
+	if err != nil {
+		return cre.PromiseFromResult[*solana.WriteReportReply](nil, err)
+	}
 	promise := runtime.GenerateReport(&sdk.ReportRequest{
-		EncodedPayload: encoded,
+		EncodedPayload: encodedFwdReport,
 		EncoderName:    "solana",
 		HashingAlgo:    "sha256",
 		SigningAlgo:    "ed25519",
 	})
 
+	typedAccountList := make([]solana.PublicKey, len(accountList))
+	for i, account := range accountList {
+		typedAccountList[i] = solana.PublicKey(account)
+	}
 	return cre.ThenPromise(promise, func(report *cre.Report) cre.Promise[*solana.WriteReportReply] {
 		return c.client.WriteReport(runtime, &solana.WriteCreReportRequest{
-			Receiver: ProgramID.Bytes(),
-			Report:   report,
+			AccountList: typedAccountList,
+			Receiver:    ProgramID.Bytes(),
+			Report:      report,
 		})
 	})
 }
@@ -419,23 +527,50 @@ func UnmarshalUpdateReserves(buf []byte) (*UpdateReserves, error) {
 	return obj, nil
 }
 
-func (c *DataStorage) WriteReportFromUpdateReserves(runtime cre.Runtime, input UpdateReserves) cre.Promise[*solana.WriteReportReply] {
-	encoded, err := input.Marshal()
+func (c *Codec) EncodeUpdateReservesStruct(in UpdateReserves) ([]byte, error) {
+	return in.Marshal()
+}
+
+func (c *DataStorage) WriteReportFromUpdateReserves(
+	runtime cre.Runtime,
+	input UpdateReserves,
+	accountList []solanago.PublicKey,
+) cre.Promise[*solana.WriteReportReply] {
+	encodedInput, err := c.Codec.EncodeUpdateReservesStruct(input)
 	if err != nil {
 		return cre.PromiseFromResult[*solana.WriteReportReply](nil, err)
 	}
 
+	encodedAccountList, err := EncodeAccountList(accountList)
+	if err != nil {
+		return cre.PromiseFromResult[*solana.WriteReportReply](nil, err)
+	}
+
+	fwdReport := ForwarderReport{
+		AccountHash: encodedAccountList,
+		Payload:     encodedInput,
+	}
+
+	encodedFwdReport, err := fwdReport.Marshal()
+	if err != nil {
+		return cre.PromiseFromResult[*solana.WriteReportReply](nil, err)
+	}
 	promise := runtime.GenerateReport(&sdk.ReportRequest{
-		EncodedPayload: encoded,
+		EncodedPayload: encodedFwdReport,
 		EncoderName:    "solana",
 		HashingAlgo:    "sha256",
 		SigningAlgo:    "ed25519",
 	})
 
+	typedAccountList := make([]solana.PublicKey, len(accountList))
+	for i, account := range accountList {
+		typedAccountList[i] = solana.PublicKey(account)
+	}
 	return cre.ThenPromise(promise, func(report *cre.Report) cre.Promise[*solana.WriteReportReply] {
 		return c.client.WriteReport(runtime, &solana.WriteCreReportRequest{
-			Receiver: ProgramID.Bytes(),
-			Report:   report,
+			AccountList: typedAccountList,
+			Receiver:    ProgramID.Bytes(),
+			Report:      report,
 		})
 	})
 }
@@ -500,23 +635,50 @@ func UnmarshalUserData(buf []byte) (*UserData, error) {
 	return obj, nil
 }
 
-func (c *DataStorage) WriteReportFromUserData(runtime cre.Runtime, input UserData) cre.Promise[*solana.WriteReportReply] {
-	encoded, err := input.Marshal()
+func (c *Codec) EncodeUserDataStruct(in UserData) ([]byte, error) {
+	return in.Marshal()
+}
+
+func (c *DataStorage) WriteReportFromUserData(
+	runtime cre.Runtime,
+	input UserData,
+	accountList []solanago.PublicKey,
+) cre.Promise[*solana.WriteReportReply] {
+	encodedInput, err := c.Codec.EncodeUserDataStruct(input)
 	if err != nil {
 		return cre.PromiseFromResult[*solana.WriteReportReply](nil, err)
 	}
 
+	encodedAccountList, err := EncodeAccountList(accountList)
+	if err != nil {
+		return cre.PromiseFromResult[*solana.WriteReportReply](nil, err)
+	}
+
+	fwdReport := ForwarderReport{
+		AccountHash: encodedAccountList,
+		Payload:     encodedInput,
+	}
+
+	encodedFwdReport, err := fwdReport.Marshal()
+	if err != nil {
+		return cre.PromiseFromResult[*solana.WriteReportReply](nil, err)
+	}
 	promise := runtime.GenerateReport(&sdk.ReportRequest{
-		EncodedPayload: encoded,
+		EncodedPayload: encodedFwdReport,
 		EncoderName:    "solana",
 		HashingAlgo:    "sha256",
 		SigningAlgo:    "ed25519",
 	})
 
+	typedAccountList := make([]solana.PublicKey, len(accountList))
+	for i, account := range accountList {
+		typedAccountList[i] = solana.PublicKey(account)
+	}
 	return cre.ThenPromise(promise, func(report *cre.Report) cre.Promise[*solana.WriteReportReply] {
 		return c.client.WriteReport(runtime, &solana.WriteCreReportRequest{
-			Receiver: ProgramID.Bytes(),
-			Report:   report,
+			AccountList: typedAccountList,
+			Receiver:    ProgramID.Bytes(),
+			Report:      report,
 		})
 	})
 }

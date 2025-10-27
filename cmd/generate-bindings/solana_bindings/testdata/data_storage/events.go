@@ -62,7 +62,7 @@ func ParseEvent_AccessLogged(eventData []byte) (*AccessLogged, error) {
 	return event, nil
 }
 
-func DecodeEvent_AccessLogged(event types.Log) (*AccessLogged, error) {
+func (c *Codec) DecodeAccessLogged(event solana.Log) (*AccessLogged, error) {
 	res, err := ParseEvent_AccessLogged(event.Data)
 	if err != nil {
 		return nil, err
@@ -72,10 +72,11 @@ func DecodeEvent_AccessLogged(event types.Log) (*AccessLogged, error) {
 
 type AccessLoggedTrigger struct {
 	cre.Trigger[*solana.Log, *solana.Log]
+	contract *DataStorage
 }
 
 func (t *AccessLoggedTrigger) Adapt(l *solana.Log) (*bindings.DecodedLog[AccessLogged], error) {
-	decoded, err := DecodeEvent_AccessLogged(l)
+	decoded, err := t.contract.Codec.DecodeAccessLogged(l)
 	if err != nil {
 		return nil, err
 	}
@@ -85,15 +86,18 @@ func (t *AccessLoggedTrigger) Adapt(l *solana.Log) (*bindings.DecodedLog[AccessL
 	}, nil
 }
 
-func (c *MyProject) LogTrigger_AccessLogged(chainSelector uint64, subKeyPathAndValue []solana.SubKeyPathAndFilter) (cre.Trigger[*solana.Log, *bindings.DecodedLog[AccessLogged]], error) {
+func (c *DataStorage) LogTrigger_AccessLogged(chainSelector uint64, subKeyPathAndValue []solana.SubKeyPathAndFilter) (cre.Trigger[*solana.Log, *bindings.DecodedLog[AccessLogged]], error) {
+	eventIdl, err := types.GetIdlEvent(c.IdlTypes, "AccessLogged")
+	if err != nil {
+		return nil, err
+	}
 	if len(subKeyPathAndValue) > 4 {
 		return nil, fmt.Errorf("too many subkey path and value pairs: %d", len(subKeyPathAndValue))
 	}
-	subKeyPaths, subKeyFilters, err := bindings.ValidateSubKeyPathAndValueExactNoPtr[AccessLogged](subKeyPathAndValue)
+	subKeyPaths, subKeyFilters, err := bindings.ValidateSubKeyPathAndValue[AccessLogged](subKeyPathAndValue)
 	if err != nil {
 		return nil, fmt.Errorf("failed to validate subkey path and value: %w", err)
 	}
-	eventIdl := types.GetIdlEvent(c.IdlTypes, "AccessLogged")
 	rawTrigger := solana.LogTrigger(chainSelector, &solana.FilterLogTriggerRequest{
 		Address:       types.PublicKey(ProgramID),
 		EventIdl:      eventIdl,
@@ -122,7 +126,7 @@ func ParseEvent_DynamicEvent(eventData []byte) (*DynamicEvent, error) {
 	return event, nil
 }
 
-func DecodeEvent_DynamicEvent(event types.Log) (*DynamicEvent, error) {
+func (c *Codec) DecodeDynamicEvent(event solana.Log) (*DynamicEvent, error) {
 	res, err := ParseEvent_DynamicEvent(event.Data)
 	if err != nil {
 		return nil, err
@@ -132,10 +136,11 @@ func DecodeEvent_DynamicEvent(event types.Log) (*DynamicEvent, error) {
 
 type DynamicEventTrigger struct {
 	cre.Trigger[*solana.Log, *solana.Log]
+	contract *DataStorage
 }
 
 func (t *DynamicEventTrigger) Adapt(l *solana.Log) (*bindings.DecodedLog[DynamicEvent], error) {
-	decoded, err := DecodeEvent_DynamicEvent(l)
+	decoded, err := t.contract.Codec.DecodeDynamicEvent(l)
 	if err != nil {
 		return nil, err
 	}
@@ -145,15 +150,18 @@ func (t *DynamicEventTrigger) Adapt(l *solana.Log) (*bindings.DecodedLog[Dynamic
 	}, nil
 }
 
-func (c *MyProject) LogTrigger_DynamicEvent(chainSelector uint64, subKeyPathAndValue []solana.SubKeyPathAndFilter) (cre.Trigger[*solana.Log, *bindings.DecodedLog[DynamicEvent]], error) {
+func (c *DataStorage) LogTrigger_DynamicEvent(chainSelector uint64, subKeyPathAndValue []solana.SubKeyPathAndFilter) (cre.Trigger[*solana.Log, *bindings.DecodedLog[DynamicEvent]], error) {
+	eventIdl, err := types.GetIdlEvent(c.IdlTypes, "DynamicEvent")
+	if err != nil {
+		return nil, err
+	}
 	if len(subKeyPathAndValue) > 4 {
 		return nil, fmt.Errorf("too many subkey path and value pairs: %d", len(subKeyPathAndValue))
 	}
-	subKeyPaths, subKeyFilters, err := bindings.ValidateSubKeyPathAndValueExactNoPtr[DynamicEvent](subKeyPathAndValue)
+	subKeyPaths, subKeyFilters, err := bindings.ValidateSubKeyPathAndValue[DynamicEvent](subKeyPathAndValue)
 	if err != nil {
 		return nil, fmt.Errorf("failed to validate subkey path and value: %w", err)
 	}
-	eventIdl := types.GetIdlEvent(c.IdlTypes, "DynamicEvent")
 	rawTrigger := solana.LogTrigger(chainSelector, &solana.FilterLogTriggerRequest{
 		Address:       types.PublicKey(ProgramID),
 		EventIdl:      eventIdl,
@@ -182,7 +190,7 @@ func ParseEvent_NoFields(eventData []byte) (*NoFields, error) {
 	return event, nil
 }
 
-func DecodeEvent_NoFields(event types.Log) (*NoFields, error) {
+func (c *Codec) DecodeNoFields(event solana.Log) (*NoFields, error) {
 	res, err := ParseEvent_NoFields(event.Data)
 	if err != nil {
 		return nil, err
@@ -192,10 +200,11 @@ func DecodeEvent_NoFields(event types.Log) (*NoFields, error) {
 
 type NoFieldsTrigger struct {
 	cre.Trigger[*solana.Log, *solana.Log]
+	contract *DataStorage
 }
 
 func (t *NoFieldsTrigger) Adapt(l *solana.Log) (*bindings.DecodedLog[NoFields], error) {
-	decoded, err := DecodeEvent_NoFields(l)
+	decoded, err := t.contract.Codec.DecodeNoFields(l)
 	if err != nil {
 		return nil, err
 	}
@@ -205,15 +214,18 @@ func (t *NoFieldsTrigger) Adapt(l *solana.Log) (*bindings.DecodedLog[NoFields], 
 	}, nil
 }
 
-func (c *MyProject) LogTrigger_NoFields(chainSelector uint64, subKeyPathAndValue []solana.SubKeyPathAndFilter) (cre.Trigger[*solana.Log, *bindings.DecodedLog[NoFields]], error) {
+func (c *DataStorage) LogTrigger_NoFields(chainSelector uint64, subKeyPathAndValue []solana.SubKeyPathAndFilter) (cre.Trigger[*solana.Log, *bindings.DecodedLog[NoFields]], error) {
+	eventIdl, err := types.GetIdlEvent(c.IdlTypes, "NoFields")
+	if err != nil {
+		return nil, err
+	}
 	if len(subKeyPathAndValue) > 4 {
 		return nil, fmt.Errorf("too many subkey path and value pairs: %d", len(subKeyPathAndValue))
 	}
-	subKeyPaths, subKeyFilters, err := bindings.ValidateSubKeyPathAndValueExactNoPtr[NoFields](subKeyPathAndValue)
+	subKeyPaths, subKeyFilters, err := bindings.ValidateSubKeyPathAndValue[NoFields](subKeyPathAndValue)
 	if err != nil {
 		return nil, fmt.Errorf("failed to validate subkey path and value: %w", err)
 	}
-	eventIdl := types.GetIdlEvent(c.IdlTypes, "NoFields")
 	rawTrigger := solana.LogTrigger(chainSelector, &solana.FilterLogTriggerRequest{
 		Address:       types.PublicKey(ProgramID),
 		EventIdl:      eventIdl,

@@ -15,18 +15,8 @@ func (g *Generator) genfile_constructor() (*OutputFile, error) {
 	file.HeaderComment("This file contains the constructor for the program.")
 
 	{
-		code := newStatement()
-		// type
-		code.Type().Id(tools.ToCamelUpper(g.options.Package)).Struct(
-			Id("IdlTypes").Op("*").Qual(PkgAnchorIdlCodec, "IdlTypeDefSlice"),
-			Id("client").Op("*").Qual(PkgSolanaCre, "Client"),
-		)
-		code.Line()
-		file.Add(code)
-		code.Line()
-
 		// idl string
-		code = newStatement()
+		code := newStatement()
 		idlData, err := json.Marshal(g.idl)
 		if err != nil {
 			return nil, fmt.Errorf("error reading IDL file: %w", err)
@@ -34,6 +24,23 @@ func (g *Generator) genfile_constructor() (*OutputFile, error) {
 		code.Var().Id("IDL").Op("=").Lit(string(idlData))
 		file.Add(code)
 		code.Line()
+
+		// contract type
+		code = newStatement()
+		code.Type().Id(tools.ToCamelUpper(g.options.Package)).Struct(
+			Id("IdlTypes").Op("*").Qual(PkgAnchorIdlCodec, "IdlTypeDefSlice"),
+			Id("client").Op("*").Qual(PkgSolanaCre, "Client"),
+			Id("Codec").Id(tools.ToCamelUpper(g.options.Package)+"Codec"),
+		)
+		code.Line()
+		file.Add(code)
+		code.Line()
+
+		// codec type
+		code = newStatement()
+		code.Type().Id("Codec").Struct()
+		code.Line()
+		file.Add(code)
 
 		// new constructor
 		code = newStatement()
@@ -58,7 +65,100 @@ func (g *Generator) genfile_constructor() (*OutputFile, error) {
 					Op("&").Id(tools.ToCamelUpper(g.options.Package)).Values(Dict{
 						Id("IdlTypes"): Id("idlTypes"),
 						Id("client"):   Id("client"),
+						Id("Codec"):    Op("&").Id("Codec").Values(),
 					}),
+					Nil(),
+				),
+			)
+		file.Add(code)
+		code.Line()
+
+		methods, err := g.generateCodecMethods()
+		if err != nil {
+			return nil, err
+		}
+
+		code = newStatement()
+		code.Type().Id(tools.ToCamelUpper(g.options.Package) + "Codec").Interface(methods...)
+		file.Add(code)
+		code.Line()
+
+		code = newStatement()
+		code.Type().Id("ForwarderReport").Struct(
+			Id("AccountHash").Index(Lit(32)).Byte().Tag(map[string]string{"json": "account_hash"}),
+			Id("Payload").Index().Byte().Tag(map[string]string{"json": "payload"}),
+		)
+		file.Add(code)
+		code.Line()
+
+		code = newStatement()
+		code.Func().
+			Params(Id("c").Op("*").Id("Codec")).
+			Id("EncodeForwarderReportStruct").
+			Params(Id("in").Id("ForwarderReport")).
+			Params(Index().Byte(), Error()).
+			Block(
+				Return(Id("in").Dot("Marshal").Call()),
+			)
+		file.Add(code)
+		code.Line()
+
+		code = newStatement()
+		code.Func().
+			Params(Id("obj").Id("ForwarderReport")).
+			Id("MarshalWithEncoder").
+			Params(Id("encoder").Op("*").Qual(PkgBinary, "Encoder")).
+			Params(Id("err").Error()).
+			Block(
+				Comment("Serialize `AccountHash`:"),
+				Id("err").Op("=").Id("encoder").Dot("Encode").Call(Id("obj").Dot("AccountHash")),
+				If(Id("err").Op("!=").Nil()).Block(
+					Return(Qual(PkgAnchorGoErrors, "NewField").Call(Lit("AccountHash"), Id("err"))),
+				),
+				Comment("Serialize `Payload`:"),
+				Id("err").Op("=").Id("encoder").Dot("Encode").Call(Id("obj").Dot("Payload")),
+				If(Id("err").Op("!=").Nil()).Block(
+					Return(Qual(PkgAnchorGoErrors, "NewField").Call(Lit("Payload"), Id("err"))),
+				),
+				Return(Nil()),
+			)
+		file.Add(code)
+		code.Line()
+
+		code = newStatement()
+		code.Func().
+			Params(Id("obj").Id("ForwarderReport")).
+			Id("Marshal").
+			Params().
+			Params(Index().Byte(), Error()).
+			Block(
+				Id("buf").Op(":=").Qual("bytes", "NewBuffer").Call(Nil()),
+				Id("encoder").Op(":=").Qual(PkgBinary, "NewBorshEncoder").Call(Id("buf")),
+				Id("err").Op(":=").Id("obj").Dot("MarshalWithEncoder").Call(Id("encoder")),
+				If(Id("err").Op("!=").Nil()).Block(
+					Return(
+						Nil(),
+						Qual("fmt", "Errorf").Call(Lit("error while encoding ForwarderReport: %w"), Id("err")),
+					),
+				),
+				Return(Id("buf").Dot("Bytes").Call(), Nil()),
+			)
+		file.Add(code)
+		code.Line()
+
+		code = newStatement()
+		code.Func().
+			Id("EncodeAccountList").
+			Params(
+				Id("accountList").Index().Qual(PkgSolanaGo, "PublicKey"),
+			).
+			Params(
+				Index(Lit(32)).Byte(),
+				Error(),
+			).
+			Block(
+				Return(
+					Index(Lit(32)).Byte().Values(),
 					Nil(),
 				),
 			)
@@ -70,4 +170,71 @@ func (g *Generator) genfile_constructor() (*OutputFile, error) {
 		Name: "constructor.go",
 		File: file,
 	}, nil
+}
+
+func (g *Generator) generateCodecAccountMethods() ([]Code, error) {
+	accountMethods := make([]Code, 0, len(g.idl.Accounts))
+	for _, acc := range g.idl.Accounts {
+		methodName := "Decode" + acc.Name
+		m := Id(methodName).
+			Params(Id("data").Index().Byte()). // ([]byte)
+			Params(
+				Op("*").Id(acc.Name), // (*DataAccount)
+				Error(),              // error
+			)
+
+		accountMethods = append(accountMethods, m)
+	}
+
+	return accountMethods, nil
+}
+
+func (g *Generator) generateCodecEventMethods() ([]Code, error) {
+	eventMethods := make([]Code, 0, len(g.idl.Events))
+	for _, event := range g.idl.Events {
+		methodName := "Decode" + event.Name
+		m := Id(methodName).
+			Params(Id("log").Op("*").Qual(PkgSolanaCre, "Log")).
+			Params(
+				Op("*").Id(event.Name),
+				Error(),
+			)
+
+		eventMethods = append(eventMethods, m)
+	}
+
+	return eventMethods, nil
+}
+
+func (g *Generator) generateCodecStructMethod() ([]Code, error) {
+	structMethods := make([]Code, 0, len(g.idl.Types))
+	for _, typ := range g.idl.Types {
+		methodName := "Encode" + typ.Name + "Struct"
+		m := Id(methodName).
+			Params(
+				Id("in").Id(typ.Name), // e.g., AccessLogged / DataAccount / ...
+			).
+			Params(
+				Index().Byte(), // []byte
+				Error(),        // error
+			)
+		structMethods = append(structMethods, m)
+	}
+	return structMethods, nil
+}
+
+func (g *Generator) generateCodecMethods() ([]Code, error) {
+	accountMethods, err := g.generateCodecAccountMethods()
+	if err != nil {
+		return nil, err
+	}
+	eventMethods, err := g.generateCodecEventMethods()
+	if err != nil {
+		return nil, err
+	}
+	structMethods, err := g.generateCodecStructMethod()
+	if err != nil {
+		return nil, err
+	}
+	return append(append(accountMethods, eventMethods...), structMethods...), nil
 }

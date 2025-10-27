@@ -55,7 +55,7 @@ func ParseEvent_AccessLogged(eventData []byte) (*AccessLogged, error) {
 	return event, nil
 }
 
-func DecodeEvent_AccessLogged(event types.Log) (*AccessLogged, error) {
+func DecodeEvent_AccessLogged(event solana.Log) (*AccessLogged, error) {
 	res, err := ParseEvent_AccessLogged(event.Data)
 	if err != nil {
 		return nil, err
@@ -79,14 +79,17 @@ func (t *AccessLoggedTrigger) Adapt(l *solana.Log) (*bindings.DecodedLog[AccessL
 }
 
 func (c *MyProject) LogTrigger_AccessLogged(chainSelector uint64, subKeyPathAndValue []solana.SubKeyPathAndFilter) (cre.Trigger[*solana.Log, *bindings.DecodedLog[AccessLogged]], error) {
+	eventIdl, err := types.GetIdlEvent(c.IdlTypes, "AccessLogged")
+	if err != nil {
+		return nil, err
+	}
 	if len(subKeyPathAndValue) > 4 {
 		return nil, fmt.Errorf("too many subkey path and value pairs: %d", len(subKeyPathAndValue))
 	}
-	subKeyPaths, subKeyFilters, err := bindings.ValidateSubKeyPathAndValueExactNoPtr[AccessLogged](subKeyPathAndValue)
+	subKeyPaths, subKeyFilters, err := bindings.ValidateSubKeyPathAndValue[AccessLogged](subKeyPathAndValue)
 	if err != nil {
 		return nil, fmt.Errorf("failed to validate subkey path and value: %w", err)
 	}
-	eventIdl := types.GetIdlEvent(c.IdlTypes, "AccessLogged")
 	rawTrigger := solana.LogTrigger(chainSelector, &solana.FilterLogTriggerRequest{
 		Address:       types.PublicKey(ProgramID),
 		EventIdl:      eventIdl,
@@ -115,7 +118,7 @@ func ParseEvent_DataUpdated(eventData []byte) (*DataUpdated, error) {
 	return event, nil
 }
 
-func DecodeEvent_DataUpdated(event types.Log) (*DataUpdated, error) {
+func DecodeEvent_DataUpdated(event solana.Log) (*DataUpdated, error) {
 	res, err := ParseEvent_DataUpdated(event.Data)
 	if err != nil {
 		return nil, err
@@ -139,14 +142,17 @@ func (t *DataUpdatedTrigger) Adapt(l *solana.Log) (*bindings.DecodedLog[DataUpda
 }
 
 func (c *MyProject) LogTrigger_DataUpdated(chainSelector uint64, subKeyPathAndValue []solana.SubKeyPathAndFilter) (cre.Trigger[*solana.Log, *bindings.DecodedLog[DataUpdated]], error) {
+	eventIdl, err := types.GetIdlEvent(c.IdlTypes, "DataUpdated")
+	if err != nil {
+		return nil, err
+	}
 	if len(subKeyPathAndValue) > 4 {
 		return nil, fmt.Errorf("too many subkey path and value pairs: %d", len(subKeyPathAndValue))
 	}
-	subKeyPaths, subKeyFilters, err := bindings.ValidateSubKeyPathAndValueExactNoPtr[DataUpdated](subKeyPathAndValue)
+	subKeyPaths, subKeyFilters, err := bindings.ValidateSubKeyPathAndValue[DataUpdated](subKeyPathAndValue)
 	if err != nil {
 		return nil, fmt.Errorf("failed to validate subkey path and value: %w", err)
 	}
-	eventIdl := types.GetIdlEvent(c.IdlTypes, "DataUpdated")
 	rawTrigger := solana.LogTrigger(chainSelector, &solana.FilterLogTriggerRequest{
 		Address:       types.PublicKey(ProgramID),
 		EventIdl:      eventIdl,

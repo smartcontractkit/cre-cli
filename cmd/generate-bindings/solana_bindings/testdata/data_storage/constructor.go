@@ -4,17 +4,25 @@
 package data_storage
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
+	errors "github.com/gagliardetto/anchor-go/errors"
+	binary "github.com/gagliardetto/binary"
+	solanago "github.com/gagliardetto/solana-go"
 	solana "github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana_bindings/cre-sdk-go/capabilities/blockchain/solana"
 	codec "github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana_bindings/cre-sdk-go/codec"
 )
 
+var IDL = "{\"address\":\"ECL8142j2YQAvs9R9geSsRnkVH2wLEi7soJCRyJ74cfL\",\"metadata\":{\"name\":\"data_storage\",\"version\":\"0.1.0\",\"spec\":\"0.1.0\",\"description\":\"Created with Anchor\"},\"instructions\":[{\"name\":\"get_multiple_reserves\",\"discriminator\":[104,122,140,104,175,151,70,42],\"accounts\":[],\"args\":[],\"returns\":{\"vec\":{\"defined\":{\"name\":\"UpdateReserves\"}}}},{\"name\":\"get_reserves\",\"discriminator\":[121,140,237,84,218,105,48,17],\"accounts\":[],\"args\":[],\"returns\":{\"defined\":{\"name\":\"UpdateReserves\"}}},{\"name\":\"get_tuple_reserves\",\"discriminator\":[189,83,186,20,127,80,109,49],\"accounts\":[],\"args\":[]},{\"name\":\"initialize_data_account\",\"discriminator\":[9,64,78,49,71,193,15,250],\"accounts\":[{\"name\":\"data_account\",\"writable\":true,\"pda\":{\"seeds\":[{\"kind\":\"const\",\"value\":[100,97,116,97,95,97,99,99,111,117,110,116]},{\"kind\":\"account\",\"path\":\"user\"}]}},{\"name\":\"user\",\"writable\":true,\"signer\":true},{\"name\":\"system_program\",\"address\":\"11111111111111111111111111111111\"}],\"args\":[{\"name\":\"input\",\"type\":{\"defined\":{\"name\":\"UserData\"}}}]},{\"name\":\"log_access\",\"discriminator\":[196,55,194,24,5,224,161,204],\"accounts\":[{\"name\":\"user\",\"signer\":true}],\"args\":[{\"name\":\"message\",\"type\":\"string\"}]},{\"name\":\"on_report\",\"discriminator\":[214,173,18,221,173,148,151,208],\"accounts\":[{\"name\":\"user\",\"writable\":true,\"signer\":true},{\"name\":\"data_account\",\"writable\":true,\"pda\":{\"seeds\":[{\"kind\":\"const\",\"value\":[100,97,116,97,95,97,99,99,111,117,110,116]},{\"kind\":\"account\",\"path\":\"user\"}]}},{\"name\":\"system_program\",\"address\":\"11111111111111111111111111111111\"}],\"args\":[{\"name\":\"_metadata\",\"type\":\"bytes\"},{\"name\":\"payload\",\"type\":\"bytes\"}]},{\"name\":\"update_key_value_data\",\"discriminator\":[67,137,144,35,210,126,254,79],\"accounts\":[{\"name\":\"user\",\"writable\":true,\"signer\":true},{\"name\":\"data_account\",\"writable\":true,\"pda\":{\"seeds\":[{\"kind\":\"const\",\"value\":[100,97,116,97,95,97,99,99,111,117,110,116]},{\"kind\":\"account\",\"path\":\"user\"}]}}],\"args\":[{\"name\":\"key\",\"type\":\"string\"},{\"name\":\"value\",\"type\":\"string\"}]},{\"name\":\"update_user_data\",\"discriminator\":[11,13,114,150,194,224,192,78],\"accounts\":[{\"name\":\"user\",\"writable\":true,\"signer\":true},{\"name\":\"data_account\",\"writable\":true,\"pda\":{\"seeds\":[{\"kind\":\"const\",\"value\":[100,97,116,97,95,97,99,99,111,117,110,116]},{\"kind\":\"account\",\"path\":\"user\"}]}}],\"args\":[{\"name\":\"input\",\"type\":{\"defined\":{\"name\":\"UserData\"}}}]}],\"accounts\":[{\"name\":\"DataAccount\",\"discriminator\":[85,240,182,158,76,7,18,233]}],\"events\":[{\"name\":\"AccessLogged\",\"discriminator\":[243,53,225,71,64,120,109,25]},{\"name\":\"DynamicEvent\",\"discriminator\":[236,145,224,161,9,222,218,237]},{\"name\":\"NoFields\",\"discriminator\":[160,156,94,85,77,122,98,240]}],\"errors\":[{\"code\":6000,\"name\":\"DataNotFound\",\"msg\":\"data not found\"}],\"types\":[{\"name\":\"AccessLogged\",\"type\":{\"kind\":\"struct\",\"fields\":[{\"name\":\"caller\",\"type\":\"pubkey\"},{\"name\":\"message\",\"type\":\"string\"}]}},{\"name\":\"DataAccount\",\"type\":{\"kind\":\"struct\",\"fields\":[{\"name\":\"sender\",\"type\":\"string\"},{\"name\":\"key\",\"type\":\"string\"},{\"name\":\"value\",\"type\":\"string\"}]}},{\"name\":\"DynamicEvent\",\"type\":{\"kind\":\"struct\",\"fields\":[{\"name\":\"key\",\"type\":\"string\"},{\"name\":\"user_data\",\"type\":{\"defined\":{\"name\":\"UserData\"}}},{\"name\":\"sender\",\"type\":\"string\"},{\"name\":\"metadata\",\"type\":\"bytes\"},{\"name\":\"metadata_array\",\"type\":{\"vec\":\"bytes\"}}]}},{\"name\":\"NoFields\",\"type\":{\"kind\":\"struct\",\"fields\":[]}},{\"name\":\"UpdateReserves\",\"type\":{\"kind\":\"struct\",\"fields\":[{\"name\":\"total_minted\",\"type\":\"u64\"},{\"name\":\"total_reserve\",\"type\":\"u64\"}]}},{\"name\":\"UserData\",\"type\":{\"kind\":\"struct\",\"fields\":[{\"name\":\"key\",\"type\":\"string\"},{\"name\":\"value\",\"type\":\"string\"}]}}]}"
+
 type DataStorage struct {
 	IdlTypes *codec.IdlTypeDefSlice
 	client   *solana.Client
+	Codec    DataStorageCodec
 }
 
-var IDL = "{\"address\":\"ECL8142j2YQAvs9R9geSsRnkVH2wLEi7soJCRyJ74cfL\",\"metadata\":{\"name\":\"data_storage\",\"version\":\"0.1.0\",\"spec\":\"0.1.0\",\"description\":\"Created with Anchor\"},\"instructions\":[{\"name\":\"get_multiple_reserves\",\"discriminator\":[104,122,140,104,175,151,70,42],\"accounts\":[],\"args\":[],\"returns\":{\"vec\":{\"defined\":{\"name\":\"UpdateReserves\"}}}},{\"name\":\"get_reserves\",\"discriminator\":[121,140,237,84,218,105,48,17],\"accounts\":[],\"args\":[],\"returns\":{\"defined\":{\"name\":\"UpdateReserves\"}}},{\"name\":\"get_tuple_reserves\",\"discriminator\":[189,83,186,20,127,80,109,49],\"accounts\":[],\"args\":[]},{\"name\":\"initialize_data_account\",\"discriminator\":[9,64,78,49,71,193,15,250],\"accounts\":[{\"name\":\"data_account\",\"writable\":true,\"pda\":{\"seeds\":[{\"kind\":\"const\",\"value\":[100,97,116,97,95,97,99,99,111,117,110,116]},{\"kind\":\"account\",\"path\":\"user\"}]}},{\"name\":\"user\",\"writable\":true,\"signer\":true},{\"name\":\"system_program\",\"address\":\"11111111111111111111111111111111\"}],\"args\":[{\"name\":\"input\",\"type\":{\"defined\":{\"name\":\"UserData\"}}}]},{\"name\":\"log_access\",\"discriminator\":[196,55,194,24,5,224,161,204],\"accounts\":[{\"name\":\"user\",\"signer\":true}],\"args\":[{\"name\":\"message\",\"type\":\"string\"}]},{\"name\":\"on_report\",\"discriminator\":[214,173,18,221,173,148,151,208],\"accounts\":[{\"name\":\"user\",\"writable\":true,\"signer\":true},{\"name\":\"data_account\",\"writable\":true,\"pda\":{\"seeds\":[{\"kind\":\"const\",\"value\":[100,97,116,97,95,97,99,99,111,117,110,116]},{\"kind\":\"account\",\"path\":\"user\"}]}},{\"name\":\"system_program\",\"address\":\"11111111111111111111111111111111\"}],\"args\":[{\"name\":\"_metadata\",\"type\":\"bytes\"},{\"name\":\"payload\",\"type\":\"bytes\"}]},{\"name\":\"update_key_value_data\",\"discriminator\":[67,137,144,35,210,126,254,79],\"accounts\":[{\"name\":\"user\",\"writable\":true,\"signer\":true},{\"name\":\"data_account\",\"writable\":true,\"pda\":{\"seeds\":[{\"kind\":\"const\",\"value\":[100,97,116,97,95,97,99,99,111,117,110,116]},{\"kind\":\"account\",\"path\":\"user\"}]}}],\"args\":[{\"name\":\"key\",\"type\":\"string\"},{\"name\":\"value\",\"type\":\"string\"}]},{\"name\":\"update_user_data\",\"discriminator\":[11,13,114,150,194,224,192,78],\"accounts\":[{\"name\":\"user\",\"writable\":true,\"signer\":true},{\"name\":\"data_account\",\"writable\":true,\"pda\":{\"seeds\":[{\"kind\":\"const\",\"value\":[100,97,116,97,95,97,99,99,111,117,110,116]},{\"kind\":\"account\",\"path\":\"user\"}]}}],\"args\":[{\"name\":\"input\",\"type\":{\"defined\":{\"name\":\"UserData\"}}}]}],\"accounts\":[{\"name\":\"DataAccount\",\"discriminator\":[85,240,182,158,76,7,18,233]}],\"events\":[{\"name\":\"AccessLogged\",\"discriminator\":[243,53,225,71,64,120,109,25]},{\"name\":\"DynamicEvent\",\"discriminator\":[236,145,224,161,9,222,218,237]},{\"name\":\"NoFields\",\"discriminator\":[160,156,94,85,77,122,98,240]}],\"errors\":[{\"code\":6000,\"name\":\"DataNotFound\",\"msg\":\"data not found\"}],\"types\":[{\"name\":\"AccessLogged\",\"type\":{\"kind\":\"struct\",\"fields\":[{\"name\":\"caller\",\"type\":\"pubkey\"},{\"name\":\"message\",\"type\":\"string\"}]}},{\"name\":\"DataAccount\",\"type\":{\"kind\":\"struct\",\"fields\":[{\"name\":\"sender\",\"type\":\"string\"},{\"name\":\"key\",\"type\":\"string\"},{\"name\":\"value\",\"type\":\"string\"}]}},{\"name\":\"DynamicEvent\",\"type\":{\"kind\":\"struct\",\"fields\":[{\"name\":\"key\",\"type\":\"string\"},{\"name\":\"user_data\",\"type\":{\"defined\":{\"name\":\"UserData\"}}},{\"name\":\"sender\",\"type\":\"string\"},{\"name\":\"metadata\",\"type\":\"bytes\"},{\"name\":\"metadata_array\",\"type\":{\"vec\":\"bytes\"}}]}},{\"name\":\"NoFields\",\"type\":{\"kind\":\"struct\",\"fields\":[]}},{\"name\":\"UpdateReserves\",\"type\":{\"kind\":\"struct\",\"fields\":[{\"name\":\"total_minted\",\"type\":\"u64\"},{\"name\":\"total_reserve\",\"type\":\"u64\"}]}},{\"name\":\"UserData\",\"type\":{\"kind\":\"struct\",\"fields\":[{\"name\":\"key\",\"type\":\"string\"},{\"name\":\"value\",\"type\":\"string\"}]}}]}"
+type Codec struct{}
 
 func NewDataStorage(client *solana.Client) (*DataStorage, error) {
 	idlTypes := codec.IdlTypeDefSlice
@@ -23,7 +31,58 @@ func NewDataStorage(client *solana.Client) (*DataStorage, error) {
 		return nil, err
 	}
 	return &DataStorage{
+		Codec:    &Codec{},
 		IdlTypes: idlTypes,
 		client:   client,
 	}, nil
+}
+
+type DataStorageCodec interface {
+	DecodeDataAccount(data []byte) (*DataAccount, error)
+	DecodeAccessLogged(log *solana.Log) (*AccessLogged, error)
+	DecodeDynamicEvent(log *solana.Log) (*DynamicEvent, error)
+	DecodeNoFields(log *solana.Log) (*NoFields, error)
+	EncodeAccessLoggedStruct(in AccessLogged) ([]byte, error)
+	EncodeDataAccountStruct(in DataAccount) ([]byte, error)
+	EncodeDynamicEventStruct(in DynamicEvent) ([]byte, error)
+	EncodeNoFieldsStruct(in NoFields) ([]byte, error)
+	EncodeUpdateReservesStruct(in UpdateReserves) ([]byte, error)
+	EncodeUserDataStruct(in UserData) ([]byte, error)
+}
+
+type ForwarderReport struct {
+	AccountHash [32]byte `json:"account_hash"`
+	Payload     []byte   `json:"payload"`
+}
+
+func (c *Codec) EncodeForwarderReportStruct(in ForwarderReport) ([]byte, error) {
+	return in.Marshal()
+}
+
+func (obj ForwarderReport) MarshalWithEncoder(encoder *binary.Encoder) (err error) {
+	// Serialize `AccountHash`:
+	err = encoder.Encode(obj.AccountHash)
+	if err != nil {
+		return errors.NewField("AccountHash", err)
+	}
+	// Serialize `Payload`:
+	err = encoder.Encode(obj.Payload)
+	if err != nil {
+		return errors.NewField("Payload", err)
+	}
+	return nil
+}
+
+func (obj ForwarderReport) Marshal() ([]byte, error) {
+	buf := bytes.NewBuffer(nil)
+	encoder := binary.NewBorshEncoder(buf)
+	err := obj.MarshalWithEncoder(encoder)
+	if err != nil {
+		return nil, fmt.Errorf("error while encoding ForwarderReport: %w", err)
+	}
+	return buf.Bytes(), nil
+}
+
+func EncodeAccountList(accountList []solanago.PublicKey) ([32]byte, error) {
+	return [32]byte{}, nil
 }

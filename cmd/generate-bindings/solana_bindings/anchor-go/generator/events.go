@@ -108,8 +108,10 @@ func (g *Generator) gen_eventParser(eventNames []string) (Code, error) {
 				})
 			code.Line().Line()
 
-			code.Func().Id("DecodeEvent_"+name).
-				Params(Id("event").Qual(PkgSolanaTypes, "Log")).
+			code.Func().
+				Params(Id("c").Op("*").Id("Codec")). // method receiver
+				Id("Decode"+name).
+				Params(Id("event").Qual(PkgSolanaCre, "Log")).
 				Params(Op("*").Id(name), Error()).
 				BlockFunc(func(block *Group) {
 					block.List(Id("res"), Id("err")).Op(":=").Id("ParseEvent_" + name).Call(
@@ -122,13 +124,14 @@ func (g *Generator) gen_eventParser(eventNames []string) (Code, error) {
 				})
 			code.Line().Line()
 
-			code.Type().Id(name + "Trigger").
+			code.Type().Id(name+"Trigger").
 				Struct(
 					Qual(PkgCRE, "Trigger"). // embedded generic type
 									Types(
 							Op("*").Qual(PkgSolanaCre, "Log"),
 							Op("*").Qual(PkgSolanaCre, "Log"),
 						),
+					Id("contract").Op("*").Id(tools.ToCamelUpper(g.options.Package)),
 				)
 			code.Line().Line()
 
@@ -143,7 +146,7 @@ func (g *Generator) gen_eventParser(eventNames []string) (Code, error) {
 					Error(),
 				).
 				Block(
-					List(Id("decoded"), Id("err")).Op(":=").Id("DecodeEvent_"+name).Call(Id("l")),
+					List(Id("decoded"), Id("err")).Op(":=").Id("t").Dot("contract").Dot("Codec").Dot("Decode"+name).Call(Id("l")),
 					If(Id("err").Op("!=").Nil()).Block(
 						Return(Nil(), Id("err")),
 					),
@@ -158,7 +161,7 @@ func (g *Generator) gen_eventParser(eventNames []string) (Code, error) {
 			code.Line().Line()
 
 			code.Func().
-				Params(Id("c").Op("*").Id("MyProject")). // method receiver
+				Params(Id("c").Op("*").Id(tools.ToCamelUpper(g.options.Package))). // method receiver
 				Id("LogTrigger_"+name).
 				Params(
 					Id("chainSelector").Uint64(),
@@ -172,6 +175,15 @@ func (g *Generator) gen_eventParser(eventNames []string) (Code, error) {
 					Error(),
 				).
 				BlockFunc(func(b *jen.Group) {
+					// eventIdl := types.GetIdlEvent(c.IdlTypes, "<Event>")
+					b.List(Id("eventIdl"), Id("err")).Op(":=").Qual(PkgSolanaTypes, "GetIdlEvent").Call(
+						Id("c").Dot("IdlTypes"),
+						Lit(name),
+					)
+					b.If(Id("err").Op("!=").Nil()).Block(
+						Return(Nil(), Id("err")),
+					)
+
 					// if len(subKeyPathAndValue) > 4 { return nil, fmt.Errorf(...) }
 					b.If(Len(Id("subKeyPathAndValue")).Op(">").Lit(4)).Block(
 						Return(
@@ -183,12 +195,12 @@ func (g *Generator) gen_eventParser(eventNames []string) (Code, error) {
 						),
 					)
 
-					// subKeyPaths, subKeyFilters, err := bindings.ValidateSubKeyPathAndValueExactNoPtr[<Event>](subKeyPathAndValue)
+					// subKeyPaths, subKeyFilters, err := bindings.ValidateSubKeyPathAndValue[<Event>](subKeyPathAndValue)
 					b.List(
 						Id("subKeyPaths"),
 						Id("subKeyFilters"),
 						Id("err"),
-					).Op(":=").Qual(PkgBindings, "ValidateSubKeyPathAndValueExactNoPtr").
+					).Op(":=").Qual(PkgBindings, "ValidateSubKeyPathAndValue").
 						Types(Id(name)).
 						Call(Id("subKeyPathAndValue"))
 
@@ -200,12 +212,6 @@ func (g *Generator) gen_eventParser(eventNames []string) (Code, error) {
 								Id("err"),
 							),
 						),
-					)
-
-					// eventIdl := types.GetIdlEvent(c.IdlTypes, "<Event>")
-					b.Id("eventIdl").Op(":=").Qual(PkgSolanaTypes, "GetIdlEvent").Call(
-						Id("c").Dot("IdlTypes"),
-						Lit(name),
 					)
 
 					// rawTrigger := solana.LogTrigger(chainSelector, &solana.FilterLogTriggerRequest{ ... })

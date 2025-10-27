@@ -11,7 +11,7 @@ import (
 )
 
 // No-pointers, strict type check.
-func ValidateSubKeyPathAndValueExactNoPtr[T any](inputs []solana.SubKeyPathAndFilter) ([][]string, []solana.SubkeyFilterCriteria, error) {
+func ValidateSubKeyPathAndValue[T any](inputs []solana.SubKeyPathAndFilter) ([][]string, []solana.SubkeyFilterCriteria, error) {
 	var zero T
 	root := reflect.TypeOf(zero)
 	if root.Kind() != reflect.Struct {
