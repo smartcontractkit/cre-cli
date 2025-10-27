@@ -101,7 +101,8 @@ type {{$call.Normalized.Name}}Output struct {
 {{end}}
 
 // Events
-// The <Event> struct should be used as a filter (for log triggers).
+// The <Event>Topics struct should be used as a filter (for log triggers).
+// Note: It is only possible to filter on indexed fields.
 // Indexed (string and bytes) fields will be of type common.Hash.
 // They need to he (crypto.Keccak256) hashed and passed in.
 // Indexed (tuple/slice/array) fields can be passed in as is, the Encode<Event>Topics function will handle the hashing.
@@ -110,9 +111,11 @@ type {{$call.Normalized.Name}}Output struct {
 // Indexed dynamic type fields will be of type common.Hash.
 {{range $event := $contract.Events}}
 
-type {{.Normalized.Name}} struct {
+type {{.Normalized.Name}}Topics struct {
 	{{- range .Normalized.Inputs}}
-	{{capitalise .Name}} {{if .Indexed}}{{bindtopictype .Type $.Structs}}{{else}}{{bindtype .Type $.Structs}}{{end}}
+	{{- if .Indexed}}
+	{{capitalise .Name}} {{bindtopictype .Type $.Structs}}
+	{{- end}}
 	{{- end}}
 }
 
@@ -155,7 +158,7 @@ type {{$contract.Type}}Codec interface {
 
 	{{- range $event := .Events}}
 	{{.Normalized.Name}}LogHash() []byte
-	Encode{{.Normalized.Name}}Topics(evt abi.Event, values []{{.Normalized.Name}}) ([]*evm.TopicValues, error)
+	Encode{{.Normalized.Name}}Topics(evt abi.Event, values []{{.Normalized.Name}}Topics) ([]*evm.TopicValues, error)
 	Decode{{.Normalized.Name}}(log *evm.Log) (*{{.Normalized.Name}}Decoded, error)
 	{{- end}}
 }
@@ -291,7 +294,7 @@ func (c *Codec) {{.Normalized.Name}}LogHash() []byte {
 
 func (c *Codec) Encode{{.Normalized.Name}}Topics(
     evt abi.Event,
-    values []{{.Normalized.Name}},
+    values []{{.Normalized.Name}}Topics,
 ) ([]*evm.TopicValues, error) {
     {{- range $idx, $inp := .Normalized.Inputs }}
     {{- if $inp.Indexed }}
@@ -536,7 +539,7 @@ func (t *{{.Normalized.Name}}Trigger) Adapt(l *evm.Log) (*bindings.DecodedLog[{{
 	}, nil
 }
 
-func (c *{{$contract.Type}}) LogTrigger{{.Normalized.Name}}Log(chainSelector uint64, confidence evm.ConfidenceLevel, filters []{{.Normalized.Name}}) (cre.Trigger[*evm.Log, *bindings.DecodedLog[{{.Normalized.Name}}Decoded]], error) {
+func (c *{{$contract.Type}}) LogTrigger{{.Normalized.Name}}Log(chainSelector uint64, confidence evm.ConfidenceLevel, filters []{{.Normalized.Name}}Topics) (cre.Trigger[*evm.Log, *bindings.DecodedLog[{{.Normalized.Name}}Decoded]], error) {
 	event := c.ABI.Events["{{.Normalized.Name}}"]
 	topics, err := c.Codec.Encode{{.Normalized.Name}}Topics(event, filters)
 	if err != nil {

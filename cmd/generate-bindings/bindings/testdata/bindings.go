@@ -113,7 +113,8 @@ type DataNotFound2 struct {
 }
 
 // Events
-// The <Event> struct should be used as a filter (for log triggers).
+// The <Event>Topics struct should be used as a filter (for log triggers).
+// Note: It is only possible to filter on indexed fields.
 // Indexed (string and bytes) fields will be of type common.Hash.
 // They need to he (crypto.Keccak256) hashed and passed in.
 // Indexed (tuple/slice/array) fields can be passed in as is, the Encode<Event>Topics function will handle the hashing.
@@ -121,9 +122,8 @@ type DataNotFound2 struct {
 // The <Event>Decoded struct will be the result of calling decode (Adapt) on the log trigger result.
 // Indexed dynamic type fields will be of type common.Hash.
 
-type AccessLogged struct {
-	Caller  common.Address
-	Message string
+type AccessLoggedTopics struct {
+	Caller common.Address
 }
 
 type AccessLoggedDecoded struct {
@@ -131,10 +131,8 @@ type AccessLoggedDecoded struct {
 	Message string
 }
 
-type DataStored struct {
+type DataStoredTopics struct {
 	Sender common.Address
-	Key    string
-	Value  string
 }
 
 type DataStoredDecoded struct {
@@ -143,10 +141,8 @@ type DataStoredDecoded struct {
 	Value  string
 }
 
-type DynamicEvent struct {
-	Key           string
+type DynamicEventTopics struct {
 	UserData      UserData
-	Sender        string
 	Metadata      common.Hash
 	MetadataArray [][]byte
 }
@@ -159,7 +155,7 @@ type DynamicEventDecoded struct {
 	MetadataArray common.Hash
 }
 
-type NoFields struct {
+type NoFieldsTopics struct {
 }
 
 type NoFieldsDecoded struct {
@@ -194,16 +190,16 @@ type DataStorageCodec interface {
 	EncodeUpdateReservesStruct(in UpdateReserves) ([]byte, error)
 	EncodeUserDataStruct(in UserData) ([]byte, error)
 	AccessLoggedLogHash() []byte
-	EncodeAccessLoggedTopics(evt abi.Event, values []AccessLogged) ([]*evm.TopicValues, error)
+	EncodeAccessLoggedTopics(evt abi.Event, values []AccessLoggedTopics) ([]*evm.TopicValues, error)
 	DecodeAccessLogged(log *evm.Log) (*AccessLoggedDecoded, error)
 	DataStoredLogHash() []byte
-	EncodeDataStoredTopics(evt abi.Event, values []DataStored) ([]*evm.TopicValues, error)
+	EncodeDataStoredTopics(evt abi.Event, values []DataStoredTopics) ([]*evm.TopicValues, error)
 	DecodeDataStored(log *evm.Log) (*DataStoredDecoded, error)
 	DynamicEventLogHash() []byte
-	EncodeDynamicEventTopics(evt abi.Event, values []DynamicEvent) ([]*evm.TopicValues, error)
+	EncodeDynamicEventTopics(evt abi.Event, values []DynamicEventTopics) ([]*evm.TopicValues, error)
 	DecodeDynamicEvent(log *evm.Log) (*DynamicEventDecoded, error)
 	NoFieldsLogHash() []byte
-	EncodeNoFieldsTopics(evt abi.Event, values []NoFields) ([]*evm.TopicValues, error)
+	EncodeNoFieldsTopics(evt abi.Event, values []NoFieldsTopics) ([]*evm.TopicValues, error)
 	DecodeNoFields(log *evm.Log) (*NoFieldsDecoded, error)
 }
 
@@ -445,7 +441,7 @@ func (c *Codec) AccessLoggedLogHash() []byte {
 
 func (c *Codec) EncodeAccessLoggedTopics(
 	evt abi.Event,
-	values []AccessLogged,
+	values []AccessLoggedTopics,
 ) ([]*evm.TopicValues, error) {
 	var callerRule []interface{}
 	for _, v := range values {
@@ -512,7 +508,7 @@ func (c *Codec) DataStoredLogHash() []byte {
 
 func (c *Codec) EncodeDataStoredTopics(
 	evt abi.Event,
-	values []DataStored,
+	values []DataStoredTopics,
 ) ([]*evm.TopicValues, error) {
 	var senderRule []interface{}
 	for _, v := range values {
@@ -579,7 +575,7 @@ func (c *Codec) DynamicEventLogHash() []byte {
 
 func (c *Codec) EncodeDynamicEventTopics(
 	evt abi.Event,
-	values []DynamicEvent,
+	values []DynamicEventTopics,
 ) ([]*evm.TopicValues, error) {
 	var userDataRule []interface{}
 	for _, v := range values {
@@ -664,7 +660,7 @@ func (c *Codec) NoFieldsLogHash() []byte {
 
 func (c *Codec) EncodeNoFieldsTopics(
 	evt abi.Event,
-	values []NoFields,
+	values []NoFieldsTopics,
 ) ([]*evm.TopicValues, error) {
 
 	rawTopics, err := abi.MakeTopics()
@@ -727,7 +723,7 @@ func (c DataStorage) GetMultipleReserves(
 	var bn cre.Promise[*pb.BigInt]
 	if blockNumber == nil {
 		promise := c.client.HeaderByNumber(runtime, &evm.HeaderByNumberRequest{
-			BlockNumber: pb.NewBigIntFromInt(big.NewInt(rpc.FinalizedBlockNumber.Int64())),
+			BlockNumber: bindings.FinalizedBlockNumber,
 		})
 
 		bn = cre.Then(promise, func(finalizedBlock *evm.HeaderByNumberReply) (*pb.BigInt, error) {
@@ -764,7 +760,7 @@ func (c DataStorage) GetReserves(
 	var bn cre.Promise[*pb.BigInt]
 	if blockNumber == nil {
 		promise := c.client.HeaderByNumber(runtime, &evm.HeaderByNumberRequest{
-			BlockNumber: pb.NewBigIntFromInt(big.NewInt(rpc.FinalizedBlockNumber.Int64())),
+			BlockNumber: bindings.FinalizedBlockNumber,
 		})
 
 		bn = cre.Then(promise, func(finalizedBlock *evm.HeaderByNumberReply) (*pb.BigInt, error) {
@@ -801,7 +797,7 @@ func (c DataStorage) GetTupleReserves(
 	var bn cre.Promise[*pb.BigInt]
 	if blockNumber == nil {
 		promise := c.client.HeaderByNumber(runtime, &evm.HeaderByNumberRequest{
-			BlockNumber: pb.NewBigIntFromInt(big.NewInt(rpc.FinalizedBlockNumber.Int64())),
+			BlockNumber: bindings.FinalizedBlockNumber,
 		})
 
 		bn = cre.Then(promise, func(finalizedBlock *evm.HeaderByNumberReply) (*pb.BigInt, error) {
@@ -838,7 +834,7 @@ func (c DataStorage) GetValue(
 	var bn cre.Promise[*pb.BigInt]
 	if blockNumber == nil {
 		promise := c.client.HeaderByNumber(runtime, &evm.HeaderByNumberRequest{
-			BlockNumber: pb.NewBigIntFromInt(big.NewInt(rpc.FinalizedBlockNumber.Int64())),
+			BlockNumber: bindings.FinalizedBlockNumber,
 		})
 
 		bn = cre.Then(promise, func(finalizedBlock *evm.HeaderByNumberReply) (*pb.BigInt, error) {
@@ -876,7 +872,7 @@ func (c DataStorage) ReadData(
 	var bn cre.Promise[*pb.BigInt]
 	if blockNumber == nil {
 		promise := c.client.HeaderByNumber(runtime, &evm.HeaderByNumberRequest{
-			BlockNumber: pb.NewBigIntFromInt(big.NewInt(rpc.FinalizedBlockNumber.Int64())),
+			BlockNumber: bindings.FinalizedBlockNumber,
 		})
 
 		bn = cre.Then(promise, func(finalizedBlock *evm.HeaderByNumberReply) (*pb.BigInt, error) {
@@ -1070,7 +1066,7 @@ func (t *AccessLoggedTrigger) Adapt(l *evm.Log) (*bindings.DecodedLog[AccessLogg
 	}, nil
 }
 
-func (c *DataStorage) LogTriggerAccessLoggedLog(chainSelector uint64, confidence evm.ConfidenceLevel, filters []AccessLogged) (cre.Trigger[*evm.Log, *bindings.DecodedLog[AccessLoggedDecoded]], error) {
+func (c *DataStorage) LogTriggerAccessLoggedLog(chainSelector uint64, confidence evm.ConfidenceLevel, filters []AccessLoggedTopics) (cre.Trigger[*evm.Log, *bindings.DecodedLog[AccessLoggedDecoded]], error) {
 	event := c.ABI.Events["AccessLogged"]
 	topics, err := c.Codec.EncodeAccessLoggedTopics(event, filters)
 	if err != nil {
@@ -1128,7 +1124,7 @@ func (t *DataStoredTrigger) Adapt(l *evm.Log) (*bindings.DecodedLog[DataStoredDe
 	}, nil
 }
 
-func (c *DataStorage) LogTriggerDataStoredLog(chainSelector uint64, confidence evm.ConfidenceLevel, filters []DataStored) (cre.Trigger[*evm.Log, *bindings.DecodedLog[DataStoredDecoded]], error) {
+func (c *DataStorage) LogTriggerDataStoredLog(chainSelector uint64, confidence evm.ConfidenceLevel, filters []DataStoredTopics) (cre.Trigger[*evm.Log, *bindings.DecodedLog[DataStoredDecoded]], error) {
 	event := c.ABI.Events["DataStored"]
 	topics, err := c.Codec.EncodeDataStoredTopics(event, filters)
 	if err != nil {
@@ -1186,7 +1182,7 @@ func (t *DynamicEventTrigger) Adapt(l *evm.Log) (*bindings.DecodedLog[DynamicEve
 	}, nil
 }
 
-func (c *DataStorage) LogTriggerDynamicEventLog(chainSelector uint64, confidence evm.ConfidenceLevel, filters []DynamicEvent) (cre.Trigger[*evm.Log, *bindings.DecodedLog[DynamicEventDecoded]], error) {
+func (c *DataStorage) LogTriggerDynamicEventLog(chainSelector uint64, confidence evm.ConfidenceLevel, filters []DynamicEventTopics) (cre.Trigger[*evm.Log, *bindings.DecodedLog[DynamicEventDecoded]], error) {
 	event := c.ABI.Events["DynamicEvent"]
 	topics, err := c.Codec.EncodeDynamicEventTopics(event, filters)
 	if err != nil {
@@ -1244,7 +1240,7 @@ func (t *NoFieldsTrigger) Adapt(l *evm.Log) (*bindings.DecodedLog[NoFieldsDecode
 	}, nil
 }
 
-func (c *DataStorage) LogTriggerNoFieldsLog(chainSelector uint64, confidence evm.ConfidenceLevel, filters []NoFields) (cre.Trigger[*evm.Log, *bindings.DecodedLog[NoFieldsDecoded]], error) {
+func (c *DataStorage) LogTriggerNoFieldsLog(chainSelector uint64, confidence evm.ConfidenceLevel, filters []NoFieldsTopics) (cre.Trigger[*evm.Log, *bindings.DecodedLog[NoFieldsDecoded]], error) {
 	event := c.ABI.Events["NoFields"]
 	topics, err := c.Codec.EncodeNoFieldsTopics(event, filters)
 	if err != nil {
