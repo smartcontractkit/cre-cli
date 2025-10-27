@@ -18,7 +18,6 @@ import (
 	anchoridlcodec "github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana_bindings/cre-sdk-go/codec"
 	"github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana_bindings/cre-sdk-go/common"
 	my_anchor_project "github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana_bindings/testdata/my_anchor_project"
-	my_project "github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana_bindings/testdata/my_project"
 )
 
 const anyChainSelector = uint64(1337)
@@ -34,7 +33,7 @@ func TestSolanaBasic(t *testing.T) {
 	health, err := solanaClient.GetHealth(context.Background())
 	require.NoError(t, err)
 	fmt.Println("health", health)
-	fmt.Println(my_project.ProgramID.String())
+	fmt.Println(my_anchor_project.ProgramID.String())
 }
 
 func TestSolanaInit(t *testing.T) {
@@ -45,9 +44,9 @@ func TestSolanaInit(t *testing.T) {
 
 	dataAccountAccount, _, err := solana.FindProgramAddress(
 		[][]byte{[]byte("test")},
-		my_project.ProgramID,
+		my_anchor_project.ProgramID,
 	)
-	ix, err := my_project.NewInitializeInstruction(
+	ix, err := my_anchor_project.NewInitializeInstruction(
 		"test-data",
 		dataAccountAccount,
 		pk.PublicKey(),
@@ -76,12 +75,12 @@ func TestSolanaGetData(t *testing.T) {
 
 	// dataAccountAccount, _, err := solana.FindProgramAddress(
 	// 	[][]byte{[]byte("test")},
-	// 	my_project.ProgramID,
+	// 	my_anchor_project.ProgramID,
 	// )
 
-	ix3, err := my_project.NewGetInputDataInstruction("test-data")
+	ix3, err := my_anchor_project.NewGetInputDataInstruction("test-data")
 	require.NoError(t, err)
-	// ix4, err := my_project.NewGetInputDataFromAccountInstruction("test-data", dataAccountAccount)
+	// ix4, err := my_anchor_project.NewGetInputDataFromAccountInstruction("test-data", dataAccountAccount)
 	// require.NoError(t, err)
 	// res, err := common.SendAndConfirm(context.Background(), solanaClient, []solana.Instruction{ix3, ix4}, pk, rpc.CommitmentConfirmed)
 	res, err := common.SendAndConfirm(context.Background(), solanaClient, []solana.Instruction{ix3}, pk, rpc.CommitmentConfirmed)
@@ -100,7 +99,7 @@ func TestSolanaReadAccount(t *testing.T) {
 	// find pda
 	dataAccountAddress, _, err := solana.FindProgramAddress(
 		[][]byte{[]byte("test")},
-		my_project.ProgramID,
+		my_anchor_project.ProgramID,
 	)
 	// call rpc
 	resp, err := solanaClient.GetAccountInfoWithOpts(
@@ -112,11 +111,11 @@ func TestSolanaReadAccount(t *testing.T) {
 	)
 	require.NoError(t, err, "failed to get account info")
 	// parse account info
-	data, err := my_project.ParseAccount_DataAccount(resp.Value.Data.GetBinary())
+	data, err := my_anchor_project.ParseAccount_DataAccount(resp.Value.Data.GetBinary())
 	require.NoError(t, err, "failed to parse account info")
 	fmt.Println("data", data)
 
-	// data2, err := my_project.ReadAccount_DataAccount([][]byte{[]byte("test")}, solanaClient)
+	// data2, err := my_anchor_project.ReadAccount_DataAccount([][]byte{[]byte("test")}, solanaClient)
 	// require.NoError(t, err, "failed to read account info")
 	// fmt.Println("data2", data2)
 }
@@ -129,12 +128,12 @@ func TestSolanaWriteAccount(t *testing.T) {
 
 	dataAccountAddress, _, err := solana.FindProgramAddress(
 		[][]byte{[]byte("test")},
-		my_project.ProgramID,
+		my_anchor_project.ProgramID,
 	)
-	ix, err := my_project.NewUpdateDataInstruction("test-data-new", dataAccountAddress)
+	ix, err := my_anchor_project.NewUpdateDataInstruction("test-data-new", dataAccountAddress)
 	require.NoError(t, err)
 
-	// ix2, err := my_project.NewUpdateDataWithTypedReturnInstruction("test-data-new", dataAccountAddress)
+	// ix2, err := my_anchor_project.NewUpdateDataWithTypedReturnInstruction("test-data-new", dataAccountAddress)
 	// require.NoError(t, err)
 
 	// res, err := common.SendAndConfirm(context.Background(), solanaClient, []solana.Instruction{ix, ix2}, pk, rpc.CommitmentConfirmed)
@@ -143,22 +142,22 @@ func TestSolanaWriteAccount(t *testing.T) {
 	require.NoError(t, err)
 	fmt.Println("res", res.Meta.LogMessages)
 
-	output, err := common.ExtractTypedReturnValue(context.Background(), res.Meta.LogMessages, my_project.ProgramID.String(), func(b []byte) string {
+	output, err := common.ExtractTypedReturnValue(context.Background(), res.Meta.LogMessages, my_anchor_project.ProgramID.String(), func(b []byte) string {
 		require.Len(t, b, int(binary.LittleEndian.Uint32(b[:4]))+4) // the first 4 bytes just encodes the length
 		return string(b[4:])
 	})
 	require.NoError(t, err)
 	fmt.Println("output", output)
 
-	// output2, err := common.ExtractAnchorTypedReturnValue[my_project.UpdateResponse](context.Background(), res.Meta.LogMessages, my_project.ProgramID.String())
+	// output2, err := common.ExtractAnchorTypedReturnValue[my_anchor_project.UpdateResponse](context.Background(), res.Meta.LogMessages, my_anchor_project.ProgramID.String())
 	// require.NoError(t, err)
 	// fmt.Println("output2", output2)
 
-	// output3, err := my_project.SendUpdateDataInstruction("test-data-new", dataAccountAddress, solanaClient, pk, rpc.CommitmentConfirmed)
+	// output3, err := my_anchor_project.SendUpdateDataInstruction("test-data-new", dataAccountAddress, solanaClient, pk, rpc.CommitmentConfirmed)
 	// require.NoError(t, err)
 	// fmt.Println("output3", output3)
 
-	// output4, err := my_project.SendUpdateDataWithTypedReturnInstruction("test-data-new", dataAccountAddress, solanaClient, pk, rpc.CommitmentConfirmed)
+	// output4, err := my_anchor_project.SendUpdateDataWithTypedReturnInstruction("test-data-new", dataAccountAddress, solanaClient, pk, rpc.CommitmentConfirmed)
 	// require.NoError(t, err)
 	// fmt.Println("output4", output4.Data)
 }
@@ -306,13 +305,13 @@ func TestDataWithIdl(t *testing.T) {
 
 /*
 anchor-go \
-  --idl /Users/yashvardhan/cre-client-program/my-project/target/idl/my_project.json \
-  --output /Users/yashvardhan/cre-cli/cmd/generate-bindings/solana_bindings/testdata/my_project \
+  --idl /Users/yashvardhan/cre-client-program/my-project/target/idl/my_anchor_project.json \
+  --output /Users/yashvardhan/cre-cli/cmd/generate-bindings/solana_bindings/testdata/my_anchor_project \
   --program-id 2GvhVcTPPkHbGduj6efNowFoWBQjE77Xab1uBKCYJvNN \
   --no-go-mod
 
 ./anchor \
-  --idl /Users/yashvardhan/cre-client-program/my-project/target/idl/my_project.json \
+  --idl /Users/yashvardhan/cre-client-program/my-project/target/idl/my_anchor_project.json \
   --output /Users/yashvardhan/cre-cli/cmd/generate-bindings/solana_bindings/testdata/my_anchor_project \
   --program-id 2GvhVcTPPkHbGduj6efNowFoWBQjE77Xab1uBKCYJvNN \
   --no-go-mod
@@ -325,7 +324,7 @@ anchor-go \
 
 */
 
-var IDL = "{\"address\":\"2GvhVcTPPkHbGduj6efNowFoWBQjE77Xab1uBKCYJvNN\",\"metadata\":{\"name\":\"my_project\",\"version\":\"0.1.0\",\"spec\":\"0.1.0\",\"description\":\"Created with Anchor\"},\"instructions\":[{\"name\":\"get_input_data\",\"discriminator\":[30,17,181,230,219,1,5,138],\"accounts\":[],\"args\":[{\"name\":\"input\",\"type\":\"string\"}]},{\"name\":\"initialize\",\"discriminator\":[175,175,109,31,13,152,155,237],\"accounts\":[{\"name\":\"data_account\",\"writable\":true,\"pda\":{\"seeds\":[{\"kind\":\"const\",\"value\":[116,101,115,116]}]}},{\"name\":\"user\",\"writable\":true,\"signer\":true},{\"name\":\"system_program\",\"address\":\"11111111111111111111111111111111\"}],\"args\":[{\"name\":\"input\",\"type\":\"string\"}]},{\"name\":\"log_access\",\"discriminator\":[196,55,194,24,5,224,161,204],\"accounts\":[{\"name\":\"user\",\"docs\":[\"The caller — whoever invokes the instruction.\"],\"signer\":true}],\"args\":[{\"name\":\"message\",\"type\":\"string\"}]},{\"name\":\"update_data\",\"discriminator\":[62,209,63,231,204,93,148,123],\"accounts\":[{\"name\":\"data_account\",\"writable\":true,\"pda\":{\"seeds\":[{\"kind\":\"const\",\"value\":[116,101,115,116]}]}}],\"args\":[{\"name\":\"new_data\",\"type\":\"string\"}]}],\"accounts\":[{\"name\":\"DataAccount\",\"discriminator\":[85,240,182,158,76,7,18,233]}],\"events\":[{\"name\":\"AccessLogged\",\"discriminator\":[243,53,225,71,64,120,109,25]},{\"name\":\"DataUpdated\",\"discriminator\":[110,104,69,204,253,168,30,91]}],\"errors\":[{\"code\":6000,\"name\":\"DataTooLong\",\"msg\":\"Data too long\"}],\"types\":[{\"name\":\"AccessLogged\",\"type\":{\"kind\":\"struct\",\"fields\":[{\"name\":\"caller\",\"type\":\"pubkey\"},{\"name\":\"message\",\"type\":\"string\"}]}},{\"name\":\"DataAccount\",\"type\":{\"kind\":\"struct\",\"fields\":[{\"name\":\"data\",\"type\":\"string\"},{\"name\":\"data2\",\"type\":{\"defined\":{\"name\":\"DataAccount2\"}}}]}},{\"name\":\"DataAccount2\",\"type\":{\"kind\":\"struct\",\"fields\":[{\"name\":\"data2\",\"type\":\"string\"}]}},{\"name\":\"DataUpdated\",\"type\":{\"kind\":\"struct\",\"fields\":[{\"name\":\"sender\",\"type\":\"pubkey\"},{\"name\":\"value\",\"type\":\"string\"}]}}]}"
+var IDL = "{\"address\":\"2GvhVcTPPkHbGduj6efNowFoWBQjE77Xab1uBKCYJvNN\",\"metadata\":{\"name\":\"my_anchor_project\",\"version\":\"0.1.0\",\"spec\":\"0.1.0\",\"description\":\"Created with Anchor\"},\"instructions\":[{\"name\":\"get_input_data\",\"discriminator\":[30,17,181,230,219,1,5,138],\"accounts\":[],\"args\":[{\"name\":\"input\",\"type\":\"string\"}]},{\"name\":\"initialize\",\"discriminator\":[175,175,109,31,13,152,155,237],\"accounts\":[{\"name\":\"data_account\",\"writable\":true,\"pda\":{\"seeds\":[{\"kind\":\"const\",\"value\":[116,101,115,116]}]}},{\"name\":\"user\",\"writable\":true,\"signer\":true},{\"name\":\"system_program\",\"address\":\"11111111111111111111111111111111\"}],\"args\":[{\"name\":\"input\",\"type\":\"string\"}]},{\"name\":\"log_access\",\"discriminator\":[196,55,194,24,5,224,161,204],\"accounts\":[{\"name\":\"user\",\"docs\":[\"The caller — whoever invokes the instruction.\"],\"signer\":true}],\"args\":[{\"name\":\"message\",\"type\":\"string\"}]},{\"name\":\"update_data\",\"discriminator\":[62,209,63,231,204,93,148,123],\"accounts\":[{\"name\":\"data_account\",\"writable\":true,\"pda\":{\"seeds\":[{\"kind\":\"const\",\"value\":[116,101,115,116]}]}}],\"args\":[{\"name\":\"new_data\",\"type\":\"string\"}]}],\"accounts\":[{\"name\":\"DataAccount\",\"discriminator\":[85,240,182,158,76,7,18,233]}],\"events\":[{\"name\":\"AccessLogged\",\"discriminator\":[243,53,225,71,64,120,109,25]},{\"name\":\"DataUpdated\",\"discriminator\":[110,104,69,204,253,168,30,91]}],\"errors\":[{\"code\":6000,\"name\":\"DataTooLong\",\"msg\":\"Data too long\"}],\"types\":[{\"name\":\"AccessLogged\",\"type\":{\"kind\":\"struct\",\"fields\":[{\"name\":\"caller\",\"type\":\"pubkey\"},{\"name\":\"message\",\"type\":\"string\"}]}},{\"name\":\"DataAccount\",\"type\":{\"kind\":\"struct\",\"fields\":[{\"name\":\"data\",\"type\":\"string\"},{\"name\":\"data2\",\"type\":{\"defined\":{\"name\":\"DataAccount2\"}}}]}},{\"name\":\"DataAccount2\",\"type\":{\"kind\":\"struct\",\"fields\":[{\"name\":\"data2\",\"type\":\"string\"}]}},{\"name\":\"DataUpdated\",\"type\":{\"kind\":\"struct\",\"fields\":[{\"name\":\"sender\",\"type\":\"pubkey\"},{\"name\":\"value\",\"type\":\"string\"}]}}]}"
 
 func TestParseIDL(t *testing.T) {
 	type ynIdlType2 struct {
