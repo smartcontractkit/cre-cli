@@ -55,7 +55,7 @@ func ParseEvent_AccessLogged(eventData []byte) (*AccessLogged, error) {
 	return event, nil
 }
 
-func DecodeEvent_AccessLogged(event solana.Log) (*AccessLogged, error) {
+func (c *Codec) DecodeAccessLogged(event *solana.Log) (*AccessLogged, error) {
 	res, err := ParseEvent_AccessLogged(event.Data)
 	if err != nil {
 		return nil, err
@@ -65,10 +65,11 @@ func DecodeEvent_AccessLogged(event solana.Log) (*AccessLogged, error) {
 
 type AccessLoggedTrigger struct {
 	cre.Trigger[*solana.Log, *solana.Log]
+	contract *MyProject
 }
 
 func (t *AccessLoggedTrigger) Adapt(l *solana.Log) (*bindings.DecodedLog[AccessLogged], error) {
-	decoded, err := DecodeEvent_AccessLogged(l)
+	decoded, err := t.contract.Codec.DecodeAccessLogged(l)
 	if err != nil {
 		return nil, err
 	}
@@ -118,7 +119,7 @@ func ParseEvent_DataUpdated(eventData []byte) (*DataUpdated, error) {
 	return event, nil
 }
 
-func DecodeEvent_DataUpdated(event solana.Log) (*DataUpdated, error) {
+func (c *Codec) DecodeDataUpdated(event *solana.Log) (*DataUpdated, error) {
 	res, err := ParseEvent_DataUpdated(event.Data)
 	if err != nil {
 		return nil, err
@@ -128,10 +129,11 @@ func DecodeEvent_DataUpdated(event solana.Log) (*DataUpdated, error) {
 
 type DataUpdatedTrigger struct {
 	cre.Trigger[*solana.Log, *solana.Log]
+	contract *MyProject
 }
 
 func (t *DataUpdatedTrigger) Adapt(l *solana.Log) (*bindings.DecodedLog[DataUpdated], error) {
-	decoded, err := DecodeEvent_DataUpdated(l)
+	decoded, err := t.contract.Codec.DecodeDataUpdated(l)
 	if err != nil {
 		return nil, err
 	}

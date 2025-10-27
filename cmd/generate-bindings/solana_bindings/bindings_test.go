@@ -15,7 +15,7 @@ import (
 	"github.com/test-go/testify/require"
 
 	"github.com/gagliardetto/anchor-go/idl"
-	anchoridlcodec "github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana_bindings/cre-sdk-go/codec"
+	anchoridlcodec "github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana_bindings/cre-sdk-go/anchorcodec"
 	"github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana_bindings/cre-sdk-go/common"
 	my_anchor_project "github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana_bindings/testdata/my_anchor_project"
 )
@@ -311,7 +311,7 @@ anchor-go \
   --no-go-mod
 
 ./anchor \
-  --idl /Users/yashvardhan/cre-client-program/my-project/target/idl/my_anchor_project.json \
+  --idl /Users/yashvardhan/cre-client-program/my-project/target/idl/my_project.json \
   --output /Users/yashvardhan/cre-cli/cmd/generate-bindings/solana_bindings/testdata/my_anchor_project \
   --program-id 2GvhVcTPPkHbGduj6efNowFoWBQjE77Xab1uBKCYJvNN \
   --no-go-mod

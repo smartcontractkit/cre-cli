@@ -7,7 +7,6 @@ import (
 	"fmt"
 	binary "github.com/gagliardetto/binary"
 	solanago "github.com/gagliardetto/solana-go"
-	pb "github.com/smartcontractkit/chainlink-protos/cre/go/values/pb"
 	solana "github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana_bindings/cre-sdk-go/capabilities/blockchain/solana"
 	types "github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana_bindings/cre-sdk-go/types"
 	cre "github.com/smartcontractkit/cre-sdk-go/cre"
@@ -50,20 +49,24 @@ func ParseAccount_DataAccount(accountData []byte) (*DataAccount, error) {
 	return acc, nil
 }
 
+func (c *Codec) DecodeDataAccount(data []byte) (*DataAccount, error) {
+	return ParseAccount_DataAccount(data)
+}
+
 func (c *MyProject) ReadAccount_DataAccount(
 	runtime cre.Runtime,
 	accountAddress solanago.PublicKey,
 	blockNumber *big.Int,
 ) cre.Promise[*DataAccount] {
 	// cre account read
-	bn := cre.PromiseFromResult(pb.NewBigIntFromInt(blockNumber), nil)
-	promise := cre.ThenPromise(bn, func(bn *pb.BigInt) cre.Promise[*solana.ReadAccountReply] {
-		return c.client.ReadAccount(runtime, &solana.ReadAccountRequest{
-			BlockNumber: bn,
-			Call:        &solana.ReadAccountMsg{AccountAddress: types.PublicKey(accountAddress)},
+	bn := cre.PromiseFromResult(uint64(blockNumber.Int64()), nil)
+	promise := cre.ThenPromise(bn, func(bn uint64) cre.Promise[*solana.GetAccountInfoReply] {
+		return c.client.GetAccountInfoWithOpts(runtime, solana.GetAccountInfoRequest{
+			Account: types.PublicKey(accountAddress),
+			Opts:    &solana.GetAccountInfoOpts{MinContextSlot: &bn},
 		})
 	})
-	return cre.Then(promise, func(response *solana.ReadAccountReply) (*DataAccount, error) {
-		return ParseAccount_DataAccount(response.Data)
+	return cre.Then(promise, func(response *solana.GetAccountInfoReply) (*DataAccount, error) {
+		return ParseAccount_DataAccount(response.Value.Data.AsDecodedBinary)
 	})
 }

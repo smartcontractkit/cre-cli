@@ -63,6 +63,12 @@ pub mod my_project {
 #[account]
 pub struct DataAccount {
     pub data: String,
+    pub data2: DataAccount2,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug, PartialEq)]
+pub struct DataAccount2 {
+    pub data2: String,
 }
 
 #[event]

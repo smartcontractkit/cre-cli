@@ -13,7 +13,7 @@ import (
 
 	"github.com/gagliardetto/solana-go"
 	"github.com/lib/pq"
-	codec "github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana_bindings/cre-sdk-go/codec"
+	codec "github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana_bindings/cre-sdk-go/anchorcodec"
 )
 
 type PublicKey solana.PublicKey
