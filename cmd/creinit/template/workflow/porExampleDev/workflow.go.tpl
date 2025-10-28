@@ -94,7 +94,7 @@ func InitWorkflow(config *Config, logger *slog.Logger, secretsProvider cre.Secre
 		if err != nil {
 			return nil, fmt.Errorf("failed to get chain selector: %w", err)
 		}
-		trigger, err := msgEmitter.LogTriggerMessageEmittedLog(chainSelector, evm.ConfidenceLevel_CONFIDENCE_LEVEL_LATEST, []message_emitter.MessageEmitted{})
+		trigger, err := msgEmitter.LogTriggerMessageEmittedLog(chainSelector, evm.ConfidenceLevel_CONFIDENCE_LEVEL_LATEST, []message_emitter.MessageEmittedTopics{})
 		if err != nil {
 			return nil, fmt.Errorf("failed to create message emitted trigger: %w", err)
 		}
