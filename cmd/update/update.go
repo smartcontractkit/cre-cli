@@ -288,7 +288,7 @@ func replaceSelf(newBin string) error {
 	if osruntime.GOOS == "windows" {
 		fmt.Println("Please close all running cre processes and manually replace the binary at:", self)
 		fmt.Println("New binary downloaded at:", newBin)
-		return nil
+		return fmt.Errorf("automatic replacement not supported on Windows")
 	}
 	// On Unix, can replace in-place
 	return os.Rename(newBin, self)
