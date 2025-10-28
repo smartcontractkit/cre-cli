@@ -78,7 +78,7 @@ type Inputs struct {
 	ProjectName  string `validate:"omitempty,project_name" cli:"project-name"`
 	TemplateID   uint32 `validate:"omitempty,min=0"`
 	WorkflowName string `validate:"omitempty,workflow_name" cli:"workflow-name"`
-	RPCUrl       string `validate:"omitempty,url" cli:"rpc-url"`
+	RPCUrl       string `validate:"omitempty" cli:"rpc-url"`
 }
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
