@@ -42,11 +42,11 @@ func Execute() {
 	err := RootCmd.Execute()
 
 	if err != nil && executingCommand != nil && runtimeContextForTelemetry != nil {
-		telemetry.EmitCommandEvent(executingCommand, 1, runtimeContextForTelemetry)
+		telemetry.EmitCommandEvent(executingCommand, []string{}, 1, runtimeContextForTelemetry)
 	}
 
 	// Hack right now to give enough time for request to be made on backend but not block UX
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(3 * time.Second)
 
 	if err != nil {
 		os.Exit(1)
@@ -141,7 +141,7 @@ func newRootCommand() *cobra.Command {
 				intupdate.CheckForUpdates(version.Version, runtimeContext.Logger)
 			}
 			// ---
-			telemetry.EmitCommandEvent(cmd, 0, runtimeContext)
+			telemetry.EmitCommandEvent(cmd, args, 0, runtimeContext)
 		},
 	}
 

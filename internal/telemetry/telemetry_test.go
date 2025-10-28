@@ -48,7 +48,7 @@ func TestCollectCommandInfo(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			info := CollectCommandInfo(tt.cmd)
+			info := CollectCommandInfo(tt.cmd, []string{})
 			assert.Equal(t, tt.expectedAction, info.Action)
 			assert.Equal(t, tt.expectedSub, info.Subcommand)
 		})
@@ -116,7 +116,7 @@ func TestBuildUserEvent(t *testing.T) {
 	cmd := &cobra.Command{Use: "login"}
 	exitCode := 0
 
-	event := buildUserEvent(cmd, exitCode)
+	event := buildUserEvent(cmd, []string{}, exitCode, nil)
 
 	assert.NotEmpty(t, event.CliVersion)
 	assert.Equal(t, exitCode, event.ExitCode)
