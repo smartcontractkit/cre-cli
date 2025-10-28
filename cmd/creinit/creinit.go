@@ -78,6 +78,7 @@ type Inputs struct {
 	ProjectName  string `validate:"omitempty,project_name" cli:"project-name"`
 	TemplateID   uint32 `validate:"omitempty,min=0"`
 	WorkflowName string `validate:"omitempty,workflow_name" cli:"workflow-name"`
+	RPCUrl       string `validate:"omitempty,url" cli:"rpc-url"`
 }
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
@@ -108,6 +109,7 @@ build, test, and deploy workflows quickly.`,
 	initCmd.Flags().StringP("project-name", "p", "", "Name for the new project")
 	initCmd.Flags().StringP("workflow-name", "w", "", "Name for the new workflow")
 	initCmd.Flags().Uint32P("template-id", "t", 0, "ID of the workflow template to use")
+	initCmd.Flags().String("rpc-url", "r", "Sepolia RPC URL to use with template")
 
 	return initCmd
 }
@@ -133,6 +135,7 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 		ProjectName:  v.GetString("project-name"),
 		TemplateID:   v.GetUint32("template-id"),
 		WorkflowName: v.GetString("workflow-name"),
+		RPCUrl:       v.GetString("rpc-url"),
 	}, nil
 }
 
@@ -259,15 +262,19 @@ func (h *handler) Execute(inputs Inputs) error {
 		repl := settings.GetDefaultReplacements()
 		rpcURL := ""
 		if selectedWorkflowTemplate.Name == PoRTemplate {
-			if e := prompt.SimplePrompt(h.stdin, fmt.Sprintf("Sepolia RPC URL? [%s]", constants.DefaultEthSepoliaRpcUrl), func(in string) error {
-				trimmed := strings.TrimSpace(in)
-				if trimmed == "" {
-					trimmed = constants.DefaultEthSepoliaRpcUrl
+			if strings.TrimSpace(inputs.RPCUrl) != "" {
+				rpcURL = strings.TrimSpace(inputs.RPCUrl)
+			} else {
+				if e := prompt.SimplePrompt(h.stdin, fmt.Sprintf("Sepolia RPC URL? [%s]", constants.DefaultEthSepoliaRpcUrl), func(in string) error {
+					trimmed := strings.TrimSpace(in)
+					if trimmed == "" {
+						trimmed = constants.DefaultEthSepoliaRpcUrl
+					}
+					rpcURL = trimmed
+					return nil
+				}); e != nil {
+					return e
 				}
-				rpcURL = trimmed
-				return nil
-			}); e != nil {
-				return e
 			}
 			repl["EthSepoliaRpcUrl"] = rpcURL
 		}
