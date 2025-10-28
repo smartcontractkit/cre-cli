@@ -182,8 +182,12 @@ func (h *handler) Execute(inputs Inputs) error {
 	if err != nil {
 		projName := inputs.ProjectName
 		if projName == "" {
-			if err := prompt.SimplePrompt(h.stdin, "Project name?", func(in string) error {
+			if err := prompt.SimplePrompt(h.stdin, fmt.Sprintf("Project name? [%s]", constants.DefaultProjectName), func(in string) error {
 				trimmed := strings.TrimSpace(in)
+				if trimmed == "" {
+					trimmed = constants.DefaultProjectName
+					fmt.Printf("Using default project name: %s\n", trimmed)
+				}
 				if err := validation.IsValidProjectName(trimmed); err != nil {
 					return err
 				}
@@ -196,13 +200,6 @@ func (h *handler) Execute(inputs Inputs) error {
 
 		projectRoot = filepath.Join(startDir, projName)
 		if err := h.ensureProjectDirectoryExists(projectRoot); err != nil {
-			return err
-		}
-
-		if _, _, err := settings.GenerateProjectSettingsFile(projectRoot, h.stdin); err != nil {
-			return err
-		}
-		if _, err := settings.GenerateProjectEnvFile(projectRoot, h.stdin); err != nil {
 			return err
 		}
 	}
@@ -258,12 +255,45 @@ func (h *handler) Execute(inputs Inputs) error {
 		}
 	}
 
+	if err != nil {
+		repl := settings.GetDefaultReplacements()
+		rpcURL := ""
+		if selectedWorkflowTemplate.Name == PoRTemplate {
+			if e := prompt.SimplePrompt(h.stdin, fmt.Sprintf("Sepolia RPC URL? [%s]", constants.DefaultEthSepoliaRpcUrl), func(in string) error {
+				trimmed := strings.TrimSpace(in)
+				if trimmed == "" {
+					trimmed = constants.DefaultEthSepoliaRpcUrl
+				}
+				rpcURL = trimmed
+				return nil
+			}); e != nil {
+				return e
+			}
+			repl["EthSepoliaRpcUrl"] = rpcURL
+		}
+		if e := settings.FindOrCreateProjectSettings(projectRoot, repl); e != nil {
+			return e
+		}
+		if selectedWorkflowTemplate.Name == PoRTemplate {
+			fmt.Printf("RPC set to %s. You can change it later in ./%s.\n",
+				rpcURL,
+				filepath.Join(filepath.Base(projectRoot), constants.DefaultProjectSettingsFileName))
+		}
+		if _, e := settings.GenerateProjectEnvFile(projectRoot, h.stdin); e != nil {
+			return e
+		}
+	}
+
 	workflowName := strings.TrimSpace(inputs.WorkflowName)
 	if workflowName == "" {
 		const maxAttempts = 3
 		for attempts := 1; attempts <= maxAttempts; attempts++ {
-			inputErr := prompt.SimplePrompt(h.stdin, "Workflow name?", func(in string) error {
+			inputErr := prompt.SimplePrompt(h.stdin, fmt.Sprintf("Workflow name? [%s]", constants.DefaultWorkflowName), func(in string) error {
 				trimmed := strings.TrimSpace(in)
+				if trimmed == "" {
+					trimmed = constants.DefaultWorkflowName
+					fmt.Printf("Using default workflow name: %s\n", trimmed)
+				}
 				if err := validation.IsValidWorkflowName(trimmed); err != nil {
 					return err
 				}
@@ -320,26 +350,34 @@ func (h *handler) Execute(inputs Inputs) error {
 	fmt.Println("\nWorkflow initialized successfully!")
 	fmt.Println("")
 	fmt.Println("Next steps:")
-	fmt.Println("")
 
-	if selectedLanguageTemplate.Lang == TemplateLangGo && selectedWorkflowTemplate.Name == HelloWorldTemplate {
-		// Go HelloWorld template is simulatable without any additional setup
+	if selectedLanguageTemplate.Lang == TemplateLangGo {
 		fmt.Println("   1. Navigate to your project directory:")
-		fmt.Printf("      cd %s\n", projectRoot)
+		fmt.Printf("      cd %s\n", filepath.Base(projectRoot))
 		fmt.Println("")
 		fmt.Println("   2. Run the workflow on your machine:")
 		fmt.Printf("      cre workflow simulate %s\n", workflowName)
 		fmt.Println("")
-	} else {
-		// TS templates and Go PoR templates require additional setup, e.g. bun install, RPCs, etc.
-		fmt.Println("   1. Navigate to your workflow directory to see workflow details:")
-		fmt.Printf("      cd %s\n", workflowDirectory)
+		fmt.Printf("   3. (Optional) Consult %s to learn more about this template:\n\n",
+			filepath.Join(filepath.Base(workflowDirectory), "README.md"))
 		fmt.Println("")
-		fmt.Println("   2. Follow the README.MD for installation, RPC setup, and workflow details:")
-		fmt.Printf("      %s\n", filepath.Join(workflowDirectory, "README.md"))
+	} else if selectedLanguageTemplate.Lang == TemplateLangTS {
+		fmt.Println("   1. Navigate to your project directory:")
+		fmt.Printf("      cd %s\n", filepath.Base(projectRoot))
+		fmt.Println("")
+		fmt.Println("   2. Make sure you have Bun installed:")
+		fmt.Println("      npm install -g bun")
+		fmt.Println("")
+		fmt.Println("   3. Install workflow dependencies:")
+		fmt.Printf("      bun install --cwd ./%s\n", filepath.Base(workflowDirectory))
+		fmt.Println("")
+		fmt.Println("   4. Run the workflow on your machine:")
+		fmt.Printf("      cre workflow simulate %s\n", workflowName)
+		fmt.Println("")
+		fmt.Printf("   5. (Optional) Consult %s to learn more about this template:\n\n",
+			filepath.Join(filepath.Base(workflowDirectory), "README.md"))
 		fmt.Println("")
 	}
-
 	return nil
 }
 
