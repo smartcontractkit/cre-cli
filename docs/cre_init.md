@@ -18,6 +18,7 @@ cre init [optional flags]
 ```
   -h, --help                   help for init
   -p, --project-name string    Name for the new project
+      --rpc-url string         Sepolia RPC URL to use with template
   -t, --template-id uint32     ID of the workflow template to use
   -w, --workflow-name string   Name for the new workflow
 ```
