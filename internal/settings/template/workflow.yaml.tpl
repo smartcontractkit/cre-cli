@@ -1,3 +1,4 @@
+# template/workflow.yaml.tpl
 # ==========================================================================
 # CRE WORKFLOW SETTINGS FILE
 # ==========================================================================
@@ -17,19 +18,18 @@
 # ==========================================================================
 staging-settings:
   user-workflow:
-    workflow-name: "{{WorkflowName}}"
+    workflow-name: "{{WorkflowName}}-staging"
   workflow-artifacts:
     workflow-path: "{{WorkflowPath}}"
-    config-path: "{{ConfigPath}}"
+    config-path: "{{ConfigPathStaging}}"
     secrets-path: "{{SecretsPath}}"
     
 
 # ==========================================================================
 production-settings:
   user-workflow:
-    workflow-name: "{{WorkflowName}}"
+    workflow-name: "{{WorkflowName}}-production"
   workflow-artifacts:
     workflow-path: "{{WorkflowPath}}"
-    config-path: "{{ConfigPath}}"
+    config-path: "{{ConfigPathProduction}}"
     secrets-path: "{{SecretsPath}}"
-    
