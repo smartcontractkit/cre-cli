@@ -262,23 +262,7 @@ func (c *Codec) EncodeMessageEmittedTopics(
 		return nil, err
 	}
 
-	topics := make([]*evm.TopicValues, len(rawTopics)+1)
-	topics[0] = &evm.TopicValues{
-		Values: [][]byte{evt.ID.Bytes()},
-	}
-	for i, hashList := range rawTopics {
-		bs := make([][]byte, len(hashList))
-		for j, h := range hashList {
-			// don't include empty bytes if hashed value is 0x0
-			if reflect.ValueOf(h).IsZero() {
-				bs[j] = []byte{}
-			} else {
-				bs[j] = h.Bytes()
-			}
-		}
-		topics[i+1] = &evm.TopicValues{Values: bs}
-	}
-	return topics, nil
+	return bindings.PrepareTopics(rawTopics, evt.ID.Bytes()), nil
 }
 
 // DecodeMessageEmitted decodes a log into a MessageEmitted struct.

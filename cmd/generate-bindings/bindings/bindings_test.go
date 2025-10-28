@@ -594,6 +594,10 @@ func TestLogTrigger(t *testing.T) {
 				},
 			},
 			{
+				UserData: datastorage.UserData{
+					Key:   "userKey2",
+					Value: "userValue2",
+				},
 				Metadata: common.BytesToHash(crypto.Keccak256([]byte("metadata"))),
 			},
 		}
@@ -604,12 +608,15 @@ func TestLogTrigger(t *testing.T) {
 		packed1, err := abi.Arguments{ev.Inputs[1]}.Pack(events[0].UserData)
 		require.NoError(t, err)
 		expected1 := crypto.Keccak256(packed1)
+		packed2, err := abi.Arguments{ev.Inputs[1]}.Pack(events[1].UserData)
+		require.NoError(t, err)
+		expected2 := crypto.Keccak256(packed2)
+		// EXPECTED: (T0) AND (T1_1 OR T1_2) AND T2
 		require.Equal(t, expected1, encoded[1].Values[0], "First value should be the UserData hash")
-		require.Equal(t, []byte{}, encoded[1].Values[1], "Second value should be an empty byte array")
-		require.Equal(t, []byte{}, encoded[2].Values[0], "Second value should be an empty byte array")
-		require.Equal(t, events[1].Metadata.Bytes(), encoded[2].Values[1], "Second value should be a populated byte array")
-		require.Equal(t, []byte{}, encoded[3].Values[0], "Third value should be an empty byte array")
-		require.Equal(t, []byte{}, encoded[3].Values[1], "Fourth value should be an empty byte array")
+		require.Equal(t, expected2, encoded[1].Values[1], "Second value should be the UserData hash")
+		require.Len(t, encoded[2].Values, 1, "Second topic should have one value")
+		require.Equal(t, events[1].Metadata.Bytes(), encoded[2].Values[0], "Second topic should be populated byte array")
+		require.Len(t, encoded[3].Values, 0, "Third topic should be empty")
 	})
 
 	t.Run("simple event with empty fields", func(t *testing.T) {
@@ -621,7 +628,7 @@ func TestLogTrigger(t *testing.T) {
 		require.NoError(t, err, "Encoding DataStored topics should not return an error")
 		require.Len(t, encoded, 2, "Trigger should have two topics")
 		require.Equal(t, ds.Codec.DataStoredLogHash(), encoded[0].Values[0], "First topic value should be DataStored log hash")
-		require.Equal(t, []byte{}, encoded[1].Values[0], "Second value should be an empty byte array")
+		require.Len(t, encoded[1].Values, 0, "Second topic should be empty")
 	})
 }
 
