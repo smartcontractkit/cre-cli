@@ -1,11 +1,13 @@
 package telemetry
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"runtime"
 	"strings"
 
+	"github.com/denisbrodbeck/machineid"
 	"github.com/spf13/cobra"
 )
 
@@ -18,8 +20,56 @@ func CollectMachineInfo() MachineInfo {
 	}
 }
 
+// CollectActorInfo returns actor information (only machineId, server populates userId/orgId)
+func CollectActorInfo() *ActorInfo {
+	// Generate or retrieve machine ID (should be cached/stable)
+	machineID, err := getOrCreateMachineID()
+	if err != nil {
+		// Log but don't fail - telemetry should always work
+		// Error indicates we're using a fallback ID
+	}
+	return &ActorInfo{
+		MachineID: machineID,
+		// userId and organizationId will be populated by the server from the JWT token
+	}
+}
+
+// CollectWorkflowInfo extracts workflow information from settings
+func CollectWorkflowInfo(settings interface{}) *WorkflowInfo {
+	// This will be populated by checking if workflow settings exist
+	// The exact structure depends on what's available in runtime.Settings
+	// For now, return nil as workflow info is optional
+	return nil
+}
+
+// getOrCreateMachineID retrieves or generates a stable machine ID for telemetry
+func getOrCreateMachineID() (string, error) {
+	// Try to read existing machine ID from config (for backwards compatibility)
+	home, err := os.UserHomeDir()
+	if err == nil {
+		idFile := fmt.Sprintf("%s/.cre/machine_id", home)
+		if data, err := os.ReadFile(idFile); err == nil && len(data) > 0 {
+			return strings.TrimSpace(string(data)), nil
+		}
+	}
+
+	// Use the system machine ID
+	machineID, err := machineid.ID()
+	if err == nil {
+		return fmt.Sprintf("machine_%s", machineID), nil
+	}
+
+	// Fallback: generate a simple ID based on hostname
+	hostname, _ := os.Hostname()
+	if hostname == "" {
+		hostname = "unknown"
+	}
+	fallbackID := fmt.Sprintf("machine_%s_%s_%s", hostname, runtime.GOOS, runtime.GOARCH)
+	return fallbackID, fmt.Errorf("failed to get system machine ID, using fallback: %w", err)
+}
+
 // CollectCommandInfo extracts command information from a cobra command
-func CollectCommandInfo(cmd *cobra.Command) CommandInfo {
+func CollectCommandInfo(cmd *cobra.Command, args []string) CommandInfo {
 	info := CommandInfo{}
 
 	// Get the action (root command name)
@@ -31,6 +81,12 @@ func CollectCommandInfo(cmd *cobra.Command) CommandInfo {
 		// This is a top-level command
 		info.Action = cmd.Name()
 	}
+
+	// Collect args (only positional arguments, not flags)
+	info.Args = args
+
+	// Omit flags for now - can be added later if needed
+	info.Flags = make(map[string]interface{})
 
 	return info
 }

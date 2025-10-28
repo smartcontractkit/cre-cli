@@ -25,7 +25,7 @@ const (
 
 // EmitCommandEvent emits a user event for command execution
 // This function is completely silent and never blocks command execution
-func EmitCommandEvent(cmd *cobra.Command, exitCode int, runtimeCtx *runtime.Context) {
+func EmitCommandEvent(cmd *cobra.Command, args []string, exitCode int, runtimeCtx *runtime.Context) {
 	// Run in a goroutine to avoid blocking
 	go func() {
 		// Recover from any panics to prevent crashes
@@ -52,7 +52,7 @@ func EmitCommandEvent(cmd *cobra.Command, exitCode int, runtimeCtx *runtime.Cont
 		}
 
 		// Collect event data
-		event := buildUserEvent(cmd, exitCode)
+		event := buildUserEvent(cmd, args, exitCode, runtimeCtx)
 		debugLog("emitting telemetry event: action=%s, subcommand=%s, exitCode=%d",
 			event.Command.Action, event.Command.Subcommand, event.ExitCode)
 
@@ -101,11 +101,30 @@ func shouldExcludeCommand(cmd *cobra.Command) bool {
 }
 
 // buildUserEvent constructs the user event payload
-func buildUserEvent(cmd *cobra.Command, exitCode int) UserEventInput {
-	return UserEventInput{
+func buildUserEvent(cmd *cobra.Command, args []string, exitCode int, runtimeCtx *runtime.Context) UserEventInput {
+	event := UserEventInput{
 		CliVersion: version.Version,
 		ExitCode:   exitCode,
-		Command:    CollectCommandInfo(cmd),
+		Command:    CollectCommandInfo(cmd, args),
 		Machine:    CollectMachineInfo(),
 	}
+
+	// Collect actor information (only machineId, server populates userId/orgId from JWT)
+	event.Actor = CollectActorInfo()
+
+	// Collect workflow information if available
+	if runtimeCtx != nil && runtimeCtx.Settings != nil {
+		workflowInfo := &WorkflowInfo{}
+
+		// Only populate if we have workflow name (indicates a workflow context)
+		if name := runtimeCtx.Settings.Workflow.UserWorkflowSettings.WorkflowName; name != "" {
+			workflowInfo.Name = name
+			workflowInfo.OwnerAddress = runtimeCtx.Settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress
+			// workflowInfo.ID would need to come from workflow command handlers (currently not available in runtime context)
+			// workflowInfo.Language would need to be detected from workflow path
+			event.Workflow = workflowInfo
+		}
+	}
+
+	return event
 }
