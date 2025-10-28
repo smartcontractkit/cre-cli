@@ -24,7 +24,7 @@ import (
 const (
 	repo           = "smartcontractkit/cre-cli"
 	cliName        = "cre"
-	maxExtractSize = 200 * 1024 * 1024
+	maxExtractSize = 500 * 1024 * 1024
 )
 
 var httpClient = &http.Client{Timeout: 30 * time.Second}
