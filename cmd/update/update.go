@@ -16,8 +16,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Masterminds/semver/v3"
 	"github.com/spf13/cobra"
 
+	"github.com/smartcontractkit/cre-cli/cmd/version"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 )
 
@@ -294,12 +296,47 @@ func replaceSelf(newBin string) error {
 	return os.Rename(newBin, self)
 }
 
-func Run() error {
-	fmt.Println("Updating cre CLI...")
+// Run accepts the currentVersion string
+func Run(currentVersion string) error {
+	fmt.Println("Checking for updates...")
 	tag, err := getLatestTag()
 	if err != nil {
 		return fmt.Errorf("error fetching latest version: %w", err)
 	}
+
+	// --- New Update Check Logic ---
+	// Clean the current version string (e.g., "version v1.2.3" -> "v1.2.3")
+	cleanedCurrent := strings.Replace(currentVersion, "version", "", 1)
+	cleanedCurrent = strings.TrimSpace(cleanedCurrent)
+
+	// Clean the latest tag (e.g., "v1.2.4")
+	cleanedLatest := strings.TrimSpace(tag)
+
+	currentSemVer, errCurrent := semver.NewVersion(cleanedCurrent)
+	latestSemVer, errLatest := semver.NewVersion(cleanedLatest)
+
+	if errCurrent != nil || errLatest != nil {
+		// If we can't parse either version, fall back to just updating.
+		// Print a warning to stderr.
+		fmt.Fprintf(os.Stderr, "Warning: could not compare versions (current: '%s', latest: '%s'). Proceeding with update.\n", cleanedCurrent, cleanedLatest)
+		if errCurrent != nil {
+			fmt.Fprintf(os.Stderr, "Current version parse error: %v\n", errCurrent)
+		}
+		if errLatest != nil {
+			fmt.Fprintf(os.Stderr, "Latest version parse error: %v\n", errLatest)
+		}
+	} else {
+		// Compare versions
+		if latestSemVer.LessThan(currentSemVer) || latestSemVer.Equal(currentSemVer) {
+			fmt.Printf("You are already using the latest version %s\n", currentSemVer.String())
+			return nil // Skip the update
+		}
+	}
+	// --- End of New Logic ---
+
+	// If we're here, an update is needed.
+	fmt.Println("Updating cre CLI...")
+
 	asset, _, err := getAssetName()
 	if err != nil {
 		return fmt.Errorf("error determining asset name: %w", err)
@@ -337,12 +374,13 @@ func Run() error {
 	return nil
 }
 
-func New(_ *runtime.Context) *cobra.Command {
+// New is modified to use the version package
+func New(_ *runtime.Context) *cobra.Command { // <-- No longer uses rt
 	var versionCmd = &cobra.Command{
 		Use:   "update",
 		Short: "Update the cre CLI to the latest version",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return Run()
+			return Run(version.Version)
 		},
 	}
 
