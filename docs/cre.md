@@ -28,6 +28,7 @@ cre [optional flags]
 * [cre login](cre_login.md)	 - Start authentication flow
 * [cre logout](cre_logout.md)	 - Revoke authentication tokens and remove local credentials
 * [cre secrets](cre_secrets.md)	 - Handles secrets management
+* [cre update](cre_update.md)	 - Update the cre CLI to the latest version
 * [cre version](cre_version.md)	 - Print the cre version
 * [cre whoami](cre_whoami.md)	 - Show your current account details
 * [cre workflow](cre_workflow.md)	 - Manages workflows

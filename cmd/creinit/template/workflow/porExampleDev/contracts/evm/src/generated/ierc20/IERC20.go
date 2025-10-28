@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"reflect"
 	"strings"
 
 	ethereum "github.com/ethereum/go-ethereum"
@@ -46,6 +47,7 @@ var (
 	_ = cre.ResponseBufferTooSmall
 	_ = rpc.API{}
 	_ = json.Unmarshal
+	_ = reflect.Bool
 )
 
 var IERC20MetaData = &bind.MetaData{
@@ -85,7 +87,8 @@ type TransferFromInput struct {
 // Errors
 
 // Events
-// The <Event> struct should be used as a filter (for log triggers).
+// The <Event>Topics struct should be used as a filter (for log triggers).
+// Note: It is only possible to filter on indexed fields.
 // Indexed (string and bytes) fields will be of type common.Hash.
 // They need to he (crypto.Keccak256) hashed and passed in.
 // Indexed (tuple/slice/array) fields can be passed in as is, the Encode<Event>Topics function will handle the hashing.
@@ -93,10 +96,9 @@ type TransferFromInput struct {
 // The <Event>Decoded struct will be the result of calling decode (Adapt) on the log trigger result.
 // Indexed dynamic type fields will be of type common.Hash.
 
-type Approval struct {
+type ApprovalTopics struct {
 	Owner   common.Address
 	Spender common.Address
-	Value   *big.Int
 }
 
 type ApprovalDecoded struct {
@@ -105,10 +107,9 @@ type ApprovalDecoded struct {
 	Value   *big.Int
 }
 
-type Transfer struct {
-	From  common.Address
-	To    common.Address
-	Value *big.Int
+type TransferTopics struct {
+	From common.Address
+	To   common.Address
 }
 
 type TransferDecoded struct {
@@ -140,10 +141,10 @@ type IERC20Codec interface {
 	EncodeTransferFromMethodCall(in TransferFromInput) ([]byte, error)
 	DecodeTransferFromMethodOutput(data []byte) (bool, error)
 	ApprovalLogHash() []byte
-	EncodeApprovalTopics(evt abi.Event, values []Approval) ([]*evm.TopicValues, error)
+	EncodeApprovalTopics(evt abi.Event, values []ApprovalTopics) ([]*evm.TopicValues, error)
 	DecodeApproval(log *evm.Log) (*ApprovalDecoded, error)
 	TransferLogHash() []byte
-	EncodeTransferTopics(evt abi.Event, values []Transfer) ([]*evm.TopicValues, error)
+	EncodeTransferTopics(evt abi.Event, values []TransferTopics) ([]*evm.TopicValues, error)
 	DecodeTransfer(log *evm.Log) (*TransferDecoded, error)
 }
 
@@ -319,10 +320,14 @@ func (c *Codec) ApprovalLogHash() []byte {
 
 func (c *Codec) EncodeApprovalTopics(
 	evt abi.Event,
-	values []Approval,
+	values []ApprovalTopics,
 ) ([]*evm.TopicValues, error) {
 	var ownerRule []interface{}
 	for _, v := range values {
+		if reflect.ValueOf(v.Owner).IsZero() {
+			ownerRule = append(ownerRule, common.Hash{})
+			continue
+		}
 		fieldVal, err := bindings.PrepareTopicArg(evt.Inputs[0], v.Owner)
 		if err != nil {
 			return nil, err
@@ -331,6 +336,10 @@ func (c *Codec) EncodeApprovalTopics(
 	}
 	var spenderRule []interface{}
 	for _, v := range values {
+		if reflect.ValueOf(v.Spender).IsZero() {
+			spenderRule = append(spenderRule, common.Hash{})
+			continue
+		}
 		fieldVal, err := bindings.PrepareTopicArg(evt.Inputs[1], v.Spender)
 		if err != nil {
 			return nil, err
@@ -353,7 +362,12 @@ func (c *Codec) EncodeApprovalTopics(
 	for i, hashList := range rawTopics {
 		bs := make([][]byte, len(hashList))
 		for j, h := range hashList {
-			bs[j] = h.Bytes()
+			// don't include empty bytes if hashed value is 0x0
+			if reflect.ValueOf(h).IsZero() {
+				bs[j] = []byte{}
+			} else {
+				bs[j] = h.Bytes()
+			}
 		}
 		topics[i+1] = &evm.TopicValues{Values: bs}
 	}
@@ -395,10 +409,14 @@ func (c *Codec) TransferLogHash() []byte {
 
 func (c *Codec) EncodeTransferTopics(
 	evt abi.Event,
-	values []Transfer,
+	values []TransferTopics,
 ) ([]*evm.TopicValues, error) {
 	var fromRule []interface{}
 	for _, v := range values {
+		if reflect.ValueOf(v.From).IsZero() {
+			fromRule = append(fromRule, common.Hash{})
+			continue
+		}
 		fieldVal, err := bindings.PrepareTopicArg(evt.Inputs[0], v.From)
 		if err != nil {
 			return nil, err
@@ -407,6 +425,10 @@ func (c *Codec) EncodeTransferTopics(
 	}
 	var toRule []interface{}
 	for _, v := range values {
+		if reflect.ValueOf(v.To).IsZero() {
+			toRule = append(toRule, common.Hash{})
+			continue
+		}
 		fieldVal, err := bindings.PrepareTopicArg(evt.Inputs[1], v.To)
 		if err != nil {
 			return nil, err
@@ -429,7 +451,12 @@ func (c *Codec) EncodeTransferTopics(
 	for i, hashList := range rawTopics {
 		bs := make([][]byte, len(hashList))
 		for j, h := range hashList {
-			bs[j] = h.Bytes()
+			// don't include empty bytes if hashed value is 0x0
+			if reflect.ValueOf(h).IsZero() {
+				bs[j] = []byte{}
+			} else {
+				bs[j] = h.Bytes()
+			}
 		}
 		topics[i+1] = &evm.TopicValues{Values: bs}
 	}
@@ -617,7 +644,7 @@ func (t *ApprovalTrigger) Adapt(l *evm.Log) (*bindings.DecodedLog[ApprovalDecode
 	}, nil
 }
 
-func (c *IERC20) LogTriggerApprovalLog(chainSelector uint64, confidence evm.ConfidenceLevel, filters []Approval) (cre.Trigger[*evm.Log, *bindings.DecodedLog[ApprovalDecoded]], error) {
+func (c *IERC20) LogTriggerApprovalLog(chainSelector uint64, confidence evm.ConfidenceLevel, filters []ApprovalTopics) (cre.Trigger[*evm.Log, *bindings.DecodedLog[ApprovalDecoded]], error) {
 	event := c.ABI.Events["Approval"]
 	topics, err := c.Codec.EncodeApprovalTopics(event, filters)
 	if err != nil {
@@ -675,7 +702,7 @@ func (t *TransferTrigger) Adapt(l *evm.Log) (*bindings.DecodedLog[TransferDecode
 	}, nil
 }
 
-func (c *IERC20) LogTriggerTransferLog(chainSelector uint64, confidence evm.ConfidenceLevel, filters []Transfer) (cre.Trigger[*evm.Log, *bindings.DecodedLog[TransferDecoded]], error) {
+func (c *IERC20) LogTriggerTransferLog(chainSelector uint64, confidence evm.ConfidenceLevel, filters []TransferTopics) (cre.Trigger[*evm.Log, *bindings.DecodedLog[TransferDecoded]], error) {
 	event := c.ABI.Events["Transfer"]
 	topics, err := c.Codec.EncodeTransferTopics(event, filters)
 	if err != nil {

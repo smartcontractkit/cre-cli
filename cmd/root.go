@@ -18,6 +18,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/cmd/login"
 	"github.com/smartcontractkit/cre-cli/cmd/logout"
 	"github.com/smartcontractkit/cre-cli/cmd/secrets"
+	"github.com/smartcontractkit/cre-cli/cmd/update"
 	"github.com/smartcontractkit/cre-cli/cmd/version"
 	"github.com/smartcontractkit/cre-cli/cmd/whoami"
 	"github.com/smartcontractkit/cre-cli/cmd/workflow"
@@ -27,7 +28,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/telemetry"
-	"github.com/smartcontractkit/cre-cli/internal/update"
+	intupdate "github.com/smartcontractkit/cre-cli/internal/update"
 )
 
 // RootCmd represents the base command when called without any subcommands
@@ -137,7 +138,7 @@ func newRootCommand() *cobra.Command {
 			// Check for updates *sequentially* after the main command has run.
 			// This guarantees it prints at the end, after all other output.
 			if cmd.Name() != "bash" && cmd.Name() != "zsh" && cmd.Name() != "fish" && cmd.Name() != "powershell" && cmd.Name() != "help" {
-				update.CheckForUpdates(version.Version, runtimeContext.Logger)
+				intupdate.CheckForUpdates(version.Version, runtimeContext.Logger)
 			}
 			// ---
 			telemetry.EmitCommandEvent(cmd, 0, runtimeContext)
@@ -296,6 +297,7 @@ Use "{{.CommandPath}} [command] --help" for more information about a command.
 	genBindingsCmd := generatebindings.New(runtimeContext)
 	accountCmd := account.New(runtimeContext)
 	whoamiCmd := whoami.New(runtimeContext)
+	updateCmd := update.New(runtimeContext)
 
 	secretsCmd.RunE = helpRunE
 	workflowCmd.RunE = helpRunE
@@ -327,6 +329,7 @@ Use "{{.CommandPath}} [command] --help" for more information about a command.
 		secretsCmd,
 		workflowCmd,
 		genBindingsCmd,
+		updateCmd,
 	)
 
 	return rootCmd
@@ -335,46 +338,48 @@ Use "{{.CommandPath}} [command] --help" for more information about a command.
 func isLoadEnvAndSettings(cmd *cobra.Command) bool {
 	// It is not expected to have the .env and the settings file when running the following commands
 	var excludedCommands = map[string]struct{}{
-		"version":           {},
-		"login":             {},
-		"logout":            {},
-		"whoami":            {},
-		"list-key":          {},
-		"init":              {},
-		"generate-bindings": {},
-		"bash":              {},
-		"fish":              {},
-		"powershell":        {},
-		"zsh":               {},
-		"help":              {},
-		"cre":               {},
-		"account":           {},
-		"secrets":           {},
-		"workflow":          {},
+		"cre version":               {},
+		"cre login":                 {},
+		"cre logout":                {},
+		"cre whoami":                {},
+		"cre account list-key":      {},
+		"cre init":                  {},
+		"cre generate-bindings":     {},
+		"cre completion bash":       {},
+		"cre completion fish":       {},
+		"cre completion powershell": {},
+		"cre completion zsh":        {},
+		"cre help":                  {},
+		"cre update":                {},
+		"cre workflow":              {},
+		"cre account":               {},
+		"cre secrets":               {},
+		"cre":                       {},
 	}
 
-	_, exists := excludedCommands[cmd.Name()]
+	_, exists := excludedCommands[cmd.CommandPath()]
 	return !exists
 }
 
 func isLoadCredentials(cmd *cobra.Command) bool {
 	// It is not expected to have the credentials loaded when running the following commands
 	var excludedCommands = map[string]struct{}{
-		"version":           {},
-		"login":             {},
-		"bash":              {},
-		"fish":              {},
-		"powershell":        {},
-		"zsh":               {},
-		"help":              {},
-		"generate-bindings": {},
-		"cre":               {},
-		"account":           {},
-		"secrets":           {},
-		"workflow":          {},
+		"cre version":               {},
+		"cre login":                 {},
+		"cre completion bash":       {},
+		"cre completion fish":       {},
+		"cre completion powershell": {},
+		"cre completion zsh":        {},
+		"cre help":                  {},
+		"cre generate-bindings":     {},
+		"cre update":                {},
+		"cre workflow":              {},
+		"cre account":               {},
+		"cre secrets":               {},
+		"cre":                       {},
 	}
 
-	_, exists := excludedCommands[cmd.Name()]
+	_, exists := excludedCommands[cmd.CommandPath()]
 	return !exists
 }
 
