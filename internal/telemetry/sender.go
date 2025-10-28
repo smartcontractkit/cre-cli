@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	sendTimeout = 1 * time.Second
+	sendTimeout = 5 * time.Second
 )
 
 const reportUserEventMutation = `
