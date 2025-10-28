@@ -174,7 +174,7 @@ func TestOnLogTrigger(t *testing.T) {
 	assertLogContains(t, logs, `blockNumber=100`)
 }
 
-//go:embed config.json
+//go:embed config.production.json
 var configJson []byte
 
 func makeTestConfig(t *testing.T) *Config {

@@ -43,8 +43,10 @@ func GetDefaultReplacements() map[string]string {
 		"BaseSepoliaRpcUrl": constants.DefaultBaseSepoliaRpcUrl,
 		"SethConfigPath":    constants.DefaultSethConfigPath,
 
-		"ConfigPath":  "./config.json",
-		"SecretsPath": "",
+		"ConfigPath":           "./config.json",
+		"ConfigPathStaging":    "./config.staging.json",
+		"ConfigPathProduction": "./config.production.json",
+		"SecretsPath":          "",
 	}
 }
 
@@ -99,16 +101,13 @@ func GenerateProjectEnvFile(workingDirectory string, stdin io.Reader) (string, e
 }
 
 func GenerateProjectSettingsFile(workingDirectory string, stdin io.Reader) (string, bool, error) {
-	// Use default replacements.
 	replacements := GetDefaultReplacements()
 
-	// Resolve the absolute output path for the project settings file.
 	outputPath, err := filepath.Abs(path.Join(workingDirectory, constants.DefaultProjectSettingsFileName))
 	if err != nil {
 		return "", false, fmt.Errorf("failed to resolve absolute path for writing file: %w", err)
 	}
 
-	// Check if the file already exists.
 	if _, err := os.Stat(outputPath); err == nil {
 		msg := fmt.Sprintf("A project settings file already exists at %s. Continuing will overwrite this file. Do you want to proceed?", outputPath)
 		shouldContinue, err := prompt.YesNoPrompt(stdin, msg)
@@ -120,7 +119,6 @@ func GenerateProjectSettingsFile(workingDirectory string, stdin io.Reader) (stri
 		}
 	}
 
-	// Generate the project settings file.
 	if err := GenerateFileFromTemplate(outputPath, ProjectSettingsTemplateContent, replacements); err != nil {
 		return "", false, fmt.Errorf("failed to generate project settings file: %w", err)
 	}

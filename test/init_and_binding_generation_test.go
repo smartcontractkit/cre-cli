@@ -34,6 +34,7 @@ func TestE2EInit_DevPoRTemplate(t *testing.T) {
 		"--project-name", projectName,
 		"--template-id", templateID,
 		"--workflow-name", workflowName,
+		"--rpc-url", constants.DefaultEthSepoliaRpcUrl,
 	}
 	var stdout, stderr bytes.Buffer
 	initCmd := exec.Command(CLIPath, initArgs...)
