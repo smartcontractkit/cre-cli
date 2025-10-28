@@ -90,7 +90,7 @@ func DeployTestWorkflowRegistry(t *testing.T, sethClient *seth.Client) (*workflo
 		return nil, err
 	}
 
-	_, err = sethClient.Decode(registry.SetDONLimit(sethClient.NewTXOpts(), constants.DefaultStagingDonFamily, 100, 10))
+	_, err = sethClient.Decode(registry.SetDONLimit(sethClient.NewTXOpts(), "zone-a", 100, 10))
 	if err != nil {
 		return nil, err
 	}

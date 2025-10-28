@@ -1,6 +1,4 @@
 staging:
-  cre-cli:
-    don-family: "zone-a"
   logging:
     seth-config-path: seth.toml
   rpcs:

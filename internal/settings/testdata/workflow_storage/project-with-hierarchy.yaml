@@ -2,8 +2,6 @@
 staging:
   hierarchy-test: Project
   test-key: projectValue
-  cre-cli:
-    don-family: "zone-a"
   user-workflow:
     workflow-owner-address: ""
     workflow-name: ""
