@@ -13,10 +13,18 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/testutil/chainsim"
 )
 
-func GetTemplateFileList() []string {
+func GetTemplateFileListGo() []string {
 	return []string{
 		"README.md",
 		"main.go",
+		"workflow.yaml",
+	}
+}
+
+func GetTemplateFileListTS() []string {
+	return []string{
+		"README.md",
+		"main.ts",
 		"workflow.yaml",
 	}
 }
@@ -89,7 +97,7 @@ func TestInitExecuteFlows(t *testing.T) {
 			mockResponses:       []string{"", "", "", "myworkflow"},
 			expectProjectDirRel: "myproj",
 			expectWorkflowName:  "myworkflow",
-			expectTemplateFiles: GetTemplateFileList(),
+			expectTemplateFiles: GetTemplateFileListGo(),
 		},
 		{
 			name:             "only project, default template+workflow via prompt",
@@ -101,7 +109,7 @@ func TestInitExecuteFlows(t *testing.T) {
 			mockResponses:       []string{"", "", "", "default-wf"},
 			expectProjectDirRel: "alpha",
 			expectWorkflowName:  "default-wf",
-			expectTemplateFiles: GetTemplateFileList(),
+			expectTemplateFiles: GetTemplateFileListGo(),
 		},
 		{
 			name:             "no flags: prompt project, blank template, prompt workflow",
@@ -111,10 +119,10 @@ func TestInitExecuteFlows(t *testing.T) {
 			rpcURLFlag:       "",
 			// "projX" (project), "1" (pick Golang), "2" (pick HelloWorld/blank), "workflow-X" (name)
 			// No RPC prompt here since PoR was NOT selected
-			mockResponses:       []string{"projX", "1", "2", "workflow-X"},
+			mockResponses:       []string{"projX", "1", "2", "", "workflow-X"},
 			expectProjectDirRel: "projX",
 			expectWorkflowName:  "workflow-X",
-			expectTemplateFiles: GetTemplateFileList(),
+			expectTemplateFiles: GetTemplateFileListGo(),
 		},
 		{
 			name:             "workflow-name flag only, default template, no workflow prompt",
@@ -126,7 +134,7 @@ func TestInitExecuteFlows(t *testing.T) {
 			mockResponses:       []string{"", "", ""},
 			expectProjectDirRel: "projFlag",
 			expectWorkflowName:  "flagged-wf",
-			expectTemplateFiles: GetTemplateFileList(),
+			expectTemplateFiles: GetTemplateFileListGo(),
 		},
 		{
 			name:                "template-id flag only, no template prompt",
@@ -137,7 +145,7 @@ func TestInitExecuteFlows(t *testing.T) {
 			mockResponses:       []string{"workflow-Tpl"},
 			expectProjectDirRel: "tplProj",
 			expectWorkflowName:  "workflow-Tpl",
-			expectTemplateFiles: GetTemplateFileList(),
+			expectTemplateFiles: GetTemplateFileListGo(),
 		},
 		{
 			name:             "PoR template via flag with rpc-url provided (skips RPC prompt)",
@@ -149,7 +157,7 @@ func TestInitExecuteFlows(t *testing.T) {
 			mockResponses:       []string{"por-wf-01"},
 			expectProjectDirRel: "porWithFlag",
 			expectWorkflowName:  "por-wf-01",
-			expectTemplateFiles: GetTemplateFileList(),
+			expectTemplateFiles: GetTemplateFileListGo(),
 		},
 		{
 			name:             "TS template with rpc-url provided (flag ignored; no RPC prompt needed)",
@@ -161,7 +169,7 @@ func TestInitExecuteFlows(t *testing.T) {
 			mockResponses:       []string{"ts-wf-flag"},
 			expectProjectDirRel: "tsWithRpcFlag",
 			expectWorkflowName:  "ts-wf-flag",
-			expectTemplateFiles: GetTemplateFileList(),
+			expectTemplateFiles: GetTemplateFileListTS(),
 		},
 	}
 
@@ -232,7 +240,7 @@ func TestInsideExistingProjectAddsWorkflow(t *testing.T) {
 		t,
 		".",
 		"wf-inside-existing-project",
-		GetTemplateFileList(),
+		GetTemplateFileListGo(),
 	)
 }
 
