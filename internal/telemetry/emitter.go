@@ -24,41 +24,40 @@ const (
 )
 
 // EmitCommandEvent emits a user event for command execution
-// This function is completely silent and never blocks command execution
+// This function will now block until finished, as it's intended
+// to be called from within a goroutine that is managed by a WaitGroup.
 func EmitCommandEvent(cmd *cobra.Command, exitCode int, runtimeCtx *runtime.Context) {
-	// Run in a goroutine to avoid blocking
-	go func() {
-		// Recover from any panics to prevent crashes
-		defer func() {
-			if r := recover(); r != nil && isTelemetryDebugEnabled() {
-				debugLog("telemetry panic recovered: %v", r)
-			}
-		}()
 
-		// Create context with timeout
-		emitCtx, cancel := context.WithTimeout(context.Background(), maxTelemetryWait)
-		defer cancel()
-
-		// Check if telemetry is disabled
-		if isTelemetryDisabled() {
-			debugLog("telemetry disabled via environment variable")
-			return
+	// Recover from any panics to prevent crashes
+	defer func() {
+		if r := recover(); r != nil && isTelemetryDebugEnabled() {
+			debugLog("telemetry panic recovered: %v", r)
 		}
-
-		// Check if this command should be excluded
-		if shouldExcludeCommand(cmd) {
-			debugLog("command %s excluded from telemetry", cmd.Name())
-			return
-		}
-
-		// Collect event data
-		event := buildUserEvent(cmd, exitCode)
-		debugLog("emitting telemetry event: action=%s, subcommand=%s, exitCode=%d",
-			event.Command.Action, event.Command.Subcommand, event.ExitCode)
-
-		// Send the event
-		SendEvent(emitCtx, event, runtimeCtx.Credentials, runtimeCtx.EnvironmentSet, runtimeCtx.Logger)
 	}()
+
+	// Create context with timeout
+	emitCtx, cancel := context.WithTimeout(context.Background(), maxTelemetryWait)
+	defer cancel()
+
+	// Check if telemetry is disabled
+	if isTelemetryDisabled() {
+		debugLog("telemetry disabled via environment variable")
+		return
+	}
+
+	// Check if this command should be excluded
+	if shouldExcludeCommand(cmd) {
+		debugLog("command %s excluded from telemetry", cmd.Name())
+		return
+	}
+
+	// Collect event data
+	event := buildUserEvent(cmd, exitCode)
+	debugLog("emitting telemetry event: action=%s, subcommand=%s, exitCode=%d",
+		event.Command.Action, event.Command.Subcommand, event.ExitCode)
+
+	// Send the event
+	SendEvent(emitCtx, event, runtimeCtx.Credentials, runtimeCtx.EnvironmentSet, runtimeCtx.Logger)
 }
 
 // isTelemetryDisabled checks if telemetry is disabled via environment variable
