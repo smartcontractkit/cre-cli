@@ -28,6 +28,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/telemetry"
+	intupdate "github.com/smartcontractkit/cre-cli/internal/update"
 )
 
 // RootCmd represents the base command when called without any subcommands
@@ -44,6 +45,7 @@ func Execute() {
 		telemetry.EmitCommandEvent(executingCommand, 1, runtimeContextForTelemetry)
 	}
 
+	// Hack right now to give enough time for request to be made on backend but not block UX
 	time.Sleep(100 * time.Millisecond)
 
 	if err != nil {
@@ -58,6 +60,17 @@ func newRootCommand() *cobra.Command {
 
 	runtimeContextForTelemetry = runtimeContext
 
+	// By defining a Run func, we force PersistentPreRunE to execute
+	// even when 'cre', 'workflow', etc is called with no subcommand
+	// this enables to check for update and display if needed
+	helpRunE := func(cmd *cobra.Command, args []string) error {
+		err := cmd.Help()
+		if err != nil {
+			return fmt.Errorf("fail to show help: %w", err)
+		}
+		return nil
+	}
+
 	rootCmd := &cobra.Command{
 		Use:   "cre",
 		Short: "CRE CLI tool",
@@ -66,6 +79,8 @@ func newRootCommand() *cobra.Command {
 		// timestamps can cause docs to keep regenerating on each new PR for no good reason
 		DisableAutoGenTag: true,
 		// this will be inherited by all submodules and all their commands
+
+		RunE: helpRunE,
 
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			executingCommand = cmd
@@ -119,6 +134,13 @@ func newRootCommand() *cobra.Command {
 		},
 
 		PersistentPostRun: func(cmd *cobra.Command, args []string) {
+
+			// Check for updates *sequentially* after the main command has run.
+			// This guarantees it prints at the end, after all other output.
+			if cmd.Name() != "bash" && cmd.Name() != "zsh" && cmd.Name() != "fish" && cmd.Name() != "powershell" && cmd.Name() != "help" {
+				intupdate.CheckForUpdates(version.Version, runtimeContext.Logger)
+			}
+			// ---
 			telemetry.EmitCommandEvent(cmd, 0, runtimeContext)
 		},
 	}
@@ -277,6 +299,10 @@ Use "{{.CommandPath}} [command] --help" for more information about a command.
 	whoamiCmd := whoami.New(runtimeContext)
 	updateCmd := update.New(runtimeContext)
 
+	secretsCmd.RunE = helpRunE
+	workflowCmd.RunE = helpRunE
+	accountCmd.RunE = helpRunE
+
 	// Define groups (order controls display order)
 	rootCmd.AddGroup(&cobra.Group{ID: "getting-started", Title: "Getting Started"})
 	rootCmd.AddGroup(&cobra.Group{ID: "account", Title: "Account"})
@@ -325,6 +351,10 @@ func isLoadEnvAndSettings(cmd *cobra.Command) bool {
 		"cre completion zsh":        {},
 		"cre help":                  {},
 		"cre update":                {},
+		"cre workflow":              {},
+		"cre account":               {},
+		"cre secrets":               {},
+		"cre":                       {},
 	}
 
 	_, exists := excludedCommands[cmd.CommandPath()]
@@ -343,6 +373,10 @@ func isLoadCredentials(cmd *cobra.Command) bool {
 		"cre help":                  {},
 		"cre generate-bindings":     {},
 		"cre update":                {},
+		"cre workflow":              {},
+		"cre account":               {},
+		"cre secrets":               {},
+		"cre":                       {},
 	}
 
 	_, exists := excludedCommands[cmd.CommandPath()]

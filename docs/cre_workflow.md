@@ -6,6 +6,10 @@ Manages workflows
 
 The workflow command allows you to register and manage existing workflows.
 
+```
+cre workflow [optional flags]
+```
+
 ### Options
 
 ```

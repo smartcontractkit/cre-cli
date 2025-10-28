@@ -6,6 +6,10 @@ Manages account
 
 Manage your linked public key addresses for workflow operations.
 
+```
+cre account [optional flags]
+```
+
 ### Options
 
 ```

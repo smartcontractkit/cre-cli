@@ -6,6 +6,10 @@ Handles secrets management
 
 Create, update, delete, list secrets in Vault DON.
 
+```
+cre secrets [optional flags]
+```
+
 ### Options
 
 ```

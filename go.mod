@@ -4,6 +4,7 @@ go 1.25.3
 
 require (
 	github.com/BurntSushi/toml v1.4.0
+	github.com/Masterminds/semver/v3 v3.4.0
 	github.com/andybalholm/brotli v1.1.1
 	github.com/avast/retry-go/v4 v4.6.1
 	github.com/charmbracelet/bubbles v0.21.0
@@ -57,7 +58,6 @@ require (
 	github.com/99designs/go-keychain v0.0.0-20191008050251-8e49817e8af4 // indirect
 	github.com/99designs/keyring v1.2.1 // indirect
 	github.com/DataDog/zstd v1.5.6 // indirect
-	github.com/Masterminds/semver/v3 v3.4.0 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/NethermindEth/juno v0.12.5 // indirect
 	github.com/NethermindEth/starknet.go v0.8.0 // indirect
