@@ -20,14 +20,12 @@ const (
 	TelemetryDebugEnvVar = "CRE_TELEMETRY_DEBUG"
 
 	// Maximum time to wait for telemetry to complete
-	maxTelemetryWait = 10 * time.Second
+	maxTelemetryWait = 1 * time.Second
 )
 
-// EmitCommandEvent emits a user event for command execution
-// This function will now block until finished, as it's intended
-// to be called from within a goroutine that is managed by a WaitGroup.
+// EmitCommandEvent emits a user event for command execution. It has a max timeout maxTelemetryWait
+// which the user needs to wait for
 func EmitCommandEvent(cmd *cobra.Command, exitCode int, runtimeCtx *runtime.Context) {
-
 	// Recover from any panics to prevent crashes
 	defer func() {
 		if r := recover(); r != nil && isTelemetryDebugEnabled() {
