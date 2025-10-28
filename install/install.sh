@@ -19,12 +19,28 @@ check_command() {
   command -v "$1" >/dev/null 2>&1 || fail "Required command '$1' is not installed."
 }
 
+tildify() {
+    if [[ $1 = $HOME/* ]]; then
+        local replacement=\~/
+
+        echo "${1/$HOME\//$replacement}"
+    else
+        echo "$1"
+    fi
+}
+
 # --- Main Installation Logic ---
 
 # 1. Define Variables
-REPO="smartcontractkit/cre-cli" # Your GitHub repository
-CLI_NAME="cre"
-INSTALL_DIR="/usr/local/bin"
+github_repo="smartcontractkit/cre-cli"
+cli_name="cre"
+
+install_env=CRE_INSTALL
+bin_env=\$$install_env/bin
+
+install_dir=${!install_env:-$HOME/.cre}
+bin_dir=$install_dir/bin
+cre_bin=$bin_dir/$cli_name
 
 # 2. Detect OS and Architecture
 OS="$(uname -s)"
@@ -54,62 +70,206 @@ case "$ARCH" in
     ;;
 esac
 
+if [[ ! -d $bin_dir ]]; then
+    mkdir -p "$bin_dir" ||
+        error "Failed to create install directory \"$bin_dir\""
+fi
+
 # 3. Determine the Latest Version from GitHub Releases
 check_command "curl"
-LATEST_TAG=$(curl -s "https://api.github.com/repos/$REPO/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+LATEST_TAG=$(curl -s "https://api.github.com/repos/$github_repo/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
 if [ -z "$LATEST_TAG" ]; then
   fail "Could not fetch the latest release version from GitHub."
 fi
 
+if [[ $# = 0 ]]; then
+  echo "Installing $cli_name version $LATEST_TAG for $PLATFORM/$ARCH_NAME..."
+else
+  LATEST_TAG=$1
+fi
+
 # 4. Construct Download URL and Download asset
-ASSET="${CLI_NAME}_${PLATFORM}_${ARCH_NAME}"
+ASSET="${cli_name}_${PLATFORM}_${ARCH_NAME}"
 # Determine the file extension based on OS
 if [ "$PLATFORM" = "linux" ]; then
   ASSET="${ASSET}.tar.gz"
 elif [ "$PLATFORM" = "darwin" ]; then
   ASSET="${ASSET}.zip"
 fi
-DOWNLOAD_URL="https://github.com/$REPO/releases/download/$LATEST_TAG/$ASSET"
-
-echo "Downloading $CLI_NAME ($LATEST_TAG) for $PLATFORM/$ARCH_NAME from $DOWNLOAD_URL"
+DOWNLOAD_URL="https://github.com/$github_repo/releases/download/$LATEST_TAG/$ASSET"
 
 # Use curl to download the asset to a temporary file
 TMP_DIR=$(mktemp -d)
-curl -fSL "$DOWNLOAD_URL" -o "$TMP_DIR/$ASSET" || fail "Failed to download asset from $DOWNLOAD_URL"
+curl --fail --location --progress-bar "$DOWNLOAD_URL" --output "$TMP_DIR/$ASSET" || fail "Failed to download asset from $DOWNLOAD_URL"
 
 # Extract if it's a tar.gz
 if echo "$ASSET" | grep -qE '\.tar\.gz$'; then
   tar -xzf "$TMP_DIR/$ASSET" -C "$TMP_DIR"
   TMP_FILE="$TMP_DIR/$ASSET"
-  echo "Extracted to $TMP_FILE"
 fi
 
 # Extract if it's a zip
 if echo "$ASSET" | grep -qE '\.zip$'; then
   check_command "unzip"
-  unzip -o "$TMP_DIR/$ASSET" -d "$TMP_DIR"
+  unzip -oq "$TMP_DIR/$ASSET" -d "$TMP_DIR"
   TMP_FILE="$TMP_DIR/$ASSET"
 fi
 
-BINARY_FILE="$TMP_DIR/${CLI_NAME}_${LATEST_TAG}_${PLATFORM}_${ARCH_NAME}"
+TMP_CRE_BIN="$TMP_DIR/${cli_name}_${LATEST_TAG}_${PLATFORM}_${ARCH_NAME}"
 # 5. Install the Binary
-echo "Installing $CLI_NAME to $INSTALL_DIR"
 [ -f "$TMP_FILE" ] || fail "Temporary file $TMP_FILE does not exist."
 chmod +x "$TMP_FILE"
 
 # Check for write permissions and use sudo if necessary
-if [ -w "$INSTALL_DIR" ]; then
-  mv "$BINARY_FILE" "$INSTALL_DIR/$CLI_NAME"
+if [ -w "$install_dir" ]; then
+  mv "$TMP_CRE_BIN" "$cre_bin"
 else
-  echo "Write permission to $INSTALL_DIR denied. Attempting with sudo..."
+  echo "Write permission to $install_dir denied. Attempting with sudo..."
   check_command "sudo"
-  sudo mv "$BINARY_FILE" "$INSTALL_DIR/$CLI_NAME"
+  sudo mv "$TMP_CRE_BIN" "$cre_bin"
 fi
 
 # check if the binary is installed correctly
-$CLI_NAME version || fail "$CLI_NAME installation failed."
+$cre_bin version || fail "$cli_name installation failed."
 
 #cleanup
 rm -rf "$TMP_DIR"
 
-echo "$CLI_NAME installed successfully! Run '$CLI_NAME --help' to get started."
+refresh_command=''
+
+tilde_bin_dir=$(tildify "$bin_dir")
+quoted_install_dir=\"${install_dir//\"/\\\"}\"
+
+if [[ $quoted_install_dir = \"$HOME/* ]]; then
+    quoted_install_dir=${quoted_install_dir/$HOME\//\$HOME/}
+fi
+
+echo
+
+case $(basename "$SHELL") in
+fish)
+    commands=(
+        "set --export $install_env $quoted_install_dir"
+        "set --export PATH $bin_env \$PATH"
+    )
+
+    fish_config=$HOME/.config/fish/config.fish
+    tilde_fish_config=$(tildify "$fish_config")
+
+    if [[ -w $fish_config ]]; then
+        if ! grep -q "# cre" "$fish_config"; then
+                {
+                    echo -e '\n# cre'
+                    for command in "${commands[@]}"; do
+                        echo "$command"
+                    done
+                } >>"$fish_config"
+            fi
+
+        echo "Added \"$tilde_bin_dir\" to \$PATH in \"$tilde_fish_config\""
+
+        refresh_command="source $tilde_fish_config"
+    else
+        echo "Manually add the directory to $tilde_fish_config (or similar):"
+
+        for command in "${commands[@]}"; do
+            echo "  $command"
+        done
+    fi
+    ;;
+zsh)
+    commands=(
+        "export $install_env=$quoted_install_dir"
+        "export PATH=\"$bin_env:\$PATH\""
+    )
+
+    zsh_config=$HOME/.zshrc
+    tilde_zsh_config=$(tildify "$zsh_config")
+
+    if [[ -w $zsh_config ]]; then
+        {
+            echo -e '\n# cre'
+
+            for command in "${commands[@]}"; do
+                echo "$command"
+            done
+        } >>"$zsh_config"
+
+        echo "Added \"$tilde_bin_dir\" to \$PATH in \"$tilde_zsh_config\""
+
+        refresh_command="exec $SHELL"
+    else
+        echo "Manually add the directory to $tilde_zsh_config (or similar):"
+
+        for command in "${commands[@]}"; do
+            echo "  $command"
+        done
+    fi
+    ;;
+bash)
+    commands=(
+        "export $install_env=$quoted_install_dir"
+        "export PATH=\"$bin_env:\$PATH\""
+    )
+
+    bash_configs=(
+        "$HOME/.bash_profile"
+        "$HOME/.bashrc"
+    )
+
+    if [[ ${XDG_CONFIG_HOME:-} ]]; then
+        bash_configs+=(
+            "$XDG_CONFIG_HOME/.bash_profile"
+            "$XDG_CONFIG_HOME/.bashrc"
+            "$XDG_CONFIG_HOME/bash_profile"
+            "$XDG_CONFIG_HOME/bashrc"
+        )
+    fi
+
+    set_manually=true
+    for bash_config in "${bash_configs[@]}"; do
+        tilde_bash_config=$(tildify "$bash_config")
+
+        if [[ -w $bash_config ]]; then
+            {
+                echo -e '\n# cre'
+
+                for command in "${commands[@]}"; do
+                    echo "$command"
+                done
+            } >>"$bash_config"
+
+            echo "Added \"$tilde_bin_dir\" to \$PATH in \"$tilde_bash_config\""
+
+            refresh_command="source $bash_config"
+            set_manually=false
+            break
+        fi
+    done
+
+    if [[ $set_manually = true ]]; then
+        echo "Manually add the directory to $tilde_bash_config (or similar):"
+
+        for command in "${commands[@]}"; do
+            echo "  $command"
+        done
+    fi
+    ;;
+*)
+    echo 'Manually add the directory to ~/.bashrc (or similar):'
+    echo "  export $install_env=$quoted_install_dir"
+    echo "  export PATH=\"$bin_env:\$PATH\""
+    ;;
+esac
+
+
+echo "$cli_name was installed successfully to $install_dir/$cli_name"
+echo
+echo "To get started, run:"
+echo
+
+if [[ $refresh_command ]]; then
+    echo "  $refresh_command"
+fi
+
+echo "  $cli_name --help"
