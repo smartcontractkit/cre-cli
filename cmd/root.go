@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"sync"
+	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
@@ -37,22 +37,15 @@ var runtimeContextForTelemetry *runtime.Context
 
 var executingCommand *cobra.Command
 
-var telemetryWG sync.WaitGroup
-
 func Execute() {
 	err := RootCmd.Execute()
 
 	if err != nil && executingCommand != nil && runtimeContextForTelemetry != nil {
-
-		telemetryWG.Add(1)
-		go func() {
-			defer telemetryWG.Done()
-			telemetry.EmitCommandEvent(executingCommand, 1, runtimeContextForTelemetry)
-		}()
+		telemetry.EmitCommandEvent(executingCommand, 1, runtimeContextForTelemetry)
 	}
 
-	// Wait for the  telemetry to finish
-	telemetryWG.Wait()
+	// Hack right now to give enough time for request to be made on backend but not block UX
+	time.Sleep(200 * time.Millisecond)
 
 	if err != nil {
 		os.Exit(1)
@@ -147,11 +140,7 @@ func newRootCommand() *cobra.Command {
 				update.CheckForUpdates(version.Version, runtimeContext.Logger)
 			}
 			// ---
-			telemetryWG.Add(1)
-			go func() {
-				defer telemetryWG.Done()
-				telemetry.EmitCommandEvent(cmd, 0, runtimeContext)
-			}()
+			telemetry.EmitCommandEvent(cmd, 0, runtimeContext)
 		},
 	}
 
