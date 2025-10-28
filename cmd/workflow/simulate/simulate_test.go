@@ -49,7 +49,6 @@ func TestBlankWorkflowSimulation(t *testing.T) {
 
 	var workflowSettings settings.WorkflowSettings
 	workflowSettings.UserWorkflowSettings.WorkflowName = "blank-workflow"
-	workflowSettings.DevPlatformSettings.DonFamily = "small"
 	workflowSettings.WorkflowArtifactSettings.WorkflowPath = filepath.Join(absWorkflowPath, "main.go")
 	workflowSettings.WorkflowArtifactSettings.ConfigPath = filepath.Join(absWorkflowPath, "config.json")
 

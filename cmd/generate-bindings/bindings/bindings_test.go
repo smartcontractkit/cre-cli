@@ -424,16 +424,12 @@ func TestLogTrigger(t *testing.T) {
 	require.NoError(t, err, "Failed to create DataStorage instance")
 	t.Run("simple event", func(t *testing.T) {
 		ev := ds.ABI.Events["DataStored"]
-		events := []datastorage.DataStored{
+		events := []datastorage.DataStoredTopics{
 			{
 				Sender: common.HexToAddress("0xAb8483F64d9C6d1EcF9b849Ae677dD3315835cb2"),
-				Key:    "testKey",
-				Value:  "testValue",
 			},
 			{
 				Sender: common.HexToAddress("0xBb8483F64d9C6d1EcF9b849Ae677dD3315835cb2"),
-				Key:    "testKey",
-				Value:  "testValue",
 			},
 		}
 
@@ -453,9 +449,12 @@ func TestLogTrigger(t *testing.T) {
 		require.NotNil(t, trigger)
 		require.NoError(t, err)
 
+		testKey := "testKey"
+		testValue := "testValue"
+
 		// Test the Adapt method
 		// We need to encode the non-indexed parameters (Key and Value) into the log data
-		eventData, err := abi.Arguments{ev.Inputs[1], ev.Inputs[2]}.Pack(events[0].Key, events[0].Value)
+		eventData, err := abi.Arguments{ev.Inputs[1], ev.Inputs[2]}.Pack(testKey, testValue)
 		require.NoError(t, err, "Encoding event data should not return an error")
 
 		// Create a mock log that simulates what would be returned by the blockchain
@@ -475,24 +474,24 @@ func TestLogTrigger(t *testing.T) {
 
 		// Verify the decoded data matches what we expect
 		require.Equal(t, events[0].Sender, decodedLog.Data.Sender, "Decoded sender should match")
-		require.Equal(t, events[0].Key, decodedLog.Data.Key, "Decoded key should match")
-		require.Equal(t, events[0].Value, decodedLog.Data.Value, "Decoded value should match")
+		require.Equal(t, testKey, decodedLog.Data.Key, "Decoded key should match")
+		require.Equal(t, testValue, decodedLog.Data.Value, "Decoded value should match")
 
 		// Verify the original log is preserved
 		require.Equal(t, mockLog, decodedLog.Log, "Original log should be preserved")
 	})
 	t.Run("dynamic event", func(t *testing.T) {
 		ev := ds.ABI.Events["DynamicEvent"]
+		testKey1 := "testKey1"
+		testSender1 := "testSender1"
 		// indexed (string and bytes) fields are hashed directly
 		// indexed tuple/slice/array fields are hashed by the EncodeDynamicEventTopics function
-		events := []datastorage.DynamicEvent{
+		events := []datastorage.DynamicEventTopics{
 			{
-				Key: "testKey1",
 				UserData: datastorage.UserData{
 					Key:   "userKey1",
 					Value: "userValue1",
 				},
-				Sender:   "testSender1",
 				Metadata: common.BytesToHash(crypto.Keccak256([]byte("metadata1"))),
 				MetadataArray: [][]byte{
 					[]byte("meta1"),
@@ -500,12 +499,10 @@ func TestLogTrigger(t *testing.T) {
 				},
 			},
 			{
-				Key: "testKey2",
 				UserData: datastorage.UserData{
 					Key:   "userKey2",
 					Value: "userValue2",
 				},
-				Sender:   "testSender2",
 				Metadata: common.BytesToHash(crypto.Keccak256([]byte("metadata2"))),
 				MetadataArray: [][]byte{
 					[]byte("meta3"),
@@ -556,7 +553,7 @@ func TestLogTrigger(t *testing.T) {
 
 		// Test the Adapt method for DynamicEvent
 		// Encode the non-indexed parameters (Key and Sender) into the log data
-		eventData, err := abi.Arguments{ev.Inputs[0], ev.Inputs[2]}.Pack(events[0].Key, events[0].Sender)
+		eventData, err := abi.Arguments{ev.Inputs[0], ev.Inputs[2]}.Pack(testKey1, testSender1)
 		require.NoError(t, err, "Encoding DynamicEvent data should not return an error")
 
 		// Create a mock log that simulates what would be returned by the blockchain
@@ -577,14 +574,54 @@ func TestLogTrigger(t *testing.T) {
 		require.NotNil(t, decodedLog, "Decoded log should not be nil")
 
 		// Verify the decoded data matches what we expect
-		require.Equal(t, events[0].Key, decodedLog.Data.Key, "Decoded key should match")
-		require.Equal(t, events[0].Sender, decodedLog.Data.Sender, "Decoded sender should match")
+		require.Equal(t, testKey1, decodedLog.Data.Key, "Decoded key should match")
+		require.Equal(t, testSender1, decodedLog.Data.Sender, "Decoded sender should match")
 		require.Equal(t, common.BytesToHash(expected1), decodedLog.Data.UserData, "UserData should be of type common.Hash and match the expected hash")
 		require.Equal(t, common.BytesToHash(expected3), decodedLog.Data.Metadata, "Metadata should be of type common.Hash and match the expected hash")
 		require.Equal(t, common.BytesToHash(expected5), decodedLog.Data.MetadataArray, "MetadataArray should be of type common.Hash and match the expected hash")
 
 		// Verify the original log is preserved
 		require.Equal(t, mockLog, decodedLog.Log, "Original log should be preserved")
+	})
+
+	t.Run("dynamic event with empty fields", func(t *testing.T) {
+		ev := ds.ABI.Events["DynamicEvent"]
+		events := []datastorage.DynamicEventTopics{
+			{
+				UserData: datastorage.UserData{
+					Key:   "userKey1",
+					Value: "userValue1",
+				},
+			},
+			{
+				Metadata: common.BytesToHash(crypto.Keccak256([]byte("metadata"))),
+			},
+		}
+		encoded, err := ds.Codec.EncodeDynamicEventTopics(ev, events)
+		require.NoError(t, err, "Encoding DynamicEvent topics should not return an error")
+		require.Len(t, encoded, 4, "Trigger should have four topics")
+		require.Equal(t, ds.Codec.DynamicEventLogHash(), encoded[0].Values[0], "First topic value should be DynamicEvent log hash")
+		packed1, err := abi.Arguments{ev.Inputs[1]}.Pack(events[0].UserData)
+		require.NoError(t, err)
+		expected1 := crypto.Keccak256(packed1)
+		require.Equal(t, expected1, encoded[1].Values[0], "First value should be the UserData hash")
+		require.Equal(t, []byte{}, encoded[1].Values[1], "Second value should be an empty byte array")
+		require.Equal(t, []byte{}, encoded[2].Values[0], "Second value should be an empty byte array")
+		require.Equal(t, events[1].Metadata.Bytes(), encoded[2].Values[1], "Second value should be a populated byte array")
+		require.Equal(t, []byte{}, encoded[3].Values[0], "Third value should be an empty byte array")
+		require.Equal(t, []byte{}, encoded[3].Values[1], "Fourth value should be an empty byte array")
+	})
+
+	t.Run("simple event with empty fields", func(t *testing.T) {
+		ev := ds.ABI.Events["DataStored"]
+		events := []datastorage.DataStoredTopics{
+			{},
+		}
+		encoded, err := ds.Codec.EncodeDataStoredTopics(ev, events)
+		require.NoError(t, err, "Encoding DataStored topics should not return an error")
+		require.Len(t, encoded, 2, "Trigger should have two topics")
+		require.Equal(t, ds.Codec.DataStoredLogHash(), encoded[0].Values[0], "First topic value should be DataStored log hash")
+		require.Equal(t, []byte{}, encoded[1].Values[0], "Second value should be an empty byte array")
 	})
 }
 

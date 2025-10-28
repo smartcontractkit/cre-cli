@@ -36,10 +36,6 @@ const (
 	DefaultBaseSepoliaRpcUrl = "<select your own rpc url>"                      // Base Sepolia
 	DefaultEthMainnetRpcUrl  = "https://mainnet.infura.io/v3/<YOUR-PROJECT-ID>" // ETH Mainnet
 
-	DefaultStagingDonFamily           = "zone-a" // Keystone team has to define this
-	DefaultProductionTestnetDonFamily = "zone-a" // Keystone team has to define this
-	DefaultProductionDonFamily        = "zone-a" // Keystone team has to define this
-
 	DefaultProjectSettingsFileName  = "project.yaml"
 	DefaultWorkflowSettingsFileName = "workflow.yaml"
 	DefaultEnvFileName              = ".env"

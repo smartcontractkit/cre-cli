@@ -13,7 +13,6 @@ import (
 
 // Config names (YAML field paths)
 const (
-	DONFamilySettingName      = "cre-cli.don-family"
 	WorkflowOwnerSettingName  = "account.workflow-owner-address"
 	WorkflowNameSettingName   = "user-workflow.workflow-name"
 	WorkflowPathSettingName   = "workflow-artifacts.workflow-path"

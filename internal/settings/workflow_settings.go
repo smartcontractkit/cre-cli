@@ -11,9 +11,6 @@ import (
 )
 
 type WorkflowSettings struct {
-	DevPlatformSettings struct {
-		DonFamily string `mapstructure:"don-family" yaml:"don-family"`
-	} `mapstructure:"cre-cli" yaml:"cre-cli"`
 	UserWorkflowSettings struct {
 		WorkflowOwnerAddress string `mapstructure:"workflow-owner-address" yaml:"workflow-owner-address"`
 		WorkflowOwnerType    string `mapstructure:"workflow-owner-type" yaml:"workflow-owner-type"`
@@ -50,8 +47,6 @@ func loadWorkflowSettings(logger *zerolog.Logger, v *viper.Viper, cmd *cobra.Com
 	}
 
 	var workflowSettings WorkflowSettings
-
-	workflowSettings.DevPlatformSettings.DonFamily = getSetting(DONFamilySettingName)
 
 	// if a command doesn't need private key, skip getting owner here
 	if !ShouldSkipGetOwner(cmd) {

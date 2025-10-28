@@ -43,10 +43,6 @@ func GetDefaultReplacements() map[string]string {
 		"BaseSepoliaRpcUrl": constants.DefaultBaseSepoliaRpcUrl,
 		"SethConfigPath":    constants.DefaultSethConfigPath,
 
-		"StagingDonFamily":           constants.DefaultStagingDonFamily,
-		"ProductionTestnetDonFamily": constants.DefaultProductionTestnetDonFamily,
-		"ProductionDonFamily":        constants.DefaultProductionDonFamily,
-
 		"ConfigPath":  "./config.json",
 		"SecretsPath": "",
 	}
