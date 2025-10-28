@@ -146,7 +146,7 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 		WorkflowTag:   h.settings.Workflow.UserWorkflowSettings.WorkflowName,
 		ConfigURL:     configURL,
 		AutoStart:     v.GetBool("auto-start"),
-		DonFamily:     h.settings.Workflow.DevPlatformSettings.DonFamily,
+		DonFamily:     h.environmentSet.DonFamily,
 
 		WorkflowPath: h.settings.Workflow.WorkflowArtifactSettings.WorkflowPath,
 		KeepAlive:    false,

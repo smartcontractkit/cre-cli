@@ -102,7 +102,7 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 	return Inputs{
 		WorkflowName:                      h.settings.Workflow.UserWorkflowSettings.WorkflowName,
 		WorkflowOwner:                     h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress,
-		DonFamily:                         h.settings.Workflow.DevPlatformSettings.DonFamily,
+		DonFamily:                         h.environmentSet.DonFamily,
 		WorkflowRegistryContractAddress:   h.environmentSet.WorkflowRegistryAddress,
 		WorkflowRegistryContractChainName: h.environmentSet.WorkflowRegistryChainName,
 	}, nil

@@ -6,8 +6,6 @@
 #
 # Example custom target:
 # my-target:
-#   cre-cli:
-#     don-family: "zone-a"                          # Required: Workflow DON Family
 #   account:
 #     workflow-owner-address: "0x123..."            # Optional: Owner wallet/MSIG address (used for --unsigned transactions)
 #   rpcs:
@@ -16,16 +14,12 @@
 
 # ==========================================================================
 staging-settings:
-  cre-cli:
-    don-family: "{{StagingDonFamily}}"
   rpcs:
     - chain-name: {{EthSepoliaChainName}}
       url: {{EthSepoliaRpcUrl}}
 
 # ==========================================================================
 production-settings:
-  cre-cli:
-    don-family: "{{StagingDonFamily}}"
   rpcs:
     - chain-name: {{EthSepoliaChainName}}
       url: {{EthSepoliaRpcUrl}}
