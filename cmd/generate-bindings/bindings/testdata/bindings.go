@@ -465,23 +465,7 @@ func (c *Codec) EncodeAccessLoggedTopics(
 		return nil, err
 	}
 
-	topics := make([]*evm.TopicValues, len(rawTopics)+1)
-	topics[0] = &evm.TopicValues{
-		Values: [][]byte{evt.ID.Bytes()},
-	}
-	for i, hashList := range rawTopics {
-		bs := make([][]byte, len(hashList))
-		for j, h := range hashList {
-			// don't include empty bytes if hashed value is 0x0
-			if reflect.ValueOf(h).IsZero() {
-				bs[j] = []byte{}
-			} else {
-				bs[j] = h.Bytes()
-			}
-		}
-		topics[i+1] = &evm.TopicValues{Values: bs}
-	}
-	return topics, nil
+	return bindings.PrepareTopics(rawTopics, evt.ID.Bytes()), nil
 }
 
 // DecodeAccessLogged decodes a log into a AccessLogged struct.
@@ -541,23 +525,7 @@ func (c *Codec) EncodeDataStoredTopics(
 		return nil, err
 	}
 
-	topics := make([]*evm.TopicValues, len(rawTopics)+1)
-	topics[0] = &evm.TopicValues{
-		Values: [][]byte{evt.ID.Bytes()},
-	}
-	for i, hashList := range rawTopics {
-		bs := make([][]byte, len(hashList))
-		for j, h := range hashList {
-			// don't include empty bytes if hashed value is 0x0
-			if reflect.ValueOf(h).IsZero() {
-				bs[j] = []byte{}
-			} else {
-				bs[j] = h.Bytes()
-			}
-		}
-		topics[i+1] = &evm.TopicValues{Values: bs}
-	}
-	return topics, nil
+	return bindings.PrepareTopics(rawTopics, evt.ID.Bytes()), nil
 }
 
 // DecodeDataStored decodes a log into a DataStored struct.
@@ -643,23 +611,7 @@ func (c *Codec) EncodeDynamicEventTopics(
 		return nil, err
 	}
 
-	topics := make([]*evm.TopicValues, len(rawTopics)+1)
-	topics[0] = &evm.TopicValues{
-		Values: [][]byte{evt.ID.Bytes()},
-	}
-	for i, hashList := range rawTopics {
-		bs := make([][]byte, len(hashList))
-		for j, h := range hashList {
-			// don't include empty bytes if hashed value is 0x0
-			if reflect.ValueOf(h).IsZero() {
-				bs[j] = []byte{}
-			} else {
-				bs[j] = h.Bytes()
-			}
-		}
-		topics[i+1] = &evm.TopicValues{Values: bs}
-	}
-	return topics, nil
+	return bindings.PrepareTopics(rawTopics, evt.ID.Bytes()), nil
 }
 
 // DecodeDynamicEvent decodes a log into a DynamicEvent struct.
@@ -705,23 +657,7 @@ func (c *Codec) EncodeNoFieldsTopics(
 		return nil, err
 	}
 
-	topics := make([]*evm.TopicValues, len(rawTopics)+1)
-	topics[0] = &evm.TopicValues{
-		Values: [][]byte{evt.ID.Bytes()},
-	}
-	for i, hashList := range rawTopics {
-		bs := make([][]byte, len(hashList))
-		for j, h := range hashList {
-			// don't include empty bytes if hashed value is 0x0
-			if reflect.ValueOf(h).IsZero() {
-				bs[j] = []byte{}
-			} else {
-				bs[j] = h.Bytes()
-			}
-		}
-		topics[i+1] = &evm.TopicValues{Values: bs}
-	}
-	return topics, nil
+	return bindings.PrepareTopics(rawTopics, evt.ID.Bytes()), nil
 }
 
 // DecodeNoFields decodes a log into a NoFields struct.
