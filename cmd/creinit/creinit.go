@@ -78,7 +78,7 @@ type Inputs struct {
 	ProjectName  string `validate:"omitempty,project_name" cli:"project-name"`
 	TemplateID   uint32 `validate:"omitempty,min=0"`
 	WorkflowName string `validate:"omitempty,workflow_name" cli:"workflow-name"`
-	RPCUrl       string `validate:"omitempty" cli:"rpc-url"`
+	RPCUrl       string `validate:"omitempty,url" cli:"rpc-url"`
 }
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
@@ -109,7 +109,7 @@ build, test, and deploy workflows quickly.`,
 	initCmd.Flags().StringP("project-name", "p", "", "Name for the new project")
 	initCmd.Flags().StringP("workflow-name", "w", "", "Name for the new workflow")
 	initCmd.Flags().Uint32P("template-id", "t", 0, "ID of the workflow template to use")
-	initCmd.Flags().String("rpc-url", "r", "Sepolia RPC URL to use with template")
+	initCmd.Flags().String("rpc-url", "", "Sepolia RPC URL to use with template")
 
 	return initCmd
 }
