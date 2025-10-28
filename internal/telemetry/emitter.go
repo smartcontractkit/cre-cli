@@ -1,15 +1,15 @@
 package telemetry
 
 import (
-	"context"
 	"fmt"
 	"os"
+	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/smartcontractkit/cre-cli/cmd/version"
-	"github.com/smartcontractkit/cre-cli/internal/runtime"
 )
 
 const (
@@ -23,64 +23,61 @@ const (
 	maxTelemetryWait = 10 * time.Second
 )
 
-// EmitCommandEvent emits a user event for command execution
-// This function will now block until finished, as it's intended
-// to be called from within a goroutine that is managed by a WaitGroup.
-func EmitCommandEvent(cmd *cobra.Command, exitCode int, runtimeCtx *runtime.Context) {
+var (
+	debugLogFile *os.File
+	logOnce      sync.Once
+	logMutex     sync.Mutex
+)
 
-	// Recover from any panics to prevent crashes
-	defer func() {
-		if r := recover(); r != nil && isTelemetryDebugEnabled() {
-			debugLog("telemetry panic recovered: %v", r)
-		}
-	}()
-
-	// Create context with timeout
-	emitCtx, cancel := context.WithTimeout(context.Background(), maxTelemetryWait)
-	defer cancel()
-
-	// Check if telemetry is disabled
-	if isTelemetryDisabled() {
-		debugLog("telemetry disabled via environment variable")
-		return
-	}
-
-	// Check if this command should be excluded
-	if shouldExcludeCommand(cmd) {
-		debugLog("command %s excluded from telemetry", cmd.Name())
-		return
-	}
-
-	// Collect event data
-	event := buildUserEvent(cmd, exitCode)
-	debugLog("emitting telemetry event: action=%s, subcommand=%s, exitCode=%d",
-		event.Command.Action, event.Command.Subcommand, event.ExitCode)
-
-	// Send the event
-	SendEvent(emitCtx, event, runtimeCtx.Credentials, runtimeCtx.EnvironmentSet, runtimeCtx.Logger)
-}
-
-// isTelemetryDisabled checks if telemetry is disabled via environment variable
-func isTelemetryDisabled() bool {
-	value := os.Getenv(TelemetryDisabledEnvVar)
-	return value == "true"
-}
-
-// isTelemetryDebugEnabled checks if telemetry debug logging is enabled
-func isTelemetryDebugEnabled() bool {
+// IsTelemetryDebugEnabled checks if telemetry debug logging is enabled
+func IsTelemetryDebugEnabled() bool {
 	value := os.Getenv(TelemetryDebugEnvVar)
 	return value == "true"
 }
 
-// debugLog logs a message if telemetry debug is enabled
-func debugLog(format string, args ...interface{}) {
-	if isTelemetryDebugEnabled() {
-		fmt.Fprintf(os.Stderr, "[TELEMETRY DEBUG] "+format+"\n", args...)
+// GetLogfilePath returns the path to the debug log file
+func GetLogfilePath() string {
+	return filepath.Join(os.TempDir(), "cre_telemetry.log")
+}
+
+// DebugLog logs a message if telemetry debug is enabled
+func DebugLog(format string, args ...interface{}) {
+	if !IsTelemetryDebugEnabled() {
+		return
+	}
+
+	// Initialize the log file once per process
+	logOnce.Do(func() {
+		var err error
+		logPath := GetLogfilePath() // Use helper
+
+		// Use os.O_CREATE|os.O_APPEND|os.O_WRONLY to append to the file
+		debugLogFile, err = os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+		if err != nil {
+			// Fallback to stderr if file open fails
+			fmt.Fprintf(os.Stderr, "[TELEMETRY DEBUG] FAILED TO OPEN LOG FILE: %v\n", err)
+			debugLogFile = os.Stderr
+		} else {
+			// Print to stderr *once* to let the user know where to look
+			fmt.Fprintf(os.Stderr, "[TELEMETRY DEBUG] Logging to %s\n", logPath)
+		}
+	})
+
+	// Write to the log file (or stderr fallback)
+	if debugLogFile != nil {
+		logMutex.Lock()
+		defer logMutex.Unlock()
+
+		// Create the log message with a timestamp
+		allArgs := append([]interface{}{time.Now().Format(time.RFC3339Nano)}, args...)
+		msg := fmt.Sprintf("[TELEMETRY DEBUG %s] "+format+"\n", allArgs...)
+
+		debugLogFile.WriteString(msg)
 	}
 }
 
-// shouldExcludeCommand determines if a command should not emit telemetry events
-func shouldExcludeCommand(cmd *cobra.Command) bool {
+// ShouldExcludeCommand determines if a command should not emit telemetry events
+func ShouldExcludeCommand(cmd *cobra.Command) bool {
 	if cmd == nil {
 		return true
 	}
@@ -99,8 +96,8 @@ func shouldExcludeCommand(cmd *cobra.Command) bool {
 	return excludedCommands[cmdName]
 }
 
-// buildUserEvent constructs the user event payload
-func buildUserEvent(cmd *cobra.Command, exitCode int) UserEventInput {
+// BuildUserEvent constructs the user event payload
+func BuildUserEvent(cmd *cobra.Command, exitCode int) UserEventInput {
 	return UserEventInput{
 		CliVersion: version.Version,
 		ExitCode:   exitCode,

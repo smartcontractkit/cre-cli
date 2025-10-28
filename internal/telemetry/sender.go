@@ -36,48 +36,49 @@ func SendEvent(ctx context.Context, event UserEventInput, creds *credentials.Cre
 	// Recover from any panics
 	defer func() {
 		if r := recover(); r != nil {
-			debugLog("sender panic: %v", r)
+			DebugLog("sender panic: %v", r)
 		}
 	}()
 
 	// Skip if no credentials (not authenticated)
 	if creds == nil {
-		debugLog("skipping telemetry: no credentials")
+		DebugLog("skipping telemetry: no credentials")
 		return
 	}
 
 	// Skip if no environment set
 	if envSet == nil {
-		debugLog("skipping telemetry: no environment set")
+		DebugLog("skipping telemetry: no environment set")
 		return
 	}
 
 	// Use provided logger if available and debug is enabled, otherwise use silent logger
 	var clientLogger *zerolog.Logger
-	if isTelemetryDebugEnabled() && logger != nil {
-		debugLog("using provided logger for GraphQL client")
+	// --- FIX: Use public IsTelemetryDebugEnabled ---
+	if IsTelemetryDebugEnabled() && logger != nil {
+		DebugLog("using provided logger for GraphQL client")
 		clientLogger = logger
 	} else {
 		silentLogger := zerolog.New(io.Discard)
 		clientLogger = &silentLogger
 	}
 
-	debugLog("creating GraphQL client for endpoint: %s", envSet.GraphQLURL)
+	DebugLog("creating GraphQL client for endpoint: %s", envSet.GraphQLURL)
 	client := graphqlclient.New(creds, envSet, clientLogger)
 
 	// Create the GraphQL request
-	debugLog("creating GraphQL request with mutation")
+	DebugLog("creating GraphQL request with mutation")
 	req := graphql.NewRequest(reportUserEventMutation)
 	req.Var("event", event)
 
 	// Execute the request
-	debugLog("executing GraphQL request")
+	DebugLog("executing GraphQL request")
 	var resp ReportUserEventResponse
 	err := client.Execute(sendCtx, req, &resp)
 
 	if err != nil {
-		debugLog("telemetry request failed: %v", err)
+		DebugLog("telemetry request failed: %v", err)
 	} else {
-		debugLog("telemetry request succeeded: success=%v, message=%s", resp.ReportUserEvent.Success, resp.ReportUserEvent.Message)
+		DebugLog("telemetry request succeeded: success=%v, message=%s", resp.ReportUserEvent.Success, resp.ReportUserEvent.Message)
 	}
 }
