@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"reflect"
 	"strings"
 
 	ethereum "github.com/ethereum/go-ethereum"
@@ -46,6 +47,7 @@ var (
 	_ = cre.ResponseBufferTooSmall
 	_ = rpc.API{}
 	_ = json.Unmarshal
+	_ = reflect.Bool
 )
 
 var ReserveManagerMetaData = &bind.MetaData{
@@ -73,7 +75,8 @@ type SupportsInterfaceInput struct {
 // Errors
 
 // Events
-// The <Event> struct should be used as a filter (for log triggers).
+// The <Event>Topics struct should be used as a filter (for log triggers).
+// Note: It is only possible to filter on indexed fields.
 // Indexed (string and bytes) fields will be of type common.Hash.
 // They need to he (crypto.Keccak256) hashed and passed in.
 // Indexed (tuple/slice/array) fields can be passed in as is, the Encode<Event>Topics function will handle the hashing.
@@ -81,8 +84,7 @@ type SupportsInterfaceInput struct {
 // The <Event>Decoded struct will be the result of calling decode (Adapt) on the log trigger result.
 // Indexed dynamic type fields will be of type common.Hash.
 
-type RequestReserveUpdate struct {
-	U UpdateReserves
+type RequestReserveUpdateTopics struct {
 }
 
 type RequestReserveUpdateDecoded struct {
@@ -108,7 +110,7 @@ type ReserveManagerCodec interface {
 	DecodeSupportsInterfaceMethodOutput(data []byte) (bool, error)
 	EncodeUpdateReservesStruct(in UpdateReserves) ([]byte, error)
 	RequestReserveUpdateLogHash() []byte
-	EncodeRequestReserveUpdateTopics(evt abi.Event, values []RequestReserveUpdate) ([]*evm.TopicValues, error)
+	EncodeRequestReserveUpdateTopics(evt abi.Event, values []RequestReserveUpdateTopics) ([]*evm.TopicValues, error)
 	DecodeRequestReserveUpdate(log *evm.Log) (*RequestReserveUpdateDecoded, error)
 }
 
@@ -240,7 +242,7 @@ func (c *Codec) RequestReserveUpdateLogHash() []byte {
 
 func (c *Codec) EncodeRequestReserveUpdateTopics(
 	evt abi.Event,
-	values []RequestReserveUpdate,
+	values []RequestReserveUpdateTopics,
 ) ([]*evm.TopicValues, error) {
 
 	rawTopics, err := abi.MakeTopics()
@@ -255,7 +257,12 @@ func (c *Codec) EncodeRequestReserveUpdateTopics(
 	for i, hashList := range rawTopics {
 		bs := make([][]byte, len(hashList))
 		for j, h := range hashList {
-			bs[j] = h.Bytes()
+			// don't include empty bytes if hashed value is 0x0
+			if reflect.ValueOf(h).IsZero() {
+				bs[j] = []byte{}
+			} else {
+				bs[j] = h.Bytes()
+			}
 		}
 		topics[i+1] = &evm.TopicValues{Values: bs}
 	}
@@ -429,7 +436,7 @@ func (t *RequestReserveUpdateTrigger) Adapt(l *evm.Log) (*bindings.DecodedLog[Re
 	}, nil
 }
 
-func (c *ReserveManager) LogTriggerRequestReserveUpdateLog(chainSelector uint64, confidence evm.ConfidenceLevel, filters []RequestReserveUpdate) (cre.Trigger[*evm.Log, *bindings.DecodedLog[RequestReserveUpdateDecoded]], error) {
+func (c *ReserveManager) LogTriggerRequestReserveUpdateLog(chainSelector uint64, confidence evm.ConfidenceLevel, filters []RequestReserveUpdateTopics) (cre.Trigger[*evm.Log, *bindings.DecodedLog[RequestReserveUpdateDecoded]], error) {
 	event := c.ABI.Events["RequestReserveUpdate"]
 	topics, err := c.Codec.EncodeRequestReserveUpdateTopics(event, filters)
 	if err != nil {
