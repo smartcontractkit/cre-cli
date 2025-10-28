@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"reflect"
 	"strings"
 
 	ethereum "github.com/ethereum/go-ethereum"
@@ -46,6 +47,7 @@ var (
 	_ = cre.ResponseBufferTooSmall
 	_ = rpc.API{}
 	_ = json.Unmarshal
+	_ = reflect.Bool
 )
 
 var MessageEmitterMetaData = &bind.MetaData{
@@ -73,7 +75,8 @@ type GetMessageInput struct {
 // Errors
 
 // Events
-// The <Event> struct should be used as a filter (for log triggers).
+// The <Event>Topics struct should be used as a filter (for log triggers).
+// Note: It is only possible to filter on indexed fields.
 // Indexed (string and bytes) fields will be of type common.Hash.
 // They need to he (crypto.Keccak256) hashed and passed in.
 // Indexed (tuple/slice/array) fields can be passed in as is, the Encode<Event>Topics function will handle the hashing.
@@ -81,10 +84,9 @@ type GetMessageInput struct {
 // The <Event>Decoded struct will be the result of calling decode (Adapt) on the log trigger result.
 // Indexed dynamic type fields will be of type common.Hash.
 
-type MessageEmitted struct {
+type MessageEmittedTopics struct {
 	Emitter   common.Address
 	Timestamp *big.Int
-	Message   string
 }
 
 type MessageEmittedDecoded struct {
@@ -111,7 +113,7 @@ type MessageEmitterCodec interface {
 	EncodeTypeAndVersionMethodCall() ([]byte, error)
 	DecodeTypeAndVersionMethodOutput(data []byte) (string, error)
 	MessageEmittedLogHash() []byte
-	EncodeMessageEmittedTopics(evt abi.Event, values []MessageEmitted) ([]*evm.TopicValues, error)
+	EncodeMessageEmittedTopics(evt abi.Event, values []MessageEmittedTopics) ([]*evm.TopicValues, error)
 	DecodeMessageEmitted(log *evm.Log) (*MessageEmittedDecoded, error)
 }
 
@@ -225,10 +227,14 @@ func (c *Codec) MessageEmittedLogHash() []byte {
 
 func (c *Codec) EncodeMessageEmittedTopics(
 	evt abi.Event,
-	values []MessageEmitted,
+	values []MessageEmittedTopics,
 ) ([]*evm.TopicValues, error) {
 	var emitterRule []interface{}
 	for _, v := range values {
+		if reflect.ValueOf(v.Emitter).IsZero() {
+			emitterRule = append(emitterRule, common.Hash{})
+			continue
+		}
 		fieldVal, err := bindings.PrepareTopicArg(evt.Inputs[0], v.Emitter)
 		if err != nil {
 			return nil, err
@@ -237,6 +243,10 @@ func (c *Codec) EncodeMessageEmittedTopics(
 	}
 	var timestampRule []interface{}
 	for _, v := range values {
+		if reflect.ValueOf(v.Timestamp).IsZero() {
+			timestampRule = append(timestampRule, common.Hash{})
+			continue
+		}
 		fieldVal, err := bindings.PrepareTopicArg(evt.Inputs[1], v.Timestamp)
 		if err != nil {
 			return nil, err
@@ -259,7 +269,12 @@ func (c *Codec) EncodeMessageEmittedTopics(
 	for i, hashList := range rawTopics {
 		bs := make([][]byte, len(hashList))
 		for j, h := range hashList {
-			bs[j] = h.Bytes()
+			// don't include empty bytes if hashed value is 0x0
+			if reflect.ValueOf(h).IsZero() {
+				bs[j] = []byte{}
+			} else {
+				bs[j] = h.Bytes()
+			}
 		}
 		topics[i+1] = &evm.TopicValues{Values: bs}
 	}
@@ -447,7 +462,7 @@ func (t *MessageEmittedTrigger) Adapt(l *evm.Log) (*bindings.DecodedLog[MessageE
 	}, nil
 }
 
-func (c *MessageEmitter) LogTriggerMessageEmittedLog(chainSelector uint64, confidence evm.ConfidenceLevel, filters []MessageEmitted) (cre.Trigger[*evm.Log, *bindings.DecodedLog[MessageEmittedDecoded]], error) {
+func (c *MessageEmitter) LogTriggerMessageEmittedLog(chainSelector uint64, confidence evm.ConfidenceLevel, filters []MessageEmittedTopics) (cre.Trigger[*evm.Log, *bindings.DecodedLog[MessageEmittedDecoded]], error) {
 	event := c.ABI.Events["MessageEmitted"]
 	topics, err := c.Codec.EncodeMessageEmittedTopics(event, filters)
 	if err != nil {
