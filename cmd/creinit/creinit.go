@@ -361,7 +361,7 @@ func (h *handler) Execute(inputs Inputs) error {
 		fmt.Printf("   3. (Optional) Consult %s to learn more about this template:\n\n",
 			filepath.Join(filepath.Base(workflowDirectory), "README.md"))
 		fmt.Println("")
-	} else if selectedLanguageTemplate.Lang == TemplateLangTS {
+	} else {
 		fmt.Println("   1. Navigate to your project directory:")
 		fmt.Printf("      cd %s\n", filepath.Base(projectRoot))
 		fmt.Println("")
