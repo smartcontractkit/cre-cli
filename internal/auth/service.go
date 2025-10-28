@@ -15,7 +15,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 )
 
-var httpClient = &http.Client{Timeout: 10 * time.Second}
+var httpClient = &http.Client{Timeout: 30 * time.Second}
 
 type OAuthService struct {
 	environmentSet *environments.EnvironmentSet
