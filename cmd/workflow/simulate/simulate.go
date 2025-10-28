@@ -165,6 +165,11 @@ func (h *handler) ValidateInputs(inputs Inputs) error {
 		return validate.ParseValidationErrors(err)
 	}
 
+	// forbid the default 0x...01 key when broadcasting
+	if inputs.Broadcast && inputs.EthPrivateKey != nil && inputs.EthPrivateKey.D.Cmp(big.NewInt(1)) == 0 {
+		return fmt.Errorf("you must configure a valid private key to perform on-chain writes. Please set your private key in the .env file before using the -–broadcast flag")
+	}
+
 	if err := runRPCHealthCheck(inputs.EVMClients); err != nil {
 		// we don't block execution, just show the error to the user
 		// because some RPCs in settings might not be used in workflow and some RPCs might have hiccups

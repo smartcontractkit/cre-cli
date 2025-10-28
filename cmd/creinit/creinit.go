@@ -328,7 +328,7 @@ func (h *handler) Execute(inputs Inputs) error {
 		fmt.Printf("      cd %s\n", projectRoot)
 		fmt.Println("")
 		fmt.Println("   2. Run the workflow on your machine:")
-		fmt.Printf("      `cre workflow simulate %s`\n", workflowName)
+		fmt.Printf("      cre workflow simulate %s\n", workflowName)
 		fmt.Println("")
 	} else {
 		// TS templates and Go PoR templates require additional setup, e.g. bun install, RPCs, etc.
