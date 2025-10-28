@@ -4,12 +4,11 @@ permissions:
 
 on:
   pull_request:
-    types:
-      - labeled
+    types: [ready_for_review, synchronize, reopened, labeled]
 
 jobs:
   build-linux:
-    if: github.event.label.name == 'preview'
+    if: github.event.pull_request.state == 'open' && contains(github.event.pull_request.labels.*.name, 'preview')
     name: Build Linux Binaries
     runs-on: ubuntu-latest
     strategy:
@@ -58,7 +57,7 @@ jobs:
             cre_preview-${{ github.sha }}_linux_${{ matrix.arch }}.tar.gz
 
   build-darwin:
-    if: github.event.label.name == 'preview'
+    if: github.event.pull_request.state == 'open' && contains(github.event.pull_request.labels.*.name, 'preview')
     name: Build Darwin Binaries
     runs-on: macos-latest
     strategy:
@@ -93,7 +92,7 @@ jobs:
             cre_${{ env.VERSION }}_darwin_${{ matrix.arch }}.zip
 
   build-windows:
-    if: github.event.label.name == 'preview'
+    if: github.event.pull_request.state == 'open' && contains(github.event.pull_request.labels.*.name, 'preview')
     name: Build Windows Binaries
     runs-on: windows-latest
     env:
@@ -143,7 +142,7 @@ jobs:
             cre_${{ env.VERSION }}_windows_${{ matrix.arch }}.zip
 
   post-preview-comment:
-    if: github.event.label.name == 'preview'
+    if: github.event.pull_request.state == 'open' && contains(github.event.pull_request.labels.*.name, 'preview')
     name: Post Preview Comment
     needs: [build-linux, build-darwin, build-windows]
     runs-on: ubuntu-latest
