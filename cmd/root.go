@@ -137,7 +137,7 @@ func newRootCommand() *cobra.Command {
 
 			// Check for updates *sequentially* after the main command has run.
 			// This guarantees it prints at the end, after all other output.
-			if cmd.Name() != "bash" && cmd.Name() != "zsh" && cmd.Name() != "fish" && cmd.Name() != "powershell" && cmd.Name() != "help" {
+			if cmd.Name() != "bash" && cmd.Name() != "zsh" && cmd.Name() != "fish" && cmd.Name() != "powershell" && cmd.Name() != "update" {
 				intupdate.CheckForUpdates(version.Version, runtimeContext.Logger)
 			}
 			// ---
