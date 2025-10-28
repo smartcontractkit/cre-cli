@@ -71,6 +71,11 @@ func New(ctx *runtime.Context) *cobra.Command {
 
 // Execute performs: build request → (MSIG step 1 bundle OR EOA allowlist+post) → parse.
 func Execute(h *common.Handler, namespace string, duration time.Duration, ownerType string) error {
+	fmt.Println("Verifying ownership...")
+	if err := h.EnsureOwnerLinkedOrFail(); err != nil {
+		return err
+	}
+
 	if namespace == "" {
 		namespace = "main"
 	}
@@ -135,19 +140,15 @@ func Execute(h *common.Handler, namespace string, duration time.Duration, ownerT
 	}
 
 	// ---------------- EOA: allowlist (if needed) and POST ----------------
-	wrV2Client, err := h.ClientFactory.NewWorkflowRegistryV2Client()
-	if err != nil {
-		return fmt.Errorf("create workflow registry client failed: %w", err)
-	}
 	ownerAddr := ethcommon.HexToAddress(owner)
 
-	allowlisted, err := wrV2Client.IsRequestAllowlisted(ownerAddr, digest)
+	allowlisted, err := h.Wrc.IsRequestAllowlisted(ownerAddr, digest)
 	if err != nil {
 		return fmt.Errorf("allowlist check failed: %w", err)
 	}
 
 	if !allowlisted {
-		if err := wrV2Client.AllowlistRequest(digest, duration); err != nil {
+		if err := h.Wrc.AllowlistRequest(digest, duration); err != nil {
 			return fmt.Errorf("allowlist request failed: %w", err)
 		}
 		fmt.Printf("Digest allowlisted; proceeding to gateway POST: owner=%s, digest=0x%x\n", ownerAddr.Hex(), digest)

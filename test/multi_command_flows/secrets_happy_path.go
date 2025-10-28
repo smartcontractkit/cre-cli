@@ -54,6 +54,23 @@ func RunSecretsHappyPath(t *testing.T, tc TestConfig, chainName string) {
 
 	// set up a mock server to simulate the vault gateway
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/graphql" {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"data": map[string]any{
+					"listWorkflowOwners": map[string]any{
+						"linkedOwners": []map[string]string{
+							{
+								"workflowOwnerAddress": strings.ToLower(constants.TestAddress3), // linked owner
+								"verificationStatus":   "VERIFICATION_STATUS_SUCCESSFULL",       //nolint:misspell // Intentional misspelling to match external API
+							},
+						},
+					},
+				},
+			})
+			return
+		}
+
 		type reqEnvelope struct {
 			JSONRPC string          `json:"jsonrpc"`
 			ID      any             `json:"id"`
@@ -149,6 +166,7 @@ func RunSecretsHappyPath(t *testing.T, tc TestConfig, chainName string) {
 
 	// Set the above mocked server as Gateway endpoint
 	t.Setenv(environments.EnvVarVaultGatewayURL, srv.URL)
+	t.Setenv(environments.EnvVarGraphQLURL, srv.URL+"/graphql")
 
 	// ===== PHASE 1: CREATE SECRETS =====
 	t.Run("Create", func(t *testing.T) {
@@ -201,6 +219,46 @@ func RunSecretsListMsig(t *testing.T, tc TestConfig, chainName string) {
 	// Set up a mock server to simulate the vault gateway
 	// Set dummy API key
 	t.Setenv(credentials.CreApiKeyVar, "test-api")
+
+	gqlSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasPrefix(r.URL.Path, "/graphql") && r.Method == http.MethodPost:
+			var req graphQLRequest
+			_ = json.NewDecoder(r.Body).Decode(&req)
+
+			if strings.Contains(req.Query, "listWorkflowOwners") {
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"data": map[string]any{
+						"listWorkflowOwners": map[string]any{
+							"linkedOwners": []map[string]string{
+								{
+									"workflowOwnerAddress": constants.TestAddress3,
+									"verificationStatus":   "VERIFICATION_STATUS_SUCCESSFULL", //nolint:misspell
+								},
+							},
+						},
+					},
+				})
+				return
+			}
+
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"errors": []map[string]string{{"message": "Unsupported GraphQL query"}},
+			})
+			return
+
+		default:
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte("not found"))
+			return
+		}
+	}))
+	defer gqlSrv.Close()
+
+	// Point GraphQL client to mock (no gateway needed for unsigned list)
+	t.Setenv(environments.EnvVarGraphQLURL, gqlSrv.URL+"/graphql")
 
 	t.Run("ListMsig", func(t *testing.T) {
 		out := secretsListMsig(t, tc)

@@ -97,6 +97,11 @@ func New(ctx *runtime.Context) *cobra.Command {
 //   - MSIG step 1: build request, compute digest, write bundle, print steps
 //   - EOA: allowlist if needed, then POST to gateway
 func Execute(h *common.Handler, inputs DeleteSecretsInputs, duration time.Duration, ownerType string) error {
+	fmt.Println("Verifying ownership...")
+	if err := h.EnsureOwnerLinkedOrFail(); err != nil {
+		return err
+	}
+
 	// Validate and canonicalize owner address
 	owner := strings.TrimSpace(h.OwnerAddress)
 	if !ethcommon.IsHexAddress(owner) {
@@ -164,18 +169,14 @@ func Execute(h *common.Handler, inputs DeleteSecretsInputs, duration time.Durati
 	}
 
 	// ---------------- EOA: allowlist (if needed) and POST ----------------
-	wrV2Client, err := h.ClientFactory.NewWorkflowRegistryV2Client()
-	if err != nil {
-		return fmt.Errorf("create workflow registry client failed: %w", err)
-	}
 	ownerAddr := ethcommon.HexToAddress(h.OwnerAddress)
 
-	allowlisted, err := wrV2Client.IsRequestAllowlisted(ownerAddr, digest)
+	allowlisted, err := h.Wrc.IsRequestAllowlisted(ownerAddr, digest)
 	if err != nil {
 		return fmt.Errorf("allowlist check failed: %w", err)
 	}
 	if !allowlisted {
-		if err := wrV2Client.AllowlistRequest(digest, duration); err != nil {
+		if err := h.Wrc.AllowlistRequest(digest, duration); err != nil {
 			return fmt.Errorf("allowlist request failed: %w", err)
 		}
 		fmt.Printf("Digest allowlisted; proceeding to gateway POST: owner=%s, digest=0x%x\n", ownerAddr.Hex(), digest)
