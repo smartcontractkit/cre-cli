@@ -309,9 +309,6 @@ func Run() error {
 	if err != nil {
 		return fmt.Errorf("error creating temp dir: %w", err)
 	}
-	defer func(path string) {
-		_ = os.RemoveAll(path)
-	}(tmpDir)
 	assetPath := filepath.Join(tmpDir, asset)
 	fmt.Println("Downloading:", url)
 	if err := downloadFile(url, assetPath); err != nil {
@@ -327,6 +324,9 @@ func Run() error {
 	if err := replaceSelf(binPath); err != nil {
 		return fmt.Errorf("failed to replace binary: %w", err)
 	}
+	defer func(path string) {
+		_ = os.RemoveAll(path)
+	}(tmpDir)
 	fmt.Println("cre CLI updated to", tag)
 	cmd := exec.Command(cliName, "version")
 	cmd.Stdout = os.Stdout
