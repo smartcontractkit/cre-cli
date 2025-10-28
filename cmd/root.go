@@ -37,7 +37,6 @@ var runtimeContextForTelemetry *runtime.Context
 
 var executingCommand *cobra.Command
 
-var updateCheckWG sync.WaitGroup
 var telemetryWG sync.WaitGroup
 
 func Execute() {
@@ -87,13 +86,7 @@ func newRootCommand() *cobra.Command {
 		DisableAutoGenTag: true,
 		// this will be inherited by all submodules and all their commands
 
-		RunE: func(cmd *cobra.Command, args []string) error {
-			err := cmd.Help()
-			if err != nil {
-				return fmt.Errorf("fail to show help: %w", err)
-			}
-			return nil
-		},
+		RunE: helpRunE,
 
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			executingCommand = cmd
@@ -115,16 +108,6 @@ func newRootCommand() *cobra.Command {
 				}
 				runtimeContext.Logger = &newLogger
 				runtimeContext.ClientFactory = client.NewFactory(&newLogger, v)
-			}
-
-			// Check latest version - don't check for autocompletion cmd call
-			if cmd.Name() != "bash" && cmd.Name() != "zsh" && cmd.Name() != "fish" && cmd.Name() != "powershell" {
-
-				updateCheckWG.Add(1)
-				go func() {
-					defer updateCheckWG.Done()
-					update.CheckForUpdates(version.Version, runtimeContext.Logger)
-				}()
 			}
 
 			// load env vars from .env file and settings from yaml files
@@ -158,7 +141,12 @@ func newRootCommand() *cobra.Command {
 
 		PersistentPostRun: func(cmd *cobra.Command, args []string) {
 
-			updateCheckWG.Wait()
+			// Check for updates *sequentially* after the main command has run.
+			// This guarantees it prints at the end, after all other output.
+			if cmd.Name() != "bash" && cmd.Name() != "zsh" && cmd.Name() != "fish" && cmd.Name() != "powershell" && cmd.Name() != "help" {
+				update.CheckForUpdates(version.Version, runtimeContext.Logger)
+			}
+			// ---
 			telemetryWG.Add(1)
 			go func() {
 				defer telemetryWG.Done()
@@ -320,7 +308,6 @@ Use "{{.CommandPath}} [command] --help" for more information about a command.
 	accountCmd := account.New(runtimeContext)
 	whoamiCmd := whoami.New(runtimeContext)
 
-	rootCmd.RunE = helpRunE
 	secretsCmd.RunE = helpRunE
 	workflowCmd.RunE = helpRunE
 	accountCmd.RunE = helpRunE
