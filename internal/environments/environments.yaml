@@ -5,6 +5,7 @@ ENVIRONMENTS:
     CRE_CLI_AUDIENCE: https://graphql.cre.dev.internal.cldev.sh/
     CRE_CLI_GRAPHQL_URL: https://graphql-cre-dev.tailf8f749.ts.net/graphql
     CRE_VAULT_DON_GATEWAY_URL: https://cre-gateway-one-zone-a.main.stage.cldev.sh/
+    CRE_CLI_DON_FAMILY: "zone-a"
 
     CRE_CLI_WORKFLOW_REGISTRY_ADDRESS: "0x7e69E853D9Ce50C2562a69823c80E01360019Cef"
     CRE_CLI_WORKFLOW_REGISTRY_CHAIN_NAME: "ethereum-testnet-sepolia" # eth-sepolia
@@ -16,6 +17,7 @@ ENVIRONMENTS:
     CRE_CLI_AUDIENCE: https://graphql.cre.stage.internal.cldev.sh/
     CRE_CLI_GRAPHQL_URL: https://graphql-cre-stage.tailf8f749.ts.net/graphql
     CRE_VAULT_DON_GATEWAY_URL: https://cre-gateway-one-zone-a.main.stage.cldev.sh/
+    CRE_CLI_DON_FAMILY: "zone-a"
 
     CRE_CLI_WORKFLOW_REGISTRY_ADDRESS: "0xaE55eB3EDAc48a1163EE2cbb1205bE1e90Ea1135"
     CRE_CLI_WORKFLOW_REGISTRY_CHAIN_NAME: "ethereum-testnet-sepolia" # eth-sepolia
@@ -27,6 +29,7 @@ ENVIRONMENTS:
     CRE_CLI_AUDIENCE: https://api.cre.chain.link/
     CRE_CLI_GRAPHQL_URL: https://api.cre.chain.link/graphql
     CRE_VAULT_DON_GATEWAY_URL: https://01.gateway.zone-a.cre.chain.link
+    CRE_CLI_DON_FAMILY: "zone-a"
 
     CRE_CLI_WORKFLOW_REGISTRY_ADDRESS: "0x4Ac54353FA4Fa961AfcC5ec4B118596d3305E7e5"
     CRE_CLI_WORKFLOW_REGISTRY_CHAIN_NAME: "ethereum-mainnet"

@@ -39,10 +39,6 @@ const (
 	DefaultProjectName  = "my-project"
 	DefaultWorkflowName = "my-workflow"
 
-	DefaultStagingDonFamily           = "zone-a" // Keystone team has to define this
-	DefaultProductionTestnetDonFamily = "zone-a" // Keystone team has to define this
-	DefaultProductionDonFamily        = "zone-a" // Keystone team has to define this
-
 	DefaultProjectSettingsFileName  = "project.yaml"
 	DefaultWorkflowSettingsFileName = "workflow.yaml"
 	DefaultEnvFileName              = ".env"

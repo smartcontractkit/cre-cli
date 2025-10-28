@@ -77,7 +77,6 @@ func TestUpload_SuccessAndErrorCases(t *testing.T) {
 		chainsim.TestAddress,
 		"eoa",
 		"test_workflow",
-		"test_label",
 		"",
 		"",
 	)
@@ -154,7 +153,6 @@ func TestUploadArtifactToStorageService_OriginError(t *testing.T) {
 		chainsim.TestAddress,
 		"eoa",
 		"test_workflow",
-		"test_label",
 		"",
 		"",
 	)
@@ -195,7 +193,6 @@ func TestUploadArtifactToStorageService_AlreadyExistsError(t *testing.T) {
 		chainsim.TestAddress,
 		"eoa",
 		"test_workflow",
-		"test_label",
 		"",
 		"",
 	)

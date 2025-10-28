@@ -1,0 +1,170 @@
+name: Preview Build
+permissions:
+  contents: read
+
+on:
+  pull_request:
+    types: [ready_for_review, synchronize, reopened, labeled]
+
+jobs:
+  build-linux:
+    if: github.event.pull_request.state == 'open' && contains(github.event.pull_request.labels.*.name, 'preview')
+    name: Build Linux Binaries
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # actions/checkout@v4.2.2
+
+      - name: Set up Go
+        uses: actions/setup-go@3041bf56c941b39c61721a86cd11f3bb1338122a # actions/setup-go@v5.2.0
+        with:
+          go-version: "1.24"
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          if [ "${{ matrix.arch }}" == "arm64" ]; then
+            sudo apt-get install -y gcc-aarch64-linux-gnu libc6-dev-arm64-cross libstdc++-13-dev-arm64-cross libstdc++-12-dev-arm64-cross
+          elif [ "${{ matrix.arch }}" == "amd64" ]; then
+            sudo apt-get install -y gcc-x86-64-linux-gnu libc6-dev-amd64-cross
+          fi
+
+      - name: Build the Go Binary
+        env:
+          GOOS: linux
+          GOARCH: ${{ matrix.arch }}
+          CGO_ENABLED: 1
+          CC: ${{ matrix.arch == 'amd64' && 'x86_64-linux-gnu-gcc' || matrix.arch == 'arm64' && 'aarch64-linux-gnu-gcc' || '' }}
+        run: |
+          VERSION="preview-${{ github.sha }}"
+          BINARY_NAME="cre_${VERSION}_linux_${{ matrix.arch }}"
+          go build -ldflags "-X 'github.com/smartcontractkit/cre-cli/cmd/version.Version=version $VERSION'" -o "${BINARY_NAME}"
+
+          # Archive the binary
+          tar -czvf "${BINARY_NAME}.tar.gz" "${BINARY_NAME}"
+
+          # Verify the files
+          ls -l
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@6f51ac03b9356f520e9adb1b1b7802705f340c2b # actions/upload-artifact@v4.5.0
+        with:
+          name: cre_linux_${{ matrix.arch }}
+          path: |
+            cre_preview-${{ github.sha }}_linux_${{ matrix.arch }}.tar.gz
+
+  build-darwin:
+    if: github.event.pull_request.state == 'open' && contains(github.event.pull_request.labels.*.name, 'preview')
+    name: Build Darwin Binaries
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+    env:
+      VERSION: "preview-${{ github.sha }}"
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # actions/checkout@v4.2.2
+
+      - name: Set up Go
+        uses: actions/setup-go@3041bf56c941b39c61721a86cd11f3bb1338122a # actions/setup-go@v5.2.0
+        with:
+          go-version: "1.24"
+
+      - name: Build the Go Binary
+        env:
+          GOOS: darwin
+          GOARCH: ${{ matrix.arch }}
+          CGO_ENABLED: 1
+        run: |
+          BINARY_NAME="cre_${VERSION}_darwin_${{ matrix.arch }}"
+          go build -ldflags "-s -w -X 'github.com/smartcontractkit/cre-cli/cmd/version.Version=version $VERSION'" -o "${BINARY_NAME}"
+          zip -r "${BINARY_NAME}.zip" "${BINARY_NAME}"
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@6f51ac03b9356f520e9adb1b1b7802705f340c2b # actions/upload-artifact@v4.5.0
+        with:
+          name: cre_darwin_${{ matrix.arch }}
+          path: |
+            cre_${{ env.VERSION }}_darwin_${{ matrix.arch }}.zip
+
+  build-windows:
+    if: github.event.pull_request.state == 'open' && contains(github.event.pull_request.labels.*.name, 'preview')
+    name: Build Windows Binaries
+    runs-on: windows-latest
+    env:
+      VERSION: "preview-${{ github.sha }}"
+    strategy:
+      matrix:
+        arch: [amd64]
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # actions/checkout@v4.2.2
+
+      - name: Set up Go
+        uses: actions/setup-go@3041bf56c941b39c61721a86cd11f3bb1338122a # stup-go@v5.2.0
+        with:
+          go-version: "1.24"
+
+      - name: Install Dependencies
+        shell: pwsh
+        run: |
+          Write-Host "Installing MinGW GCC for amd64..."
+          choco install mingw -y
+          gcc --version
+
+      - name: Build the Go Binary
+        shell: pwsh
+        env:
+          GOOS: windows
+          GOARCH: ${{ matrix.arch }}
+          CGO_ENABLED: 1
+          CC: gcc.exe
+        run: |
+          $BINARY_NAME = "cre_${{ env.VERSION }}_windows_${{ matrix.arch }}.exe"
+          go build -v -x -ldflags "-X 'github.com/smartcontractkit/cre-cli/cmd/version.Version=version ${{ env.VERSION }}'" -o $BINARY_NAME
+
+      - name: Archive binary
+        shell: pwsh
+        run: |
+          $BINARY_NAME = "cre_${{ env.VERSION }}_windows_${{ matrix.arch }}.exe"
+          $ZIP_NAME = "cre_${{ env.VERSION }}_windows_${{ matrix.arch }}.zip"
+          Compress-Archive -Path "$BINARY_NAME" -DestinationPath "$ZIP_NAME"
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@6f51ac03b9356f520e9adb1b1b7802705f340c2b # actions/upload-artifact@v4.5.0
+        with:
+          name: cre_windows_${{ matrix.arch }}
+          path: |
+            cre_${{ env.VERSION }}_windows_${{ matrix.arch }}.zip
+
+  post-preview-comment:
+    if: github.event.pull_request.state == 'open' && contains(github.event.pull_request.labels.*.name, 'preview')
+    name: Post Preview Comment
+    needs: [build-linux, build-darwin, build-windows]
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Comment on PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = `
+            :rocket: **Preview Build Artifacts**
+
+            You can download the preview builds for this PR from the following URL:
+
+            [https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+
+            *Note: These are preview builds and are not signed.*
+            `;
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
