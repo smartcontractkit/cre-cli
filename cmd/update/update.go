@@ -22,17 +22,19 @@ import (
 )
 
 const (
-	repo    = "smartcontractkit/cre-cli"
-	cliName = "cre"
+	repo           = "smartcontractkit/cre-cli"
+	cliName        = "cre"
+	maxExtractSize = 200 * 1024 * 1024
 )
+
+var httpClient = &http.Client{Timeout: 30 * time.Second}
 
 type releaseInfo struct {
 	TagName string `json:"tag_name"`
 }
 
 func getLatestTag() (string, error) {
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Get("https://api.github.com/repos/" + repo + "/releases/latest")
+	resp, err := httpClient.Get("https://api.github.com/repos/" + repo + "/releases/latest")
 	if err != nil {
 		return "", err
 	}
@@ -87,8 +89,7 @@ func getAssetName() (asset string, platform string, err error) {
 }
 
 func downloadFile(url, dest string) error {
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Get(url)
+	resp, err := httpClient.Get(url)
 	if err != nil {
 		return err
 	}
@@ -178,8 +179,6 @@ func untar(assetPath string) (string, error) {
 				return "", err
 			}
 
-			// Limit extraction to 200 MB
-			const maxExtractSize = 200 * 1024 * 1024
 			written, err := io.CopyN(out, tr, maxExtractSize+1)
 			if err != nil && !errors.Is(err, io.EOF) {
 				closeErr := out.Close()
@@ -249,8 +248,7 @@ func unzip(assetPath string) (string, error) {
 			if err != nil {
 				return "", err
 			}
-			// Limit extraction to 200 MB
-			const maxExtractSize = 200 * 1024 * 1024
+
 			written, err := io.CopyN(out, rc, maxExtractSize+1)
 			if err != nil && !errors.Is(err, io.EOF) {
 				closeErr := out.Close()
