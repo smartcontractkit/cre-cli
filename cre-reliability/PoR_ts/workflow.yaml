@@ -17,18 +17,18 @@
 # ==========================================================================
 local-simulation:
   user-workflow:
-    workflow-name: "PoR"
+    workflow-name: "PoR_ts"
   workflow-artifacts:
-    workflow-path: "."
+    workflow-path: "./main.ts"
     config-path: "./config.json"
     secrets-path: "../secrets.yaml"
 
 # ==========================================================================
 staging:
   user-workflow:
-    workflow-name: "PoR"
+    workflow-name: "PoR_ts"
   workflow-artifacts:
-    workflow-path: "."
+    workflow-path: "./main.ts"
     config-path: "./config.json"
     secrets-path: "../secrets.yaml"
     
