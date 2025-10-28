@@ -73,47 +73,57 @@ func TestInitExecuteFlows(t *testing.T) {
 		projectNameFlag     string
 		templateIDFlag      uint32
 		workflowNameFlag    string
+		rpcURLFlag          string
 		mockResponses       []string
 		expectProjectDirRel string
 		expectWorkflowName  string
 		expectTemplateFiles []string
 	}{
 		{
-			name:                "explicit project, default template via prompt, custom workflow via prompt",
-			projectNameFlag:     "myproj",
-			templateIDFlag:      0,
-			workflowNameFlag:    "",
-			mockResponses:       []string{"", "", "myworkflow"},
+			name:             "explicit project, default template via prompt, custom workflow via prompt",
+			projectNameFlag:  "myproj",
+			templateIDFlag:   0,
+			workflowNameFlag: "",
+			rpcURLFlag:       "",
+			// "" (language default -> Golang), "" (workflow default -> PoR), "" (RPC URL accept default), "myworkflow"
+			mockResponses:       []string{"", "", "", "myworkflow"},
 			expectProjectDirRel: "myproj",
 			expectWorkflowName:  "myworkflow",
 			expectTemplateFiles: GetTemplateFileList(),
 		},
 		{
-			name:                "only project, default template+workflow via prompt",
-			projectNameFlag:     "alpha",
-			templateIDFlag:      0,
-			workflowNameFlag:    "",
-			mockResponses:       []string{"", "", "default-wf"},
+			name:             "only project, default template+workflow via prompt",
+			projectNameFlag:  "alpha",
+			templateIDFlag:   0,
+			workflowNameFlag: "",
+			rpcURLFlag:       "",
+			// defaults to PoR -> include extra "" for RPC URL
+			mockResponses:       []string{"", "", "", "default-wf"},
 			expectProjectDirRel: "alpha",
 			expectWorkflowName:  "default-wf",
 			expectTemplateFiles: GetTemplateFileList(),
 		},
 		{
-			name:                "no flags: prompt project, blank template, prompt workflow",
-			projectNameFlag:     "",
-			templateIDFlag:      0,
-			workflowNameFlag:    "",
-			mockResponses:       []string{"projX", "1", "", "workflow-X"},
+			name:             "no flags: prompt project, blank template, prompt workflow",
+			projectNameFlag:  "",
+			templateIDFlag:   0,
+			workflowNameFlag: "",
+			rpcURLFlag:       "",
+			// "projX" (project), "1" (pick Golang), "2" (pick HelloWorld/blank), "workflow-X" (name)
+			// No RPC prompt here since PoR was NOT selected
+			mockResponses:       []string{"projX", "1", "2", "workflow-X"},
 			expectProjectDirRel: "projX",
 			expectWorkflowName:  "workflow-X",
 			expectTemplateFiles: GetTemplateFileList(),
 		},
 		{
-			name:                "workflow-name flag only, default template, no workflow prompt",
-			projectNameFlag:     "projFlag",
-			templateIDFlag:      0,
-			workflowNameFlag:    "flagged-wf",
-			mockResponses:       []string{"", ""},
+			name:             "workflow-name flag only, default template, no workflow prompt",
+			projectNameFlag:  "projFlag",
+			templateIDFlag:   0,
+			workflowNameFlag: "flagged-wf",
+			rpcURLFlag:       "",
+			// defaults to PoR → include RPC URL accept
+			mockResponses:       []string{"", "", ""},
 			expectProjectDirRel: "projFlag",
 			expectWorkflowName:  "flagged-wf",
 			expectTemplateFiles: GetTemplateFileList(),
@@ -123,9 +133,34 @@ func TestInitExecuteFlows(t *testing.T) {
 			projectNameFlag:     "tplProj",
 			templateIDFlag:      2,
 			workflowNameFlag:    "",
+			rpcURLFlag:          "",
 			mockResponses:       []string{"workflow-Tpl"},
 			expectProjectDirRel: "tplProj",
 			expectWorkflowName:  "workflow-Tpl",
+			expectTemplateFiles: GetTemplateFileList(),
+		},
+		{
+			name:             "PoR template via flag with rpc-url provided (skips RPC prompt)",
+			projectNameFlag:  "porWithFlag",
+			templateIDFlag:   1, // Golang PoR
+			workflowNameFlag: "",
+			rpcURLFlag:       "https://sepolia.example/rpc",
+			// Only needs a workflow name prompt
+			mockResponses:       []string{"por-wf-01"},
+			expectProjectDirRel: "porWithFlag",
+			expectWorkflowName:  "por-wf-01",
+			expectTemplateFiles: GetTemplateFileList(),
+		},
+		{
+			name:             "TS template with rpc-url provided (flag ignored; no RPC prompt needed)",
+			projectNameFlag:  "tsWithRpcFlag",
+			templateIDFlag:   3, // TypeScript HelloWorld
+			workflowNameFlag: "",
+			rpcURLFlag:       "https://sepolia.example/rpc",
+			// Just the workflow name prompt
+			mockResponses:       []string{"ts-wf-flag"},
+			expectProjectDirRel: "tsWithRpcFlag",
+			expectWorkflowName:  "ts-wf-flag",
 			expectTemplateFiles: GetTemplateFileList(),
 		},
 	}
@@ -144,6 +179,7 @@ func TestInitExecuteFlows(t *testing.T) {
 				ProjectName:  tc.projectNameFlag,
 				TemplateID:   tc.templateIDFlag,
 				WorkflowName: tc.workflowNameFlag,
+				RPCUrl:       tc.rpcURLFlag,
 			}
 
 			ctx := sim.NewRuntimeContext()
@@ -251,7 +287,7 @@ func TestInsideExistingProjectAddsTypescriptWorkflowSkipsGoScaffold(t *testing.T
 
 	inputs := Inputs{
 		ProjectName:  "",
-		TemplateID:   3, // TypeScript template
+		TemplateID:   3,
 		WorkflowName: "",
 	}
 
