@@ -9,6 +9,7 @@ require (
 	github.com/avast/retry-go/v4 v4.6.1
 	github.com/charmbracelet/bubbles v0.21.0
 	github.com/charmbracelet/bubbletea v1.3.6
+	github.com/denisbrodbeck/machineid v1.0.1
 	github.com/ethereum/go-ethereum v1.16.4
 	github.com/fatih/color v1.18.0
 	github.com/go-playground/locales v0.14.1
@@ -123,7 +124,6 @@ require (
 	github.com/dchest/siphash v1.2.3 // indirect
 	github.com/deckarep/golang-set/v2 v2.7.0 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.0 // indirect
-	github.com/denisbrodbeck/machineid v1.0.1 // indirect
 	github.com/dgraph-io/badger/v4 v4.7.0 // indirect
 	github.com/dgraph-io/ristretto/v2 v2.2.0 // indirect
 	github.com/dominikbraun/graph v0.23.0 // indirect
