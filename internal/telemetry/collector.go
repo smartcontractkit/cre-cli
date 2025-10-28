@@ -23,11 +23,8 @@ func CollectMachineInfo() MachineInfo {
 // CollectActorInfo returns actor information (only machineId, server populates userId/orgId)
 func CollectActorInfo() *ActorInfo {
 	// Generate or retrieve machine ID (should be cached/stable)
-	machineID, err := getOrCreateMachineID()
-	if err != nil {
-		// Log but don't fail - telemetry should always work
-		// Error indicates we're using a fallback ID
-	}
+	// Error is ignored as we always return a machine ID (either system or fallback)
+	machineID, _ := getOrCreateMachineID()
 	return &ActorInfo{
 		MachineID: machineID,
 		// userId and organizationId will be populated by the server from the JWT token
