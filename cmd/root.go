@@ -111,7 +111,7 @@ func newRootCommand() *cobra.Command {
 				}
 			}
 
-			// Load environment set early so it's available for telemetry even if settings fail
+			// Load environment set early so it's available even if settings fail
 			err := runtimeContext.AttachEnvironmentSet()
 			if err != nil {
 				return fmt.Errorf("failed to load environment details: %w", err)

@@ -83,7 +83,6 @@ func CollectCommandInfo(cmd *cobra.Command, args []string) CommandInfo {
 	info.Args = args
 
 	// Flags collection is not yet implemented
-	// See FLAG_COLLECTION_INSTRUCTIONS.md for implementation details
 	info.Flags = []KeyValuePair{}
 
 	return info
