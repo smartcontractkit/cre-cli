@@ -9,6 +9,7 @@ import (
 
 	"github.com/denisbrodbeck/machineid"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 // CollectMachineInfo gathers information about the machine running the CLI
@@ -65,6 +66,30 @@ func getOrCreateMachineID() (string, error) {
 	return fallbackID, fmt.Errorf("failed to get system machine ID, using fallback: %w", err)
 }
 
+// collectFlags extracts flags from a cobra command as key-value pairs
+func collectFlags(cmd *cobra.Command) []KeyValuePair {
+	var flags []KeyValuePair
+
+	if cmd == nil {
+		return flags
+	}
+
+	// Visit all flags (including inherited persistent flags)
+	cmd.Flags().VisitAll(func(flag *pflag.Flag) {
+		// Only include flags that were explicitly set by the user
+		// This avoids cluttering telemetry with default values
+		if flag.Changed {
+			value := flag.Value.String()
+			flags = append(flags, KeyValuePair{
+				Key:   flag.Name,
+				Value: value,
+			})
+		}
+	})
+
+	return flags
+}
+
 // CollectCommandInfo extracts command information from a cobra command
 func CollectCommandInfo(cmd *cobra.Command, args []string) CommandInfo {
 	info := CommandInfo{}
@@ -82,8 +107,8 @@ func CollectCommandInfo(cmd *cobra.Command, args []string) CommandInfo {
 	// Collect args (only positional arguments, not flags)
 	info.Args = args
 
-	// Flags collection is not yet implemented
-	info.Flags = []KeyValuePair{}
+	// Collect flags as key-value pairs (only flags explicitly set by user)
+	info.Flags = collectFlags(cmd)
 
 	return info
 }

@@ -46,7 +46,7 @@ func Execute() {
 	}
 
 	// Hack right now to give enough time for request to be made on backend but not block UX
-	time.Sleep(3 * time.Second)
+	time.Sleep(500 * time.Millisecond)
 
 	if err != nil {
 		os.Exit(1)
