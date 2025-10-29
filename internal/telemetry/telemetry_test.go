@@ -116,7 +116,7 @@ func TestBuildUserEvent(t *testing.T) {
 	cmd := &cobra.Command{Use: "login"}
 	exitCode := 0
 
-	event := buildUserEvent(cmd, []string{}, exitCode, nil)
+	event := buildUserEvent(cmd, []string{}, exitCode, nil, nil)
 
 	assert.NotEmpty(t, event.CliVersion)
 	assert.Equal(t, exitCode, event.ExitCode)

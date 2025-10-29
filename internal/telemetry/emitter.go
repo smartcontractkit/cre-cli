@@ -25,7 +25,7 @@ const (
 
 // EmitCommandEvent emits a user event for command execution
 // This function is completely silent and never blocks command execution
-func EmitCommandEvent(cmd *cobra.Command, args []string, exitCode int, runtimeCtx *runtime.Context) {
+func EmitCommandEvent(cmd *cobra.Command, args []string, exitCode int, runtimeCtx *runtime.Context, err error) {
 	// Run in a goroutine to avoid blocking
 	go func() {
 		// Recover from any panics to prevent crashes
@@ -52,7 +52,7 @@ func EmitCommandEvent(cmd *cobra.Command, args []string, exitCode int, runtimeCt
 		}
 
 		// Collect event data
-		event := buildUserEvent(cmd, args, exitCode, runtimeCtx)
+		event := buildUserEvent(cmd, args, exitCode, runtimeCtx, err)
 		debugLog("emitting telemetry event: action=%s, subcommand=%s, exitCode=%d",
 			event.Command.Action, event.Command.Subcommand, event.ExitCode)
 
@@ -101,12 +101,19 @@ func shouldExcludeCommand(cmd *cobra.Command) bool {
 }
 
 // buildUserEvent constructs the user event payload
-func buildUserEvent(cmd *cobra.Command, args []string, exitCode int, runtimeCtx *runtime.Context) UserEventInput {
+func buildUserEvent(cmd *cobra.Command, args []string, exitCode int, runtimeCtx *runtime.Context, err error) UserEventInput {
+	commandInfo := CollectCommandInfo(cmd, args)
+
 	event := UserEventInput{
 		CliVersion: version.Version,
 		ExitCode:   exitCode,
-		Command:    CollectCommandInfo(cmd, args),
+		Command:    commandInfo,
 		Machine:    CollectMachineInfo(),
+	}
+
+	// Extract error message if error is present (at top level)
+	if err != nil {
+		event.ErrorMessage = err.Error()
 	}
 
 	// Collect actor information (only machineId, server populates userId/orgId from JWT)
