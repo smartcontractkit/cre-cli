@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	_ "embed"
 	"fmt"
 	"os"
 	"strings"
@@ -31,26 +32,33 @@ import (
 	intupdate "github.com/smartcontractkit/cre-cli/internal/update"
 )
 
-// RootCmd represents the base command when called without any subcommands
-var RootCmd = newRootCommand()
+//go:embed template/help_template.tpl
+var helpTemplate string
 
-var runtimeContextForTelemetry *runtime.Context
+var (
+	// RootCmd represents the base command when called without any subcommands
+	RootCmd = newRootCommand()
 
-var executingCommand *cobra.Command
+	runtimeContextForTelemetry *runtime.Context
+	executingCommand           *cobra.Command
+	executingArgs              []string
+)
 
 func Execute() {
 	err := RootCmd.Execute()
 
-	if err != nil && executingCommand != nil && runtimeContextForTelemetry != nil {
-		telemetry.EmitCommandEvent(executingCommand, []string{}, 1, runtimeContextForTelemetry, err)
+	exitCode := 0
+	if err != nil {
+		exitCode = 1
 	}
 
-	// Hack right now to give enough time for request to be made on backend but not block UX
+	if executingCommand != nil && runtimeContextForTelemetry != nil {
+		telemetry.EmitCommandEvent(executingCommand, executingArgs, exitCode, runtimeContextForTelemetry, err)
+	}
+
 	time.Sleep(500 * time.Millisecond)
 
-	if err != nil {
-		os.Exit(1)
-	}
+	os.Exit(exitCode)
 }
 
 func newRootCommand() *cobra.Command {
@@ -84,6 +92,7 @@ func newRootCommand() *cobra.Command {
 
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			executingCommand = cmd
+			executingArgs = args
 
 			log := runtimeContext.Logger
 			v := runtimeContext.Viper
@@ -138,11 +147,9 @@ func newRootCommand() *cobra.Command {
 
 			// Check for updates *sequentially* after the main command has run.
 			// This guarantees it prints at the end, after all other output.
-			if cmd.Name() != "bash" && cmd.Name() != "zsh" && cmd.Name() != "fish" && cmd.Name() != "powershell" && cmd.Name() != "update" {
+			if shouldCheckForUpdates(cmd) {
 				intupdate.CheckForUpdates(version.Version, runtimeContext.Logger)
 			}
-			// ---
-			telemetry.EmitCommandEvent(cmd, args, 0, runtimeContext, nil)
 		},
 	}
 
@@ -160,103 +167,7 @@ func newRootCommand() *cobra.Command {
 		return false
 	})
 
-	rootCmd.SetHelpTemplate(`
-{{- with (or .Long .Short)}}{{.}}{{end}}
-
-Usage:
-{{- if .Runnable}}
-  {{.UseLine}}
-{{- else if .HasAvailableSubCommands}}
-  {{.CommandPath}} [command]
-{{- end}}
-
-{{- /* ============================================ */}}
-{{- /* Available Commands Section                 */}}
-{{- /* ============================================ */}}
-{{- if .HasAvailableSubCommands}}
-
-Available Commands:
-  {{- $groupsUsed := false -}}
-  {{- $firstGroup := true -}}
-
-  {{- range $grp := .Groups}}
-    {{- $has := false -}}
-    {{- range $.Commands}}
-      {{- if (and (not .Hidden) (.IsAvailableCommand) (eq .GroupID $grp.ID))}}
-        {{- $has = true}}
-      {{- end}}
-    {{- end}}
-    
-    {{- if $has}}
-      {{- $groupsUsed = true -}}
-      {{- if $firstGroup}}{{- $firstGroup = false -}}{{else}}
-
-{{- end}}
-
-  {{printf "%s:" $grp.Title}}
-      {{- range $.Commands}}
-        {{- if (and (not .Hidden) (.IsAvailableCommand) (eq .GroupID $grp.ID))}}
-    {{rpad .Name .NamePadding}}  {{.Short}}
-        {{- end}}
-      {{- end}}
-    {{- end}}
-  {{- end}}
-
-  {{- if $groupsUsed }}
-    {{- /* Groups are in use; show ungrouped as "Other" if any */}}
-    {{- if hasUngrouped .}}
-
-  Other:
-      {{- range .Commands}}
-        {{- if (and (not .Hidden) (.IsAvailableCommand) (eq .GroupID ""))}}
-    {{rpad .Name .NamePadding}}  {{.Short}}
-        {{- end}}
-      {{- end}}
-    {{- end}}
-  {{- else }}
-    {{- /* No groups at this level; show a flat list with no "Other" header */}}
-    {{- range .Commands}}
-      {{- if (and (not .Hidden) (.IsAvailableCommand))}}
-    {{rpad .Name .NamePadding}}  {{.Short}}
-      {{- end}}
-    {{- end}}
-  {{- end }}
-{{- end }}
-
-{{- if .HasExample}}
-
-Examples:
-{{.Example}}
-{{- end }}
-
-{{- $local := (.LocalFlags.FlagUsagesWrapped 100 | trimTrailingWhitespaces) -}}
-{{- if $local }}
-
-Flags:
-{{$local}}
-{{- end }}
-
-{{- $inherited := (.InheritedFlags.FlagUsagesWrapped 100 | trimTrailingWhitespaces) -}}
-{{- if $inherited }}
-
-Global Flags:
-{{$inherited}}
-{{- end }}
-
-{{- if .HasAvailableSubCommands }}
-
-Use "{{.CommandPath}} [command] --help" for more information about a command.
-{{- end }}
-
-💡 Tip: New here? Run:
-  $ cre login
-    to login into your cre account, then:
-  $ cre init
-    to create your first cre project.
-
-📘 Need more help?
-  Visit https://docs.chain.link/cre
-`)
+	rootCmd.SetHelpTemplate(helpTemplate)
 
 	// Definition of global flags:
 	// env file flag is present for every subcommand
@@ -381,6 +292,19 @@ func isLoadCredentials(cmd *cobra.Command) bool {
 	}
 
 	_, exists := excludedCommands[cmd.CommandPath()]
+	return !exists
+}
+
+func shouldCheckForUpdates(cmd *cobra.Command) bool {
+	var excludedCommands = map[string]struct{}{
+		"bash":       {},
+		"zsh":        {},
+		"fish":       {},
+		"powershell": {},
+		"update":     {},
+	}
+
+	_, exists := excludedCommands[cmd.Name()]
 	return !exists
 }
 
