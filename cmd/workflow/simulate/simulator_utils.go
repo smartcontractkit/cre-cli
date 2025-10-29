@@ -15,7 +15,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 )
 
-const WorkflowExecutionTimeout = 30 * time.Second
+const WorkflowExecutionTimeout = 5 * time.Minute
 
 type ChainSelector = uint64
 
