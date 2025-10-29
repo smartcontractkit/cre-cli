@@ -42,7 +42,7 @@ func Execute() {
 	err := RootCmd.Execute()
 
 	if err != nil && executingCommand != nil && runtimeContextForTelemetry != nil {
-		telemetry.EmitCommandEvent(executingCommand, []string{}, 1, runtimeContextForTelemetry)
+		telemetry.EmitCommandEvent(executingCommand, []string{}, 1, runtimeContextForTelemetry, err)
 	}
 
 	// Hack right now to give enough time for request to be made on backend but not block UX
@@ -104,8 +104,21 @@ func newRootCommand() *cobra.Command {
 				runtimeContext.ClientFactory = client.NewFactory(&newLogger, v)
 			}
 
-			// load env vars from .env file and settings from yaml files
-			if isLoadEnvAndSettings(cmd) {
+			if isLoadCredentials(cmd) {
+				err := runtimeContext.AttachCredentials()
+				if err != nil {
+					return fmt.Errorf("failed to attach credentials: %w", err)
+				}
+			}
+
+			// Load environment set early so it's available for telemetry even if settings fail
+			err := runtimeContext.AttachEnvironmentSet()
+			if err != nil {
+				return fmt.Errorf("failed to load environment details: %w", err)
+			}
+
+			// load settings from yaml files
+			if isLoadSettings(cmd) {
 				// Set execution context (project root + workflow directory if applicable)
 				projectRootFlag := runtimeContext.Viper.GetString(settings.Flags.ProjectRoot.Name)
 				if err := context.SetExecutionContext(cmd, args, projectRootFlag, rootLogger); err != nil {
@@ -116,18 +129,6 @@ func newRootCommand() *cobra.Command {
 				if err != nil {
 					return fmt.Errorf("%w", err)
 				}
-			}
-
-			if isLoadCredentials(cmd) {
-				err := runtimeContext.AttachCredentials()
-				if err != nil {
-					return fmt.Errorf("failed to attach credentials: %w", err)
-				}
-			}
-
-			err := runtimeContext.AttachEnvironmentSet()
-			if err != nil {
-				return fmt.Errorf("failed to load environment details: %w", err)
 			}
 
 			return nil
@@ -141,7 +142,7 @@ func newRootCommand() *cobra.Command {
 				intupdate.CheckForUpdates(version.Version, runtimeContext.Logger)
 			}
 			// ---
-			telemetry.EmitCommandEvent(cmd, args, 0, runtimeContext)
+			telemetry.EmitCommandEvent(cmd, args, 0, runtimeContext, nil)
 		},
 	}
 
@@ -335,8 +336,8 @@ Use "{{.CommandPath}} [command] --help" for more information about a command.
 	return rootCmd
 }
 
-func isLoadEnvAndSettings(cmd *cobra.Command) bool {
-	// It is not expected to have the .env and the settings file when running the following commands
+func isLoadSettings(cmd *cobra.Command) bool {
+	// It is not expected to have the settings file when running the following commands
 	var excludedCommands = map[string]struct{}{
 		"cre version":               {},
 		"cre login":                 {},

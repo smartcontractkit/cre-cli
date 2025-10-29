@@ -82,8 +82,9 @@ func CollectCommandInfo(cmd *cobra.Command, args []string) CommandInfo {
 	// Collect args (only positional arguments, not flags)
 	info.Args = args
 
-	// Omit flags for now - can be added later if needed
-	info.Flags = make(map[string]interface{})
+	// Flags collection is not yet implemented
+	// See FLAG_COLLECTION_INSTRUCTIONS.md for implementation details
+	info.Flags = []KeyValuePair{}
 
 	return info
 }
