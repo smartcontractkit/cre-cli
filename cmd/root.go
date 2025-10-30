@@ -54,9 +54,8 @@ func Execute() {
 
 	if executingCommand != nil && runtimeContextForTelemetry != nil {
 		telemetry.EmitCommandEvent(executingCommand, executingArgs, exitCode, runtimeContextForTelemetry, err)
+		time.Sleep(200 * time.Millisecond)
 	}
-
-	time.Sleep(500 * time.Millisecond)
 
 	os.Exit(exitCode)
 }
