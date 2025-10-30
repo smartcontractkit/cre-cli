@@ -1,0 +1,9 @@
+{
+  "schedule": "0 */5 * * * *",
+  "url": "https://api.real-time-reserves.verinumus.io/v1/chainlink/proof-of-reserves/TrueUSD",
+  "balance_reader_address": "0xfab1d2A09F52cE3e03bEc75073B4f5d74D3e59B0",
+  "address_one": "0x13CB6AE34A13a0977F4d7101eBc24B87Bb23F0d5",
+  "address_two": "0xDc58480363fca702ADbECD61911314E602D324EA",
+  "data_feeds_cache_address": "0x220F3509213c61959e727a8c6493E0ED27966F8B",
+  "feed_id": "0x018e16c38e000310000000000000000000000000000000000000000000000000"
+}
