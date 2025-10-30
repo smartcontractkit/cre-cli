@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"crypto/ecdsa"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -21,10 +22,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/rs/zerolog"
-	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
-	"go.uber.org/zap/zapcore"
-
 	"github.com/smartcontractkit/chainlink-common/pkg/beholder"
 	"github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/chain-capabilities/evm"
 	httptypedapi "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/triggers/http"
@@ -36,6 +33,15 @@ import (
 	"github.com/smartcontractkit/chainlink/v2/core/capabilities"
 	simulator "github.com/smartcontractkit/chainlink/v2/core/services/workflows/cmd/cre/utils"
 	v2 "github.com/smartcontractkit/chainlink/v2/core/services/workflows/v2"
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
+	"go.uber.org/zap/zapcore"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/reflect/protoregistry"
+	"google.golang.org/protobuf/types/dynamicpb"
+	"google.golang.org/protobuf/types/known/anypb"
 
 	cmdcommon "github.com/smartcontractkit/cre-cli/cmd/common"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
@@ -481,7 +487,11 @@ type TriggerInfoAndBeforeStart struct {
 }
 
 // makeBeforeStartInteractive builds the interactive BeforeStart closure
-func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs, triggerCapsGetter func() *ManualTriggers) func(context.Context, simulator.RunnerConfig, *capabilities.Registry, []services.Service, []*pb.TriggerSubscription) {
+func makeBeforeStartInteractive(
+	holder *TriggerInfoAndBeforeStart,
+	inputs Inputs,
+	triggerCapsGetter func() *ManualTriggers,
+) func(context.Context, simulator.RunnerConfig, *capabilities.Registry, []services.Service, []*pb.TriggerSubscription) {
 	return func(
 		ctx context.Context,
 		cfg simulator.RunnerConfig,
@@ -494,10 +504,34 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 			os.Exit(1)
 		}
 
+		// --- NEW: Print every trigger subscription, with payload details ---
+		fmt.Println("\n🔎 Discovered trigger subscriptions:")
+		for i, t := range triggerSub {
+			fmt.Printf("\n[%d]\n", i+1)
+			fmt.Printf("  Id:      %s\n", t.GetId())
+			fmt.Printf("  Method:  %s\n", t.GetMethod())
+
+			if t.GetPayload() == nil {
+				fmt.Printf("  Payload: <nil>\n")
+			} else {
+				pl := t.GetPayload()
+				fmt.Printf("  Payload.type_url: %q\n", pl.GetTypeUrl())
+
+				decoded := renderAnyAsJSON(pl)
+				if decoded == "" {
+					fmt.Printf("  Payload: <empty>\n")
+				} else {
+					// indent the JSON nicely under "Payload:"
+					fmt.Printf("  Payload:\n%s\n", indent(decoded, "    "))
+				}
+			}
+		}
+		fmt.Println()
+
 		var triggerIndex int
 		if len(triggerSub) > 1 {
 			// Present user with options and wait for selection
-			fmt.Println("\n🚀 Workflow simulation ready. Please select a trigger:")
+			fmt.Println("🚀 Workflow simulation ready. Please select a trigger:")
 			for i, trigger := range triggerSub {
 				fmt.Printf("%d. %s %s\n", i+1, trigger.GetId(), trigger.GetMethod())
 			}
@@ -512,6 +546,7 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 		triggerRegistrationID := fmt.Sprintf("trigger_reg_1111111111111111111111111111111111111111111111111111111111111111_%d", triggerIndex)
 		trigger := holder.TriggerToRun.Id
 		triggerCaps := triggerCapsGetter()
+		fmt.Println("=====trigger id is", trigger)
 
 		switch {
 		case trigger == "cron-trigger@1.0.0":
@@ -542,6 +577,7 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 			}
 
 			log, err := getEVMTriggerLog(ctx, client)
+			// TODO compare the user input log with the decoded payload from workflow
 			if err != nil {
 				fmt.Printf("failed to get EVM trigger log: %v\n", err)
 				os.Exit(1)
@@ -559,6 +595,95 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 			os.Exit(1)
 		}
 	}
+}
+
+// --- Helpers ---
+
+// --- fixed dynamic decode path: use anypb.UnmarshalTo and lookup by URL/name ---
+func renderAnyAsJSON(a *anypb.Any) string {
+	if a == nil {
+		return ""
+	}
+
+	// 1) Easiest path: works when the concrete message type is linked/registered.
+	if msg, err := anypb.UnmarshalNew(a, proto.UnmarshalOptions{}); err == nil {
+		b, err := protojson.MarshalOptions{
+			Indent:          "  ",
+			UseProtoNames:   true,
+			EmitUnpopulated: true,
+		}.Marshal(msg)
+		if err == nil {
+			return string(b)
+		}
+		return fmt.Sprintf("<failed to JSON-marshal unpacked %T: %v>", msg, err)
+	}
+
+	// renderAnyAsJSON: dynamic branch
+	// 2) Try registry by full type URL, then by short name.
+	if pm := tryDynamicFromRegistry(a); pm != nil {
+		b, err := protojson.MarshalOptions{
+			Indent:          "  ",
+			UseProtoNames:   true,
+			EmitUnpopulated: true,
+		}.Marshal(pm)
+		if err == nil {
+			return string(b)
+		}
+		// Include the full name we decoded to aid debugging.
+		return fmt.Sprintf("<failed to JSON-marshal dynamic %s: %v>", pm.ProtoReflect().Descriptor().FullName(), err)
+	}
+
+	// 3) Fallback: show URL + raw base64.
+	return fmt.Sprintf(
+		`{ "unrecognized_any": { "type_url": %q, "raw_value_base64": %q } }`,
+		a.GetTypeUrl(),
+		base64.StdEncoding.EncodeToString(a.GetValue()),
+	)
+}
+
+// Return proto.Message instead of protoreflect.Message
+func tryDynamicFromRegistry(a *anypb.Any) proto.Message {
+	// Prefer exact URL match if available.
+	if mt, err := protoregistry.GlobalTypes.FindMessageByURL(a.GetTypeUrl()); err == nil {
+		msg := dynamicpb.NewMessage(mt.Descriptor()) // *dynamicpb.Message implements proto.Message
+		if err := anypb.UnmarshalTo(a, msg, proto.UnmarshalOptions{}); err == nil {
+			return msg
+		}
+	}
+
+	// Fallback: extract name from URL and resolve by name.
+	if fullName := extractNameFromTypeURL(a.GetTypeUrl()); fullName != "" {
+		if mt, err := protoregistry.GlobalTypes.FindMessageByName(protoreflect.FullName(fullName)); err == nil {
+			msg := dynamicpb.NewMessage(mt.Descriptor())
+			if err := anypb.UnmarshalTo(a, msg, proto.UnmarshalOptions{}); err == nil {
+				return msg
+			}
+		}
+	}
+	return nil
+}
+
+// extractNameFromTypeURL pulls the message name from a type URL like "type.googleapis.com/package.Message".
+func extractNameFromTypeURL(u string) string {
+	if u == "" {
+		return ""
+	}
+	if i := strings.LastIndex(u, "/"); i >= 0 && i+1 < len(u) {
+		return u[i+1:]
+	}
+	return u
+}
+
+// indent prefixes every line in s with the given prefix.
+func indent(s, prefix string) string {
+	if s == "" {
+		return s
+	}
+	lines := strings.Split(s, "\n")
+	for i := range lines {
+		lines[i] = prefix + lines[i]
+	}
+	return strings.Join(lines, "\n")
 }
 
 // makeBeforeStartNonInteractive builds the non-interactive BeforeStart closure
