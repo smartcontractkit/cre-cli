@@ -48,7 +48,7 @@ func (ctx *Context) AttachCredentials() error {
 
 	ctx.Credentials, err = credentials.New(ctx.Logger)
 	if err != nil {
-		return fmt.Errorf("failed to load credentials: %w", err)
+		return fmt.Errorf("%w", err)
 	}
 
 	return nil
