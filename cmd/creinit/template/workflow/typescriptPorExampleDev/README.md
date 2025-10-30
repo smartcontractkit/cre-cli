@@ -44,6 +44,7 @@ cd workflow01 && bun install
 For local simulation to interact with a chain, you must specify RPC endpoints for the chains you interact with in the `project.yaml` file. This is required for submitting transactions and reading blockchain state.
 
 Note: The following 7 chains are supported in local simulation (both testnet and mainnet variants):
+
 - Ethereum (`ethereum-testnet-sepolia`, `ethereum-mainnet`)
 - Base (`ethereum-testnet-sepolia-base-1`, `ethereum-mainnet-base-1`)
 - Avalanche (`avalanche-testnet-fuji`, `avalanche-mainnet`)
@@ -54,11 +55,26 @@ Note: The following 7 chains are supported in local simulation (both testnet and
 
 Add your preferred RPCs under the `rpcs` section. For chain names, refer to https://github.com/smartcontractkit/chain-selectors/blob/main/selectors.yml
 
-## 5. Deploy contracts
+## 5. Deploy contracts and prepare ABIs
+
+### 5a. Deploy contracts
 
 Deploy the BalanceReader, MessageEmitter, ReserveManager and SimpleERC20 contracts. You can either do this on a local chain or on a testnet using tools like cast/foundry.
 
 For a quick start, you can also use the pre-deployed contract addresses on Ethereum Sepolia—no action required on your part if you're just trying things out.
+
+### 5b. Prepare ABIs
+
+For each contract you would like to interact with, you need to provide the ABI `.ts` file so that TypeScript can provide type safety and autocomplete for the contract methods. The format of the ABI files is very similar to regular JSON format; you just need to export it as a variable and mark it `as const`. For example:
+
+```ts
+// IERC20.ts file
+export const IERC20Abi = {
+  // ... your ABI here ...
+} as const;
+```
+
+For a quick start, every contract used in this workflow is already provided in the `contracts` folder. You can use them as a reference.
 
 ## 6. Configure workflow
 
