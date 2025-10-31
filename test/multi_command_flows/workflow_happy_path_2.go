@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -111,7 +110,7 @@ func workflowDeployEoaWithoutAutostart(t *testing.T, tc TestConfig) string {
 	defer srv.Close()
 
 	// Point the CLI at our mock GraphQL endpoint
-	os.Setenv(environments.EnvVarGraphQLURL, srv.URL+"/graphql")
+	t.Setenv(environments.EnvVarGraphQLURL, srv.URL+"/graphql")
 
 	// Build CLI args - CLI will automatically resolve workflow path using new context system
 	// Note: no auto-start flag (defaults to false)
@@ -233,7 +232,7 @@ func workflowDeployUpdateWithConfig(t *testing.T, tc TestConfig) string {
 	defer srv.Close()
 
 	// Point the CLI at our mock GraphQL endpoint
-	os.Setenv(environments.EnvVarGraphQLURL, srv.URL+"/graphql")
+	t.Setenv(environments.EnvVarGraphQLURL, srv.URL+"/graphql")
 
 	// Build CLI args with config file - CLI will automatically resolve workflow path
 	args := []string{
