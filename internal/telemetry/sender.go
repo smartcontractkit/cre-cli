@@ -62,17 +62,17 @@ func SendEvent(ctx context.Context, event UserEventInput, creds *credentials.Cre
 		clientLogger = &silentLogger
 	}
 
-	debugLog("creating GraphQL client for endpoint: %s", envSet.GraphQLURL)
+	debugLog("creating user event client for endpoint: %s", envSet.GraphQLURL)
 	client := graphqlclient.New(creds, envSet, clientLogger)
 
 	// Create the GraphQL request
-	debugLog("creating GraphQL request with mutation")
+	debugLog("creating user event request")
 	req := graphql.NewRequest(reportUserEventMutation)
 	req.Var("event", event)
 
 	// Execute the request
-	debugLog("executing GraphQL request")
 	var resp ReportUserEventResponse
+	debugLog("Request submitted, waiting for response")
 	err := client.Execute(sendCtx, req, &resp)
 
 	if err != nil {

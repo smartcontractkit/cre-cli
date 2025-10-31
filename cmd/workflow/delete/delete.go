@@ -71,6 +71,7 @@ type handler struct {
 	environmentSet *environments.EnvironmentSet
 	inputs         Inputs
 	wrc            *client.WorkflowRegistryV2Client
+	runtimeContext *runtime.Context
 
 	validated bool
 
@@ -87,6 +88,7 @@ func newHandler(ctx *runtime.Context, stdin io.Reader) *handler {
 		settings:       ctx.Settings,
 		credentials:    ctx.Credentials,
 		environmentSet: ctx.EnvironmentSet,
+		runtimeContext: ctx,
 		validated:      false,
 		wg:             sync.WaitGroup{},
 		wrcErr:         nil,
@@ -148,6 +150,9 @@ func (h *handler) Execute() error {
 		fmt.Printf("No workflows found for name: %s\n", workflowName)
 		return nil
 	}
+
+	// Note: The way deploy is set up, there will only ever be one workflow in the command for now
+	h.runtimeContext.Workflow.ID = hex.EncodeToString(allWorkflows[0].WorkflowId[:])
 
 	fmt.Printf("Found %d workflow(s) to delete for name: %s\n", len(allWorkflows), workflowName)
 	for i, wf := range allWorkflows {

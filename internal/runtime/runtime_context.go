@@ -22,6 +22,11 @@ type Context struct {
 	Settings       *settings.Settings
 	Credentials    *credentials.Credentials
 	EnvironmentSet *environments.EnvironmentSet
+	Workflow       WorkflowRuntime
+}
+
+type WorkflowRuntime struct {
+	ID string
 }
 
 func NewContext(logger *zerolog.Logger, viper *viper.Viper) *Context {

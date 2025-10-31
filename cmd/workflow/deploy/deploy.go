@@ -63,6 +63,7 @@ type handler struct {
 	environmentSet   *environments.EnvironmentSet
 	workflowArtifact *workflowArtifact
 	wrc              *client.WorkflowRegistryV2Client
+	runtimeContext   *runtime.Context
 
 	validated bool
 
@@ -115,6 +116,7 @@ func newHandler(ctx *runtime.Context, stdin io.Reader) *handler {
 		environmentSet:   ctx.EnvironmentSet,
 		workflowArtifact: &workflowArtifact{},
 		wrc:              nil,
+		runtimeContext:   ctx,
 		validated:        false,
 		wg:               sync.WaitGroup{},
 		wrcErr:           nil,
@@ -184,6 +186,8 @@ func (h *handler) Execute() error {
 	if err := h.PrepareWorkflowArtifact(); err != nil {
 		return fmt.Errorf("failed to prepare workflow artifact: %w", err)
 	}
+
+	h.runtimeContext.Workflow.ID = h.workflowArtifact.WorkflowID
 
 	h.wg.Wait()
 	if h.wrcErr != nil {
