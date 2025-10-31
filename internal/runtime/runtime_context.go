@@ -50,7 +50,7 @@ func (ctx *Context) AttachCredentials(validationCtx context.Context, skipValidat
 
 	ctx.Credentials, err = credentials.New(ctx.Logger)
 	if err != nil {
-		return fmt.Errorf("failed to load credentials: %w", err)
+		return fmt.Errorf("%w", err)
 	}
 
 	// Validate credentials immediately after loading (unless skipped)

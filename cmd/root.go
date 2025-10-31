@@ -121,7 +121,7 @@ func newRootCommand() *cobra.Command {
 				skipValidation := shouldSkipValidation(cmd)
 				err := runtimeContext.AttachCredentials(cmd.Context(), skipValidation)
 				if err != nil {
-					return fmt.Errorf("failed to attach credentials: %w", err)
+					return fmt.Errorf("authentication required: %w", err)
 				}
 			}
 
