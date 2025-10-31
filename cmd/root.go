@@ -54,9 +54,8 @@ func Execute() {
 
 	if executingCommand != nil && runtimeContextForTelemetry != nil {
 		telemetry.EmitCommandEvent(executingCommand, executingArgs, exitCode, runtimeContextForTelemetry, err)
+		time.Sleep(200 * time.Millisecond)
 	}
-
-	time.Sleep(500 * time.Millisecond)
 
 	os.Exit(exitCode)
 }
@@ -116,7 +115,7 @@ func newRootCommand() *cobra.Command {
 			if isLoadCredentials(cmd) {
 				err := runtimeContext.AttachCredentials()
 				if err != nil {
-					return fmt.Errorf("failed to attach credentials: %w", err)
+					return fmt.Errorf("authentication required: %w", err)
 				}
 			}
 
