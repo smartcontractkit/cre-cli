@@ -32,6 +32,21 @@ func workflowDeployEoaWithoutAutostart(t *testing.T, tc TestConfig) string {
 			var req graphQLRequest
 			_ = json.NewDecoder(r.Body).Decode(&req)
 
+			w.Header().Set("Content-Type", "application/json")
+
+			// Handle authentication validation query
+			if strings.Contains(req.Query, "getAccountDetails") {
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"data": map[string]any{
+						"getAccountDetails": map[string]any{
+							"userId":         "test-user-id",
+							"organizationId": "test-org-id",
+						},
+					},
+				})
+				return
+			}
+
 			// Respond based on the mutation in the query
 			if strings.Contains(req.Query, "GeneratePresignedPostUrlForArtifact") {
 				// Return presigned POST URL + fields (pointing back to this server)
@@ -138,6 +153,21 @@ func workflowDeployUpdateWithConfig(t *testing.T, tc TestConfig) string {
 		case strings.HasPrefix(r.URL.Path, "/graphql") && r.Method == http.MethodPost:
 			var req graphQLRequest
 			_ = json.NewDecoder(r.Body).Decode(&req)
+
+			w.Header().Set("Content-Type", "application/json")
+
+			// Handle authentication validation query
+			if strings.Contains(req.Query, "getAccountDetails") {
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"data": map[string]any{
+						"getAccountDetails": map[string]any{
+							"userId":         "test-user-id",
+							"organizationId": "test-org-id",
+						},
+					},
+				})
+				return
+			}
 
 			// Respond based on the mutation in the query
 			if strings.Contains(req.Query, "GeneratePresignedPostUrlForArtifact") {

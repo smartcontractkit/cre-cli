@@ -54,6 +54,21 @@ func RunAccountHappyPath(t *testing.T, tc TestConfig, testEthURL, chainName stri
 		var req gqlReq
 		_ = json.NewDecoder(r.Body).Decode(&req)
 
+		w.Header().Set("Content-Type", "application/json")
+
+		// Handle authentication validation query
+		if strings.Contains(req.Query, "getAccountDetails") {
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"data": map[string]any{
+					"getAccountDetails": map[string]any{
+						"userId":         "test-user-id",
+						"organizationId": "test-org-id",
+					},
+				},
+			})
+			return
+		}
+
 		registryAddr := os.Getenv(environments.EnvVarWorkflowRegistryAddress)
 
 		switch {

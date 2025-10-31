@@ -63,6 +63,21 @@ func workflowDeployUnsigned(t *testing.T, tc TestConfig, projectRootFlag, workfl
 			var req graphQLRequest
 			_ = json.NewDecoder(r.Body).Decode(&req)
 
+			w.Header().Set("Content-Type", "application/json")
+
+			// Handle authentication validation query
+			if strings.Contains(req.Query, "getAccountDetails") {
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"data": map[string]any{
+						"getAccountDetails": map[string]any{
+							"userId":         "test-user-id",
+							"organizationId": "test-org-id",
+						},
+					},
+				})
+				return
+			}
+
 			// Handle initiateLinking mutation for auto-link
 			if strings.Contains(req.Query, "initiateLinking") {
 				resp := map[string]any{
@@ -166,6 +181,21 @@ func workflowDeployWithConfigAndLinkedKey(t *testing.T, tc TestConfig, projectRo
 		case strings.HasPrefix(r.URL.Path, "/graphql") && r.Method == http.MethodPost:
 			var req graphQLRequest
 			_ = json.NewDecoder(r.Body).Decode(&req)
+
+			w.Header().Set("Content-Type", "application/json")
+
+			// Handle authentication validation query
+			if strings.Contains(req.Query, "getAccountDetails") {
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"data": map[string]any{
+						"getAccountDetails": map[string]any{
+							"userId":         "test-user-id",
+							"organizationId": "test-org-id",
+						},
+					},
+				})
+				return
+			}
 
 			// Handle listWorkflowOwners query for link verification
 			if strings.Contains(req.Query, "listWorkflowOwners") {

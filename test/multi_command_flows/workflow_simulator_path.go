@@ -8,10 +8,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/smartcontractkit/cre-cli/internal/environments"
 )
 
 type testEVMConfig struct {
@@ -77,6 +80,38 @@ func RunSimulationHappyPath(t *testing.T, tc TestConfig, projectDir string) {
 	t.Helper()
 
 	t.Run("Simulate", func(t *testing.T) {
+		// Set up GraphQL mock server for authentication validation
+		gqlSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasPrefix(r.URL.Path, "/graphql") && r.Method == http.MethodPost {
+				var req graphQLRequest
+				_ = json.NewDecoder(r.Body).Decode(&req)
+
+				w.Header().Set("Content-Type", "application/json")
+
+				// Handle authentication validation query
+				if strings.Contains(req.Query, "getAccountDetails") {
+					_ = json.NewEncoder(w).Encode(map[string]any{
+						"data": map[string]any{
+							"getAccountDetails": map[string]any{
+								"userId":         "test-user-id",
+								"organizationId": "test-org-id",
+							},
+						},
+					})
+					return
+				}
+
+				w.WriteHeader(http.StatusBadRequest)
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"errors": []map[string]string{{"message": "Unsupported GraphQL query"}},
+				})
+			}
+		}))
+		defer gqlSrv.Close()
+
+		// Point GraphQL client to mock server
+		t.Setenv(environments.EnvVarGraphQLURL, gqlSrv.URL+"/graphql")
+
 		srv := startMockPORServer(t)
 		patchWorkflowConfigURL(t, projectDir, "por_workflow", srv.URL)
 

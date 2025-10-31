@@ -153,8 +153,9 @@ func TestCheckLinkStatusViaGraphQL(t *testing.T) {
 			ctx, _ := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
 			// Set up mock credentials for GraphQL client
 			ctx.Credentials = &credentials.Credentials{
-				APIKey:   "test-api-key",
-				AuthType: credentials.AuthTypeApiKey,
+				APIKey:      "test-api-key",
+				AuthType:    credentials.AuthTypeApiKey,
+				IsValidated: true,
 			}
 			h := newHandler(ctx, nil)
 			h.inputs.WorkflowOwner = tt.ownerAddress
@@ -323,8 +324,9 @@ func TestWaitForBackendLinkProcessing(t *testing.T) {
 			ctx, _ := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
 			// Set up mock credentials for GraphQL client
 			ctx.Credentials = &credentials.Credentials{
-				APIKey:   "test-api-key",
-				AuthType: credentials.AuthTypeApiKey,
+				APIKey:      "test-api-key",
+				AuthType:    credentials.AuthTypeApiKey,
+				IsValidated: true,
 			}
 			h := newHandler(ctx, nil)
 			h.inputs.WorkflowOwner = tt.ownerAddress
