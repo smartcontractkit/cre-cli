@@ -18,10 +18,11 @@ type CreLoginTokenSet struct {
 }
 
 type Credentials struct {
-	Tokens   *CreLoginTokenSet `yaml:"tokens"`
-	APIKey   string            `yaml:"api_key"`
-	AuthType string            `yaml:"auth_type"`
-	log      *zerolog.Logger
+	Tokens      *CreLoginTokenSet `yaml:"tokens"`
+	APIKey      string            `yaml:"api_key"`
+	AuthType    string            `yaml:"auth_type"`
+	IsValidated bool              `yaml:"-"`
+	log         *zerolog.Logger
 }
 
 const (

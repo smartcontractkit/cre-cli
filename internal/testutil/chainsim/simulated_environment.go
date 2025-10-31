@@ -79,7 +79,7 @@ func (se *SimulatedEnvironment) createContextWithLogger(logger *zerolog.Logger) 
 		logger.Warn().Err(err).Msg("failed to create new credentials")
 	}
 
-	return &runtime.Context{
+	ctx := &runtime.Context{
 		Logger:         logger,
 		Viper:          v,
 		ClientFactory:  simulatedFactory,
@@ -87,4 +87,11 @@ func (se *SimulatedEnvironment) createContextWithLogger(logger *zerolog.Logger) 
 		EnvironmentSet: environmentSet,
 		Credentials:    creds,
 	}
+
+	// Mark credentials as validated for tests to bypass validation
+	if creds != nil {
+		creds.IsValidated = true
+	}
+
+	return ctx
 }

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -31,6 +30,21 @@ func workflowDeployEoaWithoutAutostart(t *testing.T, tc TestConfig) string {
 		case strings.HasPrefix(r.URL.Path, "/graphql") && r.Method == http.MethodPost:
 			var req graphQLRequest
 			_ = json.NewDecoder(r.Body).Decode(&req)
+
+			w.Header().Set("Content-Type", "application/json")
+
+			// Handle authentication validation query
+			if strings.Contains(req.Query, "getAccountDetails") {
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"data": map[string]any{
+						"getAccountDetails": map[string]any{
+							"userId":         "test-user-id",
+							"organizationId": "test-org-id",
+						},
+					},
+				})
+				return
+			}
 
 			// Respond based on the mutation in the query
 			if strings.Contains(req.Query, "GeneratePresignedPostUrlForArtifact") {
@@ -96,7 +110,7 @@ func workflowDeployEoaWithoutAutostart(t *testing.T, tc TestConfig) string {
 	defer srv.Close()
 
 	// Point the CLI at our mock GraphQL endpoint
-	os.Setenv(environments.EnvVarGraphQLURL, srv.URL+"/graphql")
+	t.Setenv(environments.EnvVarGraphQLURL, srv.URL+"/graphql")
 
 	// Build CLI args - CLI will automatically resolve workflow path using new context system
 	// Note: no auto-start flag (defaults to false)
@@ -139,6 +153,21 @@ func workflowDeployUpdateWithConfig(t *testing.T, tc TestConfig) string {
 			var req graphQLRequest
 			_ = json.NewDecoder(r.Body).Decode(&req)
 
+			w.Header().Set("Content-Type", "application/json")
+
+			// Handle authentication validation query
+			if strings.Contains(req.Query, "getAccountDetails") {
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"data": map[string]any{
+						"getAccountDetails": map[string]any{
+							"userId":         "test-user-id",
+							"organizationId": "test-org-id",
+						},
+					},
+				})
+				return
+			}
+
 			// Respond based on the mutation in the query
 			if strings.Contains(req.Query, "GeneratePresignedPostUrlForArtifact") {
 				// Return presigned POST URL + fields (pointing back to this server)
@@ -203,7 +232,7 @@ func workflowDeployUpdateWithConfig(t *testing.T, tc TestConfig) string {
 	defer srv.Close()
 
 	// Point the CLI at our mock GraphQL endpoint
-	os.Setenv(environments.EnvVarGraphQLURL, srv.URL+"/graphql")
+	t.Setenv(environments.EnvVarGraphQLURL, srv.URL+"/graphql")
 
 	// Build CLI args with config file - CLI will automatically resolve workflow path
 	args := []string{

@@ -55,18 +55,45 @@ func RunSecretsHappyPath(t *testing.T, tc TestConfig, chainName string) {
 	// set up a mock server to simulate the vault gateway
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/graphql" {
+			var req graphQLRequest
+			_ = json.NewDecoder(r.Body).Decode(&req)
+
 			w.Header().Set("Content-Type", "application/json")
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"data": map[string]any{
-					"listWorkflowOwners": map[string]any{
-						"linkedOwners": []map[string]string{
-							{
-								"workflowOwnerAddress": strings.ToLower(constants.TestAddress3), // linked owner
-								"verificationStatus":   "VERIFICATION_STATUS_SUCCESSFULL",       //nolint:misspell // Intentional misspelling to match external API
+
+			// Handle authentication validation query
+			if strings.Contains(req.Query, "getAccountDetails") {
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"data": map[string]any{
+						"getAccountDetails": map[string]any{
+							"userId":         "test-user-id",
+							"organizationId": "test-org-id",
+						},
+					},
+				})
+				return
+			}
+
+			// Handle listWorkflowOwners query
+			if strings.Contains(req.Query, "listWorkflowOwners") {
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"data": map[string]any{
+						"listWorkflowOwners": map[string]any{
+							"linkedOwners": []map[string]string{
+								{
+									"workflowOwnerAddress": strings.ToLower(constants.TestAddress3), // linked owner
+									"verificationStatus":   "VERIFICATION_STATUS_SUCCESSFULL",       //nolint:misspell // Intentional misspelling to match external API
+								},
 							},
 						},
 					},
-				},
+				})
+				return
+			}
+
+			// Fallback error
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"errors": []map[string]string{{"message": "Unsupported GraphQL query"}},
 			})
 			return
 		}
@@ -226,8 +253,22 @@ func RunSecretsListMsig(t *testing.T, tc TestConfig, chainName string) {
 			var req graphQLRequest
 			_ = json.NewDecoder(r.Body).Decode(&req)
 
+			w.Header().Set("Content-Type", "application/json")
+
+			// Handle authentication validation query
+			if strings.Contains(req.Query, "getAccountDetails") {
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"data": map[string]any{
+						"getAccountDetails": map[string]any{
+							"userId":         "test-user-id",
+							"organizationId": "test-org-id",
+						},
+					},
+				})
+				return
+			}
+
 			if strings.Contains(req.Query, "listWorkflowOwners") {
-				w.Header().Set("Content-Type", "application/json")
 				_ = json.NewEncoder(w).Encode(map[string]any{
 					"data": map[string]any{
 						"listWorkflowOwners": map[string]any{

@@ -47,7 +47,7 @@ type graphQLRequest struct {
 }
 
 // workflowDeployEoaWithMockStorage deploys a workflow via CLI, mocking GraphQL + Origin.
-func workflowDeployEoaWithMockStorage(t *testing.T, tc TestConfig) string {
+func workflowDeployEoaWithMockStorage(t *testing.T, tc TestConfig) (output string, gqlURL string) {
 	t.Helper()
 
 	var srv *httptest.Server
@@ -57,6 +57,21 @@ func workflowDeployEoaWithMockStorage(t *testing.T, tc TestConfig) string {
 		case strings.HasPrefix(r.URL.Path, "/graphql") && r.Method == http.MethodPost:
 			var req graphQLRequest
 			_ = json.NewDecoder(r.Body).Decode(&req)
+
+			w.Header().Set("Content-Type", "application/json")
+
+			// Handle authentication validation query
+			if strings.Contains(req.Query, "getAccountDetails") {
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"data": map[string]any{
+						"getAccountDetails": map[string]any{
+							"userId":         "test-user-id",
+							"organizationId": "test-org-id",
+						},
+					},
+				})
+				return
+			}
 
 			// Respond based on the mutation in the query
 			if strings.Contains(req.Query, "GeneratePresignedPostUrlForArtifact") {
@@ -119,10 +134,12 @@ func workflowDeployEoaWithMockStorage(t *testing.T, tc TestConfig) string {
 			return
 		}
 	}))
-	defer srv.Close()
+	// Note: Server is NOT closed here - caller is responsible for keeping it alive
+	// across multiple commands. The server should be closed at the end of the test.
 
 	// Point the CLI at our mock GraphQL endpoint
-	os.Setenv(environments.EnvVarGraphQLURL, srv.URL+"/graphql")
+	gqlURL = srv.URL + "/graphql"
+	t.Setenv(environments.EnvVarGraphQLURL, gqlURL)
 
 	// Build CLI args - CLI will automatically resolve workflow path using new context system
 	args := []string{
@@ -148,14 +165,18 @@ func workflowDeployEoaWithMockStorage(t *testing.T, tc TestConfig) string {
 		stderr.String(),
 	)
 
-	out := StripANSI(stdout.String() + stderr.String())
-
-	return out
+	output = StripANSI(stdout.String() + stderr.String())
+	return
 }
 
 // workflowPauseEoa pauses all workflows (by owner + name) via CLI.
-func workflowPauseEoa(t *testing.T, tc TestConfig) string {
+func workflowPauseEoa(t *testing.T, tc TestConfig, gqlURL string) string {
 	t.Helper()
+
+	// Set GraphQL URL if provided (server should be kept alive from previous command)
+	if gqlURL != "" {
+		t.Setenv(environments.EnvVarGraphQLURL, gqlURL)
+	}
 
 	args := []string{
 		"workflow", "pause",
@@ -183,8 +204,13 @@ func workflowPauseEoa(t *testing.T, tc TestConfig) string {
 }
 
 // workflowActivateEoa activates the workflow (by owner+name) via CLI.
-func workflowActivateEoa(t *testing.T, tc TestConfig) string {
+func workflowActivateEoa(t *testing.T, tc TestConfig, gqlURL string) string {
 	t.Helper()
+
+	// Set GraphQL URL if provided (server should be kept alive from previous command)
+	if gqlURL != "" {
+		t.Setenv(environments.EnvVarGraphQLURL, gqlURL)
+	}
 
 	args := []string{
 		"workflow", "activate",
@@ -212,8 +238,13 @@ func workflowActivateEoa(t *testing.T, tc TestConfig) string {
 }
 
 // workflowDeleteEoa deletes for the current owner+name via CLI (non-interactive).
-func workflowDeleteEoa(t *testing.T, tc TestConfig) string {
+func workflowDeleteEoa(t *testing.T, tc TestConfig, gqlURL string) string {
 	t.Helper()
+
+	// Set GraphQL URL if provided (server should be kept alive from previous command)
+	if gqlURL != "" {
+		t.Setenv(environments.EnvVarGraphQLURL, gqlURL)
+	}
 
 	args := []string{
 		"workflow", "delete",
@@ -248,23 +279,23 @@ func RunHappyPath1Workflow(t *testing.T, tc TestConfig) {
 	// Set dummy API key
 	t.Setenv(credentials.CreApiKeyVar, "test-api")
 
-	// Deploy with mocked storage
-	out := workflowDeployEoaWithMockStorage(t, tc)
+	// Deploy with mocked storage - this creates the server and returns the GraphQL URL
+	out, gqlURL := workflowDeployEoaWithMockStorage(t, tc)
 	require.Contains(t, out, "Workflow compiled", "expected workflow to compile.\nCLI OUTPUT:\n%s", out)
 	require.Contains(t, out, "linked=true", "expected link-status true.\nCLI OUTPUT:\n%s", out)
 	require.Contains(t, out, "Uploaded binary", "expected binary upload to succeed.\nCLI OUTPUT:\n%s", out)
 	require.Contains(t, out, "Workflow deployed successfully", "expected deployment success.\nCLI OUTPUT:\n%s", out)
 
-	// Pause
-	pauseOut := workflowPauseEoa(t, tc)
+	// Pause - reuse the same server
+	pauseOut := workflowPauseEoa(t, tc, gqlURL)
 	require.Contains(t, pauseOut, "Workflows paused successfully", "pause should succeed.\nCLI OUTPUT:\n%s", pauseOut)
 
-	// Activate
-	activateOut := workflowActivateEoa(t, tc)
+	// Activate - reuse the same server
+	activateOut := workflowActivateEoa(t, tc, gqlURL)
 	require.Contains(t, activateOut, "Activating workflow", "should target latest workflow.\nCLI OUTPUT:\n%s", activateOut)
 	require.Contains(t, activateOut, "Workflow activated successfully", "activate should succeed.\nCLI OUTPUT:\n%s", activateOut)
 
-	// Delete
-	deleteOut := workflowDeleteEoa(t, tc)
+	// Delete - reuse the same server
+	deleteOut := workflowDeleteEoa(t, tc, gqlURL)
 	require.Contains(t, deleteOut, "Workflows deleted successfully", "expected final deletion summary.\nCLI OUTPUT:\n%s", deleteOut)
 }

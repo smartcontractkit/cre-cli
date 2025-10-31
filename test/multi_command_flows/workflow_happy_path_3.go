@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -20,8 +19,42 @@ import (
 )
 
 // workflowInit runs cre init to initialize a new workflow project from scratch
-func workflowInit(t *testing.T, projectRootFlag, projectName, workflowName string) string {
+func workflowInit(t *testing.T, projectRootFlag, projectName, workflowName string) (output string, gqlURL string) {
 	t.Helper()
+
+	// Set up mock GraphQL server for authentication validation
+	gqlSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/graphql") && r.Method == http.MethodPost {
+			var req graphQLRequest
+			_ = json.NewDecoder(r.Body).Decode(&req)
+
+			w.Header().Set("Content-Type", "application/json")
+
+			// Handle authentication validation query
+			if strings.Contains(req.Query, "getAccountDetails") {
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"data": map[string]any{
+						"getAccountDetails": map[string]any{
+							"userId":         "test-user-id",
+							"organizationId": "test-org-id",
+						},
+					},
+				})
+				return
+			}
+
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"errors": []map[string]string{{"message": "Unsupported GraphQL query"}},
+			})
+		}
+	}))
+	// Note: Server is NOT closed here - caller is responsible for keeping it alive
+	// across multiple commands. The server should be closed at the end of the test.
+
+	// Point GraphQL client to mock server
+	gqlURL = gqlSrv.URL + "/graphql"
+	t.Setenv(environments.EnvVarGraphQLURL, gqlURL)
 
 	args := []string{
 		"init",
@@ -48,7 +81,8 @@ func workflowInit(t *testing.T, projectRootFlag, projectName, workflowName strin
 		stderr.String(),
 	)
 
-	return StripANSI(stdout.String() + stderr.String())
+	output = StripANSI(stdout.String() + stderr.String())
+	return
 }
 
 // workflowDeployUnsigned deploys with --unsigned flag to test auto-link initiation without contract submission
@@ -62,6 +96,21 @@ func workflowDeployUnsigned(t *testing.T, tc TestConfig, projectRootFlag, workfl
 		case strings.HasPrefix(r.URL.Path, "/graphql") && r.Method == http.MethodPost:
 			var req graphQLRequest
 			_ = json.NewDecoder(r.Body).Decode(&req)
+
+			w.Header().Set("Content-Type", "application/json")
+
+			// Handle authentication validation query
+			if strings.Contains(req.Query, "getAccountDetails") {
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"data": map[string]any{
+						"getAccountDetails": map[string]any{
+							"userId":         "test-user-id",
+							"organizationId": "test-org-id",
+						},
+					},
+				})
+				return
+			}
 
 			// Handle initiateLinking mutation for auto-link
 			if strings.Contains(req.Query, "initiateLinking") {
@@ -130,7 +179,7 @@ func workflowDeployUnsigned(t *testing.T, tc TestConfig, projectRootFlag, workfl
 	defer srv.Close()
 
 	// Point the CLI at our mock GraphQL endpoint
-	os.Setenv(environments.EnvVarGraphQLURL, srv.URL+"/graphql")
+	t.Setenv(environments.EnvVarGraphQLURL, srv.URL+"/graphql")
 
 	// Build CLI args with --unsigned flag to avoid contract submission
 	args := []string{
@@ -166,6 +215,21 @@ func workflowDeployWithConfigAndLinkedKey(t *testing.T, tc TestConfig, projectRo
 		case strings.HasPrefix(r.URL.Path, "/graphql") && r.Method == http.MethodPost:
 			var req graphQLRequest
 			_ = json.NewDecoder(r.Body).Decode(&req)
+
+			w.Header().Set("Content-Type", "application/json")
+
+			// Handle authentication validation query
+			if strings.Contains(req.Query, "getAccountDetails") {
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"data": map[string]any{
+						"getAccountDetails": map[string]any{
+							"userId":         "test-user-id",
+							"organizationId": "test-org-id",
+						},
+					},
+				})
+				return
+			}
 
 			// Handle listWorkflowOwners query for link verification
 			if strings.Contains(req.Query, "listWorkflowOwners") {
@@ -232,7 +296,7 @@ func workflowDeployWithConfigAndLinkedKey(t *testing.T, tc TestConfig, projectRo
 	defer srv.Close()
 
 	// Point the CLI at our mock GraphQL endpoint
-	os.Setenv(environments.EnvVarGraphQLURL, srv.URL+"/graphql")
+	t.Setenv(environments.EnvVarGraphQLURL, srv.URL+"/graphql")
 
 	// Build CLI args - CLI will automatically resolve workflow path using new context system
 	args := []string{
@@ -308,7 +372,7 @@ func RunHappyPath3aWorkflow(t *testing.T, tc TestConfig, projectName, ownerAddre
 	workflowName := "happy-path-3a-workflow"
 
 	// Step 1: Initialize new project with workflow
-	initOut := workflowInit(t, tc.GetProjectRootFlag(), projectName, workflowName)
+	initOut, gqlURL := workflowInit(t, tc.GetProjectRootFlag(), projectName, workflowName)
 	require.Contains(t, initOut, "Workflow initialized successfully", "expected init to succeed.\nCLI OUTPUT:\n%s", initOut)
 
 	// Build the project root flag pointing to the newly created project
@@ -323,6 +387,8 @@ func RunHappyPath3aWorkflow(t *testing.T, tc TestConfig, projectName, ownerAddre
 	}
 
 	// Step 3: Deploy with unlinked key using --unsigned flag to avoid contract submission
+	// Reuse the same GraphQL server from init
+	t.Setenv(environments.EnvVarGraphQLURL, gqlURL)
 	deployOut, deployErr := workflowDeployUnsigned(t, tc, projectRootFlag, workflowName)
 
 	// Verify auto-link flow was triggered

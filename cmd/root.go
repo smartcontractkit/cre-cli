@@ -112,17 +112,17 @@ func newRootCommand() *cobra.Command {
 				runtimeContext.ClientFactory = client.NewFactory(&newLogger, v)
 			}
 
-			if isLoadCredentials(cmd) {
-				err := runtimeContext.AttachCredentials()
-				if err != nil {
-					return fmt.Errorf("authentication required: %w", err)
-				}
-			}
-
-			// Load environment set early so it's available even if settings fail
 			err := runtimeContext.AttachEnvironmentSet()
 			if err != nil {
 				return fmt.Errorf("failed to load environment details: %w", err)
+			}
+
+			if isLoadCredentials(cmd) {
+				skipValidation := shouldSkipValidation(cmd)
+				err := runtimeContext.AttachCredentials(cmd.Context(), skipValidation)
+				if err != nil {
+					return fmt.Errorf("authentication required: %w", err)
+				}
 			}
 
 			// load settings from yaml files
@@ -292,6 +292,15 @@ func isLoadCredentials(cmd *cobra.Command) bool {
 
 	_, exists := excludedCommands[cmd.CommandPath()]
 	return !exists
+}
+
+func shouldSkipValidation(cmd *cobra.Command) bool {
+	var excludedCommands = map[string]struct{}{
+		"cre logout": {},
+	}
+
+	_, exists := excludedCommands[cmd.CommandPath()]
+	return exists
 }
 
 func shouldCheckForUpdates(cmd *cobra.Command) bool {
