@@ -14,8 +14,8 @@ func TestNew_Default(t *testing.T) {
 	logger := testutil.NewTestLogger()
 
 	_, err := New(logger)
-	if err == nil || err.Error() != "you are not logged in, try running cre login" {
-		t.Fatalf("expected error %q, got %v", "you are not logged in, try running cre login", err)
+	if err == nil || err.Error() != "you are not logged in, run cre login and try again" {
+		t.Fatalf("expected error %q, got %v", "you are not logged in, run cre login and try again", err)
 	}
 }
 

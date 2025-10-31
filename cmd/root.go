@@ -115,7 +115,7 @@ func newRootCommand() *cobra.Command {
 			if isLoadCredentials(cmd) {
 				err := runtimeContext.AttachCredentials()
 				if err != nil {
-					return fmt.Errorf("failed to attach credentials: %w", err)
+					return fmt.Errorf("authentication required: %w", err)
 				}
 			}
 
