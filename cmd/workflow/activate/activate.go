@@ -67,6 +67,7 @@ type handler struct {
 	environmentSet *environments.EnvironmentSet
 	inputs         Inputs
 	wrc            *client.WorkflowRegistryV2Client
+	runtimeContext *runtime.Context
 
 	validated bool
 
@@ -80,6 +81,7 @@ func newHandler(ctx *runtime.Context) *handler {
 		clientFactory:  ctx.ClientFactory,
 		settings:       ctx.Settings,
 		environmentSet: ctx.EnvironmentSet,
+		runtimeContext: ctx,
 		validated:      false,
 		wg:             sync.WaitGroup{},
 		wrcErr:         nil,
@@ -154,6 +156,8 @@ func (h *handler) Execute() error {
 	})
 
 	latest := workflows[0]
+
+	h.runtimeContext.Workflow.ID = hex.EncodeToString(latest.WorkflowId[:])
 
 	// Validate precondition: workflow must be in paused state
 	if latest.Status != WorkflowStatusPaused {
