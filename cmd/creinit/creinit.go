@@ -356,9 +356,10 @@ func (h *handler) Execute(inputs Inputs) error {
 		return fmt.Errorf("failed to generate %s file: %w", constants.DefaultWorkflowSettingsFileName, err)
 	}
 
-	if selectedLanguageTemplate.Lang == TemplateLangGo {
+	switch selectedLanguageTemplate.Lang {
+	case TemplateLangGo:
 		h.runtimeContext.Workflow.Language = constants.WorkflowLanguageGolang
-	} else if selectedLanguageTemplate.Lang == TemplateLangTS {
+	case TemplateLangTS:
 		h.runtimeContext.Workflow.Language = constants.WorkflowLanguageTypeScript
 	}
 
