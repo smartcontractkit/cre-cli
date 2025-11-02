@@ -115,18 +115,20 @@ build, test, and deploy workflows quickly.`,
 }
 
 type handler struct {
-	log           *zerolog.Logger
-	clientFactory client.Factory
-	stdin         io.Reader
-	validated     bool
+	log            *zerolog.Logger
+	clientFactory  client.Factory
+	stdin          io.Reader
+	runtimeContext *runtime.Context
+	validated      bool
 }
 
 func newHandler(ctx *runtime.Context, stdin io.Reader) *handler {
 	return &handler{
-		log:           ctx.Logger,
-		clientFactory: ctx.ClientFactory,
-		stdin:         stdin,
-		validated:     false,
+		log:            ctx.Logger,
+		clientFactory:  ctx.ClientFactory,
+		stdin:          stdin,
+		runtimeContext: ctx,
+		validated:      false,
 	}
 }
 
@@ -352,6 +354,12 @@ func (h *handler) Execute(inputs Inputs) error {
 	_, err = settings.GenerateWorkflowSettingsFile(workflowDirectory, workflowName, selectedLanguageTemplate.EntryPoint)
 	if err != nil {
 		return fmt.Errorf("failed to generate %s file: %w", constants.DefaultWorkflowSettingsFileName, err)
+	}
+
+	if selectedLanguageTemplate.Lang == TemplateLangGo {
+		h.runtimeContext.Workflow.Language = constants.WorkflowLanguageGolang
+	} else if selectedLanguageTemplate.Lang == TemplateLangTS {
+		h.runtimeContext.Workflow.Language = constants.WorkflowLanguageTypeScript
 	}
 
 	fmt.Println("\nWorkflow initialized successfully!")

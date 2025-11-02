@@ -20,6 +20,7 @@ import (
 
 	"github.com/smartcontractkit/chainlink-testing-framework/seth"
 
+	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/logger"
 )
 
@@ -159,6 +160,13 @@ func ToStringSlice(args []any) []string {
 		}
 	}
 	return result
+}
+
+func GetWorkflowLanguage(inputFile string) string {
+	if strings.HasSuffix(inputFile, ".ts") {
+		return constants.WorkflowLanguageTypeScript
+	}
+	return constants.WorkflowLanguageGolang
 }
 
 // Gets a build command for either Golang or Typescript based on the filename

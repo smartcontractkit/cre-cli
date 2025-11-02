@@ -120,20 +120,20 @@ func buildUserEvent(cmd *cobra.Command, args []string, exitCode int, runtimeCtx 
 	event.Actor = CollectActorInfo()
 
 	// Collect workflow information if available
-	if runtimeCtx != nil && runtimeCtx.Settings != nil {
+	if runtimeCtx != nil {
 		workflowInfo := &WorkflowInfo{}
 
-		// Only populate if we have workflow name (indicates a workflow context)
-		if name := runtimeCtx.Settings.Workflow.UserWorkflowSettings.WorkflowName; name != "" {
-			workflowInfo.Name = name
+		// Populate workflow info from settings if available
+		if runtimeCtx.Settings != nil {
+			workflowInfo.Name = runtimeCtx.Settings.Workflow.UserWorkflowSettings.WorkflowName
 			workflowInfo.OwnerAddress = runtimeCtx.Settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress
-			// workflowInfo.ID is populated from runtime context by workflow command handlers
-			if runtimeCtx.Workflow.ID != "" {
-				workflowInfo.ID = runtimeCtx.Workflow.ID
-			}
-			// workflowInfo.Language would need to be detected from workflow path
-			event.Workflow = workflowInfo
 		}
+
+		// Populate ID and Language from runtime context
+		workflowInfo.ID = runtimeCtx.Workflow.ID
+		workflowInfo.Language = runtimeCtx.Workflow.Language
+
+		event.Workflow = workflowInfo
 	}
 
 	return event
