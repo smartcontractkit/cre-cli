@@ -304,7 +304,7 @@ func (h *handler) Execute(inputs Inputs) error {
 		if err != nil {
 			return err
 		}
-		err = runCommand(inputs.ProjectRoot, "go", "get", "github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm@"+creinit.CapabilitiesVersion)
+		err = runCommand(inputs.ProjectRoot, "go", "get", "github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm@"+creinit.EVMCapabilitiesVersion)
 		if err != nil {
 			return err
 		}
