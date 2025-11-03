@@ -86,7 +86,7 @@ func NewHandler(ctx *runtime.Context, secretsFilePath string) (*Handler, error) 
 		EnvironmentSet:  ctx.EnvironmentSet,
 		Credentials:     ctx.Credentials,
 	}
-	h.Gw = &HTTPClient{URL: h.EnvironmentSet.GatewayURL, Client: &http.Client{Timeout: 10 * time.Second}}
+	h.Gw = &HTTPClient{URL: h.EnvironmentSet.GatewayURL, Client: &http.Client{Timeout: 90 * time.Second}}
 
 	wrc, err := h.ClientFactory.NewWorkflowRegistryV2Client()
 	if err != nil {
