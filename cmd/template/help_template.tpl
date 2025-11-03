@@ -1,11 +1,12 @@
 {{- with (or .Long .Short)}}{{.}}{{end}}
 
 Usage:
-{{- if .Runnable}}
+{{- if .HasAvailableSubCommands}}
+  {{.CommandPath}} [command]{{if .HasAvailableFlags}} [flags]{{end}}
+{{- else}}
   {{.UseLine}}
-{{- else if .HasAvailableSubCommands}}
-  {{.CommandPath}} [command]
 {{- end}}
+
 
 {{- /* ============================================ */}}
 {{- /* Available Commands Section                 */}}
