@@ -3,7 +3,7 @@ module flowtest69
 go 1.24.5
 
 require (
-	github.com/smartcontractkit/cre-sdk-go v1.0.0-beta.0
+	github.com/smartcontractkit/cre-sdk-go v1.0.0
 	github.com/smartcontractkit/cre-sdk-go/capabilities/scheduler/cron v1.0.0-beta.0
 )
 
