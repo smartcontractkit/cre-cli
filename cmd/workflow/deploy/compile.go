@@ -45,6 +45,12 @@ func (h *handler) Compile() error {
 
 	tmpWasmFileName := "tmp.wasm"
 	workflowMainFile := filepath.Base(h.inputs.WorkflowPath)
+
+	// Set language in runtime context based on workflow file extension
+	if h.runtimeContext != nil {
+		h.runtimeContext.Workflow.Language = cmdcommon.GetWorkflowLanguage(workflowMainFile)
+	}
+
 	buildCmd := cmdcommon.GetBuildCmd(workflowMainFile, tmpWasmFileName, workflowRootFolder)
 	h.log.Debug().
 		Str("Workflow directory", buildCmd.Dir).

@@ -26,7 +26,8 @@ type Context struct {
 }
 
 type WorkflowRuntime struct {
-	ID string
+	ID       string
+	Language string
 }
 
 func NewContext(logger *zerolog.Logger, viper *viper.Viper) *Context {

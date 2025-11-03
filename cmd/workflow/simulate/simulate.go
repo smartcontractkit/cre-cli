@@ -94,14 +94,16 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 }
 
 type handler struct {
-	log       *zerolog.Logger
-	validated bool
+	log            *zerolog.Logger
+	runtimeContext *runtime.Context
+	validated      bool
 }
 
 func newHandler(ctx *runtime.Context) *handler {
 	return &handler{
-		log:       ctx.Logger,
-		validated: false,
+		log:            ctx.Logger,
+		runtimeContext: ctx,
+		validated:      false,
 	}
 }
 
@@ -186,6 +188,12 @@ func (h *handler) Execute(inputs Inputs) error {
 	workflowRootFolder := filepath.Dir(inputs.WorkflowPath)
 	tmpWasmFileName := "tmp.wasm"
 	workflowMainFile := filepath.Base(inputs.WorkflowPath)
+
+	// Set language in runtime context based on workflow file extension
+	if h.runtimeContext != nil {
+		h.runtimeContext.Workflow.Language = cmdcommon.GetWorkflowLanguage(workflowMainFile)
+	}
+
 	buildCmd := cmdcommon.GetBuildCmd(workflowMainFile, tmpWasmFileName, workflowRootFolder)
 
 	h.log.Debug().
