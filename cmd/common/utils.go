@@ -162,8 +162,11 @@ func ToStringSlice(args []any) []string {
 	return result
 }
 
+// GetWorkflowLanguage determines the workflow language based on the file extension
+// Note: inputFile can be a file path (e.g., "main.ts" or "main.go") or a directory (for Go workflows, e.g., ".")
+// Returns constants.WorkflowLanguageTypeScript for .ts or .tsx files, constants.WorkflowLanguageGolang otherwise
 func GetWorkflowLanguage(inputFile string) string {
-	if strings.HasSuffix(inputFile, ".ts") {
+	if strings.HasSuffix(inputFile, ".ts") || strings.HasSuffix(inputFile, ".tsx") {
 		return constants.WorkflowLanguageTypeScript
 	}
 	return constants.WorkflowLanguageGolang
@@ -171,7 +174,7 @@ func GetWorkflowLanguage(inputFile string) string {
 
 // Gets a build command for either Golang or Typescript based on the filename
 func GetBuildCmd(inputFile string, outputFile string, rootFolder string) *exec.Cmd {
-	isTypescriptWorkflow := strings.HasSuffix(inputFile, ".ts")
+	isTypescriptWorkflow := strings.HasSuffix(inputFile, ".ts") || strings.HasSuffix(inputFile, ".tsx")
 
 	var buildCmd *exec.Cmd
 	if isTypescriptWorkflow {
