@@ -232,7 +232,7 @@ bash)
 
         if [[ -w $bash_config ]]; then
             {
-                echo -e '\n# cre'
+                echo '\n# cre'
 
                 for command in "${commands[@]}"; do
                     echo "$command"
