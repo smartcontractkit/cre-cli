@@ -159,7 +159,7 @@ fish)
     if [[ -w $fish_config ]]; then
         if ! grep -q "# cre" "$fish_config"; then
                 {
-                    echo -e '\n# cre'
+                    echo '\n# cre'
                     for command in "${commands[@]}"; do
                         echo "$command"
                     done
@@ -188,7 +188,7 @@ zsh)
 
     if [[ -w $zsh_config ]]; then
         {
-            echo -e '\n# cre'
+            echo '\n# cre'
 
             for command in "${commands[@]}"; do
                 echo "$command"
@@ -232,7 +232,7 @@ bash)
 
         if [[ -w $bash_config ]]; then
             {
-                echo -e '\n# cre'
+                echo '\n# cre'
 
                 for command in "${commands[@]}"; do
                     echo "$command"
