@@ -82,7 +82,7 @@ This will create Go binding files for all the contracts (ReserveManager, SimpleE
 ## 6. Configure workflow
 
 Configure `config.json` for the workflow
-- `schedule` should be set to `"*/3 * * * * *"` for every 3 seconds or any other cron expression you prefer
+- `schedule` should be set to `"0 */1 * * * *"` for every 1 minute(s) or any other cron expression you prefer, note [CRON service quotas](https://docs.chain.link/cre/service-quotas)
 - `url` should be set to existing reserves HTTP endpoint API
 - `tokenAddress` should be the SimpleERC20 contract address
 - `reserveManagerAddress` should be the ReserveManager contract address
