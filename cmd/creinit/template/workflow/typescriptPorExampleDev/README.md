@@ -80,7 +80,7 @@ For a quick start, every contract used in this workflow is already provided in t
 
 Configure `config.json` for the workflow
 
-- `schedule` should be set to `"*/30 * * * * *"` for every 30 seconds or any other cron expression you prefer
+- `schedule` should be set to `"0 */1 * * * *"` for every 1 minute(s) or any other cron expression you prefer, note [CRON service quotas](https://docs.chain.link/cre/service-quotas)
 - `url` should be set to existing reserves HTTP endpoint API
 - `tokenAddress` should be the SimpleERC20 contract address
 - `porAddress` should be the ReserveManager contract address
