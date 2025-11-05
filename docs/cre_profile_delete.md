@@ -1,20 +1,19 @@
-## cre login
+## cre profile delete
 
-Start authentication flow
+Delete a profile
 
 ### Synopsis
 
-Opens browser for user login and saves credentials.
+Remove a profile and its associated credentials.
 
 ```
-cre login [optional flags]
+cre profile delete <profile-name> [optional flags]
 ```
 
 ### Options
 
 ```
-  -h, --help             help for login
-      --profile string   Profile name for this login (defaults to organization name)
+  -h, --help   help for delete
 ```
 
 ### Options inherited from parent commands
@@ -28,5 +27,5 @@ cre login [optional flags]
 
 ### SEE ALSO
 
-* [cre](cre.md)	 - CRE CLI tool
+* [cre profile](cre_profile.md)	 - Manage authentication profiles
 

@@ -24,4 +24,3 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 
 	return profileCmd
 }
-

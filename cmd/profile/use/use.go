@@ -57,4 +57,3 @@ func (h *handler) execute(profileName string) error {
 
 	return nil
 }
-

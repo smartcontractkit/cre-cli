@@ -1,20 +1,19 @@
-## cre login
+## cre profile rename
 
-Start authentication flow
+Rename a profile
 
 ### Synopsis
 
-Opens browser for user login and saves credentials.
+Change the name of an existing profile.
 
 ```
-cre login [optional flags]
+cre profile rename <old-name> <new-name> [optional flags]
 ```
 
 ### Options
 
 ```
-  -h, --help             help for login
-      --profile string   Profile name for this login (defaults to organization name)
+  -h, --help   help for rename
 ```
 
 ### Options inherited from parent commands
@@ -28,5 +27,5 @@ cre login [optional flags]
 
 ### SEE ALSO
 
-* [cre](cre.md)	 - CRE CLI tool
+* [cre profile](cre_profile.md)	 - Manage authentication profiles
 

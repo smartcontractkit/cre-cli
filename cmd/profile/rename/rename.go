@@ -49,4 +49,3 @@ func (h *handler) execute(oldName, newName string) error {
 
 	return nil
 }
-

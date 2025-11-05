@@ -96,7 +96,6 @@ func (h *handler) execute() error {
 	profileName := h.profileName
 	if profileName == "" {
 		// Default to a name derived from current time or use a sensible default
-		profileName = "default"
 		if len(profileMgr.ListProfiles()) == 0 {
 			// First login, use "default"
 			profileName = "default"
