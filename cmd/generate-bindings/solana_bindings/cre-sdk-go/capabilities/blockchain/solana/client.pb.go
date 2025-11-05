@@ -1,7 +1,6 @@
 package solana
 
 import (
-	"math/big"
 	"time"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query/primitives"
@@ -32,10 +31,6 @@ type SubkeyFilterCriteria struct {
 type SubKeyPathAndFilter struct {
 	SubkeyPath string
 	Value      any
-}
-
-type WriteReportReply struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
 }
 
 type WriteCreReportRequest struct {
@@ -98,22 +93,22 @@ type SimulateTXReply struct {
 }
 
 // represents solana-go EncodingType
-type EncodingType string
+// type EncodingType string
 
-const (
-	EncodingBase58     EncodingType = "base58"      // limited to Account data of less than 129 bytes
-	EncodingBase64     EncodingType = "base64"      // will return base64 encoded data for Account data of any size
-	EncodingBase64Zstd EncodingType = "base64+zstd" // compresses the Account data using Zstandard and base64-encodes the result
+// const (
+// 	EncodingBase58     EncodingType = "base58"      // limited to Account data of less than 129 bytes
+// 	EncodingBase64     EncodingType = "base64"      // will return base64 encoded data for Account data of any size
+// 	EncodingBase64Zstd EncodingType = "base64+zstd" // compresses the Account data using Zstandard and base64-encodes the result
 
-	// attempts to use program-specific state parsers to
-	// return more human-readable and explicit account state data.
-	// If "jsonParsed" is requested but a parser cannot be found,
-	// the field falls back to "base64" encoding, detectable when the data field is type <string>.
-	// Cannot be used if specifying dataSlice parameters (offset, length).
-	EncodingJSONParsed EncodingType = "jsonParsed"
+// 	// attempts to use program-specific state parsers to
+// 	// return more human-readable and explicit account state data.
+// 	// If "jsonParsed" is requested but a parser cannot be found,
+// 	// the field falls back to "base64" encoding, detectable when the data field is type <string>.
+// 	// Cannot be used if specifying dataSlice parameters (offset, length).
+// 	EncodingJSONParsed EncodingType = "jsonParsed"
 
-	EncodingJSON EncodingType = "json" // NOTE: you're probably looking for EncodingJSONParsed
-)
+// 	EncodingJSON EncodingType = "json" // NOTE: you're probably looking for EncodingJSONParsed
+// )
 
 // represents solana-go CommitmentType
 type CommitmentType string
@@ -164,10 +159,38 @@ type GetAccountInfoRequest struct {
 	Opts    *GetAccountInfoOpts
 }
 
-type GetAccountInfoReply struct {
-	RPCContext
-	Value *Account
+func (*GetAccountInfoRequest) ProtoMessage() {}
+
+func (x *GetAccountInfoRequest) ProtoReflect() protoreflect.Message {
+	var file_capabilities_blockchain_evm_v1alpha_client_proto_msgTypes = make([]protoimpl.MessageInfo, 26)
+	mi := &file_capabilities_blockchain_evm_v1alpha_client_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
 }
+
+// type GetAccountInfoReply struct {
+// 	RPCContext
+// 	Value *Account
+// }
+
+// func (x *GetAccountInfoReply) ProtoReflect() protoreflect.Message {
+// 	var file_capabilities_blockchain_evm_v1alpha_client_proto_msgTypes = make([]protoimpl.MessageInfo, 26)
+// 	mi := &file_capabilities_blockchain_evm_v1alpha_client_proto_msgTypes[2]
+// 	if x != nil {
+// 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+// 		if ms.LoadMessageInfo() == nil {
+// 			ms.StoreMessageInfo(mi)
+// 		}
+// 		return ms
+// 	}
+// 	return mi.MessageOf(x)
+// }
 
 type GetMultipleAccountsRequest struct {
 	Accounts []solanatypes.PublicKey
@@ -236,41 +259,41 @@ type GetAccountInfoOpts struct {
 	MinContextSlot *uint64
 }
 
-type Context struct {
-	Slot uint64
-}
+// type Context struct {
+// 	Slot uint64
+// }
 
-// represents solana-go RPCContext
-type RPCContext struct {
-	Context Context
-}
+// // represents solana-go RPCContext
+// type RPCContext struct {
+// 	Context Context
+// }
 
-type DataBytesOrJSON struct {
-	RawDataEncoding EncodingType
-	AsDecodedBinary []byte
-	AsJSON          []byte
-}
+// type DataBytesOrJSON struct {
+// 	RawDataEncoding EncodingType
+// 	AsDecodedBinary []byte
+// 	AsJSON          []byte
+// }
 
-// represents solana-go Account
-type Account struct {
-	// Number of lamports assigned to this account
-	Lamports uint64
+// // represents solana-go Account
+// type Account struct {
+// 	// Number of lamports assigned to this account
+// 	Lamports uint64
 
-	// Pubkey of the program this account has been assigned to
-	Owner PublicKey
+// 	// Pubkey of the program this account has been assigned to
+// 	Owner PublicKey
 
-	// Data associated with the account, either as encoded binary data or JSON format {<program>: <state>}, depending on encoding parameter
-	Data *DataBytesOrJSON
+// 	// Data associated with the account, either as encoded binary data or JSON format {<program>: <state>}, depending on encoding parameter
+// 	Data *DataBytesOrJSON
 
-	// Boolean indicating if the account contains a program (and is strictly read-only)
-	Executable bool
+// 	// Boolean indicating if the account contains a program (and is strictly read-only)
+// 	Executable bool
 
-	// The epoch at which this account will next owe rent
-	RentEpoch *big.Int
+// 	// The epoch at which this account will next owe rent
+// 	RentEpoch *big.Int
 
-	// The amount of storage space required to store the token account
-	Space uint64
-}
+// 	// The amount of storage space required to store the token account
+// 	Space uint64
+// }
 
 // represents solana-go TransactionDetailsType
 type TransactionDetailsType string

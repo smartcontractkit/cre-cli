@@ -26,7 +26,7 @@ const (
 	PkgBindings       = "github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana_bindings/cre-sdk-go/capabilities/blockchain/solana/bindings"
 	PkgSolanaTypes    = "github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana_bindings/cre-sdk-go/types"
 	PkgIdl            = "github.com/gagliardetto/anchor-go/idl"
-	PkgAnchorIdlCodec = "github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana_bindings/cre-sdk-go/codec"
+	PkgAnchorIdlCodec = "github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana_bindings/cre-sdk-go/anchorcodec"
 	PkgJson           = "encoding/json"
 )
 

@@ -111,7 +111,7 @@ func (g *Generator) gen_eventParser(eventNames []string) (Code, error) {
 			code.Func().
 				Params(Id("c").Op("*").Id("Codec")). // method receiver
 				Id("Decode"+name).
-				Params(Id("event").Qual(PkgSolanaCre, "Log")).
+				Params(Id("event").Op("*").Qual(PkgSolanaCre, "Log")).
 				Params(Op("*").Id(name), Error()).
 				BlockFunc(func(block *Group) {
 					block.List(Id("res"), Id("err")).Op(":=").Id("ParseEvent_" + name).Call(
@@ -230,7 +230,8 @@ func (g *Generator) gen_eventParser(eventNames []string) (Code, error) {
 					// return &<Event>Trigger{ Trigger: rawTrigger }, nil
 					b.Return(
 						Op("&").Id(name+"Trigger").Values(jen.Dict{
-							Id("Trigger"): Id("rawTrigger"),
+							Id("Trigger"):  Id("rawTrigger"),
+							Id("contract"): Id("c"),
 						}),
 						Nil(),
 					)

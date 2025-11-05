@@ -62,7 +62,7 @@ func (c *DataStorage) ReadAccount_DataAccount(
 	// cre account read
 	bn := cre.PromiseFromResult(uint64(blockNumber.Int64()), nil)
 	promise := cre.ThenPromise(bn, func(bn uint64) cre.Promise[*solana.GetAccountInfoReply] {
-		return c.client.GetAccountInfoWithOpts(runtime, solana.GetAccountInfoRequest{
+		return c.client.GetAccountInfoWithOpts(runtime, &solana.GetAccountInfoRequest{
 			Account: types.PublicKey(accountAddress),
 			Opts:    &solana.GetAccountInfoOpts{MinContextSlot: &bn},
 		})

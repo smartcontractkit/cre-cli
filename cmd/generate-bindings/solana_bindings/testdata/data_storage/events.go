@@ -62,7 +62,7 @@ func ParseEvent_AccessLogged(eventData []byte) (*AccessLogged, error) {
 	return event, nil
 }
 
-func (c *Codec) DecodeAccessLogged(event solana.Log) (*AccessLogged, error) {
+func (c *Codec) DecodeAccessLogged(event *solana.Log) (*AccessLogged, error) {
 	res, err := ParseEvent_AccessLogged(event.Data)
 	if err != nil {
 		return nil, err
@@ -106,7 +106,10 @@ func (c *DataStorage) LogTrigger_AccessLogged(chainSelector uint64, subKeyPathAn
 		SubkeyFilters: subKeyFilters,
 		SubkeyPaths:   subKeyPaths,
 	})
-	return &AccessLoggedTrigger{Trigger: rawTrigger}, nil
+	return &AccessLoggedTrigger{
+		Trigger:  rawTrigger,
+		contract: c,
+	}, nil
 }
 
 func ParseEvent_DynamicEvent(eventData []byte) (*DynamicEvent, error) {
@@ -126,7 +129,7 @@ func ParseEvent_DynamicEvent(eventData []byte) (*DynamicEvent, error) {
 	return event, nil
 }
 
-func (c *Codec) DecodeDynamicEvent(event solana.Log) (*DynamicEvent, error) {
+func (c *Codec) DecodeDynamicEvent(event *solana.Log) (*DynamicEvent, error) {
 	res, err := ParseEvent_DynamicEvent(event.Data)
 	if err != nil {
 		return nil, err
@@ -170,7 +173,10 @@ func (c *DataStorage) LogTrigger_DynamicEvent(chainSelector uint64, subKeyPathAn
 		SubkeyFilters: subKeyFilters,
 		SubkeyPaths:   subKeyPaths,
 	})
-	return &DynamicEventTrigger{Trigger: rawTrigger}, nil
+	return &DynamicEventTrigger{
+		Trigger:  rawTrigger,
+		contract: c,
+	}, nil
 }
 
 func ParseEvent_NoFields(eventData []byte) (*NoFields, error) {
@@ -190,7 +196,7 @@ func ParseEvent_NoFields(eventData []byte) (*NoFields, error) {
 	return event, nil
 }
 
-func (c *Codec) DecodeNoFields(event solana.Log) (*NoFields, error) {
+func (c *Codec) DecodeNoFields(event *solana.Log) (*NoFields, error) {
 	res, err := ParseEvent_NoFields(event.Data)
 	if err != nil {
 		return nil, err
@@ -234,5 +240,8 @@ func (c *DataStorage) LogTrigger_NoFields(chainSelector uint64, subKeyPathAndVal
 		SubkeyFilters: subKeyFilters,
 		SubkeyPaths:   subKeyPaths,
 	})
-	return &NoFieldsTrigger{Trigger: rawTrigger}, nil
+	return &NoFieldsTrigger{
+		Trigger:  rawTrigger,
+		contract: c,
+	}, nil
 }

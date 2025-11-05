@@ -53,19 +53,32 @@ func (g *Generator) genfile_constructor() (*OutputFile, error) {
 				Op("*").Id(tools.ToCamelUpper(g.options.Package)), Error(),
 			).
 			Block(
-				Id("idlTypes").Op(":=").Qual(PkgAnchorIdlCodec, "IdlTypeDefSlice"),
+				// type idlTypesStruct struct { anchorcodec.IdlTypeDefSlice `json:"types"` }
+				Type().Id("idlTypesStruct").Struct(
+					Qual(PkgAnchorIdlCodec, "IdlTypeDefSlice").
+						Tag(map[string]string{"json": "types"}),
+				),
+
+				// var idlTypes idlTypesStruct
+				Var().Id("idlTypes").Id("idlTypesStruct"),
+
+				// err := json.Unmarshal([]byte(IDL), &idlTypes)
 				Id("err").Op(":=").Qual(PkgJson, "Unmarshal").Call(
 					Index().Byte().Parens(Id("IDL")),
-					Id("idlTypes"),
+					Op("&").Id("idlTypes"),
 				),
+
+				// if err != nil { return nil, err }
 				If(Err().Op("!=").Nil()).Block(
 					Return(Nil(), Err()),
 				),
+
+				// return &DataStorage{ Codec: &Codec{}, IdlTypes: &idlTypes.IdlTypeDefSlice, client: client }, nil
 				Return(
 					Op("&").Id(tools.ToCamelUpper(g.options.Package)).Values(Dict{
-						Id("IdlTypes"): Id("idlTypes"),
-						Id("client"):   Id("client"),
 						Id("Codec"):    Op("&").Id("Codec").Values(),
+						Id("IdlTypes"): Op("&").Id("idlTypes").Dot("IdlTypeDefSlice"),
+						Id("client"):   Id("client"),
 					}),
 					Nil(),
 				),

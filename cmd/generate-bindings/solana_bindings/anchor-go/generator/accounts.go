@@ -152,7 +152,7 @@ func (g *Generator) gen_accountParser(accountNames []string) (Code, error) {
 								Return(
 									Id("c").Dot("client").Dot("GetAccountInfoWithOpts").Call(
 										Id("runtime"),
-										Qual(PkgSolanaCre, "GetAccountInfoRequest").Values(
+										Op("&").Qual(PkgSolanaCre, "GetAccountInfoRequest").Values(
 											Dict{
 												Id("Account"): Qual(PkgSolanaTypes, "PublicKey").Call(Id("accountAddress")),
 												Id("Opts"): Op("&").Qual(PkgSolanaCre, "GetAccountInfoOpts").Values(
