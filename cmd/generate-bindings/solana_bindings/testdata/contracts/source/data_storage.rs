@@ -124,6 +124,14 @@ pub mod data_storage {
 
         Ok(())
     }
+
+    pub fn handle_forwarder_report(
+        _ctx: Context<HandleForwarderReport>,
+        _report: ForwarderReport,
+    ) -> Result<()> {
+        // TODO: implement forwarding logic here
+        Ok(())
+    }
 }
 
 // read data from here
@@ -175,6 +183,12 @@ pub struct UserData {
     pub value: String,
 }
 
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Debug, PartialEq)]
+pub struct ForwarderReport {
+    pub account_hash: Vec<u8>,
+    pub payload: Vec<u8>,
+}
+
 #[event]
 pub struct DynamicEvent {
     pub key: String,
@@ -212,6 +226,9 @@ pub struct GetReserves {}
 pub struct GetMultipleReserves {}
 #[derive(Accounts)]
 pub struct GetTupleReserves {}
+
+#[derive(Accounts)]
+pub struct HandleForwarderReport {}
 
 #[derive(Accounts)]
 pub struct LogAccess<'info> {

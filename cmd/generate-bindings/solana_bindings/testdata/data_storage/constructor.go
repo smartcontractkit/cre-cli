@@ -4,11 +4,7 @@
 package data_storage
 
 import (
-	"bytes"
 	"encoding/json"
-	"fmt"
-	errors "github.com/gagliardetto/anchor-go/errors"
-	binary "github.com/gagliardetto/binary"
 	solanago "github.com/gagliardetto/solana-go"
 	anchorcodec "github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana_bindings/cre-sdk-go/anchorcodec"
 	solana "github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana_bindings/cre-sdk-go/capabilities/blockchain/solana"
@@ -51,39 +47,6 @@ type DataStorageCodec interface {
 	EncodeNoFieldsStruct(in NoFields) ([]byte, error)
 	EncodeUpdateReservesStruct(in UpdateReserves) ([]byte, error)
 	EncodeUserDataStruct(in UserData) ([]byte, error)
-}
-
-type ForwarderReport struct {
-	AccountHash [32]byte `json:"account_hash"`
-	Payload     []byte   `json:"payload"`
-}
-
-func (c *Codec) EncodeForwarderReportStruct(in ForwarderReport) ([]byte, error) {
-	return in.Marshal()
-}
-
-func (obj ForwarderReport) MarshalWithEncoder(encoder *binary.Encoder) (err error) {
-	// Serialize `AccountHash`:
-	err = encoder.Encode(obj.AccountHash)
-	if err != nil {
-		return errors.NewField("AccountHash", err)
-	}
-	// Serialize `Payload`:
-	err = encoder.Encode(obj.Payload)
-	if err != nil {
-		return errors.NewField("Payload", err)
-	}
-	return nil
-}
-
-func (obj ForwarderReport) Marshal() ([]byte, error) {
-	buf := bytes.NewBuffer(nil)
-	encoder := binary.NewBorshEncoder(buf)
-	err := obj.MarshalWithEncoder(encoder)
-	if err != nil {
-		return nil, fmt.Errorf("error while encoding ForwarderReport: %w", err)
-	}
-	return buf.Bytes(), nil
 }
 
 func EncodeAccountList(accountList []solanago.PublicKey) ([32]byte, error) {

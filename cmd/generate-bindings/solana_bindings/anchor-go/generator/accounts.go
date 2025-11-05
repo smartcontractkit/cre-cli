@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/dave/jennifer/jen"
 	. "github.com/dave/jennifer/jen"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/gagliardetto/anchor-go/idl"
@@ -113,75 +112,13 @@ func (g *Generator) gen_accountParser(accountNames []string) (Code, error) {
 				})
 			code.Line().Line()
 
-			// Decode method for the codec
-			code.Func().
-				Params(Id("c").Op("*").Id("Codec")).
-				Id("Decode"+name).
-				Params(Id("data").Index().Byte()).
-				Params(Op("*").Id(name), Error()).
-				Block(Return(Id("ParseAccount_" + name).Call(Id("data"))))
+			// DecodeAccount method for the codec
+			code.Add(creDecodeAccountFn(name))
 			code.Line().Line()
 
-			code.Func().
-				Params(Id("c").Op("*").Id(tools.ToCamelUpper(g.options.Package))). // method receiver
-				Id("ReadAccount_" + name).
-				Params(
-					ListMultiline(
-						func(paramsCode *Group) {
-							paramsCode.Id("runtime").Qual(PkgCRE, "Runtime")
-							paramsCode.Id("accountAddress").Qual(PkgSolanaGo, "PublicKey")
-							paramsCode.Id("blockNumber").Op("*").Qual(PkgBig, "Int")
-						},
-					),
-				).
-				Params(
-					Qual(PkgCRE, "Promise").Types(Op("*").Id(name)),
-				).
-				BlockFunc(func(block *Group) {
-					block.Comment("cre account read")
-					block.Id("bn").Op(":=").Qual(PkgCRE, "PromiseFromResult").Call(
-						Id("uint64").Call(Id("blockNumber").Dot("Int64").Call()),
-						Nil(),
-					)
-					block.Id("promise").Op(":=").Qual(PkgCRE, "ThenPromise").Call(
-						Id("bn"),
-						Func().
-							Params(Id("bn").Op("uint64")).
-							Qual(PkgCRE, "Promise").Types(Op("*").Qual(PkgSolanaCre, "GetAccountInfoReply")).
-							Block(
-								Return(
-									Id("c").Dot("client").Dot("GetAccountInfoWithOpts").Call(
-										Id("runtime"),
-										Op("&").Qual(PkgSolanaCre, "GetAccountInfoRequest").Values(
-											Dict{
-												Id("Account"): Qual(PkgSolanaTypes, "PublicKey").Call(Id("accountAddress")),
-												Id("Opts"): Op("&").Qual(PkgSolanaCre, "GetAccountInfoOpts").Values(
-													Dict{
-														Id("MinContextSlot"): Op("&").Id("bn"),
-													},
-												),
-											},
-										),
-									),
-								),
-							),
-					)
-					block.Return(
-						Qual(PkgCRE, "Then").Call(
-							Id("promise"),
-							Func().
-								Params(Id("response").Op("*").Qual(PkgSolanaCre, "GetAccountInfoReply")).
-								Params(Op("*").Id(name), Error()).
-								Block(
-									Return(
-										Id("ParseAccount_"+name).Call(
-											Id("response").Dot("Value").Dot("Data").Dot("AsDecodedBinary"),
-										),
-									),
-								),
-						),
-					)
-				})
+			// Read account data onchain using read capability
+			code.Add(creReadAccountFn(name, g))
+			code.Line().Line()
 		}
 	}
 	return code, nil
@@ -312,131 +249,14 @@ func (g *Generator) gen_IDLTypeDefTyStruct(
 	}
 	{
 		code := Empty()
-		code.Func().
-			Params(
-				Id("c").Op("*").Id("Codec"),
-			).
-			Id("Encode"+exportedAccountName+"Struct").
-			Params(
-				Id("in").Id(exportedAccountName),
-			).
-			Params(
-				Index().Byte(),
-				Error(),
-			).
-			Block(
-				Return(
-					Id("in").Dot("Marshal").Call(),
-				),
-			)
+		code.Add(creGenerateCodecEncoderForTypes(exportedAccountName))
 		st.Add(code.Line().Line())
 	}
 	{
 		// Declare the WriteReportFrom methods:
 		// TODO: should i exclude events here ? currently it does accounts/structs/events
 		code := Empty()
-		declarerName := newWriteReportFromInstructionFuncName(exportedAccountName)
-		code.Func().
-			Params(Id("c").Op("*").Id(tools.ToCamelUpper(g.options.Package))). // method receiver
-			Id(declarerName).
-			// params
-			Params(
-				ListMultiline(func(p *Group) {
-					p.Id("runtime").Qual(PkgCRE, "Runtime")
-					p.Id("input").Id(exportedAccountName)
-					p.Id("accountList").Index().Qual(PkgSolanaGo, "PublicKey")
-				}),
-			).
-			// return type
-			Params(Qual(PkgCRE, "Promise").Types(Op("*").Qual(PkgSolanaCre, "WriteReportReply"))).
-			BlockFunc(func(block *Group) {
-				// encoded, err := input.Marshal()
-				block.List(Id("encodedInput"), Id("err")).Op(":=").Id("c").Dot("Codec").Dot("Encode" + exportedAccountName + "Struct").Call(Id("input"))
-
-				block.If(Id("err").Op("!=").Nil()).Block(
-					Return(
-						Qual(PkgCRE, "PromiseFromResult").Types(Op("*").Qual(PkgSolanaCre, "WriteReportReply")).Call(
-							Nil(), Id("err"),
-						)))
-
-				block.Line()
-
-				block.List(Id("encodedAccountList"), Id("err")).Op(":=").Id("EncodeAccountList").Call(Id("accountList"))
-				block.If(Id("err").Op("!=").Nil()).Block(
-					Return(
-						Qual(PkgCRE, "PromiseFromResult").Types(Op("*").Qual(PkgSolanaCre, "WriteReportReply")).Call(
-							Nil(), Id("err"),
-						)))
-				block.Line()
-
-				// fwdReport := ForwarderReport{Payload: encodedInput, AccountHash: encodedAccountList}
-				block.Id("fwdReport").Op(":=").Id("ForwarderReport").Values(Dict{
-					Id("Payload"):     Id("encodedInput"),
-					Id("AccountHash"): Id("encodedAccountList"),
-				})
-				block.Line()
-
-				block.List(Id("encodedFwdReport"), Id("err")).Op(":=").Id("fwdReport").Dot("Marshal").Call()
-
-				// if err != nil { return cre.PromiseFromResult[*solana.WriteReportReply](nil, err) }
-				block.If(Id("err").Op("!=").Nil()).Block(
-					Return(
-						Qual(PkgCRE, "PromiseFromResult").Types(Op("*").Qual(PkgSolanaCre, "WriteReportReply")).Call(
-							Nil(),
-							Id("err"),
-						),
-					),
-				)
-
-				// promise := runtime.GenerateReport(&pb2.ReportRequest{ ... })
-				block.Id("promise").Op(":=").Id("runtime").Dot("GenerateReport").Call(
-					Op("&").Qual(PkgPb2, "ReportRequest").Values(Dict{
-						Id("EncodedPayload"): Id("encodedFwdReport"),
-						Id("EncoderName"):    Lit("solana"),
-						Id("SigningAlgo"):    Lit("ed25519"),
-						Id("HashingAlgo"):    Lit("sha256"),
-					}),
-				)
-
-				block.Line()
-
-				block.Id("typedAccountList").Op(":=").
-					Id("make").Call(
-					Index().Qual(PkgSolanaCre, "PublicKey"),
-					Id("len").Call(Id("accountList")),
-				)
-
-				// for i, account := range accountList {
-				//     typedAccountList[i] = solana.PublicKey(account)
-				// }
-				block.For(
-					List(Id("i"), Id("account")).Op(":=").Range().Id("accountList"),
-				).Block(
-					Id("typedAccountList").Index(Id("i")).Op("=").
-						Qual(PkgSolanaCre, "PublicKey").Call(Id("account")),
-				)
-
-				block.Return(
-					Qual(PkgCRE, "ThenPromise").Call(
-						Id("promise"),
-						Func().
-							Params(Id("report").Op("*").Qual(PkgCRE, "Report")).
-							Qual(PkgCRE, "Promise").Types(Op("*").Qual(PkgSolanaCre, "WriteReportReply")).
-							Block(
-								Return(
-									Id("c").Dot("client").Dot("WriteReport").Call(
-										Id("runtime"),
-										Op("&").Qual(PkgSolanaCre, "WriteCreReportRequest").Values(jen.Dict{
-											Id("Receiver"):    Id("ProgramID").Dot("Bytes").Call(),
-											Id("Report"):      Id("report"),
-											Id("AccountList"): Id("typedAccountList"),
-										}),
-									),
-								),
-							),
-					),
-				)
-			})
+		code.Add(creWriteReportFromStructs(exportedAccountName, g))
 		st.Add(code.Line().Line())
 	}
 	return st, nil

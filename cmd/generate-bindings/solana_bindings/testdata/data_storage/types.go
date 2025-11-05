@@ -93,15 +93,15 @@ func (c *DataStorage) WriteReportFromAccessLogged(
 		return cre.PromiseFromResult[*solana.WriteReportReply](nil, err)
 	}
 
-	fwdReport := ForwarderReport{
+	fwdReport := solana.ForwarderReport{
 		AccountHash: encodedAccountList,
 		Payload:     encodedInput,
 	}
-
 	encodedFwdReport, err := fwdReport.Marshal()
 	if err != nil {
 		return cre.PromiseFromResult[*solana.WriteReportReply](nil, err)
 	}
+
 	promise := runtime.GenerateReport(&sdk.ReportRequest{
 		EncodedPayload: encodedFwdReport,
 		EncoderName:    "solana",
@@ -113,6 +113,7 @@ func (c *DataStorage) WriteReportFromAccessLogged(
 	for i, account := range accountList {
 		typedAccountList[i] = solana.PublicKey(account)
 	}
+
 	return cre.ThenPromise(promise, func(report *cre.Report) cre.Promise[*solana.WriteReportReply] {
 		return c.client.WriteReport(runtime, &solana.WriteCreReportRequest{
 			AccountList: typedAccountList,
@@ -212,15 +213,15 @@ func (c *DataStorage) WriteReportFromDataAccount(
 		return cre.PromiseFromResult[*solana.WriteReportReply](nil, err)
 	}
 
-	fwdReport := ForwarderReport{
+	fwdReport := solana.ForwarderReport{
 		AccountHash: encodedAccountList,
 		Payload:     encodedInput,
 	}
-
 	encodedFwdReport, err := fwdReport.Marshal()
 	if err != nil {
 		return cre.PromiseFromResult[*solana.WriteReportReply](nil, err)
 	}
+
 	promise := runtime.GenerateReport(&sdk.ReportRequest{
 		EncodedPayload: encodedFwdReport,
 		EncoderName:    "solana",
@@ -232,6 +233,7 @@ func (c *DataStorage) WriteReportFromDataAccount(
 	for i, account := range accountList {
 		typedAccountList[i] = solana.PublicKey(account)
 	}
+
 	return cre.ThenPromise(promise, func(report *cre.Report) cre.Promise[*solana.WriteReportReply] {
 		return c.client.WriteReport(runtime, &solana.WriteCreReportRequest{
 			AccountList: typedAccountList,
@@ -353,15 +355,15 @@ func (c *DataStorage) WriteReportFromDynamicEvent(
 		return cre.PromiseFromResult[*solana.WriteReportReply](nil, err)
 	}
 
-	fwdReport := ForwarderReport{
+	fwdReport := solana.ForwarderReport{
 		AccountHash: encodedAccountList,
 		Payload:     encodedInput,
 	}
-
 	encodedFwdReport, err := fwdReport.Marshal()
 	if err != nil {
 		return cre.PromiseFromResult[*solana.WriteReportReply](nil, err)
 	}
+
 	promise := runtime.GenerateReport(&sdk.ReportRequest{
 		EncodedPayload: encodedFwdReport,
 		EncoderName:    "solana",
@@ -373,6 +375,7 @@ func (c *DataStorage) WriteReportFromDynamicEvent(
 	for i, account := range accountList {
 		typedAccountList[i] = solana.PublicKey(account)
 	}
+
 	return cre.ThenPromise(promise, func(report *cre.Report) cre.Promise[*solana.WriteReportReply] {
 		return c.client.WriteReport(runtime, &solana.WriteCreReportRequest{
 			AccountList: typedAccountList,
@@ -438,15 +441,15 @@ func (c *DataStorage) WriteReportFromNoFields(
 		return cre.PromiseFromResult[*solana.WriteReportReply](nil, err)
 	}
 
-	fwdReport := ForwarderReport{
+	fwdReport := solana.ForwarderReport{
 		AccountHash: encodedAccountList,
 		Payload:     encodedInput,
 	}
-
 	encodedFwdReport, err := fwdReport.Marshal()
 	if err != nil {
 		return cre.PromiseFromResult[*solana.WriteReportReply](nil, err)
 	}
+
 	promise := runtime.GenerateReport(&sdk.ReportRequest{
 		EncodedPayload: encodedFwdReport,
 		EncoderName:    "solana",
@@ -458,6 +461,7 @@ func (c *DataStorage) WriteReportFromNoFields(
 	for i, account := range accountList {
 		typedAccountList[i] = solana.PublicKey(account)
 	}
+
 	return cre.ThenPromise(promise, func(report *cre.Report) cre.Promise[*solana.WriteReportReply] {
 		return c.client.WriteReport(runtime, &solana.WriteCreReportRequest{
 			AccountList: typedAccountList,
@@ -546,15 +550,15 @@ func (c *DataStorage) WriteReportFromUpdateReserves(
 		return cre.PromiseFromResult[*solana.WriteReportReply](nil, err)
 	}
 
-	fwdReport := ForwarderReport{
+	fwdReport := solana.ForwarderReport{
 		AccountHash: encodedAccountList,
 		Payload:     encodedInput,
 	}
-
 	encodedFwdReport, err := fwdReport.Marshal()
 	if err != nil {
 		return cre.PromiseFromResult[*solana.WriteReportReply](nil, err)
 	}
+
 	promise := runtime.GenerateReport(&sdk.ReportRequest{
 		EncodedPayload: encodedFwdReport,
 		EncoderName:    "solana",
@@ -566,6 +570,7 @@ func (c *DataStorage) WriteReportFromUpdateReserves(
 	for i, account := range accountList {
 		typedAccountList[i] = solana.PublicKey(account)
 	}
+
 	return cre.ThenPromise(promise, func(report *cre.Report) cre.Promise[*solana.WriteReportReply] {
 		return c.client.WriteReport(runtime, &solana.WriteCreReportRequest{
 			AccountList: typedAccountList,
@@ -654,15 +659,15 @@ func (c *DataStorage) WriteReportFromUserData(
 		return cre.PromiseFromResult[*solana.WriteReportReply](nil, err)
 	}
 
-	fwdReport := ForwarderReport{
+	fwdReport := solana.ForwarderReport{
 		AccountHash: encodedAccountList,
 		Payload:     encodedInput,
 	}
-
 	encodedFwdReport, err := fwdReport.Marshal()
 	if err != nil {
 		return cre.PromiseFromResult[*solana.WriteReportReply](nil, err)
 	}
+
 	promise := runtime.GenerateReport(&sdk.ReportRequest{
 		EncodedPayload: encodedFwdReport,
 		EncoderName:    "solana",
@@ -674,6 +679,7 @@ func (c *DataStorage) WriteReportFromUserData(
 	for i, account := range accountList {
 		typedAccountList[i] = solana.PublicKey(account)
 	}
+
 	return cre.ThenPromise(promise, func(report *cre.Report) cre.Promise[*solana.WriteReportReply] {
 		return c.client.WriteReport(runtime, &solana.WriteCreReportRequest{
 			AccountList: typedAccountList,

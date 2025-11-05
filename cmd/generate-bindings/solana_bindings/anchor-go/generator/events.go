@@ -3,7 +3,6 @@ package generator
 import (
 	"fmt"
 
-	"github.com/dave/jennifer/jen"
 	. "github.com/dave/jennifer/jen"
 	"github.com/gagliardetto/anchor-go/tools"
 )
@@ -108,135 +107,7 @@ func (g *Generator) gen_eventParser(eventNames []string) (Code, error) {
 				})
 			code.Line().Line()
 
-			code.Func().
-				Params(Id("c").Op("*").Id("Codec")). // method receiver
-				Id("Decode"+name).
-				Params(Id("event").Op("*").Qual(PkgSolanaCre, "Log")).
-				Params(Op("*").Id(name), Error()).
-				BlockFunc(func(block *Group) {
-					block.List(Id("res"), Id("err")).Op(":=").Id("ParseEvent_" + name).Call(
-						Id("event").Dot("Data"),
-					)
-					block.If(Id("err").Op("!=").Nil()).Block(
-						Return(Nil(), Id("err")),
-					)
-					block.Return(Id("res"), Nil())
-				})
-			code.Line().Line()
-
-			code.Type().Id(name+"Trigger").
-				Struct(
-					Qual(PkgCRE, "Trigger"). // embedded generic type
-									Types(
-							Op("*").Qual(PkgSolanaCre, "Log"),
-							Op("*").Qual(PkgSolanaCre, "Log"),
-						),
-					Id("contract").Op("*").Id(tools.ToCamelUpper(g.options.Package)),
-				)
-			code.Line().Line()
-
-			code.Func().
-				Params(Id("t").Op("*").Id(name+"Trigger")). // receiver (*DataUpdatedTrigger)
-				Id("Adapt").
-				Params(
-					Id("l").Op("*").Qual(PkgSolanaCre, "Log"),
-				).
-				Params(
-					Op("*").Qual(PkgBindings, "DecodedLog").Types(Id(name)), // return type
-					Error(),
-				).
-				Block(
-					List(Id("decoded"), Id("err")).Op(":=").Id("t").Dot("contract").Dot("Codec").Dot("Decode"+name).Call(Id("l")),
-					If(Id("err").Op("!=").Nil()).Block(
-						Return(Nil(), Id("err")),
-					),
-					Return(
-						Op("&").Qual(PkgBindings, "DecodedLog").Types(Id(name)).Values(Dict{
-							Id("Log"):  Id("l"),
-							Id("Data"): Op("*").Id("decoded"),
-						}),
-						Nil(),
-					),
-				)
-			code.Line().Line()
-
-			code.Func().
-				Params(Id("c").Op("*").Id(tools.ToCamelUpper(g.options.Package))). // method receiver
-				Id("LogTrigger_"+name).
-				Params(
-					Id("chainSelector").Uint64(),
-					Id("subKeyPathAndValue").Index().Qual(PkgSolanaCre, "SubKeyPathAndFilter"),
-				).
-				Params(
-					Qual(PkgCRE, "Trigger").Types(
-						Op("*").Qual(PkgSolanaCre, "Log"),
-						Op("*").Qual(PkgBindings, "DecodedLog").Types(Id(name)),
-					),
-					Error(),
-				).
-				BlockFunc(func(b *jen.Group) {
-					// eventIdl := types.GetIdlEvent(c.IdlTypes, "<Event>")
-					b.List(Id("eventIdl"), Id("err")).Op(":=").Qual(PkgSolanaTypes, "GetIdlEvent").Call(
-						Id("c").Dot("IdlTypes"),
-						Lit(name),
-					)
-					b.If(Id("err").Op("!=").Nil()).Block(
-						Return(Nil(), Id("err")),
-					)
-
-					// if len(subKeyPathAndValue) > 4 { return nil, fmt.Errorf(...) }
-					b.If(Len(Id("subKeyPathAndValue")).Op(">").Lit(4)).Block(
-						Return(
-							Nil(),
-							Qual("fmt", "Errorf").Call(
-								Lit("too many subkey path and value pairs: %d"),
-								Len(Id("subKeyPathAndValue")),
-							),
-						),
-					)
-
-					// subKeyPaths, subKeyFilters, err := bindings.ValidateSubKeyPathAndValue[<Event>](subKeyPathAndValue)
-					b.List(
-						Id("subKeyPaths"),
-						Id("subKeyFilters"),
-						Id("err"),
-					).Op(":=").Qual(PkgBindings, "ValidateSubKeyPathAndValue").
-						Types(Id(name)).
-						Call(Id("subKeyPathAndValue"))
-
-					b.If(Id("err").Op("!=").Nil()).Block(
-						Return(
-							Nil(),
-							Qual("fmt", "Errorf").Call(
-								Lit("failed to validate subkey path and value: %w"),
-								Id("err"),
-							),
-						),
-					)
-
-					// rawTrigger := solana.LogTrigger(chainSelector, &solana.FilterLogTriggerRequest{ ... })
-					b.Id("rawTrigger").Op(":=").Qual(PkgSolanaCre, "LogTrigger").Call(
-						Id("chainSelector"),
-						Op("&").Qual(PkgSolanaCre, "FilterLogTriggerRequest").Values(jen.Dict{
-							Id("Address"):       Qual(PkgSolanaTypes, "PublicKey").Call(Id("ProgramID")),
-							Id("EventName"):     Lit(name),
-							Id("EventSig"):      Id("Event_" + name),
-							Id("EventIdl"):      Id("eventIdl"),
-							Id("SubkeyPaths"):   Id("subKeyPaths"),
-							Id("SubkeyFilters"): Id("subKeyFilters"),
-						}),
-					)
-
-					// return &<Event>Trigger{ Trigger: rawTrigger }, nil
-					b.Return(
-						Op("&").Id(name+"Trigger").Values(jen.Dict{
-							Id("Trigger"):  Id("rawTrigger"),
-							Id("contract"): Id("c"),
-						}),
-						Nil(),
-					)
-				})
-			code.Line().Line()
+			code.Add(creEventFuncs(name, g))
 		}
 	}
 	return code, nil
