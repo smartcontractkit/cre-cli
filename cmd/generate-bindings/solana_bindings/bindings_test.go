@@ -429,7 +429,7 @@ func TestLogTrigger(t *testing.T) {
 		discriminator := datastorage.Event_AccessLogged
 		encoded = append(discriminator[:], encoded...)
 
-		trigger, err := ds.LogTrigger_AccessLogged(1, []solanasdk.SubKeyPathAndFilter{
+		trigger, err := ds.LogTrigger_AccessLogged(anyChainSelector, []solanasdk.SubKeyPathAndFilter{
 			{
 				SubkeyPath: "Caller",
 				Value:      testPubKey,
@@ -448,5 +448,59 @@ func TestLogTrigger(t *testing.T) {
 		decodedLog, err := trigger.Adapt(mockLog)
 		require.NoError(t, err, "Adapt should not return an error")
 		require.NotNil(t, decodedLog, "Decoded log should not be nil")
+		require.Equal(t, events[0].Caller, decodedLog.Data.Caller, "Decoded caller should match")
+		require.Equal(t, events[0].Message, decodedLog.Data.Message, "Decoded message should match")
+	})
+
+	t.Run("dynamic event", func(t *testing.T) {
+		testPrivKey, err := solana.NewRandomPrivateKey()
+		require.NoError(t, err)
+		testPubKey := testPrivKey.PublicKey()
+		events := []datastorage.DynamicEvent{
+			{
+				Key: "testKey",
+				UserData: datastorage.UserData{
+					Key:   "testKey",
+					Value: "testValue",
+				},
+				Sender:        testPubKey.String(),
+				Metadata:      []byte("testMetadata"),
+				MetadataArray: [][]byte{},
+			},
+		}
+
+		encoded, err := ds.Codec.EncodeDynamicEventStruct(events[0])
+		require.NoError(t, err, "Encoding DynamicEvent should not return an error")
+		discriminator := datastorage.Event_DynamicEvent
+		encoded = append(discriminator[:], encoded...)
+
+		trigger, err := ds.LogTrigger_DynamicEvent(anyChainSelector, []solanasdk.SubKeyPathAndFilter{
+			{
+				SubkeyPath: "UserData.Key",
+				Value:      "testKey",
+			},
+			{
+				SubkeyPath: "Key",
+				Value:      "testKey",
+			},
+		})
+		require.NotNil(t, trigger)
+		require.NoError(t, err)
+
+		// Create a mock log that simulates what would be returned by the blockchain
+		mockLog := &solanasdk.Log{
+			Address: solanatypes.PublicKey(datastorage.ProgramID),
+			Data:    encoded,
+		}
+
+		// Call Adapt to decode the log
+		decodedLog, err := trigger.Adapt(mockLog)
+		require.NoError(t, err, "Adapt should not return an error")
+		require.NotNil(t, decodedLog, "Decoded log should not be nil")
+		require.Equal(t, events[0].Key, decodedLog.Data.Key, "Decoded key should match")
+		require.Equal(t, events[0].UserData.Key, decodedLog.Data.UserData.Key, "Decoded user data key should match")
+		require.Equal(t, events[0].UserData.Value, decodedLog.Data.UserData.Value, "Decoded user data value should match")
+		require.Equal(t, events[0].Sender, decodedLog.Data.Sender, "Decoded sender should match")
+		require.Equal(t, events[0].Metadata, decodedLog.Data.Metadata, "Decoded metadata should match")
 	})
 }

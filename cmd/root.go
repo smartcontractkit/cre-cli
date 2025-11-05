@@ -135,7 +135,8 @@ func newRootCommand() *cobra.Command {
 	rootCmd.AddCommand(login.New(runtimeContext))
 	rootCmd.AddCommand(logout.New(runtimeContext))
 	rootCmd.AddCommand(creinit.New(runtimeContext))
-	rootCmd.AddCommand(generatebindings.New(runtimeContext))
+	rootCmd.AddCommand(generatebindings.NewEvmBindings(runtimeContext))
+	rootCmd.AddCommand(generatebindings.NewSolanaBindings(runtimeContext))
 	rootCmd.AddCommand(account.New(runtimeContext))
 	rootCmd.AddCommand(whoami.New(runtimeContext))
 

@@ -12,6 +12,7 @@ import (
 
 	"github.com/smartcontractkit/cre-cli/cmd/creinit"
 	"github.com/smartcontractkit/cre-cli/cmd/generate-bindings/bindings"
+	"github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana_bindings"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/validation"
 )
@@ -20,12 +21,13 @@ type Inputs struct {
 	ProjectRoot string `validate:"required,dir" cli:"--project-root"`
 	ChainFamily string `validate:"required,oneof=evm" cli:"--chain-family"`
 	Language    string `validate:"required,oneof=go" cli:"--language"`
-	AbiPath     string `validate:"required,path_read" cli:"--abi"`
-	PkgName     string `validate:"required" cli:"--pkg"`
-	OutPath     string `validate:"required" cli:"--out"`
+	// just keeping it simple for now
+	AbiPath string `validate:"required,path_read" cli:"--abi"`
+	PkgName string `validate:"required" cli:"--pkg"`
+	OutPath string `validate:"required" cli:"--out"`
 }
 
-func New(runtimeContext *runtime.Context) *cobra.Command {
+func NewEvmBindings(runtimeContext *runtime.Context) *cobra.Command {
 	var generateBindingsCmd = &cobra.Command{
 		Use:   "generate-bindings <chain-family>",
 		Short: "Generate bindings from contract ABI",
@@ -326,5 +328,227 @@ func runCommand(dir string, command string, args ...string) error {
 		return fmt.Errorf("failed to run %s: %w", command, err)
 	}
 
+	return nil
+}
+
+type SolanaInputs struct {
+	ProjectRoot string `validate:"required,dir" cli:"--project-root"`
+	Language    string `validate:"required,oneof=go" cli:"--language"`
+	// just keeping it simple for now
+	IdlPath string `validate:"required,path_read" cli:"--idl"`
+	// PkgName string `validate:"required" cli:"--pkg"`
+	OutPath string `validate:"required" cli:"--out"`
+}
+
+func NewSolanaBindings(runtimeContext *runtime.Context) *cobra.Command {
+	var generateBindingsCmd = &cobra.Command{
+		Use:   "generate-bindings-solana",
+		Short: "Generate bindings from contract IDL",
+		Long: `This command generates bindings from contract IDL files.
+Supports Solana chain family and Go language.
+Each contract gets its own package subdirectory to avoid naming conflicts.
+For example, data_storage.json generates bindings in generated/data_storage/ package.`,
+		Example: "  cre generate-bindings-solana",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			handler := newHandler(runtimeContext)
+
+			inputs, err := handler.ResolveInputsSolana(args, runtimeContext.Viper)
+			if err != nil {
+				return err
+			}
+			err = handler.ValidateInputsSolana(inputs)
+			if err != nil {
+				return err
+			}
+			return handler.ExecuteSolana(inputs)
+		},
+	}
+
+	generateBindingsCmd.Flags().StringP("project-root", "p", "", "Path to project root directory (defaults to current directory)")
+	generateBindingsCmd.Flags().StringP("language", "l", "go", "Target language (go)")
+	generateBindingsCmd.Flags().StringP("abi", "a", "", "Path to ABI directory (defaults to contracts/{chain-family}/src/abi/)")
+	generateBindingsCmd.Flags().StringP("pkg", "k", "bindings", "Base package name (each contract gets its own subdirectory)")
+
+	return generateBindingsCmd
+}
+
+func (h *handler) ResolveInputsSolana(args []string, v *viper.Viper) (SolanaInputs, error) {
+	// Get current working directory as default project root
+	currentDir, err := os.Getwd()
+	if err != nil {
+		return SolanaInputs{}, fmt.Errorf("failed to get current working directory: %w", err)
+	}
+
+	// Resolve project root with fallback to current directory
+	projectRoot := v.GetString("project-root")
+	if projectRoot == "" {
+		projectRoot = currentDir
+	}
+
+	contractsPath := filepath.Join(projectRoot, "contracts")
+	if _, err := os.Stat(contractsPath); err != nil {
+		return SolanaInputs{}, fmt.Errorf("contracts folder not found in project root: %s", contractsPath)
+	}
+
+	// Language defaults are handled by StringP
+	language := v.GetString("language")
+
+	// Resolve ABI path with fallback to contracts/{chainFamily}/src/abi/
+	idlPath := v.GetString("idl")
+	if idlPath == "" {
+		idlPath = filepath.Join(projectRoot, "contracts", "solana", "src", "idl")
+	}
+
+	// Output path is contracts/{chainFamily}/src/generated/ under projectRoot
+	outPath := filepath.Join(projectRoot, "contracts", "solana", "src", "generated")
+
+	return SolanaInputs{
+		ProjectRoot: projectRoot,
+		Language:    language,
+		IdlPath:     idlPath,
+		OutPath:     outPath,
+	}, nil
+}
+
+func (h *handler) ValidateInputsSolana(inputs SolanaInputs) error {
+	validate, err := validation.NewValidator()
+	if err != nil {
+		return fmt.Errorf("failed to initialize validator: %w", err)
+	}
+
+	if err = validate.Struct(inputs); err != nil {
+		return validate.ParseValidationErrors(err)
+	}
+
+	// Additional validation for ABI path
+	if _, err := os.Stat(inputs.IdlPath); err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("IDL path does not exist: %s", inputs.IdlPath)
+		}
+		return fmt.Errorf("failed to access IDL path: %w", err)
+	}
+
+	// Validate that if AbiPath is a directory, it contains .abi files
+	if info, err := os.Stat(inputs.IdlPath); err == nil && info.IsDir() {
+		files, err := filepath.Glob(filepath.Join(inputs.IdlPath, "*.json"))
+		if err != nil {
+			return fmt.Errorf("failed to check for ABI files in directory: %w", err)
+		}
+		if len(files) == 0 {
+			return fmt.Errorf("no .json files found in directory: %s", inputs.IdlPath)
+		}
+	}
+
+	h.validated = true
+	return nil
+}
+
+func (h *handler) processIdlDirectory(inputs SolanaInputs) error {
+	// Read all .abi files in the directory
+	files, err := filepath.Glob(filepath.Join(inputs.IdlPath, "*.json"))
+	if err != nil {
+		return fmt.Errorf("failed to find ABI files: %w", err)
+	}
+
+	if len(files) == 0 {
+		return fmt.Errorf("no .json files found in directory: %s", inputs.IdlPath)
+	}
+
+	// Process each ABI file
+	for _, idlFile := range files {
+		// Extract contract name from filename (remove .abi extension)
+		contractName := filepath.Base(idlFile)
+		contractName = contractName[:len(contractName)-5] // Remove .json extension
+
+		// Create per-contract output directory
+		contractOutDir := filepath.Join(inputs.OutPath, contractName)
+		if err := os.MkdirAll(contractOutDir, 0755); err != nil {
+			return fmt.Errorf("failed to create contract output directory %s: %w", contractOutDir, err)
+		}
+
+		// Create output file path in contract-specific directory
+		outputFile := filepath.Join(contractOutDir, contractName+".go")
+
+		fmt.Printf("Processing IDL file: %s, contract: %s, output: %s\n", idlFile, contractName, outputFile)
+
+		err = solana_bindings.GenerateBindings(
+			idlFile,
+			contractName,
+			contractOutDir,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to generate bindings for %s: %w", idlFile, err)
+		}
+	}
+
+	return nil
+}
+
+func (h *handler) processSingleIdl(inputs SolanaInputs) error {
+	// Extract contract name from ABI file path
+	contractName := filepath.Base(inputs.IdlPath)
+	if filepath.Ext(contractName) == ".json" {
+		contractName = contractName[:len(contractName)-4] // Remove .json extension
+	}
+
+	// Create per-contract output directory
+	contractOutDir := filepath.Join(inputs.OutPath, contractName)
+	if err := os.MkdirAll(contractOutDir, 0755); err != nil {
+		return fmt.Errorf("failed to create contract output directory %s: %w", contractOutDir, err)
+	}
+
+	fmt.Printf("Processing single IDL file: %s, contract: %s, output: %s\n", inputs.IdlPath, contractName, contractOutDir)
+
+	return solana_bindings.GenerateBindings(
+		inputs.IdlPath,
+		contractName,
+		contractOutDir,
+	)
+}
+
+func (h *handler) ExecuteSolana(inputs SolanaInputs) error {
+	fmt.Printf("GenerateBindings would be called here: projectRoot=%s, chainFamily=solana, language=%s, abiPath=%s, pkgName=%s, outPath=%s\n",
+		inputs.ProjectRoot, inputs.Language, inputs.IdlPath, inputs.OutPath)
+
+	// Validate language
+	switch inputs.Language {
+	case "go":
+		// Language supported, continue
+	default:
+		return fmt.Errorf("unsupported language: %s", inputs.Language)
+	}
+
+	// Create output directory if it doesn't exist
+	if err := os.MkdirAll(inputs.OutPath, 0755); err != nil {
+		return fmt.Errorf("failed to create output directory: %w", err)
+	}
+
+	// Check if IDL path is a directory or file
+	info, err := os.Stat(inputs.IdlPath)
+	if err != nil {
+		return fmt.Errorf("failed to access IDL path: %w", err)
+	}
+
+	if info.IsDir() {
+		if err := h.processIdlDirectory(inputs); err != nil {
+			return err
+		}
+	} else {
+		if err := h.processSingleIdl(inputs); err != nil {
+			return err
+		}
+	}
+
+	// err = runCommand(inputs.ProjectRoot, "go", "get", "github.com/smartcontractkit/cre-sdk-go@"+creinit.SdkVersion)
+	// if err != nil {
+	// 	return err
+	// }
+	// err = runCommand(inputs.ProjectRoot, "go", "get", "github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm@"+creinit.SdkVersion)
+	// if err != nil {
+	// 	return err
+	// }
+	// if err = runCommand(inputs.ProjectRoot, "go", "mod", "tidy"); err != nil {
+	// 	return err
+	// }
 	return nil
 }

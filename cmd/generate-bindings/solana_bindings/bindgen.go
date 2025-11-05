@@ -19,10 +19,9 @@ import (
 const defaultProgramName = "myprogram"
 
 func GenerateBindings(
-	outputDir string,
-	programName string,
 	pathToIdl string,
-	programID string,
+	programName string,
+	outputDir string,
 ) error {
 	if pathToIdl == "" {
 		panic("Please provide the path to the IDL file using the -idl flag")
@@ -33,28 +32,15 @@ func GenerateBindings(
 	if err := os.MkdirAll(outputDir, 0o777); err != nil {
 		panic(fmt.Errorf("Failed to create output directory: %w", err))
 	}
-	programIDOverride := solana.PublicKey{}
-	if programID != "" {
-		programIDOverride = solana.MustPublicKeyFromBase58(programID)
-	}
+
 	slog.Info("Starting code generation",
 		"outputDir", outputDir,
 		"pathToIdl", pathToIdl,
-		"programID", func() string {
-			if programIDOverride.IsZero() {
-				return "not provided"
-			}
-			return programIDOverride.String()
-		}(),
 	)
 	options := generator.GeneratorOptions{
 		OutputDir:   outputDir,
 		Package:     programName,
 		ProgramName: programName,
-	}
-	if !programIDOverride.IsZero() {
-		options.ProgramId = &programIDOverride
-		slog.Info("Using provided program ID", "programID", programIDOverride.String())
 	}
 	parsedIdl, err := idl.ParseFromFilepath(pathToIdl)
 	if err != nil {
@@ -68,10 +54,12 @@ func GenerateBindings(
 	}
 	{
 		{
-			if parsedIdl.Address != nil && !parsedIdl.Address.IsZero() && options.ProgramId == nil {
+			if parsedIdl.Address != nil && !parsedIdl.Address.IsZero() {
 				// If the IDL has an address, use it as the program ID:
 				slog.Info("Using IDL address as program ID", "address", parsedIdl.Address.String())
 				options.ProgramId = parsedIdl.Address
+			} else {
+				panic("Please ensure the IDL has a valid metadata.address field.")
 			}
 		}
 		parsedIdl.Metadata.Name = bin.ToSnakeForSighash(parsedIdl.Metadata.Name)
