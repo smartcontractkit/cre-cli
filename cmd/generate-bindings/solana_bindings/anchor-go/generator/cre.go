@@ -9,6 +9,7 @@ import (
 	"github.com/gagliardetto/anchor-go/tools"
 )
 
+// func (c *Codec) Decode<name>(data []byte) (*<name>, error) {
 func creDecodeAccountFn(name string) Code {
 	return Func().
 		Params(Id("c").Op("*").Id("Codec")).
@@ -18,28 +19,19 @@ func creDecodeAccountFn(name string) Code {
 		Block(Return(Id("ParseAccount_" + name).Call(Id("data"))))
 }
 
+//	func (c *Codec) Encode<StructName>Struct(in <StructName>) ([]byte, error) {
+//		return in.Marshal()
+//	}
 func creGenerateCodecEncoderForTypes(exportedAccountName string) Code {
-	code := Empty()
-	code.Func().
-		Params(
-			Id("c").Op("*").Id("Codec"),
-		).
+	return Func().
+		Params(Id("c").Op("*").Id("Codec")).
 		Id("Encode"+exportedAccountName+"Struct").
-		Params(
-			Id("in").Id(exportedAccountName),
-		).
-		Params(
-			Index().Byte(),
-			Error(),
-		).
-		Block(
-			Return(
-				Id("in").Dot("Marshal").Call(),
-			),
-		)
-	return code
+		Params(Id("in").Id(exportedAccountName)).
+		Params(Index().Byte(), Error()).
+		Block(Return(Id("in").Dot("Marshal").Call()))
 }
 
+// func (c *DataStorage) ReadAccount_DataAccount(runtime cre.Runtime, accountAddress solanago.PublicKey, blockNumber *big.Int) cre.Promise[*<StructName>] {
 func creReadAccountFn(name string, g *Generator) Code {
 	code := Func().
 		Params(Id("c").Op("*").Id(tools.ToCamelUpper(g.options.Package))). // method receiver
@@ -86,6 +78,10 @@ func creReadAccountFn(name string, g *Generator) Code {
 	return code
 }
 
+// if err block
+//
+//		return cre.PromiseFromResult[*<StructName>](nil, err)
+//	}
 func creWriteReportErrorBlock() Code {
 	code := Empty()
 	code.If(Id("err").Op("!=").Nil()).Block(
@@ -97,6 +93,7 @@ func creWriteReportErrorBlock() Code {
 	return code
 }
 
+// func (c *DataStorage) WriteReportFrom<StructName>(runtime cre.Runtime, input <StructName>, accountList []solanago.PublicKey) cre.Promise[*solana.WriteReportReply] {
 func creWriteReportFromStructs(exportedAccountName string, g *Generator) Code {
 	code := Empty()
 	declarerName := newWriteReportFromInstructionFuncName(exportedAccountName)
@@ -209,13 +206,7 @@ func creWriteReportFromStructsLambda() *Statement {
 		)
 }
 
-//	func (c *Codec) Decode<name>(event *solana.Log) (*<name>, error) {
-//			res, err := ParseEvent_<name>(event.Data)
-//			if err != nil {
-//				return nil, err
-//			}
-//			return res, nil
-//		}
+// func (c *Codec) Decode<name>(event *solana.Log) (*<name>, error) {
 func creDecodeEventFn(name string) Code {
 	return Func().
 		Params(Id("c").Op("*").Id("Codec")). // method receiver
@@ -223,6 +214,7 @@ func creDecodeEventFn(name string) Code {
 		Params(Id("event").Op("*").Qual(PkgSolanaCre, "Log")).
 		Params(Op("*").Id(name), Error()).
 		BlockFunc(func(block *Group) {
+			// res, err := ParseEvent_<name>(event.Data)
 			block.List(Id("res"), Id("err")).Op(":=").Id("ParseEvent_" + name).Call(
 				Id("event").Dot("Data"),
 			)
