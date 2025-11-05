@@ -257,7 +257,7 @@ mutation InitiateLinking($request: InitiateLinkingRequest!) {
 During private Beta, only approved organizations can deploy workflows to CRE environment.
 
 → If you believe this is an error or would like to request access, please visit:
-https://docs.cre.link/request-deployment-access`
+https://cre.chain.link/request-access`
 			return initiateLinkingResponse{}, fmt.Errorf("\n%s\n%w", unauthorizedMsg, err)
 		}
 		return initiateLinkingResponse{}, fmt.Errorf("graphql request failed: %w", err)
