@@ -18,6 +18,7 @@ import (
 	generatebindings "github.com/smartcontractkit/cre-cli/cmd/generate-bindings"
 	"github.com/smartcontractkit/cre-cli/cmd/login"
 	"github.com/smartcontractkit/cre-cli/cmd/logout"
+	"github.com/smartcontractkit/cre-cli/cmd/profile"
 	"github.com/smartcontractkit/cre-cli/cmd/secrets"
 	"github.com/smartcontractkit/cre-cli/cmd/update"
 	"github.com/smartcontractkit/cre-cli/cmd/version"
@@ -204,6 +205,7 @@ func newRootCommand() *cobra.Command {
 	versionCmd := version.New(runtimeContext)
 	loginCmd := login.New(runtimeContext)
 	logoutCmd := logout.New(runtimeContext)
+	profileCmd := profile.New(runtimeContext)
 	initCmd := creinit.New(runtimeContext)
 	genBindingsCmd := generatebindings.New(runtimeContext)
 	accountCmd := account.New(runtimeContext)
@@ -213,6 +215,7 @@ func newRootCommand() *cobra.Command {
 	secretsCmd.RunE = helpRunE
 	workflowCmd.RunE = helpRunE
 	accountCmd.RunE = helpRunE
+	profileCmd.RunE = helpRunE
 
 	// Define groups (order controls display order)
 	rootCmd.AddGroup(&cobra.Group{ID: "getting-started", Title: "Getting Started"})
@@ -224,6 +227,7 @@ func newRootCommand() *cobra.Command {
 
 	loginCmd.GroupID = "account"
 	logoutCmd.GroupID = "account"
+	profileCmd.GroupID = "account"
 	accountCmd.GroupID = "account"
 	whoamiCmd.GroupID = "account"
 
@@ -235,6 +239,7 @@ func newRootCommand() *cobra.Command {
 		versionCmd,
 		loginCmd,
 		logoutCmd,
+		profileCmd,
 		accountCmd,
 		whoamiCmd,
 		secretsCmd,
@@ -264,6 +269,11 @@ func isLoadSettings(cmd *cobra.Command) bool {
 		"cre update":                {},
 		"cre workflow":              {},
 		"cre account":               {},
+		"cre profile":               {},
+		"cre profile list":          {},
+		"cre profile use":           {},
+		"cre profile delete":        {},
+		"cre profile rename":        {},
 		"cre secrets":               {},
 		"cre":                       {},
 	}
@@ -275,19 +285,24 @@ func isLoadSettings(cmd *cobra.Command) bool {
 func isLoadCredentials(cmd *cobra.Command) bool {
 	// It is not expected to have the credentials loaded when running the following commands
 	var excludedCommands = map[string]struct{}{
-		"cre version":               {},
-		"cre login":                 {},
-		"cre completion bash":       {},
-		"cre completion fish":       {},
-		"cre completion powershell": {},
-		"cre completion zsh":        {},
-		"cre help":                  {},
-		"cre generate-bindings":     {},
-		"cre update":                {},
-		"cre workflow":              {},
-		"cre account":               {},
-		"cre secrets":               {},
-		"cre":                       {},
+		"cre version":                {},
+		"cre login":                  {},
+		"cre completion bash":        {},
+		"cre completion fish":        {},
+		"cre completion powershell":  {},
+		"cre completion zsh":         {},
+		"cre help":                   {},
+		"cre generate-bindings":      {},
+		"cre update":                 {},
+		"cre workflow":               {},
+		"cre account":                {},
+		"cre profile":                {},
+		"cre profile list":           {},
+		"cre profile use":            {},
+		"cre profile delete":         {},
+		"cre profile rename":         {},
+		"cre secrets":                {},
+		"cre":                        {},
 	}
 
 	_, exists := excludedCommands[cmd.CommandPath()]

@@ -23,6 +23,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
+	"github.com/smartcontractkit/cre-cli/internal/profiles"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 )
 
@@ -38,16 +39,20 @@ var (
 var htmlFiles embed.FS
 
 func New(runtimeCtx *runtime.Context) *cobra.Command {
+	var profileName string
+
 	cmd := &cobra.Command{
 		Use:   "login",
 		Short: "Start authentication flow",
 		Long:  "Opens browser for user login and saves credentials.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			h := newHandler(runtimeCtx)
+			h := newHandler(runtimeCtx, profileName)
 			return h.execute()
 		},
 	}
+
+	cmd.Flags().StringVar(&profileName, "profile", "", "Profile name for this login (defaults to organization name)")
 
 	return cmd
 }
@@ -55,14 +60,16 @@ func New(runtimeCtx *runtime.Context) *cobra.Command {
 type handler struct {
 	environmentSet   *environments.EnvironmentSet
 	log              *zerolog.Logger
+	profileName      string
 	lastPKCEVerifier string
 	lastState        string
 }
 
-func newHandler(ctx *runtime.Context) *handler {
+func newHandler(ctx *runtime.Context, profileName string) *handler {
 	return &handler{
 		log:            ctx.Logger,
 		environmentSet: ctx.EnvironmentSet,
+		profileName:    profileName,
 	}
 }
 
@@ -78,12 +85,45 @@ func (h *handler) execute() error {
 		return err
 	}
 
-	if err := credentials.SaveCredentials(tokenSet); err != nil {
-		h.log.Error().Err(err).Msg("failed to save credentials")
+	// Use profile-based saving
+	profileMgr, err := profiles.New(h.log)
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to initialize profile manager")
 		return err
 	}
 
-	fmt.Println("Login completed successfully")
+	// Generate profile name
+	profileName := h.profileName
+	if profileName == "" {
+		// Default to a name derived from current time or use a sensible default
+		profileName = "default"
+		if len(profileMgr.ListProfiles()) == 0 {
+			// First login, use "default"
+			profileName = "default"
+		} else {
+			// For subsequent logins without explicit name, use a timestamp-based name
+			profileName = fmt.Sprintf("profile_%d", time.Now().Unix())
+		}
+	}
+
+	profile := &profiles.Profile{
+		Name:     profileName,
+		Tokens:   tokenSet,
+		AuthType: credentials.AuthTypeBearer,
+	}
+
+	if err := profileMgr.SaveProfile(profile); err != nil {
+		h.log.Error().Err(err).Msg("failed to save profile")
+		return err
+	}
+
+	// Also save in legacy format for backwards compatibility (if it's the active profile)
+	if err := credentials.SaveCredentials(tokenSet); err != nil {
+		h.log.Warn().Err(err).Msg("failed to save credentials in legacy format (non-critical)")
+	}
+
+	fmt.Printf("\nLogin completed successfully!\n")
+	fmt.Printf("Profile '%s' is now active\n", profileName)
 	fmt.Println("To get started, run: cre init")
 	return nil
 }

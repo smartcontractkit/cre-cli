@@ -21,12 +21,14 @@ type Credentials struct {
 	Tokens      *CreLoginTokenSet `yaml:"tokens"`
 	APIKey      string            `yaml:"api_key"`
 	AuthType    string            `yaml:"auth_type"`
+	ProfileName string            `yaml:"-"` // Current profile name
 	IsValidated bool              `yaml:"-"`
 	log         *zerolog.Logger
 }
 
 const (
 	CreApiKeyVar   = "CRE_API_KEY"
+	CREProfileVar  = "CRE_PROFILE"
 	AuthTypeApiKey = "api-key"
 	AuthTypeBearer = "bearer"
 	ConfigDir      = ".cre"
@@ -44,6 +46,26 @@ func New(logger *zerolog.Logger) (*Credentials, error) {
 		return cfg, nil
 	}
 
+	// Check for environment variable override
+	if profileName := os.Getenv(CREProfileVar); profileName != "" {
+		cfg.ProfileName = profileName
+	}
+
+	// Try to load from profiles
+	if profileName := os.Getenv(CREProfileVar); profileName != "" {
+		if err := loadFromProfile(cfg, profileName, logger); err == nil {
+			return cfg, nil
+		}
+		// If profile load fails but env var is set, return error
+		return nil, fmt.Errorf("profile '%s' not found or invalid, run cre profile list to see available profiles", profileName)
+	}
+
+	// Try to load from profiles (use active profile)
+	if err := loadFromProfile(cfg, "", logger); err == nil {
+		return cfg, nil
+	}
+
+	// Fallback to legacy single-file format for backwards compatibility
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return cfg, nil
@@ -61,6 +83,65 @@ func New(logger *zerolog.Logger) (*Credentials, error) {
 		return nil, fmt.Errorf("you are not logged in, run cre login and try again")
 	}
 	return cfg, nil
+}
+
+func loadFromProfile(cfg *Credentials, profileName string, logger *zerolog.Logger) error {
+	// Dynamically import profiles to avoid circular dependency
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+
+	profilesPath := filepath.Join(home, ConfigDir, "profiles.yaml")
+	data, err := os.ReadFile(profilesPath)
+	if err != nil {
+		return err // profiles.yaml doesn't exist
+	}
+
+	var profilesConfig struct {
+		Version       string `yaml:"version"`
+		ActiveProfile string `yaml:"active_profile"`
+		Profiles      []struct {
+			Name     string            `yaml:"name"`
+			Tokens   *CreLoginTokenSet `yaml:"tokens,omitempty"`
+			APIKey   string            `yaml:"api_key,omitempty"`
+			AuthType string            `yaml:"auth_type,omitempty"`
+		} `yaml:"profiles"`
+	}
+
+	if err := yaml.Unmarshal(data, &profilesConfig); err != nil {
+		return err
+	}
+
+	// Determine which profile to use
+	targetProfile := profileName
+	if targetProfile == "" {
+		targetProfile = profilesConfig.ActiveProfile
+	}
+
+	if targetProfile == "" && len(profilesConfig.Profiles) > 0 {
+		// Use first profile if no active profile specified
+		targetProfile = profilesConfig.Profiles[0].Name
+	}
+
+	if targetProfile == "" {
+		return fmt.Errorf("no profile specified and no active profile found")
+	}
+
+	// Find the profile
+	for _, profile := range profilesConfig.Profiles {
+		if profile.Name == targetProfile {
+			cfg.ProfileName = profile.Name
+			cfg.Tokens = profile.Tokens
+			cfg.APIKey = profile.APIKey
+			if profile.AuthType != "" {
+				cfg.AuthType = profile.AuthType
+			}
+			return nil
+		}
+	}
+
+	return fmt.Errorf("profile '%s' not found", targetProfile)
 }
 
 func SaveCredentials(tokenSet *CreLoginTokenSet) error {
