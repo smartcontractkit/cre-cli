@@ -12,29 +12,29 @@ import (
 )
 
 const (
-	ConfigDir     = ".cre"
-	ProfilesFile  = "profiles.yaml"
-	LegacyFile    = "cre.yaml" // for backwards compatibility
+	ConfigDir    = ".cre"
+	ProfilesFile = "profiles.yaml"
+	LegacyFile   = "cre.yaml" // for backwards compatibility
 )
 
 // Profile represents a single account/organization profile
 type Profile struct {
-	Name       string                          `yaml:"name"`
-	Org        string                          `yaml:"org,omitempty"` // organization name for reference
-	OrgID      string                          `yaml:"org_id,omitempty"`
-	Email      string                          `yaml:"email,omitempty"`
-	Tokens     *credentials.CreLoginTokenSet   `yaml:"tokens,omitempty"`
-	APIKey     string                          `yaml:"api_key,omitempty"`
-	AuthType   string                          `yaml:"auth_type,omitempty"`
-	CreatedAt  string                          `yaml:"created_at,omitempty"`
-	UpdatedAt  string                          `yaml:"updated_at,omitempty"`
+	Name      string                        `yaml:"name"`
+	Org       string                        `yaml:"org,omitempty"` // organization name for reference
+	OrgID     string                        `yaml:"org_id,omitempty"`
+	Email     string                        `yaml:"email,omitempty"`
+	Tokens    *credentials.CreLoginTokenSet `yaml:"tokens,omitempty"`
+	APIKey    string                        `yaml:"api_key,omitempty"`
+	AuthType  string                        `yaml:"auth_type,omitempty"`
+	CreatedAt string                        `yaml:"created_at,omitempty"`
+	UpdatedAt string                        `yaml:"updated_at,omitempty"`
 }
 
 // ProfilesConfig represents the entire profiles configuration
 type ProfilesConfig struct {
-	Version      string     `yaml:"version"`
-	ActiveProfile string    `yaml:"active_profile"`
-	Profiles     []*Profile `yaml:"profiles"`
+	Version       string     `yaml:"version"`
+	ActiveProfile string     `yaml:"active_profile"`
+	Profiles      []*Profile `yaml:"profiles"`
 }
 
 // Manager handles profile operations
@@ -282,4 +282,3 @@ func (m *Manager) GetProfileByOrgID(orgID string) *Profile {
 func (m *Manager) GetActiveProfileName() string {
 	return m.config.ActiveProfile
 }
-

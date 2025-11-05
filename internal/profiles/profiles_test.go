@@ -153,4 +153,3 @@ func TestProfileManager(t *testing.T) {
 		}
 	})
 }
-
