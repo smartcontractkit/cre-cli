@@ -42,6 +42,7 @@ type flagNames struct {
 	LedgerDerivationPath Flag
 	NonInteractive       Flag
 	SkipConfirmation     Flag
+	Profile              Flag
 }
 
 var Flags = flagNames{
@@ -56,6 +57,7 @@ var Flags = flagNames{
 	LedgerDerivationPath: Flag{"ledger-derivation-path", ""},
 	NonInteractive:       Flag{"non-interactive", ""},
 	SkipConfirmation:     Flag{"yes", "y"},
+	Profile:              Flag{"profile", ""},
 }
 
 func AddTxnTypeFlags(cmd *cobra.Command) {
@@ -70,6 +72,10 @@ func AddRawTxFlag(cmd *cobra.Command) {
 
 func AddSkipConfirmation(cmd *cobra.Command) {
 	cmd.Flags().Bool(Flags.SkipConfirmation.Name, false, "If set, the command will skip the confirmation prompt and proceed with the operation even if it is potentially destructive")
+}
+
+func AddProfileFlag(cmd *cobra.Command) {
+	cmd.Flags().String(Flags.Profile.Name, "", "Profile name for this command (overrides the active profile)")
 }
 
 func mergeConfigToViper(v *viper.Viper, filePath string) error {

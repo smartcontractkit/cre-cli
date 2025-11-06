@@ -103,6 +103,11 @@ func newRootCommand() *cobra.Command {
 				return fmt.Errorf("failed to bind flags: %w", err)
 			}
 
+			// Set the profile environment variable if provided via flag
+			if profileName := v.GetString(settings.Flags.Profile.Name); profileName != "" {
+				os.Setenv("CRE_PROFILE", profileName)
+			}
+
 			// Update log level if verbose flag is set
 			if verbose := v.GetBool(settings.Flags.Verbose.Name); verbose {
 				newLogger := log.Level(zerolog.DebugLevel)
