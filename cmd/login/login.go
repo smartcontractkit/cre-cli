@@ -111,6 +111,11 @@ func (h *handler) execute() error {
 		AuthType: credentials.AuthTypeBearer,
 	}
 
+	// Preserve eth_private_key if re-logging into an existing profile
+	if existingProfile := profileMgr.GetProfile(profileName); existingProfile != nil {
+		profile.EthPrivateKey = existingProfile.EthPrivateKey
+	}
+
 	if err := profileMgr.SaveProfile(profile); err != nil {
 		h.log.Error().Err(err).Msg("failed to save profile")
 		return err

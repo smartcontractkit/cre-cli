@@ -19,15 +19,16 @@ const (
 
 // Profile represents a single account/organization profile
 type Profile struct {
-	Name      string                        `yaml:"name"`
-	Org       string                        `yaml:"org,omitempty"` // organization name for reference
-	OrgID     string                        `yaml:"org_id,omitempty"`
-	Email     string                        `yaml:"email,omitempty"`
-	Tokens    *credentials.CreLoginTokenSet `yaml:"tokens,omitempty"`
-	APIKey    string                        `yaml:"api_key,omitempty"`
-	AuthType  string                        `yaml:"auth_type,omitempty"`
-	CreatedAt string                        `yaml:"created_at,omitempty"`
-	UpdatedAt string                        `yaml:"updated_at,omitempty"`
+	Name          string                        `yaml:"name"`
+	Org           string                        `yaml:"org,omitempty"` // organization name for reference
+	OrgID         string                        `yaml:"org_id,omitempty"`
+	Email         string                        `yaml:"email,omitempty"`
+	Tokens        *credentials.CreLoginTokenSet `yaml:"tokens,omitempty"`
+	APIKey        string                        `yaml:"api_key,omitempty"`
+	AuthType      string                        `yaml:"auth_type,omitempty"`
+	EthPrivateKey string                        `yaml:"eth_private_key,omitempty"`
+	CreatedAt     string                        `yaml:"created_at,omitempty"`
+	UpdatedAt     string                        `yaml:"updated_at,omitempty"`
 }
 
 // ProfilesConfig represents the entire profiles configuration
