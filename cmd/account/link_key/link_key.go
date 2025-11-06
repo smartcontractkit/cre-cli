@@ -254,7 +254,7 @@ mutation InitiateLinking($request: InitiateLinkingRequest!) {
 		s := strings.ToLower(err.Error())
 		if strings.Contains(s, "unauthorized") {
 			unauthorizedMsg := `✖ Deployment blocked: your organization is not authorized to deploy workflows.
-During private Beta, only approved organizations can deploy workflows to CRE environment.
+During early access, only approved organizations can deploy workflows to CRE environment.
 
 → If you believe this is an error or would like to request access, please visit:
 https://cre.chain.link/request-access`
