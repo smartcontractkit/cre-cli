@@ -129,6 +129,11 @@ func newRootCommand() *cobra.Command {
 				if err != nil {
 					return fmt.Errorf("authentication required: %w", err)
 				}
+
+				// If profile has an eth private key override, set it
+				if runtimeContext.Credentials.EthPrivateKey != "" {
+					os.Setenv("CRE_ETH_PRIVATE_KEY", runtimeContext.Credentials.EthPrivateKey)
+				}
 			}
 
 			// load settings from yaml files

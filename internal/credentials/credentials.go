@@ -18,12 +18,13 @@ type CreLoginTokenSet struct {
 }
 
 type Credentials struct {
-	Tokens      *CreLoginTokenSet `yaml:"tokens"`
-	APIKey      string            `yaml:"api_key"`
-	AuthType    string            `yaml:"auth_type"`
-	ProfileName string            `yaml:"-"` // Current profile name
-	IsValidated bool              `yaml:"-"`
-	log         *zerolog.Logger
+	Tokens        *CreLoginTokenSet `yaml:"tokens"`
+	APIKey        string            `yaml:"api_key"`
+	AuthType      string            `yaml:"auth_type"`
+	EthPrivateKey string            `yaml:"-"` // Eth private key from profile
+	ProfileName   string            `yaml:"-"` // Current profile name
+	IsValidated   bool              `yaml:"-"`
+	log           *zerolog.Logger
 }
 
 const (
@@ -102,10 +103,11 @@ func loadFromProfile(cfg *Credentials, profileName string, logger *zerolog.Logge
 		Version       string `yaml:"version"`
 		ActiveProfile string `yaml:"active_profile"`
 		Profiles      []struct {
-			Name     string            `yaml:"name"`
-			Tokens   *CreLoginTokenSet `yaml:"tokens,omitempty"`
-			APIKey   string            `yaml:"api_key,omitempty"`
-			AuthType string            `yaml:"auth_type,omitempty"`
+			Name          string            `yaml:"name"`
+			Tokens        *CreLoginTokenSet `yaml:"tokens,omitempty"`
+			APIKey        string            `yaml:"api_key,omitempty"`
+			AuthType      string            `yaml:"auth_type,omitempty"`
+			EthPrivateKey string            `yaml:"eth_private_key,omitempty"`
 		} `yaml:"profiles"`
 	}
 
@@ -136,6 +138,9 @@ func loadFromProfile(cfg *Credentials, profileName string, logger *zerolog.Logge
 			cfg.APIKey = profile.APIKey
 			if profile.AuthType != "" {
 				cfg.AuthType = profile.AuthType
+			}
+			if profile.EthPrivateKey != "" {
+				cfg.EthPrivateKey = profile.EthPrivateKey
 			}
 			return nil
 		}
