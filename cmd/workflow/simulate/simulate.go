@@ -186,7 +186,7 @@ func (h *handler) Execute(inputs Inputs) error {
 	// Compile the workflow
 	// terminal command: GOOS=wasip1 GOARCH=wasm go build -trimpath -ldflags="-buildid= -w -s" -o <output_path> <workflow_path>
 	workflowRootFolder := filepath.Dir(inputs.WorkflowPath)
-	tmpWasmFileName := "tmp.wasm"
+	tmpWasmFileName := fmt.Sprintf("tmp_%d.wasm", os.Getpid())
 	workflowMainFile := filepath.Base(inputs.WorkflowPath)
 
 	// Set language in runtime context based on workflow file extension
