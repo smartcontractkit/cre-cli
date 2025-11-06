@@ -43,7 +43,7 @@ func (h *handler) Compile() error {
 
 	workflowRootFolder := filepath.Dir(h.inputs.WorkflowPath)
 
-	tmpWasmFileName := "tmp.wasm"
+	tmpWasmFileName := fmt.Sprintf("tmp_%d.wasm", os.Getpid())
 	workflowMainFile := filepath.Base(h.inputs.WorkflowPath)
 
 	// Set language in runtime context based on workflow file extension
