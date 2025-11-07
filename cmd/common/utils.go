@@ -172,6 +172,14 @@ func GetWorkflowLanguage(inputFile string) string {
 	return constants.WorkflowLanguageGolang
 }
 
+// EnsureTool checks that the binary exists on PATH
+func EnsureTool(bin string) error {
+	if _, err := exec.LookPath(bin); err != nil {
+		return fmt.Errorf("%q not found in PATH: %w", bin, err)
+	}
+	return nil
+}
+
 // Gets a build command for either Golang or Typescript based on the filename
 func GetBuildCmd(inputFile string, outputFile string, rootFolder string) *exec.Cmd {
 	isTypescriptWorkflow := strings.HasSuffix(inputFile, ".ts") || strings.HasSuffix(inputFile, ".tsx")
