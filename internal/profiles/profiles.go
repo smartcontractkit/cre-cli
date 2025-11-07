@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/rs/zerolog"
 	"gopkg.in/yaml.v2"
@@ -12,9 +13,9 @@ import (
 )
 
 const (
-	ConfigDir    = ".cre"
-	ProfilesFile = "profiles.yaml"
-	LegacyFile   = "cre.yaml" // for backwards compatibility
+	ConfigDir      = ".cre"
+	ProfilesFolder = "profiles" // Directory: individual profile files
+	LegacyFile     = "cre.yaml" // Legacy: backwards compatibility
 )
 
 // Profile represents a single account/organization profile
@@ -31,18 +32,10 @@ type Profile struct {
 	UpdatedAt     string                        `yaml:"updated_at,omitempty"`
 }
 
-// ProfilesConfig represents the entire profiles configuration
-type ProfilesConfig struct {
-	Version       string     `yaml:"version"`
-	ActiveProfile string     `yaml:"active_profile"`
-	Profiles      []*Profile `yaml:"profiles"`
-}
-
 // Manager handles profile operations
 type Manager struct {
-	configPath string
-	log        *zerolog.Logger
-	config     *ProfilesConfig
+	profilesDir string
+	log         *zerolog.Logger
 }
 
 // New creates a new profile manager
@@ -52,28 +45,15 @@ func New(logger *zerolog.Logger) (*Manager, error) {
 		return nil, fmt.Errorf("get home dir: %w", err)
 	}
 
-	configPath := filepath.Join(home, ConfigDir, ProfilesFile)
+	profilesDir := filepath.Join(home, ConfigDir, ProfilesFolder)
 	m := &Manager{
-		configPath: configPath,
-		log:        logger,
+		profilesDir: profilesDir,
+		log:         logger,
 	}
 
-	// Try to load existing config
-	if err := m.load(); err != nil {
-		// If file doesn't exist, initialize with empty config
-		if os.IsNotExist(err) {
-			m.config = &ProfilesConfig{
-				Version:       "1.0",
-				ActiveProfile: "",
-				Profiles:      []*Profile{},
-			}
-			// Try to migrate from legacy single-file format
-			if err := m.migrateFromLegacy(); err != nil {
-				m.log.Debug().Err(err).Msg("no legacy credentials to migrate")
-			}
-		} else {
-			return nil, fmt.Errorf("failed to load profiles: %w", err)
-		}
+	// Try to migrate from legacy single-file format on first run
+	if err := m.migrateFromLegacy(); err != nil {
+		m.log.Debug().Err(err).Msg("no legacy credentials to migrate")
 	}
 
 	return m, nil
@@ -109,56 +89,18 @@ func (m *Manager) migrateFromLegacy() error {
 		AuthType: credentials.AuthTypeBearer,
 	}
 
-	m.config.Profiles = append(m.config.Profiles, profile)
-	m.config.ActiveProfile = "default"
-
-	// Save the migrated config
-	if err := m.save(); err != nil {
-		return fmt.Errorf("failed to save migrated profiles: %w", err)
+	// Save the migrated profile
+	if err := m.SaveProfile(profile); err != nil {
+		return fmt.Errorf("failed to save migrated profile: %w", err)
 	}
 
 	m.log.Info().Msg("successfully migrated credentials from legacy format")
 	return nil
 }
 
-// load reads the profiles configuration from disk
-func (m *Manager) load() error {
-	data, err := os.ReadFile(m.configPath)
-	if err != nil {
-		return err
-	}
-
-	config := &ProfilesConfig{}
-	if err := yaml.Unmarshal(data, config); err != nil {
-		return err
-	}
-
-	m.config = config
-	return nil
-}
-
-// save writes the profiles configuration to disk
-func (m *Manager) save() error {
-	dir := filepath.Dir(m.configPath)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return fmt.Errorf("create config dir: %w", err)
-	}
-
-	data, err := yaml.Marshal(m.config)
-	if err != nil {
-		return fmt.Errorf("marshal profiles: %w", err)
-	}
-
-	tmp := m.configPath + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o600); err != nil {
-		return fmt.Errorf("write temp file: %w", err)
-	}
-
-	if err := os.Rename(tmp, m.configPath); err != nil {
-		return fmt.Errorf("rename temp file: %w", err)
-	}
-
-	return nil
+// getProfilePath returns the file path for a specific profile
+func (m *Manager) getProfilePath(profileName string) string {
+	return filepath.Join(m.profilesDir, profileName+".yaml")
 }
 
 // SaveProfile saves or updates a profile
@@ -167,83 +109,114 @@ func (m *Manager) SaveProfile(profile *Profile) error {
 		return fmt.Errorf("profile name cannot be empty")
 	}
 
-	// Check if profile already exists
-	for i, p := range m.config.Profiles {
-		if p.Name == profile.Name {
-			// Update existing profile
-			m.config.Profiles[i] = profile
-			return m.save()
-		}
+	// Ensure profiles directory exists
+	if err := os.MkdirAll(m.profilesDir, 0o700); err != nil {
+		return fmt.Errorf("create profiles directory: %w", err)
 	}
 
-	// Add new profile
-	m.config.Profiles = append(m.config.Profiles, profile)
-
-	// If this is the first profile, make it active
-	if m.config.ActiveProfile == "" {
-		m.config.ActiveProfile = profile.Name
+	// Save individual profile to its own file
+	profilePath := m.getProfilePath(profile.Name)
+	data, err := yaml.Marshal(profile)
+	if err != nil {
+		return fmt.Errorf("marshal profile: %w", err)
 	}
 
-	return m.save()
-}
-
-// GetProfile retrieves a profile by name
-func (m *Manager) GetProfile(name string) *Profile {
-	for _, p := range m.config.Profiles {
-		if p.Name == name {
-			return p
-		}
+	tmp := profilePath + ".tmp"
+	if err := os.WriteFile(tmp, data, 0o600); err != nil {
+		return fmt.Errorf("write profile temp file: %w", err)
 	}
+
+	if err := os.Rename(tmp, profilePath); err != nil {
+		return fmt.Errorf("rename profile file: %w", err)
+	}
+
 	return nil
 }
 
-// GetActiveProfile retrieves the currently active profile
-func (m *Manager) GetActiveProfile() *Profile {
-	if m.config.ActiveProfile == "" {
+// GetProfile retrieves a profile by name from individual file
+func (m *Manager) GetProfile(name string) *Profile {
+	profilePath := m.getProfilePath(name)
+	data, err := os.ReadFile(profilePath)
+	if err != nil {
+		m.log.Debug().Err(err).Str("profile", name).Msg("failed to read profile file")
 		return nil
 	}
-	return m.GetProfile(m.config.ActiveProfile)
+
+	var profile Profile
+	if err := yaml.Unmarshal(data, &profile); err != nil {
+		m.log.Debug().Err(err).Str("profile", name).Msg("failed to unmarshal profile")
+		return nil
+	}
+	return &profile
 }
 
-// SetActiveProfile sets the active profile
+// GetActiveProfile retrieves the active profile from CRE_PROFILE env var
+func (m *Manager) GetActiveProfile() *Profile {
+	activeProfileName := os.Getenv(credentials.CREProfileVar)
+	if activeProfileName == "" {
+		return nil
+	}
+	return m.GetProfile(activeProfileName)
+}
+
+// SetActiveProfile sets the active profile via CRE_PROFILE env var
 func (m *Manager) SetActiveProfile(name string) error {
 	profile := m.GetProfile(name)
 	if profile == nil {
 		return fmt.Errorf("profile '%s' not found", name)
 	}
 
-	m.config.ActiveProfile = name
-	return m.save()
+	return os.Setenv(credentials.CREProfileVar, name)
 }
 
-// ListProfiles returns all profiles
+// ListProfiles returns all profiles by reading from individual files
 func (m *Manager) ListProfiles() []*Profile {
-	return m.config.Profiles
-}
+	entries, err := os.ReadDir(m.profilesDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []*Profile{}
+		}
+		m.log.Debug().Err(err).Msg("failed to read profiles directory")
+		return []*Profile{}
+	}
 
-// DeleteProfile removes a profile
-func (m *Manager) DeleteProfile(name string) error {
-	for i, p := range m.config.Profiles {
-		if p.Name == name {
-			m.config.Profiles = append(m.config.Profiles[:i], m.config.Profiles[i+1:]...)
+	var profiles []*Profile
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".yaml") {
+			continue
+		}
 
-			// If we deleted the active profile, switch to the first available
-			if m.config.ActiveProfile == name {
-				if len(m.config.Profiles) > 0 {
-					m.config.ActiveProfile = m.config.Profiles[0].Name
-				} else {
-					m.config.ActiveProfile = ""
-				}
-			}
-
-			return m.save()
+		profileName := strings.TrimSuffix(entry.Name(), ".yaml")
+		if profile := m.GetProfile(profileName); profile != nil {
+			profiles = append(profiles, profile)
 		}
 	}
 
-	return fmt.Errorf("profile '%s' not found", name)
+	return profiles
 }
 
-// RenameProfile renames an existing profile
+// DeleteProfile removes a profile and its file
+func (m *Manager) DeleteProfile(name string) error {
+	// Check if profile exists
+	if m.GetProfile(name) == nil {
+		return fmt.Errorf("profile '%s' not found", name)
+	}
+
+	// Delete the individual profile file
+	profilePath := m.getProfilePath(name)
+	if err := os.Remove(profilePath); err != nil && !os.IsNotExist(err) {
+		m.log.Warn().Err(err).Str("profile", name).Msg("failed to delete profile file")
+	}
+
+	// If we deleted the active profile, clear it from env var
+	if os.Getenv(credentials.CREProfileVar) == name {
+		os.Unsetenv(credentials.CREProfileVar)
+	}
+
+	return nil
+}
+
+// RenameProfile renames an existing profile and its file
 func (m *Manager) RenameProfile(oldName, newName string) error {
 	if newName == "" {
 		return fmt.Errorf("new profile name cannot be empty")
@@ -259,19 +232,33 @@ func (m *Manager) RenameProfile(oldName, newName string) error {
 		return fmt.Errorf("profile '%s' not found", oldName)
 	}
 
+	// Update profile name
 	profile.Name = newName
 
-	// If this was the active profile, update the active profile name
-	if m.config.ActiveProfile == oldName {
-		m.config.ActiveProfile = newName
+	// Save to new file name
+	if err := m.SaveProfile(profile); err != nil {
+		return fmt.Errorf("failed to save renamed profile: %w", err)
 	}
 
-	return m.save()
+	// Delete old file
+	oldPath := m.getProfilePath(oldName)
+	if err := os.Remove(oldPath); err != nil && !os.IsNotExist(err) {
+		m.log.Warn().Err(err).Str("profile", oldName).Msg("failed to delete old profile file")
+	}
+
+	// Update active profile env var if applicable
+	if os.Getenv(credentials.CREProfileVar) == oldName {
+		os.Setenv(credentials.CREProfileVar, newName)
+	}
+
+	return nil
 }
 
 // GetProfileByOrgID retrieves a profile by organization ID
 func (m *Manager) GetProfileByOrgID(orgID string) *Profile {
-	for _, p := range m.config.Profiles {
+	// Search all profiles by loading from individual files
+	profiles := m.ListProfiles()
+	for _, p := range profiles {
 		if p.OrgID == orgID {
 			return p
 		}
@@ -279,7 +266,7 @@ func (m *Manager) GetProfileByOrgID(orgID string) *Profile {
 	return nil
 }
 
-// GetActiveProfileName returns the name of the active profile
+// GetActiveProfileName returns the name of the active profile from env var
 func (m *Manager) GetActiveProfileName() string {
-	return m.config.ActiveProfile
+	return os.Getenv(credentials.CREProfileVar)
 }
