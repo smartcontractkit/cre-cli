@@ -14,24 +14,16 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 )
 
-const queryGetAccountDetails = `
-query GetAccountDetails {
-	getAccountDetails {
-		userId
-		organizationId
-		emailAddress
-		displayName
-		memberType
-		memberStatus
-		createdAt
-		updatedAt
-		invitedByUser
-		invitedAt
-		joinedAt
-		removedByUser
-		removedAt
-	}
-}`
+const getWhoamiDetails = `
+	query GetWhoamiDetails {
+		getAccountDetails {
+			emailAddress
+			organizationId
+		}
+		getOrganization {
+			displayName
+		}
+	}`
 
 func New(runtimeCtx *runtime.Context) *cobra.Command {
 	cmd := &cobra.Command{
@@ -63,14 +55,16 @@ func NewHandler(ctx *runtime.Context) *Handler {
 
 func (h *Handler) Execute(ctx context.Context) error {
 	client := graphqlclient.New(h.credentials, h.environmentSet, h.log)
-	req := graphql.NewRequest(queryGetAccountDetails)
+	req := graphql.NewRequest(getWhoamiDetails)
 
 	var respEnvelope struct {
 		GetAccountDetails struct {
-			Username       string `json:"username"`
-			OrganizationID string `json:"organizationID"`
+			OrganizationID string `json:"organizationId"`
 			EmailAddress   string `json:"emailAddress"`
 		} `json:"getAccountDetails"`
+		GetOrganization struct {
+			DisplayName string `json:"displayName"`
+		} `json:"getOrganization"`
 	}
 
 	if err := client.Execute(ctx, req, &respEnvelope); err != nil {
@@ -78,10 +72,11 @@ func (h *Handler) Execute(ctx context.Context) error {
 	}
 
 	fmt.Println("")
-	fmt.Println("\tAccount details retrieved:")
+	fmt.Println("Account details retrieved:")
 	fmt.Println("")
-	fmt.Printf("   \tEmail:           %s\n", respEnvelope.GetAccountDetails.EmailAddress)
-	fmt.Printf("   \tOrganization ID: %s\n", respEnvelope.GetAccountDetails.OrganizationID)
+	fmt.Printf("\tEmail:             %s\n", respEnvelope.GetAccountDetails.EmailAddress)
+	fmt.Printf("\tOrganization ID:   %s\n", respEnvelope.GetAccountDetails.OrganizationID)
+	fmt.Printf("\tOrganization Name: %s\n", respEnvelope.GetOrganization.DisplayName)
 	fmt.Println("")
 
 	return nil
