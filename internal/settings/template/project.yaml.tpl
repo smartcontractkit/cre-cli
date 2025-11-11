@@ -19,8 +19,6 @@ staging-settings:
   rpcs:
     - chain-name: {{EthSepoliaChainName}}
       url: {{EthSepoliaRpcUrl}}
-    - chain-name: {{EthMainnetChainName}}
-      url: {{EthMainnetRpcUrl}}
 
 # ==========================================================================
 production-settings:
