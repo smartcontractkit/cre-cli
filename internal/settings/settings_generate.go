@@ -85,7 +85,7 @@ func GenerateProjectEnvFile(workingDirectory string, stdin io.Reader) (string, e
 
 	replacements := map[string]string{
 		"GithubApiToken": "your-github-token",
-		"EthPrivateKey":  "0000000000000000000000000000000000000000000000000000000000000001",
+		"EthPrivateKey":  "your-eth-private-key",
 	}
 
 	if err := GenerateFileFromTemplate(outputPath, ProjectEnvironmentTemplateContent, replacements); err != nil {
