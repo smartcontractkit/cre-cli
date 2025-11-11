@@ -135,14 +135,13 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 		return Inputs{}, fmt.Errorf("no RPC URLs found for supported chains")
 	}
 
-	var pk *ecdsa.PrivateKey
-	var err error
-	if v.GetBool("broadcast") {
-		h.log.Debug().Msg("Broadcast mode enabled: transactions will be sent to the EVM networks")
-		pk, err = crypto.HexToECDSA(creSettings.User.EthPrivateKey)
+	pk, err := crypto.HexToECDSA(creSettings.User.EthPrivateKey)
+	if err != nil {
+		pk, err = crypto.HexToECDSA("0000000000000000000000000000000000000000000000000000000000000001")
 		if err != nil {
-			return Inputs{}, fmt.Errorf("failed to parse private key. Please check CRE_ETH_PRIVATE_KEY in your .env file or system environment: %w", err)
+			return Inputs{}, fmt.Errorf("failed to parse default private key. Please set CRE_ETH_PRIVATE_KEY in your .env file or system environment: %w", err)
 		}
+		fmt.Println("Warning: using default private key. Transactions may NOT be signed correctly.")
 	}
 
 	return Inputs{
