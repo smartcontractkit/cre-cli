@@ -14,32 +14,16 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 )
 
-const queryGetAccountDetails = `
-query GetAccountDetails {
-	getAccountDetails {
-		userId
-		organizationId
-		emailAddress
-		displayName
-		memberType
-		memberStatus
-		createdAt
-		updatedAt
-		invitedByUser
-		invitedAt
-		joinedAt
-		removedByUser
-		removedAt
-	}
-}`
-
-const getOrganization = `
-query GetOrganization {
-	getOrganization {
-		organizationId
-		displayName
-	}
-}`
+const getWhoamiDetails = `
+	query GetWhoamiDetails {
+		getAccountDetails {
+			emailAddress
+			organizationId
+		}
+		getOrganization {
+			displayName
+		}
+	}`
 
 func New(runtimeCtx *runtime.Context) *cobra.Command {
 	cmd := &cobra.Command{
@@ -71,38 +55,28 @@ func NewHandler(ctx *runtime.Context) *Handler {
 
 func (h *Handler) Execute(ctx context.Context) error {
 	client := graphqlclient.New(h.credentials, h.environmentSet, h.log)
-	reqGetAccountDetails := graphql.NewRequest(queryGetAccountDetails)
-	reqGetOrganization := graphql.NewRequest(getOrganization)
+	req := graphql.NewRequest(getWhoamiDetails)
 
-	var respEnvelopeGetAccountDetails struct {
+	var respEnvelope struct {
 		GetAccountDetails struct {
-			Username       string `json:"username"`
-			OrganizationID string `json:"organizationID"`
+			OrganizationID string `json:"organizationId"`
 			EmailAddress   string `json:"emailAddress"`
 		} `json:"getAccountDetails"`
-	}
-
-	var respEnvelopeGetOrganization struct {
 		GetOrganization struct {
-			OrganizationID string `json:"organizationID"`
-			DisplayName    string `json:"displayName"`
+			DisplayName string `json:"displayName"`
 		} `json:"getOrganization"`
 	}
 
-	if err := client.Execute(ctx, reqGetAccountDetails, &respEnvelopeGetAccountDetails); err != nil {
-		return fmt.Errorf("graphql request failed: %w", err)
-	}
-
-	if err := client.Execute(ctx, reqGetOrganization, &respEnvelopeGetOrganization); err != nil {
+	if err := client.Execute(ctx, req, &respEnvelope); err != nil {
 		return fmt.Errorf("graphql request failed: %w", err)
 	}
 
 	fmt.Println("")
 	fmt.Println("Account details retrieved:")
 	fmt.Println("")
-	fmt.Printf("\tEmail:             %s\n", respEnvelopeGetAccountDetails.GetAccountDetails.EmailAddress)
-	fmt.Printf("\tOrganization ID:   %s\n", respEnvelopeGetAccountDetails.GetAccountDetails.OrganizationID)
-	fmt.Printf("\tOrganization Name: %s\n", respEnvelopeGetOrganization.GetOrganization.DisplayName)
+	fmt.Printf("\tEmail:             %s\n", respEnvelope.GetAccountDetails.EmailAddress)
+	fmt.Printf("\tOrganization ID:   %s\n", respEnvelope.GetAccountDetails.OrganizationID)
+	fmt.Printf("\tOrganization Name: %s\n", respEnvelope.GetOrganization.DisplayName)
 	fmt.Println("")
 
 	return nil
