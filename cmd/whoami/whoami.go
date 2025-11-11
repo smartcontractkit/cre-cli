@@ -33,6 +33,14 @@ query GetAccountDetails {
 	}
 }`
 
+const getOrganization = `
+query GetOrganization {
+	getOrganization {
+		organizationId
+		displayName
+	}
+}`
+
 func New(runtimeCtx *runtime.Context) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "whoami",
@@ -63,9 +71,10 @@ func NewHandler(ctx *runtime.Context) *Handler {
 
 func (h *Handler) Execute(ctx context.Context) error {
 	client := graphqlclient.New(h.credentials, h.environmentSet, h.log)
-	req := graphql.NewRequest(queryGetAccountDetails)
+	reqGetAccountDetails := graphql.NewRequest(queryGetAccountDetails)
+	reqGetOrganization := graphql.NewRequest(getOrganization)
 
-	var respEnvelope struct {
+	var respEnvelopeGetAccountDetails struct {
 		GetAccountDetails struct {
 			Username       string `json:"username"`
 			OrganizationID string `json:"organizationID"`
@@ -73,15 +82,27 @@ func (h *Handler) Execute(ctx context.Context) error {
 		} `json:"getAccountDetails"`
 	}
 
-	if err := client.Execute(ctx, req, &respEnvelope); err != nil {
+	var respEnvelopeGetOrganization struct {
+		GetOrganization struct {
+			OrganizationID string `json:"organizationID"`
+			DisplayName    string `json:"displayName"`
+		} `json:"getOrganization"`
+	}
+
+	if err := client.Execute(ctx, reqGetAccountDetails, &respEnvelopeGetAccountDetails); err != nil {
+		return fmt.Errorf("graphql request failed: %w", err)
+	}
+
+	if err := client.Execute(ctx, reqGetOrganization, &respEnvelopeGetOrganization); err != nil {
 		return fmt.Errorf("graphql request failed: %w", err)
 	}
 
 	fmt.Println("")
-	fmt.Println("\tAccount details retrieved:")
+	fmt.Println("Account details retrieved:")
 	fmt.Println("")
-	fmt.Printf("   \tEmail:           %s\n", respEnvelope.GetAccountDetails.EmailAddress)
-	fmt.Printf("   \tOrganization ID: %s\n", respEnvelope.GetAccountDetails.OrganizationID)
+	fmt.Printf("\tEmail:             %s\n", respEnvelopeGetAccountDetails.GetAccountDetails.EmailAddress)
+	fmt.Printf("\tOrganization ID:   %s\n", respEnvelopeGetAccountDetails.GetAccountDetails.OrganizationID)
+	fmt.Printf("\tOrganization Name: %s\n", respEnvelopeGetOrganization.GetOrganization.DisplayName)
 	fmt.Println("")
 
 	return nil
