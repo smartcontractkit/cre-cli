@@ -30,26 +30,35 @@ func TestHandlerExecute(t *testing.T) {
 			name: "successful response",
 			graphqlHandler: func(w http.ResponseWriter, r *http.Request) {
 				body, _ := io.ReadAll(r.Body)
-				if !strings.Contains(string(body), "getAccountDetails") {
+				if strings.Contains(string(body), "getAccountDetails") && strings.Contains(string(body), "getOrganization") {
+					resp := map[string]interface{}{
+						"data": map[string]interface{}{
+							"getAccountDetails": map[string]string{
+								"username":       "alice",
+								"organizationID": "org-42",
+								"emailAddress":   "alice@example.com",
+							},
+							"getOrganization": map[string]string{
+								"organizationID": "org-42",
+								"displayName":    "Alice's Org",
+							},
+						},
+					}
+					w.Header().Set("Content-Type", "application/json")
+					if err := json.NewEncoder(w).Encode(resp); err != nil {
+						t.Fatalf("failed to encode GraphQL response: %v", err)
+					}
+				} else {
 					http.Error(w, "bad request", http.StatusBadRequest)
 					return
 				}
-				resp := map[string]interface{}{
-					"data": map[string]interface{}{
-						"getAccountDetails": map[string]string{
-							"username":       "alice",
-							"organizationID": "org-42",
-							"emailAddress":   "alice@example.com",
-						},
-					},
-				}
-				w.Header().Set("Content-Type", "application/json")
-				if err := json.NewEncoder(w).Encode(resp); err != nil {
-					t.Fatalf("failed to encode GraphQL response: %v", err)
-				}
 			},
-			wantErr:      false,
-			wantLogSnips: []string{"Account details retrieved:", "Email:           alice@example.com", "Organization ID: org-42"},
+			wantErr: false,
+			wantLogSnips: []string{
+				"Account details retrieved:", "Email:             alice@example.com",
+				"Organization ID:   org-42",
+				"Organization Name: Alice's Org",
+			},
 		},
 		{
 			name: "graphql error",
