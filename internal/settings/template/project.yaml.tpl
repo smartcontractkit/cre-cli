@@ -9,8 +9,10 @@
 #   account:
 #     workflow-owner-address: "0x123..."            # Optional: Owner wallet/MSIG address (used for --unsigned transactions)
 #   rpcs:
-#     - chain-name: ethereum-mainnet                # Required: Chain RPC endpoints
-#       url: "https://mainnet.infura.io/v3/KEY"
+#     - chain-name: ethereum-testnet-sepolia        # Required if your workflow interacts with this chain
+#       url: "<select your own rpc url>"
+#     - chain-name: ethereum-mainnet                # Required if your workflow interacts with this chain
+#       url: "<select your own rpc url>"
 
 # ==========================================================================
 staging-settings:
@@ -25,5 +27,3 @@ production-settings:
   rpcs:
     - chain-name: {{EthSepoliaChainName}}
       url: {{EthSepoliaRpcUrl}}
-    - chain-name: {{EthMainnetChainName}}
-      url: {{EthMainnetRpcUrl}}
