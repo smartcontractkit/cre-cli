@@ -137,7 +137,15 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 
 	pk, err := crypto.HexToECDSA(creSettings.User.EthPrivateKey)
 	if err != nil {
-		return Inputs{}, fmt.Errorf("failed to get private key: %w", err)
+		if v.GetBool("broadcast") {
+			return Inputs{}, fmt.Errorf(
+				"failed to parse private key, required to broadcast. Please check CRE_ETH_PRIVATE_KEY in your .env file or system environment: %w", err)
+		}
+		pk, err = crypto.HexToECDSA("0000000000000000000000000000000000000000000000000000000000000001")
+		if err != nil {
+			return Inputs{}, fmt.Errorf("failed to parse default private key. Please set CRE_ETH_PRIVATE_KEY in your .env file or system environment: %w", err)
+		}
+		fmt.Println("Warning: using default private key for chain write simulation. To use your own key, set CRE_ETH_PRIVATE_KEY in your .env file or system environment.")
 	}
 
 	return Inputs{
