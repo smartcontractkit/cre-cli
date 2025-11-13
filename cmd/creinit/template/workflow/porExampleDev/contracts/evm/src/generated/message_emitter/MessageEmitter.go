@@ -465,11 +465,9 @@ func (c *MessageEmitter) LogTriggerMessageEmittedLog(chainSelector uint64, confi
 	}, nil
 }
 
-func (c *MessageEmitter) FilterLogsMessageEmitted(runtime cre.Runtime, options *bindings.FilterOptions) cre.Promise[*evm.FilterLogsReply] {
+func (c *MessageEmitter) FilterLogsMessageEmitted(runtime cre.Runtime, options *bindings.FilterOptions) (cre.Promise[*evm.FilterLogsReply], error) {
 	if options == nil {
-		options = &bindings.FilterOptions{
-			ToBlock: options.ToBlock,
-		}
+		return nil, errors.New("FilterLogs options are required.")
 	}
 	return c.client.FilterLogs(runtime, &evm.FilterLogsRequest{
 		FilterQuery: &evm.FilterQuery{
@@ -481,5 +479,5 @@ func (c *MessageEmitter) FilterLogsMessageEmitted(runtime cre.Runtime, options *
 			FromBlock: pb.NewBigIntFromInt(options.FromBlock),
 			ToBlock:   pb.NewBigIntFromInt(options.ToBlock),
 		},
-	})
+	}), nil
 }
