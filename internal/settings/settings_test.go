@@ -82,7 +82,7 @@ func TestLoadEnvAndSettingsEmptyTarget(t *testing.T) {
 
 	setUpTestSettingsFiles(t, v, workflowTemplatePath, projectTemplatePath, tempDir)
 	cmd := &cobra.Command{Use: "login"}
-	s, err := settings.New(logger, v, cmd)
+	s, err := settings.New(logger, v, cmd, "")
 
 	assert.Error(t, err, "Expected error due to empty target")
 	assert.Contains(t, err.Error(), "target not set", "Expected missing target error")
@@ -110,7 +110,7 @@ func TestLoadEnvAndSettings(t *testing.T) {
 
 	setUpTestSettingsFiles(t, v, workflowTemplatePath, projectTemplatePath, tempDir)
 	cmd := &cobra.Command{Use: "login"}
-	s, err := settings.New(logger, v, cmd)
+	s, err := settings.New(logger, v, cmd, "")
 	require.NoError(t, err)
 	assert.Equal(t, "staging", s.User.TargetName)
 	assert.Equal(t, "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80", s.User.EthPrivateKey)
@@ -143,7 +143,7 @@ func TestLoadEnvAndSettingsWithWorkflowSettingsFlag(t *testing.T) {
 
 	setUpTestSettingsFiles(t, v, workflowTemplatePath, projectTemplatePath, tempDir)
 	cmd := &cobra.Command{Use: "login"}
-	s, err := settings.New(logger, v, cmd)
+	s, err := settings.New(logger, v, cmd, "")
 	require.NoError(t, err)
 	assert.Equal(t, "staging", s.User.TargetName)
 	assert.Equal(t, "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80", s.User.EthPrivateKey)
@@ -173,7 +173,7 @@ func TestInlineEnvTakesPrecedenceOverDotEnv(t *testing.T) {
 	defer os.Unsetenv(settings.CreTargetEnvVar)
 
 	cmd := &cobra.Command{Use: "login"}
-	s, err := settings.New(logger, v, cmd)
+	s, err := settings.New(logger, v, cmd, "")
 	require.NoError(t, err)
 	assert.Equal(t, "staging", s.User.TargetName)
 	assert.Equal(t, "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80", s.User.EthPrivateKey)
@@ -201,7 +201,7 @@ func TestLoadEnvAndMergedSettings(t *testing.T) {
 	setUpTestSettingsFiles(t, v, workflowTemplatePath, projectTemplatePath, tempDir)
 
 	cmd := &cobra.Command{Use: "workflow"}
-	s, err := settings.New(logger, v, cmd)
+	s, err := settings.New(logger, v, cmd, "")
 	require.NoError(t, err)
 	require.NotNil(t, s)
 
@@ -257,7 +257,7 @@ func TestLoadEnvAndSettingsInvalidTarget(t *testing.T) {
 	v.Set(settings.Flags.Target.Name, "nonexistent-target")
 
 	cmd := &cobra.Command{Use: "workflow"}
-	s, err := settings.New(logger, v, cmd)
+	s, err := settings.New(logger, v, cmd, "")
 
 	assert.Error(t, err, "Expected error due to invalid target")
 	assert.Contains(t, err.Error(), "target not found: nonexistent-target", "Expected target not found error")
