@@ -40,10 +40,15 @@ func NewContext(logger *zerolog.Logger, viper *viper.Viper) *Context {
 	}
 }
 
-func (ctx *Context) AttachSettings(cmd *cobra.Command) error {
+func (ctx *Context) AttachSettings(cmd *cobra.Command, validateDeployRPC bool) error {
 	var err error
+	registryChainName := ""
 
-	ctx.Settings, err = settings.New(ctx.Logger, ctx.Viper, cmd)
+	if validateDeployRPC {
+		registryChainName = ctx.EnvironmentSet.WorkflowRegistryChainName
+	}
+
+	ctx.Settings, err = settings.New(ctx.Logger, ctx.Viper, cmd, registryChainName)
 	if err != nil {
 		return fmt.Errorf("failed to load settings: %w", err)
 	}
