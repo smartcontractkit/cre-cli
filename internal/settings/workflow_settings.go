@@ -3,6 +3,7 @@ package settings
 import (
 	"fmt"
 	"net/url"
+	"os"
 	"strings"
 
 	"github.com/rs/zerolog"
@@ -74,6 +75,11 @@ func loadWorkflowSettings(logger *zerolog.Logger, v *viper.Viper, cmd *cobra.Com
 	}
 
 	if err := validateSettings(&workflowSettings); err != nil {
+		return WorkflowSettings{}, err
+	}
+
+	// Validate artifact paths
+	if err := validateArtifactPaths(&workflowSettings, target); err != nil {
 		return WorkflowSettings{}, err
 	}
 
@@ -187,4 +193,34 @@ func ShouldSkipGetOwner(cmd *cobra.Command) bool {
 	default:
 		return false
 	}
+}
+
+// validateArtifactPaths checks if artifact paths resolve and are accessible when exist
+func validateArtifactPaths(workflowSettings *WorkflowSettings, target string) error {
+	if err := validatePathIfSet(workflowSettings.WorkflowArtifactSettings.WorkflowPath, "WorkflowPath", target); err != nil {
+		return err
+	}
+	if err := validatePathIfSet(workflowSettings.WorkflowArtifactSettings.ConfigPath, "ConfigPath", target); err != nil {
+		return err
+	}
+	if err := validatePathIfSet(workflowSettings.WorkflowArtifactSettings.SecretsPath, "SecretsPath", target); err != nil {
+		return err
+	}
+	return nil
+}
+
+// validatePathIfSet validates a single artifact path if it's non-empty
+func validatePathIfSet(path, fieldName, target string) error {
+	if path == "" {
+		return nil
+	}
+
+	if _, err := os.Stat(path); err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("%s does not exist: %s (configured in your settings for target '%s')", fieldName, path, target)
+		}
+		return fmt.Errorf("%s is not accessible: %s (configured in your settings for target '%s'): %w", fieldName, path, target, err)
+	}
+
+	return nil
 }
