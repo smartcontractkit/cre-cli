@@ -210,10 +210,7 @@ func validateArtifactPaths(workflowSettings *WorkflowSettings, target string) er
 	if err := validatePathIfSet(workflowSettings.WorkflowArtifactSettings.ConfigPath, "ConfigPath", target); err != nil {
 		return err
 	}
-	if err := validatePathIfSet(workflowSettings.WorkflowArtifactSettings.SecretsPath, "SecretsPath", target); err != nil {
-		return err
-	}
-	return nil
+	return validatePathIfSet(workflowSettings.WorkflowArtifactSettings.SecretsPath, "SecretsPath", target)
 }
 
 // validatePathIfSet validates a single artifact path if it's non-empty

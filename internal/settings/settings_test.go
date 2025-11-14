@@ -42,9 +42,18 @@ func setUpTestSettingsFiles(t *testing.T, v *viper.Viper, workflowTemplatePath s
 	projectFilePath := filepath.Join(targetDir, constants.DefaultProjectSettingsFileName)
 	require.NoError(t, copyFile(TempProjectSettingsFile, projectFilePath))
 
+	// Create dummy artifact files that are referenced in the workflow settings
+	mainGoPath := filepath.Join(targetDir, "main.go")
+	require.NoError(t, os.WriteFile(mainGoPath, []byte("package main\n"), 0600))
+
+	configPath := filepath.Join(targetDir, "config.json")
+	require.NoError(t, os.WriteFile(configPath, []byte("{}"), 0600))
+
 	t.Cleanup(func() {
 		os.Remove(workflowFilePath)
 		os.Remove(projectFilePath)
+		os.Remove(mainGoPath)
+		os.Remove(configPath)
 	})
 }
 
