@@ -13,11 +13,7 @@ const (
 	ReserveManagerContractName        = "ReserveManager"
 	MockKeystoneForwarderContractName = "MockKeystoneForwarder"
 
-	MaxBinarySize                               = 20 * 1024 * 1024
-	MaxConfigSize                               = 5 * 1024 * 1024
-	MaxEncryptedSecretsSize                     = 5 * 1024 * 1024
-	MaxURLLength                                = 200
-	MaxPaginationLimit            uint32        = 100
+	MaxSecretItemsPerPayload                    = 10
 	MaxVaultAllowlistDuration     time.Duration = 7 * 24 * time.Hour
 	DefaultVaultAllowlistDuration time.Duration = 2 * 24 * time.Hour // 2 days
 
