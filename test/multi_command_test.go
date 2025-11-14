@@ -48,7 +48,7 @@ func TestMultiCommandHappyPaths(t *testing.T) {
 		multi_command_flows.RunHappyPath1Workflow(t, tc)
 	})
 
-	// Run Happy Path 2: Deploy without autostart -> Deploy update with config
+	// Run Happy Path 2: Deploy -> Deploy update with config
 	t.Run("HappyPath2_DeployUpdateWithConfig", func(t *testing.T) {
 		anvilProc, testEthUrl := initTestEnv(t, "anvil-state.json")
 		defer StopAnvil(anvilProc)
