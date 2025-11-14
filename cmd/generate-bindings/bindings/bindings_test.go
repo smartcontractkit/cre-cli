@@ -406,11 +406,12 @@ func TestFilterLogs(t *testing.T) {
 
 	runtime := testutils.NewRuntime(t, testutils.Secrets{})
 
-	reply := ds.FilterLogsAccessLogged(runtime, &bindings.FilterOptions{
+	reply, err := ds.FilterLogsAccessLogged(runtime, &bindings.FilterOptions{
 		BlockHash: bh,
 		FromBlock: fb,
 		ToBlock:   tb,
 	})
+	require.NoError(t, err, "FilterLogsAccessLogged should not return an error")
 	response, err := reply.Await()
 	require.NoError(t, err, "Awaiting FilteredLogsAccessLogged reply should not return an error")
 	require.NotNil(t, response, "Response from FilteredLogsAccessLogged should not be nil")

@@ -46,7 +46,7 @@ type UserSettings struct {
 }
 
 // New initializes and loads settings from the `.env` file or system environment.
-func New(logger *zerolog.Logger, v *viper.Viper, cmd *cobra.Command) (*Settings, error) {
+func New(logger *zerolog.Logger, v *viper.Viper, cmd *cobra.Command, registryChainName string) (*Settings, error) {
 	// Retrieve the flag value (user-provided or default)
 	envPath := v.GetString(Flags.CliEnvFile.Name)
 
@@ -75,7 +75,7 @@ func New(logger *zerolog.Logger, v *viper.Viper, cmd *cobra.Command) (*Settings,
 		return nil, fmt.Errorf("failed to load settings: %w", err)
 	}
 
-	workflowSettings, err := loadWorkflowSettings(logger, v, cmd)
+	workflowSettings, err := loadWorkflowSettings(logger, v, cmd, registryChainName)
 	if err != nil {
 		return nil, err
 	}
