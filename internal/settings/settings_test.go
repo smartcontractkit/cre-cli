@@ -324,3 +324,41 @@ func TestShouldSkipGetOwner(t *testing.T) {
 		})
 	}
 }
+
+func TestArtifactPathValidation(t *testing.T) {
+	envVars := map[string]string{
+		settings.CreTargetEnvVar:     "staging",
+		settings.EthPrivateKeyEnvVar: "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
+	}
+
+	workflowTemplatePath, err := filepath.Abs(TempWorkflowSettingsFile)
+	require.NoError(t, err)
+
+	projectTemplatePath, err := filepath.Abs(TempProjectSettingsFile)
+	require.NoError(t, err)
+
+	tempDir := t.TempDir()
+	restoreWorkingDirectory, err := testutil.ChangeWorkingDirectory(tempDir)
+	require.NoError(t, err)
+	defer restoreWorkingDirectory()
+
+	v, logger := createTestContext(t, envVars, tempDir)
+
+	// Set up workflow and project settings files, but DON'T create the artifact files
+	workflowFilePath := filepath.Join(tempDir, constants.DefaultWorkflowSettingsFileName)
+	require.NoError(t, copyFile(workflowTemplatePath, workflowFilePath))
+	v.Set(settings.Flags.ProjectRoot.Name, workflowFilePath)
+
+	projectFilePath := filepath.Join(tempDir, constants.DefaultProjectSettingsFileName)
+	require.NoError(t, copyFile(projectTemplatePath, projectFilePath))
+
+	cmd := &cobra.Command{Use: "workflow"}
+	s, err := settings.New(logger, v, cmd, "")
+
+	// Assert that we get an error about the missing workflow path
+	assert.Error(t, err, "Expected error due to missing artifact path")
+	assert.Contains(t, err.Error(), "WorkflowPath does not exist", "Expected error message about missing WorkflowPath")
+	assert.Contains(t, err.Error(), "./main.go", "Expected error message to include the file path")
+	assert.Contains(t, err.Error(), "staging", "Expected error message to include the target name")
+	assert.Nil(t, s, "Settings object should be nil on error")
+}
