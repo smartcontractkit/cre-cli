@@ -37,7 +37,7 @@ func (h *handler) prepareUpsertParams() (client.RegisterWorkflowV2Parameters, er
 		WorkflowName: workflowName,
 		Tag:          workflowTag,
 		WorkflowID:   [32]byte(common.Hex2Bytes(workflowID)),
-		Status:       getWorkflowInitialStatus(h.inputs.AutoStart),
+		Status:       0, // active
 		DonFamily:    h.inputs.DonFamily,
 		BinaryURL:    binaryURL,
 		ConfigURL:    configURL,
@@ -88,11 +88,4 @@ func (h *handler) handleUpsert(params client.RegisterWorkflowV2Parameters) error
 		h.log.Warn().Msgf("Unsupported transaction type: %s", txOut.Type)
 	}
 	return nil
-}
-
-func getWorkflowInitialStatus(autoStart bool) uint8 {
-	if autoStart {
-		return 0 // active
-	}
-	return 1 // paused
 }

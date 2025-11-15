@@ -26,7 +26,7 @@ func TestWorkflowUpsert(t *testing.T) {
 					WorkflowOwner:                     chainsim.TestAddress,
 					WorkflowPath:                      filepath.Join("testdata", "basic_workflow", "main.go"),
 					ConfigPath:                        filepath.Join("testdata", "basic_workflow", "config.yml"),
-					DonFamily:                         "test_label",
+					DonFamily:                         "zone-a",
 					WorkflowRegistryContractChainName: "ethereum-testnet-sepolia",
 					BinaryURL:                         "https://example.com/binary",
 					KeepAlive:                         true,
