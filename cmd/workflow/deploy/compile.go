@@ -75,7 +75,9 @@ func (h *handler) Compile() error {
 	buildOutput, err := buildCmd.CombinedOutput()
 	if err != nil {
 		fmt.Println(string(buildOutput))
-		return fmt.Errorf("failed to compile workflow: %w", err)
+
+		out := strings.TrimSpace(string(buildOutput))
+		return fmt.Errorf("failed to compile workflow: %w\nbuild output:\n%s", err, out)
 	}
 	h.log.Debug().Msgf("Build output: %s", buildOutput)
 	fmt.Println("Workflow compiled successfully")
