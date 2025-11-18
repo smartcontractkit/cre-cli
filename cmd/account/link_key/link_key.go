@@ -251,10 +251,6 @@ mutation InitiateLinking($request: InitiateLinkingRequest!) {
 
 	if err := graphqlclient.New(h.credentials, h.environmentSet, h.log).
 		Execute(ctx, req, &container); err != nil {
-		s := strings.ToLower(err.Error())
-		if strings.Contains(s, "unauthorized") {
-			return initiateLinkingResponse{}, fmt.Errorf("%s%w", credentials.UngatedOrgRequiredMsg, err)
-		}
 		return initiateLinkingResponse{}, fmt.Errorf("graphql request failed: %w", err)
 	}
 
