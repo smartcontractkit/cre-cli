@@ -147,7 +147,6 @@ func workflowDeployEoaWithMockStorage(t *testing.T, tc TestConfig) (output strin
 		"blank_workflow",
 		tc.GetCliEnvFlag(),
 		tc.GetProjectRootFlag(),
-		"--auto-start=true",
 		"--" + settings.Flags.SkipConfirmation.Name,
 	}
 
