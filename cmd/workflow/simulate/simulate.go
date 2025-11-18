@@ -227,8 +227,9 @@ func (h *handler) Execute(inputs Inputs) error {
 	// Execute the build command
 	buildOutput, err := buildCmd.CombinedOutput()
 	if err != nil {
-		h.log.Info().Msg(string(buildOutput))
-		return fmt.Errorf("failed to compile workflow: %w", err)
+		out := strings.TrimSpace(string(buildOutput))
+		h.log.Info().Msg(out)
+		return fmt.Errorf("failed to compile workflow: %w\nbuild output:\n%s", err, out)
 	}
 	h.log.Debug().Msgf("Build output: %s", buildOutput)
 	fmt.Println("Workflow compiled")
