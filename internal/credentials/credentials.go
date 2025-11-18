@@ -38,7 +38,7 @@ const (
 )
 
 // UngatedOrgRequiredMsg is the error message shown when an organization does not have ungated access.
-var UngatedOrgRequiredMsg = "\n✖ Workflow key linking is currently in early access and only available to ungated organizations.\n\nWant to link keys?\n→ Request access here: https://cre.chain.link/request-access\n"
+var UngatedOrgRequiredMsg = "\n✖ Workflow deployment is currently in early access. We're onboarding organizations gradually.\n\nWant to deploy?\n→ Request access here: https://cre.chain.link/request-access\n"
 
 func New(logger *zerolog.Logger) (*Credentials, error) {
 	cfg := &Credentials{

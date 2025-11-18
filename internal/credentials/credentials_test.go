@@ -196,8 +196,8 @@ func TestCheckIsUngatedOrganization_JWTWithMissingClaim(t *testing.T) {
 	if err == nil {
 		t.Error("expected error for missing organization_status claim, got nil")
 	}
-	if !strings.Contains(err.Error(), "ungated organizations") {
-		t.Errorf("expected ungated organization error, got: %v", err)
+	if !strings.Contains(err.Error(), "early access") {
+		t.Errorf("expected early access error, got: %v", err)
 	}
 }
 
@@ -224,8 +224,8 @@ func TestCheckIsUngatedOrganization_JWTWithEmptyStatus(t *testing.T) {
 	if err == nil {
 		t.Error("expected error for empty organization_status, got nil")
 	}
-	if !strings.Contains(err.Error(), "ungated organizations") {
-		t.Errorf("expected ungated organization error, got: %v", err)
+	if !strings.Contains(err.Error(), "early access") {
+		t.Errorf("expected early access error, got: %v", err)
 	}
 }
 
@@ -252,8 +252,8 @@ func TestCheckIsUngatedOrganization_JWTWithGatedStatus(t *testing.T) {
 	if err == nil {
 		t.Error("expected error for GATED organization, got nil")
 	}
-	if !strings.Contains(err.Error(), "ungated organizations") {
-		t.Errorf("expected ungated organization error, got: %v", err)
+	if !strings.Contains(err.Error(), "early access") {
+		t.Errorf("expected early access error, got: %v", err)
 	}
 }
 
@@ -280,8 +280,8 @@ func TestCheckIsUngatedOrganization_JWTWithRestrictedStatus(t *testing.T) {
 	if err == nil {
 		t.Error("expected error for RESTRICTED organization, got nil")
 	}
-	if !strings.Contains(err.Error(), "ungated organizations") {
-		t.Errorf("expected ungated organization error, got: %v", err)
+	if !strings.Contains(err.Error(), "early access") {
+		t.Errorf("expected early access error, got: %v", err)
 	}
 }
 
