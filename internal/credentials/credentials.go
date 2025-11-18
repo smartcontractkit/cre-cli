@@ -1,9 +1,13 @@
 package credentials
 
 import (
+	"encoding/base64"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/rs/zerolog"
 	"gopkg.in/yaml.v2"
@@ -32,6 +36,9 @@ const (
 	ConfigDir      = ".cre"
 	ConfigFile     = "cre.yaml"
 )
+
+// UngatedOrgRequiredMsg is the error message shown when an organization does not have ungated access.
+var UngatedOrgRequiredMsg = "\n✖ Workflow key linking is currently in early access and only available to ungated organizations.\n\nWant to link keys?\n→ Request access here: https://cre.chain.link/request-access\n"
 
 func New(logger *zerolog.Logger) (*Credentials, error) {
 	cfg := &Credentials{
@@ -86,5 +93,70 @@ func SaveCredentials(tokenSet *CreLoginTokenSet) error {
 	if err := os.Rename(tmp, path); err != nil {
 		return fmt.Errorf("rename temp file %s to %s: %w", tmp, path, err)
 	}
+	return nil
+}
+
+// CheckIsUngatedOrganization verifies that the organization associated with the credentials
+// has FULL_ACCESS status (is not gated). This check is required for certain operations like
+// workflow key linking.
+func (c *Credentials) CheckIsUngatedOrganization() error {
+	// API keys can only be generated on ungated organizations, so they always pass
+	if c.AuthType == AuthTypeApiKey {
+		return nil
+	}
+
+	// For JWT bearer tokens, we need to parse the token and check the organization_status claim
+	if c.Tokens == nil || c.Tokens.AccessToken == "" {
+		return fmt.Errorf("no access token available")
+	}
+
+	// Parse the JWT to extract claims
+	parts := strings.Split(c.Tokens.AccessToken, ".")
+	if len(parts) < 2 {
+		return fmt.Errorf("invalid JWT token format")
+	}
+
+	// Decode the payload (second part of the JWT)
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return fmt.Errorf("failed to decode JWT payload: %w", err)
+	}
+
+	// Parse claims into a map
+	var claims map[string]interface{}
+	if err := json.Unmarshal(payload, &claims); err != nil {
+		return fmt.Errorf("failed to unmarshal JWT claims: %w", err)
+	}
+
+	// Log all claims for debugging
+	c.log.Debug().Interface("claims", claims).Msg("JWT claims decoded")
+
+	// Dynamically find the organization_status claim by looking for any key ending with "organization_status"
+	var orgStatus string
+	var orgStatusKey string
+	for key, value := range claims {
+		if strings.HasSuffix(key, "organization_status") {
+			if status, ok := value.(string); ok {
+				orgStatus = status
+				orgStatusKey = key
+				break
+			}
+		}
+	}
+
+	c.log.Debug().Str("claim_key", orgStatusKey).Str("organization_status", orgStatus).Msg("checking organization status claim")
+
+	if orgStatus == "" {
+		// If the claim is missing or empty, the organization is considered gated
+		return errors.New(UngatedOrgRequiredMsg)
+	}
+
+	// Check if the organization has full access
+	if orgStatus != "FULL_ACCESS" {
+		c.log.Debug().Str("organization_status", orgStatus).Msg("organization does not have FULL_ACCESS - organization is gated")
+		return errors.New(UngatedOrgRequiredMsg)
+	}
+	c.log.Debug().Str("organization_status", orgStatus).Msg("organization has FULL_ACCESS - organization is ungated")
+
 	return nil
 }
