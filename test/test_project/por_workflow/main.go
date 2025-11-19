@@ -3,26 +3,11 @@
 package main
 
 import (
-	"encoding/hex"
-	"encoding/json"
-	"errors"
-	"fmt"
-	"log/slog"
-	"math/big"
 	"time"
 
-	"por_workflow/contracts/evm/src/generated/balance_reader"
-	"por_workflow/contracts/evm/src/generated/ierc20"
-	"por_workflow/contracts/evm/src/generated/reserve_manager"
-
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/shopspring/decimal"
 
 	"github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm"
-	"github.com/smartcontractkit/cre-sdk-go/capabilities/networking/http"
-	"github.com/smartcontractkit/cre-sdk-go/capabilities/scheduler/cron"
-	"github.com/smartcontractkit/cre-sdk-go/cre"
-	"github.com/smartcontractkit/cre-sdk-go/cre/wasm"
 )
 
 // EVMConfig holds per-chain configuration.
