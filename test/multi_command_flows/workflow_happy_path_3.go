@@ -31,11 +31,10 @@ func workflowInit(t *testing.T, projectRootFlag, projectName, workflowName strin
 			w.Header().Set("Content-Type", "application/json")
 
 			// Handle authentication validation query
-			if strings.Contains(req.Query, "getAccountDetails") {
+			if strings.Contains(req.Query, "getOrganization") {
 				_ = json.NewEncoder(w).Encode(map[string]any{
 					"data": map[string]any{
-						"getAccountDetails": map[string]any{
-							"userId":         "test-user-id",
+						"getOrganization": map[string]any{
 							"organizationId": "test-org-id",
 						},
 					},
@@ -100,11 +99,10 @@ func workflowDeployUnsigned(t *testing.T, tc TestConfig, projectRootFlag, workfl
 			w.Header().Set("Content-Type", "application/json")
 
 			// Handle authentication validation query
-			if strings.Contains(req.Query, "getAccountDetails") {
+			if strings.Contains(req.Query, "getOrganization") {
 				_ = json.NewEncoder(w).Encode(map[string]any{
 					"data": map[string]any{
-						"getAccountDetails": map[string]any{
-							"userId":         "test-user-id",
+						"getOrganization": map[string]any{
 							"organizationId": "test-org-id",
 						},
 					},
@@ -219,11 +217,10 @@ func workflowDeployWithConfigAndLinkedKey(t *testing.T, tc TestConfig, projectRo
 			w.Header().Set("Content-Type", "application/json")
 
 			// Handle authentication validation query
-			if strings.Contains(req.Query, "getAccountDetails") {
+			if strings.Contains(req.Query, "getOrganization") {
 				_ = json.NewEncoder(w).Encode(map[string]any{
 					"data": map[string]any{
-						"getAccountDetails": map[string]any{
-							"userId":         "test-user-id",
+						"getOrganization": map[string]any{
 							"organizationId": "test-org-id",
 						},
 					},

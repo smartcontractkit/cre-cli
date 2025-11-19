@@ -14,17 +14,6 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 )
 
-const getWhoamiDetails = `
-	query GetWhoamiDetails {
-		getAccountDetails {
-			emailAddress
-			organizationId
-		}
-		getOrganization {
-			displayName
-		}
-	}`
-
 func New(runtimeCtx *runtime.Context) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "whoami",
@@ -54,16 +43,38 @@ func NewHandler(ctx *runtime.Context) *Handler {
 }
 
 func (h *Handler) Execute(ctx context.Context) error {
+	var query string
+	if h.credentials.APIKey == "" {
+		query = `
+        query GetWhoamiDetails {
+            getAccountDetails {
+                emailAddress
+            }
+            getOrganization {
+                displayName
+				organizationId
+            }
+        }`
+	} else {
+		query = `
+        query GetWhoamiDetails {
+            getOrganization {
+                displayName
+				organizationId
+            }
+        }`
+	}
+
 	client := graphqlclient.New(h.credentials, h.environmentSet, h.log)
-	req := graphql.NewRequest(getWhoamiDetails)
+	req := graphql.NewRequest(query)
 
 	var respEnvelope struct {
-		GetAccountDetails struct {
-			OrganizationID string `json:"organizationId"`
-			EmailAddress   string `json:"emailAddress"`
+		GetAccountDetails *struct {
+			EmailAddress string `json:"emailAddress"`
 		} `json:"getAccountDetails"`
 		GetOrganization struct {
-			DisplayName string `json:"displayName"`
+			DisplayName    string `json:"displayName"`
+			OrganizationID string `json:"organizationId"`
 		} `json:"getOrganization"`
 	}
 
@@ -74,8 +85,10 @@ func (h *Handler) Execute(ctx context.Context) error {
 	fmt.Println("")
 	fmt.Println("Account details retrieved:")
 	fmt.Println("")
-	fmt.Printf("\tEmail:             %s\n", respEnvelope.GetAccountDetails.EmailAddress)
-	fmt.Printf("\tOrganization ID:   %s\n", respEnvelope.GetAccountDetails.OrganizationID)
+	if respEnvelope.GetAccountDetails != nil {
+		fmt.Printf("\tEmail:             %s\n", respEnvelope.GetAccountDetails.EmailAddress)
+	}
+	fmt.Printf("\tOrganization ID:   %s\n", respEnvelope.GetOrganization.OrganizationID)
 	fmt.Printf("\tOrganization Name: %s\n", respEnvelope.GetOrganization.DisplayName)
 	fmt.Println("")
 
