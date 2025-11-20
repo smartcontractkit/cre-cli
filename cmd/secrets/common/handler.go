@@ -3,6 +3,7 @@ package common
 import (
 	"context"
 	"crypto/ecdsa"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -261,7 +262,7 @@ func (h *Handler) EncryptSecrets(rawSecrets UpsertSecretsInputs) ([]*vault.Encry
 
 	encryptedSecrets := make([]*vault.EncryptedSecret, 0, len(rawSecrets))
 	for _, item := range rawSecrets {
-		cipherHex, err := EncryptSecret(item.Value, pubKeyHex)
+		cipherHex, err := EncryptSecret(item.Value, pubKeyHex, h.OwnerAddress)
 		if err != nil {
 			return nil, fmt.Errorf("failed to encrypt secret (key=%s ns=%s): %w", item.ID, item.Namespace, err)
 		}
@@ -278,7 +279,7 @@ func (h *Handler) EncryptSecrets(rawSecrets UpsertSecretsInputs) ([]*vault.Encry
 	return encryptedSecrets, nil
 }
 
-func EncryptSecret(secret, masterPublicKeyHex string) (string, error) {
+func EncryptSecret(secret, masterPublicKeyHex string, ownerAddress string) (string, error) {
 	masterPublicKey := tdh2easy.PublicKey{}
 	masterPublicKeyBytes, err := hex.DecodeString(masterPublicKeyHex)
 	if err != nil {
@@ -287,7 +288,10 @@ func EncryptSecret(secret, masterPublicKeyHex string) (string, error) {
 	if err = masterPublicKey.Unmarshal(masterPublicKeyBytes); err != nil {
 		return "", fmt.Errorf("failed to unmarshal master public key: %w", err)
 	}
-	cipher, err := tdh2easy.Encrypt(&masterPublicKey, []byte(secret))
+
+	addr := common.HexToAddress(ownerAddress) // canonical 20-byte address
+	label := sha256.Sum256(addr.Bytes())      // [32]byte
+	cipher, err := tdh2easy.EncryptWithLabel(&masterPublicKey, []byte(secret), label)
 	if err != nil {
 		return "", fmt.Errorf("failed to encrypt secret: %w", err)
 	}
