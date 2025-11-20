@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -27,7 +28,7 @@ type WorkflowSettings struct {
 	RPCs []RpcEndpoint `mapstructure:"rpcs" yaml:"rpcs"`
 }
 
-func loadWorkflowSettings(logger *zerolog.Logger, v *viper.Viper, cmd *cobra.Command) (WorkflowSettings, error) {
+func loadWorkflowSettings(logger *zerolog.Logger, v *viper.Viper, cmd *cobra.Command, registryChainName string) (WorkflowSettings, error) {
 	target, err := GetTarget(v)
 	if err != nil {
 		return WorkflowSettings{}, err
@@ -73,8 +74,14 @@ func loadWorkflowSettings(logger *zerolog.Logger, v *viper.Viper, cmd *cobra.Com
 		logger.Debug().Msgf("rpcs settings not found in target %q", target)
 	}
 
+	if registryChainName != "" {
+		if err := validateDeploymentRPC(&workflowSettings, registryChainName); err != nil {
+			return WorkflowSettings{}, errors.Wrap(err, "for target "+target)
+		}
+	}
+
 	if err := validateSettings(&workflowSettings); err != nil {
-		return WorkflowSettings{}, err
+		return WorkflowSettings{}, errors.Wrap(err, "for target "+target)
 	}
 
 	// This is required because some commands still read values directly out of viper
@@ -132,7 +139,7 @@ func validateSettings(config *WorkflowSettings) error {
 	// TODO validate that all chain names mentioned for the contracts above have a matching URL specified
 	for _, rpc := range config.RPCs {
 		if err := isValidRpcUrl(rpc.Url); err != nil {
-			return err
+			return errors.Wrap(err, "invalid rpc url for "+rpc.ChainName)
 		}
 		if err := IsValidChainName(rpc.ChainName); err != nil {
 			return err
@@ -144,15 +151,15 @@ func validateSettings(config *WorkflowSettings) error {
 func isValidRpcUrl(rpcURL string) error {
 	parsedURL, err := url.Parse(rpcURL)
 	if err != nil {
-		return fmt.Errorf("failed to parse RPC URL %s", rpcURL)
+		return fmt.Errorf("failed to parse RPC URL: invalid format")
 	}
 
 	// Check if the URL has a valid scheme and host
 	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
-		return fmt.Errorf("invalid scheme in RPC URL %s", rpcURL)
+		return fmt.Errorf("invalid scheme in RPC URL: %s", parsedURL.Scheme)
 	}
 	if parsedURL.Host == "" {
-		return fmt.Errorf("invalid host in RPC URL %s", rpcURL)
+		return fmt.Errorf("invalid host in RPC URL: %s", parsedURL.Host)
 	}
 
 	return nil
@@ -187,4 +194,24 @@ func ShouldSkipGetOwner(cmd *cobra.Command) bool {
 	default:
 		return false
 	}
+}
+
+func validateDeploymentRPC(config *WorkflowSettings, chainName string) error {
+	deploymentRPCFound := false
+	deploymentRPCURL := ""
+	commonError := " - required to deploy CRE workflows"
+	for _, rpc := range config.RPCs {
+		if rpc.ChainName == chainName {
+			deploymentRPCFound = true
+			deploymentRPCURL = rpc.Url
+			break
+		}
+	}
+	if !deploymentRPCFound {
+		return fmt.Errorf("%s", "missing RPC URL for "+chainName+commonError)
+	}
+	if err := isValidRpcUrl(deploymentRPCURL); err != nil {
+		return errors.Wrap(err, "invalid RPC URL for "+chainName+commonError)
+	}
+	return nil
 }

@@ -34,14 +34,12 @@ type ProjectEnv struct {
 
 func GetDefaultReplacements() map[string]string {
 	return map[string]string{
-		"EthSepoliaChainName":  constants.DefaultEthSepoliaChainName,
-		"BaseSepoliaChainName": constants.DefaultBaseSepoliaChainName,
-		"EthMainnetChainName":  constants.DefaultEthMainnetChainName,
+		"EthSepoliaChainName": constants.DefaultEthSepoliaChainName,
+		"EthMainnetChainName": constants.DefaultEthMainnetChainName,
 
-		"EthSepoliaRpcUrl":  constants.DefaultEthSepoliaRpcUrl,
-		"EthMainnetRpcUrl":  constants.DefaultEthMainnetRpcUrl,
-		"BaseSepoliaRpcUrl": constants.DefaultBaseSepoliaRpcUrl,
-		"SethConfigPath":    constants.DefaultSethConfigPath,
+		"EthSepoliaRpcUrl": constants.DefaultEthSepoliaRpcUrl,
+		"EthMainnetRpcUrl": constants.DefaultEthMainnetRpcUrl,
+		"SethConfigPath":   constants.DefaultSethConfigPath,
 
 		"ConfigPath":           "./config.json",
 		"ConfigPathStaging":    "./config.staging.json",
@@ -85,7 +83,7 @@ func GenerateProjectEnvFile(workingDirectory string, stdin io.Reader) (string, e
 
 	replacements := map[string]string{
 		"GithubApiToken": "your-github-token",
-		"EthPrivateKey":  "0000000000000000000000000000000000000000000000000000000000000001",
+		"EthPrivateKey":  "your-eth-private-key",
 	}
 
 	if err := GenerateFileFromTemplate(outputPath, ProjectEnvironmentTemplateContent, replacements); err != nil {

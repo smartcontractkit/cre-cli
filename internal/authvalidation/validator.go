@@ -12,10 +12,9 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 )
 
-const queryGetAccountDetails = `
-query GetAccountDetails {
-	getAccountDetails {
-		userId
+const queryOrganization = `
+query GetOrganizationDetails  {
+	getOrganization {
 		organizationId
 	}
 }`
@@ -47,13 +46,12 @@ func (v *Validator) ValidateCredentials(validationCtx context.Context, creds *cr
 		return nil
 	}
 
-	req := graphql.NewRequest(queryGetAccountDetails)
+	req := graphql.NewRequest(queryOrganization)
 
 	var respEnvelope struct {
-		GetAccountDetails struct {
-			UserID         string `json:"userId"`
+		GetOrganization struct {
 			OrganizationID string `json:"organizationId"`
-		} `json:"getAccountDetails"`
+		} `json:"getOrganization"`
 	}
 
 	if err := v.gqlClient.Execute(validationCtx, req, &respEnvelope); err != nil {

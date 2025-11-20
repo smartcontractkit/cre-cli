@@ -6,6 +6,7 @@ import (
 	"crypto/ecdsa"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -38,6 +39,7 @@ import (
 	v2 "github.com/smartcontractkit/chainlink/v2/core/services/workflows/v2"
 
 	cmdcommon "github.com/smartcontractkit/cre-cli/cmd/common"
+	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/validation"
@@ -137,7 +139,15 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 
 	pk, err := crypto.HexToECDSA(creSettings.User.EthPrivateKey)
 	if err != nil {
-		return Inputs{}, fmt.Errorf("failed to get private key: %w", err)
+		if v.GetBool("broadcast") {
+			return Inputs{}, fmt.Errorf(
+				"failed to parse private key, required to broadcast. Please check CRE_ETH_PRIVATE_KEY in your .env file or system environment: %w", err)
+		}
+		pk, err = crypto.HexToECDSA("0000000000000000000000000000000000000000000000000000000000000001")
+		if err != nil {
+			return Inputs{}, fmt.Errorf("failed to parse default private key. Please set CRE_ETH_PRIVATE_KEY in your .env file or system environment: %w", err)
+		}
+		fmt.Println("Warning: using default private key for chain write simulation. To use your own key, set CRE_ETH_PRIVATE_KEY in your .env file or system environment.")
 	}
 
 	return Inputs{
@@ -192,6 +202,19 @@ func (h *handler) Execute(inputs Inputs) error {
 	// Set language in runtime context based on workflow file extension
 	if h.runtimeContext != nil {
 		h.runtimeContext.Workflow.Language = cmdcommon.GetWorkflowLanguage(workflowMainFile)
+
+		switch h.runtimeContext.Workflow.Language {
+		case constants.WorkflowLanguageTypeScript:
+			if err := cmdcommon.EnsureTool("bun"); err != nil {
+				return errors.New("bun is required for TypeScript workflows but was not found in PATH; install from https://bun.com/docs/installation")
+			}
+		case constants.WorkflowLanguageGolang:
+			if err := cmdcommon.EnsureTool("go"); err != nil {
+				return errors.New("go toolchain is required for Go workflows but was not found in PATH; install from https://go.dev/dl")
+			}
+		default:
+			return fmt.Errorf("unsupported workflow language for file %s", workflowMainFile)
+		}
 	}
 
 	buildCmd := cmdcommon.GetBuildCmd(workflowMainFile, tmpWasmFileName, workflowRootFolder)
@@ -204,8 +227,9 @@ func (h *handler) Execute(inputs Inputs) error {
 	// Execute the build command
 	buildOutput, err := buildCmd.CombinedOutput()
 	if err != nil {
-		h.log.Info().Msg(string(buildOutput))
-		return fmt.Errorf("failed to compile workflow: %w", err)
+		out := strings.TrimSpace(string(buildOutput))
+		h.log.Info().Msg(out)
+		return fmt.Errorf("failed to compile workflow: %w\nbuild output:\n%s", err, out)
 	}
 	h.log.Debug().Msgf("Build output: %s", buildOutput)
 	fmt.Println("Workflow compiled")
@@ -498,7 +522,7 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 		triggerSub []*pb.TriggerSubscription,
 	) {
 		if len(triggerSub) == 0 {
-			fmt.Println("No triggers found")
+			fmt.Println("Error in simulation. No workflow triggers found, please check your workflow source code and config")
 			os.Exit(1)
 		}
 
@@ -579,7 +603,7 @@ func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inp
 		triggerSub []*pb.TriggerSubscription,
 	) {
 		if len(triggerSub) == 0 {
-			fmt.Println("No triggers found")
+			fmt.Println("Error in simulation. No workflow triggers found, please check your workflow source code and config")
 			os.Exit(1)
 		}
 		if inputs.TriggerIndex < 0 {

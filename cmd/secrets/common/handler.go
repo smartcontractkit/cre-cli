@@ -149,6 +149,11 @@ func (h *Handler) ResolveInputs() (UpsertSecretsInputs, error) {
 			Value:     envVal,
 			Namespace: "main",
 		})
+
+		// Enforce max payload size of 10 items.
+		if len(out) > constants.MaxSecretItemsPerPayload {
+			return nil, fmt.Errorf("cannot have more than 10 items in a single payload; check your secrets YAML")
+		}
 	}
 	return out, nil
 }

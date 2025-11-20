@@ -1063,11 +1063,9 @@ func (c *DataStorage) LogTriggerAccessLoggedLog(chainSelector uint64, confidence
 	}, nil
 }
 
-func (c *DataStorage) FilterLogsAccessLogged(runtime cre.Runtime, options *bindings.FilterOptions) cre.Promise[*evm.FilterLogsReply] {
+func (c *DataStorage) FilterLogsAccessLogged(runtime cre.Runtime, options *bindings.FilterOptions) (cre.Promise[*evm.FilterLogsReply], error) {
 	if options == nil {
-		options = &bindings.FilterOptions{
-			ToBlock: options.ToBlock,
-		}
+		return nil, errors.New("FilterLogs options are required.")
 	}
 	return c.client.FilterLogs(runtime, &evm.FilterLogsRequest{
 		FilterQuery: &evm.FilterQuery{
@@ -1079,7 +1077,7 @@ func (c *DataStorage) FilterLogsAccessLogged(runtime cre.Runtime, options *bindi
 			FromBlock: pb.NewBigIntFromInt(options.FromBlock),
 			ToBlock:   pb.NewBigIntFromInt(options.ToBlock),
 		},
-	})
+	}), nil
 }
 
 // DataStoredTrigger wraps the raw log trigger and provides decoded DataStoredDecoded data
@@ -1121,11 +1119,9 @@ func (c *DataStorage) LogTriggerDataStoredLog(chainSelector uint64, confidence e
 	}, nil
 }
 
-func (c *DataStorage) FilterLogsDataStored(runtime cre.Runtime, options *bindings.FilterOptions) cre.Promise[*evm.FilterLogsReply] {
+func (c *DataStorage) FilterLogsDataStored(runtime cre.Runtime, options *bindings.FilterOptions) (cre.Promise[*evm.FilterLogsReply], error) {
 	if options == nil {
-		options = &bindings.FilterOptions{
-			ToBlock: options.ToBlock,
-		}
+		return nil, errors.New("FilterLogs options are required.")
 	}
 	return c.client.FilterLogs(runtime, &evm.FilterLogsRequest{
 		FilterQuery: &evm.FilterQuery{
@@ -1137,7 +1133,7 @@ func (c *DataStorage) FilterLogsDataStored(runtime cre.Runtime, options *binding
 			FromBlock: pb.NewBigIntFromInt(options.FromBlock),
 			ToBlock:   pb.NewBigIntFromInt(options.ToBlock),
 		},
-	})
+	}), nil
 }
 
 // DynamicEventTrigger wraps the raw log trigger and provides decoded DynamicEventDecoded data
@@ -1179,11 +1175,9 @@ func (c *DataStorage) LogTriggerDynamicEventLog(chainSelector uint64, confidence
 	}, nil
 }
 
-func (c *DataStorage) FilterLogsDynamicEvent(runtime cre.Runtime, options *bindings.FilterOptions) cre.Promise[*evm.FilterLogsReply] {
+func (c *DataStorage) FilterLogsDynamicEvent(runtime cre.Runtime, options *bindings.FilterOptions) (cre.Promise[*evm.FilterLogsReply], error) {
 	if options == nil {
-		options = &bindings.FilterOptions{
-			ToBlock: options.ToBlock,
-		}
+		return nil, errors.New("FilterLogs options are required.")
 	}
 	return c.client.FilterLogs(runtime, &evm.FilterLogsRequest{
 		FilterQuery: &evm.FilterQuery{
@@ -1195,7 +1189,7 @@ func (c *DataStorage) FilterLogsDynamicEvent(runtime cre.Runtime, options *bindi
 			FromBlock: pb.NewBigIntFromInt(options.FromBlock),
 			ToBlock:   pb.NewBigIntFromInt(options.ToBlock),
 		},
-	})
+	}), nil
 }
 
 // NoFieldsTrigger wraps the raw log trigger and provides decoded NoFieldsDecoded data
@@ -1237,11 +1231,9 @@ func (c *DataStorage) LogTriggerNoFieldsLog(chainSelector uint64, confidence evm
 	}, nil
 }
 
-func (c *DataStorage) FilterLogsNoFields(runtime cre.Runtime, options *bindings.FilterOptions) cre.Promise[*evm.FilterLogsReply] {
+func (c *DataStorage) FilterLogsNoFields(runtime cre.Runtime, options *bindings.FilterOptions) (cre.Promise[*evm.FilterLogsReply], error) {
 	if options == nil {
-		options = &bindings.FilterOptions{
-			ToBlock: options.ToBlock,
-		}
+		return nil, errors.New("FilterLogs options are required.")
 	}
 	return c.client.FilterLogs(runtime, &evm.FilterLogsRequest{
 		FilterQuery: &evm.FilterQuery{
@@ -1253,5 +1245,5 @@ func (c *DataStorage) FilterLogsNoFields(runtime cre.Runtime, options *bindings.
 			FromBlock: pb.NewBigIntFromInt(options.FromBlock),
 			ToBlock:   pb.NewBigIntFromInt(options.ToBlock),
 		},
-	})
+	}), nil
 }
