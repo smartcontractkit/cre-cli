@@ -14,6 +14,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/auth"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
+	"github.com/smartcontractkit/cre-cli/internal/profiles"
 )
 
 const bufferSeconds = 60
@@ -73,11 +74,33 @@ func (c *Client) refreshTokens(ctx context.Context) error {
 	}
 	c.log.Debug().Msg("token refreshed")
 	c.creds.Tokens = newTokens
-	if err := credentials.SaveCredentials(newTokens); err != nil {
-		c.log.Error().Err(err).Msg("failed to save credentials")
-		return err
+
+	// Save to profile if credentials were loaded from a profile, otherwise use legacy format
+	if c.creds.ProfileName != "" {
+		// Profile-aware: save to profile system
+		profileMgr, err := profiles.New(c.log)
+		if err != nil {
+			c.log.Warn().Err(err).Msg("failed to create profile manager for token refresh")
+		} else {
+			profile := profileMgr.GetProfile(c.creds.ProfileName)
+			if profile != nil {
+				profile.Tokens = newTokens
+				if err := profileMgr.SaveProfile(profile); err != nil {
+					c.log.Warn().Err(err).Msg("failed to save refreshed tokens to profile")
+				} else {
+					c.log.Debug().Msg("refreshed tokens saved to profile")
+					return nil
+				}
+			}
+		}
 	}
-	c.log.Debug().Msg("refreshed tokens saved to disk")
+
+	// Fallback to legacy format for backward compatibility or if profile save failed
+	if err := credentials.SaveCredentials(newTokens); err != nil {
+		c.log.Warn().Err(err).Msg("failed to save credentials in legacy format (non-critical)")
+	} else {
+		c.log.Debug().Msg("refreshed tokens saved to disk")
+	}
 	return nil
 }
 

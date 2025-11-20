@@ -1,20 +1,19 @@
-## cre login
+## cre profile use
 
-Start authentication flow
+Switch to a different profile
 
 ### Synopsis
 
-Opens browser for user login and saves credentials.
+Set the specified profile as the active profile for subsequent commands.
 
 ```
-cre login [optional flags]
+cre profile use <profile-name> [optional flags]
 ```
 
 ### Options
 
 ```
-  -h, --help             help for login
-      --profile string   Profile name for this login (defaults to organization name)
+  -h, --help   help for use
 ```
 
 ### Options inherited from parent commands
@@ -28,5 +27,5 @@ cre login [optional flags]
 
 ### SEE ALSO
 
-* [cre](cre.md)	 - CRE CLI tool
+* [cre profile](cre_profile.md)	 - Manage authentication profiles
 

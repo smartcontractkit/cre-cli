@@ -57,6 +57,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 
 	settings.AddRawTxFlag(deleteCmd)
 	settings.AddSkipConfirmation(deleteCmd)
+	settings.AddProfileFlag(deleteCmd)
 
 	return deleteCmd
 }

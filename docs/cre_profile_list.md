@@ -1,20 +1,19 @@
-## cre login
+## cre profile list
 
-Start authentication flow
+List all authentication profiles
 
 ### Synopsis
 
-Opens browser for user login and saves credentials.
+Display all available authentication profiles and show which one is currently active.
 
 ```
-cre login [optional flags]
+cre profile list [optional flags]
 ```
 
 ### Options
 
 ```
-  -h, --help             help for login
-      --profile string   Profile name for this login (defaults to organization name)
+  -h, --help   help for list
 ```
 
 ### Options inherited from parent commands
@@ -28,5 +27,5 @@ cre login [optional flags]
 
 ### SEE ALSO
 
-* [cre](cre.md)	 - CRE CLI tool
+* [cre profile](cre_profile.md)	 - Manage authentication profiles
 

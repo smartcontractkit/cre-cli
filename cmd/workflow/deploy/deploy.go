@@ -96,6 +96,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 
 	settings.AddRawTxFlag(deployCmd)
 	settings.AddSkipConfirmation(deployCmd)
+	settings.AddProfileFlag(deployCmd)
 	deployCmd.Flags().StringP("output", "o", defaultOutputPath, "The output file for the compiled WASM binary encoded in base64")
 	deployCmd.Flags().StringP("owner-label", "l", "", "Label for the workflow owner (used during auto-link if owner is not already linked)")
 

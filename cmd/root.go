@@ -18,6 +18,7 @@ import (
 	generatebindings "github.com/smartcontractkit/cre-cli/cmd/generate-bindings"
 	"github.com/smartcontractkit/cre-cli/cmd/login"
 	"github.com/smartcontractkit/cre-cli/cmd/logout"
+	"github.com/smartcontractkit/cre-cli/cmd/profile"
 	"github.com/smartcontractkit/cre-cli/cmd/secrets"
 	"github.com/smartcontractkit/cre-cli/cmd/update"
 	"github.com/smartcontractkit/cre-cli/cmd/version"
@@ -102,6 +103,11 @@ func newRootCommand() *cobra.Command {
 				return fmt.Errorf("failed to bind flags: %w", err)
 			}
 
+			// Set the profile environment variable if provided via flag
+			if profileName := v.GetString(settings.Flags.Profile.Name); profileName != "" {
+				os.Setenv("CRE_PROFILE", profileName)
+			}
+
 			// Update log level if verbose flag is set
 			if verbose := v.GetBool(settings.Flags.Verbose.Name); verbose {
 				newLogger := log.Level(zerolog.DebugLevel)
@@ -122,6 +128,11 @@ func newRootCommand() *cobra.Command {
 				err := runtimeContext.AttachCredentials(cmd.Context(), skipValidation)
 				if err != nil {
 					return fmt.Errorf("authentication required: %w", err)
+				}
+
+				// If profile has an eth private key override, set it
+				if runtimeContext.Credentials.EthPrivateKey != "" {
+					os.Setenv("CRE_ETH_PRIVATE_KEY", runtimeContext.Credentials.EthPrivateKey)
 				}
 			}
 
@@ -204,6 +215,7 @@ func newRootCommand() *cobra.Command {
 	versionCmd := version.New(runtimeContext)
 	loginCmd := login.New(runtimeContext)
 	logoutCmd := logout.New(runtimeContext)
+	profileCmd := profile.New(runtimeContext)
 	initCmd := creinit.New(runtimeContext)
 	genBindingsCmd := generatebindings.New(runtimeContext)
 	accountCmd := account.New(runtimeContext)
@@ -213,6 +225,7 @@ func newRootCommand() *cobra.Command {
 	secretsCmd.RunE = helpRunE
 	workflowCmd.RunE = helpRunE
 	accountCmd.RunE = helpRunE
+	profileCmd.RunE = helpRunE
 
 	// Define groups (order controls display order)
 	rootCmd.AddGroup(&cobra.Group{ID: "getting-started", Title: "Getting Started"})
@@ -224,6 +237,7 @@ func newRootCommand() *cobra.Command {
 
 	loginCmd.GroupID = "account"
 	logoutCmd.GroupID = "account"
+	profileCmd.GroupID = "account"
 	accountCmd.GroupID = "account"
 	whoamiCmd.GroupID = "account"
 
@@ -235,6 +249,7 @@ func newRootCommand() *cobra.Command {
 		versionCmd,
 		loginCmd,
 		logoutCmd,
+		profileCmd,
 		accountCmd,
 		whoamiCmd,
 		secretsCmd,
@@ -264,6 +279,11 @@ func isLoadSettings(cmd *cobra.Command) bool {
 		"cre update":                {},
 		"cre workflow":              {},
 		"cre account":               {},
+		"cre profile":               {},
+		"cre profile list":          {},
+		"cre profile use":           {},
+		"cre profile delete":        {},
+		"cre profile rename":        {},
 		"cre secrets":               {},
 		"cre":                       {},
 	}
@@ -286,6 +306,11 @@ func isLoadCredentials(cmd *cobra.Command) bool {
 		"cre update":                {},
 		"cre workflow":              {},
 		"cre account":               {},
+		"cre profile":               {},
+		"cre profile list":          {},
+		"cre profile use":           {},
+		"cre profile delete":        {},
+		"cre profile rename":        {},
 		"cre secrets":               {},
 		"cre":                       {},
 	}

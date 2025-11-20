@@ -19,9 +19,10 @@ cre workflow activate ./my-workflow
 ### Options
 
 ```
-  -h, --help       help for activate
-      --unsigned   If set, the command will either return the raw transaction instead of sending it to the network or execute the second step of secrets operations using a previously generated raw transaction
-      --yes        If set, the command will skip the confirmation prompt and proceed with the operation even if it is potentially destructive
+  -h, --help             help for activate
+      --profile string   Profile name for this command (overrides the active profile)
+      --unsigned         If set, the command will either return the raw transaction instead of sending it to the network or execute the second step of secrets operations using a previously generated raw transaction
+      --yes              If set, the command will skip the confirmation prompt and proceed with the operation even if it is potentially destructive
 ```
 
 ### Options inherited from parent commands
