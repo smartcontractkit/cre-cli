@@ -522,7 +522,7 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 		triggerSub []*pb.TriggerSubscription,
 	) {
 		if len(triggerSub) == 0 {
-			fmt.Println("No triggers found")
+			fmt.Println("Error in simulation. No workflow triggers found, please check your workflow source code and config")
 			os.Exit(1)
 		}
 
@@ -603,7 +603,7 @@ func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inp
 		triggerSub []*pb.TriggerSubscription,
 	) {
 		if len(triggerSub) == 0 {
-			fmt.Println("No triggers found")
+			fmt.Println("Error in simulation. No workflow triggers found, please check your workflow source code and config")
 			os.Exit(1)
 		}
 		if inputs.TriggerIndex < 0 {
