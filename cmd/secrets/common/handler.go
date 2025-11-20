@@ -3,7 +3,6 @@ package common
 import (
 	"context"
 	"crypto/ecdsa"
-	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -290,7 +289,8 @@ func EncryptSecret(secret, masterPublicKeyHex string, ownerAddress string) (stri
 	}
 
 	addr := common.HexToAddress(ownerAddress) // canonical 20-byte address
-	label := sha256.Sum256(addr.Bytes())      // [32]byte
+	var label [32]byte
+	copy(label[12:], addr.Bytes()) // left-pad with 12 zero bytes
 	cipher, err := tdh2easy.EncryptWithLabel(&masterPublicKey, []byte(secret), label)
 	if err != nil {
 		return "", fmt.Errorf("failed to encrypt secret: %w", err)
