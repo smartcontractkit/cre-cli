@@ -123,6 +123,14 @@ func newRootCommand() *cobra.Command {
 				if err != nil {
 					return fmt.Errorf("authentication required: %w", err)
 				}
+
+				// Check if organization is ungated for commands that require it
+				cmdPath := cmd.CommandPath()
+				if cmdPath == "cre account link-key" || cmdPath == "cre workflow deploy" {
+					if err := runtimeContext.Credentials.CheckIsUngatedOrganization(); err != nil {
+						return err
+					}
+				}
 			}
 
 			// load settings from yaml files
