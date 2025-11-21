@@ -83,7 +83,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 			return h.Execute(in)
 		},
 	}
-	settings.AddRawTxFlag(cmd)
+	settings.AddTxnTypeFlags(cmd)
 	settings.AddSkipConfirmation(cmd)
 	return cmd
 }
@@ -287,6 +287,11 @@ func (h *handler) unlinkOwner(owner string, resp initiateUnlinkingResponse) erro
 		fmt.Println("")
 		fmt.Printf("      %s\n", resp.TransactionData)
 		fmt.Println("")
+
+	case client.Changeset:
+		// TODO: implement changeset handling
+		fmt.Println("Changeset output type is not yet implemented")
+
 	default:
 		h.log.Warn().Msgf("Unsupported transaction type: %s", txOut.Type)
 	}

@@ -38,6 +38,7 @@ type flagNames struct {
 	OverridePreviousRoot Flag
 	Description          Flag
 	RawTxFlag            Flag
+	Changeset            Flag
 	Ledger               Flag
 	LedgerDerivationPath Flag
 	NonInteractive       Flag
@@ -52,20 +53,22 @@ var Flags = flagNames{
 	Target:               Flag{"target", "T"},
 	OverridePreviousRoot: Flag{"override-previous-root", "O"},
 	RawTxFlag:            Flag{"unsigned", ""},
+	Changeset:            Flag{"changeset", ""},
 	Ledger:               Flag{"ledger", ""},
 	LedgerDerivationPath: Flag{"ledger-derivation-path", ""},
 	NonInteractive:       Flag{"non-interactive", ""},
 	SkipConfirmation:     Flag{"yes", "y"},
 }
 
-func AddTxnTypeFlags(cmd *cobra.Command) {
-	AddRawTxFlag(cmd)
-	cmd.Flags().Bool(Flags.Ledger.Name, false, "Sign the workflow with a Ledger device [EXPERIMENTAL]")
-	cmd.Flags().String(Flags.LedgerDerivationPath.Name, "m/44'/60'/0'/0/0", "Derivation path for the Ledger device")
-}
+//func AddTxnTypeFlags(cmd *cobra.Command) {
+//	AddTxnTypeFlags(cmd)
+//	cmd.Flags().Bool(Flags.Ledger.Name, false, "Sign the workflow with a Ledger device [EXPERIMENTAL]")
+//	cmd.Flags().String(Flags.LedgerDerivationPath.Name, "m/44'/60'/0'/0/0", "Derivation path for the Ledger device")
+//}
 
-func AddRawTxFlag(cmd *cobra.Command) {
+func AddTxnTypeFlags(cmd *cobra.Command) {
 	cmd.Flags().Bool(Flags.RawTxFlag.Name, false, "If set, the command will either return the raw transaction instead of sending it to the network or execute the second step of secrets operations using a previously generated raw transaction")
+	cmd.Flags().Bool(Flags.Changeset.Name, false, "If set, the command will output a changeset YAML for use with CLD instead of sending the transaction to the network")
 }
 
 func AddSkipConfirmation(cmd *cobra.Command) {

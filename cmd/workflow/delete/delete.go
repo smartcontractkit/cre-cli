@@ -55,7 +55,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 		},
 	}
 
-	settings.AddRawTxFlag(deleteCmd)
+	settings.AddTxnTypeFlags(deleteCmd)
 	settings.AddSkipConfirmation(deleteCmd)
 
 	return deleteCmd
@@ -208,6 +208,11 @@ func (h *handler) Execute() error {
 			fmt.Println("")
 			fmt.Printf("      %x\n", txOut.RawTx.Data)
 			fmt.Println("")
+
+		case client.Changeset:
+			// TODO: implement changeset handling
+			fmt.Println("Changeset output type is not yet implemented")
+
 		default:
 			h.log.Warn().Msgf("Unsupported transaction type: %s", txOut.Type)
 		}

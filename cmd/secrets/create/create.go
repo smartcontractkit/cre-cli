@@ -58,6 +58,6 @@ func New(ctx *runtime.Context) *cobra.Command {
 		},
 	}
 
-	settings.AddRawTxFlag(cmd)
+	settings.AddTxnTypeFlags(cmd)
 	return cmd
 }

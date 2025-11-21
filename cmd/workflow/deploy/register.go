@@ -3,11 +3,38 @@ package deploy
 import (
 	"encoding/hex"
 	"fmt"
+	"os"
+	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/common"
+	"gopkg.in/yaml.v2"
 
 	"github.com/smartcontractkit/cre-cli/cmd/client"
 )
+
+type ChangesetFile struct {
+	Changesets []Changeset `yaml:"changesets"`
+}
+
+type Changeset struct {
+	WorkflowUpsert WorkflowUpsert `yaml:"workflow_upsert"`
+}
+
+type WorkflowUpsert struct {
+	Payload Payload `yaml:"payload"`
+}
+
+type Payload struct {
+	WorkflowID     string `yaml:"workflowID"`
+	WorkflowName   string `yaml:"workflowName"`
+	WorkflowTag    string `yaml:"workflowTag"`
+	WorkflowStatus uint8  `yaml:"workflowStatus"`
+	DonFamily      string `yaml:"donFamily"`
+	BinaryURL      string `yaml:"binaryURL"`
+	ConfigURL      string `yaml:"configURL"`
+	Attributes     string `yaml:"attributes"`
+	KeepAlive      bool   `yaml:"keepAlive"`
+}
 
 func (h *handler) upsert() error {
 	if !h.validated {
@@ -84,6 +111,47 @@ func (h *handler) handleUpsert(params client.RegisterWorkflowV2Parameters) error
 		fmt.Println("")
 		fmt.Printf("      %x\n", txOut.RawTx.Data)
 		fmt.Println("")
+
+	case client.Changeset:
+		csFile := ChangesetFile{
+			Changesets: []Changeset{
+				{
+					WorkflowUpsert: WorkflowUpsert{
+						Payload: Payload{
+							WorkflowID:     hex.EncodeToString(params.WorkflowID[:]),
+							WorkflowName:   params.WorkflowName,
+							WorkflowTag:    params.Tag,
+							WorkflowStatus: params.Status,
+							DonFamily:      params.DonFamily,
+							BinaryURL:      params.BinaryURL,
+							ConfigURL:      params.ConfigURL,
+							Attributes:     string(params.Attributes),
+							KeepAlive:      params.KeepAlive,
+						},
+					},
+				},
+			},
+		}
+
+		yamlData, err := yaml.Marshal(&csFile)
+		if err != nil {
+			return fmt.Errorf("failed to marshal changeset to yaml: %w", err)
+		}
+
+		fileName := fmt.Sprintf("UpsertWorkflow_%s_%s.yaml", workflowName, h.workflowArtifact.WorkflowID)
+		workingDir, err := os.Getwd()
+		if err != nil {
+			return fmt.Errorf("failed to get working directory: %w", err)
+		}
+		if err := os.WriteFile(fileName, yamlData, 0600); err != nil {
+			return fmt.Errorf("failed to write changeset yaml file: %w", err)
+		}
+
+		fmt.Println("")
+		fmt.Println("Changeset YAML file generated!")
+		fmt.Printf("File: %s\n", filepath.Join(workingDir, fileName))
+		fmt.Println("")
+
 	default:
 		h.log.Warn().Msgf("Unsupported transaction type: %s", txOut.Type)
 	}
