@@ -251,16 +251,6 @@ mutation InitiateLinking($request: InitiateLinkingRequest!) {
 
 	if err := graphqlclient.New(h.credentials, h.environmentSet, h.log).
 		Execute(ctx, req, &container); err != nil {
-		s := strings.ToLower(err.Error())
-		if strings.Contains(s, "unauthorized") {
-			unauthorizedMsg := `
-✖ Workflow deployment is currently in early access. We're onboarding organizations gradually. 
-			
-Want to deploy?
-→ Request access here: https://cre.chain.link/request-access
-`
-			return initiateLinkingResponse{}, fmt.Errorf("\n%s\n%w", unauthorizedMsg, err)
-		}
 		return initiateLinkingResponse{}, fmt.Errorf("graphql request failed: %w", err)
 	}
 

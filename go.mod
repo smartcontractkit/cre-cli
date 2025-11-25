@@ -32,7 +32,7 @@ require (
 	github.com/smartcontractkit/chainlink/v2 v2.29.1-cre-beta.0.0.20251119193110-917049d99750
 	github.com/smartcontractkit/cre-sdk-go v1.0.0
 	github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm v1.0.0-beta.0
-	github.com/smartcontractkit/tdh2/go/tdh2 v0.0.0-20250624150019-e49f7e125e6b
+	github.com/smartcontractkit/tdh2/go/tdh2 v0.0.0-20251120172354-e8ec0386b06c
 	github.com/spf13/cobra v1.10.1
 	github.com/spf13/pflag v1.0.10
 	github.com/spf13/viper v1.20.1
