@@ -1,9 +1,13 @@
 package list
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
@@ -20,7 +24,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 )
 
-// cre secrets list --namespace main --timeout 1h
+// cre secrets list --timeout 1h
 func New(ctx *runtime.Context) *cobra.Command {
 	var namespace string
 
@@ -47,11 +51,15 @@ func New(ctx *runtime.Context) *cobra.Command {
 					Dur("timeout", duration).
 					Dur("maxDuration", maxDuration).
 					Msg(fmt.Sprintf("invalid timeout: must be > 0 and < %dh (%dd)", maxHours, maxDays))
-
 				return fmt.Errorf("invalid --timeout: must be greater than 0 and less than %dh (%dd)", maxHours, maxDays)
 			}
 
-			return Execute(h, namespace, duration, ctx.Settings.Workflow.UserWorkflowSettings.WorkflowOwnerType)
+			return Execute(
+				h,
+				namespace,
+				duration,
+				ctx.Settings.Workflow.UserWorkflowSettings.WorkflowOwnerType,
+			)
 		},
 	}
 
@@ -61,14 +69,27 @@ func New(ctx *runtime.Context) *cobra.Command {
 	return cmd
 }
 
-// Execute performs: derive digest → (optional MSIG path) → allowlist digest → POST → parse.
+// Execute performs: build request → (MSIG step 1 bundle OR EOA allowlist+post) → parse.
 func Execute(h *common.Handler, namespace string, duration time.Duration, ownerType string) error {
-	owner := h.OwnerAddress
+	fmt.Println("Verifying ownership...")
+	if err := h.EnsureOwnerLinkedOrFail(); err != nil {
+		return err
+	}
+
 	if namespace == "" {
 		namespace = "main"
 	}
 
+	// Validate and canonicalize owner address (checksummed)
+	owner := strings.TrimSpace(h.OwnerAddress)
+	if !ethcommon.IsHexAddress(owner) {
+		return fmt.Errorf("invalid owner address: %q", h.OwnerAddress)
+	}
+	owner = ethcommon.HexToAddress(owner).Hex()
+
+	// Fresh request ID
 	requestID := uuid.New().String()
+
 	req := jsonrpc2.Request[vault.ListSecretIdentifiersRequest]{
 		Version: jsonrpc2.JsonRpcVersion,
 		ID:      requestID,
@@ -90,36 +111,49 @@ func Execute(h *common.Handler, namespace string, duration time.Duration, ownerT
 		return fmt.Errorf("failed to marshal JSON-RPC request: %w", err)
 	}
 
-	// MSIG path: provide next steps and exit before making a gateway call.
+	// ---------------- MSIG step 1: bundle and exit ----------------
 	if ownerType == constants.WorkflowOwnerTypeMSIG {
+		// Save bundle in the current working directory
+		cwd, err := os.Getwd()
+		if err != nil {
+			return fmt.Errorf("failed to get working directory: %w", err)
+		}
+		filename := common.DeriveBundleFilename(digest) // <digest>.json
+		bundlePath := filepath.Join(cwd, filename)
+
+		ub := &common.UnsignedBundle{
+			RequestID:   requestID,
+			Method:      vaulttypes.MethodSecretsList,
+			DigestHex:   "0x" + hex.EncodeToString(digest[:]),
+			RequestBody: body,
+			CreatedAt:   time.Now().UTC(),
+		}
+		if err := common.SaveBundle(bundlePath, ub); err != nil {
+			return fmt.Errorf("failed to save unsigned bundle at %s: %w", bundlePath, err)
+		}
+
 		txData, err := h.PackAllowlistRequestTxData(digest, duration)
 		if err != nil {
 			return fmt.Errorf("failed to pack allowlist tx: %w", err)
 		}
-		if err := h.LogMSIGNextSteps(txData); err != nil {
-			return fmt.Errorf("failed to log MSIG steps: %w", err)
-		}
-		return nil
+		return h.LogMSIGNextSteps(txData, digest, bundlePath)
 	}
 
-	// Allowlist digest on-chain (or skip if already allowlisted).
-	wrV2Client, err := h.ClientFactory.NewWorkflowRegistryV2Client()
-	if err != nil {
-		return fmt.Errorf("create workflow registry client failed: %w", err)
-	}
+	// ---------------- EOA: allowlist (if needed) and POST ----------------
 	ownerAddr := ethcommon.HexToAddress(owner)
-	allowlisted, err := wrV2Client.IsRequestAllowlisted(ownerAddr, digest)
+
+	allowlisted, err := h.Wrc.IsRequestAllowlisted(ownerAddr, digest)
 	if err != nil {
 		return fmt.Errorf("allowlist check failed: %w", err)
 	}
 
 	if !allowlisted {
-		if err := wrV2Client.AllowlistRequest(digest, duration); err != nil {
+		if err := h.Wrc.AllowlistRequest(digest, duration); err != nil {
 			return fmt.Errorf("allowlist request failed: %w", err)
 		}
-		fmt.Printf("\nDigest allowlisted; proceeding to gateway POST: owner=%s, digest=%x\\n", ownerAddr.Hex(), digest)
+		fmt.Printf("Digest allowlisted; proceeding to gateway POST: owner=%s, digest=0x%x\n", ownerAddr.Hex(), digest)
 	} else {
-		fmt.Printf("\nDigest already allowlisted; skipping on-chain allowlist: owner=%s, digest=%x\\n", ownerAddr.Hex(), digest)
+		fmt.Printf("Digest already allowlisted; proceeding to gateway POST: owner=%s, digest=0x%x\n", ownerAddr.Hex(), digest)
 	}
 
 	// POST to gateway

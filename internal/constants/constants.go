@@ -2,17 +2,18 @@ package constants
 
 import (
 	"time"
+
+	chainselectors "github.com/smartcontractkit/chain-selectors"
 )
 
 const (
-	WorkflowRegistryContractName = "WorkflowRegistry"
-	BalanceReaderContractName    = "BalanceReader"
+	WorkflowRegistryContractName      = "WorkflowRegistry"
+	BalanceReaderContractName         = "BalanceReader"
+	WERC20MockContractName            = "WERC20Mock"
+	ReserveManagerContractName        = "ReserveManager"
+	MockKeystoneForwarderContractName = "MockKeystoneForwarder"
 
-	MaxBinarySize                               = 20 * 1024 * 1024
-	MaxConfigSize                               = 5 * 1024 * 1024
-	MaxEncryptedSecretsSize                     = 5 * 1024 * 1024
-	MaxURLLength                                = 200
-	MaxPaginationLimit            uint32        = 100
+	MaxSecretItemsPerPayload                    = 10
 	MaxVaultAllowlistDuration     time.Duration = 7 * 24 * time.Hour
 	DefaultVaultAllowlistDuration time.Duration = 2 * 24 * time.Hour // 2 days
 
@@ -25,17 +26,11 @@ const (
 	// Default settings
 	DefaultProposalExpirationTime = 60 * 60 * 24 * 3 // 72 hours
 
-	DefaultEthSepoliaChainName  = "ethereum-testnet-sepolia"        // ETH Sepolia
-	DefaultBaseSepoliaChainName = "ethereum-testnet-sepolia-base-1" // Base Sepolia
-	DefaultEthMainnetChainName  = "ethereum-mainnet"                // Eth Mainnet
+	DefaultEthSepoliaRpcUrl = "https://ethereum-sepolia-rpc.publicnode.com" // ETH Sepolia
+	DefaultEthMainnetRpcUrl = "<select your own rpc url>"                   // ETH Mainnet
 
-	DefaultEthSepoliaRpcUrl  = "https://sepolia.infura.io/v3/YOUR_API_KEY" // ETH Sepolia
-	DefaultEthMainnetRpcUrl  = "<select your own rpc url>"                 // ETH Mainnet
-	DefaultBaseSepoliaRpcUrl = "<select your own rpc url>"                 // Base Sepolia
-
-	DefaultStagingDonFamily           = "zone-a" // Keystone team has to define this
-	DefaultProductionTestnetDonFamily = "zone-a" // Keystone team has to define this
-	DefaultProductionDonFamily        = "zone-a" // Keystone team has to define this
+	DefaultProjectName  = "my-project"
+	DefaultWorkflowName = "my-workflow"
 
 	DefaultProjectSettingsFileName  = "project.yaml"
 	DefaultWorkflowSettingsFileName = "workflow.yaml"
@@ -56,6 +51,9 @@ const (
 
 	WorkflowRegistryV2TypeAndVersion = "WorkflowRegistry 2.0.0"
 
+	WorkflowLanguageGolang     = "golang"
+	WorkflowLanguageTypeScript = "typescript"
+
 	TestAddress      = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
 	TestAddress2     = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
 	TestAddress3     = "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC"
@@ -65,4 +63,9 @@ const (
 	TestPrivateKey3  = "5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a"
 	TestPrivateKey4  = "7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6"
 	TestAnvilChainID = 31337 // Anvil chain ID
+)
+
+var (
+	DefaultEthMainnetChainName = chainselectors.ETHEREUM_MAINNET.Name
+	DefaultEthSepoliaChainName = chainselectors.ETHEREUM_TESTNET_SEPOLIA.Name
 )

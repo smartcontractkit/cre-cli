@@ -1,10 +1,12 @@
 package delete
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -45,8 +47,8 @@ type SecretsDeleteYamlConfig struct {
 func New(ctx *runtime.Context) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "delete [SECRETS_FILE_PATH]",
-		Short:   "Deletes secrets from a JSON file provided as a positional argument.",
-		Example: "cre secrets delete my-secrets.json",
+		Short:   "Deletes secrets from a YAML file provided as a positional argument.",
+		Example: "cre secrets delete my-secrets.yaml",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			secretsFilePath := args[0]
@@ -69,30 +71,37 @@ func New(ctx *runtime.Context) *cobra.Command {
 					Dur("timeout", duration).
 					Dur("maxDuration", maxDuration).
 					Msg(fmt.Sprintf("invalid timeout: must be > 0 and < %dh (%dd)", maxHours, maxDays))
-
 				return fmt.Errorf("invalid --timeout: must be greater than 0 and less than %dh (%dd)", maxHours, maxDays)
 			}
 
+			// Parse & validate YAML input
 			inputs, err := ResolveDeleteInputs(secretsFilePath)
 			if err != nil {
 				return err
 			}
-
 			if err := ValidateDeleteInputs(inputs); err != nil {
 				return err
 			}
 
+			// Two-path logic: MSIG step 1 (bundle) or EOA (allowlist + post)
 			return Execute(h, inputs, duration, ctx.Settings.Workflow.UserWorkflowSettings.WorkflowOwnerType)
 		},
 	}
 
 	settings.AddRawTxFlag(cmd)
-
 	return cmd
 }
 
 // Execute handles the main logic for the 'delete' command.
+// Two paths:
+//   - MSIG step 1: build request, compute digest, write bundle, print steps
+//   - EOA: allowlist if needed, then POST to gateway
 func Execute(h *common.Handler, inputs DeleteSecretsInputs, duration time.Duration, ownerType string) error {
+	fmt.Println("Verifying ownership...")
+	if err := h.EnsureOwnerLinkedOrFail(); err != nil {
+		return err
+	}
+
 	// Validate and canonicalize owner address
 	owner := strings.TrimSpace(h.OwnerAddress)
 	if !ethcommon.IsHexAddress(owner) {
@@ -110,8 +119,10 @@ func Execute(h *common.Handler, inputs DeleteSecretsInputs, duration time.Durati
 		}
 	}
 
+	// Fresh request ID for this build
 	requestID := uuid.New().String()
-	// Use the ID and prepare the JSON RPC request
+
+	// Build JSON-RPC request
 	deleteSecretsRequest := jsonrpc2.Request[vault.DeleteSecretsRequest]{
 		Version: jsonrpc2.JsonRpcVersion,
 		ID:      requestID,
@@ -122,50 +133,58 @@ func Execute(h *common.Handler, inputs DeleteSecretsInputs, duration time.Durati
 		},
 	}
 
-	digest, err := common.CalculateDigest(deleteSecretsRequest)
-	if err != nil {
-		return fmt.Errorf("failed to calculate request digest: %w", err)
-	}
-
 	requestBody, err := json.Marshal(deleteSecretsRequest)
 	if err != nil {
 		return fmt.Errorf("failed to marshal JSON-RPC request: %w", err)
 	}
 
-	// if unsigned, prepare the tx data and return
+	// Compute digest from the exact payload (includes requestID)
+	digest, err := common.CalculateDigest(deleteSecretsRequest)
+	if err != nil {
+		return fmt.Errorf("failed to calculate request digest: %w", err)
+	}
+
+	// ---------------- MSIG step 1: bundle and exit ----------------
 	if ownerType == constants.WorkflowOwnerTypeMSIG {
+		baseDir := filepath.Dir(h.SecretsFilePath)
+		filename := common.DeriveBundleFilename(digest) // <digest>.json
+		bundlePath := filepath.Join(baseDir, filename)
+
+		ub := &common.UnsignedBundle{
+			RequestID:   requestID,
+			Method:      vaulttypes.MethodSecretsDelete,
+			DigestHex:   "0x" + hex.EncodeToString(digest[:]),
+			RequestBody: requestBody,
+			CreatedAt:   time.Now().UTC(),
+		}
+		if err := common.SaveBundle(bundlePath, ub); err != nil {
+			return fmt.Errorf("failed to save unsigned bundle at %s: %w", bundlePath, err)
+		}
+
 		txData, err := h.PackAllowlistRequestTxData(digest, duration)
 		if err != nil {
 			return fmt.Errorf("failed to pack allowlist tx: %w", err)
 		}
-		if err := h.LogMSIGNextSteps(txData); err != nil {
-			return fmt.Errorf("failed to log MSIG steps: %w", err)
-		}
-		return nil
+		return h.LogMSIGNextSteps(txData, digest, bundlePath)
 	}
-	// TODO double check: for the 2nd step of MSIG, we shouldnt require private key and shouldnt require unsigned flag
 
-	// Register the digest on-chain
-	wrV2Client, err := h.ClientFactory.NewWorkflowRegistryV2Client()
-	if err != nil {
-		return fmt.Errorf("create workflow registry client failed: %w", err)
-	}
+	// ---------------- EOA: allowlist (if needed) and POST ----------------
 	ownerAddr := ethcommon.HexToAddress(h.OwnerAddress)
-	allowlisted, err := wrV2Client.IsRequestAllowlisted(ownerAddr, digest)
+
+	allowlisted, err := h.Wrc.IsRequestAllowlisted(ownerAddr, digest)
 	if err != nil {
 		return fmt.Errorf("allowlist check failed: %w", err)
 	}
-
 	if !allowlisted {
-		if err := wrV2Client.AllowlistRequest(digest, duration); err != nil {
+		if err := h.Wrc.AllowlistRequest(digest, duration); err != nil {
 			return fmt.Errorf("allowlist request failed: %w", err)
 		}
-		fmt.Printf("\nDigest allowlisted; proceeding to gateway POST: owner=%s, digest=%x\n", ownerAddr.Hex(), digest)
+		fmt.Printf("Digest allowlisted; proceeding to gateway POST: owner=%s, digest=0x%x\n", ownerAddr.Hex(), digest)
 	} else {
-		fmt.Printf("\nDigest already allowlisted; skipping on-chain allowlist: owner=%s, digest=%x\n", ownerAddr.Hex(), digest)
+		fmt.Printf("Digest already allowlisted; proceeding to gateway POST: owner=%s, digest=0x%x\n", ownerAddr.Hex(), digest)
 	}
 
-	// POST to gateway
+	// POST to gateway (HTTPClient.Post has your retry policy)
 	respBody, status, err := h.Gw.Post(requestBody)
 	if err != nil {
 		return err
@@ -175,10 +194,9 @@ func Execute(h *common.Handler, inputs DeleteSecretsInputs, duration time.Durati
 	}
 
 	return h.ParseVaultGatewayResponse(vaulttypes.MethodSecretsDelete, respBody)
-
 }
 
-// ResolveDeleteInputs unmarshals the JSON string into the DeleteSecretsInputs struct.
+// ResolveDeleteInputs unmarshals the YAML into DeleteSecretsInputs.
 func ResolveDeleteInputs(secretsFilePath string) (DeleteSecretsInputs, error) {
 	fileContent, err := os.ReadFile(secretsFilePath)
 	if err != nil {
@@ -187,7 +205,7 @@ func ResolveDeleteInputs(secretsFilePath string) (DeleteSecretsInputs, error) {
 
 	var cfg SecretsDeleteYamlConfig
 	if err := yaml.Unmarshal(fileContent, &cfg); err != nil {
-		return nil, fmt.Errorf("failed to parse YAML: %w", err)
+		return nil, fmt.Errorf("check your YAML format for deletion: %w", err)
 	}
 	if len(cfg.SecretsNames) == 0 {
 		return nil, fmt.Errorf("YAML must contain a non-empty 'secretsNames' list")
@@ -208,6 +226,11 @@ func ResolveDeleteInputs(secretsFilePath string) (DeleteSecretsInputs, error) {
 			ID:        id,
 			Namespace: "main",
 		})
+
+		// Enforce max payload size of 10 items.
+		if len(out) > constants.MaxSecretItemsPerPayload {
+			return nil, fmt.Errorf("cannot have more than 10 items in a single payload; check your secrets YAML")
+		}
 	}
 	return out, nil
 }

@@ -1,10 +1,12 @@
 package settings
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
 
+	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/spf13/viper"
 
 	chainSelectors "github.com/smartcontractkit/chain-selectors"
@@ -79,23 +81,48 @@ func GetWorkflowOwner(v *viper.Viper) (ownerAddress string, ownerType string, er
 		return "", "", err
 	}
 
+	// if --unsigned flag is set, owner must be set in settings
+	ownerKey := fmt.Sprintf("%s.%s", target, WorkflowOwnerSettingName)
 	if v.IsSet(Flags.RawTxFlag.Name) {
-		return v.GetString(fmt.Sprintf("%s.%s", target, WorkflowOwnerSettingName)), constants.WorkflowOwnerTypeMSIG, nil
-	}
-
-	if v.IsSet(Flags.Owner.Name) {
-		ownerFlag := v.GetString(Flags.Owner.Name)
-		if ownerFlag != "" {
-			v.Set(fmt.Sprintf("%s.%s", target, WorkflowOwnerSettingName), ownerFlag)
+		if v.IsSet(ownerKey) {
+			owner := strings.TrimSpace(v.GetString(ownerKey))
+			if owner != "" {
+				return owner, constants.WorkflowOwnerTypeMSIG, nil
+			}
 		}
-		return ownerFlag, constants.WorkflowOwnerTypeMSIG, nil
+
+		// Not set or empty -> print error and stop
+		msg := fmt.Sprintf(
+			"missing workflow owner: when using --%s you must set %q in your config",
+			Flags.RawTxFlag.Name, ownerKey,
+		)
+		fmt.Fprintln(os.Stderr, msg)
+		return "", "", errors.New(msg)
 	}
 
+	// unsigned is not set, it is EOA path
 	rawPrivKey := v.GetString(EthPrivateKeyEnvVar)
 	normPrivKey := NormalizeHexKey(rawPrivKey)
 	ownerAddress, err = ethkeys.DeriveEthAddressFromPrivateKey(normPrivKey)
 	if err != nil {
 		return "", "", err
+	}
+
+	// if owner is also set in settings, owner and private key should match
+	if v.IsSet(ownerKey) {
+		cfgOwner := strings.TrimSpace(v.GetString(ownerKey))
+		if cfgOwner != "" {
+			// Validate cfgOwner and compare to derived ownerAddress
+			derived := ethcommon.HexToAddress(ownerAddress)
+			fromCfg := ethcommon.HexToAddress(cfgOwner)
+			if derived != fromCfg {
+				return "", "", fmt.Errorf(
+					"settings owner %q does not match address derived from private key %q. "+
+						"remove owner in settings if you are using EOA",
+					fromCfg.Hex(), derived.Hex(),
+				)
+			}
+		}
 	}
 
 	return ownerAddress, constants.WorkflowOwnerTypeEOA, nil

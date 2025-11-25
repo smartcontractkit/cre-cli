@@ -18,8 +18,8 @@ import (
 func New(ctx *runtime.Context) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "update [SECRETS_FILE_PATH]",
-		Short:   "Updates existing secrets from a JSON file provided as a positional argument.",
-		Example: "cre secrets update my-secrets.json",
+		Short:   "Updates existing secrets from a file provided as a positional argument.",
+		Example: "cre secrets update my-secrets.yaml",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			secretsFilePath := args[0]
@@ -35,8 +35,8 @@ func New(ctx *runtime.Context) *cobra.Command {
 			}
 
 			maxDuration := constants.MaxVaultAllowlistDuration
-			maxHours := int(constants.MaxVaultAllowlistDuration / time.Hour)
-			maxDays := int(constants.MaxVaultAllowlistDuration / (24 * time.Hour))
+			maxHours := int(maxDuration / time.Hour)
+			maxDays := int(maxDuration / (24 * time.Hour))
 			if duration <= 0 || duration > maxDuration {
 				ctx.Logger.Error().
 					Dur("timeout", duration).
@@ -55,7 +55,12 @@ func New(ctx *runtime.Context) *cobra.Command {
 				return err
 			}
 
-			return h.Execute(inputs, vaulttypes.MethodSecretsUpdate, duration, ctx.Settings.Workflow.UserWorkflowSettings.WorkflowOwnerType)
+			return h.Execute(
+				inputs,
+				vaulttypes.MethodSecretsUpdate,
+				duration,
+				ctx.Settings.Workflow.UserWorkflowSettings.WorkflowOwnerType,
+			)
 		},
 	}
 

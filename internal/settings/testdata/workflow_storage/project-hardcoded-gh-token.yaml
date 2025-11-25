@@ -1,6 +1,4 @@
-production-testnet:
-  cre-cli:
-    don-family: "zone-a"
+staging:
   logging:
     seth-config-path: seth.toml
   rpcs:

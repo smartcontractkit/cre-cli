@@ -14,25 +14,6 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 )
 
-const queryGetAccountDetails = `
-query GetAccountDetails {
-	getAccountDetails {
-		userId
-		organizationId
-		emailAddress
-		displayName
-		memberType
-		memberStatus
-		createdAt
-		updatedAt
-		invitedByUser
-		invitedAt
-		joinedAt
-		removedByUser
-		removedAt
-	}
-}`
-
 func New(runtimeCtx *runtime.Context) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "whoami",
@@ -62,15 +43,39 @@ func NewHandler(ctx *runtime.Context) *Handler {
 }
 
 func (h *Handler) Execute(ctx context.Context) error {
+	var query string
+	if h.credentials.APIKey == "" {
+		query = `
+        query GetWhoamiDetails {
+            getAccountDetails {
+                emailAddress
+            }
+            getOrganization {
+                displayName
+				organizationId
+            }
+        }`
+	} else {
+		query = `
+        query GetWhoamiDetails {
+            getOrganization {
+                displayName
+				organizationId
+            }
+        }`
+	}
+
 	client := graphqlclient.New(h.credentials, h.environmentSet, h.log)
-	req := graphql.NewRequest(queryGetAccountDetails)
+	req := graphql.NewRequest(query)
 
 	var respEnvelope struct {
-		GetAccountDetails struct {
-			Username       string `json:"username"`
-			OrganizationID string `json:"organizationID"`
-			EmailAddress   string `json:"emailAddress"`
+		GetAccountDetails *struct {
+			EmailAddress string `json:"emailAddress"`
 		} `json:"getAccountDetails"`
+		GetOrganization struct {
+			DisplayName    string `json:"displayName"`
+			OrganizationID string `json:"organizationId"`
+		} `json:"getOrganization"`
 	}
 
 	if err := client.Execute(ctx, req, &respEnvelope); err != nil {
@@ -78,10 +83,13 @@ func (h *Handler) Execute(ctx context.Context) error {
 	}
 
 	fmt.Println("")
-	fmt.Println("\tAccount details retrieved:")
+	fmt.Println("Account details retrieved:")
 	fmt.Println("")
-	fmt.Printf("   \tEmail:           %s\n", respEnvelope.GetAccountDetails.EmailAddress)
-	fmt.Printf("   \tOrganization ID: %s\n", respEnvelope.GetAccountDetails.OrganizationID)
+	if respEnvelope.GetAccountDetails != nil {
+		fmt.Printf("\tEmail:             %s\n", respEnvelope.GetAccountDetails.EmailAddress)
+	}
+	fmt.Printf("\tOrganization ID:   %s\n", respEnvelope.GetOrganization.OrganizationID)
+	fmt.Printf("\tOrganization Name: %s\n", respEnvelope.GetOrganization.DisplayName)
 	fmt.Println("")
 
 	return nil

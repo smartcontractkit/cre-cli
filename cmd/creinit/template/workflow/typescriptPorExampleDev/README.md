@@ -44,6 +44,7 @@ cd workflow01 && bun install
 For local simulation to interact with a chain, you must specify RPC endpoints for the chains you interact with in the `project.yaml` file. This is required for submitting transactions and reading blockchain state.
 
 Note: The following 7 chains are supported in local simulation (both testnet and mainnet variants):
+
 - Ethereum (`ethereum-testnet-sepolia`, `ethereum-mainnet`)
 - Base (`ethereum-testnet-sepolia-base-1`, `ethereum-mainnet-base-1`)
 - Avalanche (`avalanche-testnet-fuji`, `avalanche-mainnet`)
@@ -54,39 +55,32 @@ Note: The following 7 chains are supported in local simulation (both testnet and
 
 Add your preferred RPCs under the `rpcs` section. For chain names, refer to https://github.com/smartcontractkit/chain-selectors/blob/main/selectors.yml
 
-## 5. Set up workflow secrets
+## 5. Deploy contracts and prepare ABIs
 
-This template workflow demonstrates the use of secrets. To configure them, a separate file containing the secret names is required. For this template, a secrets.yaml file is already provided in the workflow root directory with all necessary entries.
-
-To simulate how secrets are accessed, you need to define them in your environment. Below is an example based on the generated secrets.yaml.
-
-```bash
-export SECRET_ADDRESS_ALL="0xMySecretAddress"
-```
-
-Or you may append the secret value to your existing `.env` file and then it will be automatically loaded by the CLI:
-
-```bash
-SECRET_ADDRESS_ALL=0xMySecretAddress
-```
-
-Note in our example the secret address is used to read a balance from. You can use the address of our deployed contract 0x4700A50d858Cb281847ca4Ee0938F80DEfB3F1dd.
-
-```bash
-export SECRET_ADDRESS_ALL="0x4700A50d858Cb281847ca4Ee0938F80DEfB3F1dd"
-```
-
-## 6. Deploy contracts
+### 5a. Deploy contracts
 
 Deploy the BalanceReader, MessageEmitter, ReserveManager and SimpleERC20 contracts. You can either do this on a local chain or on a testnet using tools like cast/foundry.
 
 For a quick start, you can also use the pre-deployed contract addresses on Ethereum Sepolia—no action required on your part if you're just trying things out.
 
-## 7. Configure workflow
+### 5b. Prepare ABIs
+
+For each contract you would like to interact with, you need to provide the ABI `.ts` file so that TypeScript can provide type safety and autocomplete for the contract methods. The format of the ABI files is very similar to regular JSON format; you just need to export it as a variable and mark it `as const`. For example:
+
+```ts
+// IERC20.ts file
+export const IERC20Abi = {
+  // ... your ABI here ...
+} as const;
+```
+
+For a quick start, every contract used in this workflow is already provided in the `contracts` folder. You can use them as a reference.
+
+## 6. Configure workflow
 
 Configure `config.json` for the workflow
 
-- `schedule` should be set to `"*/30 * * * * *"` for every 30 seconds or any other cron expression you prefer
+- `schedule` should be set to `"0 */1 * * * *"` for every 1 minute(s) or any other cron expression you prefer, note [CRON service quotas](https://docs.chain.link/cre/service-quotas)
 - `url` should be set to existing reserves HTTP endpoint API
 - `tokenAddress` should be the SimpleERC20 contract address
 - `porAddress` should be the ReserveManager contract address
@@ -101,16 +95,16 @@ The config is already populated with deployed contracts in template.
 Note: Make sure your `workflow.yaml` file is pointing to the config.json, example:
 
 ```yaml
-local-simulation:
+staging-settings:
   user-workflow:
     workflow-name: "workflow01"
   workflow-artifacts:
     workflow-path: "./main.ts"
     config-path: "./config.json"
-    secrets-path: "../secrets.yaml"
+    secrets-path: ""
 ```
 
-## 8. Simulate the workflow
+## 7. Simulate the workflow
 
 Run the command from <b>project root directory</b> and pass in the path to the workflow directory.
 
@@ -130,22 +124,21 @@ After this you will get a set of options similar to:
 🚀 Workflow simulation ready. Please select a trigger:
 1. cron-trigger@1.0.0 Trigger
 2. evm:ChainSelector:16015286601757825753@1.0.0 LogTrigger
-3. http-trigger@1.0.0-alpha Trigger
 
-Enter your choice (1-3):
+Enter your choice (1-2):
 ```
 
 You can simulate each of the following triggers types as follows
 
-### 8a. Simulating Cron Trigger Workflows
+### 7a. Simulating Cron Trigger Workflows
 
 Select option 1, and the workflow should immediately execute.
 
-### 8b. Simulating Log Trigger Workflows
+### 7b. Simulating Log Trigger Workflows
 
 Select option 2, and then two additional prompts will come up and you can pass in the example inputs:
 
-Transaction Hash: 0x420721d7d00130a03c5b525b2dbfd42550906ddb3075e8377f9bb5d1a5992f8e
+Transaction Hash: 0x9394cc015736e536da215c31e4f59486a8d85f4cfc3641e309bf00c34b2bf410
 Log Event Index: 0
 
 The output will look like:
@@ -153,27 +146,9 @@ The output will look like:
 ```
 🔗 EVM Trigger Configuration:
 Please provide the transaction hash and event index for the EVM log event.
-Enter transaction hash (0x...): 0x420721d7d00130a03c5b525b2dbfd42550906ddb3075e8377f9bb5d1a5992f8e
+Enter transaction hash (0x...): 0x9394cc015736e536da215c31e4f59486a8d85f4cfc3641e309bf00c34b2bf410
 Enter event index (0-based): 0
-Fetching transaction receipt for transaction 0x420721d7d00130a03c5b525b2dbfd42550906ddb3075e8377f9bb5d1a5992f8e...
+Fetching transaction receipt for transaction 0x9394cc015736e536da215c31e4f59486a8d85f4cfc3641e309bf00c34b2bf410...
 Found log event at index 0: contract=0x1d598672486ecB50685Da5497390571Ac4E93FDc, topics=3
-Created EVM trigger log for transaction 0x420721d7d00130a03c5b525b2dbfd42550906ddb3075e8377f9bb5d1a5992f8e, event 0
-```
-
-### 8c. Simulating HTTP Trigger Workflows
-
-Select option 3, and then an additional prompt will come up where you can pass in:
-
-File Path: ./http_trigger_payload.json
-
-The output will look like:
-
-```
-🔍 HTTP Trigger Configuration:
-Please provide JSON input for the HTTP trigger.
-You can enter a file path or JSON directly
-
-Enter your input: ./http_trigger_payload.json
-Loaded JSON from file: ./http_trigger_payload.json
-Created HTTP trigger payload with 1 fields
+Created EVM trigger log for transaction 0x9394cc015736e536da215c31e4f59486a8d85f4cfc3641e309bf00c34b2bf410, event 0
 ```

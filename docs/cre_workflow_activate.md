@@ -13,16 +13,14 @@ cre workflow activate <workflow-folder-path> [optional flags]
 ### Examples
 
 ```
-
-		cre workflow activate ./my-workflow
-		
+cre workflow activate ./my-workflow
 ```
 
 ### Options
 
 ```
   -h, --help       help for activate
-      --unsigned   If set, the command will return the raw transaction instead of sending it to the network
+      --unsigned   If set, the command will either return the raw transaction instead of sending it to the network or execute the second step of secrets operations using a previously generated raw transaction
       --yes        If set, the command will skip the confirmation prompt and proceed with the operation even if it is potentially destructive
 ```
 
@@ -31,8 +29,8 @@ cre workflow activate <workflow-folder-path> [optional flags]
 ```
   -e, --env string            Path to .env file which contains sensitive info (default ".env")
   -R, --project-root string   Path to the project root
-  -T, --target string         Set the target settings
-  -v, --verbose               Print DEBUG logs
+  -T, --target string         Use target settings from YAML config
+  -v, --verbose               Run command in VERBOSE mode
 ```
 
 ### SEE ALSO

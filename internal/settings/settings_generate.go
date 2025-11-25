@@ -34,22 +34,17 @@ type ProjectEnv struct {
 
 func GetDefaultReplacements() map[string]string {
 	return map[string]string{
-		"EthSepoliaChainName":  constants.DefaultEthSepoliaChainName,
-		"BaseSepoliaChainName": constants.DefaultBaseSepoliaChainName,
-		"EthMainnetChainName":  constants.DefaultEthMainnetChainName,
+		"EthSepoliaChainName": constants.DefaultEthSepoliaChainName,
+		"EthMainnetChainName": constants.DefaultEthMainnetChainName,
 
-		"EthSepoliaRpcUrl":  constants.DefaultEthSepoliaRpcUrl,
-		"EthMainnetRpcUrl":  constants.DefaultEthMainnetRpcUrl,
-		"BaseSepoliaRpcUrl": constants.DefaultBaseSepoliaRpcUrl,
-		"SethConfigPath":    constants.DefaultSethConfigPath,
+		"EthSepoliaRpcUrl": constants.DefaultEthSepoliaRpcUrl,
+		"EthMainnetRpcUrl": constants.DefaultEthMainnetRpcUrl,
+		"SethConfigPath":   constants.DefaultSethConfigPath,
 
-		"StagingDonFamily":           constants.DefaultStagingDonFamily,
-		"ProductionTestnetDonFamily": constants.DefaultProductionTestnetDonFamily,
-		"ProductionDonFamily":        constants.DefaultProductionDonFamily,
-
-		"WorkflowOwnerAddress": "(optional) Multi-signature contract address",
 		"ConfigPath":           "./config.json",
-		"SecretsPath":          "../secrets.yaml",
+		"ConfigPathStaging":    "./config.staging.json",
+		"ConfigPathProduction": "./config.production.json",
+		"SecretsPath":          "",
 	}
 }
 
@@ -88,7 +83,7 @@ func GenerateProjectEnvFile(workingDirectory string, stdin io.Reader) (string, e
 
 	replacements := map[string]string{
 		"GithubApiToken": "your-github-token",
-		"EthPrivateKey":  "0000000000000000000000000000000000000000000000000000000000000001",
+		"EthPrivateKey":  "your-eth-private-key",
 	}
 
 	if err := GenerateFileFromTemplate(outputPath, ProjectEnvironmentTemplateContent, replacements); err != nil {
@@ -104,16 +99,13 @@ func GenerateProjectEnvFile(workingDirectory string, stdin io.Reader) (string, e
 }
 
 func GenerateProjectSettingsFile(workingDirectory string, stdin io.Reader) (string, bool, error) {
-	// Use default replacements.
 	replacements := GetDefaultReplacements()
 
-	// Resolve the absolute output path for the project settings file.
 	outputPath, err := filepath.Abs(path.Join(workingDirectory, constants.DefaultProjectSettingsFileName))
 	if err != nil {
 		return "", false, fmt.Errorf("failed to resolve absolute path for writing file: %w", err)
 	}
 
-	// Check if the file already exists.
 	if _, err := os.Stat(outputPath); err == nil {
 		msg := fmt.Sprintf("A project settings file already exists at %s. Continuing will overwrite this file. Do you want to proceed?", outputPath)
 		shouldContinue, err := prompt.YesNoPrompt(stdin, msg)
@@ -125,7 +117,6 @@ func GenerateProjectSettingsFile(workingDirectory string, stdin io.Reader) (stri
 		}
 	}
 
-	// Generate the project settings file.
 	if err := GenerateFileFromTemplate(outputPath, ProjectSettingsTemplateContent, replacements); err != nil {
 		return "", false, fmt.Errorf("failed to generate project settings file: %w", err)
 	}

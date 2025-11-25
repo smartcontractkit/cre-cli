@@ -16,7 +16,7 @@ CRE_ETH_PRIVATE_KEY=000000000000000000000000000000000000000000000000000000000000
 Run the command from <b>project root directory</b>
 
 ```bash
-cre workflow simulate --target local-simulation <path-to-workflow>
+cre workflow simulate <path-to-workflow> --target=staging-settings
 ```
 
 It is recommended to look into other existing examples to see how to write a workflow. You can generate then by running the `cre init` command.

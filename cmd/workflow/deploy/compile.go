@@ -3,6 +3,7 @@ package deploy
 import (
 	"bytes"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 	"github.com/andybalholm/brotli"
 
 	cmdcommon "github.com/smartcontractkit/cre-cli/cmd/common"
+	"github.com/smartcontractkit/cre-cli/internal/constants"
 )
 
 func (h *handler) Compile() error {
@@ -45,6 +47,25 @@ func (h *handler) Compile() error {
 
 	tmpWasmFileName := "tmp.wasm"
 	workflowMainFile := filepath.Base(h.inputs.WorkflowPath)
+
+	// Set language in runtime context based on workflow file extension
+	if h.runtimeContext != nil {
+		h.runtimeContext.Workflow.Language = cmdcommon.GetWorkflowLanguage(workflowMainFile)
+
+		switch h.runtimeContext.Workflow.Language {
+		case constants.WorkflowLanguageTypeScript:
+			if err := cmdcommon.EnsureTool("bun"); err != nil {
+				return errors.New("bun is required for TypeScript workflows but was not found in PATH; install from https://bun.com/docs/installation")
+			}
+		case constants.WorkflowLanguageGolang:
+			if err := cmdcommon.EnsureTool("go"); err != nil {
+				return errors.New("go toolchain is required for Go workflows but was not found in PATH; install from https://go.dev/dl")
+			}
+		default:
+			return fmt.Errorf("unsupported workflow language for file %s", workflowMainFile)
+		}
+	}
+
 	buildCmd := cmdcommon.GetBuildCmd(workflowMainFile, tmpWasmFileName, workflowRootFolder)
 	h.log.Debug().
 		Str("Workflow directory", buildCmd.Dir).
@@ -54,7 +75,9 @@ func (h *handler) Compile() error {
 	buildOutput, err := buildCmd.CombinedOutput()
 	if err != nil {
 		fmt.Println(string(buildOutput))
-		return fmt.Errorf("failed to compile workflow: %w", err)
+
+		out := strings.TrimSpace(string(buildOutput))
+		return fmt.Errorf("failed to compile workflow: %w\nbuild output:\n%s", err, out)
 	}
 	h.log.Debug().Msgf("Build output: %s", buildOutput)
 	fmt.Println("Workflow compiled successfully")

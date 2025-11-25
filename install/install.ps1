@@ -44,6 +44,7 @@ try {
     New-Item -ItemType Directory -Path $TempDir | Out-Null
     $ZipPath = Join-Path $TempDir "$($CliName).zip"
 
+    $ProgressPreference = 'SilentlyContinue'
     Write-Host "Downloading from $DownloadUrl..."
     Invoke-WebRequest -Uri $DownloadUrl -OutFile $ZipPath
 

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"reflect"
 	"strings"
 
 	ethereum "github.com/ethereum/go-ethereum"
@@ -46,6 +47,7 @@ var (
 	_ = cre.ResponseBufferTooSmall
 	_ = rpc.API{}
 	_ = json.Unmarshal
+	_ = reflect.Bool
 )
 
 {{range $contract := .Contracts}}
@@ -101,7 +103,8 @@ type {{$call.Normalized.Name}}Output struct {
 {{end}}
 
 // Events
-// The <Event> struct should be used as a filter (for log triggers).
+// The <Event>Topics struct should be used as a filter (for log triggers).
+// Note: It is only possible to filter on indexed fields.
 // Indexed (string and bytes) fields will be of type common.Hash.
 // They need to he (crypto.Keccak256) hashed and passed in.
 // Indexed (tuple/slice/array) fields can be passed in as is, the Encode<Event>Topics function will handle the hashing.
@@ -110,9 +113,11 @@ type {{$call.Normalized.Name}}Output struct {
 // Indexed dynamic type fields will be of type common.Hash.
 {{range $event := $contract.Events}}
 
-type {{.Normalized.Name}} struct {
+type {{.Normalized.Name}}Topics struct {
 	{{- range .Normalized.Inputs}}
-	{{capitalise .Name}} {{if .Indexed}}{{bindtopictype .Type $.Structs}}{{else}}{{bindtype .Type $.Structs}}{{end}}
+	{{- if .Indexed}}
+	{{capitalise .Name}} {{bindtopictype .Type $.Structs}}
+	{{- end}}
 	{{- end}}
 }
 
@@ -155,7 +160,7 @@ type {{$contract.Type}}Codec interface {
 
 	{{- range $event := .Events}}
 	{{.Normalized.Name}}LogHash() []byte
-	Encode{{.Normalized.Name}}Topics(evt abi.Event, values []{{.Normalized.Name}}) ([]*evm.TopicValues, error)
+	Encode{{.Normalized.Name}}Topics(evt abi.Event, values []{{.Normalized.Name}}Topics) ([]*evm.TopicValues, error)
 	Decode{{.Normalized.Name}}(log *evm.Log) (*{{.Normalized.Name}}Decoded, error)
 	{{- end}}
 }
@@ -291,12 +296,16 @@ func (c *Codec) {{.Normalized.Name}}LogHash() []byte {
 
 func (c *Codec) Encode{{.Normalized.Name}}Topics(
     evt abi.Event,
-    values []{{.Normalized.Name}},
+    values []{{.Normalized.Name}}Topics,
 ) ([]*evm.TopicValues, error) {
     {{- range $idx, $inp := .Normalized.Inputs }}
     {{- if $inp.Indexed }}
     var {{ decapitalise $inp.Name }}Rule []interface{}
     for _, v := range values {
+		if reflect.ValueOf(v.{{capitalise $inp.Name}}).IsZero() {
+			{{ decapitalise $inp.Name }}Rule = append({{ decapitalise $inp.Name }}Rule, common.Hash{})
+			continue
+		}
 		fieldVal, err := bindings.PrepareTopicArg(evt.Inputs[{{$idx}}], v.{{capitalise $inp.Name}})
 		if err != nil {
 			return nil, err
@@ -317,18 +326,7 @@ func (c *Codec) Encode{{.Normalized.Name}}Topics(
         return nil, err
     }
 
-	topics := make([]*evm.TopicValues, len(rawTopics)+1)
-	topics[0] = &evm.TopicValues{
-		Values: [][]byte{evt.ID.Bytes()},
-	}
-    for i, hashList := range rawTopics {
-        bs := make([][]byte, len(hashList))
-        for j, h := range hashList {
-            bs[j] = h.Bytes()
-        }
-        topics[i+1] = &evm.TopicValues{Values: bs}
-    }
-    return topics, nil
+	return bindings.PrepareTopics(rawTopics, evt.ID.Bytes()), nil
 }
 
 
@@ -536,7 +534,7 @@ func (t *{{.Normalized.Name}}Trigger) Adapt(l *evm.Log) (*bindings.DecodedLog[{{
 	}, nil
 }
 
-func (c *{{$contract.Type}}) LogTrigger{{.Normalized.Name}}Log(chainSelector uint64, confidence evm.ConfidenceLevel, filters []{{.Normalized.Name}}) (cre.Trigger[*evm.Log, *bindings.DecodedLog[{{.Normalized.Name}}Decoded]], error) {
+func (c *{{$contract.Type}}) LogTrigger{{.Normalized.Name}}Log(chainSelector uint64, confidence evm.ConfidenceLevel, filters []{{.Normalized.Name}}Topics) (cre.Trigger[*evm.Log, *bindings.DecodedLog[{{.Normalized.Name}}Decoded]], error) {
 	event := c.ABI.Events["{{.Normalized.Name}}"]
 	topics, err := c.Codec.Encode{{.Normalized.Name}}Topics(event, filters)
 	if err != nil {
@@ -556,11 +554,9 @@ func (c *{{$contract.Type}}) LogTrigger{{.Normalized.Name}}Log(chainSelector uin
 }
 
 
-func (c *{{$contract.Type}}) FilterLogs{{.Normalized.Name}}(runtime cre.Runtime, options *bindings.FilterOptions) cre.Promise[*evm.FilterLogsReply] {
+func (c *{{$contract.Type}}) FilterLogs{{.Normalized.Name}}(runtime cre.Runtime, options *bindings.FilterOptions) (cre.Promise[*evm.FilterLogsReply], error) {
 	if options == nil {
-		options = &bindings.FilterOptions{
-			ToBlock: options.ToBlock,
-		}
+		return nil, errors.New("FilterLogs options are required.")
 	}
 	return c.client.FilterLogs(runtime, &evm.FilterLogsRequest{
 		FilterQuery: &evm.FilterQuery{
@@ -572,7 +568,7 @@ func (c *{{$contract.Type}}) FilterLogs{{.Normalized.Name}}(runtime cre.Runtime,
 			FromBlock: pb.NewBigIntFromInt(options.FromBlock),
 			ToBlock:   pb.NewBigIntFromInt(options.ToBlock),
 		},
-	})
+	}), nil
 }
 {{end}}
 

@@ -45,7 +45,7 @@ func RunAccountHappyPath(t *testing.T, tc TestConfig, testEthURL, chainName stri
 
 	// GraphQL server that supports InitiateLinking, InitiateUnlinking, and listWorkflowOwners
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !(strings.HasPrefix(r.URL.Path, "/graphql") && r.Method == http.MethodPost) {
+		if !strings.HasPrefix(r.URL.Path, "/graphql") || r.Method != http.MethodPost {
 			w.WriteHeader(http.StatusNotFound)
 			_, _ = w.Write([]byte("not found"))
 			return
@@ -53,6 +53,20 @@ func RunAccountHappyPath(t *testing.T, tc TestConfig, testEthURL, chainName stri
 
 		var req gqlReq
 		_ = json.NewDecoder(r.Body).Decode(&req)
+
+		w.Header().Set("Content-Type", "application/json")
+
+		// Handle authentication validation query
+		if strings.Contains(req.Query, "getOrganization") {
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"data": map[string]any{
+					"getOrganization": map[string]any{
+						"organizationId": "test-org-id",
+					},
+				},
+			})
+			return
+		}
 
 		registryAddr := os.Getenv(environments.EnvVarWorkflowRegistryAddress)
 

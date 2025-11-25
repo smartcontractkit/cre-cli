@@ -1,0 +1,30 @@
+## cre secrets list
+
+Lists secret identifiers for the current owner address in the given namespace.
+
+```
+cre secrets list [optional flags]
+```
+
+### Options
+
+```
+  -h, --help               help for list
+      --namespace string   Namespace to list (default: main) (default "main")
+      --unsigned           If set, the command will either return the raw transaction instead of sending it to the network or execute the second step of secrets operations using a previously generated raw transaction
+```
+
+### Options inherited from parent commands
+
+```
+  -e, --env string            Path to .env file which contains sensitive info (default ".env")
+  -R, --project-root string   Path to the project root
+  -T, --target string         Use target settings from YAML config
+      --timeout duration      Timeout for secrets operations (e.g. 30m, 2h, 48h). (default 48h0m0s)
+  -v, --verbose               Run command in VERBOSE mode
+```
+
+### SEE ALSO
+
+* [cre secrets](cre_secrets.md)	 - Handles secrets management
+

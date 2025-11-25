@@ -23,15 +23,10 @@ import (
 func createProjectSettingsFile(projectSettingPath string, workflowOwner string, testEthURL string) error {
 	v := viper.New()
 
-	v.Set(fmt.Sprintf("%s.%s", SettingsTarget, settings.DONFamilySettingName), constants.DefaultStagingDonFamily)
-
 	// account fields
 	if workflowOwner != "" {
 		v.Set(fmt.Sprintf("%s.account.workflow-owner-address", SettingsTarget), workflowOwner)
 	}
-
-	// cre-cli fields
-	v.Set(fmt.Sprintf("%s.cre-cli.don-family", SettingsTarget), constants.DefaultStagingDonFamily)
 
 	// rpcs
 	v.Set(fmt.Sprintf("%s.%s", SettingsTarget, settings.RpcsSettingName), []settings.RpcEndpoint{
@@ -71,9 +66,11 @@ func createCliEnvFile(envPath string, ethPrivateKey string) error {
 	if err != nil {
 		return err
 	}
-	_, err = writer.WriteString(fmt.Sprintf("%s=%s", settings.EthPrivateKeyEnvVar, ethPrivateKey))
-	if err != nil {
-		return err
+	if strings.TrimSpace(ethPrivateKey) != "" {
+		_, err = fmt.Fprintf(writer, "%s=%s\n", settings.EthPrivateKeyEnvVar, ethPrivateKey)
+		if err != nil {
+			return err
+		}
 	}
 
 	_, err = writer.WriteString("\n")
@@ -81,7 +78,7 @@ func createCliEnvFile(envPath string, ethPrivateKey string) error {
 		return err
 	}
 
-	_, err = writer.WriteString(fmt.Sprintf("%s=%s", settings.CreTargetEnvVar, SettingsTarget))
+	_, err = fmt.Fprintf(writer, "%s=%s", settings.CreTargetEnvVar, SettingsTarget)
 	if err != nil {
 		return err
 	}

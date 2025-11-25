@@ -8,7 +8,7 @@
   },
   "license": "UNLICENSED",
   "dependencies": {
-    "@chainlink/cre-sdk": "0.0.8-alpha"
+    "@chainlink/cre-sdk": "^1.0.0"
   },
   "devDependencies": {
     "@types/bun": "1.2.21"

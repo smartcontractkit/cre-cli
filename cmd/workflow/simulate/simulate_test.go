@@ -40,16 +40,15 @@ func TestBlankWorkflowSimulation(t *testing.T) {
 	v.Set("project-root", projectRoot)
 	v.Set("non-interactive", true)
 	v.Set("trigger-index", 0)
-	v.Set("target", "local-simulation")
+	v.Set("target", "staging-settings")
 
 	var rpc settings.RpcEndpoint
 	rpc.ChainName = "ethereum-testnet-sepolia"
 	rpc.Url = "https://sepolia.infura.io/v3"
-	v.Set(fmt.Sprintf("%s.%s", "local-simulation", settings.RpcsSettingName), []settings.RpcEndpoint{rpc})
+	v.Set(fmt.Sprintf("%s.%s", "staging-settings", settings.RpcsSettingName), []settings.RpcEndpoint{rpc})
 
 	var workflowSettings settings.WorkflowSettings
 	workflowSettings.UserWorkflowSettings.WorkflowName = "blank-workflow"
-	workflowSettings.DevPlatformSettings.DonFamily = "small"
 	workflowSettings.WorkflowArtifactSettings.WorkflowPath = filepath.Join(absWorkflowPath, "main.go")
 	workflowSettings.WorkflowArtifactSettings.ConfigPath = filepath.Join(absWorkflowPath, "config.json")
 
@@ -60,7 +59,7 @@ func TestBlankWorkflowSimulation(t *testing.T) {
 		Settings: &settings.Settings{
 			Workflow: workflowSettings,
 			User: settings.UserSettings{
-				TargetName:    "local-simulation",
+				TargetName:    "staging-settings",
 				EthPrivateKey: "88888845d8761ca4a8cefb324c89702f12114ffbd0c47222f12aac0ad6538888",
 			},
 		},

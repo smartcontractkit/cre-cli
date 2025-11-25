@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -20,8 +19,8 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 )
 
-// workflowDeployEoaWithoutAutostart deploys a workflow via CLI without autostart, mocking GraphQL + Origin.
-func workflowDeployEoaWithoutAutostart(t *testing.T, tc TestConfig) string {
+// workflowDeployEoa deploys a workflow via CLI, mocking GraphQL + Origin.
+func workflowDeployEoa(t *testing.T, tc TestConfig) string {
 	t.Helper()
 
 	var srv *httptest.Server
@@ -31,6 +30,20 @@ func workflowDeployEoaWithoutAutostart(t *testing.T, tc TestConfig) string {
 		case strings.HasPrefix(r.URL.Path, "/graphql") && r.Method == http.MethodPost:
 			var req graphQLRequest
 			_ = json.NewDecoder(r.Body).Decode(&req)
+
+			w.Header().Set("Content-Type", "application/json")
+
+			// Handle authentication validation query
+			if strings.Contains(req.Query, "getOrganization") {
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"data": map[string]any{
+						"getOrganization": map[string]any{
+							"organizationId": "test-org-id",
+						},
+					},
+				})
+				return
+			}
 
 			// Respond based on the mutation in the query
 			if strings.Contains(req.Query, "GeneratePresignedPostUrlForArtifact") {
@@ -51,6 +64,23 @@ func workflowDeployEoaWithoutAutostart(t *testing.T, tc TestConfig) string {
 					"data": map[string]any{
 						"generateUnsignedGetUrlForArtifact": map[string]any{
 							"unsignedGetUrl": srv.URL + "/get",
+						},
+					},
+				}
+				_ = json.NewEncoder(w).Encode(resp)
+				return
+			}
+			if strings.Contains(req.Query, "listWorkflowOwners") {
+				// Mock response for link verification check
+				resp := map[string]any{
+					"data": map[string]any{
+						"listWorkflowOwners": map[string]any{
+							"linkedOwners": []map[string]string{
+								{
+									"workflowOwnerAddress": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+									"verificationStatus":   "VERIFICATION_STATUS_SUCCESSFULL", //nolint:misspell // Intentional misspelling to match external API
+								},
+							},
 						},
 					},
 				}
@@ -79,10 +109,9 @@ func workflowDeployEoaWithoutAutostart(t *testing.T, tc TestConfig) string {
 	defer srv.Close()
 
 	// Point the CLI at our mock GraphQL endpoint
-	os.Setenv(environments.EnvVarGraphQLURL, srv.URL+"/graphql")
+	t.Setenv(environments.EnvVarGraphQLURL, srv.URL+"/graphql")
 
 	// Build CLI args - CLI will automatically resolve workflow path using new context system
-	// Note: no auto-start flag (defaults to false)
 	args := []string{
 		"workflow", "deploy",
 		"blank_workflow",
@@ -122,6 +151,20 @@ func workflowDeployUpdateWithConfig(t *testing.T, tc TestConfig) string {
 			var req graphQLRequest
 			_ = json.NewDecoder(r.Body).Decode(&req)
 
+			w.Header().Set("Content-Type", "application/json")
+
+			// Handle authentication validation query
+			if strings.Contains(req.Query, "getOrganization") {
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"data": map[string]any{
+						"getOrganization": map[string]any{
+							"organizationId": "test-org-id",
+						},
+					},
+				})
+				return
+			}
+
 			// Respond based on the mutation in the query
 			if strings.Contains(req.Query, "GeneratePresignedPostUrlForArtifact") {
 				// Return presigned POST URL + fields (pointing back to this server)
@@ -141,6 +184,23 @@ func workflowDeployUpdateWithConfig(t *testing.T, tc TestConfig) string {
 					"data": map[string]any{
 						"generateUnsignedGetUrlForArtifact": map[string]any{
 							"unsignedGetUrl": srv.URL + "/get",
+						},
+					},
+				}
+				_ = json.NewEncoder(w).Encode(resp)
+				return
+			}
+			if strings.Contains(req.Query, "listWorkflowOwners") {
+				// Mock response for link verification check
+				resp := map[string]any{
+					"data": map[string]any{
+						"listWorkflowOwners": map[string]any{
+							"linkedOwners": []map[string]string{
+								{
+									"workflowOwnerAddress": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+									"verificationStatus":   "VERIFICATION_STATUS_SUCCESSFULL", //nolint:misspell // Intentional misspelling to match external API
+								},
+							},
 						},
 					},
 				}
@@ -169,7 +229,7 @@ func workflowDeployUpdateWithConfig(t *testing.T, tc TestConfig) string {
 	defer srv.Close()
 
 	// Point the CLI at our mock GraphQL endpoint
-	os.Setenv(environments.EnvVarGraphQLURL, srv.URL+"/graphql")
+	t.Setenv(environments.EnvVarGraphQLURL, srv.URL+"/graphql")
 
 	// Build CLI args with config file - CLI will automatically resolve workflow path
 	args := []string{
@@ -200,12 +260,12 @@ func workflowDeployUpdateWithConfig(t *testing.T, tc TestConfig) string {
 }
 
 // RunHappyPath2Workflow runs the complete happy path 2 workflow:
-// Deploy without autostart -> Deploy update with config
+// Deploy -> Deploy update with config
 func RunHappyPath2Workflow(t *testing.T, tc TestConfig) {
 	t.Helper()
 
-	// Step 1: Deploy initial workflow without autostart
-	out := workflowDeployEoaWithoutAutostart(t, tc)
+	// Step 1: Deploy initial workflow
+	out := workflowDeployEoa(t, tc)
 	require.Contains(t, out, "Workflow compiled", "expected workflow to compile.\nCLI OUTPUT:\n%s", out)
 	require.Contains(t, out, "linked=true", "expected link-status true.\nCLI OUTPUT:\n%s", out)
 	require.Contains(t, out, "Uploaded binary", "expected binary upload to succeed.\nCLI OUTPUT:\n%s", out)
@@ -227,7 +287,7 @@ func RunHappyPath2Workflow(t *testing.T, tc TestConfig) {
 
 // updateWorkflowConfigPath updates the config-path in the workflow.yaml file
 func updateWorkflowConfigPath(projectRootFlag, configPath string) error {
-	const SettingsTarget = "production-testnet"
+	const SettingsTarget = "staging-settings"
 
 	// Extract directory path from flag format "--project-root=/path/..."
 	parts := strings.Split(projectRootFlag, "=")

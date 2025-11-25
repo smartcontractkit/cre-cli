@@ -13,7 +13,6 @@ import (
 
 // Config names (YAML field paths)
 const (
-	DONFamilySettingName      = "cre-cli.don-family"
 	WorkflowOwnerSettingName  = "account.workflow-owner-address"
 	WorkflowNameSettingName   = "user-workflow.workflow-name"
 	WorkflowPathSettingName   = "workflow-artifacts.workflow-path"
@@ -66,7 +65,7 @@ func AddTxnTypeFlags(cmd *cobra.Command) {
 }
 
 func AddRawTxFlag(cmd *cobra.Command) {
-	cmd.Flags().Bool(Flags.RawTxFlag.Name, false, "If set, the command will return the raw transaction instead of sending it to the network")
+	cmd.Flags().Bool(Flags.RawTxFlag.Name, false, "If set, the command will either return the raw transaction instead of sending it to the network or execute the second step of secrets operations using a previously generated raw transaction")
 }
 
 func AddSkipConfirmation(cmd *cobra.Command) {

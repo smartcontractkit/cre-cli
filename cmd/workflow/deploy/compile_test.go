@@ -98,7 +98,6 @@ func TestCompileCmd(t *testing.T) {
 					chainsim.TestAddress,
 					tt.WorkflowOwnerType,
 					"test_workflow",
-					"test_don_family",
 					tt.cmd.WorkflowPath,
 					tt.cmd.ConfigPath,
 				)
@@ -205,7 +204,6 @@ func TestCompileCmd(t *testing.T) {
 						chainsim.TestAddress,
 						tt.WorkflowOwnerType,
 						"test_workflow",
-						"test_don_family",
 						tt.inputs.WorkflowPath,
 						tt.inputs.ConfigPath,
 					)
@@ -241,7 +239,6 @@ func TestCompileCmd(t *testing.T) {
 				chainsim.TestAddress,
 				constants.WorkflowOwnerTypeEOA,
 				"test_workflow",
-				"test_don_family",
 				"testdata/configless_workflow/main.go",
 				"",
 			)
@@ -410,7 +407,7 @@ func TestCompileCreatesBase64EncodedFile(t *testing.T) {
 }
 
 // createTestSettings is a helper function to construct settings for tests
-func createTestSettings(workflowOwnerAddress, workflowOwnerType, workflowName, donFamily, workflowPath, configPath string) *settings.Settings {
+func createTestSettings(workflowOwnerAddress, workflowOwnerType, workflowName, workflowPath, configPath string) *settings.Settings {
 	return &settings.Settings{
 		Workflow: settings.WorkflowSettings{
 			UserWorkflowSettings: struct {
@@ -421,11 +418,6 @@ func createTestSettings(workflowOwnerAddress, workflowOwnerType, workflowName, d
 				WorkflowOwnerAddress: workflowOwnerAddress,
 				WorkflowOwnerType:    workflowOwnerType,
 				WorkflowName:         workflowName,
-			},
-			DevPlatformSettings: struct {
-				DonFamily string `mapstructure:"don-family" yaml:"don-family"`
-			}{
-				DonFamily: donFamily,
 			},
 			WorkflowArtifactSettings: struct {
 				WorkflowPath string `mapstructure:"workflow-path" yaml:"workflow-path"`
@@ -453,7 +445,6 @@ func runCompile(simulatedEnvironment *chainsim.SimulatedEnvironment, inputs Inpu
 		inputs.WorkflowOwner,
 		ownerType,
 		inputs.WorkflowName,
-		inputs.DonFamily,
 		inputs.WorkflowPath,
 		inputs.ConfigPath,
 	)

@@ -18,8 +18,8 @@ import (
 func New(ctx *runtime.Context) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "create [SECRETS_FILE_PATH]",
-		Short:   "Creates secrets from a JSON file provided as a positional argument.",
-		Example: "cre secrets create my-secrets.json",
+		Short:   "Creates secrets from a YAML file.",
+		Example: "cre secrets create my-secrets.yaml",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			secretsFilePath := args[0]
@@ -42,7 +42,6 @@ func New(ctx *runtime.Context) *cobra.Command {
 					Dur("timeout", duration).
 					Dur("maxDuration", maxDuration).
 					Msg(fmt.Sprintf("invalid timeout: must be > 0 and < %dh (%dd)", maxHours, maxDays))
-
 				return fmt.Errorf("invalid --timeout: must be greater than 0 and less than %dh (%dd)", maxHours, maxDays)
 			}
 
@@ -60,6 +59,5 @@ func New(ctx *runtime.Context) *cobra.Command {
 	}
 
 	settings.AddRawTxFlag(cmd)
-
 	return cmd
 }

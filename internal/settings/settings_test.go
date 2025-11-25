@@ -82,7 +82,7 @@ func TestLoadEnvAndSettingsEmptyTarget(t *testing.T) {
 
 	setUpTestSettingsFiles(t, v, workflowTemplatePath, projectTemplatePath, tempDir)
 	cmd := &cobra.Command{Use: "login"}
-	s, err := settings.New(logger, v, cmd)
+	s, err := settings.New(logger, v, cmd, "")
 
 	assert.Error(t, err, "Expected error due to empty target")
 	assert.Contains(t, err.Error(), "target not set", "Expected missing target error")
@@ -91,7 +91,7 @@ func TestLoadEnvAndSettingsEmptyTarget(t *testing.T) {
 
 func TestLoadEnvAndSettings(t *testing.T) {
 	envVars := map[string]string{
-		settings.CreTargetEnvVar:     "production-testnet",
+		settings.CreTargetEnvVar:     "staging",
 		settings.EthPrivateKeyEnvVar: "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
 	}
 
@@ -110,15 +110,15 @@ func TestLoadEnvAndSettings(t *testing.T) {
 
 	setUpTestSettingsFiles(t, v, workflowTemplatePath, projectTemplatePath, tempDir)
 	cmd := &cobra.Command{Use: "login"}
-	s, err := settings.New(logger, v, cmd)
+	s, err := settings.New(logger, v, cmd, "")
 	require.NoError(t, err)
-	assert.Equal(t, "production-testnet", s.User.TargetName)
+	assert.Equal(t, "staging", s.User.TargetName)
 	assert.Equal(t, "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80", s.User.EthPrivateKey)
 }
 
 func TestLoadEnvAndSettingsWithWorkflowSettingsFlag(t *testing.T) {
 	envVars := map[string]string{
-		settings.CreTargetEnvVar:     "production-testnet",
+		settings.CreTargetEnvVar:     "staging",
 		settings.EthPrivateKeyEnvVar: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
 	}
 
@@ -143,9 +143,9 @@ func TestLoadEnvAndSettingsWithWorkflowSettingsFlag(t *testing.T) {
 
 	setUpTestSettingsFiles(t, v, workflowTemplatePath, projectTemplatePath, tempDir)
 	cmd := &cobra.Command{Use: "login"}
-	s, err := settings.New(logger, v, cmd)
+	s, err := settings.New(logger, v, cmd, "")
 	require.NoError(t, err)
-	assert.Equal(t, "production-testnet", s.User.TargetName)
+	assert.Equal(t, "staging", s.User.TargetName)
 	assert.Equal(t, "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80", s.User.EthPrivateKey)
 }
 
@@ -169,19 +169,19 @@ func TestInlineEnvTakesPrecedenceOverDotEnv(t *testing.T) {
 	v, logger := createTestContext(t, envVars, tempDir)
 
 	setUpTestSettingsFiles(t, v, workflowTemplatePath, projectTemplatePath, tempDir)
-	os.Setenv(settings.CreTargetEnvVar, "production-testnet")
+	os.Setenv(settings.CreTargetEnvVar, "staging")
 	defer os.Unsetenv(settings.CreTargetEnvVar)
 
 	cmd := &cobra.Command{Use: "login"}
-	s, err := settings.New(logger, v, cmd)
+	s, err := settings.New(logger, v, cmd, "")
 	require.NoError(t, err)
-	assert.Equal(t, "production-testnet", s.User.TargetName)
+	assert.Equal(t, "staging", s.User.TargetName)
 	assert.Equal(t, "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80", s.User.EthPrivateKey)
 }
 
 func TestLoadEnvAndMergedSettings(t *testing.T) {
 	envVars := map[string]string{
-		settings.CreTargetEnvVar:     "production-testnet",
+		settings.CreTargetEnvVar:     "staging",
 		settings.EthPrivateKeyEnvVar: "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
 	}
 
@@ -201,7 +201,7 @@ func TestLoadEnvAndMergedSettings(t *testing.T) {
 	setUpTestSettingsFiles(t, v, workflowTemplatePath, projectTemplatePath, tempDir)
 
 	cmd := &cobra.Command{Use: "workflow"}
-	s, err := settings.New(logger, v, cmd)
+	s, err := settings.New(logger, v, cmd, "")
 	require.NoError(t, err)
 	require.NotNil(t, s)
 
@@ -210,7 +210,6 @@ func TestLoadEnvAndMergedSettings(t *testing.T) {
 
 	assert.Equal(t, "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266", s.Workflow.UserWorkflowSettings.WorkflowOwnerAddress, "Workflow owner address should be taken from workflow settings")
 	assert.Equal(t, "workflowTest", s.Workflow.UserWorkflowSettings.WorkflowName, "Workflow name should be taken from workflow settings")
-	assert.Equal(t, "zone-a", s.Workflow.DevPlatformSettings.DonFamily, "DonFamily should be zone-a")
 
 	assert.Equal(t, "seth.toml", s.Workflow.LoggingSettings.SethConfigPath, "Logging seth config path should be set to 'seth.toml'")
 
@@ -233,6 +232,36 @@ func makeCmd(use string, defineBroadcast bool, args ...string) *cobra.Command {
 	}
 	_ = cmd.Flags().Parse(args) // parse only the provided flag args
 	return cmd
+}
+
+func TestLoadEnvAndSettingsInvalidTarget(t *testing.T) {
+	envVars := map[string]string{
+		settings.EthPrivateKeyEnvVar: "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
+	}
+
+	workflowTemplatePath, err := filepath.Abs(TempWorkflowSettingsFile)
+	require.NoError(t, err)
+
+	projectTemplatePath, err := filepath.Abs(TempProjectSettingsFile)
+	require.NoError(t, err)
+
+	tempDir := t.TempDir()
+	restoreWorkingDirectory, err := testutil.ChangeWorkingDirectory(tempDir)
+	require.NoError(t, err)
+	defer restoreWorkingDirectory()
+
+	v, logger := createTestContext(t, envVars, tempDir)
+
+	setUpTestSettingsFiles(t, v, workflowTemplatePath, projectTemplatePath, tempDir)
+
+	v.Set(settings.Flags.Target.Name, "nonexistent-target")
+
+	cmd := &cobra.Command{Use: "workflow"}
+	s, err := settings.New(logger, v, cmd, "")
+
+	assert.Error(t, err, "Expected error due to invalid target")
+	assert.Contains(t, err.Error(), "target not found: nonexistent-target", "Expected target not found error")
+	assert.Nil(t, s, "Settings object should be nil on error")
 }
 
 func TestShouldSkipGetOwner(t *testing.T) {

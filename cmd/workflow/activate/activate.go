@@ -33,13 +33,11 @@ type Inputs struct {
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
 	activateCmd := &cobra.Command{
-		Use:   "activate <workflow-folder-path>",
-		Short: "Activates workflow on the Workflow Registry contract",
-		Long:  `Changes workflow status to active on the Workflow Registry contract`,
-		Args:  cobra.ExactArgs(1),
-		Example: `
-		cre workflow activate ./my-workflow
-		`,
+		Use:     "activate <workflow-folder-path>",
+		Short:   "Activates workflow on the Workflow Registry contract",
+		Long:    `Changes workflow status to active on the Workflow Registry contract`,
+		Args:    cobra.ExactArgs(1),
+		Example: `cre workflow activate ./my-workflow`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			handler := newHandler(runtimeContext)
 
@@ -69,6 +67,7 @@ type handler struct {
 	environmentSet *environments.EnvironmentSet
 	inputs         Inputs
 	wrc            *client.WorkflowRegistryV2Client
+	runtimeContext *runtime.Context
 
 	validated bool
 
@@ -82,6 +81,7 @@ func newHandler(ctx *runtime.Context) *handler {
 		clientFactory:  ctx.ClientFactory,
 		settings:       ctx.Settings,
 		environmentSet: ctx.EnvironmentSet,
+		runtimeContext: ctx,
 		validated:      false,
 		wg:             sync.WaitGroup{},
 		wrcErr:         nil,
@@ -104,7 +104,7 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 	return Inputs{
 		WorkflowName:                      h.settings.Workflow.UserWorkflowSettings.WorkflowName,
 		WorkflowOwner:                     h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress,
-		DonFamily:                         h.settings.Workflow.DevPlatformSettings.DonFamily,
+		DonFamily:                         h.environmentSet.DonFamily,
 		WorkflowRegistryContractAddress:   h.environmentSet.WorkflowRegistryAddress,
 		WorkflowRegistryContractChainName: h.environmentSet.WorkflowRegistryChainName,
 	}, nil
@@ -156,6 +156,8 @@ func (h *handler) Execute() error {
 	})
 
 	latest := workflows[0]
+
+	h.runtimeContext.Workflow.ID = hex.EncodeToString(latest.WorkflowId[:])
 
 	// Validate precondition: workflow must be in paused state
 	if latest.Status != WorkflowStatusPaused {

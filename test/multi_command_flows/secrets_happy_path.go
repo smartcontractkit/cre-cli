@@ -54,6 +54,49 @@ func RunSecretsHappyPath(t *testing.T, tc TestConfig, chainName string) {
 
 	// set up a mock server to simulate the vault gateway
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/graphql" {
+			var req graphQLRequest
+			_ = json.NewDecoder(r.Body).Decode(&req)
+
+			w.Header().Set("Content-Type", "application/json")
+
+			// Handle authentication validation query
+			if strings.Contains(req.Query, "getOrganization") {
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"data": map[string]any{
+						"getOrganization": map[string]any{
+							"organizationId": "test-org-id",
+						},
+					},
+				})
+				return
+			}
+
+			// Handle listWorkflowOwners query
+			if strings.Contains(req.Query, "listWorkflowOwners") {
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"data": map[string]any{
+						"listWorkflowOwners": map[string]any{
+							"linkedOwners": []map[string]string{
+								{
+									"workflowOwnerAddress": strings.ToLower(constants.TestAddress3), // linked owner
+									"verificationStatus":   "VERIFICATION_STATUS_SUCCESSFULL",       //nolint:misspell // Intentional misspelling to match external API
+								},
+							},
+						},
+					},
+				})
+				return
+			}
+
+			// Fallback error
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"errors": []map[string]string{{"message": "Unsupported GraphQL query"}},
+			})
+			return
+		}
+
 		type reqEnvelope struct {
 			JSONRPC string          `json:"jsonrpc"`
 			ID      any             `json:"id"`
@@ -149,6 +192,7 @@ func RunSecretsHappyPath(t *testing.T, tc TestConfig, chainName string) {
 
 	// Set the above mocked server as Gateway endpoint
 	t.Setenv(environments.EnvVarVaultGatewayURL, srv.URL)
+	t.Setenv(environments.EnvVarGraphQLURL, srv.URL+"/graphql")
 
 	// ===== PHASE 1: CREATE SECRETS =====
 	t.Run("Create", func(t *testing.T) {
@@ -188,6 +232,103 @@ func RunSecretsHappyPath(t *testing.T, tc TestConfig, chainName string) {
 		require.Contains(t, out, "testid", "expected listed secret id in output.\nCLI OUTPUT:\n%s", out)
 		require.Contains(t, out, "namespace=testns", "expected namespace in delete output.\nCLI OUTPUT:\n%s", out)
 	})
+}
+
+// RunSecretsListMsig on unsigned
+func RunSecretsListMsig(t *testing.T, tc TestConfig, chainName string) {
+	t.Helper()
+
+	// Set up environment variables for pre-deployed contracts
+	t.Setenv(environments.EnvVarWorkflowRegistryAddress, "0x5FbDB2315678afecb367f032d93F642f64180aa3")
+	t.Setenv(environments.EnvVarWorkflowRegistryChainName, chainName)
+
+	// Set up a mock server to simulate the vault gateway
+	// Set dummy API key
+	t.Setenv(credentials.CreApiKeyVar, "test-api")
+
+	gqlSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasPrefix(r.URL.Path, "/graphql") && r.Method == http.MethodPost:
+			var req graphQLRequest
+			_ = json.NewDecoder(r.Body).Decode(&req)
+
+			w.Header().Set("Content-Type", "application/json")
+
+			// Handle authentication validation query
+			if strings.Contains(req.Query, "getOrganization") {
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"data": map[string]any{
+						"getOrganization": map[string]any{
+							"organizationId": "test-org-id",
+						},
+					},
+				})
+				return
+			}
+
+			if strings.Contains(req.Query, "listWorkflowOwners") {
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"data": map[string]any{
+						"listWorkflowOwners": map[string]any{
+							"linkedOwners": []map[string]string{
+								{
+									"workflowOwnerAddress": constants.TestAddress3,
+									"verificationStatus":   "VERIFICATION_STATUS_SUCCESSFULL", //nolint:misspell
+								},
+							},
+						},
+					},
+				})
+				return
+			}
+
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"errors": []map[string]string{{"message": "Unsupported GraphQL query"}},
+			})
+			return
+
+		default:
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte("not found"))
+			return
+		}
+	}))
+	defer gqlSrv.Close()
+
+	// Point GraphQL client to mock (no gateway needed for unsigned list)
+	t.Setenv(environments.EnvVarGraphQLURL, gqlSrv.URL+"/graphql")
+
+	t.Run("ListMsig", func(t *testing.T) {
+		out := secretsListMsig(t, tc)
+		require.Contains(t, out, "MSIG transaction prepared", "expected transaction prepared.\nCLI OUTPUT:\n%s", out)
+	})
+}
+
+//	cre secrets list <env-flag> <settings-flag> --unsigned
+//
+// It returns the output.
+func secretsListMsig(t *testing.T, tc TestConfig) string {
+	t.Helper()
+
+	// build CLI args
+	args := []string{
+		"secrets", "list",
+		tc.GetCliEnvFlag(),
+		tc.GetProjectRootFlag(),
+		"--unsigned",
+	}
+	cmd := exec.Command(CLIPath, args...)
+	// Let CLI handle context switching - don't set cmd.Dir manually
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	_ = cmd.Run()
+	out := stdout.String() + stderr.String()
+
+	return StripANSI(out)
 }
 
 // secretsCreateEoa writes a minimal secrets.yaml and invokes:

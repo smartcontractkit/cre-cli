@@ -27,8 +27,8 @@ type Inputs struct {
 	OutPath string `validate:"required" cli:"--out"`
 }
 
-func NewEvmBindings(runtimeContext *runtime.Context) *cobra.Command {
-	var generateBindingsCmd = &cobra.Command{
+func New(runtimeContext *runtime.Context) *cobra.Command {
+	generateBindingsCmd := &cobra.Command{
 		Use:   "generate-bindings <chain-family>",
 		Short: "Generate bindings from contract ABI",
 		Long: `This command generates bindings from contract ABI files.
@@ -213,7 +213,7 @@ func (h *handler) processAbiDirectory(inputs Inputs) error {
 
 		// Create per-contract output directory
 		contractOutDir := filepath.Join(inputs.OutPath, packageName)
-		if err := os.MkdirAll(contractOutDir, 0755); err != nil {
+		if err := os.MkdirAll(contractOutDir, 0o755); err != nil {
 			return fmt.Errorf("failed to create contract output directory %s: %w", contractOutDir, err)
 		}
 
@@ -249,7 +249,7 @@ func (h *handler) processSingleAbi(inputs Inputs) error {
 
 	// Create per-contract output directory
 	contractOutDir := filepath.Join(inputs.OutPath, packageName)
-	if err := os.MkdirAll(contractOutDir, 0755); err != nil {
+	if err := os.MkdirAll(contractOutDir, 0o755); err != nil {
 		return fmt.Errorf("failed to create contract output directory %s: %w", contractOutDir, err)
 	}
 
@@ -282,7 +282,7 @@ func (h *handler) Execute(inputs Inputs) error {
 	switch inputs.ChainFamily {
 	case "evm":
 		// Create output directory if it doesn't exist
-		if err := os.MkdirAll(inputs.OutPath, 0755); err != nil {
+		if err := os.MkdirAll(inputs.OutPath, 0o755); err != nil {
 			return fmt.Errorf("failed to create output directory: %w", err)
 		}
 
@@ -306,7 +306,7 @@ func (h *handler) Execute(inputs Inputs) error {
 		if err != nil {
 			return err
 		}
-		err = runCommand(inputs.ProjectRoot, "go", "get", "github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm@"+creinit.SdkVersion)
+		err = runCommand(inputs.ProjectRoot, "go", "get", "github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm@"+creinit.EVMCapabilitiesVersion)
 		if err != nil {
 			return err
 		}

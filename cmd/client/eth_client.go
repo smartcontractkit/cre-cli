@@ -15,6 +15,9 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/smartcontractkit/chainlink-evm/gethwrappers/keystone/generated/balance_reader"
+	"github.com/smartcontractkit/chainlink-evm/gethwrappers/shared/generated/latest/werc20_mock"
+	"github.com/smartcontractkit/chainlink-evm/gethwrappers/workflow/generated/mock_forwarder"
+	"github.com/smartcontractkit/chainlink-evm/gethwrappers/workflow/generated/reserve_manager"
 	workflow_registry_wrapper "github.com/smartcontractkit/chainlink-evm/gethwrappers/workflow/generated/workflow_registry_wrapper_v2"
 	"github.com/smartcontractkit/chainlink-testing-framework/seth"
 
@@ -41,6 +44,30 @@ func LoadContracts(l *zerolog.Logger, client *seth.Client) error {
 	client.ContractStore.AddBIN(constants.BalanceReaderContractName, common.FromHex(balance_reader.BalanceReaderMetaData.Bin))
 	l.Debug().Msgf("Loaded %s contract into ContractStore", constants.BalanceReaderContractName)
 
+	abi, err = werc20_mock.WERC20MockMetaData.GetAbi()
+	if err != nil {
+		return fmt.Errorf("failed to get WERC20Mock ABI: %w", err)
+	}
+	client.ContractStore.AddABI(constants.WERC20MockContractName, *abi)
+	client.ContractStore.AddBIN(constants.WERC20MockContractName, common.FromHex(werc20_mock.WERC20MockMetaData.Bin))
+	l.Debug().Msgf("Loaded %s contract into ContractStore", constants.WERC20MockContractName)
+
+	abi, err = reserve_manager.ReserveManagerMetaData.GetAbi()
+	if err != nil {
+		return fmt.Errorf("failed to get ReserveManager ABI: %w", err)
+	}
+	client.ContractStore.AddABI(constants.ReserveManagerContractName, *abi)
+	client.ContractStore.AddBIN(constants.ReserveManagerContractName, common.FromHex(reserve_manager.ReserveManagerMetaData.Bin))
+	l.Debug().Msgf("Loaded %s contract into ContractStore", constants.ReserveManagerContractName)
+
+	abi, err = mock_forwarder.MockKeystoneForwarderMetaData.GetAbi()
+	if err != nil {
+		return fmt.Errorf("failed to get MockKeystoneForwarder ABI: %w", err)
+	}
+	client.ContractStore.AddABI(constants.MockKeystoneForwarderContractName, *abi)
+	client.ContractStore.AddBIN(constants.MockKeystoneForwarderContractName, common.FromHex(mock_forwarder.MockKeystoneForwarderMetaData.Bin))
+	l.Debug().Msgf("Loaded %s contract into ContractStore", constants.MockKeystoneForwarderContractName)
+
 	return nil
 }
 
@@ -56,14 +83,18 @@ func NewEthClientFromEnv(v *viper.Viper, l *zerolog.Logger, ethUrl string) (*set
 	}
 	rawPrivKey := v.GetString(settings.EthPrivateKeyEnvVar)
 	normPrivKey := settings.NormalizeHexKey(rawPrivKey)
+
+	keys := []string{}
 	if normPrivKey == "" {
 		l.Debug().Msg("No private key provided, all commands that write to chain will work only in unsigned mode")
 	} else {
 		if err := cmdCommon.ValidatePrivateKey(normPrivKey); err != nil {
 			return nil, fmt.Errorf("invalid private key: %w", err)
 		}
+		keys = []string{normPrivKey}
 	}
-	client, err := NewSethClient(sethConfigPath, ethUrl, []string{normPrivKey}, ethChainID)
+
+	client, err := NewSethClient(sethConfigPath, ethUrl, keys, ethChainID)
 	l.Debug().Str("Seth config", sethConfigPath).Uint64("Chain ID", ethChainID).Msg("Setting up connectivity client based on RPC URL and private key info")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Seth client: %w", err)
@@ -113,11 +144,10 @@ func NewSethClientWithSimulated(
 		// if full flexibility is not needed we create a client with reasonable defaults
 		// if you need to further tweak them, please refer to https://github.com/smartcontractkit/chainlink-testing-framework/blob/main/seth/README.md
 		sethClientBuilder = seth.NewClientBuilder().
-			WithProtections(true, false, seth.MustMakeDuration(1*time.Minute)).
-			// Fast priority will add a 20% buffer on top of what the node suggests
-			// we will use last 20 block to estimate block congestion and further bump gas price suggested by the node
-			// we retry 10 times if gas estimation RPC calls fail
-			WithGasPriceEstimations(true, 20, seth.Priority_Standard, 1)
+			WithProtections(false, false, seth.MustMakeDuration(1*time.Minute)).
+			// Auto priority will use what the blockchain node suggests
+			// estimationBlocks and attemptCount can be disregarded for Auto priority
+			WithGasPriceEstimations(false, 20, seth.Priority_Auto, 1)
 		if rpc != "" {
 			sethClientBuilder.WithRpcUrl(rpc)
 		} else {

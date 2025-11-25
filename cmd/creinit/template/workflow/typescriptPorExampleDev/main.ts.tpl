@@ -6,7 +6,6 @@ import {
 	type EVMLog,
 	encodeCallMsg,
 	getNetwork,
-	type HTTPPayload,
 	type HTTPSendRequester,
 	hexToBase64,
 	LAST_FINALIZED_BLOCK_NUMBER,
@@ -55,7 +54,7 @@ const safeJsonStringify = (obj: any): string =>
 	JSON.stringify(obj, (_, value) => (typeof value === 'bigint' ? value.toString() : value), 2)
 
 const fetchReserveInfo = (sendRequester: HTTPSendRequester, config: Config): ReserveInfo => {
-	const response = sendRequester.sendRequest({ url: config.url }).result()
+	const response = sendRequester.sendRequest({ method: 'GET', url: config.url }).result()
 
 	if (response.statusCode !== 200) {
 		throw new Error(`HTTP request failed with status: ${response.statusCode}`)
@@ -267,14 +266,6 @@ const doPOR = (runtime: Runtime<Config>): string => {
 	)
 	runtime.log(`NativeTokenBalance ${nativeTokenBalance.toString()}`)
 
-	const secretAddress = runtime.getSecret({ id: 'SECRET_ADDRESS' }).result()
-	const secretAddressBalance = fetchNativeTokenBalance(
-		runtime,
-		runtime.config.evms[0],
-		secretAddress.value,
-	)
-	runtime.log(`SecretAddressBalance ${secretAddressBalance.toString()}`)
-
 	updateReserves(runtime, totalSupply, totalReserveScaled)
 
 	return reserveInfo.totalReserve.toString()
@@ -356,31 +347,8 @@ const onLogTrigger = (runtime: Runtime<Config>, payload: EVMLog): string => {
 	return message
 }
 
-const onHTTPTrigger = (runtime: Runtime<Config>, payload: HTTPPayload): string => {
-	runtime.log('Raw HTTP trigger received')
-
-	// If there's no input, fall back to "now"
-	if (!payload.input || payload.input.length === 0) {
-		runtime.log('HTTP trigger payload is empty; defaulting execution time to now')
-
-		return doPOR(runtime)
-	}
-
-	// Log the raw JSON for debugging (human-readable).
-	runtime.log(`Payload bytes payloadBytes ${payload.input.toString()}`)
-
-	try {
-		runtime.log(`Parsed HTTP trigger received payload ${payload.input.toString()}`)
-		return doPOR(runtime)
-	} catch (error) {
-		runtime.log('Failed to parse HTTP trigger payload')
-		throw new Error('Failed to parse HTTP trigger payload')
-	}
-}
-
 const initWorkflow = (config: Config) => {
 	const cronTrigger = new cre.capabilities.CronCapability()
-	const httpTrigger = new cre.capabilities.HTTPCapability()
 	const network = getNetwork({
 		chainFamily: 'evm',
 		chainSelectorName: config.evms[0].chainSelectorName,
@@ -408,7 +376,6 @@ const initWorkflow = (config: Config) => {
 			}),
 			onLogTrigger,
 		),
-		cre.handler(httpTrigger.trigger({}), onHTTPTrigger),
 	]
 }
 

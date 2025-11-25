@@ -33,13 +33,11 @@ type Inputs struct {
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
 	var pauseCmd = &cobra.Command{
-		Use:   "pause <workflow-folder-path>",
-		Short: "Pauses workflow on the Workflow Registry contract",
-		Long:  `Changes workflow status to paused on the Workflow Registry contract`,
-		Args:  cobra.ExactArgs(1),
-		Example: `
-		cre workflow pause ./my-workflow
-		`,
+		Use:     "pause <workflow-folder-path>",
+		Short:   "Pauses workflow on the Workflow Registry contract",
+		Long:    `Changes workflow status to paused on the Workflow Registry contract`,
+		Args:    cobra.ExactArgs(1),
+		Example: `cre workflow pause ./my-workflow`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			handler := newHandler(runtimeContext)
 
@@ -68,6 +66,7 @@ type handler struct {
 	environmentSet *environments.EnvironmentSet
 	inputs         Inputs
 	wrc            *client.WorkflowRegistryV2Client
+	runtimeContext *runtime.Context
 
 	validated bool
 
@@ -81,6 +80,7 @@ func newHandler(ctx *runtime.Context) *handler {
 		clientFactory:  ctx.ClientFactory,
 		settings:       ctx.Settings,
 		environmentSet: ctx.EnvironmentSet,
+		runtimeContext: ctx,
 		validated:      false,
 		wg:             sync.WaitGroup{},
 		wrcErr:         nil,
@@ -158,6 +158,9 @@ func (h *handler) Execute() error {
 	if len(activeWorkflowIDs) == 0 {
 		return fmt.Errorf("workflow is already paused, cancelling transaction")
 	}
+
+	// Note: The way deploy is set up, there will only ever be one workflow in the command for now
+	h.runtimeContext.Workflow.ID = hex.EncodeToString(activeWorkflowIDs[0][:])
 
 	fmt.Printf("Processing batch pause... count=%d\n", len(activeWorkflowIDs))
 

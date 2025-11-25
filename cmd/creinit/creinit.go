@@ -2,7 +2,6 @@ package creinit
 
 import (
 	"embed"
-	_ "embed"
 	"errors"
 	"fmt"
 	"io"
@@ -35,10 +34,16 @@ const (
 	TemplateLangTS TemplateLanguage = "typescript"
 )
 
+const (
+	HelloWorldTemplate string = "HelloWorld"
+	PoRTemplate        string = "PoR"
+)
+
 type WorkflowTemplate struct {
 	Folder string
 	Title  string
 	ID     uint32
+	Name   string
 }
 
 type LanguageTemplate struct {
@@ -54,8 +59,8 @@ var languageTemplates = []LanguageTemplate{
 		Lang:       TemplateLangGo,
 		EntryPoint: ".",
 		Workflows: []WorkflowTemplate{
-			{Folder: "porExampleDev", Title: "Custom data feed: Updating on-chain data periodically using offchain API data", ID: 1},
-			{Folder: "blankTemplate", Title: "Boilerplate: A barebones template with just the essentials", ID: 2},
+			{Folder: "porExampleDev", Title: "Custom data feed: Updating on-chain data periodically using offchain API data", ID: 1, Name: PoRTemplate},
+			{Folder: "blankTemplate", Title: "Helloworld: A Golang Hello World example", ID: 2, Name: HelloWorldTemplate},
 		},
 	},
 	{
@@ -63,8 +68,8 @@ var languageTemplates = []LanguageTemplate{
 		Lang:       TemplateLangTS,
 		EntryPoint: "./main.ts",
 		Workflows: []WorkflowTemplate{
-			{Folder: "typescriptSimpleExample", Title: "Boilerplate: Typescript Hello World example for a simple workflow", ID: 3},
-			{Folder: "typescriptPorExampleDev", Title: "Custom data feed: Typescript updating on-chain data periodically using offchain API data", ID: 4},
+			{Folder: "typescriptSimpleExample", Title: "Helloworld: Typescript Hello World example", ID: 3, Name: HelloWorldTemplate},
+			{Folder: "typescriptPorExampleDev", Title: "Custom data feed: Typescript updating on-chain data periodically using offchain API data", ID: 4, Name: PoRTemplate},
 		},
 	},
 }
@@ -73,14 +78,19 @@ type Inputs struct {
 	ProjectName  string `validate:"omitempty,project_name" cli:"project-name"`
 	TemplateID   uint32 `validate:"omitempty,min=0"`
 	WorkflowName string `validate:"omitempty,workflow_name" cli:"workflow-name"`
+	RPCUrl       string `validate:"omitempty,url" cli:"rpc-url"`
 }
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
 	var initCmd = &cobra.Command{
-		Use:   "init",
-		Short: "Initialize a new workflow project or add a workflow to an existing one",
-		Long:  "Initialize or extend a workflow project by setting up core files, gathering any missing details, and scaffolding the chosen template.",
-		Args:  cobra.NoArgs,
+		Use:     "init",
+		Aliases: []string{"new"},
+		Short:   "Initialize a new cre project (recommended starting point)",
+		Long: `Initialize a new CRE project or add a workflow to an existing one.
+
+This sets up the project structure, configuration, and starter files so you can
+build, test, and deploy workflows quickly.`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			handler := newHandler(runtimeContext, cmd.InOrStdin())
 
@@ -99,23 +109,26 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	initCmd.Flags().StringP("project-name", "p", "", "Name for the new project")
 	initCmd.Flags().StringP("workflow-name", "w", "", "Name for the new workflow")
 	initCmd.Flags().Uint32P("template-id", "t", 0, "ID of the workflow template to use")
+	initCmd.Flags().String("rpc-url", "", "Sepolia RPC URL to use with template")
 
 	return initCmd
 }
 
 type handler struct {
-	log           *zerolog.Logger
-	clientFactory client.Factory
-	stdin         io.Reader
-	validated     bool
+	log            *zerolog.Logger
+	clientFactory  client.Factory
+	stdin          io.Reader
+	runtimeContext *runtime.Context
+	validated      bool
 }
 
 func newHandler(ctx *runtime.Context, stdin io.Reader) *handler {
 	return &handler{
-		log:           ctx.Logger,
-		clientFactory: ctx.ClientFactory,
-		stdin:         stdin,
-		validated:     false,
+		log:            ctx.Logger,
+		clientFactory:  ctx.ClientFactory,
+		stdin:          stdin,
+		runtimeContext: ctx,
+		validated:      false,
 	}
 }
 
@@ -124,6 +137,7 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 		ProjectName:  v.GetString("project-name"),
 		TemplateID:   v.GetUint32("template-id"),
 		WorkflowName: v.GetString("workflow-name"),
+		RPCUrl:       v.GetString("rpc-url"),
 	}, nil
 }
 
@@ -173,8 +187,12 @@ func (h *handler) Execute(inputs Inputs) error {
 	if err != nil {
 		projName := inputs.ProjectName
 		if projName == "" {
-			if err := prompt.SimplePrompt(h.stdin, "Project name?", func(in string) error {
+			if err := prompt.SimplePrompt(h.stdin, fmt.Sprintf("Project name? [%s]", constants.DefaultProjectName), func(in string) error {
 				trimmed := strings.TrimSpace(in)
+				if trimmed == "" {
+					trimmed = constants.DefaultProjectName
+					fmt.Printf("Using default project name: %s\n", trimmed)
+				}
 				if err := validation.IsValidProjectName(trimmed); err != nil {
 					return err
 				}
@@ -189,13 +207,6 @@ func (h *handler) Execute(inputs Inputs) error {
 		if err := h.ensureProjectDirectoryExists(projectRoot); err != nil {
 			return err
 		}
-
-		if _, _, err := settings.GenerateProjectSettingsFile(projectRoot, h.stdin); err != nil {
-			return err
-		}
-		if _, err := settings.GenerateProjectEnvFile(projectRoot, h.stdin); err != nil {
-			return err
-		}
 	}
 
 	if err == nil {
@@ -207,12 +218,12 @@ func (h *handler) Execute(inputs Inputs) error {
 		}
 	}
 
-	var tpl WorkflowTemplate
+	var selectedWorkflowTemplate WorkflowTemplate
 	var selectedLanguageTemplate LanguageTemplate
 	var workflowTemplates []WorkflowTemplate
 	if inputs.TemplateID != 0 {
 		var findErr error
-		tpl, selectedLanguageTemplate, findErr = h.getWorkflowTemplateByID(inputs.TemplateID)
+		selectedWorkflowTemplate, selectedLanguageTemplate, findErr = h.getWorkflowTemplateByID(inputs.TemplateID)
 		if findErr != nil {
 			return fmt.Errorf("invalid template ID %d: %w", inputs.TemplateID, findErr)
 		}
@@ -242,10 +253,43 @@ func (h *handler) Execute(inputs Inputs) error {
 		workflowTitles := h.extractWorkflowTitles(workflowTemplates)
 		if err := prompt.SelectPrompt(h.stdin, "Pick a workflow template", workflowTitles, func(choice string) error {
 			selected, selErr := h.getWorkflowTemplateByTitle(choice, workflowTemplates)
-			tpl = selected
+			selectedWorkflowTemplate = selected
 			return selErr
 		}); err != nil {
 			return fmt.Errorf("template selection aborted: %w", err)
+		}
+	}
+
+	if err != nil {
+		repl := settings.GetDefaultReplacements()
+		rpcURL := ""
+		if selectedWorkflowTemplate.Name == PoRTemplate {
+			if strings.TrimSpace(inputs.RPCUrl) != "" {
+				rpcURL = strings.TrimSpace(inputs.RPCUrl)
+			} else {
+				if e := prompt.SimplePrompt(h.stdin, fmt.Sprintf("Sepolia RPC URL? [%s]", constants.DefaultEthSepoliaRpcUrl), func(in string) error {
+					trimmed := strings.TrimSpace(in)
+					if trimmed == "" {
+						trimmed = constants.DefaultEthSepoliaRpcUrl
+					}
+					rpcURL = trimmed
+					return nil
+				}); e != nil {
+					return e
+				}
+			}
+			repl["EthSepoliaRpcUrl"] = rpcURL
+		}
+		if e := settings.FindOrCreateProjectSettings(projectRoot, repl); e != nil {
+			return e
+		}
+		if selectedWorkflowTemplate.Name == PoRTemplate {
+			fmt.Printf("RPC set to %s. You can change it later in ./%s.\n",
+				rpcURL,
+				filepath.Join(filepath.Base(projectRoot), constants.DefaultProjectSettingsFileName))
+		}
+		if _, e := settings.GenerateProjectEnvFile(projectRoot, h.stdin); e != nil {
+			return e
 		}
 	}
 
@@ -253,8 +297,12 @@ func (h *handler) Execute(inputs Inputs) error {
 	if workflowName == "" {
 		const maxAttempts = 3
 		for attempts := 1; attempts <= maxAttempts; attempts++ {
-			inputErr := prompt.SimplePrompt(h.stdin, "Workflow name?", func(in string) error {
+			inputErr := prompt.SimplePrompt(h.stdin, fmt.Sprintf("Workflow name? [%s]", constants.DefaultWorkflowName), func(in string) error {
 				trimmed := strings.TrimSpace(in)
+				if trimmed == "" {
+					trimmed = constants.DefaultWorkflowName
+					fmt.Printf("Using default workflow name: %s\n", trimmed)
+				}
 				if err := validation.IsValidWorkflowName(trimmed); err != nil {
 					return err
 				}
@@ -281,19 +329,19 @@ func (h *handler) Execute(inputs Inputs) error {
 		return err
 	}
 
-	if err := h.copySecretsFileIfExists(projectRoot, tpl); err != nil {
+	if err := h.copySecretsFileIfExists(projectRoot, selectedWorkflowTemplate); err != nil {
 		return fmt.Errorf("failed to copy secrets file: %w", err)
 	}
 
 	// Get project name from project root
 	projectName := filepath.Base(projectRoot)
 
-	if err := h.generateWorkflowTemplate(workflowDirectory, tpl, projectName); err != nil {
+	if err := h.generateWorkflowTemplate(workflowDirectory, selectedWorkflowTemplate, projectName); err != nil {
 		return fmt.Errorf("failed to scaffold workflow: %w", err)
 	}
 
 	// Generate contracts at project level if template has contracts
-	if err := h.generateContractsTemplate(projectRoot, tpl, projectName); err != nil {
+	if err := h.generateContractsTemplate(projectRoot, selectedWorkflowTemplate, projectName); err != nil {
 		return fmt.Errorf("failed to scaffold contracts: %w", err)
 	}
 
@@ -308,17 +356,46 @@ func (h *handler) Execute(inputs Inputs) error {
 		return fmt.Errorf("failed to generate %s file: %w", constants.DefaultWorkflowSettingsFileName, err)
 	}
 
+	if h.runtimeContext != nil {
+		switch selectedLanguageTemplate.Lang {
+		case TemplateLangGo:
+			h.runtimeContext.Workflow.Language = constants.WorkflowLanguageGolang
+		case TemplateLangTS:
+			h.runtimeContext.Workflow.Language = constants.WorkflowLanguageTypeScript
+		}
+	}
+
 	fmt.Println("\nWorkflow initialized successfully!")
 	fmt.Println("")
 	fmt.Println("Next steps:")
-	fmt.Println("")
-	fmt.Println("   1. Navigate to your workflow directory to see workflow details:")
-	fmt.Printf("      cd %s\n", workflowDirectory)
-	fmt.Println("")
-	fmt.Println("   2. To learn more about this template view the README.MD file:")
-	fmt.Printf("      %s\n", filepath.Join(workflowDirectory, "README.md"))
-	fmt.Println("")
 
+	if selectedLanguageTemplate.Lang == TemplateLangGo {
+		fmt.Println("   1. Navigate to your project directory:")
+		fmt.Printf("      cd %s\n", filepath.Base(projectRoot))
+		fmt.Println("")
+		fmt.Println("   2. Run the workflow on your machine:")
+		fmt.Printf("      cre workflow simulate %s\n", workflowName)
+		fmt.Println("")
+		fmt.Printf("   3. (Optional) Consult %s to learn more about this template:\n\n",
+			filepath.Join(filepath.Base(workflowDirectory), "README.md"))
+		fmt.Println("")
+	} else {
+		fmt.Println("   1. Navigate to your project directory:")
+		fmt.Printf("      cd %s\n", filepath.Base(projectRoot))
+		fmt.Println("")
+		fmt.Println("   2. Make sure you have Bun installed:")
+		fmt.Println("      npm install -g bun")
+		fmt.Println("")
+		fmt.Println("   3. Install workflow dependencies:")
+		fmt.Printf("      bun install --cwd ./%s\n", filepath.Base(workflowDirectory))
+		fmt.Println("")
+		fmt.Println("   4. Run the workflow on your machine:")
+		fmt.Printf("      cre workflow simulate %s\n", workflowName)
+		fmt.Println("")
+		fmt.Printf("   5. (Optional) Consult %s to learn more about this template:\n\n",
+			filepath.Join(filepath.Base(workflowDirectory), "README.md"))
+		fmt.Println("")
+	}
 	return nil
 }
 

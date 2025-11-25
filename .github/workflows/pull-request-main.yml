@@ -10,7 +10,7 @@ on:
 env:
   # Ensure that a cached go version is used:
   # https://github.com/actions/runner-images/blob/main/images/ubuntu/Ubuntu2404-Readme.md#go
-  GO_VERSION: 1.24
+  GO_VERSION: 1.25.3
 
 jobs:
   ci-lint:
@@ -21,14 +21,14 @@ jobs:
       actions: read
     steps:
       - name: ci-lint
-        uses: smartcontractkit/.github/actions/ci-lint-go@01d931b0455a754d12e7143cc54a5a3521a8f6f6 # ci-lint-go@0.3.1
+        uses: smartcontractkit/.github/actions/ci-lint-go@31f7a923a25f7672641b5099cbb85ce4a984fc05 # ci-lint-go@3.1.0
         with:
-          golangci-lint-args: --timeout 10m --out-format checkstyle:golangci-lint-report.xml
           only-new-issues: false
           aws-region: ${{ secrets.AWS_REGION }}
           use-gati: "true"
           aws-role-arn-gati: ${{ secrets.AWS_OIDC_DEV_PLATFORM_READ_REPOS_EXTERNAL_TOKEN_ISSUER_ROLE_ARN }}
           aws-lambda-url-gati: ${{ secrets.AWS_DEV_SERVICES_TOKEN_ISSUER_LAMBDA_URL }}
+          golangci-lint-config: .golangci.yml
 
   ci-lint-misc:
     runs-on: ubuntu-latest
@@ -204,7 +204,6 @@ jobs:
           # Anvil developer key, not a secret
           PRIVATE_KEY: "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
         shell: bash
-        #TODO (DEVSVCS-2016) clean the GOLANG_PROTOBUF_REGISTRATION_CONFLICT flag
         run: |
           cd chainlink/system-tests/tests/smoke/cre
           go mod download
@@ -213,7 +212,7 @@ jobs:
           go run main.go download capabilities --output-dir ../ --gh-token-env-var-name GITHUB_READ_TOKEN --names cron --version v1.0.2-alpha 1>&2 && \
           popd > /dev/null
           # run the test
-          GOLANG_PROTOBUF_REGISTRATION_CONFLICT=warn go test github.com/smartcontractkit/chainlink/system-tests/tests/smoke/cre -v -run "^(TestCRE_OCR3_PoR_Workflow_SingleDon_MultipleWriters_MockedPrice)$" -timeout 30m -count=1 -test.parallel=1
+          go test github.com/smartcontractkit/chainlink/system-tests/tests/smoke/cre -v -run "^(TestCRE_OCR3_PoR_Workflow_SingleDon_MultipleWriters_MockedPrice)$" -timeout 30m -count=1 -test.parallel=1
 
       - name: Publish Artifacts
         if: failure()

@@ -6,6 +6,10 @@ Manages workflows
 
 The workflow command allows you to register and manage existing workflows.
 
+```
+cre workflow [optional flags]
+```
+
 ### Options
 
 ```
@@ -17,8 +21,8 @@ The workflow command allows you to register and manage existing workflows.
 ```
   -e, --env string            Path to .env file which contains sensitive info (default ".env")
   -R, --project-root string   Path to the project root
-  -T, --target string         Set the target settings
-  -v, --verbose               Print DEBUG logs
+  -T, --target string         Use target settings from YAML config
+  -v, --verbose               Run command in VERBOSE mode
 ```
 
 ### SEE ALSO

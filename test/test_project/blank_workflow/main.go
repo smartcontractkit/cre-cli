@@ -43,7 +43,7 @@ func onPorCronTrigger(config *Config, runtime cre.Runtime, outputs *cron.Payload
 	return doPor(config, runtime, outputs.ScheduledExecutionTime.AsTime())
 }
 
-func doPor(config *Config, runtime cre.Runtime, runTime time.Time) (string, error) {
+func doPor(config *Config, runtime cre.Runtime, _ time.Time) (string, error) {
 	logger := runtime.Logger()
 	logger.Info("assume the workflow is doing some stuff", "url", config.Url, "evms", config.Evms)
 

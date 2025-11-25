@@ -20,8 +20,9 @@ const (
 	EnvVarWorkflowRegistryAddress          = "CRE_CLI_WORKFLOW_REGISTRY_ADDRESS"
 	EnvVarWorkflowRegistryChainName        = "CRE_CLI_WORKFLOW_REGISTRY_CHAIN_NAME"
 	EnvVarWorkflowRegistryChainExplorerURL = "CRE_CLI_WORKFLOW_REGISTRY_CHAIN_EXPLORER_URL"
+	EnvVarDonFamily                        = "CRE_CLI_DON_FAMILY"
 
-	DefaultEnv = "STAGING"
+	DefaultEnv = "PRODUCTION"
 )
 
 //go:embed environments.yaml
@@ -37,6 +38,7 @@ type EnvironmentSet struct {
 	WorkflowRegistryAddress          string `yaml:"CRE_CLI_WORKFLOW_REGISTRY_ADDRESS"`
 	WorkflowRegistryChainName        string `yaml:"CRE_CLI_WORKFLOW_REGISTRY_CHAIN_NAME"`
 	WorkflowRegistryChainExplorerURL string `yaml:"CRE_CLI_WORKFLOW_REGISTRY_CHAIN_EXPLORER_URL"`
+	DonFamily                        string `yaml:"CRE_CLI_DON_FAMILY"`
 }
 
 type fileFormat struct {
@@ -85,6 +87,10 @@ func NewEnvironmentSet(ff *fileFormat, envName string) *EnvironmentSet {
 
 	if v := os.Getenv(EnvVarWorkflowRegistryChainName); v != "" {
 		set.WorkflowRegistryChainName = v
+	}
+
+	if v := os.Getenv(EnvVarDonFamily); v != "" {
+		set.DonFamily = v
 	}
 
 	return &set

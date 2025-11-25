@@ -6,6 +6,7 @@ import (
 	"crypto/ecdsa"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -38,6 +39,7 @@ import (
 	v2 "github.com/smartcontractkit/chainlink/v2/core/services/workflows/v2"
 
 	cmdcommon "github.com/smartcontractkit/cre-cli/cmd/common"
+	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/validation"
@@ -62,13 +64,11 @@ type Inputs struct {
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
 	var simulateCmd = &cobra.Command{
-		Use:   "simulate <workflow-folder-path>",
-		Short: "Simulates a workflow",
-		Long:  `This command simulates a workflow.`,
-		Args:  cobra.ExactArgs(1),
-		Example: `
-		cre workflow simulate ./my-workflow
-		`,
+		Use:     "simulate <workflow-folder-path>",
+		Short:   "Simulates a workflow",
+		Long:    `This command simulates a workflow.`,
+		Args:    cobra.ExactArgs(1),
+		Example: `cre workflow simulate ./my-workflow`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			handler := newHandler(runtimeContext)
 
@@ -96,14 +96,16 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 }
 
 type handler struct {
-	log       *zerolog.Logger
-	validated bool
+	log            *zerolog.Logger
+	runtimeContext *runtime.Context
+	validated      bool
 }
 
 func newHandler(ctx *runtime.Context) *handler {
 	return &handler{
-		log:       ctx.Logger,
-		validated: false,
+		log:            ctx.Logger,
+		runtimeContext: ctx,
+		validated:      false,
 	}
 }
 
@@ -137,7 +139,15 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 
 	pk, err := crypto.HexToECDSA(creSettings.User.EthPrivateKey)
 	if err != nil {
-		return Inputs{}, fmt.Errorf("failed to get private key: %w", err)
+		if v.GetBool("broadcast") {
+			return Inputs{}, fmt.Errorf(
+				"failed to parse private key, required to broadcast. Please check CRE_ETH_PRIVATE_KEY in your .env file or system environment: %w", err)
+		}
+		pk, err = crypto.HexToECDSA("0000000000000000000000000000000000000000000000000000000000000001")
+		if err != nil {
+			return Inputs{}, fmt.Errorf("failed to parse default private key. Please set CRE_ETH_PRIVATE_KEY in your .env file or system environment: %w", err)
+		}
+		fmt.Println("Warning: using default private key for chain write simulation. To use your own key, set CRE_ETH_PRIVATE_KEY in your .env file or system environment.")
 	}
 
 	return Inputs{
@@ -167,10 +177,15 @@ func (h *handler) ValidateInputs(inputs Inputs) error {
 		return validate.ParseValidationErrors(err)
 	}
 
+	// forbid the default 0x...01 key when broadcasting
+	if inputs.Broadcast && inputs.EthPrivateKey != nil && inputs.EthPrivateKey.D.Cmp(big.NewInt(1)) == 0 {
+		return fmt.Errorf("you must configure a valid private key to perform on-chain writes. Please set your private key in the .env file before using the -–broadcast flag")
+	}
+
 	if err := runRPCHealthCheck(inputs.EVMClients); err != nil {
 		// we don't block execution, just show the error to the user
 		// because some RPCs in settings might not be used in workflow and some RPCs might have hiccups
-		h.log.Error().Msgf("some RPCs in setting is not functioning properly, please check: %v", err)
+		fmt.Printf("Warning: some RPCs in settings are not functioning properly, please check: %v\n", err)
 	}
 
 	h.validated = true
@@ -183,6 +198,25 @@ func (h *handler) Execute(inputs Inputs) error {
 	workflowRootFolder := filepath.Dir(inputs.WorkflowPath)
 	tmpWasmFileName := "tmp.wasm"
 	workflowMainFile := filepath.Base(inputs.WorkflowPath)
+
+	// Set language in runtime context based on workflow file extension
+	if h.runtimeContext != nil {
+		h.runtimeContext.Workflow.Language = cmdcommon.GetWorkflowLanguage(workflowMainFile)
+
+		switch h.runtimeContext.Workflow.Language {
+		case constants.WorkflowLanguageTypeScript:
+			if err := cmdcommon.EnsureTool("bun"); err != nil {
+				return errors.New("bun is required for TypeScript workflows but was not found in PATH; install from https://bun.com/docs/installation")
+			}
+		case constants.WorkflowLanguageGolang:
+			if err := cmdcommon.EnsureTool("go"); err != nil {
+				return errors.New("go toolchain is required for Go workflows but was not found in PATH; install from https://go.dev/dl")
+			}
+		default:
+			return fmt.Errorf("unsupported workflow language for file %s", workflowMainFile)
+		}
+	}
+
 	buildCmd := cmdcommon.GetBuildCmd(workflowMainFile, tmpWasmFileName, workflowRootFolder)
 
 	h.log.Debug().
@@ -193,8 +227,9 @@ func (h *handler) Execute(inputs Inputs) error {
 	// Execute the build command
 	buildOutput, err := buildCmd.CombinedOutput()
 	if err != nil {
-		h.log.Info().Msg(string(buildOutput))
-		return fmt.Errorf("failed to compile workflow: %w", err)
+		out := strings.TrimSpace(string(buildOutput))
+		h.log.Info().Msg(out)
+		return fmt.Errorf("failed to compile workflow: %w\nbuild output:\n%s", err, out)
 	}
 	h.log.Debug().Msgf("Build output: %s", buildOutput)
 	fmt.Println("Workflow compiled")
@@ -247,10 +282,7 @@ func run(
 	verbosity bool,
 ) error {
 	logCfg := logger.Config{Level: getLevel(verbosity, zapcore.InfoLevel)}
-	baseLggr, err := logCfg.New()
-	if err != nil {
-		return fmt.Errorf("failed to create logger: %w", err)
-	}
+	simLogger := NewSimulationLogger(verbosity)
 
 	engineLogCfg := logger.Config{Level: zapcore.FatalLevel}
 
@@ -290,7 +322,7 @@ func run(
 
 		if cfg.EnableBeholder {
 			beholderLggr := lggr.Named("Beholder")
-			err := setupCustomBeholder(beholderLggr, verbosity)
+			err := setupCustomBeholder(beholderLggr, verbosity, simLogger)
 			if err != nil {
 				fmt.Printf("Failed to setup beholder: %v\n", err)
 				os.Exit(1)
@@ -312,6 +344,7 @@ func run(
 		}
 
 		triggerLggr := lggr.Named("TriggerCapabilities")
+		var err error
 		triggerCaps, err = NewManualTriggerCapabilities(ctx, triggerLggr, registry, manualTriggerCapConfig, !inputs.Broadcast)
 		if err != nil {
 			fmt.Printf("failed to create trigger capabilities: %v\n", err)
@@ -362,44 +395,44 @@ func run(
 
 		// Manual trigger execution
 		if triggerInfoAndBeforeStart.TriggerFunc == nil {
-			baseLggr.Errorw("Trigger function not initialized")
+			simLogger.Error("Trigger function not initialized")
 			os.Exit(1)
 		}
 		if triggerInfoAndBeforeStart.TriggerToRun == nil {
-			baseLggr.Errorw("Trigger to run not selected")
+			simLogger.Error("Trigger to run not selected")
 			os.Exit(1)
 		}
-		baseLggr.Infow("Running trigger", "trigger", triggerInfoAndBeforeStart.TriggerToRun.GetId())
+		simLogger.Info("Running trigger", "trigger", triggerInfoAndBeforeStart.TriggerToRun.GetId())
 		err := triggerInfoAndBeforeStart.TriggerFunc()
 		if err != nil {
-			baseLggr.Errorw("Failed to run trigger", "trigger", triggerInfoAndBeforeStart.TriggerToRun.GetId(), "error", err)
+			simLogger.Error("Failed to run trigger", "trigger", triggerInfoAndBeforeStart.TriggerToRun.GetId(), "error", err)
 			os.Exit(1)
 		}
 
 		select {
 		case <-executionFinishedCh:
-			baseLggr.Infow("Execution finished signal received")
+			simLogger.Info("Execution finished signal received")
 		case <-ctx.Done():
-			baseLggr.Infow("Received interrupt signal, stopping execution")
+			simLogger.Info("Received interrupt signal, stopping execution")
 		case <-time.After(WorkflowExecutionTimeout):
-			baseLggr.Infow("Timeout waiting for execution to finish")
+			simLogger.Warn("Timeout waiting for execution to finish")
 		}
 	}
 	simulatorCleanup := func(ctx context.Context, cfg simulator.RunnerConfig, registry *capabilities.Registry, services []services.Service) {
 		for _, service := range services {
 			if service.Name() == "WorkflowEngine.WorkflowEngineV2" {
-				baseLggr.Info("Skipping WorkflowEngineV2")
+				simLogger.Info("Skipping WorkflowEngineV2")
 				continue
 			}
 
 			if err := service.Close(); err != nil {
-				baseLggr.Errorw("Failed to close service", "service", service.Name(), "error", err)
+				simLogger.Error("Failed to close service", "service", service.Name(), "error", err)
 			}
 		}
 
-		err = cleanupBeholder()
+		err := cleanupBeholder()
 		if err != nil {
-			baseLggr.Warnw("Failed to cleanup beholder", "error", err)
+			simLogger.Warn("Failed to cleanup beholder", "error", err)
 		}
 	}
 	emptyHook := func(context.Context, simulator.RunnerConfig, *capabilities.Registry, []services.Service) {}
@@ -427,10 +460,10 @@ func run(
 		LifecycleHooks: v2.LifecycleHooks{
 			OnInitialized: func(err error) {
 				if err != nil {
-					baseLggr.Errorw("Failed to initialize simulator", "error", err)
+					simLogger.Error("Failed to initialize simulator", "error", err)
 					os.Exit(1)
 				}
-				baseLggr.Info("Simulator Initialized")
+				simLogger.Info("Simulator Initialized")
 				fmt.Println()
 				close(initializedCh)
 			},
@@ -489,7 +522,7 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 		triggerSub []*pb.TriggerSubscription,
 	) {
 		if len(triggerSub) == 0 {
-			fmt.Println("No triggers found")
+			fmt.Println("Error in simulation. No workflow triggers found, please check your workflow source code and config")
 			os.Exit(1)
 		}
 
@@ -570,7 +603,7 @@ func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inp
 		triggerSub []*pb.TriggerSubscription,
 	) {
 		if len(triggerSub) == 0 {
-			fmt.Println("No triggers found")
+			fmt.Println("Error in simulation. No workflow triggers found, please check your workflow source code and config")
 			os.Exit(1)
 		}
 		if inputs.TriggerIndex < 0 {
@@ -652,8 +685,8 @@ func getLevel(verbosity bool, defaultLevel zapcore.Level) zapcore.Level {
 }
 
 // setupCustomBeholder sets up beholder with our custom telemetry writer
-func setupCustomBeholder(lggr logger.Logger, verbosity bool) error {
-	writer := &telemetryWriter{lggr: lggr, verbose: verbosity}
+func setupCustomBeholder(lggr logger.Logger, verbosity bool, simLogger *SimulationLogger) error {
+	writer := &telemetryWriter{lggr: lggr, verbose: verbosity, simLogger: simLogger}
 
 	client, err := beholder.NewWriterClient(writer)
 	if err != nil {

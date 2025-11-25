@@ -20,6 +20,7 @@ import (
 
 	"github.com/smartcontractkit/chainlink-testing-framework/seth"
 
+	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/logger"
 )
 
@@ -161,9 +162,27 @@ func ToStringSlice(args []any) []string {
 	return result
 }
 
+// GetWorkflowLanguage determines the workflow language based on the file extension
+// Note: inputFile can be a file path (e.g., "main.ts" or "main.go") or a directory (for Go workflows, e.g., ".")
+// Returns constants.WorkflowLanguageTypeScript for .ts or .tsx files, constants.WorkflowLanguageGolang otherwise
+func GetWorkflowLanguage(inputFile string) string {
+	if strings.HasSuffix(inputFile, ".ts") || strings.HasSuffix(inputFile, ".tsx") {
+		return constants.WorkflowLanguageTypeScript
+	}
+	return constants.WorkflowLanguageGolang
+}
+
+// EnsureTool checks that the binary exists on PATH
+func EnsureTool(bin string) error {
+	if _, err := exec.LookPath(bin); err != nil {
+		return fmt.Errorf("%q not found in PATH: %w", bin, err)
+	}
+	return nil
+}
+
 // Gets a build command for either Golang or Typescript based on the filename
 func GetBuildCmd(inputFile string, outputFile string, rootFolder string) *exec.Cmd {
-	isTypescriptWorkflow := strings.HasSuffix(inputFile, ".ts")
+	isTypescriptWorkflow := strings.HasSuffix(inputFile, ".ts") || strings.HasSuffix(inputFile, ".tsx")
 
 	var buildCmd *exec.Cmd
 	if isTypescriptWorkflow {

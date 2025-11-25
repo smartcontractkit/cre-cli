@@ -12,7 +12,6 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	linkkey "github.com/smartcontractkit/cre-cli/cmd/account/link_key"
 	"github.com/smartcontractkit/cre-cli/cmd/client"
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
@@ -32,8 +31,6 @@ type Inputs struct {
 	BinaryURL string  `validate:"omitempty,http_url|eq="`
 	ConfigURL *string `validate:"omitempty,http_url|eq="`
 
-	AutoStart bool
-
 	KeepAlive    bool
 	WorkflowPath string `validate:"required,path_read"`
 	ConfigPath   string `validate:"omitempty,file,ascii,max=97" cli:"--config"`
@@ -42,6 +39,7 @@ type Inputs struct {
 	WorkflowRegistryContractAddress   string `validate:"required"`
 	WorkflowRegistryContractChainName string `validate:"required"`
 
+	OwnerLabel       string `validate:"omitempty"`
 	SkipConfirmation bool
 }
 
@@ -63,6 +61,7 @@ type handler struct {
 	environmentSet   *environments.EnvironmentSet
 	workflowArtifact *workflowArtifact
 	wrc              *client.WorkflowRegistryV2Client
+	runtimeContext   *runtime.Context
 
 	validated bool
 
@@ -74,13 +73,11 @@ var defaultOutputPath = "./binary.wasm.br.b64"
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
 	var deployCmd = &cobra.Command{
-		Use:   "deploy <workflow-folder-path>",
-		Short: "Deploys a workflow to the Workflow Registry contract",
-		Long:  `Compiles the workflow, uploads the artifacts, and registers the workflow in the Workflow Registry contract.`,
-		Args:  cobra.ExactArgs(1),
-		Example: `
-		cre workflow deploy ./my-workflow
-		`,
+		Use:     "deploy <workflow-folder-path>",
+		Short:   "Deploys a workflow to the Workflow Registry contract",
+		Long:    `Compiles the workflow, uploads the artifacts, and registers the workflow in the Workflow Registry contract.`,
+		Args:    cobra.ExactArgs(1),
+		Example: `cre workflow deploy ./my-workflow`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			h := newHandler(runtimeContext, cmd.InOrStdin())
 
@@ -100,7 +97,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	settings.AddRawTxFlag(deployCmd)
 	settings.AddSkipConfirmation(deployCmd)
 	deployCmd.Flags().StringP("output", "o", defaultOutputPath, "The output file for the compiled WASM binary encoded in base64")
-	deployCmd.Flags().BoolP("auto-start", "r", true, "Activate and run the workflow after registration, or pause it")
+	deployCmd.Flags().StringP("owner-label", "l", "", "Label for the workflow owner (used during auto-link if owner is not already linked)")
 
 	return deployCmd
 }
@@ -116,6 +113,7 @@ func newHandler(ctx *runtime.Context, stdin io.Reader) *handler {
 		environmentSet:   ctx.EnvironmentSet,
 		workflowArtifact: &workflowArtifact{},
 		wrc:              nil,
+		runtimeContext:   ctx,
 		validated:        false,
 		wg:               sync.WaitGroup{},
 		wrcErr:           nil,
@@ -146,8 +144,7 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 		WorkflowOwner: h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress,
 		WorkflowTag:   h.settings.Workflow.UserWorkflowSettings.WorkflowName,
 		ConfigURL:     configURL,
-		AutoStart:     v.GetBool("auto-start"),
-		DonFamily:     h.settings.Workflow.DevPlatformSettings.DonFamily,
+		DonFamily:     h.environmentSet.DonFamily,
 
 		WorkflowPath: h.settings.Workflow.WorkflowArtifactSettings.WorkflowPath,
 		KeepAlive:    false,
@@ -157,6 +154,7 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 
 		WorkflowRegistryContractChainName: h.environmentSet.WorkflowRegistryChainName,
 		WorkflowRegistryContractAddress:   h.environmentSet.WorkflowRegistryAddress,
+		OwnerLabel:                        v.GetString("owner-label"),
 		SkipConfirmation:                  v.GetBool(settings.Flags.SkipConfirmation.Name),
 	}, nil
 }
@@ -184,6 +182,8 @@ func (h *handler) Execute() error {
 	if err := h.PrepareWorkflowArtifact(); err != nil {
 		return fmt.Errorf("failed to prepare workflow artifact: %w", err)
 	}
+
+	h.runtimeContext.Workflow.ID = h.workflowArtifact.WorkflowID
 
 	h.wg.Wait()
 	if h.wrcErr != nil {
@@ -236,76 +236,6 @@ func (h *handler) Execute() error {
 	return nil
 }
 
-func (h *handler) ensureOwnerLinkedOrFail() error {
-	ownerAddr := common.HexToAddress(h.inputs.WorkflowOwner)
-
-	linked, err := h.wrc.IsOwnerLinked(ownerAddr)
-	if err != nil {
-		return fmt.Errorf("failed to check owner link status: %w", err)
-	}
-
-	fmt.Printf("Workflow owner link status: owner=%s, linked=%v\n", ownerAddr.Hex(), linked)
-
-	if linked {
-		return nil
-	}
-
-	fmt.Printf("Owner not linked. Attempting auto-link: owner=%s\n", ownerAddr.Hex())
-	if err := h.tryAutoLink(); err != nil {
-		return fmt.Errorf("auto-link attempt failed: %w", err)
-	}
-
-	if linked, err = h.wrc.IsOwnerLinked(ownerAddr); err != nil {
-		return fmt.Errorf("linked via auto-link, but failed to verify link status: %w", err)
-	} else if !linked {
-		return fmt.Errorf("auto-link executed but owner still not linked")
-	}
-
-	fmt.Printf("Auto-link successful: owner=%s\n", ownerAddr.Hex())
-	return nil
-}
-
-func (h *handler) autoLinkMSIGAndExit() (halt bool, err error) {
-	ownerAddr := common.HexToAddress(h.inputs.WorkflowOwner)
-
-	linked, err := h.wrc.IsOwnerLinked(ownerAddr)
-	if err != nil {
-		return false, fmt.Errorf("failed to check owner link status: %w", err)
-	}
-
-	if linked {
-		fmt.Printf("MSIG owner already linked. Continuing deploy: owner=%s\n", ownerAddr.Hex())
-		return false, nil
-	}
-
-	fmt.Printf("MSIG workflow owner link status: owner=%s, linked=%v\n", ownerAddr.Hex(), linked)
-	fmt.Printf("MSIG owner: attempting auto-link... owner=%s\n", ownerAddr.Hex())
-
-	if err := h.tryAutoLink(); err != nil {
-		return false, fmt.Errorf("MSIG auto-link attempt failed: %w", err)
-	}
-
-	fmt.Println("MSIG auto-link initiated. Halting deploy. Submit the multisig transaction, then re-run deploy.")
-	return true, nil
-}
-
-func (h *handler) tryAutoLink() error {
-	rtx := &runtime.Context{
-		Settings:       h.settings,
-		Credentials:    h.credentials,
-		ClientFactory:  h.clientFactory,
-		Logger:         h.log,
-		EnvironmentSet: h.environmentSet,
-	}
-
-	lkInputs := linkkey.Inputs{
-		WorkflowOwner:                   h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress,
-		WorkflowRegistryContractAddress: h.inputs.WorkflowRegistryContractAddress,
-		WorkflowOwnerLabel:              "",
-	}
-
-	return linkkey.Exec(rtx, lkInputs)
-}
 func (h *handler) workflowExists() error {
 	workflow, err := h.wrc.GetWorkflow(common.HexToAddress(h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress), h.inputs.WorkflowName, h.inputs.WorkflowName)
 	if err != nil {
