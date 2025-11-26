@@ -236,10 +236,6 @@ type IdlTypeDefined struct {
 	Defined string `json:"defined"`
 }
 
-// type IdlTypeDefinedNamed struct {
-// 	Name string `json:"name"`
-// }
-
 // Wrapper type:
 type IdlTypeArray struct {
 	Thing IdlType
@@ -526,4 +522,27 @@ type IdlErrorCode struct {
 	Code int    `json:"code"`
 	Name string `json:"name"`
 	Msg  string `json:"msg,omitempty"`
+}
+
+func GetIdlEvent(idlTypes *IdlTypeDefSlice, eventName string) (EventIDLTypes, error) {
+	myevent := IdlEvent{}
+	for _, typDefs := range *idlTypes {
+		if typDefs.Name != eventName {
+			continue
+		}
+		fields := *typDefs.Type.Fields
+		for _, field := range fields {
+			myevent.Fields = append(myevent.Fields, IdlEventField{
+				Name: field.Name,
+				Type: field.Type,
+			})
+		}
+	}
+	if len(myevent.Fields) == 0 {
+		return EventIDLTypes{}, fmt.Errorf("event %s has no fields", eventName)
+	}
+	return EventIDLTypes{
+		Event: myevent,
+		Types: *idlTypes,
+	}, nil
 }

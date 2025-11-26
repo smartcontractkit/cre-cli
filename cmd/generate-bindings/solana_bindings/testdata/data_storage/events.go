@@ -6,9 +6,9 @@ package data_storage
 import (
 	"fmt"
 	binary "github.com/gagliardetto/binary"
+	anchorcodec "github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana_bindings/cre-sdk-go/anchorcodec"
 	solana "github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana_bindings/cre-sdk-go/capabilities/blockchain/solana"
 	bindings "github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana_bindings/cre-sdk-go/capabilities/blockchain/solana/bindings"
-	types "github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana_bindings/cre-sdk-go/types"
 	cre "github.com/smartcontractkit/cre-sdk-go/cre"
 )
 
@@ -87,7 +87,7 @@ func (t *AccessLoggedTrigger) Adapt(l *solana.Log) (*bindings.DecodedLog[AccessL
 }
 
 func (c *DataStorage) LogTrigger_AccessLogged(chainSelector uint64, subKeyPathAndValue []solana.SubKeyPathAndFilter) (cre.Trigger[*solana.Log, *bindings.DecodedLog[AccessLogged]], error) {
-	eventIdl, err := types.GetIdlEvent(c.IdlTypes, "AccessLogged")
+	eventIdl, err := anchorcodec.GetIdlEvent(c.IdlTypes, "AccessLogged")
 	if err != nil {
 		return nil, err
 	}
@@ -99,7 +99,7 @@ func (c *DataStorage) LogTrigger_AccessLogged(chainSelector uint64, subKeyPathAn
 		return nil, fmt.Errorf("failed to validate subkey path and value: %w", err)
 	}
 	rawTrigger := solana.LogTrigger(chainSelector, &solana.FilterLogTriggerRequest{
-		Address:       types.PublicKey(ProgramID),
+		Address:       ProgramID.Bytes(),
 		EventIdl:      eventIdl,
 		EventName:     "AccessLogged",
 		EventSig:      Event_AccessLogged,
@@ -154,7 +154,7 @@ func (t *DynamicEventTrigger) Adapt(l *solana.Log) (*bindings.DecodedLog[Dynamic
 }
 
 func (c *DataStorage) LogTrigger_DynamicEvent(chainSelector uint64, subKeyPathAndValue []solana.SubKeyPathAndFilter) (cre.Trigger[*solana.Log, *bindings.DecodedLog[DynamicEvent]], error) {
-	eventIdl, err := types.GetIdlEvent(c.IdlTypes, "DynamicEvent")
+	eventIdl, err := anchorcodec.GetIdlEvent(c.IdlTypes, "DynamicEvent")
 	if err != nil {
 		return nil, err
 	}
@@ -166,7 +166,7 @@ func (c *DataStorage) LogTrigger_DynamicEvent(chainSelector uint64, subKeyPathAn
 		return nil, fmt.Errorf("failed to validate subkey path and value: %w", err)
 	}
 	rawTrigger := solana.LogTrigger(chainSelector, &solana.FilterLogTriggerRequest{
-		Address:       types.PublicKey(ProgramID),
+		Address:       ProgramID.Bytes(),
 		EventIdl:      eventIdl,
 		EventName:     "DynamicEvent",
 		EventSig:      Event_DynamicEvent,
@@ -221,7 +221,7 @@ func (t *NoFieldsTrigger) Adapt(l *solana.Log) (*bindings.DecodedLog[NoFields], 
 }
 
 func (c *DataStorage) LogTrigger_NoFields(chainSelector uint64, subKeyPathAndValue []solana.SubKeyPathAndFilter) (cre.Trigger[*solana.Log, *bindings.DecodedLog[NoFields]], error) {
-	eventIdl, err := types.GetIdlEvent(c.IdlTypes, "NoFields")
+	eventIdl, err := anchorcodec.GetIdlEvent(c.IdlTypes, "NoFields")
 	if err != nil {
 		return nil, err
 	}
@@ -233,7 +233,7 @@ func (c *DataStorage) LogTrigger_NoFields(chainSelector uint64, subKeyPathAndVal
 		return nil, fmt.Errorf("failed to validate subkey path and value: %w", err)
 	}
 	rawTrigger := solana.LogTrigger(chainSelector, &solana.FilterLogTriggerRequest{
-		Address:       types.PublicKey(ProgramID),
+		Address:       ProgramID.Bytes(),
 		EventIdl:      eventIdl,
 		EventName:     "NoFields",
 		EventSig:      Event_NoFields,

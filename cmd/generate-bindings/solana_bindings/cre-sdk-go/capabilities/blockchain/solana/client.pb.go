@@ -8,7 +8,11 @@ import (
 	"github.com/gagliardetto/anchor-go/errors"
 	binary "github.com/gagliardetto/binary"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query/primitives"
-	solanatypes "github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana_bindings/cre-sdk-go/types"
+	solanatypes "github.com/smartcontractkit/chainlink-solana/pkg/solana/logpoller/types"
+	"github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana_bindings/cre-sdk-go/anchorcodec"
+
+	// solanatypes "github.com/chainlink-solana/pkg/solana/logpoller/types"
+
 	"github.com/smartcontractkit/cre-sdk-go/cre"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
@@ -19,10 +23,10 @@ const (
 )
 
 type FilterLogTriggerRequest struct {
-	Address       solanatypes.PublicKey
+	Address       []byte
 	EventName     string
 	EventSig      solanatypes.EventSignature
-	EventIdl      solanatypes.EventIdl
+	EventIdl      anchorcodec.EventIDLTypes // this is the only change
 	SubkeyPaths   solanatypes.SubKeyPaths
 	SubkeyFilters []SubkeyFilterCriteria
 }

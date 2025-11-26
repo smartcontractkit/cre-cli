@@ -283,7 +283,7 @@ func creLogTriggerFunc(name string, g *Generator) Code {
 		).
 		BlockFunc(func(b *jen.Group) {
 			// eventIdl := types.GetIdlEvent(c.IdlTypes, "<Event>")
-			b.List(Id("eventIdl"), Id("err")).Op(":=").Qual(PkgSolanaTypes, "GetIdlEvent").Call(
+			b.List(Id("eventIdl"), Id("err")).Op(":=").Qual(PkgAnchorIdlCodec, "GetIdlEvent").Call(
 				Id("c").Dot("IdlTypes"),
 				Lit(name),
 			)
@@ -323,7 +323,7 @@ func creLogTriggerFunc(name string, g *Generator) Code {
 			b.Id("rawTrigger").Op(":=").Qual(PkgSolanaCre, "LogTrigger").Call(
 				Id("chainSelector"),
 				Op("&").Qual(PkgSolanaCre, "FilterLogTriggerRequest").Values(jen.Dict{
-					Id("Address"):       Qual(PkgSolanaTypes, "PublicKey").Call(Id("ProgramID")),
+					Id("Address"):       Id("ProgramID").Dot("Bytes").Call(),
 					Id("EventName"):     Lit(name),
 					Id("EventSig"):      Id("Event_" + name),
 					Id("EventIdl"):      Id("eventIdl"),

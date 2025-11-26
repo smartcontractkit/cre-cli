@@ -18,7 +18,7 @@ import (
 	// "github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana_bindings/testdata/forwarder"
 	// "github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana_bindings/testdata/receiver"
 
-	solanatypes "github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana_bindings/cre-sdk-go/types"
+	solanatypes "github.com/smartcontractkit/chainlink-solana/pkg/solana/logpoller/types"
 	datastorage "github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana_bindings/testdata/data_storage"
 	"github.com/smartcontractkit/cre-sdk-go/cre/testutils"
 	consensusmock "github.com/smartcontractkit/cre-sdk-go/internal_testing/capabilities/consensus/mock"
