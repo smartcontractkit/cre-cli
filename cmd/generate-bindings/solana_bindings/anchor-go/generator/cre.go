@@ -86,7 +86,7 @@ func creWriteReportErrorBlock() Code {
 	code := Empty()
 	code.If(Id("err").Op("!=").Nil()).Block(
 		Return(
-			Qual(PkgCRE, "PromiseFromResult").Types(Op("*").Qual(PkgSolanaCre, "WriteReportReply")).Call(
+			Qual(PkgCRE, "PromiseFromResult").Types(Op("*").Qual(PkgRealSolanaCre, "WriteReportReply")).Call(
 				Nil(), Id("err"),
 			)))
 	code.Line().Line()
@@ -105,11 +105,11 @@ func creWriteReportFromStructs(exportedAccountName string, g *Generator) Code {
 			ListMultiline(func(p *Group) {
 				p.Id("runtime").Qual(PkgCRE, "Runtime")
 				p.Id("input").Id(exportedAccountName)
-				p.Id("accountList").Index().Qual(PkgSolanaGo, "PublicKey")
+				p.Id("remainingAccounts").Index().Op("*").Qual(PkgRealSolanaCre, "AccountMeta")
 			}),
 		).
 		// return type
-		Params(Qual(PkgCRE, "Promise").Types(Op("*").Qual(PkgSolanaCre, "WriteReportReply"))).
+		Params(Qual(PkgCRE, "Promise").Types(Op("*").Qual(PkgRealSolanaCre, "WriteReportReply"))).
 		BlockFunc(func(block *Group) {
 			// encoded, err := c.Codec.Encode<exportedAccountName>Struct(input)
 			block.List(Id("encodedInput"), Id("err")).Op(":=").
@@ -120,7 +120,7 @@ func creWriteReportFromStructs(exportedAccountName string, g *Generator) Code {
 
 			// encodedAccountList, err := EncodeAccountList(accountList)
 			block.List(Id("encodedAccountList"), Id("err")).Op(":=").
-				Id("EncodeAccountList").Call(Id("accountList"))
+				Qual(PkgBindings, "EncodeAccountList").Call(Id("remainingAccounts"))
 
 			// if err block
 			block.Add(creWriteReportErrorBlock())
@@ -148,21 +148,21 @@ func creWriteReportFromStructs(exportedAccountName string, g *Generator) Code {
 			).Line()
 
 			// typedAccountList := make([]solana.PublicKey, len(accountList))
-			block.Id("typedAccountList").Op(":=").
-				Id("make").Call(
-				Index().Qual(PkgSolanaCre, "PublicKey"),
-				Id("len").Call(Id("accountList")),
-			)
+			// block.Id("typedAccountList").Op(":=").
+			// 	Id("make").Call(
+			// 	Index().Qual(PkgSolanaCre, "PublicKey"),
+			// 	Id("len").Call(Id("accountList")),
+			// )
 
-			// for i, account := range accountList {
-			//     typedAccountList[i] = solana.PublicKey(account)
-			// }
-			block.For(
-				List(Id("i"), Id("account")).Op(":=").Range().Id("accountList"),
-			).Block(
-				Id("typedAccountList").Index(Id("i")).Op("=").
-					Qual(PkgSolanaCre, "PublicKey").Call(Id("account")),
-			).Line()
+			// // for i, account := range accountList {
+			// //     typedAccountList[i] = solana.PublicKey(account)
+			// // }
+			// block.For(
+			// 	List(Id("i"), Id("account")).Op(":=").Range().Id("accountList"),
+			// ).Block(
+			// 	Id("typedAccountList").Index(Id("i")).Op("=").
+			// 		Qual(PkgSolanaCre, "PublicKey").Call(Id("account")),
+			// ).Line()
 
 			//return cre.ThenPromise(promise, func(report *cre.Report) cre.Promise[*solana.WriteReportReply] {
 			// 	return c.client.WriteReport(runtime, &solana.WriteCreReportRequest{
@@ -191,15 +191,15 @@ func creWriteReportFromStructsLambda() *Statement {
 	// }
 	return Func().
 		Params(Id("report").Op("*").Qual(PkgCRE, "Report")).
-		Qual(PkgCRE, "Promise").Types(Op("*").Qual(PkgSolanaCre, "WriteReportReply")).
+		Qual(PkgCRE, "Promise").Types(Op("*").Qual(PkgRealSolanaCre, "WriteReportReply")).
 		Block(
 			Return(
 				Id("c").Dot("client").Dot("WriteReport").Call(
 					Id("runtime"),
-					Op("&").Qual(PkgSolanaCre, "WriteCreReportRequest").Values(jen.Dict{
-						Id("Receiver"):    Id("ProgramID").Dot("Bytes").Call(),
-						Id("Report"):      Id("report"),
-						Id("AccountList"): Id("typedAccountList"),
+					Op("&").Qual(PkgRealSolanaCre, "WriteCreReportRequest").Values(jen.Dict{
+						Id("Receiver"):          Id("ProgramID").Dot("Bytes").Call(),
+						Id("Report"):            Id("report"),
+						Id("RemainingAccounts"): Id("remainingAccounts"),
 					}),
 				),
 			),
@@ -387,7 +387,7 @@ func (g *Generator) genfile_constructor() (*OutputFile, error) {
 		code = newStatement()
 		code.Type().Id(tools.ToCamelUpper(g.options.Package)).Struct(
 			Id("IdlTypes").Op("*").Qual(PkgAnchorIdlCodec, "IdlTypeDefSlice"),
-			Id("client").Op("*").Qual(PkgSolanaCre, "Client"),
+			Id("client").Op("*").Qual(PkgRealSolanaCre, "Client"),
 			Id("Codec").Id(tools.ToCamelUpper(g.options.Package)+"Codec"),
 		)
 		code.Line()
@@ -405,7 +405,7 @@ func (g *Generator) genfile_constructor() (*OutputFile, error) {
 		code.Func().
 			Id("New"+tools.ToCamelUpper(g.options.Package)).
 			Params(
-				Id("client").Op("*").Qual(PkgSolanaCre, "Client"),
+				Id("client").Op("*").Qual(PkgRealSolanaCre, "Client"),
 			).
 			Params(
 				Op("*").Id(tools.ToCamelUpper(g.options.Package)), Error(),
@@ -454,18 +454,6 @@ func (g *Generator) genfile_constructor() (*OutputFile, error) {
 		code.Type().Id(tools.ToCamelUpper(g.options.Package) + "Codec").Interface(methods...)
 		file.Add(code)
 		code.Line()
-
-		// dummyForwarderCode(file)
-
-		// dummy account encoding function
-		code = newStatement()
-		code.Func().
-			Id("EncodeAccountList").
-			Params(Id("accountList").Index().Qual(PkgSolanaGo, "PublicKey")).
-			Params(Index(Lit(32)).Byte(), Error()).
-			Block(Return(Index(Lit(32)).Byte().Values(), Nil()))
-		file.Add(code)
-		code.Line()
 	}
 
 	return &OutputFile{
@@ -475,23 +463,23 @@ func (g *Generator) genfile_constructor() (*OutputFile, error) {
 }
 
 func getAccountInfoLambda() *Statement {
-	// func(bn uint64) cre.Promise[*solana.GetAccountInfoReply] {
-	// 	return c.client.GetAccountInfoWithOpts(runtime, &solana.GetAccountInfoRequest{
+	// func(bn uint64) cre.Promise[*solana.GetAccountInfoWithOptsReply] {
+	// 	return c.client.GetAccountInfoWithOpts(runtime, &solana.GetAccountInfoWithOptsRequest{
 	// 		Account: types.PublicKey(accountAddress),
 	// 		Opts:    &solana.GetAccountInfoOpts{MinContextSlot: &bn},
 	// 	})
 	// }
 	return Func().
 		Params(Id("bn").Uint64()).
-		Qual(PkgCRE, "Promise").Types(Op("*").Qual(PkgSolanaCre, "GetAccountInfoReply")).
+		Qual(PkgCRE, "Promise").Types(Op("*").Qual(PkgRealSolanaCre, "GetAccountInfoWithOptsReply")).
 		Block(
 			Return(
 				Id("c").Dot("client").Dot("GetAccountInfoWithOpts").Call(
 					Id("runtime"),
-					Op("&").Qual(PkgSolanaCre, "GetAccountInfoRequest").Values(Dict{
-						Id("Account"): Qual(PkgSolanaTypes, "PublicKey").Call(Id("accountAddress")),
-						Id("Opts"): Op("&").Qual(PkgSolanaCre, "GetAccountInfoOpts").Values(Dict{
-							Id("MinContextSlot"): Op("&").Id("bn"),
+					Op("&").Qual(PkgRealSolanaCre, "GetAccountInfoWithOptsRequest").Values(Dict{
+						Id("Account"): Id("accountAddress").Dot("Bytes").Call(),
+						Id("Opts"): Op("&").Qual(PkgRealSolanaCre, "GetAccountInfoOpts").Values(Dict{
+							Id("MinContextSlot"): Id("bn"),
 						}),
 					}),
 				),
@@ -500,16 +488,16 @@ func getAccountInfoLambda() *Statement {
 }
 
 func parseAccountLambda(name string) *Statement {
-	// func(response *solana.GetAccountInfoReply) (*DataAccount, error) {
+	// func(response *solana.GetAccountInfoWithOptsReply) (*DataAccount, error) {
 	// 	return ParseAccount_DataAccount(response.Value.Data.AsDecodedBinary)
 	// }
 	return Func().
-		Params(Id("response").Op("*").Qual(PkgSolanaCre, "GetAccountInfoReply")).
+		Params(Id("response").Op("*").Qual(PkgRealSolanaCre, "GetAccountInfoWithOptsReply")).
 		Params(Op("*").Id(name), Error()).
 		Block(
 			Return(
 				Id("ParseAccount_" + name).Call(
-					Id("response").Dot("Value").Dot("Data").Dot("AsDecodedBinary"),
+					Id("response").Dot("Value").Dot("Data").Dot("GetRaw").Call(),
 				),
 			),
 		)

@@ -8,8 +8,7 @@ import (
 	"fmt"
 	binary "github.com/gagliardetto/binary"
 	solanago "github.com/gagliardetto/solana-go"
-	solana "github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana_bindings/cre-sdk-go/capabilities/blockchain/solana"
-	types "github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana_bindings/cre-sdk-go/types"
+	solana "github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/solana"
 	cre "github.com/smartcontractkit/cre-sdk-go/cre"
 	"math/big"
 )
@@ -61,13 +60,13 @@ func (c *DataStorage) ReadAccount_DataAccount(
 ) cre.Promise[*DataAccount] {
 	// cre account read
 	bn := cre.PromiseFromResult(uint64(blockNumber.Int64()), nil)
-	promise := cre.ThenPromise(bn, func(bn uint64) cre.Promise[*solana.GetAccountInfoReply] {
-		return c.client.GetAccountInfoWithOpts(runtime, &solana.GetAccountInfoRequest{
-			Account: types.PublicKey(accountAddress),
-			Opts:    &solana.GetAccountInfoOpts{MinContextSlot: &bn},
+	promise := cre.ThenPromise(bn, func(bn uint64) cre.Promise[*solana.GetAccountInfoWithOptsReply] {
+		return c.client.GetAccountInfoWithOpts(runtime, &solana.GetAccountInfoWithOptsRequest{
+			Account: accountAddress.Bytes(),
+			Opts:    &solana.GetAccountInfoOpts{MinContextSlot: bn},
 		})
 	})
-	return cre.Then(promise, func(response *solana.GetAccountInfoReply) (*DataAccount, error) {
-		return ParseAccount_DataAccount(response.Value.Data.AsDecodedBinary)
+	return cre.Then(promise, func(response *solana.GetAccountInfoWithOptsReply) (*DataAccount, error) {
+		return ParseAccount_DataAccount(response.Value.Data.GetRaw())
 	})
 }

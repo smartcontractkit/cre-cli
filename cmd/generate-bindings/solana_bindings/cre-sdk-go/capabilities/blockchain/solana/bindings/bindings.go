@@ -8,6 +8,7 @@ import (
 	"github.com/gagliardetto/anchor-go/idl"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/query/primitives"
 	solana "github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana_bindings/cre-sdk-go/capabilities/blockchain/solana"
+	realSolana "github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/solana"
 )
 
 // No-pointers, strict type check.
@@ -84,4 +85,9 @@ func ExtractEventIDL(eventName string, contractIdl *idl.Idl) (idl.IdlTypeDef, er
 type DecodedLog[T any] struct {
 	Log  *solana.Log
 	Data T
+}
+
+// this should be the same encoding expected by the solana forwarder report
+func EncodeAccountList(remainingAccounts []*realSolana.AccountMeta) ([32]byte, error) {
+	return [32]byte{}, nil
 }
