@@ -214,6 +214,7 @@ func newRootCommand() *cobra.Command {
 	logoutCmd := logout.New(runtimeContext)
 	initCmd := creinit.New(runtimeContext)
 	genBindingsCmd := generatebindings.New(runtimeContext)
+	genBindingsSolanaCmd := generatebindings.NewSolanaBindings(runtimeContext)
 	accountCmd := account.New(runtimeContext)
 	whoamiCmd := whoami.New(runtimeContext)
 	updateCmd := update.New(runtimeContext)
@@ -248,6 +249,7 @@ func newRootCommand() *cobra.Command {
 		secretsCmd,
 		workflowCmd,
 		genBindingsCmd,
+		genBindingsSolanaCmd,
 		updateCmd,
 	)
 
