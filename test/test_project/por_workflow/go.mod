@@ -1,16 +1,17 @@
 module por_workflow
 
-go 1.24.5
+go 1.25.3
 
 require (
 	github.com/ethereum/go-ethereum v1.16.4
 	github.com/shopspring/decimal v1.4.0
-	github.com/smartcontractkit/chainlink-protos/cre/go v0.0.0-20250918131840-564fe2776a35
-	github.com/smartcontractkit/cre-sdk-go v1.0.0
+	github.com/smartcontractkit/chainlink-protos/cre/go v0.0.0-20251021010742-3f8d3dba17d8
+	github.com/smartcontractkit/cre-sdk-go v1.0.1-0.20251113102311-429c91cd0f85
 	github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm v1.0.0-beta.0
+	github.com/smartcontractkit/cre-sdk-go/capabilities/networking/confidentialhttp v0.0.0-20251125171021-cf44e313fc9e
 	github.com/smartcontractkit/cre-sdk-go/capabilities/networking/http v1.0.0-beta.0
 	github.com/smartcontractkit/cre-sdk-go/capabilities/scheduler/cron v1.0.0-beta.0
-	google.golang.org/protobuf v1.36.7
+	google.golang.org/protobuf v1.36.8
 )
 
 require (
