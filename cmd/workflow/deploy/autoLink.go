@@ -46,11 +46,11 @@ func (h *handler) ensureOwnerLinkedOrFail() error {
 	}
 
 	fmt.Printf("Owner not linked. Attempting auto-link: owner=%s\n", ownerAddr.Hex())
-	linkSuccessTime := time.Now()
 	if err := h.tryAutoLink(); err != nil {
 		return fmt.Errorf("auto-link attempt failed: %w", err)
 	}
 
+	linkSuccessTime := time.Now()
 	fmt.Printf("Auto-link successful: owner=%s\n", ownerAddr.Hex())
 
 	// Wait for linking process to complete
