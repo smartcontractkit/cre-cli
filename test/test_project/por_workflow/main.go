@@ -19,6 +19,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm"
+	"github.com/smartcontractkit/cre-sdk-go/capabilities/networking/confidentialhttp"
 	"github.com/smartcontractkit/cre-sdk-go/capabilities/networking/http"
 	"github.com/smartcontractkit/cre-sdk-go/capabilities/scheduler/cron"
 	"github.com/smartcontractkit/cre-sdk-go/cre"
@@ -103,6 +104,39 @@ func doPOR(config *Config, runtime cre.Runtime, runTime time.Time) (string, erro
 	}
 
 	logger.Info("ReserveInfo", "reserveInfo", reserveInfo)
+
+	confHttpClient := &confidentialhttp.Client{}
+	confOutput, err := confidentialhttp.SendRequests(
+		config,
+		runtime,
+		confHttpClient,
+		fetchPORConfidential,
+		cre.ConsensusIdenticalAggregation[*confidentialhttp.HTTPEnclaveResponseData](),
+	).Await()
+	if err != nil {
+		logger.Error("error fetching conf por", "err", err)
+		return "", err
+	}
+	logger.Info("Conf POR response", "response", confOutput)
+
+	// Compare responses
+	porResp := &PORResponse{}
+	if err = json.Unmarshal(confOutput.Responses[0].Body, porResp); err != nil {
+		return "", err
+	}
+
+	if porResp.Ripcord {
+		return "", errors.New("ripcord is true")
+	}
+
+	confReserveInfo := &ReserveInfo{
+		LastUpdated:  porResp.UpdatedAt.UTC(),
+		TotalReserve: decimal.NewFromFloat(porResp.TotalToken),
+	}
+
+	if !confReserveInfo.TotalReserve.Equal(reserveInfo.TotalReserve) || !confReserveInfo.LastUpdated.Equal(reserveInfo.LastUpdated) {
+		logger.Error("Mismatch between confidential and regular POR responses")
+	}
 
 	totalSupply, err := getTotalSupply(config, runtime)
 	if err != nil {
@@ -236,6 +270,20 @@ func updateReserves(config *Config, runtime cre.Runtime, totalSupply *big.Int, t
 	logger.Info("Write report succeeded", "response", resp)
 	logger.Info("Write report transaction succeeded at", "txHash", common.BytesToHash(resp.TxHash).Hex())
 	return nil
+}
+
+func fetchPORConfidential(config *Config, logger *slog.Logger, sendRequester *confidentialhttp.SendRequestser) (*confidentialhttp.HTTPEnclaveResponseData, error) {
+	return sendRequester.SendRequests(&confidentialhttp.EnclaveActionInput{
+		Input: &confidentialhttp.HTTPEnclaveRequestData{
+			Requests: []*confidentialhttp.Request{
+				{
+					Url:    config.URL,
+					Method: "GET",
+				},
+			},
+		},
+		// No Vault DON Secrets in this example
+	}).Await()
 }
 
 func fetchPOR(config *Config, logger *slog.Logger, sendRequester *http.SendRequester) (*ReserveInfo, error) {
