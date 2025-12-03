@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"context"
 	"crypto/ecdsa"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -31,6 +30,7 @@ import (
 	httptypedapi "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/triggers/http"
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	"github.com/smartcontractkit/chainlink-common/pkg/services"
+	pkgworkflows "github.com/smartcontractkit/chainlink-common/pkg/workflows"
 	pb "github.com/smartcontractkit/chainlink-protos/cre/go/sdk"
 	"github.com/smartcontractkit/chainlink-protos/cre/go/values"
 	valuespb "github.com/smartcontractkit/chainlink-protos/cre/go/values/pb"
@@ -437,14 +437,7 @@ func run(
 	}
 	emptyHook := func(context.Context, simulator.RunnerConfig, *capabilities.Registry, []services.Service) {}
 
-	// Ensure the workflow name is exactly 10 bytes before hex-encoding
-	raw := []byte(inputs.WorkflowName)
-
-	// Pad or truncate to exactly 10 bytes
-	padded := make([]byte, 10)
-	copy(padded, raw) // truncates if longer, zero-pads if shorter
-
-	encodedWorkflowName := hex.EncodeToString(padded)
+	encodedWorkflowName := pkgworkflows.HashTruncateName(inputs.WorkflowName)
 
 	simulator.NewRunner(&simulator.RunnerHooks{
 		Initialize:  simulatorInitialize,
