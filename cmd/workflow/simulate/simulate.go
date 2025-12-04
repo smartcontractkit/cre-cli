@@ -30,7 +30,6 @@ import (
 	httptypedapi "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/triggers/http"
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	"github.com/smartcontractkit/chainlink-common/pkg/services"
-	pkgworkflows "github.com/smartcontractkit/chainlink-common/pkg/workflows"
 	pb "github.com/smartcontractkit/chainlink-protos/cre/go/sdk"
 	"github.com/smartcontractkit/chainlink-protos/cre/go/values"
 	valuespb "github.com/smartcontractkit/chainlink-protos/cre/go/values/pb"
@@ -437,8 +436,6 @@ func run(
 	}
 	emptyHook := func(context.Context, simulator.RunnerConfig, *capabilities.Registry, []services.Service) {}
 
-	encodedWorkflowName := pkgworkflows.HashTruncateName(inputs.WorkflowName)
-
 	simulator.NewRunner(&simulator.RunnerHooks{
 		Initialize:  simulatorInitialize,
 		BeforeStart: triggerInfoAndBeforeStart.BeforeStart,
@@ -446,7 +443,7 @@ func run(
 		AfterRun:    emptyHook,
 		Cleanup:     simulatorCleanup,
 		Finally:     emptyHook,
-	}).Run(ctx, encodedWorkflowName, binary, config, secrets, simulator.RunnerConfig{
+	}).Run(ctx, inputs.WorkflowName, binary, config, secrets, simulator.RunnerConfig{
 		EnableBeholder: true,
 		EnableBilling:  false,
 		Lggr:           engineLog,
