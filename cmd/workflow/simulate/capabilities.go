@@ -7,6 +7,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 
+	confhttpserver "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/actions/confidentialhttp/server"
 	httpserver "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/actions/http/server"
 	evmserver "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/chain-capabilities/evm/server"
 	consensusserver "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/consensus/server"
@@ -154,6 +155,14 @@ func NewFakeActionCapabilities(ctx context.Context, lggr logger.Logger, registry
 		return nil, err
 	}
 	caps = append(caps, httpActionServer)
+
+	// Conf HTTP Action
+	confHTTPAction := fakes.NewDirectConfidentialHTTPAction(lggr)
+	confHTTPActionServer := confhttpserver.NewClientServer(confHTTPAction)
+	if err := registry.Add(ctx, confHTTPActionServer); err != nil {
+		return nil, err
+	}
+	caps = append(caps, confHTTPActionServer)
 
 	return caps, nil
 }

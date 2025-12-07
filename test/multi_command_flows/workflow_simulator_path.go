@@ -143,6 +143,7 @@ func RunSimulationHappyPath(t *testing.T, tc TestConfig, projectDir string) {
 		require.Contains(t, out, "[SIMULATION] Simulator Initialized", "expected workflow to initialize.\nCLI OUTPUT:\n%s", out)
 		require.Contains(t, out, "Getting native balances", "expected workflow to read from balance reader.\nCLI OUTPUT:\n%s", out)
 		require.Contains(t, out, "fetching por", "expected http capability success.\nCLI OUTPUT:\n%s", out)
+		require.Contains(t, out, "Conf POR response", "expected confidential http capability success.\nCLI OUTPUT:\n%s", out)
 		require.Contains(t, out, "totalSupply=", "expected ERC20 chain reader success.\nCLI OUTPUT:\n%s", out)
 		require.Contains(t, out, "Write report succeeded", "expected chain writer success.\nCLI OUTPUT:\n%s", out)
 
