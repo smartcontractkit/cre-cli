@@ -32,7 +32,7 @@ func (h *handler) ensureOwnerLinkedOrFail() error {
 
 	if linked {
 		// Owner is linked on contract, now verify it's linked to the current user's account
-		linkedToCurrentUser, err := h.checkLinkStatusViaGraphQL(ownerAddr)
+		linkedToCurrentUser, _, err := h.checkLinkStatusViaGraphQL(ownerAddr)
 		if err != nil {
 			return fmt.Errorf("failed to validate key ownership: %w", err)
 		}
@@ -50,11 +50,12 @@ func (h *handler) ensureOwnerLinkedOrFail() error {
 		return fmt.Errorf("auto-link attempt failed: %w", err)
 	}
 
+	linkSuccessTime := time.Now()
 	fmt.Printf("Auto-link successful: owner=%s\n", ownerAddr.Hex())
 	fmt.Println("Note: Linking verification may take up to 60 seconds.")
 
 	// Wait for linking process to complete
-	if err := h.waitForBackendLinkProcessing(ownerAddr); err != nil {
+	if err := h.waitForBackendLinkProcessing(ownerAddr, linkSuccessTime); err != nil {
 		return fmt.Errorf("linking process failed: %w", err)
 	}
 
@@ -72,7 +73,7 @@ func (h *handler) autoLinkMSIGAndExit() (halt bool, err error) {
 
 	if linked {
 		// Owner is linked on contract, now verify it's linked to the current user's account
-		linkedToCurrentUser, err := h.checkLinkStatusViaGraphQL(ownerAddr)
+		linkedToCurrentUser, _, err := h.checkLinkStatusViaGraphQL(ownerAddr)
 		if err != nil {
 			return false, fmt.Errorf("failed to validate MSIG key ownership: %w", err)
 		}
@@ -116,13 +117,14 @@ func (h *handler) tryAutoLink() error {
 }
 
 // checkLinkStatusViaGraphQL checks if the owner is linked and verified by querying the service
-func (h *handler) checkLinkStatusViaGraphQL(ownerAddr common.Address) (bool, error) {
+func (h *handler) checkLinkStatusViaGraphQL(ownerAddr common.Address) (bool, *time.Time, error) {
 	const query = `
 	query {
 		listWorkflowOwners(filters: { linkStatus: LINKED_ONLY }) {
 			linkedOwners {
 				workflowOwnerAddress
 				verificationStatus
+				verifiedAt
 			}
 		}
 	}`
@@ -131,15 +133,16 @@ func (h *handler) checkLinkStatusViaGraphQL(ownerAddr common.Address) (bool, err
 	var resp struct {
 		ListWorkflowOwners struct {
 			LinkedOwners []struct {
-				WorkflowOwnerAddress string `json:"workflowOwnerAddress"`
-				VerificationStatus   string `json:"verificationStatus"`
+				WorkflowOwnerAddress string     `json:"workflowOwnerAddress"`
+				VerificationStatus   string     `json:"verificationStatus"`
+				VerifiedAt           *time.Time `json:"verifiedAt"`
 			} `json:"linkedOwners"`
 		} `json:"listWorkflowOwners"`
 	}
 
 	gql := graphqlclient.New(h.credentials, h.environmentSet, h.log)
 	if err := gql.Execute(context.Background(), req, &resp); err != nil {
-		return false, fmt.Errorf("GraphQL query failed: %w", err)
+		return false, nil, fmt.Errorf("GraphQL query failed: %w", err)
 	}
 
 	ownerHex := strings.ToLower(ownerAddr.Hex())
@@ -151,14 +154,14 @@ func (h *handler) checkLinkStatusViaGraphQL(ownerAddr common.Address) (bool, err
 					Str("ownerAddress", linkedOwner.WorkflowOwnerAddress).
 					Str("verificationStatus", linkedOwner.VerificationStatus).
 					Msg("Owner found and verified")
-				return true, nil
+				return true, linkedOwner.VerifiedAt, nil
 			}
 			h.log.Debug().
 				Str("ownerAddress", linkedOwner.WorkflowOwnerAddress).
 				Str("verificationStatus", linkedOwner.VerificationStatus).
 				Str("expectedStatus", VerificationStatusSuccessful).
 				Msg("Owner found but verification status not successful")
-			return false, nil
+			return false, nil, nil
 		}
 	}
 
@@ -166,19 +169,20 @@ func (h *handler) checkLinkStatusViaGraphQL(ownerAddr common.Address) (bool, err
 		Str("ownerAddress", ownerAddr.Hex()).
 		Msg("Owner not found in linked owners list")
 
-	return false, nil
+	return false, nil, nil
 }
 
 // waitForBackendLinkProcessing polls the service until the link is processed
-func (h *handler) waitForBackendLinkProcessing(ownerAddr common.Address) error {
+func (h *handler) waitForBackendLinkProcessing(ownerAddr common.Address, linkSuccessTime time.Time) error {
 	const maxAttempts = 5
 	const retryDelay = 3 * time.Second
 
 	fmt.Printf("Waiting for linking process to complete: owner=%s\n", ownerAddr.Hex())
 
+	var verifiedAt *time.Time
 	err := retry.Do(
 		func() error {
-			linked, err := h.checkLinkStatusViaGraphQL(ownerAddr)
+			linked, vAt, err := h.checkLinkStatusViaGraphQL(ownerAddr)
 			if err != nil {
 				h.log.Warn().Err(err).Msg("Failed to check link status")
 				return err // Return error to trigger retry
@@ -186,6 +190,7 @@ func (h *handler) waitForBackendLinkProcessing(ownerAddr common.Address) error {
 			if !linked {
 				return fmt.Errorf("owner not yet linked and verified")
 			}
+			verifiedAt = vAt
 			return nil // Success - owner is linked and verified
 		},
 		retry.Attempts(maxAttempts),
@@ -199,6 +204,18 @@ func (h *handler) waitForBackendLinkProcessing(ownerAddr common.Address) error {
 
 	if err != nil {
 		return fmt.Errorf("linking process timeout after %d attempts: %w", maxAttempts, err)
+	}
+
+	// Calculate and log the time between link success and verification
+	if verifiedAt != nil {
+		processingTime := verifiedAt.Sub(linkSuccessTime)
+		h.log.Info().
+			Str("owner", ownerAddr.Hex()).
+			Time("linkSuccessTime", linkSuccessTime).
+			Time("verifiedAt", *verifiedAt).
+			Dur("processingTime", processingTime).
+			Msgf("Link verification processing time: %.2f seconds", processingTime.Seconds())
+		fmt.Printf("Backend processing time: %.2f seconds (from transaction success to verified status)\n", processingTime.Seconds())
 	}
 
 	fmt.Printf("Linking process confirmed: owner=%s\n", ownerAddr.Hex())
