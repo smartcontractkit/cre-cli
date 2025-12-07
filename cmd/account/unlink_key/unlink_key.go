@@ -257,6 +257,8 @@ func (h *handler) unlinkOwner(owner string, resp initiateUnlinkingResponse) erro
 		fmt.Println("Transaction confirmed")
 		fmt.Printf("View on explorer: \033]8;;%s/tx/%s\033\\%s/tx/%s\033]8;;\033\\\n", h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash, h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash)
 		fmt.Println("\n[OK] web3 address unlinked from your CRE organization successfully")
+		fmt.Println("\nNote: Unlinking verification may take up to 60 seconds.")
+		fmt.Println("      You must wait for verification to complete before linking this address again.")
 		fmt.Println("\n→ This address can no longer deploy workflows on behalf of your organization")
 
 	case client.Raw:

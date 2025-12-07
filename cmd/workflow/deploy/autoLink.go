@@ -51,6 +51,7 @@ func (h *handler) ensureOwnerLinkedOrFail() error {
 	}
 
 	fmt.Printf("Auto-link successful: owner=%s\n", ownerAddr.Hex())
+	fmt.Println("Note: Linking verification may take up to 60 seconds.")
 
 	// Wait for linking process to complete
 	if err := h.waitForBackendLinkProcessing(ownerAddr); err != nil {

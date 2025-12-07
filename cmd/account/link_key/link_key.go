@@ -300,6 +300,7 @@ func (h *handler) linkOwner(resp initiateLinkingResponse) error {
 		fmt.Println("Transaction confirmed")
 		fmt.Printf("View on explorer: \033]8;;%s/tx/%s\033\\%s/tx/%s\033]8;;\033\\\n", h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash, h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash)
 		fmt.Println("\n[OK] web3 address linked to your CRE organization successfully")
+		fmt.Println("\nNote: Linking verification may take up to 60 seconds.")
 		fmt.Println("\n→ You can now deploy workflows using this address")
 
 	case client.Raw:
