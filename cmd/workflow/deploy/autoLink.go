@@ -170,7 +170,7 @@ func (h *handler) checkLinkStatusViaGraphQL(ownerAddr common.Address) (bool, err
 
 // waitForBackendLinkProcessing polls the service until the link is processed
 func (h *handler) waitForBackendLinkProcessing(ownerAddr common.Address) error {
-	const maxAttempts = 5
+	const maxAttempts = 10
 	const retryDelay = 3 * time.Second
 
 	fmt.Printf("Waiting for linking process to complete: owner=%s\n", ownerAddr.Hex())
