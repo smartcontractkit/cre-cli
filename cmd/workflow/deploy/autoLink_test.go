@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
@@ -164,7 +163,7 @@ func TestCheckLinkStatusViaGraphQL(t *testing.T) {
 
 			// Test the function
 			ownerAddr := common.HexToAddress(tt.ownerAddress)
-			result, _, err := h.checkLinkStatusViaGraphQL(ownerAddr)
+			result, err := h.checkLinkStatusViaGraphQL(ownerAddr)
 
 			if tt.expectError {
 				assert.Error(t, err)
@@ -335,8 +334,7 @@ func TestWaitForBackendLinkProcessing(t *testing.T) {
 
 			// Test the function
 			ownerAddr := common.HexToAddress(tt.ownerAddress)
-			linkSuccessTime := time.Now()
-			err := h.waitForBackendLinkProcessing(ownerAddr, linkSuccessTime)
+			err := h.waitForBackendLinkProcessing(ownerAddr)
 
 			if tt.expectError {
 				assert.Error(t, err)
