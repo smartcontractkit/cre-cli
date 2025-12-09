@@ -169,7 +169,7 @@ func TestCallbackHandler_OrgMembershipError(t *testing.T) {
 	}
 
 	// Waiting page should contain redirect JavaScript
-	if !strings.Contains(string(body), "Setting up your organisation") {
+	if !strings.Contains(string(body), "Setting up your organization") {
 		t.Errorf("expected waiting page content, got: %s", string(body))
 	}
 
@@ -220,7 +220,7 @@ func TestCallbackHandler_OrgMembershipError_MaxRetries(t *testing.T) {
 	}
 
 	// Should show error page, not waiting page
-	if strings.Contains(string(body), "Setting up your organisation") {
+	if strings.Contains(string(body), "Setting up your organization") {
 		t.Error("should not show waiting page when max retries exceeded")
 	}
 
@@ -263,7 +263,7 @@ func TestCallbackHandler_GenericAuth0Error(t *testing.T) {
 	}
 
 	// Should not show waiting page
-	if strings.Contains(string(body), "Setting up your organisation") {
+	if strings.Contains(string(body), "Setting up your organization") {
 		t.Error("should not show waiting page for generic errors")
 	}
 }
@@ -291,7 +291,7 @@ func TestServeWaitingPage(t *testing.T) {
 	}
 
 	// Should contain waiting message
-	if !strings.Contains(string(body), "Setting up your organisation") {
+	if !strings.Contains(string(body), "Setting up your organization") {
 		t.Errorf("expected body to contain waiting message, got: %s", string(body))
 	}
 

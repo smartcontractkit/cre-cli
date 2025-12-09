@@ -163,7 +163,7 @@ func (h *handler) callbackHandler(codeCh chan string) http.HandlerFunc {
 			// Check if this is an organization membership error
 			if strings.Contains(errorDesc, OrgMembershipErrorSubstring) {
 				if h.retryCount >= maxOrgNotFoundRetries {
-					h.log.Error().Int("retries", h.retryCount).Msg("organisation setup timed out after maximum retries")
+					h.log.Error().Int("retries", h.retryCount).Msg("organization setup timed out after maximum retries")
 					h.serveEmbeddedHTML(w, errorPage, http.StatusBadRequest)
 					return
 				}
@@ -182,7 +182,7 @@ func (h *handler) callbackHandler(codeCh chan string) http.HandlerFunc {
 				// Build the new auth URL for redirect
 				authURL := h.buildAuthURL(challenge, h.lastState)
 
-				fmt.Printf("Your organisation is being created, please wait (attempt %d/%d)...\n", h.retryCount, maxOrgNotFoundRetries)
+				fmt.Printf("Your organization is being created, please wait (attempt %d/%d)...\n", h.retryCount, maxOrgNotFoundRetries)
 				h.serveWaitingPage(w, authURL)
 				return
 			}
