@@ -162,8 +162,6 @@ func (h *handler) callbackHandler(codeCh chan string) http.HandlerFunc {
 		if errorParam != "" {
 			// Check if this is an organization membership error
 			if strings.Contains(errorDesc, OrgMembershipErrorSubstring) {
-				h.log.Info().Msg("organisation is being created")
-
 				if h.retryCount >= maxOrgNotFoundRetries {
 					h.log.Error().Int("retries", h.retryCount).Msg("organisation setup timed out after maximum retries")
 					h.serveEmbeddedHTML(w, errorPage, http.StatusBadRequest)
