@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Completing Sign-up</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="./output.css" />
+    <style>
+        .spinner {
+            width: 32px;
+            height: 32px;
+            border: 3px solid var(--gray-200);
+            border-top-color: var(--blue-700);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+</head>
+
+<body class="bg-background-alt flex flex-col items-center justify-center min-h-screen">
+    <div class="flex items-center gap-2">
+        <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path
+                d="M27.4099 0H4.59008C2.05505 0 0 2.05505 0 4.59008V27.4099C0 29.945 2.05505 32 4.59008 32H27.4099C29.945 32 32 29.945 32 27.4099V4.59008C32 2.05505 29.945 0 27.4099 0Z"
+                fill="#0847F7"></path>
+            <path
+                d="M16.0021 6.76172L8.00244 11.3805V20.618L16.0021 25.2368L24.0017 20.618V11.3805L16.0021 6.76172ZM20.6122 18.6615L16.0021 21.3223L11.3919 18.6615V13.3384L16.0021 10.6776L20.6122 13.3384V18.6615Z"
+                fill="white"></path>
+        </svg>
+        <h1 class="text-3xl font-semibold text-gray-800">CRE</h1>
+    </div>
+    <div
+        class="bg-white shadow-lg rounded p-8 max-w-[520px] text-center mt-8 border border-border flex flex-col items-center gap-4">
+        <div class="spinner"></div>
+        <h2 class="text-2xl font-semibold text-gray-800">
+            Setting up your organisation
+        </h2>
+        <p class="mt-2 text-gray-600">
+            Please wait while we create your organisation. You'll be redirected to complete MFA enrollment shortly.
+        </p>
+    </div>
+    <script>
+        setTimeout(function () {
+            window.location.href = "{{REDIRECT_URL}}";
+        }, 1500);
+    </script>
+</body>
+
+</html>
