@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"context"
 	"crypto/ecdsa"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -437,15 +436,6 @@ func run(
 	}
 	emptyHook := func(context.Context, simulator.RunnerConfig, *capabilities.Registry, []services.Service) {}
 
-	// Ensure the workflow name is exactly 10 bytes before hex-encoding
-	raw := []byte(inputs.WorkflowName)
-
-	// Pad or truncate to exactly 10 bytes
-	padded := make([]byte, 10)
-	copy(padded, raw) // truncates if longer, zero-pads if shorter
-
-	encodedWorkflowName := hex.EncodeToString(padded)
-
 	simulator.NewRunner(&simulator.RunnerHooks{
 		Initialize:  simulatorInitialize,
 		BeforeStart: triggerInfoAndBeforeStart.BeforeStart,
@@ -453,7 +443,7 @@ func run(
 		AfterRun:    emptyHook,
 		Cleanup:     simulatorCleanup,
 		Finally:     emptyHook,
-	}).Run(ctx, encodedWorkflowName, binary, config, secrets, simulator.RunnerConfig{
+	}).Run(ctx, inputs.WorkflowName, binary, config, secrets, simulator.RunnerConfig{
 		EnableBeholder: true,
 		EnableBilling:  false,
 		Lggr:           engineLog,
