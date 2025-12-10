@@ -172,12 +172,16 @@ func (h *handler) checkLinkStatusViaGraphQL(ownerAddr common.Address) (bool, err
 func (h *handler) waitForBackendLinkProcessing(ownerAddr common.Address) error {
 	const maxAttempts = 5
 	const retryDelay = 3 * time.Second
+	const initialBlockWait = 36 * time.Second // Wait for 3 block confirmations (~12s per block)
 
 	fmt.Println("")
 	fmt.Println("✓ Transaction confirmed on-chain.")
 	fmt.Println("  Waiting for 3 block confirmations before verification completes...")
 	fmt.Println("  Note: This is a one-time linking process. Future deployments from this address will not require this step.")
 	fmt.Println("")
+
+	// Wait for 3 block confirmations before polling
+	time.Sleep(initialBlockWait)
 
 	err := retry.Do(
 		func() error {
@@ -193,6 +197,7 @@ func (h *handler) waitForBackendLinkProcessing(ownerAddr common.Address) error {
 		},
 		retry.Attempts(maxAttempts),
 		retry.Delay(retryDelay),
+		retry.DelayType(retry.FixedDelay), // Use fixed 3s delay between retries
 		retry.LastErrorOnly(true),
 		retry.OnRetry(func(n uint, err error) {
 			h.log.Debug().Uint("attempt", n+1).Uint("maxAttempts", maxAttempts).Err(err).Msg("Retrying link status check")
