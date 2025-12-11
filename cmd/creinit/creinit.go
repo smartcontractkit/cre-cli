@@ -37,6 +37,7 @@ const (
 const (
 	HelloWorldTemplate string = "HelloWorld"
 	PoRTemplate        string = "PoR"
+	ConfHTTPTemplate   string = "ConfHTTP"
 )
 
 type WorkflowTemplate struct {
@@ -70,6 +71,7 @@ var languageTemplates = []LanguageTemplate{
 		Workflows: []WorkflowTemplate{
 			{Folder: "typescriptSimpleExample", Title: "Helloworld: Typescript Hello World example", ID: 3, Name: HelloWorldTemplate},
 			{Folder: "typescriptPorExampleDev", Title: "Custom data feed: Typescript updating on-chain data periodically using offchain API data", ID: 4, Name: PoRTemplate},
+			{Folder: "typescriptConfHTTP", Title: "Confidential Http: Typescript example using the confidential http capability", ID: 5, Name: ConfHTTPTemplate},
 		},
 	},
 }
