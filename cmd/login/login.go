@@ -30,7 +30,13 @@ var (
 	httpClient  = &http.Client{Timeout: 10 * time.Second}
 	errorPage   = "htmlPages/error.html"
 	successPage = "htmlPages/success.html"
+	waitingPage = "htmlPages/waiting.html"
 	stylePage   = "htmlPages/output.css"
+
+	// OrgMembershipErrorSubstring is the error message substring returned by Auth0
+	// when a user doesn't belong to any organization during the auth flow.
+	// This typically happens during sign-up when the organization hasn't been created yet.
+	OrgMembershipErrorSubstring = "user does not belong to any organization"
 )
 
 //go:embed htmlPages/*.html
@@ -57,7 +63,10 @@ type handler struct {
 	log              *zerolog.Logger
 	lastPKCEVerifier string
 	lastState        string
+	retryCount       int
 }
+
+const maxOrgNotFoundRetries = 3
 
 func newHandler(ctx *runtime.Context) *handler {
 	return &handler{
@@ -146,6 +155,44 @@ func (h *handler) setupServer(codeCh chan string) (*http.Server, net.Listener, e
 
 func (h *handler) callbackHandler(codeCh chan string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Check for error in the callback (Auth0 error responses)
+		errorParam := r.URL.Query().Get("error")
+		errorDesc := r.URL.Query().Get("error_description")
+
+		if errorParam != "" {
+			// Check if this is an organization membership error
+			if strings.Contains(errorDesc, OrgMembershipErrorSubstring) {
+				if h.retryCount >= maxOrgNotFoundRetries {
+					h.log.Error().Int("retries", h.retryCount).Msg("organization setup timed out after maximum retries")
+					h.serveEmbeddedHTML(w, errorPage, http.StatusBadRequest)
+					return
+				}
+
+				// Generate new authentication credentials for the retry
+				verifier, challenge, err := generatePKCE()
+				if err != nil {
+					h.log.Error().Err(err).Msg("failed to prepare authentication retry")
+					h.serveEmbeddedHTML(w, errorPage, http.StatusInternalServerError)
+					return
+				}
+				h.lastPKCEVerifier = verifier
+				h.lastState = randomState()
+				h.retryCount++
+
+				// Build the new auth URL for redirect
+				authURL := h.buildAuthURL(challenge, h.lastState)
+
+				fmt.Printf("Your organization is being created, please wait (attempt %d/%d)...\n", h.retryCount, maxOrgNotFoundRetries)
+				h.serveWaitingPage(w, authURL)
+				return
+			}
+
+			// Generic Auth0 error
+			h.log.Error().Str("error", errorParam).Str("description", errorDesc).Msg("auth error in callback")
+			h.serveEmbeddedHTML(w, errorPage, http.StatusBadRequest)
+			return
+		}
+
 		if st := r.URL.Query().Get("state"); st == "" || h.lastState == "" || st != h.lastState {
 			h.log.Error().Msg("invalid state in response")
 			h.serveEmbeddedHTML(w, errorPage, http.StatusBadRequest)
@@ -189,6 +236,41 @@ func (h *handler) serveEmbeddedHTML(w http.ResponseWriter, filePath string, stat
 	w.WriteHeader(status)
 	if _, err := w.Write([]byte(modified)); err != nil {
 		h.log.Error().Err(err).Msg("failed to write HTML response")
+	}
+}
+
+// serveWaitingPage serves the waiting page with the redirect URL injected.
+// This is used when handling organization membership errors during sign-up flow.
+func (h *handler) serveWaitingPage(w http.ResponseWriter, redirectURL string) {
+	htmlContent, err := htmlFiles.ReadFile(waitingPage)
+	if err != nil {
+		h.log.Error().Err(err).Str("file", waitingPage).Msg("failed to read waiting page HTML file")
+		h.sendHTTPError(w)
+		return
+	}
+
+	cssContent, err := htmlFiles.ReadFile(stylePage)
+	if err != nil {
+		h.log.Error().Err(err).Str("file", stylePage).Msg("failed to read embedded CSS file")
+		h.sendHTTPError(w)
+		return
+	}
+
+	// Inject CSS inline
+	modified := strings.Replace(
+		string(htmlContent),
+		`<link rel="stylesheet" href="./output.css" />`,
+		fmt.Sprintf("<style>%s</style>", string(cssContent)),
+		1,
+	)
+
+	// Inject the redirect URL
+	modified = strings.Replace(modified, "{{REDIRECT_URL}}", redirectURL, 1)
+
+	w.Header().Set("Content-Type", "text/html")
+	w.WriteHeader(http.StatusOK)
+	if _, err := w.Write([]byte(modified)); err != nil {
+		h.log.Error().Err(err).Msg("failed to write waiting page response")
 	}
 }
 
