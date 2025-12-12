@@ -61,6 +61,7 @@ jobs:
           GOARCH: ${{ matrix.arch }}
           CGO_ENABLED: 1
           CC: ${{ matrix.arch == 'amd64' && 'x86_64-linux-gnu-gcc' || matrix.arch == 'arm64' && 'aarch64-linux-gnu-gcc' || '' }}
+          CXX: ${{ matrix.arch == 'arm64' && 'aarch64-linux-gnu-g++' || '' }}
           GITHUB_TOKEN: ${{ steps.setup-github-token.outputs.access-token }}
         run: |
           VERSION="${{ github.ref_name }}"
