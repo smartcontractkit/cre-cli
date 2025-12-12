@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - "v*"
+    branches:
+      - fix-build
 
 jobs:
   build-linux:
@@ -40,7 +42,7 @@ jobs:
         run: |
           sudo apt-get update
           if [ "${{ matrix.arch }}" == "arm64" ]; then
-            sudo apt-get install -y gcc-aarch64-linux-gnu libc6-dev-arm64-cross libstdc++-13-dev-arm64-cross libstdc++-12-dev-arm64-cross
+            sudo apt-get install -y gcc-aarch64-linux-gnu libc6-dev-arm64-cross $(if [ "${{ matrix.os }}" = "ubuntu24.04" ]; then echo "libstdc++-13-dev-arm64-cross"; fi) libstdc++-12-dev-arm64-cross
           elif [ "${{ matrix.arch }}" == "amd64" ]; then
             sudo apt-get install -y gcc-x86-64-linux-gnu libc6-dev-amd64-cross
           fi
