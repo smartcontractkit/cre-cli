@@ -1,9 +1,9 @@
-#!/bin/sh
+#!/bin/env bash
 #
 # This is a universal installer script for 'cre'.
 # It detects the OS and architecture, then downloads the correct binary.
 #
-# Usage: curl -sSL https://cre.chain.link/install.sh | sh
+# Usage: curl -sSL https://cre.chain.link/install.sh | bash
 
 set -e # Exit immediately if a command exits with a non-zero status.
 
@@ -158,13 +158,13 @@ fish)
 
     if [[ -w $fish_config ]]; then
         if ! grep -q "# cre" "$fish_config"; then
-                {
-                    echo '\n# cre'
-                    for command in "${commands[@]}"; do
-                        echo "$command"
-                    done
-                } >>"$fish_config"
-            fi
+            {
+                echo -e '\n# cre'
+                for command in "${commands[@]}"; do
+                    echo "$command"
+                done
+            } >>"$fish_config"
+        fi
 
         echo "Added \"$tilde_bin_dir\" to \$PATH in \"$tilde_fish_config\""
 
@@ -187,17 +187,19 @@ zsh)
     tilde_zsh_config=$(tildify "$zsh_config")
 
     if [[ -w $zsh_config ]]; then
+      if ! grep -q "# cre" "$zsh_config"; then
         {
-            echo '\n# cre'
+            echo -e '\n# cre'
 
             for command in "${commands[@]}"; do
                 echo "$command"
             done
         } >>"$zsh_config"
+      fi
 
-        echo "Added \"$tilde_bin_dir\" to \$PATH in \"$tilde_zsh_config\""
+      echo "Added \"$tilde_bin_dir\" to \$PATH in \"$tilde_zsh_config\""
 
-        refresh_command="exec $SHELL"
+      refresh_command="exec $SHELL"
     else
         echo "Manually add the directory to $tilde_zsh_config (or similar):"
 
@@ -231,19 +233,21 @@ bash)
         tilde_bash_config=$(tildify "$bash_config")
 
         if [[ -w $bash_config ]]; then
+          if ! grep -q "# cre" "$bash_config"; then
             {
-                echo '\n# cre'
+                echo -e '\n# cre'
 
                 for command in "${commands[@]}"; do
                     echo "$command"
                 done
             } >>"$bash_config"
+          fi
 
-            echo "Added \"$tilde_bin_dir\" to \$PATH in \"$tilde_bash_config\""
+          echo "Added \"$tilde_bin_dir\" to \$PATH in \"$tilde_bash_config\""
 
-            refresh_command="source $bash_config"
-            set_manually=false
-            break
+          refresh_command="source $bash_config"
+          set_manually=false
+          break
         fi
     done
 
