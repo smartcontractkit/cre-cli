@@ -4,8 +4,6 @@ on:
   push:
     tags:
       - "v*"
-    branches:
-      - fix-build
 
 jobs:
   build-linux:
