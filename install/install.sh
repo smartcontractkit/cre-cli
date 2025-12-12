@@ -1,4 +1,4 @@
-#!/bin/env bash
+#!/usr/bin/env bash
 #
 # This is a universal installer script for 'cre'.
 # It detects the OS and architecture, then downloads the correct binary.
