@@ -7,7 +7,19 @@
 
 set -e # Exit immediately if a command exits with a non-zero status.
 
+# === Version Requirements for Workflow Dependencies ===
+# These do NOT block CLI installation; they are used to print helpful warnings.
+REQUIRED_GO_VERSION="1.25.3"
+REQUIRED_GO_MAJOR=1
+REQUIRED_GO_MINOR=25
+
+# Choose a conservative Bun floor for TS workflows.
+REQUIRED_BUN_VERSION="1.0.0"
+REQUIRED_BUN_MAJOR=1
+REQUIRED_BUN_MINOR=0
+
 # --- Helper Functions ---
+
 # Function to print error messages and exit.
 fail() {
   echo "Error: $1" >&2
@@ -27,6 +39,62 @@ tildify() {
     else
         echo "$1"
     fi
+}
+
+# Check Go dependency and version (for Go-based workflows).
+check_go_dependency() {
+  if ! command -v go >/dev/null 2>&1; then
+    echo "Warning: 'go' is not installed."
+    echo "         Go $REQUIRED_GO_VERSION or later is recommended to build CRE Go workflows."
+    return
+  fi
+
+  # Example output: 'go version go1.25.3 darwin/arm64'
+  go_version_str=$(go version 2>/dev/null | awk '{print $3}' | sed 's/go//')
+  if [ -z "$go_version_str" ]; then
+    echo "Warning: Could not determine Go version. Go $REQUIRED_GO_VERSION or later is recommended for CRE Go workflows."
+    return
+  fi
+
+  go_major=${go_version_str%%.*}
+  go_minor_patch=${go_version_str#*.}
+  go_minor=${go_minor_patch%%.*}
+
+  if [ "$go_major" -lt "$REQUIRED_GO_MAJOR" ] || \
+     { [ "$go_major" -eq "$REQUIRED_GO_MAJOR" ] && [ "$go_minor" -lt "$REQUIRED_GO_MINOR" ]; }; then
+    echo "Warning: Detected Go $go_version_str."
+    echo "         Go $REQUIRED_GO_VERSION or later is recommended to build CRE Go workflows."
+  fi
+}
+
+# Check Bun dependency and version (for TypeScript workflows using 'bunx cre-setup').
+check_bun_dependency() {
+  if ! command -v bun >/dev/null 2>&1; then
+    echo "Warning: 'bun' is not installed."
+    echo "         Bun $REQUIRED_BUN_VERSION or later is recommended to run TypeScript CRE workflows (e.g. 'postinstall: bunx cre-setup')."
+    return
+  fi
+
+  # Bun version examples:
+  #  - '1.2.1'
+  #  - 'bun 1.2.1'
+  bun_version_str=$(bun -v 2>/dev/null | head -n1)
+  bun_version_str=${bun_version_str#bun }
+
+  if [ -z "$bun_version_str" ]; then
+    echo "Warning: Could not determine Bun version. Bun $REQUIRED_BUN_VERSION or later is recommended for TypeScript workflows."
+    return
+  fi
+
+  bun_major=${bun_version_str%%.*}
+  bun_minor_patch=${bun_version_str#*.}
+  bun_minor=${bun_minor_patch%%.*}
+
+  if [ "$bun_major" -lt "$REQUIRED_BUN_MAJOR" ] || \
+     { [ "$bun_major" -eq "$REQUIRED_BUN_MAJOR" ] && [ "$bun_minor" -lt "$REQUIRED_BUN_MINOR" ]; }; then
+    echo "Warning: Detected Bun $bun_version_str."
+    echo "         Bun $REQUIRED_BUN_VERSION or later is recommended to run TypeScript CRE workflows."
+  fi
 }
 
 # --- Main Installation Logic ---
@@ -72,7 +140,7 @@ esac
 
 if [[ ! -d $bin_dir ]]; then
     mkdir -p "$bin_dir" ||
-        error "Failed to create install directory \"$bin_dir\""
+        fail "Failed to create install directory \"$bin_dir\""
 fi
 
 # 3. Determine the Latest Version from GitHub Releases
@@ -98,29 +166,28 @@ elif [ "$PLATFORM" = "darwin" ]; then
 fi
 DOWNLOAD_URL="https://github.com/$github_repo/releases/download/$LATEST_TAG/$ASSET"
 
-# Use curl to download the asset to a temporary file
 TMP_DIR=$(mktemp -d)
-curl --fail --location --progress-bar "$DOWNLOAD_URL" --output "$TMP_DIR/$ASSET" || fail "Failed to download asset from $DOWNLOAD_URL"
+ARCHIVE_PATH="$TMP_DIR/$ASSET"
 
-# Extract if it's a tar.gz
+curl --fail --location --progress-bar "$DOWNLOAD_URL" --output "$ARCHIVE_PATH" || fail "Failed to download asset from $DOWNLOAD_URL"
+
+# 5. Extract archive and locate the binary
 if echo "$ASSET" | grep -qE '\.tar\.gz$'; then
-  tar -xzf "$TMP_DIR/$ASSET" -C "$TMP_DIR"
-  TMP_FILE="$TMP_DIR/$ASSET"
-fi
-
-# Extract if it's a zip
-if echo "$ASSET" | grep -qE '\.zip$'; then
+  check_command "tar"
+  tar -xzf "$ARCHIVE_PATH" -C "$TMP_DIR"
+elif echo "$ASSET" | grep -qE '\.zip$'; then
   check_command "unzip"
-  unzip -oq "$TMP_DIR/$ASSET" -d "$TMP_DIR"
-  TMP_FILE="$TMP_DIR/$ASSET"
+  unzip -oq "$ARCHIVE_PATH" -d "$TMP_DIR"
+else
+  fail "Unknown archive format: $ASSET"
 fi
 
 TMP_CRE_BIN="$TMP_DIR/${cli_name}_${LATEST_TAG}_${PLATFORM}_${ARCH_NAME}"
-# 5. Install the Binary
-[ -f "$TMP_FILE" ] || fail "Temporary file $TMP_FILE does not exist."
-chmod +x "$TMP_FILE"
 
-# Check for write permissions and use sudo if necessary
+[ -f "$TMP_CRE_BIN" ] || fail "Binary $TMP_CRE_BIN not found after extraction."
+chmod +x "$TMP_CRE_BIN"
+
+# 6. Install the Binary (moving into place)
 if [ -w "$install_dir" ]; then
   mv "$TMP_CRE_BIN" "$cre_bin"
 else
@@ -129,11 +196,18 @@ else
   sudo mv "$TMP_CRE_BIN" "$cre_bin"
 fi
 
-# check if the binary is installed correctly
-$cre_bin version || fail "$cli_name installation failed."
+# 7. Check that the binary runs
+"$cre_bin" version || fail "$cli_name installation failed."
 
-#cleanup
+# Cleanup
 rm -rf "$TMP_DIR"
+
+# 8. Post-install dependency checks (Go & Bun)
+echo
+echo "Performing environment checks for CRE workflows..."
+check_go_dependency
+check_bun_dependency
+echo
 
 refresh_command=''
 
@@ -143,8 +217,6 @@ quoted_install_dir=\"${install_dir//\"/\\\"}\"
 if [[ $quoted_install_dir = \"$HOME/* ]]; then
     quoted_install_dir=${quoted_install_dir/$HOME\//\$HOME/}
 fi
-
-echo
 
 case $(basename "$SHELL") in
 fish)
@@ -266,7 +338,7 @@ bash)
     ;;
 esac
 
-
+echo
 echo "$cli_name was installed successfully to $install_dir/$cli_name"
 echo
 echo "To get started, run:"
@@ -277,3 +349,6 @@ if [[ $refresh_command ]]; then
 fi
 
 echo "  $cli_name --help"
+echo
+echo "If you plan to build Go workflows, ensure Go >= $REQUIRED_GO_VERSION."
+echo "If you plan to build TypeScript workflows, ensure Bun >= $REQUIRED_BUN_VERSION."
