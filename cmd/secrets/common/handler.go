@@ -173,6 +173,7 @@ func (h *Handler) ValidateInputs(inputs UpsertSecretsInputs) error {
 }
 
 // TODO: use TxType interface
+// TODO: implement changeset handling
 func (h *Handler) PackAllowlistRequestTxData(reqDigest [32]byte, duration time.Duration) (string, error) {
 	contractABI, err := abi.JSON(strings.NewReader(workflow_registry_wrapper_v2.WorkflowRegistryMetaData.ABI))
 	if err != nil {

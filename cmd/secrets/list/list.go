@@ -64,7 +64,7 @@ func New(ctx *runtime.Context) *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&namespace, "namespace", "main", "Namespace to list (default: main)")
-	settings.AddRawTxFlag(cmd)
+	settings.AddTxnTypeFlags(cmd)
 
 	return cmd
 }

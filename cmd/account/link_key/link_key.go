@@ -84,7 +84,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 			return h.Execute(inputs)
 		},
 	}
-	settings.AddRawTxFlag(cmd)
+	settings.AddTxnTypeFlags(cmd)
 	settings.AddSkipConfirmation(cmd)
 	cmd.Flags().StringP("owner-label", "l", "", "Label for the workflow owner")
 
@@ -328,6 +328,11 @@ func (h *handler) linkOwner(resp initiateLinkingResponse) error {
 		fmt.Println("")
 		fmt.Printf("      %x\n", txOut.RawTx.Data)
 		fmt.Println("")
+
+	case client.Changeset:
+		// TODO: implement changeset handling
+		fmt.Println("Changeset output type is not yet implemented")
+
 	default:
 		h.log.Warn().Msgf("Unsupported transaction type: %s", txOut.Type)
 	}
