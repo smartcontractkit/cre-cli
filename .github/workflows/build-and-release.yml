@@ -458,10 +458,10 @@ jobs:
             echo "cre_${VERSION}_linux_arm64.tar.gz: $(shasum -a 256 ./linux_arm64/cre_${VERSION}_linux_arm64.tar.gz | awk '{print $1}')"
           
             # Linux amd64 tar.gz (ldd-2.35)
-            echo "cre_${VERSION}_linux_amd64.tar.gz: $(shasum -a 256 ./linux_amd64_ldd2-35/cre_${VERSION}_linux_amd64.tar.gz | awk '{print $1}')"
+            echo "cre_${VERSION}_linux_amd64.tar.gz (ldd-2.35): $(shasum -a 256 ./linux_amd64_ldd2-35/cre_${VERSION}_linux_amd64.tar.gz | awk '{print $1}')"
 
             # Linux arm64 tar.gz (ldd-2.35)
-            echo "cre_${VERSION}_linux_arm64.tar.gz: $(shasum -a 256 ./linux_arm64_ldd2-35/cre_${VERSION}_linux_arm64.tar.gz | awk '{print $1}')"
+            echo "cre_${VERSION}_linux_arm64.tar.gz (ldd-2.35): $(shasum -a 256 ./linux_arm64_ldd2-35/cre_${VERSION}_linux_arm64.tar.gz | awk '{print $1}')"
 
             # Darwin amd64 zip
             echo "cre_${VERSION}_darwin_amd64.zip: $(shasum -a 256 ./darwin_amd64/cre_${VERSION}_darwin_amd64.zip | awk '{print $1}')"
