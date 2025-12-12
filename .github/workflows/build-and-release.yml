@@ -123,7 +123,7 @@ jobs:
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@6f51ac03b9356f520e9adb1b1b7802705f340c2b # actions/upload-artifact@v4.5.0
         with:
-          name: cre_linux_${{ matrix.arch }}_${matrix.os}
+          name: cre_linux_${{ matrix.arch }}_${{ matrix.os }}
           path: |
             cre_${{ github.ref_name }}_linux_${{ matrix.arch }}.tar.gz
             cre_${{ github.ref_name }}_linux_${{ matrix.arch }}
