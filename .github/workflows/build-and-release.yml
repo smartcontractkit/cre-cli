@@ -40,7 +40,7 @@ jobs:
         run: |
           sudo apt-get update
           if [ "${{ matrix.arch }}" == "arm64" ]; then
-            sudo apt-get install -y gcc-aarch64-linux-gnu libc6-dev-arm64-cross libstdc++-13-dev-arm64-cross libstdc++-12-dev-arm64-cross
+            sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu libc6-dev-arm64-cross $(if [ "${{ matrix.os }}" = "ubuntu24.04" ]; then echo "libstdc++-13-dev-arm64-cross"; fi) libstdc++-12-dev-arm64-cross
           elif [ "${{ matrix.arch }}" == "amd64" ]; then
             sudo apt-get install -y gcc-x86-64-linux-gnu libc6-dev-amd64-cross
           fi
@@ -59,6 +59,7 @@ jobs:
           GOARCH: ${{ matrix.arch }}
           CGO_ENABLED: 1
           CC: ${{ matrix.arch == 'amd64' && 'x86_64-linux-gnu-gcc' || matrix.arch == 'arm64' && 'aarch64-linux-gnu-gcc' || '' }}
+          CXX: ${{ matrix.arch == 'arm64' && 'aarch64-linux-gnu-g++' || '' }}
           GITHUB_TOKEN: ${{ steps.setup-github-token.outputs.access-token }}
         run: |
           VERSION="${{ github.ref_name }}"
