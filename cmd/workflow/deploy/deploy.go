@@ -185,11 +185,12 @@ func (h *handler) Execute() error {
 		return errors.New("inputs have not been validated")
 	}
 
-	outputPath := h.inputs.OutputPath
-	if outputPath == "" {
-		outputPath = defaultOutputPath
+	buildParams, err := build.ResolveBuildParamsForWorkflow(h.inputs.WorkflowPath, h.inputs.OutputPath)
+	if err != nil {
+		return fmt.Errorf("failed to resolve build inputs: %w", err)
 	}
-	if err := h.builder.CompileAndSave(h.inputs.WorkflowPath, outputPath); err != nil {
+
+	if err := h.builder.CompileAndSave(buildParams); err != nil {
 		return fmt.Errorf("failed to compile workflow: %w", err)
 	}
 	if err := h.PrepareWorkflowArtifact(); err != nil {
@@ -197,6 +198,7 @@ func (h *handler) Execute() error {
 	}
 
 	h.runtimeContext.Workflow.ID = h.workflowArtifact.WorkflowID
+	h.runtimeContext.Workflow.Language = buildParams.WorkflowLanguage
 
 	h.wg.Wait()
 	if h.wrcErr != nil {

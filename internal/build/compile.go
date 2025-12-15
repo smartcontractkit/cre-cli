@@ -3,7 +3,6 @@ package build
 import (
 	"bytes"
 	"encoding/base64"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,8 +12,39 @@ import (
 	"github.com/rs/zerolog"
 
 	cmdcommon "github.com/smartcontractkit/cre-cli/cmd/common"
-	"github.com/smartcontractkit/cre-cli/internal/constants"
 )
+
+type Params struct {
+	WorkflowPath       string
+	WorkflowRootFolder string
+	WorkflowMainFile   string
+	WorkflowLanguage   string
+
+	OutputPath string
+}
+
+func ResolveBuildParamsForWorkflow(workflowPath, outputPath string) (Params, error) {
+	workflowAbsFile, err := filepath.Abs(workflowPath)
+	if err != nil {
+		return Params{}, fmt.Errorf("failed to get absolute path for the workflow file: %w", err)
+	}
+
+	if _, err := os.Stat(workflowAbsFile); os.IsNotExist(err) {
+		return Params{}, fmt.Errorf("workflow file not found: %s", workflowAbsFile)
+	}
+
+	workflowRootFolder := filepath.Dir(workflowPath)
+	workflowMainFile := filepath.Base(workflowPath)
+	workflowLanguage := cmdcommon.GetWorkflowLanguage(workflowMainFile)
+
+	return Params{
+		WorkflowPath:       workflowPath,
+		WorkflowRootFolder: workflowRootFolder,
+		WorkflowMainFile:   workflowMainFile,
+		WorkflowLanguage:   workflowLanguage,
+		OutputPath:         outputPath,
+	}, nil
+}
 
 type Builder struct {
 	log *zerolog.Logger
@@ -26,37 +56,15 @@ func NewBuilder(log *zerolog.Logger) *Builder {
 	}
 }
 
-func (b *Builder) Compile(workflowPath string) (*[]byte, error) {
+func (b *Builder) Compile(params Params) (*[]byte, error) {
 	fmt.Println("Compiling workflow...")
 
-	workflowAbsFile, err := filepath.Abs(workflowPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get absolute path for the workflow file: %w", err)
+	if err := EnsureToolsForBuild(params.WorkflowLanguage); err != nil {
+		return nil, fmt.Errorf("failed to ensure build tools: %w", err)
 	}
-
-	if _, err := os.Stat(workflowAbsFile); os.IsNotExist(err) {
-		return nil, fmt.Errorf("workflow file not found: %s", workflowAbsFile)
-	}
-
-	workflowRootFolder := filepath.Dir(workflowPath)
 
 	tmpWasmFileName := "tmp.wasm"
-	workflowMainFile := filepath.Base(workflowPath)
-
-	switch cmdcommon.GetWorkflowLanguage(workflowMainFile) {
-	case constants.WorkflowLanguageTypeScript:
-		if err := cmdcommon.EnsureTool("bun"); err != nil {
-			return nil, errors.New("bun is required for TypeScript workflows but was not found in PATH; install from https://bun.com/docs/installation")
-		}
-	case constants.WorkflowLanguageGolang:
-		if err := cmdcommon.EnsureTool("go"); err != nil {
-			return nil, errors.New("go toolchain is required for Go workflows but was not found in PATH; install from https://go.dev/dl")
-		}
-	default:
-		return nil, fmt.Errorf("unsupported workflow language for file %s", workflowMainFile)
-	}
-
-	buildCmd := cmdcommon.GetBuildCmd(workflowMainFile, tmpWasmFileName, workflowRootFolder)
+	buildCmd := cmdcommon.GetBuildCmd(params.WorkflowMainFile, tmpWasmFileName, params.WorkflowRootFolder)
 	b.log.Debug().
 		Str("Workflow directory", buildCmd.Dir).
 		Str("Command", buildCmd.String()).
@@ -72,7 +80,7 @@ func (b *Builder) Compile(workflowPath string) (*[]byte, error) {
 	b.log.Debug().Msgf("Build output: %s", buildOutput)
 	fmt.Println("Workflow compiled successfully")
 
-	tmpWasmLocation := filepath.Join(workflowRootFolder, tmpWasmFileName)
+	tmpWasmLocation := filepath.Join(params.WorkflowRootFolder, tmpWasmFileName)
 	wasmFile, err := os.ReadFile(tmpWasmLocation)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read workflow binary: %w", err)
@@ -94,18 +102,18 @@ func (b *Builder) Compile(workflowPath string) (*[]byte, error) {
 	return encoded, nil
 }
 
-func (b *Builder) CompileAndSave(workflowPath, outputPath string) error {
-	if outputPath == "" {
+func (b *Builder) CompileAndSave(params Params) error {
+	if params.OutputPath == "" {
 		return fmt.Errorf("output path is not specified")
 	}
-	outputPath = ensureOutputPathExtensions(outputPath)
+	params.OutputPath = ensureOutputPathExtensions(params.OutputPath)
 
-	binary, err := b.Compile(workflowPath)
+	binary, err := b.Compile(params)
 	if err != nil {
 		return err
 	}
 
-	return saveToFile(binary, outputPath)
+	return saveToFile(binary, params.OutputPath)
 }
 
 func ensureOutputPathExtensions(outputPath string) string {
