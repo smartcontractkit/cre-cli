@@ -9,6 +9,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/rs/zerolog"
+	"github.com/smartcontractkit/cre-cli/internal/artifact"
+	"github.com/smartcontractkit/cre-cli/internal/build"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
@@ -59,9 +61,11 @@ type handler struct {
 	stdin            io.Reader
 	credentials      *credentials.Credentials
 	environmentSet   *environments.EnvironmentSet
-	workflowArtifact *workflowArtifact
+	workflowArtifact *artifact.Artifact
 	wrc              *client.WorkflowRegistryV2Client
 	runtimeContext   *runtime.Context
+	builder          *build.Builder
+	artifactBuilder  *artifact.Builder
 
 	validated bool
 
@@ -69,7 +73,7 @@ type handler struct {
 	wrcErr error
 }
 
-var defaultOutputPath = "./binary.wasm.br.b64"
+const defaultOutputPath = "./binary.wasm.br.b64"
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
 	var deployCmd = &cobra.Command{
@@ -111,7 +115,8 @@ func newHandler(ctx *runtime.Context, stdin io.Reader) *handler {
 		stdin:            stdin,
 		credentials:      ctx.Credentials,
 		environmentSet:   ctx.EnvironmentSet,
-		workflowArtifact: &workflowArtifact{},
+		workflowArtifact: &artifact.Artifact{},
+		builder:          build.NewBuilder(ctx.Logger),
 		wrc:              nil,
 		runtimeContext:   ctx,
 		validated:        false,
@@ -176,7 +181,15 @@ func (h *handler) ValidateInputs() error {
 func (h *handler) Execute() error {
 	h.displayWorkflowDetails()
 
-	if err := h.Compile(); err != nil {
+	if !h.validated {
+		return errors.New("inputs have not been validated")
+	}
+
+	outputPath := h.inputs.OutputPath
+	if outputPath == "" {
+		outputPath = defaultOutputPath
+	}
+	if err := h.builder.CompileAndSave(h.inputs.WorkflowPath, outputPath); err != nil {
 		return fmt.Errorf("failed to compile workflow: %w", err)
 	}
 	if err := h.PrepareWorkflowArtifact(); err != nil {
