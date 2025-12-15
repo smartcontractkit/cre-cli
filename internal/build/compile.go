@@ -134,6 +134,7 @@ func applyBrotliCompressionV2(wasmContent *[]byte) ([]byte, error) {
 
 	// Compress using Brotli with default options
 	writer := brotli.NewWriter(&buffer)
+	defer writer.Close()
 
 	_, err := writer.Write(*wasmContent)
 	if err != nil {
