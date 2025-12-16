@@ -14,7 +14,7 @@ env:
 
 jobs:
   ci-lint:
-    runs-on: ubuntu-latest-4-cores
+    runs-on: ubuntu-latest-4cores-16GB
     permissions:
       id-token: write
       contents: read
@@ -101,7 +101,7 @@ jobs:
           artifact-name: go-test-${{ matrix.os }}
 
   ci-test-system:
-    runs-on: ubuntu-latest-4-cores
+    runs-on: ubuntu-latest-4cores-16GB
     if: false # Disable system test untill we have a version of the test that works with the new CRE CLI (Smartcon)
     environment: system-test
     permissions:
