@@ -117,6 +117,7 @@ func newHandler(ctx *runtime.Context, stdin io.Reader) *handler {
 		environmentSet:   ctx.EnvironmentSet,
 		workflowArtifact: &artifact.Artifact{},
 		builder:          build.NewBuilder(ctx.Logger),
+		artifactBuilder:  artifact.NewBuilder(ctx.Logger),
 		wrc:              nil,
 		runtimeContext:   ctx,
 		validated:        false,

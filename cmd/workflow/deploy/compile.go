@@ -7,7 +7,12 @@ import (
 )
 
 func (h *handler) Compile() error {
-	buildParams, err := build.ResolveBuildParamsForWorkflow(h.inputs.WorkflowPath, h.inputs.OutputPath)
+	outputPath := h.inputs.OutputPath
+	if outputPath == "" {
+		outputPath = defaultOutputPath
+	}
+
+	buildParams, err := build.ResolveBuildParamsForWorkflow(h.inputs.WorkflowPath, outputPath)
 	if err != nil {
 		return fmt.Errorf("failed to resolve build inputs: %w", err)
 	}
