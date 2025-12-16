@@ -6,12 +6,12 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/smartcontractkit/cre-cli/internal/artifact"
-	"github.com/smartcontractkit/cre-cli/internal/testutil/chainsim"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/smartcontractkit/cre-cli/internal/artifact"
 	"github.com/smartcontractkit/cre-cli/internal/testutil"
+	"github.com/smartcontractkit/cre-cli/internal/testutil/chainsim"
 )
 
 func TestBuilder_Build(t *testing.T) {
@@ -29,13 +29,13 @@ func TestBuilder_Build(t *testing.T) {
 		binaryData := []byte("test binary data")
 		encodedBinary := base64.StdEncoding.EncodeToString(binaryData)
 		binaryPath := filepath.Join(tempDir, "binary.wasm.br.b64")
-		err := os.WriteFile(binaryPath, []byte(encodedBinary), 0644)
+		err := os.WriteFile(binaryPath, []byte(encodedBinary), 0600)
 		require.NoError(t, err)
 
 		// Create config file
 		configData := []byte("test config data")
 		configPath := filepath.Join(tempDir, "config.yaml")
-		err = os.WriteFile(configPath, configData, 0644)
+		err = os.WriteFile(configPath, configData, 0600)
 		require.NoError(t, err)
 
 		inputs := artifact.Inputs{
@@ -62,7 +62,7 @@ func TestBuilder_Build(t *testing.T) {
 		binaryData := []byte("test binary data")
 		encodedBinary := base64.StdEncoding.EncodeToString(binaryData)
 		binaryPath := filepath.Join(tempDir, "binary.wasm.br.b64")
-		err := os.WriteFile(binaryPath, []byte(encodedBinary), 0644)
+		err := os.WriteFile(binaryPath, []byte(encodedBinary), 0600)
 		require.NoError(t, err)
 
 		inputs := artifact.Inputs{
@@ -121,7 +121,7 @@ func TestBuilder_Build(t *testing.T) {
 		binaryData := []byte("test binary data")
 		encodedBinary := base64.StdEncoding.EncodeToString(binaryData)
 		binaryPath := filepath.Join(tempDir, "binary.wasm.br.b64")
-		err := os.WriteFile(binaryPath, []byte(encodedBinary), 0644)
+		err := os.WriteFile(binaryPath, []byte(encodedBinary), 0600)
 		require.NoError(t, err)
 
 		inputs := artifact.Inputs{
@@ -158,7 +158,7 @@ func TestBuilder_Build(t *testing.T) {
 
 		// Create invalid base64 binary file
 		binaryPath := filepath.Join(tempDir, "binary.wasm.br.b64")
-		err := os.WriteFile(binaryPath, []byte("not-valid-base64!!!"), 0644)
+		err := os.WriteFile(binaryPath, []byte("not-valid-base64!!!"), 0600)
 		require.NoError(t, err)
 
 		inputs := artifact.Inputs{
@@ -187,13 +187,13 @@ func TestBuilder_BuildGeneratesConsistentWorkflowID(t *testing.T) {
 	binaryData := []byte("test binary data for consistency check")
 	encodedBinary := base64.StdEncoding.EncodeToString(binaryData)
 	binaryPath := filepath.Join(tempDir, "binary.wasm.br.b64")
-	err := os.WriteFile(binaryPath, []byte(encodedBinary), 0644)
+	err := os.WriteFile(binaryPath, []byte(encodedBinary), 0600)
 	require.NoError(t, err)
 
 	// Create config file
 	configData := []byte("test config data for consistency")
 	configPath := filepath.Join(tempDir, "config.yaml")
-	err = os.WriteFile(configPath, configData, 0644)
+	err = os.WriteFile(configPath, configData, 0600)
 	require.NoError(t, err)
 
 	inputs := artifact.Inputs{
@@ -227,13 +227,13 @@ func TestBuilder_BuildGeneratesDifferentWorkflowIDsForDifferentInputs(t *testing
 	binaryData := []byte("test binary data")
 	encodedBinary := base64.StdEncoding.EncodeToString(binaryData)
 	binaryPath := filepath.Join(tempDir, "binary.wasm.br.b64")
-	err := os.WriteFile(binaryPath, []byte(encodedBinary), 0644)
+	err := os.WriteFile(binaryPath, []byte(encodedBinary), 0600)
 	require.NoError(t, err)
 
 	// Create config file
 	configData := []byte("test config data")
 	configPath := filepath.Join(tempDir, "config.yaml")
-	err = os.WriteFile(configPath, configData, 0644)
+	err = os.WriteFile(configPath, configData, 0600)
 	require.NoError(t, err)
 
 	// Build artifact with first workflow name
@@ -274,7 +274,7 @@ func TestBuilder_BuildWithDifferentOwners(t *testing.T) {
 	binaryData := []byte("test binary data")
 	encodedBinary := base64.StdEncoding.EncodeToString(binaryData)
 	binaryPath := filepath.Join(tempDir, "binary.wasm.br.b64")
-	err := os.WriteFile(binaryPath, []byte(encodedBinary), 0644)
+	err := os.WriteFile(binaryPath, []byte(encodedBinary), 0600)
 	require.NoError(t, err)
 
 	tests := []struct {

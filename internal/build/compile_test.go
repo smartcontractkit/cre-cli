@@ -6,9 +6,10 @@ import (
 	"testing"
 
 	"github.com/rs/zerolog"
-	"github.com/smartcontractkit/cre-cli/internal/build"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/smartcontractkit/cre-cli/internal/build"
 )
 
 func TestResolveBuildParamsForWorkflow(t *testing.T) {
@@ -19,7 +20,7 @@ func TestResolveBuildParamsForWorkflow(t *testing.T) {
 
 		tempDir := t.TempDir()
 		workflowFile := filepath.Join(tempDir, "main.go")
-		err := os.WriteFile(workflowFile, []byte("package main"), 0644)
+		err := os.WriteFile(workflowFile, []byte("package main"), 0600)
 		require.NoError(t, err)
 
 		tests := []struct {
@@ -58,7 +59,7 @@ func TestResolveBuildParamsForWorkflow(t *testing.T) {
 
 		tempDir := t.TempDir()
 		workflowFile := filepath.Join(tempDir, "main.ts")
-		err := os.WriteFile(workflowFile, []byte("console.log('test')"), 0644)
+		err := os.WriteFile(workflowFile, []byte("console.log('test')"), 0600)
 		require.NoError(t, err)
 
 		params, err := build.ResolveBuildParamsForWorkflow(workflowFile, "output.wasm")
