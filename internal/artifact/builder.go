@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/rs/zerolog"
+
 	workflowUtils "github.com/smartcontractkit/chainlink-common/pkg/workflows"
 )
 

@@ -231,7 +231,7 @@ func StartAnvil(initState AnvilInitState, stateFileName string) (*os.Process, in
 
 	L.Info().Str("Command", anvil.String()).Msg("Executing anvil")
 	if err := anvil.Start(); err != nil {
-		return nil, 0, errors.New("failed to start Anvil")
+		return nil, 0, fmt.Errorf("failed to start Anvil: %w", err)
 	}
 
 	L.Info().Msg("Checking if Anvil is up and running")

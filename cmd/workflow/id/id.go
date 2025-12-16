@@ -4,13 +4,14 @@ import (
 	"fmt"
 
 	"github.com/rs/zerolog"
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
+
 	"github.com/smartcontractkit/cre-cli/internal/artifact"
 	"github.com/smartcontractkit/cre-cli/internal/build"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/validation"
-	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 const defaultOutputPath = "./binary.wasm.br.b64"
@@ -74,8 +75,12 @@ func (h *handler) Execute() error {
 		return fmt.Errorf("inputs have not been validated")
 	}
 
-	err := h.builder.CompileAndSave(h.inputs.WorkflowPath, h.inputs.OutputPath)
+	buildParams, err := build.ResolveBuildParamsForWorkflow(h.inputs.WorkflowPath, h.inputs.OutputPath)
 	if err != nil {
+		return fmt.Errorf("failed to resolve build parameters: %w", err)
+	}
+
+	if err := h.builder.CompileAndSave(buildParams); err != nil {
 		return fmt.Errorf("failed to compile workflow: %w", err)
 	}
 

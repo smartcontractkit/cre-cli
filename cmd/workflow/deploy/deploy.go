@@ -9,12 +9,12 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/rs/zerolog"
-	"github.com/smartcontractkit/cre-cli/internal/artifact"
-	"github.com/smartcontractkit/cre-cli/internal/build"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
 	"github.com/smartcontractkit/cre-cli/cmd/client"
+	"github.com/smartcontractkit/cre-cli/internal/artifact"
+	"github.com/smartcontractkit/cre-cli/internal/build"
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
@@ -185,20 +185,14 @@ func (h *handler) Execute() error {
 		return errors.New("inputs have not been validated")
 	}
 
-	buildParams, err := build.ResolveBuildParamsForWorkflow(h.inputs.WorkflowPath, h.inputs.OutputPath)
-	if err != nil {
-		return fmt.Errorf("failed to resolve build inputs: %w", err)
+	if err := h.Compile(); err != nil {
+		return err
 	}
 
-	if err := h.builder.CompileAndSave(buildParams); err != nil {
-		return fmt.Errorf("failed to compile workflow: %w", err)
-	}
 	if err := h.PrepareWorkflowArtifact(); err != nil {
 		return fmt.Errorf("failed to prepare workflow artifact: %w", err)
 	}
-
 	h.runtimeContext.Workflow.ID = h.workflowArtifact.WorkflowID
-	h.runtimeContext.Workflow.Language = buildParams.WorkflowLanguage
 
 	h.wg.Wait()
 	if h.wrcErr != nil {

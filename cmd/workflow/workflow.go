@@ -1,12 +1,12 @@
 package workflow
 
 import (
-	"github.com/smartcontractkit/cre-cli/cmd/workflow/id"
 	"github.com/spf13/cobra"
 
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/activate"
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/delete"
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/deploy"
+	"github.com/smartcontractkit/cre-cli/cmd/workflow/id"
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/pause"
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/simulate"
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/test"
