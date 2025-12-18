@@ -1,4 +1,4 @@
-package id
+package generate_id
 
 import (
 	"fmt"
@@ -38,10 +38,10 @@ type handler struct {
 
 func New(ctx *runtime.Context) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "id <workflow-folder-path>",
+		Use:     "generate-id <workflow-folder-path>",
 		Short:   "Display the workflow ID",
 		Args:    cobra.ExactArgs(1),
-		Example: `cre workflow id ./my-workflow`,
+		Example: `cre workflow generate-id ./my-workflow`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			h := newHandler(ctx)
 
