@@ -7,7 +7,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/smartcontractkit/cre-cli/internal/artifact"
+	"github.com/smartcontractkit/cre-cli/internal/artifacts"
 	"github.com/smartcontractkit/cre-cli/internal/build"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
@@ -31,7 +31,7 @@ type handler struct {
 	log             *zerolog.Logger
 	settings        *settings.Settings
 	builder         *build.Builder
-	artifactBuilder *artifact.Builder
+	artifactBuilder *artifacts.Builder
 
 	inputs Inputs
 }
@@ -66,7 +66,7 @@ func newHandler(ctx *runtime.Context) *handler {
 		log:             ctx.Logger,
 		settings:        ctx.Settings,
 		builder:         build.NewBuilder(ctx.Logger),
-		artifactBuilder: artifact.NewBuilder(ctx.Logger),
+		artifactBuilder: artifacts.NewBuilder(ctx.Logger),
 	}
 }
 
@@ -84,7 +84,7 @@ func (h *handler) Execute() error {
 		return fmt.Errorf("failed to compile workflow: %w", err)
 	}
 
-	workflowArtifact, err := h.artifactBuilder.Build(artifact.Inputs{
+	workflowArtifact, err := h.artifactBuilder.Build(artifacts.Inputs{
 		WorkflowOwner: h.inputs.WorkflowOwner,
 		WorkflowName:  h.inputs.WorkflowName,
 		OutputPath:    h.inputs.OutputPath,

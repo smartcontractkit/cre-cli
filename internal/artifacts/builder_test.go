@@ -1,4 +1,4 @@
-package artifact_test
+package artifacts_test
 
 import (
 	"encoding/base64"
@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/smartcontractkit/cre-cli/internal/artifact"
+	"github.com/smartcontractkit/cre-cli/internal/artifacts"
 	"github.com/smartcontractkit/cre-cli/internal/testutil"
 	"github.com/smartcontractkit/cre-cli/internal/testutil/chainsim"
 )
@@ -18,7 +18,7 @@ func TestBuilder_Build(t *testing.T) {
 	t.Parallel()
 
 	logger := testutil.NewTestLogger()
-	artifactBuilder := artifact.NewBuilder(logger)
+	artifactBuilder := artifacts.NewBuilder(logger)
 
 	t.Run("success with config", func(t *testing.T) {
 		t.Parallel()
@@ -38,19 +38,19 @@ func TestBuilder_Build(t *testing.T) {
 		err = os.WriteFile(configPath, configData, 0600)
 		require.NoError(t, err)
 
-		inputs := artifact.Inputs{
+		inputs := artifacts.Inputs{
 			WorkflowOwner: chainsim.TestAddress,
 			WorkflowName:  "test_workflow",
 			OutputPath:    binaryPath,
 			ConfigPath:    configPath,
 		}
 
-		art, err := artifactBuilder.Build(inputs)
+		artifact, err := artifactBuilder.Build(inputs)
 		require.NoError(t, err)
-		assert.NotNil(t, art)
-		assert.Equal(t, []byte(encodedBinary), art.BinaryData)
-		assert.Equal(t, configData, art.ConfigData)
-		assert.NotEmpty(t, art.WorkflowID)
+		assert.NotNil(t, artifact)
+		assert.Equal(t, []byte(encodedBinary), artifact.BinaryData)
+		assert.Equal(t, configData, artifact.ConfigData)
+		assert.NotEmpty(t, artifact.WorkflowID)
 	})
 
 	t.Run("success without config", func(t *testing.T) {
@@ -65,50 +65,50 @@ func TestBuilder_Build(t *testing.T) {
 		err := os.WriteFile(binaryPath, []byte(encodedBinary), 0600)
 		require.NoError(t, err)
 
-		inputs := artifact.Inputs{
+		inputs := artifacts.Inputs{
 			WorkflowOwner: chainsim.TestAddress,
 			WorkflowName:  "test_workflow",
 			OutputPath:    binaryPath,
 			ConfigPath:    "", // No config
 		}
 
-		art, err := artifactBuilder.Build(inputs)
+		artifact, err := artifactBuilder.Build(inputs)
 		require.NoError(t, err)
-		assert.NotNil(t, art)
-		assert.Equal(t, []byte(encodedBinary), art.BinaryData)
-		assert.Empty(t, art.ConfigData)
-		assert.NotEmpty(t, art.WorkflowID)
+		assert.NotNil(t, artifact)
+		assert.Equal(t, []byte(encodedBinary), artifact.BinaryData)
+		assert.Empty(t, artifact.ConfigData)
+		assert.NotEmpty(t, artifact.WorkflowID)
 	})
 
 	t.Run("error: workflow owner is empty", func(t *testing.T) {
 		t.Parallel()
 
-		inputs := artifact.Inputs{
+		inputs := artifacts.Inputs{
 			WorkflowOwner: "",
 			WorkflowName:  "test_workflow",
 			OutputPath:    "binary.wasm",
 			ConfigPath:    "",
 		}
 
-		art, err := artifactBuilder.Build(inputs)
+		artifact, err := artifactBuilder.Build(inputs)
 		require.Error(t, err)
-		assert.Nil(t, art)
+		assert.Nil(t, artifact)
 		assert.Contains(t, err.Error(), "workflow owner is required")
 	})
 
 	t.Run("error: workflow name is empty", func(t *testing.T) {
 		t.Parallel()
 
-		inputs := artifact.Inputs{
+		inputs := artifacts.Inputs{
 			WorkflowOwner: chainsim.TestAddress,
 			WorkflowName:  "",
 			OutputPath:    "binary.wasm",
 			ConfigPath:    "",
 		}
 
-		art, err := artifactBuilder.Build(inputs)
+		artifact, err := artifactBuilder.Build(inputs)
 		require.Error(t, err)
-		assert.Nil(t, art)
+		assert.Nil(t, artifact)
 		assert.Contains(t, err.Error(), "workflow name is required")
 	})
 
@@ -124,31 +124,31 @@ func TestBuilder_Build(t *testing.T) {
 		err := os.WriteFile(binaryPath, []byte(encodedBinary), 0600)
 		require.NoError(t, err)
 
-		inputs := artifact.Inputs{
+		inputs := artifacts.Inputs{
 			WorkflowOwner: chainsim.TestAddress,
 			WorkflowName:  "test_workflow",
 			OutputPath:    binaryPath,
 			ConfigPath:    "/nonexistent/config.yaml",
 		}
 
-		art, err := artifactBuilder.Build(inputs)
+		artifact, err := artifactBuilder.Build(inputs)
 		require.Error(t, err)
-		assert.Nil(t, art)
+		assert.Nil(t, artifact)
 	})
 
 	t.Run("error: invalid binary path", func(t *testing.T) {
 		t.Parallel()
 
-		inputs := artifact.Inputs{
+		inputs := artifacts.Inputs{
 			WorkflowOwner: chainsim.TestAddress,
 			WorkflowName:  "test_workflow",
 			OutputPath:    "/nonexistent/binary.wasm",
 			ConfigPath:    "",
 		}
 
-		art, err := artifactBuilder.Build(inputs)
+		artifact, err := artifactBuilder.Build(inputs)
 		require.Error(t, err)
-		assert.Nil(t, art)
+		assert.Nil(t, artifact)
 	})
 
 	t.Run("error: invalid base64 binary data", func(t *testing.T) {
@@ -161,16 +161,16 @@ func TestBuilder_Build(t *testing.T) {
 		err := os.WriteFile(binaryPath, []byte("not-valid-base64!!!"), 0600)
 		require.NoError(t, err)
 
-		inputs := artifact.Inputs{
+		inputs := artifacts.Inputs{
 			WorkflowOwner: chainsim.TestAddress,
 			WorkflowName:  "test_workflow",
 			OutputPath:    binaryPath,
 			ConfigPath:    "",
 		}
 
-		art, err := artifactBuilder.Build(inputs)
+		artifact, err := artifactBuilder.Build(inputs)
 		require.Error(t, err)
-		assert.Nil(t, art)
+		assert.Nil(t, artifact)
 		assert.Contains(t, err.Error(), "failed to decode base64 binary data")
 	})
 }
@@ -179,7 +179,7 @@ func TestBuilder_BuildGeneratesConsistentWorkflowID(t *testing.T) {
 	t.Parallel()
 
 	logger := testutil.NewTestLogger()
-	builder := artifact.NewBuilder(logger)
+	builder := artifacts.NewBuilder(logger)
 
 	tempDir := t.TempDir()
 
@@ -196,7 +196,7 @@ func TestBuilder_BuildGeneratesConsistentWorkflowID(t *testing.T) {
 	err = os.WriteFile(configPath, configData, 0600)
 	require.NoError(t, err)
 
-	inputs := artifact.Inputs{
+	inputs := artifacts.Inputs{
 		WorkflowOwner: chainsim.TestAddress,
 		WorkflowName:  "test_workflow",
 		OutputPath:    binaryPath,
@@ -219,7 +219,7 @@ func TestBuilder_BuildGeneratesDifferentWorkflowIDsForDifferentInputs(t *testing
 	t.Parallel()
 
 	logger := testutil.NewTestLogger()
-	builder := artifact.NewBuilder(logger)
+	builder := artifacts.NewBuilder(logger)
 
 	tempDir := t.TempDir()
 
@@ -237,7 +237,7 @@ func TestBuilder_BuildGeneratesDifferentWorkflowIDsForDifferentInputs(t *testing
 	require.NoError(t, err)
 
 	// Build artifact with first workflow name
-	inputs1 := artifact.Inputs{
+	inputs1 := artifacts.Inputs{
 		WorkflowOwner: chainsim.TestAddress,
 		WorkflowName:  "workflow_one",
 		OutputPath:    binaryPath,
@@ -247,7 +247,7 @@ func TestBuilder_BuildGeneratesDifferentWorkflowIDsForDifferentInputs(t *testing
 	require.NoError(t, err)
 
 	// Build artifact with different workflow name
-	inputs2 := artifact.Inputs{
+	inputs2 := artifacts.Inputs{
 		WorkflowOwner: chainsim.TestAddress,
 		WorkflowName:  "workflow_two",
 		OutputPath:    binaryPath,
@@ -266,7 +266,7 @@ func TestBuilder_BuildWithDifferentOwners(t *testing.T) {
 	t.Parallel()
 
 	logger := testutil.NewTestLogger()
-	builder := artifact.NewBuilder(logger)
+	builder := artifacts.NewBuilder(logger)
 
 	tempDir := t.TempDir()
 
@@ -294,17 +294,17 @@ func TestBuilder_BuildWithDifferentOwners(t *testing.T) {
 	var workflowIDs []string
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			inputs := artifact.Inputs{
+			inputs := artifacts.Inputs{
 				WorkflowOwner: tt.workflowOwner,
 				WorkflowName:  "test_workflow",
 				OutputPath:    binaryPath,
 				ConfigPath:    "",
 			}
 
-			art, err := builder.Build(inputs)
+			artifact, err := builder.Build(inputs)
 			require.NoError(t, err)
-			assert.NotEmpty(t, art.WorkflowID)
-			workflowIDs = append(workflowIDs, art.WorkflowID)
+			assert.NotEmpty(t, artifact.WorkflowID)
+			workflowIDs = append(workflowIDs, artifact.WorkflowID)
 		})
 	}
 

@@ -1,4 +1,4 @@
-package artifact
+package artifacts
 
 import (
 	"encoding/base64"
@@ -27,8 +27,8 @@ func NewBuilder(log *zerolog.Logger) *Builder {
 	}
 }
 
-func (b *Builder) Build(inputs Inputs) (art *Artifact, err error) {
-	art = &Artifact{}
+func (b *Builder) Build(inputs Inputs) (artifact *Artifact, err error) {
+	artifact = &Artifact{}
 
 	if inputs.WorkflowOwner == "" {
 		return nil, fmt.Errorf("workflow owner is required")
@@ -38,27 +38,27 @@ func (b *Builder) Build(inputs Inputs) (art *Artifact, err error) {
 		return nil, fmt.Errorf("workflow name is required")
 	}
 
-	art.ConfigData, err = b.prepareWorkflowConfig(inputs.ConfigPath)
+	artifact.ConfigData, err = b.prepareWorkflowConfig(inputs.ConfigPath)
 	if err != nil {
 		return nil, err
 	}
 
-	art.BinaryData, err = b.prepareWorkflowBinary(inputs.OutputPath)
+	artifact.BinaryData, err = b.prepareWorkflowBinary(inputs.OutputPath)
 	if err != nil {
 		return nil, err
 	}
 
-	binaryDataDecoded, err := decodeBinaryData(art.BinaryData)
+	binaryDataDecoded, err := decodeBinaryData(artifact.BinaryData)
 	if err != nil {
 		return nil, err
 	}
 
-	art.WorkflowID, err = workflowUtils.GenerateWorkflowIDFromStrings(inputs.WorkflowOwner, inputs.WorkflowName, binaryDataDecoded, art.ConfigData, "")
+	artifact.WorkflowID, err = workflowUtils.GenerateWorkflowIDFromStrings(inputs.WorkflowOwner, inputs.WorkflowName, binaryDataDecoded, artifact.ConfigData, "")
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate workflow ID: %w", err)
 	}
 
-	return art, nil
+	return artifact, nil
 }
 
 func decodeBinaryData(binaryData []byte) ([]byte, error) {

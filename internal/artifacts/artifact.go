@@ -1,4 +1,4 @@
-package artifact
+package artifacts
 
 type Artifact struct {
 	BinaryData []byte

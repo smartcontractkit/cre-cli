@@ -12,7 +12,7 @@ import (
 	"github.com/jarcoal/httpmock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/smartcontractkit/cre-cli/internal/artifact"
+	"github.com/smartcontractkit/cre-cli/internal/artifacts"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/testutil/chainsim"
 )
@@ -92,7 +92,7 @@ func TestUpload_SuccessAndErrorCases(t *testing.T) {
 	h.environmentSet.GraphQLURL = "http://graphql.endpoint"
 
 	// Success case : uploading binary and config data
-	h.workflowArtifact = &artifact.Artifact{
+	h.workflowArtifact = &artifacts.Artifact{
 		BinaryData: []byte("binarydata"),
 		ConfigData: []byte("configdata"),
 		WorkflowID: "workflow-id",
@@ -103,7 +103,7 @@ func TestUpload_SuccessAndErrorCases(t *testing.T) {
 	require.Equal(t, "http://origin/get", *h.inputs.ConfigURL)
 
 	// Success: empty ConfigData
-	h.workflowArtifact = &artifact.Artifact{
+	h.workflowArtifact = &artifacts.Artifact{
 		BinaryData: []byte("binarydata"),
 		ConfigData: nil,
 		WorkflowID: "workflow-id",
@@ -117,7 +117,7 @@ func TestUpload_SuccessAndErrorCases(t *testing.T) {
 	require.ErrorContains(t, err, "workflowArtifact is nil")
 
 	// Error: empty BinaryData
-	h.workflowArtifact = &artifact.Artifact{
+	h.workflowArtifact = &artifacts.Artifact{
 		BinaryData: nil,
 		ConfigData: []byte("configdata"),
 		WorkflowID: "workflow-id",
@@ -126,7 +126,7 @@ func TestUpload_SuccessAndErrorCases(t *testing.T) {
 	require.ErrorContains(t, err, "uploading binary artifact: content is empty for artifactType BINARY")
 
 	// Error: workflowID is empty
-	h.workflowArtifact = &artifact.Artifact{
+	h.workflowArtifact = &artifacts.Artifact{
 		BinaryData: []byte("binarydata"),
 		ConfigData: []byte("configdata"),
 		WorkflowID: "",
@@ -167,7 +167,7 @@ func TestUploadArtifactToStorageService_OriginError(t *testing.T) {
 	// Patch settings to use mock GraphQL endpoint
 	h.environmentSet.GraphQLURL = "http://graphql.endpoint"
 
-	h.workflowArtifact = &artifact.Artifact{
+	h.workflowArtifact = &artifacts.Artifact{
 		BinaryData: []byte("binarydata"),
 		ConfigData: []byte("configdata"),
 		WorkflowID: "workflow-id",
@@ -233,7 +233,7 @@ func TestUploadArtifactToStorageService_AlreadyExistsError(t *testing.T) {
 	// Patch settings to use mock GraphQL endpoint
 	h.environmentSet.GraphQLURL = "http://graphql.endpoint"
 
-	h.workflowArtifact = &artifact.Artifact{
+	h.workflowArtifact = &artifacts.Artifact{
 		BinaryData: []byte("binarydata"),
 		ConfigData: []byte("configdata"),
 		WorkflowID: "workflow-id",

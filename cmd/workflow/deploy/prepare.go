@@ -1,9 +1,11 @@
 package deploy
 
-import "github.com/smartcontractkit/cre-cli/internal/artifact"
+import (
+	"github.com/smartcontractkit/cre-cli/internal/artifacts"
+)
 
 func (h *handler) PrepareWorkflowArtifact() (err error) {
-	h.workflowArtifact, err = h.artifactBuilder.Build(artifact.Inputs{
+	h.workflowArtifact, err = h.artifactBuilder.Build(artifacts.Inputs{
 		WorkflowOwner: h.inputs.WorkflowOwner,
 		WorkflowName:  h.inputs.WorkflowName,
 		OutputPath:    h.inputs.OutputPath,
