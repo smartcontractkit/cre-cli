@@ -32,6 +32,8 @@ import (
 	intupdate "github.com/smartcontractkit/cre-cli/internal/update"
 )
 
+// This is a test comment
+
 //go:embed template/help_template.tpl
 var helpTemplate string
 
