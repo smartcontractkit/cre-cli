@@ -184,7 +184,7 @@ func IsValidChainName(name string) error {
 // `--broadcast` is false or not set. `cre help` should skip as well.
 func ShouldSkipGetOwner(cmd *cobra.Command) bool {
 	switch cmd.Name() {
-	case "help":
+	case "help", "id":
 		return true
 	case "simulate":
 		// Treat missing/invalid flag as false (i.e., skip).
