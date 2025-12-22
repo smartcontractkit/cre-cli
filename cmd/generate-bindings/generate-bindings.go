@@ -83,6 +83,10 @@ func (h *handler) ResolveInputs(args []string, v *viper.Viper) (Inputs, error) {
 		projectRoot = currentDir
 	}
 
+	if _, err := os.Stat(projectRoot); err != nil {
+		return Inputs{}, fmt.Errorf("project root not found: %s", projectRoot)
+	}
+
 	contractsPath := filepath.Join(projectRoot, "contracts")
 	if _, err := os.Stat(contractsPath); err != nil {
 		return Inputs{}, fmt.Errorf("contracts folder not found in project root: %s", contractsPath)
