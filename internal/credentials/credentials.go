@@ -58,14 +58,16 @@ func New(logger *zerolog.Logger) (*Credentials, error) {
 	path := filepath.Join(home, ConfigDir, ConfigFile)
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("you are not logged in, run cre login and try again")
+		//return nil, fmt.Errorf("you are not logged in, run cre login and try again")
+		return cfg, nil
 	}
 
 	if err := yaml.Unmarshal(data, &cfg.Tokens); err != nil {
 		return nil, err
 	}
 	if cfg.Tokens == nil || cfg.Tokens.AccessToken == "" {
-		return nil, fmt.Errorf("you are not logged in, run cre login and try again")
+		//return nil, fmt.Errorf("you are not logged in, run cre login and try again")
+		return cfg, nil
 	}
 	return cfg, nil
 }
