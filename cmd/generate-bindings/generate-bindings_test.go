@@ -442,6 +442,47 @@ func TestProcessAbiDirectory_NoAbiFiles(t *testing.T) {
 	assert.Contains(t, err.Error(), "no .abi files found")
 }
 
+func TestProcessAbiDirectory_PackageNameCollision(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "generate-bindings-test")
+	require.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	abiDir := filepath.Join(tempDir, "abi")
+	outDir := filepath.Join(tempDir, "generated")
+
+	err = os.MkdirAll(abiDir, 0755)
+	require.NoError(t, err)
+
+	abiContent := `[{"type":"function","name":"test","inputs":[],"outputs":[]}]`
+
+	// "TestContract" -> "test_contract"
+	// "test_contract" -> "test_contract"
+	err = os.WriteFile(filepath.Join(abiDir, "TestContract.abi"), []byte(abiContent), 0600)
+	require.NoError(t, err)
+	err = os.WriteFile(filepath.Join(abiDir, "test_contract.abi"), []byte(abiContent), 0600)
+	require.NoError(t, err)
+
+	logger := zerolog.New(os.Stderr).With().Timestamp().Logger()
+	runtimeCtx := &runtime.Context{
+		Logger: &logger,
+	}
+	handler := newHandler(runtimeCtx)
+
+	inputs := Inputs{
+		ProjectRoot: tempDir,
+		ChainFamily: "evm",
+		Language:    "go",
+		AbiPath:     abiDir,
+		PkgName:     "bindings",
+		OutPath:     outDir,
+	}
+
+	err = handler.processAbiDirectory(inputs)
+	fmt.Println(err.Error())
+	require.Error(t, err)
+	require.Equal(t, err.Error(), "package name collision: multiple contracts would generate the same package name 'test_contract' (contracts are converted to snake_case for package names). Please rename one of your contract files to avoid this conflict")
+}
+
 func TestProcessAbiDirectory_NonExistentDirectory(t *testing.T) {
 	logger := zerolog.New(os.Stderr).With().Timestamp().Logger()
 	runtimeCtx := &runtime.Context{
