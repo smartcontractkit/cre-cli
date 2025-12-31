@@ -2,13 +2,12 @@ package settings
 
 import (
 	"fmt"
-	"net/url"
-	"strings"
-
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"net/url"
+	"strings"
 )
 
 type WorkflowSettings struct {
@@ -25,7 +24,20 @@ type WorkflowSettings struct {
 	LoggingSettings struct {
 		SethConfigPath string `mapstructure:"seth-config-path" yaml:"seth-config-path"`
 	} `mapstructure:"logging" yaml:"logging"`
-	RPCs []RpcEndpoint `mapstructure:"rpcs" yaml:"rpcs"`
+	RPCs        []RpcEndpoint `mapstructure:"rpcs" yaml:"rpcs"`
+	CLDSettings struct {
+		CLDPath                   string `mapstructure:"cld-path" yaml:"cld-path"`
+		Environment               string `mapstructure:"environment" yaml:"environment"`
+		Domain                    string `mapstructure:"domain" yaml:"domain"`
+		WorkflowRegistryQualifier string `mapstructure:"workflow-registry-qualifier" yaml:"workflow-registry-qualifier"`
+		MCMSSettings              struct {
+			MinDelay          string `mapstructure:"min-delay" yaml:"min-delay"`
+			MCMSAction        string `mapstructure:"mcms-action" yaml:"mcms-action"`
+			OverrideRoot      string `mapstructure:"override-root" yaml:"override-root"`
+			TimelockQualifier string `mapstructure:"timelock-qualifier" yaml:"timelock-qualifier"`
+			ValidDuration     string `mapstructure:"valid-duration" yaml:"valid-duration"`
+		} `mapstructure:"mcms-settings" yaml:"mcms-settings"`
+	} `mapstructure:"cld-settings" yaml:"cld-settings"`
 }
 
 func loadWorkflowSettings(logger *zerolog.Logger, v *viper.Viper, cmd *cobra.Command, registryChainName string) (WorkflowSettings, error) {
@@ -64,6 +76,16 @@ func loadWorkflowSettings(logger *zerolog.Logger, v *viper.Viper, cmd *cobra.Com
 	workflowSettings.WorkflowArtifactSettings.ConfigPath = getSetting(ConfigPathSettingName)
 	workflowSettings.WorkflowArtifactSettings.SecretsPath = getSetting(SecretsPathSettingName)
 	workflowSettings.LoggingSettings.SethConfigPath = getSetting(SethConfigPathSettingName)
+
+	workflowSettings.CLDSettings.CLDPath = getSetting("cld-settings.cld-path")
+	workflowSettings.CLDSettings.WorkflowRegistryQualifier = getSetting("cld-settings.workflow-registry-qualifier")
+	workflowSettings.CLDSettings.Environment = getSetting("cld-settings.environment")
+	workflowSettings.CLDSettings.Domain = getSetting("cld-settings.domain")
+	workflowSettings.CLDSettings.MCMSSettings.MCMSAction = getSetting("cld-settings.mcms-settings.mcms-action")
+	workflowSettings.CLDSettings.MCMSSettings.TimelockQualifier = getSetting("cld-settings.mcms-settings.timelock-qualifier")
+	workflowSettings.CLDSettings.MCMSSettings.MinDelay = getSetting("cld-settings.mcms-settings.min-delay")
+	workflowSettings.CLDSettings.MCMSSettings.ValidDuration = getSetting("cld-settings.mcms-settings.valid-duration")
+	workflowSettings.CLDSettings.MCMSSettings.OverrideRoot = getSetting("cld-settings.mcms-settings.override-root")
 
 	fullRPCsKey := fmt.Sprintf("%s.%s", target, RpcsSettingName)
 	if v.IsSet(fullRPCsKey) {

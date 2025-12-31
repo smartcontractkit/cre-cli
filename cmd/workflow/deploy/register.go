@@ -5,35 +5,32 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
+
+	"github.com/smartcontractkit/cre-cli/internal/settings"
+	"github.com/smartcontractkit/mcms/types"
 
 	"github.com/ethereum/go-ethereum/common"
-	"gopkg.in/yaml.v2"
+	"sigs.k8s.io/yaml"
 
+	commonconfig "github.com/smartcontractkit/chainlink-common/pkg/config"
+	crecontracts "github.com/smartcontractkit/chainlink/deployment/cre/contracts"
+	"github.com/smartcontractkit/chainlink/deployment/cre/workflow_registry/v2/changeset"
 	"github.com/smartcontractkit/cre-cli/cmd/client"
 )
 
 type ChangesetFile struct {
-	Changesets []Changeset `yaml:"changesets"`
+	Environment string      `json:"environment"`
+	Domain      string      `json:"domain"`
+	Changesets  []Changeset `json:"changesets"`
 }
 
 type Changeset struct {
-	WorkflowUpsert WorkflowUpsert `yaml:"workflow_upsert"`
+	UpsertWorkflow UpsertWorkflow `json:"UpsertWorkflow"`
 }
 
-type WorkflowUpsert struct {
-	Payload Payload `yaml:"payload"`
-}
-
-type Payload struct {
-	WorkflowID     string `yaml:"workflowID"`
-	WorkflowName   string `yaml:"workflowName"`
-	WorkflowTag    string `yaml:"workflowTag"`
-	WorkflowStatus uint8  `yaml:"workflowStatus"`
-	DonFamily      string `yaml:"donFamily"`
-	BinaryURL      string `yaml:"binaryURL"`
-	ConfigURL      string `yaml:"configURL"`
-	Attributes     string `yaml:"attributes"`
-	KeepAlive      bool   `yaml:"keepAlive"`
+type UpsertWorkflow struct {
+	Payload changeset.UserWorkflowUpsertInput `json:"payload"`
 }
 
 func (h *handler) upsert() error {
@@ -113,11 +110,25 @@ func (h *handler) handleUpsert(params client.RegisterWorkflowV2Parameters) error
 		fmt.Println("")
 
 	case client.Changeset:
+		chainSelector, err := settings.GetChainSelectorByChainName(h.environmentSet.WorkflowRegistryChainName)
+		if err != nil {
+			return fmt.Errorf("failed to get chain selector for chain %q: %w", h.environmentSet.WorkflowRegistryChainName, err)
+		}
+		minDelay, err := time.ParseDuration(h.settings.Workflow.CLDSettings.MCMSSettings.MinDelay)
+		if err != nil {
+			return fmt.Errorf("failed to parse min delay duration: %w", err)
+		}
+		validDuration, err := time.ParseDuration(h.settings.Workflow.CLDSettings.MCMSSettings.ValidDuration)
+		if err != nil {
+			return fmt.Errorf("failed to parse valid duration: %w", err)
+		}
 		csFile := ChangesetFile{
+			Environment: h.settings.Workflow.CLDSettings.Environment,
+			Domain:      h.settings.Workflow.CLDSettings.Domain,
 			Changesets: []Changeset{
 				{
-					WorkflowUpsert: WorkflowUpsert{
-						Payload: Payload{
+					UpsertWorkflow: UpsertWorkflow{
+						Payload: changeset.UserWorkflowUpsertInput{
 							WorkflowID:     hex.EncodeToString(params.WorkflowID[:]),
 							WorkflowName:   params.WorkflowName,
 							WorkflowTag:    params.Tag,
@@ -125,8 +136,20 @@ func (h *handler) handleUpsert(params client.RegisterWorkflowV2Parameters) error
 							DonFamily:      params.DonFamily,
 							BinaryURL:      params.BinaryURL,
 							ConfigURL:      params.ConfigURL,
-							Attributes:     string(params.Attributes),
+							Attributes:     common.Bytes2Hex(params.Attributes),
 							KeepAlive:      params.KeepAlive,
+
+							ChainSelector: chainSelector,
+							MCMSConfig: &crecontracts.MCMSConfig{
+								MinDelay:     minDelay,
+								MCMSAction:   types.TimelockActionSchedule,
+								OverrideRoot: h.settings.Workflow.CLDSettings.MCMSSettings.OverrideRoot == "true",
+								TimelockQualifierPerChain: map[uint64]string{
+									chainSelector: h.settings.Workflow.CLDSettings.MCMSSettings.TimelockQualifier,
+								},
+								ValidDuration: commonconfig.MustNewDuration(validDuration),
+							},
+							WorkflowRegistryQualifier: h.settings.Workflow.CLDSettings.WorkflowRegistryQualifier,
 						},
 					},
 				},
@@ -138,18 +161,23 @@ func (h *handler) handleUpsert(params client.RegisterWorkflowV2Parameters) error
 			return fmt.Errorf("failed to marshal changeset to yaml: %w", err)
 		}
 
-		fileName := fmt.Sprintf("UpsertWorkflow_%s_%s.yaml", workflowName, h.workflowArtifact.WorkflowID)
-		workingDir, err := os.Getwd()
-		if err != nil {
-			return fmt.Errorf("failed to get working directory: %w", err)
-		}
-		if err := os.WriteFile(fileName, yamlData, 0600); err != nil {
+		fileName := fmt.Sprintf("UpsertWorkflow_%s_%d.yaml", workflowName, time.Now().Unix())
+		fullFilePath := filepath.Join(
+			filepath.Clean(h.settings.Workflow.CLDSettings.CLDPath),
+			"domains",
+			h.settings.Workflow.CLDSettings.Domain,
+			h.settings.Workflow.CLDSettings.Environment,
+			"durable_pipelines",
+			"inputs",
+			fileName,
+		)
+		if err := os.WriteFile(fullFilePath, yamlData, 0600); err != nil {
 			return fmt.Errorf("failed to write changeset yaml file: %w", err)
 		}
 
 		fmt.Println("")
 		fmt.Println("Changeset YAML file generated!")
-		fmt.Printf("File: %s\n", filepath.Join(workingDir, fileName))
+		fmt.Printf("File: %s\n", fullFilePath)
 		fmt.Println("")
 
 	default:

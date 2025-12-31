@@ -8,10 +8,17 @@ import (
 	"io"
 	"math/big"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	commonconfig "github.com/smartcontractkit/chainlink-common/pkg/config"
+	crecontracts "github.com/smartcontractkit/chainlink/deployment/cre/contracts"
+	"github.com/smartcontractkit/chainlink/deployment/cre/workflow_registry/v2/changeset"
+	"github.com/smartcontractkit/mcms/types"
+	"sigs.k8s.io/yaml"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/google/uuid"
@@ -54,6 +61,20 @@ type initiateLinkingResponse struct {
 	TransactionData    string   `json:"transactionData"`
 	FunctionSignature  string   `json:"functionSignature"`
 	FunctionArgs       []string `json:"functionArgs"`
+}
+
+type ChangesetFile struct {
+	Environment string      `json:"environment"`
+	Domain      string      `json:"domain"`
+	Changesets  []Changeset `json:"changesets"`
+}
+
+type Changeset struct {
+	LinkOwner LinkOwner `json:"LinkOwner"`
+}
+
+type LinkOwner struct {
+	Payload changeset.UserLinkOwnerInput `json:"payload"`
 }
 
 func Exec(ctx *runtime.Context, in Inputs) error {
@@ -330,8 +351,68 @@ func (h *handler) linkOwner(resp initiateLinkingResponse) error {
 		fmt.Println("")
 
 	case client.Changeset:
-		// TODO: implement changeset handling
-		fmt.Println("Changeset output type is not yet implemented")
+		chainSelector, err := settings.GetChainSelectorByChainName(h.environmentSet.WorkflowRegistryChainName)
+		if err != nil {
+			return fmt.Errorf("failed to get chain selector for chain %q: %w", h.environmentSet.WorkflowRegistryChainName, err)
+		}
+		minDelay, err := time.ParseDuration(h.settings.Workflow.CLDSettings.MCMSSettings.MinDelay)
+		if err != nil {
+			return fmt.Errorf("failed to parse min delay duration: %w", err)
+		}
+		validDuration, err := time.ParseDuration(h.settings.Workflow.CLDSettings.MCMSSettings.ValidDuration)
+		if err != nil {
+			return fmt.Errorf("failed to parse valid duration: %w", err)
+		}
+		csFile := ChangesetFile{
+			Environment: h.settings.Workflow.CLDSettings.Environment,
+			Domain:      h.settings.Workflow.CLDSettings.Domain,
+			Changesets: []Changeset{
+				{
+					LinkOwner: LinkOwner{
+						Payload: changeset.UserLinkOwnerInput{
+							ValidityTimestamp: ts,
+							Proof:             common.Bytes2Hex(proofBytes[:]),
+							Signature:         common.Bytes2Hex(sigBytes),
+							ChainSelector:     chainSelector,
+							MCMSConfig: &crecontracts.MCMSConfig{
+								MinDelay:     minDelay,
+								MCMSAction:   types.TimelockActionSchedule,
+								OverrideRoot: h.settings.Workflow.CLDSettings.MCMSSettings.OverrideRoot == "true",
+								TimelockQualifierPerChain: map[uint64]string{
+									chainSelector: h.settings.Workflow.CLDSettings.MCMSSettings.TimelockQualifier,
+								},
+								ValidDuration: commonconfig.MustNewDuration(validDuration),
+							},
+							WorkflowRegistryQualifier: h.settings.Workflow.CLDSettings.WorkflowRegistryQualifier,
+						},
+					},
+				},
+			},
+		}
+
+		yamlData, err := yaml.Marshal(&csFile)
+		if err != nil {
+			return fmt.Errorf("failed to marshal changeset to yaml: %w", err)
+		}
+
+		fileName := fmt.Sprintf("LinkOwner_%s_%d.yaml", h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress, time.Now().Unix())
+		fullFilePath := filepath.Join(
+			filepath.Clean(h.settings.Workflow.CLDSettings.CLDPath),
+			"domains",
+			h.settings.Workflow.CLDSettings.Domain,
+			h.settings.Workflow.CLDSettings.Environment,
+			"durable_pipelines",
+			"inputs",
+			fileName,
+		)
+		if err := os.WriteFile(fullFilePath, yamlData, 0600); err != nil {
+			return fmt.Errorf("failed to write changeset yaml file: %w", err)
+		}
+
+		fmt.Println("")
+		fmt.Println("Changeset YAML file generated!")
+		fmt.Printf("File: %s\n", fullFilePath)
+		fmt.Println("")
 
 	default:
 		h.log.Warn().Msgf("Unsupported transaction type: %s", txOut.Type)
