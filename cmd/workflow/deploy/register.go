@@ -3,35 +3,16 @@ package deploy
 import (
 	"encoding/hex"
 	"fmt"
-	"os"
-	"path/filepath"
 	"time"
 
-	"github.com/smartcontractkit/cre-cli/internal/settings"
-	"github.com/smartcontractkit/mcms/types"
-
 	"github.com/ethereum/go-ethereum/common"
-	"sigs.k8s.io/yaml"
 
-	commonconfig "github.com/smartcontractkit/chainlink-common/pkg/config"
-	crecontracts "github.com/smartcontractkit/chainlink/deployment/cre/contracts"
 	"github.com/smartcontractkit/chainlink/deployment/cre/workflow_registry/v2/changeset"
+
 	"github.com/smartcontractkit/cre-cli/cmd/client"
+	"github.com/smartcontractkit/cre-cli/internal/settings"
+	"github.com/smartcontractkit/cre-cli/internal/types"
 )
-
-type ChangesetFile struct {
-	Environment string      `json:"environment"`
-	Domain      string      `json:"domain"`
-	Changesets  []Changeset `json:"changesets"`
-}
-
-type Changeset struct {
-	UpsertWorkflow UpsertWorkflow `json:"UpsertWorkflow"`
-}
-
-type UpsertWorkflow struct {
-	Payload changeset.UserWorkflowUpsertInput `json:"payload"`
-}
 
 func (h *handler) upsert() error {
 	if !h.validated {
@@ -114,22 +95,18 @@ func (h *handler) handleUpsert(params client.RegisterWorkflowV2Parameters) error
 		if err != nil {
 			return fmt.Errorf("failed to get chain selector for chain %q: %w", h.environmentSet.WorkflowRegistryChainName, err)
 		}
-		minDelay, err := time.ParseDuration(h.settings.Workflow.CLDSettings.MCMSSettings.MinDelay)
+		mcmsConfig, err := types.MCMSConfig(h.settings, chainSelector)
 		if err != nil {
-			return fmt.Errorf("failed to parse min delay duration: %w", err)
+			return fmt.Errorf("failed to get MCMS config: %w", err)
 		}
-		validDuration, err := time.ParseDuration(h.settings.Workflow.CLDSettings.MCMSSettings.ValidDuration)
-		if err != nil {
-			return fmt.Errorf("failed to parse valid duration: %w", err)
-		}
-		csFile := ChangesetFile{
+		csFile := types.ChangesetFile{
 			Environment: h.settings.Workflow.CLDSettings.Environment,
 			Domain:      h.settings.Workflow.CLDSettings.Domain,
-			Changesets: []Changeset{
+			Changesets: []types.Changeset{
 				{
-					UpsertWorkflow: UpsertWorkflow{
+					UpsertWorkflow: &types.UpsertWorkflow{
 						Payload: changeset.UserWorkflowUpsertInput{
-							WorkflowID:     hex.EncodeToString(params.WorkflowID[:]),
+							WorkflowID:     h.runtimeContext.Workflow.ID,
 							WorkflowName:   params.WorkflowName,
 							WorkflowTag:    params.Tag,
 							WorkflowStatus: params.Status,
@@ -139,16 +116,8 @@ func (h *handler) handleUpsert(params client.RegisterWorkflowV2Parameters) error
 							Attributes:     common.Bytes2Hex(params.Attributes),
 							KeepAlive:      params.KeepAlive,
 
-							ChainSelector: chainSelector,
-							MCMSConfig: &crecontracts.MCMSConfig{
-								MinDelay:     minDelay,
-								MCMSAction:   types.TimelockActionSchedule,
-								OverrideRoot: h.settings.Workflow.CLDSettings.MCMSSettings.OverrideRoot == "true",
-								TimelockQualifierPerChain: map[uint64]string{
-									chainSelector: h.settings.Workflow.CLDSettings.MCMSSettings.TimelockQualifier,
-								},
-								ValidDuration: commonconfig.MustNewDuration(validDuration),
-							},
+							ChainSelector:             chainSelector,
+							MCMSConfig:                mcmsConfig,
 							WorkflowRegistryQualifier: h.settings.Workflow.CLDSettings.WorkflowRegistryQualifier,
 						},
 					},
@@ -156,29 +125,9 @@ func (h *handler) handleUpsert(params client.RegisterWorkflowV2Parameters) error
 			},
 		}
 
-		yamlData, err := yaml.Marshal(&csFile)
-		if err != nil {
-			return fmt.Errorf("failed to marshal changeset to yaml: %w", err)
-		}
+		fileName := fmt.Sprintf("UpsertWorkflow_%s_%s.yaml", workflowName, time.Now().Format("20060102_150405"))
 
-		fileName := fmt.Sprintf("UpsertWorkflow_%s_%d.yaml", workflowName, time.Now().Unix())
-		fullFilePath := filepath.Join(
-			filepath.Clean(h.settings.Workflow.CLDSettings.CLDPath),
-			"domains",
-			h.settings.Workflow.CLDSettings.Domain,
-			h.settings.Workflow.CLDSettings.Environment,
-			"durable_pipelines",
-			"inputs",
-			fileName,
-		)
-		if err := os.WriteFile(fullFilePath, yamlData, 0600); err != nil {
-			return fmt.Errorf("failed to write changeset yaml file: %w", err)
-		}
-
-		fmt.Println("")
-		fmt.Println("Changeset YAML file generated!")
-		fmt.Printf("File: %s\n", fullFilePath)
-		fmt.Println("")
+		return types.WriteChangesetFile(fileName, &csFile, h.settings)
 
 	default:
 		h.log.Warn().Msgf("Unsupported transaction type: %s", txOut.Type)

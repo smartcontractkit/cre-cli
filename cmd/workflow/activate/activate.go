@@ -6,16 +6,20 @@ import (
 	"math/big"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
+	"github.com/smartcontractkit/chainlink/deployment/cre/workflow_registry/v2/changeset"
+
 	"github.com/smartcontractkit/cre-cli/cmd/client"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
+	"github.com/smartcontractkit/cre-cli/internal/types"
 	"github.com/smartcontractkit/cre-cli/internal/validation"
 )
 
@@ -198,8 +202,36 @@ func (h *handler) Execute() error {
 		fmt.Println("")
 
 	case client.Changeset:
-		// TODO: implement changeset handling
-		fmt.Println("Changeset output type is not yet implemented")
+		chainSelector, err := settings.GetChainSelectorByChainName(h.environmentSet.WorkflowRegistryChainName)
+		if err != nil {
+			return fmt.Errorf("failed to get chain selector for chain %q: %w", h.environmentSet.WorkflowRegistryChainName, err)
+		}
+		mcmsConfig, err := types.MCMSConfig(h.settings, chainSelector)
+		if err != nil {
+			return fmt.Errorf("failed to get MCMS config: %w", err)
+		}
+		csFile := types.ChangesetFile{
+			Environment: h.settings.Workflow.CLDSettings.Environment,
+			Domain:      h.settings.Workflow.CLDSettings.Domain,
+			Changesets: []types.Changeset{
+				{
+					ActivateWorkflow: &types.ActivateWorkflow{
+						Payload: changeset.UserWorkflowActivateInput{
+							WorkflowID: h.runtimeContext.Workflow.ID,
+							DonFamily:  h.inputs.DonFamily,
+
+							ChainSelector:             chainSelector,
+							MCMSConfig:                mcmsConfig,
+							WorkflowRegistryQualifier: h.settings.Workflow.CLDSettings.WorkflowRegistryQualifier,
+						},
+					},
+				},
+			},
+		}
+
+		fileName := fmt.Sprintf("ActivateWorkflow_%s_%s.yaml", workflowName, time.Now().Format("20060102_150405"))
+
+		return types.WriteChangesetFile(fileName, &csFile, h.settings)
 
 	default:
 		h.log.Warn().Msgf("Unsupported transaction type: %s", txOut.Type)
