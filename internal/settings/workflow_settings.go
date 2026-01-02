@@ -2,12 +2,13 @@ package settings
 
 import (
 	"fmt"
+	"net/url"
+	"strings"
+
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"net/url"
-	"strings"
 )
 
 type WorkflowSettings struct {
@@ -77,15 +78,18 @@ func loadWorkflowSettings(logger *zerolog.Logger, v *viper.Viper, cmd *cobra.Com
 	workflowSettings.WorkflowArtifactSettings.SecretsPath = getSetting(SecretsPathSettingName)
 	workflowSettings.LoggingSettings.SethConfigPath = getSetting(SethConfigPathSettingName)
 
-	workflowSettings.CLDSettings.CLDPath = getSetting("cld-settings.cld-path")
-	workflowSettings.CLDSettings.WorkflowRegistryQualifier = getSetting("cld-settings.workflow-registry-qualifier")
-	workflowSettings.CLDSettings.Environment = getSetting("cld-settings.environment")
-	workflowSettings.CLDSettings.Domain = getSetting("cld-settings.domain")
-	workflowSettings.CLDSettings.MCMSSettings.MCMSAction = getSetting("cld-settings.mcms-settings.mcms-action")
-	workflowSettings.CLDSettings.MCMSSettings.TimelockQualifier = getSetting("cld-settings.mcms-settings.timelock-qualifier")
-	workflowSettings.CLDSettings.MCMSSettings.MinDelay = getSetting("cld-settings.mcms-settings.min-delay")
-	workflowSettings.CLDSettings.MCMSSettings.ValidDuration = getSetting("cld-settings.mcms-settings.valid-duration")
-	workflowSettings.CLDSettings.MCMSSettings.OverrideRoot = getSetting("cld-settings.mcms-settings.override-root")
+	isChangeset, _ := cmd.Flags().GetBool(Flags.Changeset.Name)
+	if isChangeset {
+		workflowSettings.CLDSettings.CLDPath = getSetting("cld-settings.cld-path")
+		workflowSettings.CLDSettings.WorkflowRegistryQualifier = getSetting("cld-settings.workflow-registry-qualifier")
+		workflowSettings.CLDSettings.Environment = getSetting("cld-settings.environment")
+		workflowSettings.CLDSettings.Domain = getSetting("cld-settings.domain")
+		workflowSettings.CLDSettings.MCMSSettings.MCMSAction = getSetting("cld-settings.mcms-settings.mcms-action")
+		workflowSettings.CLDSettings.MCMSSettings.TimelockQualifier = getSetting("cld-settings.mcms-settings.timelock-qualifier")
+		workflowSettings.CLDSettings.MCMSSettings.MinDelay = getSetting("cld-settings.mcms-settings.min-delay")
+		workflowSettings.CLDSettings.MCMSSettings.ValidDuration = getSetting("cld-settings.mcms-settings.valid-duration")
+		workflowSettings.CLDSettings.MCMSSettings.OverrideRoot = getSetting("cld-settings.mcms-settings.override-root")
+	}
 
 	fullRPCsKey := fmt.Sprintf("%s.%s", target, RpcsSettingName)
 	if v.IsSet(fullRPCsKey) {

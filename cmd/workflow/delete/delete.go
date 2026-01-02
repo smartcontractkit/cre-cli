@@ -18,6 +18,7 @@ import (
 	"github.com/smartcontractkit/chainlink/deployment/cre/workflow_registry/v2/changeset"
 
 	"github.com/smartcontractkit/cre-cli/cmd/client"
+	cmdCommon "github.com/smartcontractkit/cre-cli/cmd/common"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/prompt"
@@ -218,7 +219,7 @@ func (h *handler) Execute() error {
 			if err != nil {
 				return fmt.Errorf("failed to get chain selector for chain %q: %w", h.environmentSet.WorkflowRegistryChainName, err)
 			}
-			mcmsConfig, err := types.MCMSConfig(h.settings, chainSelector)
+			mcmsConfig, err := settings.GetMCMSConfig(h.settings, chainSelector)
 			if err != nil {
 				return fmt.Errorf("failed to get MCMS config: %w", err)
 			}
@@ -242,7 +243,7 @@ func (h *handler) Execute() error {
 
 			fileName := fmt.Sprintf("DeleteWorkflow_%s_%s.yaml", workflowName, time.Now().Format("20060102_150405"))
 
-			return types.WriteChangesetFile(fileName, &csFile, h.settings)
+			return cmdCommon.WriteChangesetFile(fileName, &csFile, h.settings)
 
 		default:
 			h.log.Warn().Msgf("Unsupported transaction type: %s", txOut.Type)

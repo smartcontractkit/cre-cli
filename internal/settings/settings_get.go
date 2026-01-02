@@ -5,11 +5,15 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/spf13/viper"
 
 	chainSelectors "github.com/smartcontractkit/chain-selectors"
+	commonconfig "github.com/smartcontractkit/chainlink-common/pkg/config"
+	crecontracts "github.com/smartcontractkit/chainlink/deployment/cre/contracts"
+	mcmstypes "github.com/smartcontractkit/mcms/types"
 
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/ethkeys"
@@ -178,4 +182,26 @@ func GetChainSelectorByChainName(name string) (uint64, error) {
 	}
 
 	return selector, nil
+}
+
+func GetMCMSConfig(settings *Settings, chainSelector uint64) (*crecontracts.MCMSConfig, error) {
+	minDelay, err := time.ParseDuration(settings.Workflow.CLDSettings.MCMSSettings.MinDelay)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse min delay duration: %w", err)
+	}
+	validDuration, err := time.ParseDuration(settings.Workflow.CLDSettings.MCMSSettings.ValidDuration)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse valid duration: %w", err)
+	}
+	mcmsAction := mcmstypes.TimelockAction(strings.ToLower(settings.Workflow.CLDSettings.MCMSSettings.MCMSAction))
+
+	return &crecontracts.MCMSConfig{
+		MinDelay:     minDelay,
+		MCMSAction:   mcmsAction,
+		OverrideRoot: settings.Workflow.CLDSettings.MCMSSettings.OverrideRoot == "true",
+		TimelockQualifierPerChain: map[uint64]string{
+			chainSelector: settings.Workflow.CLDSettings.MCMSSettings.TimelockQualifier,
+		},
+		ValidDuration: commonconfig.MustNewDuration(validDuration),
+	}, nil
 }

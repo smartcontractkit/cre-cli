@@ -17,11 +17,14 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/rs/zerolog"
+	"sigs.k8s.io/yaml"
 
 	"github.com/smartcontractkit/chainlink-testing-framework/seth"
 
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/logger"
+	"github.com/smartcontractkit/cre-cli/internal/settings"
+	inttypes "github.com/smartcontractkit/cre-cli/internal/types"
 )
 
 func ValidateEventSignature(l *zerolog.Logger, tx *seth.DecodedTransaction, e abi.Event) (bool, int) {
@@ -213,4 +216,30 @@ func GetBuildCmd(inputFile string, outputFile string, rootFolder string) *exec.C
 	buildCmd.Dir = rootFolder
 
 	return buildCmd
+}
+
+func WriteChangesetFile(fileName string, changesetFile *inttypes.ChangesetFile, settings *settings.Settings) error {
+	yamlData, err := yaml.Marshal(&changesetFile)
+	if err != nil {
+		return fmt.Errorf("failed to marshal changeset to yaml: %w", err)
+	}
+
+	fullFilePath := filepath.Join(
+		filepath.Clean(settings.Workflow.CLDSettings.CLDPath),
+		"domains",
+		settings.Workflow.CLDSettings.Domain,
+		settings.Workflow.CLDSettings.Environment,
+		"durable_pipelines",
+		"inputs",
+		fileName,
+	)
+	if err := os.WriteFile(fullFilePath, yamlData, 0600); err != nil {
+		return fmt.Errorf("failed to write changeset yaml file: %w", err)
+	}
+
+	fmt.Println("")
+	fmt.Println("Changeset YAML file generated!")
+	fmt.Printf("File: %s\n", fullFilePath)
+	fmt.Println("")
+	return nil
 }
