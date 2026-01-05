@@ -13,6 +13,8 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/smartcontractkit/cre-cli/cmd/client"
+	"github.com/smartcontractkit/cre-cli/internal/artifacts"
+	"github.com/smartcontractkit/cre-cli/internal/build"
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
@@ -59,9 +61,11 @@ type handler struct {
 	stdin            io.Reader
 	credentials      *credentials.Credentials
 	environmentSet   *environments.EnvironmentSet
-	workflowArtifact *workflowArtifact
+	workflowArtifact *artifacts.Artifact
 	wrc              *client.WorkflowRegistryV2Client
 	runtimeContext   *runtime.Context
+	builder          *build.Builder
+	artifactBuilder  *artifacts.Builder
 
 	validated bool
 
@@ -73,7 +77,7 @@ type handler struct {
 	wrcErr error
 }
 
-var defaultOutputPath = "./binary.wasm.br.b64"
+const defaultOutputPath = "./binary.wasm.br.b64"
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
 	var deployCmd = &cobra.Command{
@@ -115,7 +119,9 @@ func newHandler(ctx *runtime.Context, stdin io.Reader) *handler {
 		stdin:            stdin,
 		credentials:      ctx.Credentials,
 		environmentSet:   ctx.EnvironmentSet,
-		workflowArtifact: &workflowArtifact{},
+		workflowArtifact: &artifacts.Artifact{},
+		builder:          build.NewBuilder(ctx.Logger),
+		artifactBuilder:  artifacts.NewBuilder(ctx.Logger),
 		wrc:              nil,
 		runtimeContext:   ctx,
 		validated:        false,
@@ -180,13 +186,17 @@ func (h *handler) ValidateInputs() error {
 func (h *handler) Execute() error {
 	h.displayWorkflowDetails()
 
-	if err := h.Compile(); err != nil {
-		return fmt.Errorf("failed to compile workflow: %w", err)
+	if !h.validated {
+		return errors.New("inputs have not been validated")
 	}
+
+	if err := h.Compile(); err != nil {
+		return err
+	}
+
 	if err := h.PrepareWorkflowArtifact(); err != nil {
 		return fmt.Errorf("failed to prepare workflow artifact: %w", err)
 	}
-
 	h.runtimeContext.Workflow.ID = h.workflowArtifact.WorkflowID
 
 	h.wg.Wait()

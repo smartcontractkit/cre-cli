@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/smartcontractkit/cre-cli/internal/artifacts"
 	"github.com/smartcontractkit/cre-cli/internal/testutil/chainsim"
 )
 
@@ -56,7 +57,7 @@ func TestWorkflowUpsert(t *testing.T) {
 				err = handler.ValidateInputs()
 				require.NoError(t, err)
 
-				wfArt := workflowArtifact{
+				wfArt := artifacts.Artifact{
 					BinaryData: []byte("0x1234"),
 					ConfigData: []byte("config"),
 					WorkflowID: "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
