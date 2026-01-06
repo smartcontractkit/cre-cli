@@ -15,7 +15,7 @@ func (h *handler) PrepareWorkflowArtifact() (err error) {
 		return err
 	}
 
-	h.log.Info().Str("workflowID", h.workflowArtifact.WorkflowID).Msg("Prepared workflow artifact")
+	h.log.Debug().Str("workflowID", h.workflowArtifact.WorkflowID).Msg("Prepared workflow artifact")
 
 	return nil
 }
