@@ -340,7 +340,7 @@ func (h *handler) linkOwner(resp initiateLinkingResponse) error {
 		}
 		mcmsConfig, err := settings.GetMCMSConfig(h.settings, chainSelector)
 		if err != nil {
-			return fmt.Errorf("failed to get MCMS config: %w", err)
+			fmt.Println("\nMCMS config not found or is incorrect, skipping MCMS config in changeset")
 		}
 		csFile := types.ChangesetFile{
 			Environment: h.settings.Workflow.CLDSettings.Environment,
