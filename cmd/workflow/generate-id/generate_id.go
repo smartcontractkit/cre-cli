@@ -94,7 +94,7 @@ func (h *handler) Execute() error {
 		return fmt.Errorf("failed to build workflow artifact: %w", err)
 	}
 
-	h.log.Info().Str("workflowID", workflowArtifact.WorkflowID).Msg("Workflow ID computed successfully")
+	h.log.Debug().Str("workflowID", workflowArtifact.WorkflowID).Msg("Workflow ID computed successfully")
 	fmt.Println("Workflow ID:", workflowArtifact.WorkflowID)
 
 	return nil
