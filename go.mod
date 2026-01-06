@@ -29,8 +29,8 @@ require (
 	github.com/smartcontractkit/chainlink-protos/cre/go v0.0.0-20251124151448-0448aefdaab9
 	github.com/smartcontractkit/chainlink-protos/workflows/go v0.0.0-20251025021331-aa7746850cc4
 	github.com/smartcontractkit/chainlink-testing-framework/seth v1.51.3
-	github.com/smartcontractkit/chainlink/deployment v0.0.0-20260102085451-03accc9a563e
-	github.com/smartcontractkit/chainlink/v2 v2.29.1-cre-beta.0.0.20251231200809-f2da465bf7f2
+	github.com/smartcontractkit/chainlink/deployment v0.0.0-20260106152452-73e8e27278fe
+	github.com/smartcontractkit/chainlink/v2 v2.29.1-cre-beta.0.0.20260106152452-73e8e27278fe
 	github.com/smartcontractkit/cre-sdk-go v1.0.0
 	github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm v1.0.0-beta.0
 	github.com/smartcontractkit/mcms v0.30.2
@@ -301,7 +301,7 @@ require (
 	github.com/smartcontractkit/chainlink-ccip/chains/solana v0.0.0-20250912190424-fd2e35d7deb5 // indirect
 	github.com/smartcontractkit/chainlink-ccip/chains/solana/gobindings v0.0.0-20250912190424-fd2e35d7deb5 // indirect
 	github.com/smartcontractkit/chainlink-common/pkg/chipingress v0.0.10 // indirect
-	github.com/smartcontractkit/chainlink-data-streams v0.1.9 // indirect
+	github.com/smartcontractkit/chainlink-data-streams v0.1.10 // indirect
 	github.com/smartcontractkit/chainlink-deployments-framework v0.70.0 // indirect
 	github.com/smartcontractkit/chainlink-evm v0.3.4-0.20251210110629-10c56e8d2cec // indirect
 	github.com/smartcontractkit/chainlink-framework/capabilities v0.0.0-20250818175541-3389ac08a563 // indirect
