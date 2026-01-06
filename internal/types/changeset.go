@@ -17,6 +17,7 @@ type Changeset struct {
 	BatchPauseWorkflow *BatchPauseWorkflow `json:"BatchPauseWorkflow,omitempty"`
 	ActivateWorkflow   *ActivateWorkflow   `json:"ActivateWorkflow,omitempty"`
 	DeleteWorkflow     *DeleteWorkflow     `json:"DeleteWorkflow,omitempty"`
+	AllowlistRequest   *AllowlistRequest   `json:"AllowlistRequest,omitempty"`
 }
 
 type UpsertWorkflow struct {
@@ -41,4 +42,8 @@ type ActivateWorkflow struct {
 
 type DeleteWorkflow struct {
 	Payload changeset.UserWorkflowDeleteInput `json:"payload,omitempty"`
+}
+
+type AllowlistRequest struct {
+	Payload changeset.UserAllowlistRequestInput `json:"payload,omitempty"`
 }

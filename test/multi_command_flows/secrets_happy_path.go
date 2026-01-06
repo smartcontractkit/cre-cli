@@ -23,6 +23,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
+	"github.com/smartcontractkit/cre-cli/internal/settings"
 )
 
 // Hex-encoded tdh2easy.PublicKey blob returned by the gateway
@@ -359,6 +360,7 @@ func secretsCreateEoa(t *testing.T, tc TestConfig) (bool, string) {
 		secretsPath,
 		tc.GetCliEnvFlag(),
 		tc.GetProjectRootFlag(),
+		"--" + settings.Flags.SkipConfirmation.Name,
 	}
 	cmd := exec.Command(CLIPath, args...)
 	// Let CLI handle context switching - don't set cmd.Dir manually
@@ -404,6 +406,7 @@ func secretsUpdateEoa(t *testing.T, tc TestConfig) (bool, string) {
 		secretsPath,
 		tc.GetCliEnvFlag(),
 		tc.GetProjectRootFlag(),
+		"--" + settings.Flags.SkipConfirmation.Name,
 	}
 	cmd := exec.Command(CLIPath, args...)
 	// Let CLI handle context switching - don't set cmd.Dir manually
@@ -432,6 +435,7 @@ func secretsListEoa(t *testing.T, tc TestConfig, ns string) (bool, string) {
 		"--namespace", ns,
 		tc.GetCliEnvFlag(),
 		tc.GetProjectRootFlag(),
+		"--" + settings.Flags.SkipConfirmation.Name,
 	}
 	cmd := exec.Command(CLIPath, args...)
 	// Let CLI handle context switching - don't set cmd.Dir manually
@@ -471,6 +475,7 @@ func secretsDeleteEoa(t *testing.T, tc TestConfig, ns string) (bool, string) {
 		delPath,
 		tc.GetCliEnvFlag(),
 		tc.GetProjectRootFlag(),
+		"--" + settings.Flags.SkipConfirmation.Name,
 	}
 	cmd := exec.Command(CLIPath, args...)
 	// Let CLI handle context switching - don't set cmd.Dir manually

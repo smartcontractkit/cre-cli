@@ -18,12 +18,16 @@ import (
 
 	"github.com/smartcontractkit/chainlink-common/pkg/capabilities/actions/vault"
 	"github.com/smartcontractkit/chainlink-common/pkg/jsonrpc2"
+	"github.com/smartcontractkit/chainlink/deployment/cre/workflow_registry/v2/changeset"
 	"github.com/smartcontractkit/chainlink/v2/core/capabilities/vault/vaulttypes"
 
+	"github.com/smartcontractkit/cre-cli/cmd/client"
+	cmdCommon "github.com/smartcontractkit/cre-cli/cmd/common"
 	"github.com/smartcontractkit/cre-cli/cmd/secrets/common"
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
+	"github.com/smartcontractkit/cre-cli/internal/types"
 	"github.com/smartcontractkit/cre-cli/internal/validation"
 )
 
@@ -89,6 +93,7 @@ func New(ctx *runtime.Context) *cobra.Command {
 	}
 
 	settings.AddTxnTypeFlags(cmd)
+	settings.AddSkipConfirmation(cmd)
 	return cmd
 }
 
@@ -144,19 +149,53 @@ func Execute(h *common.Handler, inputs DeleteSecretsInputs, duration time.Durati
 		return fmt.Errorf("failed to calculate request digest: %w", err)
 	}
 
-	// ---------------- MSIG step 1: bundle and exit ----------------
-	if ownerType == constants.WorkflowOwnerTypeMSIG {
-		baseDir := filepath.Dir(h.SecretsFilePath)
-		filename := common.DeriveBundleFilename(digest) // <digest>.json
-		bundlePath := filepath.Join(baseDir, filename)
-
-		ub := &common.UnsignedBundle{
-			RequestID:   requestID,
-			Method:      vaulttypes.MethodSecretsDelete,
-			DigestHex:   "0x" + hex.EncodeToString(digest[:]),
-			RequestBody: requestBody,
-			CreatedAt:   time.Now().UTC(),
+	gatewayPost := func() error {
+		respBody, status, err := h.Gw.Post(requestBody)
+		if err != nil {
+			return err
 		}
+		if status != http.StatusOK {
+			return fmt.Errorf("gateway returned a non-200 status code: %d", status)
+		}
+		return h.ParseVaultGatewayResponse(vaulttypes.MethodSecretsDelete, respBody)
+	}
+
+	ownerAddr := ethcommon.HexToAddress(h.OwnerAddress)
+
+	allowlisted, err := h.Wrc.IsRequestAllowlisted(ownerAddr, digest)
+	if err != nil {
+		return fmt.Errorf("allowlist check failed: %w", err)
+	}
+	var txOut *client.TxOutput
+	if !allowlisted {
+		if txOut, err = h.Wrc.AllowlistRequest(digest, duration); err != nil {
+			return fmt.Errorf("allowlist request failed: %w", err)
+		}
+	} else {
+		fmt.Printf("Digest already allowlisted; proceeding to gateway POST: owner=%s, digest=0x%x\n", ownerAddr.Hex(), digest)
+		return gatewayPost()
+	}
+
+	baseDir := filepath.Dir(h.SecretsFilePath)
+	filename := common.DeriveBundleFilename(digest) // <digest>.json
+	bundlePath := filepath.Join(baseDir, filename)
+
+	ub := &common.UnsignedBundle{
+		RequestID:   requestID,
+		Method:      vaulttypes.MethodSecretsDelete,
+		DigestHex:   "0x" + hex.EncodeToString(digest[:]),
+		RequestBody: requestBody,
+		CreatedAt:   time.Now().UTC(),
+	}
+
+	switch txOut.Type {
+	case client.Regular:
+		fmt.Println("Transaction confirmed")
+		fmt.Printf("Digest allowlisted; proceeding to gateway POST: owner=%s, digest=0x%x\n", ownerAddr.Hex(), digest)
+		fmt.Printf("View on explorer: \033]8;;%s/tx/%s\033\\%s/tx/%s\033]8;;\033\\\n", h.EnvironmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash, h.EnvironmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash)
+		return gatewayPost()
+	case client.Raw:
+
 		if err := common.SaveBundle(bundlePath, ub); err != nil {
 			return fmt.Errorf("failed to save unsigned bundle at %s: %w", bundlePath, err)
 		}
@@ -166,22 +205,45 @@ func Execute(h *common.Handler, inputs DeleteSecretsInputs, duration time.Durati
 			return fmt.Errorf("failed to pack allowlist tx: %w", err)
 		}
 		return h.LogMSIGNextSteps(txData, digest, bundlePath)
-	}
 
-	// ---------------- EOA: allowlist (if needed) and POST ----------------
-	ownerAddr := ethcommon.HexToAddress(h.OwnerAddress)
-
-	allowlisted, err := h.Wrc.IsRequestAllowlisted(ownerAddr, digest)
-	if err != nil {
-		return fmt.Errorf("allowlist check failed: %w", err)
-	}
-	if !allowlisted {
-		if err := h.Wrc.AllowlistRequest(digest, duration); err != nil {
-			return fmt.Errorf("allowlist request failed: %w", err)
+	case client.Changeset:
+		chainSelector, err := settings.GetChainSelectorByChainName(h.EnvironmentSet.WorkflowRegistryChainName)
+		if err != nil {
+			return fmt.Errorf("failed to get chain selector for chain %q: %w", h.EnvironmentSet.WorkflowRegistryChainName, err)
 		}
-		fmt.Printf("Digest allowlisted; proceeding to gateway POST: owner=%s, digest=0x%x\n", ownerAddr.Hex(), digest)
-	} else {
-		fmt.Printf("Digest already allowlisted; proceeding to gateway POST: owner=%s, digest=0x%x\n", ownerAddr.Hex(), digest)
+		mcmsConfig, err := settings.GetMCMSConfig(h.Settings, chainSelector)
+		if err != nil {
+			fmt.Println("\nMCMS config not found or is incorrect, skipping MCMS config in changeset")
+		}
+		csFile := types.ChangesetFile{
+			Environment: h.Settings.Workflow.CLDSettings.Environment,
+			Domain:      h.Settings.Workflow.CLDSettings.Domain,
+			Changesets: []types.Changeset{
+				{
+					AllowlistRequest: &types.AllowlistRequest{
+						Payload: changeset.UserAllowlistRequestInput{
+							ExpiryTimestamp:           uint32(time.Now().Add(duration).Unix()), // #nosec G115 -- int64 to uint32 conversion; Unix() returns seconds since epoch, which fits in uint32 until 2106
+							RequestDigest:             ethcommon.Bytes2Hex(digest[:]),
+							ChainSelector:             chainSelector,
+							MCMSConfig:                mcmsConfig,
+							WorkflowRegistryQualifier: h.Settings.Workflow.CLDSettings.WorkflowRegistryQualifier,
+						},
+					},
+				},
+			},
+		}
+
+		fileName := fmt.Sprintf("AllowlistRequest_%s_%s_%s.yaml", requestID, h.Settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress, time.Now().Format("20060102_150405"))
+
+		if err := common.SaveBundle(bundlePath, ub); err != nil {
+			return fmt.Errorf("failed to save unsigned bundle at %s: %w", bundlePath, err)
+		}
+
+		return cmdCommon.WriteChangesetFile(fileName, &csFile, h.Settings)
+
+	default:
+		h.Log.Warn().Msgf("Unsupported transaction type: %s", txOut.Type)
+
 	}
 
 	// POST to gateway (HTTPClient.Post has your retry policy)
