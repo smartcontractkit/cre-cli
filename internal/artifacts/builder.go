@@ -64,11 +64,11 @@ func (b *Builder) Build(inputs Inputs) (artifact *Artifact, err error) {
 func decodeBinaryData(binaryData []byte) ([]byte, error) {
 	// Note: the binary data read from file is base64 encoded, so we need to decode it before generating the workflow ID.
 	// This matches the behavior in the Chainlink node. Ref https://github.com/smartcontractkit/chainlink/blob/a4adc900d98d4e6eec0a6f80fcf86d883a8f1e3c/core/services/workflows/artifacts/v2/store.go#L211-L213
-	binaryDataDecoded := make([]byte, base64.StdEncoding.DecodedLen(len(binaryData)))
-	if _, err := base64.StdEncoding.Decode(binaryDataDecoded, binaryData); err != nil {
+	decodedBinary, err := base64.StdEncoding.DecodeString(string(binaryData))
+	if err != nil {
 		return nil, fmt.Errorf("failed to decode base64 binary data: %w", err)
 	}
-	return binaryDataDecoded, nil
+	return decodedBinary, nil
 }
 
 func (b *Builder) prepareWorkflowBinary(outputPath string) ([]byte, error) {
