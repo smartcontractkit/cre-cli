@@ -91,7 +91,7 @@ func TestPrepareUpsertParams_StatusPreservation(t *testing.T) {
 			BinaryURL:                         "https://example.com/binary",
 			WorkflowTag:                       "test_tag",
 		}
-		handler.workflowArtifact = &workflowArtifact{
+		handler.workflowArtifact = &artifacts.Artifact{
 			BinaryData: []byte("0x1234"),
 			ConfigData: []byte("config"),
 			WorkflowID: "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
@@ -122,7 +122,7 @@ func TestPrepareUpsertParams_StatusPreservation(t *testing.T) {
 			BinaryURL:                         "https://example.com/binary",
 			WorkflowTag:                       "test_tag",
 		}
-		handler.workflowArtifact = &workflowArtifact{
+		handler.workflowArtifact = &artifacts.Artifact{
 			BinaryData: []byte("0x1234"),
 			ConfigData: []byte("config"),
 			WorkflowID: "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
@@ -156,7 +156,7 @@ func TestPrepareUpsertParams_StatusPreservation(t *testing.T) {
 			BinaryURL:                         "https://example.com/binary",
 			WorkflowTag:                       "test_tag",
 		}
-		handler.workflowArtifact = &workflowArtifact{
+		handler.workflowArtifact = &artifacts.Artifact{
 			BinaryData: []byte("0x1234"),
 			ConfigData: []byte("config"),
 			WorkflowID: "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
