@@ -13,8 +13,6 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/smartcontractkit/chainlink/deployment/cre/workflow_registry/v2/changeset"
-
 	"github.com/smartcontractkit/cre-cli/cmd/client"
 	cmdCommon "github.com/smartcontractkit/cre-cli/cmd/common"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
@@ -211,28 +209,31 @@ func (h *handler) Execute() error {
 		if err != nil {
 			fmt.Println("\nMCMS config not found or is incorrect, skipping MCMS config in changeset")
 		}
-		csFile := types.ChangesetFile{
-			Environment: h.settings.Workflow.CLDSettings.Environment,
-			Domain:      h.settings.Workflow.CLDSettings.Domain,
-			Changesets: []types.Changeset{
-				{
-					ActivateWorkflow: &types.ActivateWorkflow{
-						Payload: changeset.UserWorkflowActivateInput{
-							WorkflowID: h.runtimeContext.Workflow.ID,
-							DonFamily:  h.inputs.DonFamily,
+		cldSettings := h.settings.CLDSettings
+		changesets := []types.Changeset{
+			{
+				ActivateWorkflow: &types.ActivateWorkflow{
+					Payload: types.UserWorkflowActivateInput{
+						WorkflowID: h.runtimeContext.Workflow.ID,
+						DonFamily:  h.inputs.DonFamily,
 
-							ChainSelector:             chainSelector,
-							MCMSConfig:                mcmsConfig,
-							WorkflowRegistryQualifier: h.settings.Workflow.CLDSettings.WorkflowRegistryQualifier,
-						},
+						ChainSelector:             chainSelector,
+						MCMSConfig:                mcmsConfig,
+						WorkflowRegistryQualifier: cldSettings.WorkflowRegistryQualifier,
 					},
 				},
 			},
 		}
+		csFile := types.NewChangesetFile(cldSettings.Environment, cldSettings.Domain, cldSettings.MergeProposals, changesets)
 
-		fileName := fmt.Sprintf("ActivateWorkflow_%s_%s.yaml", workflowName, time.Now().Format("20060102_150405"))
+		var fileName string
+		if cldSettings.ChangesetFile != "" {
+			fileName = cldSettings.ChangesetFile
+		} else {
+			fileName = fmt.Sprintf("ActivateWorkflow_%s_%s.yaml", workflowName, time.Now().Format("20060102_150405"))
+		}
 
-		return cmdCommon.WriteChangesetFile(fileName, &csFile, h.settings)
+		return cmdCommon.WriteChangesetFile(fileName, csFile, h.settings)
 
 	default:
 		h.log.Warn().Msgf("Unsupported transaction type: %s", txOut.Type)

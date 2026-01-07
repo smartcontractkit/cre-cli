@@ -19,8 +19,6 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/smartcontractkit/chainlink/deployment/cre/workflow_registry/v2/changeset"
-
 	"github.com/smartcontractkit/cre-cli/cmd/client"
 	cmdCommon "github.com/smartcontractkit/cre-cli/cmd/common"
 	"github.com/smartcontractkit/cre-cli/internal/client/graphqlclient"
@@ -301,27 +299,30 @@ func (h *handler) unlinkOwner(owner string, resp initiateUnlinkingResponse) erro
 		if err != nil {
 			fmt.Println("\nMCMS config not found or is incorrect, skipping MCMS config in changeset")
 		}
-		csFile := types.ChangesetFile{
-			Environment: h.settings.Workflow.CLDSettings.Environment,
-			Domain:      h.settings.Workflow.CLDSettings.Domain,
-			Changesets: []types.Changeset{
-				{
-					UnlinkOwner: &types.UnlinkOwner{
-						Payload: changeset.UserUnlinkOwnerInput{
-							ValidityTimestamp:         ts,
-							Signature:                 common.Bytes2Hex(sigBytes),
-							ChainSelector:             chainSelector,
-							MCMSConfig:                mcmsConfig,
-							WorkflowRegistryQualifier: h.settings.Workflow.CLDSettings.WorkflowRegistryQualifier,
-						},
+		cldSettings := h.settings.CLDSettings
+		changesets := []types.Changeset{
+			{
+				UnlinkOwner: &types.UnlinkOwner{
+					Payload: types.UserUnlinkOwnerInput{
+						ValidityTimestamp:         ts,
+						Signature:                 common.Bytes2Hex(sigBytes),
+						ChainSelector:             chainSelector,
+						MCMSConfig:                mcmsConfig,
+						WorkflowRegistryQualifier: cldSettings.WorkflowRegistryQualifier,
 					},
 				},
 			},
 		}
+		csFile := types.NewChangesetFile(cldSettings.Environment, cldSettings.Domain, cldSettings.MergeProposals, changesets)
 
-		fileName := fmt.Sprintf("UnlinkOwner_%s_%s.yaml", h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress, time.Now().Format("20060102_150405"))
+		var fileName string
+		if cldSettings.ChangesetFile != "" {
+			fileName = cldSettings.ChangesetFile
+		} else {
+			fileName = fmt.Sprintf("UnlinkOwner_%s_%s.yaml", h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress, time.Now().Format("20060102_150405"))
+		}
 
-		return cmdCommon.WriteChangesetFile(fileName, &csFile, h.settings)
+		return cmdCommon.WriteChangesetFile(fileName, csFile, h.settings)
 
 	default:
 		h.log.Warn().Msgf("Unsupported transaction type: %s", txOut.Type)

@@ -13,7 +13,6 @@ import (
 	"github.com/spf13/viper"
 
 	workflow_registry_v2_wrapper "github.com/smartcontractkit/chainlink-evm/gethwrappers/workflow/generated/workflow_registry_wrapper_v2"
-	"github.com/smartcontractkit/chainlink/deployment/cre/workflow_registry/v2/changeset"
 
 	"github.com/smartcontractkit/cre-cli/cmd/client"
 	cmdCommon "github.com/smartcontractkit/cre-cli/cmd/common"
@@ -211,27 +210,30 @@ func (h *handler) Execute() error {
 		if err != nil {
 			fmt.Println("\nMCMS config not found or is incorrect, skipping MCMS config in changeset")
 		}
-		csFile := types.ChangesetFile{
-			Environment: h.settings.Workflow.CLDSettings.Environment,
-			Domain:      h.settings.Workflow.CLDSettings.Domain,
-			Changesets: []types.Changeset{
-				{
-					BatchPauseWorkflow: &types.BatchPauseWorkflow{
-						Payload: changeset.UserWorkflowBatchPauseInput{
-							WorkflowIDs: h.runtimeContext.Workflow.ID, // Note: The way deploy is set up, there will only ever be one workflow in the command for now
+		cldSettings := h.settings.CLDSettings
+		changesets := []types.Changeset{
+			{
+				BatchPauseWorkflow: &types.BatchPauseWorkflow{
+					Payload: types.UserWorkflowBatchPauseInput{
+						WorkflowIDs: h.runtimeContext.Workflow.ID, // Note: The way deploy is set up, there will only ever be one workflow in the command for now
 
-							ChainSelector:             chainSelector,
-							MCMSConfig:                mcmsConfig,
-							WorkflowRegistryQualifier: h.settings.Workflow.CLDSettings.WorkflowRegistryQualifier,
-						},
+						ChainSelector:             chainSelector,
+						MCMSConfig:                mcmsConfig,
+						WorkflowRegistryQualifier: cldSettings.WorkflowRegistryQualifier,
 					},
 				},
 			},
 		}
+		csFile := types.NewChangesetFile(cldSettings.Environment, cldSettings.Domain, cldSettings.MergeProposals, changesets)
 
-		fileName := fmt.Sprintf("BatchPauseWorkflow_%s_%s.yaml", workflowName, time.Now().Format("20060102_150405"))
+		var fileName string
+		if cldSettings.ChangesetFile != "" {
+			fileName = cldSettings.ChangesetFile
+		} else {
+			fileName = fmt.Sprintf("BatchPauseWorkflow_%s_%s.yaml", workflowName, time.Now().Format("20060102_150405"))
+		}
 
-		return cmdCommon.WriteChangesetFile(fileName, &csFile, h.settings)
+		return cmdCommon.WriteChangesetFile(fileName, csFile, h.settings)
 
 	default:
 		h.log.Warn().Msgf("Unsupported transaction type: %s", txOut.Type)

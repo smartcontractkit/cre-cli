@@ -219,20 +219,38 @@ func GetBuildCmd(inputFile string, outputFile string, rootFolder string) *exec.C
 }
 
 func WriteChangesetFile(fileName string, changesetFile *inttypes.ChangesetFile, settings *settings.Settings) error {
+	fullFilePath := filepath.Join(
+		filepath.Clean(settings.CLDSettings.CLDPath),
+		"domains",
+		settings.CLDSettings.Domain,
+		settings.CLDSettings.Environment,
+		"durable_pipelines",
+		"inputs",
+		fileName,
+	)
+
+	// if file exists, read it and append the new changesets
+	if _, err := os.Stat(fullFilePath); err == nil {
+		existingYamlData, err := os.ReadFile(fullFilePath)
+		if err != nil {
+			return fmt.Errorf("failed to read existing changeset yaml file: %w", err)
+		}
+
+		var existingChangesetFile inttypes.ChangesetFile
+		if err := yaml.Unmarshal(existingYamlData, &existingChangesetFile); err != nil {
+			return fmt.Errorf("failed to unmarshal existing changeset yaml: %w", err)
+		}
+
+		// Append new changesets to the existing ones
+		existingChangesetFile.Changesets = append(existingChangesetFile.Changesets, changesetFile.Changesets...)
+		changesetFile = &existingChangesetFile
+	}
+
 	yamlData, err := yaml.Marshal(&changesetFile)
 	if err != nil {
 		return fmt.Errorf("failed to marshal changeset to yaml: %w", err)
 	}
 
-	fullFilePath := filepath.Join(
-		filepath.Clean(settings.Workflow.CLDSettings.CLDPath),
-		"domains",
-		settings.Workflow.CLDSettings.Domain,
-		settings.Workflow.CLDSettings.Environment,
-		"durable_pipelines",
-		"inputs",
-		fileName,
-	)
 	if err := os.WriteFile(fullFilePath, yamlData, 0600); err != nil {
 		return fmt.Errorf("failed to write changeset yaml file: %w", err)
 	}

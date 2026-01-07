@@ -5,9 +5,10 @@ import (
 )
 
 type ChangesetFile struct {
-	Environment string      `json:"environment"`
-	Domain      string      `json:"domain"`
-	Changesets  []Changeset `json:"changesets"`
+	Environment    string      `json:"environment"`
+	Domain         string      `json:"domain"`
+	MergeProposals bool        `json:"merge-proposals"`
+	Changesets     []Changeset `json:"changesets"`
 }
 
 type Changeset struct {
@@ -20,9 +21,13 @@ type Changeset struct {
 	AllowlistRequest   *AllowlistRequest   `json:"AllowlistRequest,omitempty"`
 }
 
-type UpsertWorkflow struct {
-	Payload changeset.UserWorkflowUpsertInput `json:"payload,omitempty"`
-}
+type UserLinkOwnerInput = changeset.UserLinkOwnerInput
+type UserUnlinkOwnerInput = changeset.UserUnlinkOwnerInput
+type UserWorkflowUpsertInput = changeset.UserWorkflowUpsertInput
+type UserWorkflowBatchPauseInput = changeset.UserWorkflowBatchPauseInput
+type UserWorkflowActivateInput = changeset.UserWorkflowActivateInput
+type UserWorkflowDeleteInput = changeset.UserWorkflowDeleteInput
+type UserAllowlistRequestInput = changeset.UserAllowlistRequestInput
 
 type LinkOwner struct {
 	Payload changeset.UserLinkOwnerInput `json:"payload,omitempty"`
@@ -30,6 +35,10 @@ type LinkOwner struct {
 
 type UnlinkOwner struct {
 	Payload changeset.UserUnlinkOwnerInput `json:"payload,omitempty"`
+}
+
+type UpsertWorkflow struct {
+	Payload changeset.UserWorkflowUpsertInput `json:"payload,omitempty"`
 }
 
 type BatchPauseWorkflow struct {
@@ -46,4 +55,13 @@ type DeleteWorkflow struct {
 
 type AllowlistRequest struct {
 	Payload changeset.UserAllowlistRequestInput `json:"payload,omitempty"`
+}
+
+func NewChangesetFile(env, domain string, mergeProposals bool, changesets []Changeset) *ChangesetFile {
+	return &ChangesetFile{
+		Environment:    env,
+		Domain:         domain,
+		MergeProposals: mergeProposals,
+		Changesets:     changesets,
+	}
 }

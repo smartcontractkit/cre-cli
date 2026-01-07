@@ -7,8 +7,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 
-	"github.com/smartcontractkit/chainlink/deployment/cre/workflow_registry/v2/changeset"
-
 	"github.com/smartcontractkit/cre-cli/cmd/client"
 	cmdCommon "github.com/smartcontractkit/cre-cli/cmd/common"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
@@ -100,35 +98,38 @@ func (h *handler) handleUpsert(params client.RegisterWorkflowV2Parameters) error
 		if err != nil {
 			fmt.Println("\nMCMS config not found or is incorrect, skipping MCMS config in changeset")
 		}
-		csFile := types.ChangesetFile{
-			Environment: h.settings.Workflow.CLDSettings.Environment,
-			Domain:      h.settings.Workflow.CLDSettings.Domain,
-			Changesets: []types.Changeset{
-				{
-					UpsertWorkflow: &types.UpsertWorkflow{
-						Payload: changeset.UserWorkflowUpsertInput{
-							WorkflowID:     h.runtimeContext.Workflow.ID,
-							WorkflowName:   params.WorkflowName,
-							WorkflowTag:    params.Tag,
-							WorkflowStatus: params.Status,
-							DonFamily:      params.DonFamily,
-							BinaryURL:      params.BinaryURL,
-							ConfigURL:      params.ConfigURL,
-							Attributes:     common.Bytes2Hex(params.Attributes),
-							KeepAlive:      params.KeepAlive,
+		cldSettings := h.settings.CLDSettings
+		changesets := []types.Changeset{
+			{
+				UpsertWorkflow: &types.UpsertWorkflow{
+					Payload: types.UserWorkflowUpsertInput{
+						WorkflowID:     h.runtimeContext.Workflow.ID,
+						WorkflowName:   params.WorkflowName,
+						WorkflowTag:    params.Tag,
+						WorkflowStatus: params.Status,
+						DonFamily:      params.DonFamily,
+						BinaryURL:      params.BinaryURL,
+						ConfigURL:      params.ConfigURL,
+						Attributes:     common.Bytes2Hex(params.Attributes),
+						KeepAlive:      params.KeepAlive,
 
-							ChainSelector:             chainSelector,
-							MCMSConfig:                mcmsConfig,
-							WorkflowRegistryQualifier: h.settings.Workflow.CLDSettings.WorkflowRegistryQualifier,
-						},
+						ChainSelector:             chainSelector,
+						MCMSConfig:                mcmsConfig,
+						WorkflowRegistryQualifier: cldSettings.WorkflowRegistryQualifier,
 					},
 				},
 			},
 		}
+		csFile := types.NewChangesetFile(cldSettings.Environment, cldSettings.Domain, cldSettings.MergeProposals, changesets)
 
-		fileName := fmt.Sprintf("UpsertWorkflow_%s_%s.yaml", workflowName, time.Now().Format("20060102_150405"))
+		var fileName string
+		if cldSettings.ChangesetFile != "" {
+			fileName = cldSettings.ChangesetFile
+		} else {
+			fileName = fmt.Sprintf("UpsertWorkflow_%s_%s.yaml", workflowName, time.Now().Format("20060102_150405"))
+		}
 
-		return cmdCommon.WriteChangesetFile(fileName, &csFile, h.settings)
+		return cmdCommon.WriteChangesetFile(fileName, csFile, h.settings)
 
 	default:
 		h.log.Warn().Msgf("Unsupported transaction type: %s", txOut.Type)

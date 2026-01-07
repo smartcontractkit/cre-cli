@@ -25,7 +25,6 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/capabilities/actions/vault"
 	"github.com/smartcontractkit/chainlink-common/pkg/jsonrpc2"
 	"github.com/smartcontractkit/chainlink-evm/gethwrappers/workflow/generated/workflow_registry_wrapper_v2"
-	"github.com/smartcontractkit/chainlink/deployment/cre/workflow_registry/v2/changeset"
 	"github.com/smartcontractkit/chainlink/v2/core/capabilities/vault/vaulttypes"
 	"github.com/smartcontractkit/tdh2/go/tdh2/tdh2easy"
 
@@ -475,31 +474,34 @@ func (h *Handler) Execute(
 		if err != nil {
 			fmt.Println("\nMCMS config not found or is incorrect, skipping MCMS config in changeset")
 		}
-		csFile := types.ChangesetFile{
-			Environment: h.Settings.Workflow.CLDSettings.Environment,
-			Domain:      h.Settings.Workflow.CLDSettings.Domain,
-			Changesets: []types.Changeset{
-				{
-					AllowlistRequest: &types.AllowlistRequest{
-						Payload: changeset.UserAllowlistRequestInput{
-							ExpiryTimestamp:           uint32(time.Now().Add(duration).Unix()), // #nosec G115 -- int64 to uint32 conversion; Unix() returns seconds since epoch, which fits in uint32 until 2106
-							RequestDigest:             common.Bytes2Hex(digest[:]),
-							ChainSelector:             chainSelector,
-							MCMSConfig:                mcmsConfig,
-							WorkflowRegistryQualifier: h.Settings.Workflow.CLDSettings.WorkflowRegistryQualifier,
-						},
+		cldSettings := h.Settings.CLDSettings
+		changesets := []types.Changeset{
+			{
+				AllowlistRequest: &types.AllowlistRequest{
+					Payload: types.UserAllowlistRequestInput{
+						ExpiryTimestamp:           uint32(time.Now().Add(duration).Unix()), // #nosec G115 -- int64 to uint32 conversion; Unix() returns seconds since epoch, which fits in uint32 until 2106
+						RequestDigest:             common.Bytes2Hex(digest[:]),
+						ChainSelector:             chainSelector,
+						MCMSConfig:                mcmsConfig,
+						WorkflowRegistryQualifier: cldSettings.WorkflowRegistryQualifier,
 					},
 				},
 			},
 		}
+		csFile := types.NewChangesetFile(cldSettings.Environment, cldSettings.Domain, cldSettings.MergeProposals, changesets)
 
-		fileName := fmt.Sprintf("AllowlistRequest_%s_%s_%s.yaml", requestID, h.Settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress, time.Now().Format("20060102_150405"))
+		var fileName string
+		if cldSettings.ChangesetFile != "" {
+			fileName = cldSettings.ChangesetFile
+		} else {
+			fileName = fmt.Sprintf("AllowlistRequest_%s_%s_%s.yaml", requestID, h.Settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress, time.Now().Format("20060102_150405"))
+		}
 
 		if err := SaveBundle(bundlePath, ub); err != nil {
 			return fmt.Errorf("failed to save unsigned bundle at %s: %w", bundlePath, err)
 		}
 
-		return cmdCommon.WriteChangesetFile(fileName, &csFile, h.Settings)
+		return cmdCommon.WriteChangesetFile(fileName, csFile, h.Settings)
 
 	default:
 		h.Log.Warn().Msgf("Unsupported transaction type: %s", txOut.Type)

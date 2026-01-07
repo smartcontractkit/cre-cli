@@ -43,6 +43,7 @@ type flagNames struct {
 	LedgerDerivationPath Flag
 	NonInteractive       Flag
 	SkipConfirmation     Flag
+	ChangesetFile        Flag
 }
 
 var Flags = flagNames{
@@ -58,12 +59,15 @@ var Flags = flagNames{
 	LedgerDerivationPath: Flag{"ledger-derivation-path", ""},
 	NonInteractive:       Flag{"non-interactive", ""},
 	SkipConfirmation:     Flag{"yes", "y"},
+	ChangesetFile:        Flag{"changeset-file", ""},
 }
 
 func AddTxnTypeFlags(cmd *cobra.Command) {
 	cmd.Flags().Bool(Flags.RawTxFlag.Name, false, "If set, the command will either return the raw transaction instead of sending it to the network or execute the second step of secrets operations using a previously generated raw transaction")
 	cmd.Flags().Bool(Flags.Changeset.Name, false, "If set, the command will output a changeset YAML for use with CLD instead of sending the transaction to the network")
-	_ = cmd.LocalFlags().MarkHidden(Flags.Changeset.Name) // hide changeset flag as this is not a public feature
+	cmd.Flags().String(Flags.ChangesetFile.Name, "", "If set, the command will append the generated changeset to the specified file")
+	_ = cmd.LocalFlags().MarkHidden(Flags.Changeset.Name)     // hide changeset flag as this is not a public feature
+	_ = cmd.LocalFlags().MarkHidden(Flags.ChangesetFile.Name) // hide changeset flag as this is not a public feature
 	//	cmd.Flags().Bool(Flags.Ledger.Name, false, "Sign the workflow with a Ledger device [EXPERIMENTAL]")
 	//	cmd.Flags().String(Flags.LedgerDerivationPath.Name, "m/44'/60'/0'/0/0", "Derivation path for the Ledger device")
 }
