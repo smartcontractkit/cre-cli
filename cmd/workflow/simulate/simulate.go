@@ -30,6 +30,8 @@ import (
 	httptypedapi "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/triggers/http"
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	"github.com/smartcontractkit/chainlink-common/pkg/services"
+	commonsettings "github.com/smartcontractkit/chainlink-common/pkg/settings"
+	"github.com/smartcontractkit/chainlink-common/pkg/settings/cresettings"
 	pb "github.com/smartcontractkit/chainlink-protos/cre/go/sdk"
 	"github.com/smartcontractkit/chainlink-protos/cre/go/values"
 	valuespb "github.com/smartcontractkit/chainlink-protos/cre/go/values/pb"
@@ -490,6 +492,12 @@ func run(
 				fmt.Println()
 				close(executionFinishedCh)
 			},
+		},
+		WorkflowSettingsCfgFn: func(cfg *cresettings.Workflows) {
+			cfg.ChainAllowed = commonsettings.PerChainSelector(
+				commonsettings.Bool(true), // Allow all chains in simulation
+				map[string]bool{},
+			)
 		},
 	})
 
