@@ -53,6 +53,10 @@ var SupportedEVM = []ChainConfig{
 	// Optimism
 	{Selector: chainselectors.ETHEREUM_TESTNET_SEPOLIA_OPTIMISM_1.Selector, Forwarder: "0xa2888380dff3704a8ab6d1cd1a8f69c15fea5ee3"},
 	{Selector: chainselectors.ETHEREUM_MAINNET_OPTIMISM_1.Selector, Forwarder: "0x9119a1501550ed94a3f2794038ed9258337afa18"},
+
+	// ZkSync
+	{Selector: chainselectors.ETHEREUM_MAINNET_ZKSYNC_1.Selector, Forwarder: "0x76c9cf548b4179F8901cda1f8623568b58215E62"},
+	{Selector: chainselectors.ETHEREUM_TESTNET_SEPOLIA_ZKSYNC_1.Selector, Forwarder: "0x76c9cf548b4179F8901cda1f8623568b58215E62"},
 }
 
 // parse "ChainSelector:<digits>" from trigger id, e.g. "evm:ChainSelector:5009297550715157269@1.0.0 LogTrigger"
