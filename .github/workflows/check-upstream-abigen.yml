@@ -1,0 +1,127 @@
+name: Check Upstream Abigen Updates
+
+on:
+  pull_request:
+    branches:
+      - main
+      - "releases/**"
+  workflow_dispatch:
+
+jobs:
+  check-upstream:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check latest go-ethereum release
+        id: upstream
+        run: |
+          LATEST=$(curl -s https://api.github.com/repos/ethereum/go-ethereum/releases/latest | jq -r .tag_name)
+          echo "latest=$LATEST" >> "$GITHUB_OUTPUT"
+          echo "Latest go-ethereum: $LATEST"
+
+      - name: Get current fork version
+        id: current
+        run: |
+          CURRENT=$(grep "Upstream Version:" cmd/generate-bindings/bindings/abigen/FORK_METADATA.md | cut -d: -f2 | tr -d ' ')
+          echo "current=$CURRENT" >> "$GITHUB_OUTPUT"
+          echo "Current fork version: $CURRENT"
+
+      - name: Compare versions
+        id: compare
+        run: |
+          CURRENT="${{ steps.current.outputs.current }}"
+          LATEST="${{ steps.upstream.outputs.latest }}"
+
+          # Extract major.minor version (e.g., "1.16" from "v1.16.0")
+          CURRENT_MAJOR_MINOR=$(echo "$CURRENT" | sed 's/^v//' | cut -d. -f1,2)
+          LATEST_MAJOR_MINOR=$(echo "$LATEST" | sed 's/^v//' | cut -d. -f1,2)
+
+          echo "Current major.minor: $CURRENT_MAJOR_MINOR"
+          echo "Latest major.minor: $LATEST_MAJOR_MINOR"
+
+          if [ "$CURRENT_MAJOR_MINOR" != "$LATEST_MAJOR_MINOR" ]; then
+            echo "outdated=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::Fork has a major version difference. Current: $CURRENT, Latest: $LATEST"
+          else
+            echo "outdated=false" >> "$GITHUB_OUTPUT"
+            echo "Fork is on the same major.minor version ($CURRENT_MAJOR_MINOR)"
+          fi
+
+      - name: Check for recent security-related commits
+        id: security
+        run: |
+          CURRENT="${{ steps.current.outputs.current }}"
+          echo "Checking for security-related commits since $CURRENT..."
+          
+          # Search for security-related keywords in commit messages
+          SECURITY_COMMITS=$(curl -s "https://api.github.com/repos/ethereum/go-ethereum/commits?sha=master&per_page=100" | \
+            jq -r '[.[] | select(.commit.message | test("security|vulnerability|CVE|exploit"; "i")) | "- \(.commit.message | split("\n")[0]) ([link](\(.html_url)))"] | join("\n")' || echo "")
+          
+          if [ -n "$SECURITY_COMMITS" ]; then
+            echo "has_security=true" >> "$GITHUB_OUTPUT"
+            # Save to file to handle multiline
+            echo "$SECURITY_COMMITS" > /tmp/security_commits.txt
+          else
+            echo "has_security=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Comment on PR - Outdated
+        if: steps.compare.outputs.outdated == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const current = '${{ steps.current.outputs.current }}';
+            const latest = '${{ steps.upstream.outputs.latest }}';
+            const hasSecurity = '${{ steps.security.outputs.has_security }}' === 'true';
+            
+            let securitySection = '';
+            if (hasSecurity) {
+              try {
+                const commits = fs.readFileSync('/tmp/security_commits.txt', 'utf8');
+                securitySection = `
+
+            ### ⚠️ Potential Security-Related Commits Detected
+
+            ${commits}
+            `;
+              } catch (e) {
+                // File might not exist
+              }
+            }
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `## ⚠️ Abigen Fork Check - Update Available
+
+            The forked abigen package is **outdated** and may be missing important updates.
+
+            | Version | Value |
+            |---------|-------|
+            | **Current Fork** | \`${current}\` |
+            | **Latest Upstream** | \`${latest}\` |
+
+            ### Action Required
+
+            1. Review [abigen changes in upstream](https://github.com/ethereum/go-ethereum/commits/${latest}/accounts/abi/bind) (only the \`accounts/abi/bind\` directory matters)
+            2. Compare with our fork in \`cmd/generate-bindings/bindings/abigen/\`
+            3. If relevant changes exist, sync them and update \`FORK_METADATA.md\`
+            4. If no abigen changes, just update the version in \`FORK_METADATA.md\` to \`${latest}\`
+            ${securitySection}
+            ### Files to Review
+
+            - \`cmd/generate-bindings/bindings/abigen/bind.go\`
+            - \`cmd/generate-bindings/bindings/abigen/bindv2.go\`
+            - \`cmd/generate-bindings/bindings/abigen/template.go\`
+
+            ---
+            ⚠️ **Note to PR author**: This is not something you need to fix. The Platform Expansion team is responsible for maintaining the abigen fork.
+
+            cc @smartcontractkit/bix-framework`
+            });
