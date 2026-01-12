@@ -65,6 +65,10 @@ type handler struct {
 
 	validated bool
 
+	// existingWorkflowStatus stores the status of an existing workflow when updating.
+	// nil means this is a new workflow, otherwise it contains the current status (0=active, 1=paused).
+	existingWorkflowStatus *uint8
+
 	wg     sync.WaitGroup
 	wrcErr error
 }
@@ -246,6 +250,8 @@ func (h *handler) workflowExists() error {
 
 	}
 	if workflow.WorkflowName == h.inputs.WorkflowName {
+		status := workflow.Status
+		h.existingWorkflowStatus = &status
 		return fmt.Errorf("workflow with name %s already exists", h.inputs.WorkflowName)
 	}
 	return nil

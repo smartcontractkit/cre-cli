@@ -36,12 +36,18 @@ func (h *handler) prepareUpsertParams() (client.RegisterWorkflowV2Parameters, er
 	configURL := h.inputs.ResolveConfigURL("")
 	workflowID := h.workflowArtifact.WorkflowID
 
+	// Use the existing workflow's status if updating, otherwise default to active (0).
+	status := uint8(0)
+	if h.existingWorkflowStatus != nil {
+		status = *h.existingWorkflowStatus
+	}
+
 	fmt.Printf("Preparing transaction for workflowID: %s\n", workflowID)
 	return client.RegisterWorkflowV2Parameters{
 		WorkflowName: workflowName,
 		Tag:          workflowTag,
 		WorkflowID:   [32]byte(common.Hex2Bytes(workflowID)),
-		Status:       0, // active
+		Status:       status,
 		DonFamily:    h.inputs.DonFamily,
 		BinaryURL:    binaryURL,
 		ConfigURL:    configURL,
