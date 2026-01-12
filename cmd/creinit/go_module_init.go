@@ -12,8 +12,10 @@ import (
 )
 
 const (
-	SdkVersion          = "v1.0.0"
-	CapabilitiesVersion = "v1.0.0-beta.0"
+	SdkVersion              = "v1.0.0"
+	EVMCapabilitiesVersion  = "v1.0.0-beta.0"
+	HTTPCapabilitiesVersion = "v1.0.0-beta.0"
+	CronCapabilitiesVersion = "v1.0.0-beta.0"
 )
 
 func initializeGoModule(logger *zerolog.Logger, workingDirectory, moduleName string) error {
@@ -39,13 +41,13 @@ func initializeGoModule(logger *zerolog.Logger, workingDirectory, moduleName str
 	if err := captureDep("go", "get", "github.com/smartcontractkit/cre-sdk-go@"+SdkVersion); err != nil {
 		return err
 	}
-	if err := captureDep("go", "get", "github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm@"+CapabilitiesVersion); err != nil {
+	if err := captureDep("go", "get", "github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm@"+EVMCapabilitiesVersion); err != nil {
 		return err
 	}
-	if err := captureDep("go", "get", "github.com/smartcontractkit/cre-sdk-go/capabilities/networking/http@"+CapabilitiesVersion); err != nil {
+	if err := captureDep("go", "get", "github.com/smartcontractkit/cre-sdk-go/capabilities/networking/http@"+HTTPCapabilitiesVersion); err != nil {
 		return err
 	}
-	if err := captureDep("go", "get", "github.com/smartcontractkit/cre-sdk-go/capabilities/scheduler/cron@"+CapabilitiesVersion); err != nil {
+	if err := captureDep("go", "get", "github.com/smartcontractkit/cre-sdk-go/capabilities/scheduler/cron@"+CronCapabilitiesVersion); err != nil {
 		return err
 	}
 

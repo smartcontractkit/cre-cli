@@ -2,6 +2,8 @@ package constants
 
 import (
 	"time"
+
+	chainselectors "github.com/smartcontractkit/chain-selectors"
 )
 
 const (
@@ -11,11 +13,7 @@ const (
 	ReserveManagerContractName        = "ReserveManager"
 	MockKeystoneForwarderContractName = "MockKeystoneForwarder"
 
-	MaxBinarySize                               = 20 * 1024 * 1024
-	MaxConfigSize                               = 5 * 1024 * 1024
-	MaxEncryptedSecretsSize                     = 5 * 1024 * 1024
-	MaxURLLength                                = 200
-	MaxPaginationLimit            uint32        = 100
+	MaxSecretItemsPerPayload                    = 10
 	MaxVaultAllowlistDuration     time.Duration = 7 * 24 * time.Hour
 	DefaultVaultAllowlistDuration time.Duration = 2 * 24 * time.Hour // 2 days
 
@@ -28,13 +26,8 @@ const (
 	// Default settings
 	DefaultProposalExpirationTime = 60 * 60 * 24 * 3 // 72 hours
 
-	DefaultEthSepoliaChainName  = "ethereum-testnet-sepolia"        // ETH Sepolia
-	DefaultBaseSepoliaChainName = "ethereum-testnet-sepolia-base-1" // Base Sepolia
-	DefaultEthMainnetChainName  = "ethereum-mainnet"                // Eth Mainnet
-
-	DefaultEthSepoliaRpcUrl  = "https://ethereum-sepolia-rpc.publicnode.com"    // ETH Sepolia
-	DefaultBaseSepoliaRpcUrl = "<select your own rpc url>"                      // Base Sepolia
-	DefaultEthMainnetRpcUrl  = "https://mainnet.infura.io/v3/<YOUR-PROJECT-ID>" // ETH Mainnet
+	DefaultEthSepoliaRpcUrl = "https://ethereum-sepolia-rpc.publicnode.com" // ETH Sepolia
+	DefaultEthMainnetRpcUrl = "<select your own rpc url>"                   // ETH Mainnet
 
 	DefaultProjectName  = "my-project"
 	DefaultWorkflowName = "my-workflow"
@@ -70,4 +63,9 @@ const (
 	TestPrivateKey3  = "5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a"
 	TestPrivateKey4  = "7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6"
 	TestAnvilChainID = 31337 // Anvil chain ID
+)
+
+var (
+	DefaultEthMainnetChainName = chainselectors.ETHEREUM_MAINNET.Name
+	DefaultEthSepoliaChainName = chainselectors.ETHEREUM_TESTNET_SEPOLIA.Name
 )

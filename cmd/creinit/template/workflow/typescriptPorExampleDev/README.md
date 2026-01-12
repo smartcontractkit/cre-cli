@@ -80,7 +80,7 @@ For a quick start, every contract used in this workflow is already provided in t
 
 Configure `config.json` for the workflow
 
-- `schedule` should be set to `"*/30 * * * * *"` for every 30 seconds or any other cron expression you prefer
+- `schedule` should be set to `"0 */1 * * * *"` for every 1 minute(s) or any other cron expression you prefer, note [CRON service quotas](https://docs.chain.link/cre/service-quotas)
 - `url` should be set to existing reserves HTTP endpoint API
 - `tokenAddress` should be the SimpleERC20 contract address
 - `porAddress` should be the ReserveManager contract address
@@ -138,7 +138,7 @@ Select option 1, and the workflow should immediately execute.
 
 Select option 2, and then two additional prompts will come up and you can pass in the example inputs:
 
-Transaction Hash: 0x420721d7d00130a03c5b525b2dbfd42550906ddb3075e8377f9bb5d1a5992f8e
+Transaction Hash: 0x9394cc015736e536da215c31e4f59486a8d85f4cfc3641e309bf00c34b2bf410
 Log Event Index: 0
 
 The output will look like:
@@ -146,9 +146,9 @@ The output will look like:
 ```
 🔗 EVM Trigger Configuration:
 Please provide the transaction hash and event index for the EVM log event.
-Enter transaction hash (0x...): 0x420721d7d00130a03c5b525b2dbfd42550906ddb3075e8377f9bb5d1a5992f8e
+Enter transaction hash (0x...): 0x9394cc015736e536da215c31e4f59486a8d85f4cfc3641e309bf00c34b2bf410
 Enter event index (0-based): 0
-Fetching transaction receipt for transaction 0x420721d7d00130a03c5b525b2dbfd42550906ddb3075e8377f9bb5d1a5992f8e...
+Fetching transaction receipt for transaction 0x9394cc015736e536da215c31e4f59486a8d85f4cfc3641e309bf00c34b2bf410...
 Found log event at index 0: contract=0x1d598672486ecB50685Da5497390571Ac4E93FDc, topics=3
-Created EVM trigger log for transaction 0x420721d7d00130a03c5b525b2dbfd42550906ddb3075e8377f9bb5d1a5992f8e, event 0
+Created EVM trigger log for transaction 0x9394cc015736e536da215c31e4f59486a8d85f4cfc3641e309bf00c34b2bf410, event 0
 ```

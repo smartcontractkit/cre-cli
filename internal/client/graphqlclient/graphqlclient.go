@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -28,7 +29,9 @@ type Client struct {
 func New(creds *credentials.Credentials, environmentSet *environments.EnvironmentSet, l *zerolog.Logger) *Client {
 	gqlClient := graphql.NewClient(environmentSet.GraphQLURL)
 	gqlClient.Log = func(s string) {
-		l.Debug().Str("client", "GraphQL").Msg(s)
+		// Redact Authorization header to prevent token leakage in logs
+		redacted := redactSensitiveHeaders(s)
+		l.Debug().Str("client", "GraphQL").Msg(redacted)
 	}
 
 	return &Client{
@@ -108,4 +111,14 @@ func (c *Client) refreshTokenIfNeeded(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// sensitiveHeaderPattern matches Authorization header values in log output
+// Matches patterns like: Authorization:[Bearer xxx] or Authorization:[Apikey xxx]
+var sensitiveHeaderPattern = regexp.MustCompile(`(Authorization:\[)[^\]]+(\])`)
+
+// redactSensitiveHeaders redacts sensitive header values from log messages
+// to prevent auth tokens from being leaked in debug logs
+func redactSensitiveHeaders(s string) string {
+	return sensitiveHeaderPattern.ReplaceAllString(s, "${1}[REDACTED]${2}")
 }

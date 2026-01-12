@@ -251,15 +251,6 @@ mutation InitiateLinking($request: InitiateLinkingRequest!) {
 
 	if err := graphqlclient.New(h.credentials, h.environmentSet, h.log).
 		Execute(ctx, req, &container); err != nil {
-		s := strings.ToLower(err.Error())
-		if strings.Contains(s, "unauthorized") {
-			unauthorizedMsg := `✖ Deployment blocked: your organization is not authorized to deploy workflows.
-During private Beta, only approved organizations can deploy workflows to CRE environment.
-
-→ If you believe this is an error or would like to request access, please visit:
-https://docs.cre.link/request-deployment-access`
-			return initiateLinkingResponse{}, fmt.Errorf("\n%s\n%w", unauthorizedMsg, err)
-		}
 		return initiateLinkingResponse{}, fmt.Errorf("graphql request failed: %w", err)
 	}
 
@@ -309,6 +300,7 @@ func (h *handler) linkOwner(resp initiateLinkingResponse) error {
 		fmt.Println("Transaction confirmed")
 		fmt.Printf("View on explorer: \033]8;;%s/tx/%s\033\\%s/tx/%s\033]8;;\033\\\n", h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash, h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash)
 		fmt.Println("\n[OK] web3 address linked to your CRE organization successfully")
+		fmt.Println("\nNote: Linking verification may take up to 60 seconds.")
 		fmt.Println("\n→ You can now deploy workflows using this address")
 
 	case client.Raw:

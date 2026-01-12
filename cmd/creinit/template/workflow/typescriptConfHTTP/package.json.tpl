@@ -1,5 +1,5 @@
 {
-  "name": "typescript-por-template",
+  "name": "typescript-simple-template",
   "version": "1.0.0",
   "main": "dist/main.js",
   "private": true,
@@ -8,9 +8,7 @@
   },
   "license": "UNLICENSED",
   "dependencies": {
-    "@chainlink/cre-sdk": "^1.0.1",
-    "viem": "2.34.0",
-    "zod": "3.25.76"
+    "@chainlink/cre-sdk": "^1.0.0"
   },
   "devDependencies": {
     "@types/bun": "1.2.21"

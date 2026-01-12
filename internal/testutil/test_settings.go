@@ -38,7 +38,7 @@ func NewTestSettings(v *viper.Viper, logger *zerolog.Logger) (*settings.Settings
 	v.Set(settings.CreTargetEnvVar, "staging")
 
 	cmd := &cobra.Command{Use: "login"}
-	testSettings, err := settings.New(logger, v, cmd)
+	testSettings, err := settings.New(logger, v, cmd, "")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create new test settings: %w", err)
 	}

@@ -31,8 +31,6 @@ type Inputs struct {
 	BinaryURL string  `validate:"omitempty,http_url|eq="`
 	ConfigURL *string `validate:"omitempty,http_url|eq="`
 
-	AutoStart bool
-
 	KeepAlive    bool
 	WorkflowPath string `validate:"required,path_read"`
 	ConfigPath   string `validate:"omitempty,file,ascii,max=97" cli:"--config"`
@@ -67,6 +65,10 @@ type handler struct {
 
 	validated bool
 
+	// existingWorkflowStatus stores the status of an existing workflow when updating.
+	// nil means this is a new workflow, otherwise it contains the current status (0=active, 1=paused).
+	existingWorkflowStatus *uint8
+
 	wg     sync.WaitGroup
 	wrcErr error
 }
@@ -99,7 +101,6 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	settings.AddRawTxFlag(deployCmd)
 	settings.AddSkipConfirmation(deployCmd)
 	deployCmd.Flags().StringP("output", "o", defaultOutputPath, "The output file for the compiled WASM binary encoded in base64")
-	deployCmd.Flags().BoolP("auto-start", "r", true, "Activate and run the workflow after registration, or pause it")
 	deployCmd.Flags().StringP("owner-label", "l", "", "Label for the workflow owner (used during auto-link if owner is not already linked)")
 
 	return deployCmd
@@ -147,7 +148,6 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 		WorkflowOwner: h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress,
 		WorkflowTag:   h.settings.Workflow.UserWorkflowSettings.WorkflowName,
 		ConfigURL:     configURL,
-		AutoStart:     v.GetBool("auto-start"),
 		DonFamily:     h.environmentSet.DonFamily,
 
 		WorkflowPath: h.settings.Workflow.WorkflowArtifactSettings.WorkflowPath,
@@ -250,6 +250,8 @@ func (h *handler) workflowExists() error {
 
 	}
 	if workflow.WorkflowName == h.inputs.WorkflowName {
+		status := workflow.Status
+		h.existingWorkflowStatus = &status
 		return fmt.Errorf("workflow with name %s already exists", h.inputs.WorkflowName)
 	}
 	return nil

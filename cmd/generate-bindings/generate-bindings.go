@@ -200,6 +200,17 @@ func (h *handler) processAbiDirectory(inputs Inputs) error {
 		return fmt.Errorf("no .abi files found in directory: %s", inputs.AbiPath)
 	}
 
+	packageNames := make(map[string]bool)
+	for _, abiFile := range files {
+		contractName := filepath.Base(abiFile)
+		contractName = contractName[:len(contractName)-4]
+		packageName := contractNameToPackage(contractName)
+		if _, exists := packageNames[packageName]; exists {
+			return fmt.Errorf("package name collision: multiple contracts would generate the same package name '%s' (contracts are converted to snake_case for package names). Please rename one of your contract files to avoid this conflict", packageName)
+		}
+		packageNames[packageName] = true
+	}
+
 	// Process each ABI file
 	for _, abiFile := range files {
 		// Extract contract name from filename (remove .abi extension)
@@ -304,7 +315,7 @@ func (h *handler) Execute(inputs Inputs) error {
 		if err != nil {
 			return err
 		}
-		err = runCommand(inputs.ProjectRoot, "go", "get", "github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm@"+creinit.CapabilitiesVersion)
+		err = runCommand(inputs.ProjectRoot, "go", "get", "github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm@"+creinit.EVMCapabilitiesVersion)
 		if err != nil {
 			return err
 		}

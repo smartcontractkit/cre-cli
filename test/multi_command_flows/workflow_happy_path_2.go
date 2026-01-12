@@ -19,8 +19,8 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 )
 
-// workflowDeployEoaWithoutAutostart deploys a workflow via CLI without autostart, mocking GraphQL + Origin.
-func workflowDeployEoaWithoutAutostart(t *testing.T, tc TestConfig) string {
+// workflowDeployEoa deploys a workflow via CLI, mocking GraphQL + Origin.
+func workflowDeployEoa(t *testing.T, tc TestConfig) string {
 	t.Helper()
 
 	var srv *httptest.Server
@@ -34,11 +34,10 @@ func workflowDeployEoaWithoutAutostart(t *testing.T, tc TestConfig) string {
 			w.Header().Set("Content-Type", "application/json")
 
 			// Handle authentication validation query
-			if strings.Contains(req.Query, "getAccountDetails") {
+			if strings.Contains(req.Query, "getOrganization") {
 				_ = json.NewEncoder(w).Encode(map[string]any{
 					"data": map[string]any{
-						"getAccountDetails": map[string]any{
-							"userId":         "test-user-id",
+						"getOrganization": map[string]any{
 							"organizationId": "test-org-id",
 						},
 					},
@@ -113,7 +112,6 @@ func workflowDeployEoaWithoutAutostart(t *testing.T, tc TestConfig) string {
 	t.Setenv(environments.EnvVarGraphQLURL, srv.URL+"/graphql")
 
 	// Build CLI args - CLI will automatically resolve workflow path using new context system
-	// Note: no auto-start flag (defaults to false)
 	args := []string{
 		"workflow", "deploy",
 		"blank_workflow",
@@ -156,11 +154,10 @@ func workflowDeployUpdateWithConfig(t *testing.T, tc TestConfig) string {
 			w.Header().Set("Content-Type", "application/json")
 
 			// Handle authentication validation query
-			if strings.Contains(req.Query, "getAccountDetails") {
+			if strings.Contains(req.Query, "getOrganization") {
 				_ = json.NewEncoder(w).Encode(map[string]any{
 					"data": map[string]any{
-						"getAccountDetails": map[string]any{
-							"userId":         "test-user-id",
+						"getOrganization": map[string]any{
 							"organizationId": "test-org-id",
 						},
 					},
@@ -263,12 +260,12 @@ func workflowDeployUpdateWithConfig(t *testing.T, tc TestConfig) string {
 }
 
 // RunHappyPath2Workflow runs the complete happy path 2 workflow:
-// Deploy without autostart -> Deploy update with config
+// Deploy -> Deploy update with config
 func RunHappyPath2Workflow(t *testing.T, tc TestConfig) {
 	t.Helper()
 
-	// Step 1: Deploy initial workflow without autostart
-	out := workflowDeployEoaWithoutAutostart(t, tc)
+	// Step 1: Deploy initial workflow
+	out := workflowDeployEoa(t, tc)
 	require.Contains(t, out, "Workflow compiled", "expected workflow to compile.\nCLI OUTPUT:\n%s", out)
 	require.Contains(t, out, "linked=true", "expected link-status true.\nCLI OUTPUT:\n%s", out)
 	require.Contains(t, out, "Uploaded binary", "expected binary upload to succeed.\nCLI OUTPUT:\n%s", out)

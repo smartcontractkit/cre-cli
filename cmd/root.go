@@ -123,6 +123,14 @@ func newRootCommand() *cobra.Command {
 				if err != nil {
 					return fmt.Errorf("authentication required: %w", err)
 				}
+
+				// Check if organization is ungated for commands that require it
+				cmdPath := cmd.CommandPath()
+				if cmdPath == "cre account link-key" || cmdPath == "cre workflow deploy" {
+					if err := runtimeContext.Credentials.CheckIsUngatedOrganization(); err != nil {
+						return err
+					}
+				}
 			}
 
 			// load settings from yaml files
@@ -133,7 +141,7 @@ func newRootCommand() *cobra.Command {
 					return err
 				}
 
-				err := runtimeContext.AttachSettings(cmd)
+				err := runtimeContext.AttachSettings(cmd, isLoadDeploymentRPC(cmd))
 				if err != nil {
 					return fmt.Errorf("%w", err)
 				}
@@ -292,6 +300,24 @@ func isLoadCredentials(cmd *cobra.Command) bool {
 
 	_, exists := excludedCommands[cmd.CommandPath()]
 	return !exists
+}
+
+func isLoadDeploymentRPC(cmd *cobra.Command) bool {
+	var includedCommands = map[string]struct{}{
+		"cre workflow deploy":    {},
+		"cre workflow pause":     {},
+		"cre workflow activate":  {},
+		"cre workflow delete":    {},
+		"cre account link-key":   {},
+		"cre account unlink-key": {},
+		"cre secrets create":     {},
+		"cre secrets delete":     {},
+		"cre secrets execute":    {},
+		"cre secrets list":       {},
+		"cre secrets update":     {},
+	}
+	_, exists := includedCommands[cmd.CommandPath()]
+	return exists
 }
 
 func shouldSkipValidation(cmd *cobra.Command) bool {
