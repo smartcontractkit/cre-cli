@@ -53,6 +53,9 @@ var SupportedEVM = []ChainConfig{
 	// Optimism
 	{Selector: chainselectors.ETHEREUM_TESTNET_SEPOLIA_OPTIMISM_1.Selector, Forwarder: "0xa2888380dff3704a8ab6d1cd1a8f69c15fea5ee3"},
 	{Selector: chainselectors.ETHEREUM_MAINNET_OPTIMISM_1.Selector, Forwarder: "0x9119a1501550ed94a3f2794038ed9258337afa18"},
+
+	// Andesite (private testnet)
+	{Selector: chainselectors.PRIVATE_TESTNET_ANDESITE.Selector, Forwarder: "0xcF4629d8DC7a5fa17F4D77233F5b953225669821"},
 }
 
 // parse "ChainSelector:<digits>" from trigger id, e.g. "evm:ChainSelector:5009297550715157269@1.0.0 LogTrigger"
