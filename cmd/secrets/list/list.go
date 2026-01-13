@@ -134,7 +134,7 @@ func Execute(h *common.Handler, namespace string, duration time.Duration, ownerT
 			return err
 		}
 		if status != http.StatusOK {
-			return fmt.Errorf("gateway returned a non-200 status code: %d", status)
+			return fmt.Errorf("gateway returned a non-200 status code: status_code=%d, body=%s", status, respBody)
 		}
 		return h.ParseVaultGatewayResponse(vaulttypes.MethodSecretsList, respBody)
 	}
