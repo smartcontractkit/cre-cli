@@ -154,7 +154,7 @@ func Execute(h *common.Handler, inputs DeleteSecretsInputs, duration time.Durati
 			return err
 		}
 		if status != http.StatusOK {
-			return fmt.Errorf("gateway returned a non-200 status code: %d", status)
+			return fmt.Errorf("gateway returned a non-200 status code: status_code=%d, body=%s", status, respBody)
 		}
 		return h.ParseVaultGatewayResponse(vaulttypes.MethodSecretsDelete, respBody)
 	}
@@ -249,16 +249,7 @@ func Execute(h *common.Handler, inputs DeleteSecretsInputs, duration time.Durati
 
 	}
 
-	// POST to gateway (HTTPClient.Post has your retry policy)
-	respBody, status, err := h.Gw.Post(requestBody)
-	if err != nil {
-		return err
-	}
-	if status != http.StatusOK {
-		return fmt.Errorf("gateway returned a non-200 status code: status_code=%d, body=%s", status, respBody)
-	}
-
-	return h.ParseVaultGatewayResponse(vaulttypes.MethodSecretsDelete, respBody)
+	return nil
 }
 
 // ResolveDeleteInputs unmarshals the YAML into DeleteSecretsInputs.
