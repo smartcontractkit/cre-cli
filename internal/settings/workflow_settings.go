@@ -64,7 +64,6 @@ func loadWorkflowSettings(logger *zerolog.Logger, v *viper.Viper, cmd *cobra.Com
 	workflowSettings.WorkflowArtifactSettings.ConfigPath = getSetting(ConfigPathSettingName)
 	workflowSettings.WorkflowArtifactSettings.SecretsPath = getSetting(SecretsPathSettingName)
 	workflowSettings.LoggingSettings.SethConfigPath = getSetting(SethConfigPathSettingName)
-
 	fullRPCsKey := fmt.Sprintf("%s.%s", target, RpcsSettingName)
 	if v.IsSet(fullRPCsKey) {
 		if err := v.UnmarshalKey(fullRPCsKey, &workflowSettings.RPCs); err != nil {

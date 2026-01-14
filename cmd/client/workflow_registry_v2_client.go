@@ -678,7 +678,7 @@ func (wrc *WorkflowRegistryV2Client) IsRequestAllowlisted(owner common.Address, 
 
 // AllowlistRequest sends the request digest to the WorkflowRegistry allowlist with a default expiry of now + 10 minutes.
 // `requestDigestHex` should be the hex string produced by utils.CalculateRequestDigest(...), with or without "0x".
-func (wrc *WorkflowRegistryV2Client) AllowlistRequest(requestDigest [32]byte, duration time.Duration) error {
+func (wrc *WorkflowRegistryV2Client) AllowlistRequest(requestDigest [32]byte, duration time.Duration) (*TxOutput, error) {
 	var contract workflowRegistryV2Contract
 	if wrc.Wr != nil {
 		contract = wrc.Wr
@@ -686,7 +686,7 @@ func (wrc *WorkflowRegistryV2Client) AllowlistRequest(requestDigest [32]byte, du
 		c, err := workflow_registry_v2_wrapper.NewWorkflowRegistry(wrc.ContractAddress, wrc.EthClient.Client)
 		if err != nil {
 			wrc.Logger.Error().Err(err).Msg("Failed to connect for AllowlistRequest")
-			return err
+			return nil, err
 		}
 		contract = c
 	}
@@ -694,26 +694,22 @@ func (wrc *WorkflowRegistryV2Client) AllowlistRequest(requestDigest [32]byte, du
 	// #nosec G115 -- int64 to uint32 conversion; Unix() returns seconds since epoch, which fits in uint32 until 2106
 	deadline := uint32(time.Now().Add(duration).Unix())
 
-	// Send tx; keep the same "callContractMethodV2" pattern you used for read-only calls.
-	// Here we return the tx hash string to the helper (it may log/track it).
-	_, err := callContractMethodV2(wrc, func() (string, error) {
-		tx, txErr := contract.AllowlistRequest(wrc.EthClient.NewTXOpts(), requestDigest, deadline)
-		if txErr != nil {
-			return "", txErr
-		}
-		// Return the tx hash string for visibility through the helper
-		return tx.Hash().Hex(), nil
-	})
-	if err != nil {
-		wrc.Logger.Error().Err(err).Msg("AllowlistRequest tx failed")
-		return err
+	txFn := func(opts *bind.TransactOpts) (*types.Transaction, error) {
+		return contract.AllowlistRequest(opts, requestDigest, deadline)
 	}
-
+	txOut, err := wrc.executeTransactionByTxType(txFn, "AllowlistRequest", "RequestAllowlisted", requestDigest, duration)
+	if err != nil {
+		wrc.Logger.Error().
+			Str("contract", wrc.ContractAddress.Hex()).
+			Err(err).
+			Msg("Failed to call AllowlistRequest")
+		return nil, err
+	}
 	wrc.Logger.Debug().
 		Str("digest", hex.EncodeToString(requestDigest[:])).
 		Str("deadline", time.Unix(int64(deadline), 0).UTC().Format(time.RFC3339)).
 		Msg("AllowlistRequest submitted")
-	return nil
+	return &txOut, nil
 }
 
 func callContractMethodV2[T any](wrc *WorkflowRegistryV2Client, contractMethod func() (T, error)) (T, error) {

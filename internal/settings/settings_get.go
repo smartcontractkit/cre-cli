@@ -81,9 +81,9 @@ func GetWorkflowOwner(v *viper.Viper) (ownerAddress string, ownerType string, er
 		return "", "", err
 	}
 
-	// if --unsigned flag is set, owner must be set in settings
+	// if --unsigned flag or --changeset is set, owner must be set in settings
 	ownerKey := fmt.Sprintf("%s.%s", target, WorkflowOwnerSettingName)
-	if v.IsSet(Flags.RawTxFlag.Name) {
+	if v.IsSet(Flags.RawTxFlag.Name) || v.IsSet(Flags.Changeset.Name) {
 		if v.IsSet(ownerKey) {
 			owner := strings.TrimSpace(v.GetString(ownerKey))
 			if owner != "" {
@@ -100,7 +100,7 @@ func GetWorkflowOwner(v *viper.Viper) (ownerAddress string, ownerType string, er
 		return "", "", errors.New(msg)
 	}
 
-	// unsigned is not set, it is EOA path
+	// unsigned or changeset is not set, it is EOA path
 	rawPrivKey := v.GetString(EthPrivateKeyEnvVar)
 	normPrivKey := NormalizeHexKey(rawPrivKey)
 	ownerAddress, err = ethkeys.DeriveEthAddressFromPrivateKey(normPrivKey)
