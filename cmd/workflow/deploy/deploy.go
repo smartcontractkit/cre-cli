@@ -169,6 +169,10 @@ func (h *handler) ValidateInputs() error {
 		return fmt.Errorf("failed to initialize validator: %w", err)
 	}
 
+	if h.inputs.WorkflowTag == "" {
+		h.inputs.WorkflowTag = h.inputs.WorkflowName
+	}
+
 	if err := validate.Struct(h.inputs); err != nil {
 		return validate.ParseValidationErrors(err)
 	}
