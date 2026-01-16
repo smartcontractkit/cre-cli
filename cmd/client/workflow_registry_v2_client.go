@@ -3,6 +3,7 @@ package client
 import (
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"math/big"
 	"time"
 
@@ -387,6 +388,19 @@ func (wrc *WorkflowRegistryV2Client) GetMaxWorkflowsPerUserDON(user common.Addre
 	return val, err
 }
 
+func (wrc *WorkflowRegistryV2Client) GetMaxWorkflowsPerUserDONByFamily(user common.Address, donFamily string) (uint32, error) {
+	contract, err := workflow_registry_v2_wrapper.NewWorkflowRegistry(wrc.ContractAddress, wrc.EthClient.Client)
+	if err != nil {
+		wrc.Logger.Error().Err(err).Msg("Failed to connect for GetMaxWorkflowsPerUserDONByFamily")
+		return 0, err
+	}
+	val, err := contract.GetMaxWorkflowsPerUserDON(wrc.EthClient.NewCallOpts(), user, donFamily)
+	if err != nil {
+		wrc.Logger.Error().Err(err).Msg("GetMaxWorkflowsPerUserDONByFamily call failed")
+	}
+	return val, err
+}
+
 func (wrc *WorkflowRegistryV2Client) IsAllowedSigner(signer common.Address) (bool, error) {
 	contract, err := workflow_registry_v2_wrapper.NewWorkflowRegistry(wrc.ContractAddress, wrc.EthClient.Client)
 	if err != nil {
@@ -529,6 +543,67 @@ func (wrc *WorkflowRegistryV2Client) GetWorkflowListByOwnerAndName(owner common.
 		wrc.Logger.Error().Err(err).Msg("GetWorkflowListByOwnerAndName call failed")
 	}
 	return result, err
+}
+
+func (wrc *WorkflowRegistryV2Client) GetWorkflowListByOwner(owner common.Address, start, limit *big.Int) ([]workflow_registry_v2_wrapper.WorkflowRegistryWorkflowMetadataView, error) {
+	contract, err := workflow_registry_v2_wrapper.NewWorkflowRegistry(wrc.ContractAddress, wrc.EthClient.Client)
+	if err != nil {
+		wrc.Logger.Error().Err(err).Msg("Failed to connect for GetWorkflowListByOwner")
+		return nil, err
+	}
+
+	result, err := callContractMethodV2(wrc, func() ([]workflow_registry_v2_wrapper.WorkflowRegistryWorkflowMetadataView, error) {
+		return contract.GetWorkflowListByOwner(wrc.EthClient.NewCallOpts(), owner, start, limit)
+	})
+	if err != nil {
+		wrc.Logger.Error().Err(err).Msg("GetWorkflowListByOwner call failed")
+	}
+	return result, err
+}
+
+func (wrc *WorkflowRegistryV2Client) CheckUserDonLimit(
+	owner common.Address,
+	donFamily string,
+	pending uint32,
+) error {
+	const workflowStatusActive = uint8(0)
+	const workflowListPageSize = int64(200)
+
+	maxAllowed, err := wrc.GetMaxWorkflowsPerUserDONByFamily(owner, donFamily)
+	if err != nil {
+		return fmt.Errorf("failed to fetch per-user workflow limit: %w", err)
+	}
+
+	var currentActive uint32
+	start := big.NewInt(0)
+	limit := big.NewInt(workflowListPageSize)
+
+	for {
+		list, err := wrc.GetWorkflowListByOwner(owner, start, limit)
+		if err != nil {
+			return fmt.Errorf("failed to check active workflows for DON %s: %w", donFamily, err)
+		}
+		if len(list) == 0 {
+			break
+		}
+
+		for _, workflow := range list {
+			if workflow.Status == workflowStatusActive && workflow.DonFamily == donFamily {
+				currentActive++
+			}
+		}
+
+		start = big.NewInt(start.Int64() + int64(len(list)))
+		if int64(len(list)) < workflowListPageSize {
+			break
+		}
+	}
+
+	if currentActive+pending > maxAllowed {
+		return fmt.Errorf("workflow limit reached for DON %s: %d/%d active workflows", donFamily, currentActive, maxAllowed)
+	}
+
+	return nil
 }
 
 func (wrc *WorkflowRegistryV2Client) DeleteWorkflow(workflowID [32]byte) (*TxOutput, error) {

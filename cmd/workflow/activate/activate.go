@@ -167,6 +167,10 @@ func (h *handler) Execute() error {
 		return fmt.Errorf("workflow is already active, cancelling transaction")
 	}
 
+	if err := h.wrc.CheckUserDonLimit(ownerAddr, h.inputs.DonFamily, 1); err != nil {
+		return err
+	}
+
 	fmt.Printf("Activating workflow: Name=%s, Owner=%s, WorkflowID=%s\n", workflowName, workflowOwner, hex.EncodeToString(latest.WorkflowId[:]))
 
 	txOut, err := h.wrc.ActivateWorkflow(latest.WorkflowId, h.inputs.DonFamily)

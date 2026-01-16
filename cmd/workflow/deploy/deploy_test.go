@@ -2,10 +2,14 @@ package deploy
 
 import (
 	"errors"
+	"math/big"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	workflow_registry_v2_wrapper "github.com/smartcontractkit/chainlink-evm/gethwrappers/workflow/generated/workflow_registry_wrapper_v2"
 
 	"github.com/smartcontractkit/cre-cli/internal/testutil/chainsim"
 	"github.com/smartcontractkit/cre-cli/internal/validation"
@@ -150,4 +154,81 @@ func TestWorkflowDeployCommand(t *testing.T) {
 
 func stringPtr(s string) *string {
 	return &s
+}
+
+type fakeUserDonLimitClient struct {
+	maxAllowed           uint32
+	workflowsByOwner     []workflow_registry_v2_wrapper.WorkflowRegistryWorkflowMetadataView
+	workflowsByOwnerName []workflow_registry_v2_wrapper.WorkflowRegistryWorkflowMetadataView
+}
+
+func (f fakeUserDonLimitClient) CheckUserDonLimit(owner common.Address, donFamily string, pending uint32) error {
+	var currentActive uint32
+	for _, workflow := range f.workflowsByOwner {
+		if workflow.Owner == owner && workflow.Status == workflowStatusActive && workflow.DonFamily == donFamily {
+			currentActive++
+		}
+	}
+
+	if currentActive+pending > f.maxAllowed {
+		return errors.New("workflow limit reached")
+	}
+	return nil
+}
+
+func (f fakeUserDonLimitClient) GetWorkflowListByOwnerAndName(common.Address, string, *big.Int, *big.Int) ([]workflow_registry_v2_wrapper.WorkflowRegistryWorkflowMetadataView, error) {
+	return f.workflowsByOwnerName, nil
+}
+
+func TestCheckUserDonLimitBeforeDeploy(t *testing.T) {
+	owner := common.HexToAddress(chainsim.TestAddress)
+	donFamily := "test-don"
+	workflowName := "test-workflow"
+
+	t.Run("errors when limit reached", func(t *testing.T) {
+		client := fakeUserDonLimitClient{
+			maxAllowed: 2,
+			workflowsByOwner: []workflow_registry_v2_wrapper.WorkflowRegistryWorkflowMetadataView{
+				{Owner: owner, Status: workflowStatusActive, DonFamily: donFamily},
+				{Owner: owner, Status: workflowStatusActive, DonFamily: donFamily},
+			},
+		}
+		nameLookup := fakeUserDonLimitClient{}
+
+		err := checkUserDonLimitBeforeDeploy(client, nameLookup, owner, donFamily, workflowName, true, nil)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "workflow limit reached")
+	})
+
+	t.Run("accounts for keepAlive false pausing same-name workflows", func(t *testing.T) {
+		client := fakeUserDonLimitClient{
+			maxAllowed: 2,
+			workflowsByOwner: []workflow_registry_v2_wrapper.WorkflowRegistryWorkflowMetadataView{
+				{Owner: owner, Status: workflowStatusActive, DonFamily: donFamily},
+				{Owner: owner, Status: workflowStatusActive, DonFamily: donFamily},
+			},
+		}
+		nameLookup := fakeUserDonLimitClient{
+			workflowsByOwnerName: []workflow_registry_v2_wrapper.WorkflowRegistryWorkflowMetadataView{
+				{Owner: owner, Status: workflowStatusActive, DonFamily: donFamily},
+			},
+		}
+
+		err := checkUserDonLimitBeforeDeploy(client, nameLookup, owner, donFamily, workflowName, false, nil)
+		require.NoError(t, err)
+	})
+
+	t.Run("skips check when updating existing workflow", func(t *testing.T) {
+		client := fakeUserDonLimitClient{
+			maxAllowed: 1,
+			workflowsByOwner: []workflow_registry_v2_wrapper.WorkflowRegistryWorkflowMetadataView{
+				{Owner: owner, Status: workflowStatusActive, DonFamily: donFamily},
+			},
+		}
+		nameLookup := fakeUserDonLimitClient{}
+		existingStatus := uint8(0)
+
+		err := checkUserDonLimitBeforeDeploy(client, nameLookup, owner, donFamily, workflowName, true, &existingStatus)
+		require.NoError(t, err)
+	})
 }
