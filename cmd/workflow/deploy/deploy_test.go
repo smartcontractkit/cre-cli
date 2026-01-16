@@ -45,6 +45,29 @@ func TestWorkflowDeployCommand(t *testing.T) {
 				wantDetail: "WorkflowName must be non-empty, no longer than 64 characters, and contain only letters (a-z, A-Z), numbers (0-9), dashes (-), and underscores (_): this_is_a_really_long_workflow_name_that_exceeds_the_maximum_allowed_length_of_64_chars",
 			},
 			{
+				name: "Workflow Name Fine but too long for tag",
+				inputs: Inputs{
+					WorkflowName:  "workflow_tag_name_longer_than_32_bytes",
+					WorkflowOwner: "0x4c0883a69102937d6234146e38a6aefbf95944c6e4d4013a6d287e4d739e7f9b",
+					DonFamily:     "test_label",
+				},
+				wantErr:    true,
+				wantKey:    "Inputs.WorkflowTag",
+				wantDetail: "WorkflowTag must be a maximum of 32 characters in length",
+			},
+			{
+				name: "WorkflowTag too long",
+				inputs: Inputs{
+					WorkflowName:  "valid_workflow",
+					WorkflowOwner: "0x4c0883a69102937d6234146e38a6aefbf95944c6e4d4013a6d287e4d739e7f9b",
+					DonFamily:     "test_label",
+					WorkflowTag:   "workflow_tag_name_longer_than_32_bytes",
+				},
+				wantErr:    true,
+				wantKey:    "Inputs.WorkflowTag",
+				wantDetail: "WorkflowTag must be a maximum of 32 characters in length",
+			},
+			{
 				name: "Invalid Workflow Owner - Missing 0x Prefix",
 				inputs: Inputs{
 					WorkflowName:  "valid_workflow",
