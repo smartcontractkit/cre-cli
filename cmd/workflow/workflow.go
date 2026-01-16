@@ -6,6 +6,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/activate"
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/delete"
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/deploy"
+	generateid "github.com/smartcontractkit/cre-cli/cmd/workflow/generate-id"
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/pause"
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/simulate"
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/test"
@@ -25,6 +26,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	workflowCmd.AddCommand(test.New(runtimeContext))
 	workflowCmd.AddCommand(deploy.New(runtimeContext))
 	workflowCmd.AddCommand(simulate.New(runtimeContext))
+	workflowCmd.AddCommand(generateid.New(runtimeContext))
 
 	return workflowCmd
 }
