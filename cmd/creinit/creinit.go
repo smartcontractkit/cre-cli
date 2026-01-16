@@ -45,6 +45,7 @@ type WorkflowTemplate struct {
 	Title  string
 	ID     uint32
 	Name   string
+	Hidden bool // If true, this template will be hidden from the user selection prompt
 }
 
 type LanguageTemplate struct {
@@ -71,7 +72,7 @@ var languageTemplates = []LanguageTemplate{
 		Workflows: []WorkflowTemplate{
 			{Folder: "typescriptSimpleExample", Title: "Helloworld: Typescript Hello World example", ID: 3, Name: HelloWorldTemplate},
 			{Folder: "typescriptPorExampleDev", Title: "Custom data feed: Typescript updating on-chain data periodically using offchain API data", ID: 4, Name: PoRTemplate},
-			{Folder: "typescriptConfHTTP", Title: "Confidential Http: Typescript example using the confidential http capability", ID: 5, Name: ConfHTTPTemplate},
+			{Folder: "typescriptConfHTTP", Title: "Confidential Http: Typescript example using the confidential http capability", ID: 5, Name: ConfHTTPTemplate, Hidden: true},
 		},
 	},
 }
@@ -426,7 +427,13 @@ func (h *handler) extractLanguageTitles(templates []LanguageTemplate) []string {
 }
 
 func (h *handler) extractWorkflowTitles(templates []WorkflowTemplate) []string {
-	return extractTitles(templates)
+	visibleTemplates := make([]WorkflowTemplate, 0, len(templates))
+	for _, t := range templates {
+		if !t.Hidden {
+			visibleTemplates = append(visibleTemplates, t)
+		}
+	}
+	return extractTitles(visibleTemplates)
 }
 
 func (h *handler) getLanguageTemplateByTitle(title string) (LanguageTemplate, error) {
