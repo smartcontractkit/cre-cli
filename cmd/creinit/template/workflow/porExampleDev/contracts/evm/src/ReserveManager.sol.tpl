@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
-import {IReceiver} from "../../keystone/interfaces/IReceiver.sol";
-import {IERC165} from "@openzeppelin/contracts@5.0.2/interfaces/IERC165.sol";
+import {IReceiver} from "./keystone/IReceiver.sol";
+import {IERC165} from "./keystone/IERC165.sol";
 
 contract ReserveManager is IReceiver {
   uint256 public lastTotalMinted;
