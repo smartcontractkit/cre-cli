@@ -387,6 +387,19 @@ func (wrc *WorkflowRegistryV2Client) GetMaxWorkflowsPerUserDON(user common.Addre
 	return val, err
 }
 
+func (wrc *WorkflowRegistryV2Client) GetMaxWorkflowsPerUserDONByFamily(user common.Address, donFamily string) (uint32, error) {
+	contract, err := workflow_registry_v2_wrapper.NewWorkflowRegistry(wrc.ContractAddress, wrc.EthClient.Client)
+	if err != nil {
+		wrc.Logger.Error().Err(err).Msg("Failed to connect for GetMaxWorkflowsPerUserDONByFamily")
+		return 0, err
+	}
+	val, err := contract.GetMaxWorkflowsPerUserDON(wrc.EthClient.NewCallOpts(), user, donFamily)
+	if err != nil {
+		wrc.Logger.Error().Err(err).Msg("GetMaxWorkflowsPerUserDONByFamily call failed")
+	}
+	return val, err
+}
+
 func (wrc *WorkflowRegistryV2Client) IsAllowedSigner(signer common.Address) (bool, error) {
 	contract, err := workflow_registry_v2_wrapper.NewWorkflowRegistry(wrc.ContractAddress, wrc.EthClient.Client)
 	if err != nil {
@@ -527,6 +540,22 @@ func (wrc *WorkflowRegistryV2Client) GetWorkflowListByOwnerAndName(owner common.
 	})
 	if err != nil {
 		wrc.Logger.Error().Err(err).Msg("GetWorkflowListByOwnerAndName call failed")
+	}
+	return result, err
+}
+
+func (wrc *WorkflowRegistryV2Client) GetWorkflowListByOwner(owner common.Address, start, limit *big.Int) ([]workflow_registry_v2_wrapper.WorkflowRegistryWorkflowMetadataView, error) {
+	contract, err := workflow_registry_v2_wrapper.NewWorkflowRegistry(wrc.ContractAddress, wrc.EthClient.Client)
+	if err != nil {
+		wrc.Logger.Error().Err(err).Msg("Failed to connect for GetWorkflowListByOwner")
+		return nil, err
+	}
+
+	result, err := callContractMethodV2(wrc, func() ([]workflow_registry_v2_wrapper.WorkflowRegistryWorkflowMetadataView, error) {
+		return contract.GetWorkflowListByOwner(wrc.EthClient.NewCallOpts(), owner, start, limit)
+	})
+	if err != nil {
+		wrc.Logger.Error().Err(err).Msg("GetWorkflowListByOwner call failed")
 	}
 	return result, err
 }
