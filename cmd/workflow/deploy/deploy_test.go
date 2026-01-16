@@ -162,12 +162,18 @@ type fakeUserDonLimitClient struct {
 	workflowsByOwnerName []workflow_registry_v2_wrapper.WorkflowRegistryWorkflowMetadataView
 }
 
-func (f fakeUserDonLimitClient) GetMaxWorkflowsPerUserDONByFamily(common.Address, string) (uint32, error) {
-	return f.maxAllowed, nil
-}
+func (f fakeUserDonLimitClient) CheckUserDonLimit(owner common.Address, donFamily string, pending uint32) error {
+	var currentActive uint32
+	for _, workflow := range f.workflowsByOwner {
+		if workflow.Owner == owner && workflow.Status == workflowStatusActive && workflow.DonFamily == donFamily {
+			currentActive++
+		}
+	}
 
-func (f fakeUserDonLimitClient) GetWorkflowListByOwner(common.Address, *big.Int, *big.Int) ([]workflow_registry_v2_wrapper.WorkflowRegistryWorkflowMetadataView, error) {
-	return f.workflowsByOwner, nil
+	if currentActive+pending > f.maxAllowed {
+		return errors.New("workflow limit reached")
+	}
+	return nil
 }
 
 func (f fakeUserDonLimitClient) GetWorkflowListByOwnerAndName(common.Address, string, *big.Int, *big.Int) ([]workflow_registry_v2_wrapper.WorkflowRegistryWorkflowMetadataView, error) {
@@ -187,8 +193,9 @@ func TestCheckUserDonLimitBeforeDeploy(t *testing.T) {
 				{Owner: owner, Status: workflowStatusActive, DonFamily: donFamily},
 			},
 		}
+		nameLookup := fakeUserDonLimitClient{}
 
-		err := checkUserDonLimitBeforeDeploy(client, owner, donFamily, workflowName, true, nil)
+		err := checkUserDonLimitBeforeDeploy(client, nameLookup, owner, donFamily, workflowName, true, nil)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "workflow limit reached")
 	})
@@ -200,12 +207,14 @@ func TestCheckUserDonLimitBeforeDeploy(t *testing.T) {
 				{Owner: owner, Status: workflowStatusActive, DonFamily: donFamily},
 				{Owner: owner, Status: workflowStatusActive, DonFamily: donFamily},
 			},
+		}
+		nameLookup := fakeUserDonLimitClient{
 			workflowsByOwnerName: []workflow_registry_v2_wrapper.WorkflowRegistryWorkflowMetadataView{
 				{Owner: owner, Status: workflowStatusActive, DonFamily: donFamily},
 			},
 		}
 
-		err := checkUserDonLimitBeforeDeploy(client, owner, donFamily, workflowName, false, nil)
+		err := checkUserDonLimitBeforeDeploy(client, nameLookup, owner, donFamily, workflowName, false, nil)
 		require.NoError(t, err)
 	})
 
@@ -216,9 +225,10 @@ func TestCheckUserDonLimitBeforeDeploy(t *testing.T) {
 				{Owner: owner, Status: workflowStatusActive, DonFamily: donFamily},
 			},
 		}
+		nameLookup := fakeUserDonLimitClient{}
 		existingStatus := uint8(0)
 
-		err := checkUserDonLimitBeforeDeploy(client, owner, donFamily, workflowName, true, &existingStatus)
+		err := checkUserDonLimitBeforeDeploy(client, nameLookup, owner, donFamily, workflowName, true, &existingStatus)
 		require.NoError(t, err)
 	})
 }

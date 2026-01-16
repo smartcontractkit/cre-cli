@@ -231,6 +231,7 @@ func (h *handler) Execute() error {
 
 	if err := checkUserDonLimitBeforeDeploy(
 		h.wrc,
+		h.wrc,
 		common.HexToAddress(h.inputs.WorkflowOwner),
 		h.inputs.DonFamily,
 		h.inputs.WorkflowName,
