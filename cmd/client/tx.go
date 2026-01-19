@@ -31,6 +31,7 @@ const (
 	Regular TxType = iota
 	Raw
 	Ledger
+	Changeset
 )
 
 type TxClientConfig struct {
@@ -219,6 +220,20 @@ func (c *TxClient) executeTransactionByTxType(txFn func(opts *bind.TransactOpts)
 			RawTx: RawTx{
 				To:       tx.To().Hex(),
 				Data:     tx.Data(),
+				Function: funName,
+				Args:     cmdCommon.ToStringSlice(args),
+			},
+		}, nil
+	case Changeset:
+		tx, err := txFn(cmdCommon.SimTransactOpts())
+		if err != nil {
+			return TxOutput{Type: Changeset}, err
+		}
+		return TxOutput{
+			Type: Changeset,
+			RawTx: RawTx{
+				To:       tx.To().Hex(),
+				Data:     []byte{},
 				Function: funName,
 				Args:     cmdCommon.ToStringSlice(args),
 			},

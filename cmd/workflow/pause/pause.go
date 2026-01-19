@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/big"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/rs/zerolog"
@@ -14,9 +15,11 @@ import (
 	workflow_registry_v2_wrapper "github.com/smartcontractkit/chainlink-evm/gethwrappers/workflow/generated/workflow_registry_wrapper_v2"
 
 	"github.com/smartcontractkit/cre-cli/cmd/client"
+	cmdCommon "github.com/smartcontractkit/cre-cli/cmd/common"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
+	"github.com/smartcontractkit/cre-cli/internal/types"
 	"github.com/smartcontractkit/cre-cli/internal/validation"
 )
 
@@ -54,7 +57,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 		},
 	}
 
-	settings.AddRawTxFlag(pauseCmd)
+	settings.AddTxnTypeFlags(pauseCmd)
 	settings.AddSkipConfirmation(pauseCmd)
 	return pauseCmd
 }
@@ -197,6 +200,41 @@ func (h *handler) Execute() error {
 		fmt.Println("")
 		fmt.Printf("      %x\n", txOut.RawTx.Data)
 		fmt.Println("")
+
+	case client.Changeset:
+		chainSelector, err := settings.GetChainSelectorByChainName(h.environmentSet.WorkflowRegistryChainName)
+		if err != nil {
+			return fmt.Errorf("failed to get chain selector for chain %q: %w", h.environmentSet.WorkflowRegistryChainName, err)
+		}
+		mcmsConfig, err := settings.GetMCMSConfig(h.settings, chainSelector)
+		if err != nil {
+			fmt.Println("\nMCMS config not found or is incorrect, skipping MCMS config in changeset")
+		}
+		cldSettings := h.settings.CLDSettings
+		changesets := []types.Changeset{
+			{
+				BatchPauseWorkflow: &types.BatchPauseWorkflow{
+					Payload: types.UserWorkflowBatchPauseInput{
+						WorkflowIDs: h.runtimeContext.Workflow.ID, // Note: The way deploy is set up, there will only ever be one workflow in the command for now
+
+						ChainSelector:             chainSelector,
+						MCMSConfig:                mcmsConfig,
+						WorkflowRegistryQualifier: cldSettings.WorkflowRegistryQualifier,
+					},
+				},
+			},
+		}
+		csFile := types.NewChangesetFile(cldSettings.Environment, cldSettings.Domain, cldSettings.MergeProposals, changesets)
+
+		var fileName string
+		if cldSettings.ChangesetFile != "" {
+			fileName = cldSettings.ChangesetFile
+		} else {
+			fileName = fmt.Sprintf("BatchPauseWorkflow_%s_%s.yaml", workflowName, time.Now().Format("20060102_150405"))
+		}
+
+		return cmdCommon.WriteChangesetFile(fileName, csFile, h.settings)
+
 	default:
 		h.log.Warn().Msgf("Unsupported transaction type: %s", txOut.Type)
 	}

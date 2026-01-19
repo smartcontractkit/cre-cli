@@ -98,7 +98,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 		},
 	}
 
-	settings.AddRawTxFlag(deployCmd)
+	settings.AddTxnTypeFlags(deployCmd)
 	settings.AddSkipConfirmation(deployCmd)
 	deployCmd.Flags().StringP("output", "o", defaultOutputPath, "The output file for the compiled WASM binary encoded in base64")
 	deployCmd.Flags().StringP("owner-label", "l", "", "Label for the workflow owner (used during auto-link if owner is not already linked)")
@@ -227,6 +227,18 @@ func (h *handler) Execute() error {
 		} else {
 			return existsErr
 		}
+	}
+
+	if err := checkUserDonLimitBeforeDeploy(
+		h.wrc,
+		h.wrc,
+		common.HexToAddress(h.inputs.WorkflowOwner),
+		h.inputs.DonFamily,
+		h.inputs.WorkflowName,
+		h.inputs.KeepAlive,
+		h.existingWorkflowStatus,
+	); err != nil {
+		return err
 	}
 
 	fmt.Println("\nUploading files...")

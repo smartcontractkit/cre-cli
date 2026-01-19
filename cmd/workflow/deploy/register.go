@@ -3,10 +3,14 @@ package deploy
 import (
 	"encoding/hex"
 	"fmt"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 
 	"github.com/smartcontractkit/cre-cli/cmd/client"
+	cmdCommon "github.com/smartcontractkit/cre-cli/cmd/common"
+	"github.com/smartcontractkit/cre-cli/internal/settings"
+	"github.com/smartcontractkit/cre-cli/internal/types"
 )
 
 func (h *handler) upsert() error {
@@ -90,6 +94,49 @@ func (h *handler) handleUpsert(params client.RegisterWorkflowV2Parameters) error
 		fmt.Println("")
 		fmt.Printf("      %x\n", txOut.RawTx.Data)
 		fmt.Println("")
+
+	case client.Changeset:
+		chainSelector, err := settings.GetChainSelectorByChainName(h.environmentSet.WorkflowRegistryChainName)
+		if err != nil {
+			return fmt.Errorf("failed to get chain selector for chain %q: %w", h.environmentSet.WorkflowRegistryChainName, err)
+		}
+		mcmsConfig, err := settings.GetMCMSConfig(h.settings, chainSelector)
+		if err != nil {
+			fmt.Println("\nMCMS config not found or is incorrect, skipping MCMS config in changeset")
+		}
+		cldSettings := h.settings.CLDSettings
+		changesets := []types.Changeset{
+			{
+				UpsertWorkflow: &types.UpsertWorkflow{
+					Payload: types.UserWorkflowUpsertInput{
+						WorkflowID:     h.runtimeContext.Workflow.ID,
+						WorkflowName:   params.WorkflowName,
+						WorkflowTag:    params.Tag,
+						WorkflowStatus: params.Status,
+						DonFamily:      params.DonFamily,
+						BinaryURL:      params.BinaryURL,
+						ConfigURL:      params.ConfigURL,
+						Attributes:     common.Bytes2Hex(params.Attributes),
+						KeepAlive:      params.KeepAlive,
+
+						ChainSelector:             chainSelector,
+						MCMSConfig:                mcmsConfig,
+						WorkflowRegistryQualifier: cldSettings.WorkflowRegistryQualifier,
+					},
+				},
+			},
+		}
+		csFile := types.NewChangesetFile(cldSettings.Environment, cldSettings.Domain, cldSettings.MergeProposals, changesets)
+
+		var fileName string
+		if cldSettings.ChangesetFile != "" {
+			fileName = cldSettings.ChangesetFile
+		} else {
+			fileName = fmt.Sprintf("UpsertWorkflow_%s_%s.yaml", workflowName, time.Now().Format("20060102_150405"))
+		}
+
+		return cmdCommon.WriteChangesetFile(fileName, csFile, h.settings)
+
 	default:
 		h.log.Warn().Msgf("Unsupported transaction type: %s", txOut.Type)
 	}
