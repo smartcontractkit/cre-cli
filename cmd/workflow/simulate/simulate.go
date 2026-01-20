@@ -464,7 +464,15 @@ func run(
 				os.Exit(1)
 			},
 			OnResultReceived: func(result *pb.ExecutionResult) {
+				// Wait 1s to allow all pending logs to be written before showing the result
+				time.Sleep(1 * time.Second)
+				// Flush I/O before printing result
+				os.Stdout.Sync()
+				os.Stderr.Sync()
+				
 				fmt.Println()
+				if result != nil && result.Result != nil {
+					
 				switch r := result.Result.(type) {
 				case *pb.ExecutionResult_Value:
 					v, err := values.FromProto(r.Value)
@@ -489,7 +497,9 @@ func run(
 				case *pb.ExecutionResult_Error:
 					fmt.Println("Execution resulted in an error being returned: " + r.Error)
 				}
-				fmt.Println()
+				
+			}
+			fmt.Println()
 				close(executionFinishedCh)
 			},
 		},
