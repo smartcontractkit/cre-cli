@@ -1,7 +1,9 @@
 import {
 	type ConfidentialHTTPSendRequester,
 	consensusIdenticalAggregation,
-	cre,
+	handler,
+	ConfidentialHTTPClient,
+	CronCapability,
 	json,
 	ok,
 	Runner,
@@ -58,7 +60,7 @@ const fetchResult = (sendRequester: ConfidentialHTTPSendRequester, config: Confi
 const onCronTrigger = (runtime: Runtime<Config>) => {
 	runtime.log('Confidential HTTP workflow triggered.')
 
-	const confHTTPClient = new cre.capabilities.ConfidentialHTTPClient()
+	const confHTTPClient = new ConfidentialHTTPClient()
 	const result = confHTTPClient
 		.sendRequests(
 			runtime,
@@ -75,9 +77,9 @@ const onCronTrigger = (runtime: Runtime<Config>) => {
 }
 
 const initWorkflow = (config: Config) => {
-	const cron = new cre.capabilities.CronCapability()
+	const cron = new CronCapability()
 
-	return [cre.handler(cron.trigger({ schedule: config.schedule }), onCronTrigger)]
+	return [handler(cron.trigger({ schedule: config.schedule }), onCronTrigger)]
 }
 
 export async function main() {
@@ -85,5 +87,3 @@ export async function main() {
 
 	await runner.run(initWorkflow)
 }
-
-main()
