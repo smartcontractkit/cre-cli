@@ -519,43 +519,52 @@ func run(
 				commonsettings.Bool(true), // Allow all chains in simulation
 				map[string]bool{},
 			)
-			if creSettings == nil {
-				return
-			}
-			overrideFilePath := creSettings.Workflow.WorkflowArtifactSettings.OverrideFilePath
-			if overrideFilePath != "" {
-				workflowDir := filepath.Dir(creSettings.Workflow.WorkflowArtifactSettings.WorkflowPath)
-				var absOverridePath string
-				if filepath.IsAbs(overrideFilePath) {
-					absOverridePath = overrideFilePath
-				} else {
-					absOverridePath = filepath.Join(workflowDir, overrideFilePath)
-				}
-
-				if overrideData, err := os.ReadFile(absOverridePath); err == nil {
-					var override struct {
-						HTTPCallLimit         *int `json:"http-call-limit"`
-						ChainReadCallLimit    *int `json:"chain-read-call-limit"`
-						ChainWriteTargetLimit *int `json:"chain-write-target-limit"`
-						ConsensusCallLimit    *int `json:"consensus-call-limit"`
-					}
-					if err := json.Unmarshal(overrideData, &override); err == nil {
-						if override.HTTPCallLimit != nil && *override.HTTPCallLimit > 0 {
-							cfg.HTTPAction.CallLimit.DefaultValue = *override.HTTPCallLimit
-						}
-						if override.ChainReadCallLimit != nil && *override.ChainReadCallLimit > 0 {
-							cfg.ChainRead.CallLimit.DefaultValue = *override.ChainReadCallLimit
-						}
-						if override.ChainWriteTargetLimit != nil && *override.ChainWriteTargetLimit > 0 {
-							cfg.ChainWrite.TargetsLimit.DefaultValue = *override.ChainWriteTargetLimit
-						}
-						if override.ConsensusCallLimit != nil && *override.ConsensusCallLimit > 0 {
-							cfg.Consensus.CallLimit.DefaultValue = *override.ConsensusCallLimit
-						}
+			
+			overrideFileFound := false
+			if creSettings != nil {
+				overrideFilePath := creSettings.Workflow.WorkflowArtifactSettings.OverrideFilePath
+				if overrideFilePath != "" {
+					workflowDir := filepath.Dir(creSettings.Workflow.WorkflowArtifactSettings.WorkflowPath)
+					var absOverridePath string
+					if filepath.IsAbs(overrideFilePath) {
+						absOverridePath = overrideFilePath
 					} else {
-						simLogger.Warn("Failed to parse override file, using default limits", "path", absOverridePath, "error", err)
+						absOverridePath = filepath.Join(workflowDir, overrideFilePath)
+					}
+
+					if overrideData, err := os.ReadFile(absOverridePath); err == nil {
+						overrideFileFound = true
+						var override struct {
+							HTTPCallLimit         *int `json:"http-call-limit"`
+							ChainReadCallLimit    *int `json:"chain-read-call-limit"`
+							ChainWriteTargetLimit *int `json:"chain-write-target-limit"`
+							ConsensusCallLimit    *int `json:"consensus-call-limit"`
+						}
+						if err := json.Unmarshal(overrideData, &override); err == nil {
+							if override.HTTPCallLimit != nil && *override.HTTPCallLimit > 0 {
+								cfg.HTTPAction.CallLimit.DefaultValue = *override.HTTPCallLimit
+							}
+							if override.ChainReadCallLimit != nil && *override.ChainReadCallLimit > 0 {
+								cfg.ChainRead.CallLimit.DefaultValue = *override.ChainReadCallLimit
+							}
+							if override.ChainWriteTargetLimit != nil && *override.ChainWriteTargetLimit > 0 {
+								cfg.ChainWrite.TargetsLimit.DefaultValue = *override.ChainWriteTargetLimit
+							}
+							if override.ConsensusCallLimit != nil && *override.ConsensusCallLimit > 0 {
+								cfg.Consensus.CallLimit.DefaultValue = *override.ConsensusCallLimit
+							}
+						} else {
+							simLogger.Warn("Failed to parse override file, using default limits", "path", absOverridePath, "error", err)
+						}
 					}
 				}
+			}
+			
+			if !overrideFileFound {
+				cfg.HTTPAction.CallLimit.DefaultValue = 100
+				cfg.ChainRead.CallLimit.DefaultValue = 100
+				cfg.ChainWrite.TargetsLimit.DefaultValue = 100
+				cfg.Consensus.CallLimit.DefaultValue = 100
 			}
 		},
 	})
