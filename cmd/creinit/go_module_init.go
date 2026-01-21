@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	SdkVersion              = "v1.0.0"
+	SdkVersion              = "v1.1.3"
 	EVMCapabilitiesVersion  = "v1.0.0-beta.0"
 	HTTPCapabilitiesVersion = "v1.0.0-beta.0"
 	CronCapabilitiesVersion = "v1.0.0-beta.0"
