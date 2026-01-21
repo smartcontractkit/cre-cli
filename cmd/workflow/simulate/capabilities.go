@@ -3,18 +3,27 @@ package simulate
 import (
 	"context"
 	"crypto/ecdsa"
+	"fmt"
+	"os"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 
+	confidentialhttp "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/actions/confidentialhttp"
 	confhttpserver "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/actions/confidentialhttp/server"
+	customhttp "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/actions/http"
 	httpserver "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/actions/http/server"
 	evmserver "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/chain-capabilities/evm/server"
 	consensusserver "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/consensus/server"
 	crontrigger "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/triggers/cron/server"
 	httptrigger "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/triggers/http/server"
+	commoncap "github.com/smartcontractkit/chainlink-common/pkg/capabilities"
+	caperrors "github.com/smartcontractkit/chainlink-common/pkg/capabilities/errors"
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	"github.com/smartcontractkit/chainlink-common/pkg/services"
+	"github.com/smartcontractkit/chainlink-protos/cre/go/sdk"
+	"github.com/smartcontractkit/chainlink-protos/cre/go/values"
+	valuespb "github.com/smartcontractkit/chainlink-protos/cre/go/values/pb"
 	"github.com/smartcontractkit/chainlink/v2/core/capabilities"
 	"github.com/smartcontractkit/chainlink/v2/core/capabilities/fakes"
 	"github.com/smartcontractkit/chainlink/v2/core/services/keystore/chaintype"
@@ -128,6 +137,84 @@ func (m *ManualTriggers) Close() error {
 	return nil
 }
 
+// debugHTTPWrapper wraps an HTTP capability to add debug logging for CRE-Ignore headers
+type debugHTTPWrapper struct {
+	httpserver.ClientCapability
+	lggr logger.Logger
+}
+
+func (w *debugHTTPWrapper) SendRequest(ctx context.Context, metadata commoncap.RequestMetadata, input *customhttp.Request) (*commoncap.ResponseAndMetadata[*customhttp.Response], caperrors.Error) {
+	// Check for CRE-Ignore header and log it
+	if input != nil && input.GetHeaders() != nil {
+		if creIgnoreValue, exists := input.GetHeaders()["CRE-Ignore"]; exists {
+			fmt.Fprintf(os.Stderr, "[DEBUG] CRE-Ignore header value: %s\n", creIgnoreValue)
+			w.lggr.Infow("[DEBUG] CRE-Ignore header value", "value", creIgnoreValue)
+			// Remove the header before making the call
+			delete(input.GetHeaders(), "CRE-Ignore")
+		}
+	}
+	return w.ClientCapability.SendRequest(ctx, metadata, input)
+}
+
+// debugConfHTTPWrapper wraps a Confidential HTTP capability to add debug logging for CRE-Ignore headers
+type debugConfHTTPWrapper struct {
+	confhttpserver.ClientCapability
+	lggr logger.Logger
+}
+
+func (w *debugConfHTTPWrapper) SendRequests(ctx context.Context, metadata commoncap.RequestMetadata, input *confidentialhttp.EnclaveActionInput) (*commoncap.ResponseAndMetadata[*confidentialhttp.HTTPEnclaveResponseData], caperrors.Error) {
+	// Check for CRE-Ignore header in requests and log it
+	if input != nil && input.GetInput() != nil {
+		for i, req := range input.GetInput().GetRequests() {
+			if req != nil && len(req.GetHeaders()) > 0 {
+				for _, header := range req.GetHeaders() {
+					// Headers are in "Key: Value" format
+					if len(header) > 11 && header[:11] == "CRE-Ignore:" {
+						value := header[11:]
+						// Trim leading space if present
+						if len(value) > 0 && value[0] == ' ' {
+							value = value[1:]
+						}
+						w.lggr.Infow("CRE-Ignore header value", "value", value, "requestIndex", i)
+						// Note: Header removal is handled by the underlying fake implementation
+					}
+				}
+			}
+		}
+	}
+	return w.ClientCapability.SendRequests(ctx, metadata, input)
+}
+
+// debugConsensusWrapper wraps a Consensus capability to add debug logging for map ID values
+type debugConsensusWrapper struct {
+	consensusserver.ConsensusCapability
+	lggr logger.Logger
+}
+
+func (w *debugConsensusWrapper) Simple(ctx context.Context, metadata commoncap.RequestMetadata, input *sdk.SimpleConsensusInputs) (*commoncap.ResponseAndMetadata[*valuespb.Value], caperrors.Error) {
+	// Check if consensus input is a map and log the ID value
+	if input != nil {
+		switch obs := input.Observation.(type) {
+		case *sdk.SimpleConsensusInputs_Value:
+			if obs.Value != nil {
+				value, err := values.FromProto(obs.Value)
+				if err == nil {
+					unwrapped, err := value.Unwrap()
+					if err == nil {
+						if structMap, ok := unwrapped.(map[string]any); ok {
+							if idVal, exists := structMap["id"]; exists {
+								fmt.Fprintf(os.Stderr, "[DEBUG] Consensus on map - ID value: %v\n", idVal)
+								w.lggr.Infow("[DEBUG] Consensus on map - ID value", "id", fmt.Sprintf("%v", idVal))
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	return w.ConsensusCapability.Simple(ctx, metadata, input)
+}
+
 // NewFakeCapabilities builds faked capabilities, then registers them with the capability registry.
 func NewFakeActionCapabilities(ctx context.Context, lggr logger.Logger, registry *capabilities.Registry) ([]services.Service, error) {
 	caps := make([]services.Service, 0)
@@ -142,7 +229,11 @@ func NewFakeActionCapabilities(ctx context.Context, lggr logger.Logger, registry
 		signers = append(signers, signer)
 	}
 	fakeConsensusNoDAG := fakes.NewFakeConsensusNoDAG(signers, lggr)
-	fakeConsensusServer := consensusserver.NewConsensusServer(fakeConsensusNoDAG)
+	debugConsensus := &debugConsensusWrapper{
+		ConsensusCapability: fakeConsensusNoDAG,
+		lggr:                lggr,
+	}
+	fakeConsensusServer := consensusserver.NewConsensusServer(debugConsensus)
 	if err := registry.Add(ctx, fakeConsensusServer); err != nil {
 		return nil, err
 	}
@@ -150,7 +241,11 @@ func NewFakeActionCapabilities(ctx context.Context, lggr logger.Logger, registry
 
 	// HTTP Action
 	httpAction := fakes.NewDirectHTTPAction(lggr)
-	httpActionServer := httpserver.NewClientServer(httpAction)
+	debugHTTP := &debugHTTPWrapper{
+		ClientCapability: httpAction,
+		lggr:             lggr,
+	}
+	httpActionServer := httpserver.NewClientServer(debugHTTP)
 	if err := registry.Add(ctx, httpActionServer); err != nil {
 		return nil, err
 	}
@@ -158,7 +253,11 @@ func NewFakeActionCapabilities(ctx context.Context, lggr logger.Logger, registry
 
 	// Conf HTTP Action
 	confHTTPAction := fakes.NewDirectConfidentialHTTPAction(lggr)
-	confHTTPActionServer := confhttpserver.NewClientServer(confHTTPAction)
+	debugConfHTTP := &debugConfHTTPWrapper{
+		ClientCapability: confHTTPAction,
+		lggr:             lggr,
+	}
+	confHTTPActionServer := confhttpserver.NewClientServer(debugConfHTTP)
 	if err := registry.Add(ctx, confHTTPActionServer); err != nil {
 		return nil, err
 	}
