@@ -464,6 +464,11 @@ func run(
 				os.Exit(1)
 			},
 			OnResultReceived: func(result *pb.ExecutionResult) {
+				if result == nil || result.Result == nil {
+					// OnExecutionError will print the error message of the crash.
+					return
+				}
+
 				fmt.Println()
 				switch r := result.Result.(type) {
 				case *pb.ExecutionResult_Value:
