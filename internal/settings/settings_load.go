@@ -18,6 +18,7 @@ const (
 	WorkflowPathSettingName   = "workflow-artifacts.workflow-path"
 	ConfigPathSettingName     = "workflow-artifacts.config-path"
 	SecretsPathSettingName    = "workflow-artifacts.secrets-path"
+	OverrideFilePathSettingName = "workflow-artifacts.override-file-path"
 	SethConfigPathSettingName = "logging.seth-config-path"
 	RegistriesSettingName     = "contracts.registries"
 	KeystoneSettingName       = "contracts.keystone"

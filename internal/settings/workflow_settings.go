@@ -18,9 +18,10 @@ type WorkflowSettings struct {
 		WorkflowName         string `mapstructure:"workflow-name" yaml:"workflow-name"`
 	} `mapstructure:"user-workflow" yaml:"user-workflow"`
 	WorkflowArtifactSettings struct {
-		WorkflowPath string `mapstructure:"workflow-path" yaml:"workflow-path"`
-		ConfigPath   string `mapstructure:"config-path" yaml:"config-path"`
-		SecretsPath  string `mapstructure:"secrets-path" yaml:"secrets-path"`
+		WorkflowPath    string `mapstructure:"workflow-path" yaml:"workflow-path"`
+		ConfigPath      string `mapstructure:"config-path" yaml:"config-path"`
+		SecretsPath     string `mapstructure:"secrets-path" yaml:"secrets-path"`
+		OverrideFilePath string `mapstructure:"override-file-path" yaml:"override-file-path"`
 	} `mapstructure:"workflow-artifacts" yaml:"workflow-artifacts"`
 	LoggingSettings struct {
 		SethConfigPath string `mapstructure:"seth-config-path" yaml:"seth-config-path"`
@@ -63,6 +64,7 @@ func loadWorkflowSettings(logger *zerolog.Logger, v *viper.Viper, cmd *cobra.Com
 	workflowSettings.WorkflowArtifactSettings.WorkflowPath = getSetting(WorkflowPathSettingName)
 	workflowSettings.WorkflowArtifactSettings.ConfigPath = getSetting(ConfigPathSettingName)
 	workflowSettings.WorkflowArtifactSettings.SecretsPath = getSetting(SecretsPathSettingName)
+	workflowSettings.WorkflowArtifactSettings.OverrideFilePath = getSetting(OverrideFilePathSettingName)
 	workflowSettings.LoggingSettings.SethConfigPath = getSetting(SethConfigPathSettingName)
 	fullRPCsKey := fmt.Sprintf("%s.%s", target, RpcsSettingName)
 	if v.IsSet(fullRPCsKey) {
