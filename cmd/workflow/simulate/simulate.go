@@ -2,13 +2,17 @@ package simulate
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"crypto/ecdsa"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"math"
 	"math/big"
+	"math/rand"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -17,6 +21,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/andybalholm/brotli"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -43,6 +48,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
+	sim "github.com/smartcontractkit/cre-cli/internal/simulator"
 	"github.com/smartcontractkit/cre-cli/internal/validation"
 )
 
@@ -99,14 +105,22 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 type handler struct {
 	log            *zerolog.Logger
 	runtimeContext *runtime.Context
-	validated      bool
+	client         *sim.RpcClient
+
+	validated bool
 }
 
 func newHandler(ctx *runtime.Context) *handler {
+	client, err := sim.NewRpcClient("127.0.0.1", sim.DefaultPort)
+	if err != nil {
+		log.Fatalf("failed to create RPC client: %v", err)
+	}
+
 	return &handler{
 		log:            ctx.Logger,
 		runtimeContext: ctx,
 		validated:      false,
+		client:         client,
 	}
 }
 
@@ -242,6 +256,22 @@ func (h *handler) Execute(inputs Inputs) error {
 		return fmt.Errorf("failed to read workflow binary: %w", err)
 	}
 
+	compressedFile, err := applyBrotliCompressionV2(&wasmFileBinary)
+	if err != nil {
+		return fmt.Errorf("failed to compress WASM binary: %w", err)
+	}
+	h.log.Debug().Msg("WASM binary compressed")
+
+	binPath, err := filepath.Abs(tmpWasmLocation)
+	if err != nil {
+		return fmt.Errorf("failed to get absolute path of workflow binary: %w", err)
+	}
+
+	if err = encodeToBase64AndSaveToFile(&compressedFile, binPath); err != nil {
+		return fmt.Errorf("failed to base64 encode the WASM binary: %w", err)
+	}
+	h.log.Debug().Msg("WASM binary encoded")
+
 	// Read the config file
 	var config []byte
 	if inputs.ConfigPath != "" {
@@ -250,6 +280,21 @@ func (h *handler) Execute(inputs Inputs) error {
 			return fmt.Errorf("failed to read config file: %w", err)
 		}
 	}
+
+	id, err := h.client.Run(sim.RunArgs{
+		WorkflowID:     randomId(64), // TODO
+		WorkflowOwner:  randomId(40), // TODO
+		WorkflowName:   inputs.WorkflowName,
+		WorkflowConfig: string(config),
+		BinaryPath:     binPath,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to start simulation via RPC: %w", err)
+	}
+
+	fmt.Printf("Simulation started with ID: %d\n", id)
+
+	return nil // TODO
 
 	// Read the secrets file
 	var secrets []byte
@@ -273,6 +318,16 @@ func (h *handler) Execute(inputs Inputs) error {
 	verbosity := h.log.GetLevel() == zerolog.DebugLevel
 
 	return run(ctx, wasmFileBinary, config, secrets, inputs, verbosity)
+}
+
+func randomId(size int) string {
+	vocab := "abcdef0123456789"
+	vocabLen := len(vocab)
+	id := make([]byte, size)
+	for i := 0; i < size; i++ {
+		id[i] = vocab[rand.Intn(vocabLen)]
+	}
+	return string(id)
 }
 
 // run instantiates the engine, starts it and blocks until the context is canceled.
@@ -986,4 +1041,35 @@ func getEVMTriggerLogFromValues(ctx context.Context, ethClient *ethclient.Client
 		pbLog.EventSig = log.Topics[0].Bytes()
 	}
 	return pbLog, nil
+}
+
+func applyBrotliCompressionV2(wasmContent *[]byte) ([]byte, error) {
+	var buffer bytes.Buffer
+
+	// Compress using Brotli with default options
+	writer := brotli.NewWriter(&buffer)
+
+	_, err := writer.Write(*wasmContent)
+	if err != nil {
+		return nil, err
+	}
+
+	// must close it to flush the writer and ensure all data is stored to the buffer
+	err = writer.Close()
+	if err != nil {
+		return nil, err
+	}
+
+	return buffer.Bytes(), nil
+}
+
+func encodeToBase64AndSaveToFile(input *[]byte, outputFile string) error {
+	encoded := base64.StdEncoding.EncodeToString(*input)
+
+	err := os.WriteFile(outputFile, []byte(encoded), 0666) //nolint:gosec
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
