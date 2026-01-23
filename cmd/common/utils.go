@@ -145,13 +145,50 @@ func ToStringSlice(args []any) []string {
 }
 
 // GetWorkflowLanguage determines the workflow language based on the file extension
-// Note: inputFile can be a file path (e.g., "main.ts" or "main.go") or a directory (for Go workflows, e.g., ".")
-// Returns constants.WorkflowLanguageTypeScript for .ts or .tsx files, constants.WorkflowLanguageGolang otherwise
+// Note: inputFile can be a file path (e.g., "main.ts", "main.go", or "workflow.wasm") or a directory (for Go workflows, e.g., ".")
+// Returns constants.WorkflowLanguageTypeScript for .ts or .tsx files, constants.WorkflowLanguageWasm for .wasm files, constants.WorkflowLanguageGolang otherwise
 func GetWorkflowLanguage(inputFile string) string {
 	if strings.HasSuffix(inputFile, ".ts") || strings.HasSuffix(inputFile, ".tsx") {
 		return constants.WorkflowLanguageTypeScript
 	}
+	if strings.HasSuffix(inputFile, ".wasm") {
+		return constants.WorkflowLanguageWasm
+	}
 	return constants.WorkflowLanguageGolang
+}
+
+// ResolveWorkflowPath turns a workflow-path value from YAML (e.g. "." or "main.ts") into an
+// absolute path to the main file. When pathFromYAML is "." or "", looks for main.go then main.ts
+// under workflowDir. Callers can use GetWorkflowLanguage on the result to get the language.
+func ResolveWorkflowPath(workflowDir, pathFromYAML string) (absPath string, err error) {
+	workflowDir, err = filepath.Abs(workflowDir)
+	if err != nil {
+		return "", fmt.Errorf("workflow directory: %w", err)
+	}
+	if pathFromYAML == "" || pathFromYAML == "." {
+		mainGo := filepath.Join(workflowDir, "main.go")
+		mainTS := filepath.Join(workflowDir, "main.ts")
+		if _, err := os.Stat(mainGo); err == nil {
+			return mainGo, nil
+		}
+		if _, err := os.Stat(mainTS); err == nil {
+			return mainTS, nil
+		}
+		return "", fmt.Errorf("no main.go or main.ts in %s", workflowDir)
+	}
+	joined := filepath.Join(workflowDir, pathFromYAML)
+	return filepath.Abs(joined)
+}
+
+// WorkflowPathRootAndMain returns the absolute root directory and main file name for a workflow
+// path (e.g. "workflowName/main.go" -> rootDir, "main.go"). Use with GetWorkflowLanguage(mainFile)
+// for consistent language detection.
+func WorkflowPathRootAndMain(workflowPath string) (rootDir, mainFile string, err error) {
+	abs, err := filepath.Abs(workflowPath)
+	if err != nil {
+		return "", "", fmt.Errorf("workflow path: %w", err)
+	}
+	return filepath.Dir(abs), filepath.Base(abs), nil
 }
 
 // EnsureTool checks that the binary exists on PATH
@@ -160,41 +197,6 @@ func EnsureTool(bin string) error {
 		return fmt.Errorf("%q not found in PATH: %w", bin, err)
 	}
 	return nil
-}
-
-// Gets a build command for either Golang or Typescript based on the filename
-func GetBuildCmd(inputFile string, outputFile string, rootFolder string) *exec.Cmd {
-	isTypescriptWorkflow := strings.HasSuffix(inputFile, ".ts") || strings.HasSuffix(inputFile, ".tsx")
-
-	var buildCmd *exec.Cmd
-	if isTypescriptWorkflow {
-		buildCmd = exec.Command(
-			"bun",
-			"cre-compile",
-			inputFile,
-			outputFile,
-		)
-	} else {
-		// The build command for reproducible and trimmed binaries.
-		// -trimpath removes all file system paths from the compiled binary.
-		// -ldflags="-buildid= -w -s" further reduces the binary size:
-		//   -buildid= removes the build ID, ensuring reproducibility.
-		//   -w disables DWARF debugging information.
-		//   -s removes the symbol table.
-		buildCmd = exec.Command(
-			"go",
-			"build",
-			"-o", outputFile,
-			"-trimpath",
-			"-ldflags=-buildid= -w -s",
-			inputFile,
-		)
-		buildCmd.Env = append(os.Environ(), "GOOS=wasip1", "GOARCH=wasm", "CGO_ENABLED=0")
-	}
-
-	buildCmd.Dir = rootFolder
-
-	return buildCmd
 }
 
 func WriteChangesetFile(fileName string, changesetFile *inttypes.ChangesetFile, settings *settings.Settings) error {

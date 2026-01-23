@@ -29,8 +29,9 @@ const SecretsFileName = "secrets.yaml"
 type TemplateLanguage string
 
 const (
-	TemplateLangGo TemplateLanguage = "go"
-	TemplateLangTS TemplateLanguage = "typescript"
+	TemplateLangGo   TemplateLanguage = "go"
+	TemplateLangTS   TemplateLanguage = "typescript"
+	TemplateLangWasm TemplateLanguage = "wasm"
 )
 
 const (
@@ -72,6 +73,14 @@ var languageTemplates = []LanguageTemplate{
 			{Folder: "typescriptSimpleExample", Title: "Helloworld: Typescript Hello World example", ID: 3, Name: HelloWorldTemplate},
 			{Folder: "typescriptPorExampleDev", Title: "Custom data feed: Typescript updating on-chain data periodically using offchain API data", ID: 4, Name: PoRTemplate},
 			{Folder: "typescriptConfHTTP", Title: "Confidential Http: Typescript example using the confidential http capability", ID: 5, Name: ConfHTTPTemplate, Hidden: true},
+		},
+	},
+	{
+		Title:      "Self-compiled WASM (advanced)",
+		Lang:       TemplateLangWasm,
+		EntryPoint: "./wasm/workflow.wasm",
+		Workflows: []WorkflowTemplate{
+			{Folder: "wasmBlankTemplate", Title: "Blank: Self-compiled WASM workflow template", ID: 6, Name: HelloWorldTemplate},
 		},
 	},
 }
@@ -333,10 +342,12 @@ func (h *handler) Execute(inputs Inputs) error {
 			h.runtimeContext.Workflow.Language = constants.WorkflowLanguageGolang
 		case TemplateLangTS:
 			h.runtimeContext.Workflow.Language = constants.WorkflowLanguageTypeScript
+		case TemplateLangWasm:
+			h.runtimeContext.Workflow.Language = constants.WorkflowLanguageWasm
 		}
 	}
 
-	h.printSuccessMessage(projectRoot, workflowName, selectedLanguageTemplate.Lang)
+	h.printSuccessMessage(projectRoot, workflowName, workflowDirectory, selectedLanguageTemplate.Lang)
 
 	return nil
 }
@@ -358,25 +369,47 @@ func (h *handler) findExistingProject(dir string) (projectRoot string, language 
 	}
 }
 
-func (h *handler) printSuccessMessage(projectRoot, workflowName string, lang TemplateLanguage) {
+func (h *handler) printSuccessMessage(projectRoot, workflowName, workflowDirectory string, lang TemplateLanguage) {
 	ui.Line()
 	ui.Success("Project created successfully!")
 	ui.Line()
 
 	var steps string
-	if lang == TemplateLangGo {
+	workflowDirBase := filepath.Base(workflowDirectory)
+	projBase := filepath.Base(projectRoot)
+	readmeHint := filepath.Join(workflowDirBase, "README.md")
+
+	switch lang {
+	case TemplateLangGo:
 		steps = ui.RenderStep("1. Navigate to your project:") + "\n" +
-			"     " + ui.RenderDim("cd "+filepath.Base(projectRoot)) + "\n\n" +
+			"     " + ui.RenderDim("cd "+projBase) + "\n\n" +
 			ui.RenderStep("2. Run the workflow:") + "\n" +
-			"     " + ui.RenderDim("cre workflow simulate "+workflowName)
-	} else {
+			"     " + ui.RenderDim("cre workflow simulate "+workflowName) + "\n\n" +
+			ui.RenderStep("3. (Optional) Consult " + readmeHint + " to learn more about this template.")
+	case TemplateLangTS:
 		steps = ui.RenderStep("1. Navigate to your project:") + "\n" +
-			"     " + ui.RenderDim("cd "+filepath.Base(projectRoot)) + "\n\n" +
+			"     " + ui.RenderDim("cd "+projBase) + "\n\n" +
 			ui.RenderStep("2. Install Bun (if needed):") + "\n" +
 			"     " + ui.RenderDim("npm install -g bun") + "\n\n" +
-			ui.RenderStep("3. Install dependencies:") + "\n" +
+			ui.RenderStep("3. Install workflow dependencies:") + "\n" +
 			"     " + ui.RenderDim("bun install --cwd ./"+workflowName) + "\n\n" +
 			ui.RenderStep("4. Run the workflow:") + "\n" +
+			"     " + ui.RenderDim("cre workflow simulate "+workflowName) + "\n\n" +
+			ui.RenderStep("5. (Optional) Consult " + readmeHint + " to learn more about this template.")
+	case TemplateLangWasm:
+		steps = ui.RenderStep("1. Navigate to your project:") + "\n" +
+			"     " + ui.RenderDim("cd "+projBase) + "\n\n" +
+			ui.RenderStep("2. Add your build logic to the Makefile:") + "\n" +
+			"     " + ui.RenderDim("Edit "+workflowDirBase+"/Makefile and implement the 'build' target") + "\n\n" +
+			ui.RenderStep("3. Build your workflow:") + "\n" +
+			"     " + ui.RenderDim("cd "+workflowName+" && make build") + "\n\n" +
+			ui.RenderStep("4. Run the workflow:") + "\n" +
+			"     " + ui.RenderDim("cre workflow simulate "+workflowName) + "\n\n" +
+			ui.RenderStep("5. (Optional) Consult " + readmeHint + " to learn more about this template.")
+	default:
+		steps = ui.RenderStep("1. Navigate to your project:") + "\n" +
+			"     " + ui.RenderDim("cd "+projBase) + "\n\n" +
+			ui.RenderStep("2. Run the workflow:") + "\n" +
 			"     " + ui.RenderDim("cre workflow simulate "+workflowName)
 	}
 
