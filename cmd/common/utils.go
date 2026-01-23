@@ -166,11 +166,14 @@ func ToStringSlice(args []any) []string {
 }
 
 // GetWorkflowLanguage determines the workflow language based on the file extension
-// Note: inputFile can be a file path (e.g., "main.ts" or "main.go") or a directory (for Go workflows, e.g., ".")
-// Returns constants.WorkflowLanguageTypeScript for .ts or .tsx files, constants.WorkflowLanguageGolang otherwise
+// Note: inputFile can be a file path (e.g., "main.ts", "main.go", or "workflow.wasm") or a directory (for Go workflows, e.g., ".")
+// Returns constants.WorkflowLanguageTypeScript for .ts or .tsx files, constants.WorkflowLanguageWasm for .wasm files, constants.WorkflowLanguageGolang otherwise
 func GetWorkflowLanguage(inputFile string) string {
 	if strings.HasSuffix(inputFile, ".ts") || strings.HasSuffix(inputFile, ".tsx") {
 		return constants.WorkflowLanguageTypeScript
+	}
+	if strings.HasSuffix(inputFile, ".wasm") {
+		return constants.WorkflowLanguageWasm
 	}
 	return constants.WorkflowLanguageGolang
 }
@@ -183,25 +186,40 @@ func EnsureTool(bin string) error {
 	return nil
 }
 
-// Gets a build command for either Golang or Typescript based on the filename
+// Gets a build command for Golang, TypeScript, or WASM based on the workflow language
 func GetBuildCmd(inputFile string, outputFile string, rootFolder string) *exec.Cmd {
-	isTypescriptWorkflow := strings.HasSuffix(inputFile, ".ts") || strings.HasSuffix(inputFile, ".tsx")
+	language := GetWorkflowLanguage(inputFile)
 
 	var buildCmd *exec.Cmd
-	if isTypescriptWorkflow {
+	switch language {
+	case constants.WorkflowLanguageTypeScript:
 		buildCmd = exec.Command(
 			"bun",
 			"cre-compile",
 			inputFile,
 			outputFile,
 		)
-	} else {
+	case constants.WorkflowLanguageWasm:
+		// For WASM workflows, use make build
+		buildCmd = exec.Command("make", "build")
+	case constants.WorkflowLanguageGolang:
 		// The build command for reproducible and trimmed binaries.
 		// -trimpath removes all file system paths from the compiled binary.
 		// -ldflags="-buildid= -w -s" further reduces the binary size:
 		//   -buildid= removes the build ID, ensuring reproducibility.
 		//   -w disables DWARF debugging information.
 		//   -s removes the symbol table.
+		buildCmd = exec.Command(
+			"go",
+			"build",
+			"-o", outputFile,
+			"-trimpath",
+			"-ldflags=-buildid= -w -s",
+			inputFile,
+		)
+		buildCmd.Env = append(os.Environ(), "GOOS=wasip1", "GOARCH=wasm", "CGO_ENABLED=0")
+	default:
+		// Fallback to Go for unknown languages
 		buildCmd = exec.Command(
 			"go",
 			"build",

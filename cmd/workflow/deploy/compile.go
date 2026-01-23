@@ -44,8 +44,6 @@ func (h *handler) Compile() error {
 	}
 
 	workflowRootFolder := filepath.Dir(h.inputs.WorkflowPath)
-
-	tmpWasmFileName := "tmp.wasm"
 	workflowMainFile := filepath.Base(h.inputs.WorkflowPath)
 
 	// Set language in runtime context based on workflow file extension
@@ -61,31 +59,73 @@ func (h *handler) Compile() error {
 			if err := cmdcommon.EnsureTool("go"); err != nil {
 				return errors.New("go toolchain is required for Go workflows but was not found in PATH; install from https://go.dev/dl")
 			}
+		case constants.WorkflowLanguageWasm:
+			if err := cmdcommon.EnsureTool("make"); err != nil {
+				return errors.New("make is required for WASM workflows but was not found in PATH")
+			}
 		default:
 			return fmt.Errorf("unsupported workflow language for file %s", workflowMainFile)
 		}
 	}
 
-	buildCmd := cmdcommon.GetBuildCmd(workflowMainFile, tmpWasmFileName, workflowRootFolder)
-	h.log.Debug().
-		Str("Workflow directory", buildCmd.Dir).
-		Str("Command", buildCmd.String()).
-		Msg("Executing go build command")
+	var wasmFile []byte
 
-	buildOutput, err := buildCmd.CombinedOutput()
-	if err != nil {
-		fmt.Println(string(buildOutput))
+	// For WASM workflows, if the path already points to a .wasm file, use it directly
+	if h.runtimeContext != nil && h.runtimeContext.Workflow.Language == constants.WorkflowLanguageWasm {
+		if strings.HasSuffix(h.inputs.WorkflowPath, ".wasm") {
+			// Use the WASM file directly
+			wasmFile, err = os.ReadFile(h.inputs.WorkflowPath)
+			if err != nil {
+				return fmt.Errorf("failed to read WASM file: %w", err)
+			}
+		} else {
+			// Build the workflow using make build
+			tmpWasmFileName := "tmp.wasm"
+			buildCmd := cmdcommon.GetBuildCmd(workflowMainFile, tmpWasmFileName, workflowRootFolder)
+			h.log.Debug().
+				Str("Workflow directory", buildCmd.Dir).
+				Str("Command", buildCmd.String()).
+				Msg("Executing make build command")
 
-		out := strings.TrimSpace(string(buildOutput))
-		return fmt.Errorf("failed to compile workflow: %w\nbuild output:\n%s", err, out)
-	}
-	h.log.Debug().Msgf("Build output: %s", buildOutput)
-	fmt.Println("Workflow compiled successfully")
+			buildOutput, err := buildCmd.CombinedOutput()
+			if err != nil {
+				fmt.Println(string(buildOutput))
+				out := strings.TrimSpace(string(buildOutput))
+				return fmt.Errorf("failed to build workflow: %w\nbuild output:\n%s", err, out)
+			}
+			h.log.Debug().Msgf("Build output: %s", buildOutput)
+			fmt.Println("Workflow compiled successfully")
 
-	tmpWasmLocation := filepath.Join(workflowRootFolder, tmpWasmFileName)
-	wasmFile, err := os.ReadFile(tmpWasmLocation)
-	if err != nil {
-		return fmt.Errorf("failed to read workflow binary: %w", err)
+			tmpWasmLocation := filepath.Join(workflowRootFolder, tmpWasmFileName)
+			wasmFile, err = os.ReadFile(tmpWasmLocation)
+			if err != nil {
+				return fmt.Errorf("failed to read workflow binary: %w", err)
+			}
+		}
+	} else {
+		// For Go and TypeScript workflows, compile as before
+		tmpWasmFileName := "tmp.wasm"
+		buildCmd := cmdcommon.GetBuildCmd(workflowMainFile, tmpWasmFileName, workflowRootFolder)
+		h.log.Debug().
+			Str("Workflow directory", buildCmd.Dir).
+			Str("Command", buildCmd.String()).
+			Msg("Executing build command")
+
+		buildOutput, err := buildCmd.CombinedOutput()
+		if err != nil {
+			fmt.Println(string(buildOutput))
+
+			out := strings.TrimSpace(string(buildOutput))
+			return fmt.Errorf("failed to compile workflow: %w\nbuild output:\n%s", err, out)
+		}
+		h.log.Debug().Msgf("Build output: %s", buildOutput)
+		fmt.Println("Workflow compiled successfully")
+
+		tmpWasmLocation := filepath.Join(workflowRootFolder, tmpWasmFileName)
+		wasmFile, err = os.ReadFile(tmpWasmLocation)
+		if err != nil {
+			return fmt.Errorf("failed to read workflow binary: %w", err)
+		}
 	}
 
 	compressedFile, err := applyBrotliCompressionV2(&wasmFile)
@@ -99,8 +139,13 @@ func (h *handler) Compile() error {
 	}
 	h.log.Debug().Msg("WASM binary encoded")
 
-	if err = os.Remove(tmpWasmLocation); err != nil {
-		return fmt.Errorf("failed to remove the temporary file:  %w", err)
+	// Only remove tmp file if we created one (not for direct WASM file usage)
+	// Check if we used a tmp file (i.e., not a direct .wasm file and not WASM language that used direct file)
+	if !strings.HasSuffix(h.inputs.WorkflowPath, ".wasm") {
+		tmpWasmLocation := filepath.Join(workflowRootFolder, "tmp.wasm")
+		if err = os.Remove(tmpWasmLocation); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("failed to remove the temporary file:  %w", err)
+		}
 	}
 
 	return nil
