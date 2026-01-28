@@ -151,10 +151,20 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 		fmt.Println("Warning: using default private key for chain write simulation. To use your own key, set CRE_ETH_PRIVATE_KEY in your .env file or system environment.")
 	}
 
+	workflowDir := filepath.Dir(creSettings.Workflow.WorkflowArtifactSettings.WorkflowPath)
+	configPath := creSettings.Workflow.WorkflowArtifactSettings.ConfigPath
+	if configPath != "" && !filepath.IsAbs(configPath) {
+		configPath = filepath.Join(workflowDir, configPath)
+	}
+	secretsPath := creSettings.Workflow.WorkflowArtifactSettings.SecretsPath
+	if secretsPath != "" && !filepath.IsAbs(secretsPath) {
+		secretsPath = filepath.Join(workflowDir, secretsPath)
+	}
+
 	return Inputs{
 		WorkflowPath:   creSettings.Workflow.WorkflowArtifactSettings.WorkflowPath,
-		ConfigPath:     creSettings.Workflow.WorkflowArtifactSettings.ConfigPath,
-		SecretsPath:    creSettings.Workflow.WorkflowArtifactSettings.SecretsPath,
+		ConfigPath:     configPath,
+		SecretsPath:    secretsPath,
 		EngineLogs:     v.GetBool("engine-logs"),
 		Broadcast:      v.GetBool("broadcast"),
 		EVMClients:     clients,
@@ -162,9 +172,9 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 		WorkflowName:   creSettings.Workflow.UserWorkflowSettings.WorkflowName,
 		NonInteractive: v.GetBool("non-interactive"),
 		TriggerIndex:   v.GetInt("trigger-index"),
-		HTTPPayload:    v.GetString("http-payload"),
-		EVMTxHash:      v.GetString("evm-tx-hash"),
-		EVMEventIndex:  v.GetInt("evm-event-index"),
+		HTTPPayload:          v.GetString("http-payload"),
+		EVMTxHash:            v.GetString("evm-tx-hash"),
+		EVMEventIndex:        v.GetInt("evm-event-index"),
 	}, nil
 }
 
@@ -272,7 +282,7 @@ func (h *handler) Execute(inputs Inputs) error {
 	// if logger instance is set to DEBUG, that means verbosity flag is set by the user
 	verbosity := h.log.GetLevel() == zerolog.DebugLevel
 
-	return run(ctx, wasmFileBinary, config, secrets, inputs, verbosity)
+	return run(ctx, wasmFileBinary, config, secrets, inputs, verbosity, h.runtimeContext.Settings)
 }
 
 // run instantiates the engine, starts it and blocks until the context is canceled.
@@ -281,6 +291,7 @@ func run(
 	binary, config, secrets []byte,
 	inputs Inputs,
 	verbosity bool,
+	creSettings *settings.Settings,
 ) error {
 	logCfg := logger.Config{Level: getLevel(verbosity, zapcore.InfoLevel)}
 	simLogger := NewSimulationLogger(verbosity)
@@ -503,6 +514,44 @@ func run(
 				commonsettings.Bool(true), // Allow all chains in simulation
 				map[string]bool{},
 			)
+			if creSettings == nil {
+				return
+			}
+			overrideFilePath := creSettings.Workflow.WorkflowArtifactSettings.OverrideFilePath
+			if overrideFilePath != "" {
+				workflowDir := filepath.Dir(creSettings.Workflow.WorkflowArtifactSettings.WorkflowPath)
+				var absOverridePath string
+				if filepath.IsAbs(overrideFilePath) {
+					absOverridePath = overrideFilePath
+				} else {
+					absOverridePath = filepath.Join(workflowDir, overrideFilePath)
+				}
+
+				if overrideData, err := os.ReadFile(absOverridePath); err == nil {
+					var override struct {
+						HTTPCallLimit         *int `json:"http-call-limit"`
+						ChainReadCallLimit    *int `json:"chain-read-call-limit"`
+						ChainWriteTargetLimit *int `json:"chain-write-target-limit"`
+						ConsensusCallLimit    *int `json:"consensus-call-limit"`
+					}
+					if err := json.Unmarshal(overrideData, &override); err == nil {
+						if override.HTTPCallLimit != nil && *override.HTTPCallLimit > 0 {
+							cfg.HTTPAction.CallLimit.DefaultValue = *override.HTTPCallLimit
+						}
+						if override.ChainReadCallLimit != nil && *override.ChainReadCallLimit > 0 {
+							cfg.ChainRead.CallLimit.DefaultValue = *override.ChainReadCallLimit
+						}
+						if override.ChainWriteTargetLimit != nil && *override.ChainWriteTargetLimit > 0 {
+							cfg.ChainWrite.TargetsLimit.DefaultValue = *override.ChainWriteTargetLimit
+						}
+						if override.ConsensusCallLimit != nil && *override.ConsensusCallLimit > 0 {
+							cfg.Consensus.CallLimit.DefaultValue = *override.ConsensusCallLimit
+						}
+					} else {
+						simLogger.Warn("Failed to parse override file, using default limits", "path", absOverridePath, "error", err)
+					}
+				}
+			}
 		},
 	})
 
