@@ -30,8 +30,9 @@ const SecretsFileName = "secrets.yaml"
 type TemplateLanguage string
 
 const (
-	TemplateLangGo TemplateLanguage = "go"
-	TemplateLangTS TemplateLanguage = "typescript"
+	TemplateLangGo   TemplateLanguage = "go"
+	TemplateLangTS   TemplateLanguage = "typescript"
+	TemplateLangWasm TemplateLanguage = "wasm"
 )
 
 const (
@@ -73,6 +74,14 @@ var languageTemplates = []LanguageTemplate{
 			{Folder: "typescriptSimpleExample", Title: "Helloworld: Typescript Hello World example", ID: 3, Name: HelloWorldTemplate},
 			{Folder: "typescriptPorExampleDev", Title: "Custom data feed: Typescript updating on-chain data periodically using offchain API data", ID: 4, Name: PoRTemplate},
 			{Folder: "typescriptConfHTTP", Title: "Confidential Http: Typescript example using the confidential http capability", ID: 5, Name: ConfHTTPTemplate, Hidden: true},
+		},
+	},
+	{
+		Title:      "Self-compiled WASM (advanced)",
+		Lang:       TemplateLangWasm,
+		EntryPoint: "./wasm/workflow.wasm",
+		Workflows: []WorkflowTemplate{
+			{Folder: "wasmBlankTemplate", Title: "Blank: Self-compiled WASM workflow template", ID: 6, Name: HelloWorldTemplate},
 		},
 	},
 }
@@ -365,6 +374,8 @@ func (h *handler) Execute(inputs Inputs) error {
 			h.runtimeContext.Workflow.Language = constants.WorkflowLanguageGolang
 		case TemplateLangTS:
 			h.runtimeContext.Workflow.Language = constants.WorkflowLanguageTypeScript
+		case TemplateLangWasm:
+			h.runtimeContext.Workflow.Language = constants.WorkflowLanguageWasm
 		}
 	}
 
@@ -372,7 +383,8 @@ func (h *handler) Execute(inputs Inputs) error {
 	fmt.Println("")
 	fmt.Println("Next steps:")
 
-	if selectedLanguageTemplate.Lang == TemplateLangGo {
+	switch selectedLanguageTemplate.Lang {
+	case TemplateLangGo:
 		fmt.Println("   1. Navigate to your project directory:")
 		fmt.Printf("      cd %s\n", filepath.Base(projectRoot))
 		fmt.Println("")
@@ -382,7 +394,7 @@ func (h *handler) Execute(inputs Inputs) error {
 		fmt.Printf("   3. (Optional) Consult %s to learn more about this template:\n\n",
 			filepath.Join(filepath.Base(workflowDirectory), "README.md"))
 		fmt.Println("")
-	} else {
+	case TemplateLangTS:
 		fmt.Println("   1. Navigate to your project directory:")
 		fmt.Printf("      cd %s\n", filepath.Base(projectRoot))
 		fmt.Println("")
@@ -391,6 +403,22 @@ func (h *handler) Execute(inputs Inputs) error {
 		fmt.Println("")
 		fmt.Println("   3. Install workflow dependencies:")
 		fmt.Printf("      bun install --cwd ./%s\n", filepath.Base(workflowDirectory))
+		fmt.Println("")
+		fmt.Println("   4. Run the workflow on your machine:")
+		fmt.Printf("      cre workflow simulate %s\n", workflowName)
+		fmt.Println("")
+		fmt.Printf("   5. (Optional) Consult %s to learn more about this template:\n\n",
+			filepath.Join(filepath.Base(workflowDirectory), "README.md"))
+		fmt.Println("")
+	case TemplateLangWasm:
+		fmt.Println("   1. Navigate to your project directory:")
+		fmt.Printf("      cd %s\n", filepath.Base(projectRoot))
+		fmt.Println("")
+		fmt.Println("   2. Add your build logic to the Makefile:")
+		fmt.Printf("      Edit %s/Makefile and implement the 'build' target\n", filepath.Base(workflowDirectory))
+		fmt.Println("")
+		fmt.Println("   3. Build your workflow:")
+		fmt.Printf("      cd %s && make build\n", filepath.Base(workflowDirectory))
 		fmt.Println("")
 		fmt.Println("   4. Run the workflow on your machine:")
 		fmt.Printf("      cre workflow simulate %s\n", workflowName)

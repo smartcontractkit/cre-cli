@@ -194,10 +194,7 @@ func (h *handler) ValidateInputs(inputs Inputs) error {
 }
 
 func (h *handler) Execute(inputs Inputs) error {
-	// Compile the workflow
-	// terminal command: GOOS=wasip1 GOARCH=wasm go build -trimpath -ldflags="-buildid= -w -s" -o <output_path> <workflow_path>
 	workflowRootFolder := filepath.Dir(inputs.WorkflowPath)
-	tmpWasmFileName := "tmp.wasm"
 	workflowMainFile := filepath.Base(inputs.WorkflowPath)
 
 	// Set language in runtime context based on workflow file extension
@@ -213,33 +210,78 @@ func (h *handler) Execute(inputs Inputs) error {
 			if err := cmdcommon.EnsureTool("go"); err != nil {
 				return errors.New("go toolchain is required for Go workflows but was not found in PATH; install from https://go.dev/dl")
 			}
+		case constants.WorkflowLanguageWasm:
+			if err := cmdcommon.EnsureTool("make"); err != nil {
+				return errors.New("make is required for WASM workflows but was not found in PATH")
+			}
 		default:
 			return fmt.Errorf("unsupported workflow language for file %s", workflowMainFile)
 		}
 	}
 
-	buildCmd := cmdcommon.GetBuildCmd(workflowMainFile, tmpWasmFileName, workflowRootFolder)
+	var wasmFileBinary []byte
+	var err error
 
-	h.log.Debug().
-		Str("Workflow directory", buildCmd.Dir).
-		Str("Command", buildCmd.String()).
-		Msg("Executing go build command")
+	// For WASM workflows, if the path already points to a .wasm file, use it directly
+	if h.runtimeContext != nil && h.runtimeContext.Workflow.Language == constants.WorkflowLanguageWasm {
+		if strings.HasSuffix(inputs.WorkflowPath, ".wasm") {
+			// Use the WASM file directly
+			wasmFileBinary, err = os.ReadFile(inputs.WorkflowPath)
+			if err != nil {
+				return fmt.Errorf("failed to read WASM file: %w", err)
+			}
+		} else {
+			// Build the workflow using make build
+			tmpWasmFileName := "tmp.wasm"
+			buildCmd := cmdcommon.GetBuildCmd(workflowMainFile, tmpWasmFileName, workflowRootFolder)
 
-	// Execute the build command
-	buildOutput, err := buildCmd.CombinedOutput()
-	if err != nil {
-		out := strings.TrimSpace(string(buildOutput))
-		h.log.Info().Msg(out)
-		return fmt.Errorf("failed to compile workflow: %w\nbuild output:\n%s", err, out)
-	}
-	h.log.Debug().Msgf("Build output: %s", buildOutput)
-	fmt.Println("Workflow compiled")
+			h.log.Debug().
+				Str("Workflow directory", buildCmd.Dir).
+				Str("Command", buildCmd.String()).
+				Msg("Executing make build command")
 
-	// Read the compiled workflow binary
-	tmpWasmLocation := filepath.Join(workflowRootFolder, tmpWasmFileName)
-	wasmFileBinary, err := os.ReadFile(tmpWasmLocation)
-	if err != nil {
-		return fmt.Errorf("failed to read workflow binary: %w", err)
+			buildOutput, err := buildCmd.CombinedOutput()
+			if err != nil {
+				out := strings.TrimSpace(string(buildOutput))
+				h.log.Info().Msg(out)
+				return fmt.Errorf("failed to build workflow: %w\nbuild output:\n%s", err, out)
+			}
+			h.log.Debug().Msgf("Build output: %s", buildOutput)
+			fmt.Println("Workflow compiled")
+
+			// Read the compiled workflow binary
+			tmpWasmLocation := filepath.Join(workflowRootFolder, tmpWasmFileName)
+			wasmFileBinary, err = os.ReadFile(tmpWasmLocation)
+			if err != nil {
+				return fmt.Errorf("failed to read workflow binary: %w", err)
+			}
+		}
+	} else {
+		// For Go and TypeScript workflows, compile as before
+		tmpWasmFileName := "tmp.wasm"
+		buildCmd := cmdcommon.GetBuildCmd(workflowMainFile, tmpWasmFileName, workflowRootFolder)
+
+		h.log.Debug().
+			Str("Workflow directory", buildCmd.Dir).
+			Str("Command", buildCmd.String()).
+			Msg("Executing build command")
+
+		// Execute the build command
+		buildOutput, err := buildCmd.CombinedOutput()
+		if err != nil {
+			out := strings.TrimSpace(string(buildOutput))
+			h.log.Info().Msg(out)
+			return fmt.Errorf("failed to compile workflow: %w\nbuild output:\n%s", err, out)
+		}
+		h.log.Debug().Msgf("Build output: %s", buildOutput)
+		fmt.Println("Workflow compiled")
+
+		// Read the compiled workflow binary
+		tmpWasmLocation := filepath.Join(workflowRootFolder, tmpWasmFileName)
+		wasmFileBinary, err = os.ReadFile(tmpWasmLocation)
+		if err != nil {
+			return fmt.Errorf("failed to read workflow binary: %w", err)
+		}
 	}
 
 	// Read the config file
