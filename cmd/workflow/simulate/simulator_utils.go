@@ -65,7 +65,8 @@ var SupportedEVM = []ChainConfig{
 	{Selector: chainselectors.JOVAY_TESTNET.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
 
 	// Pharos
-	{Selector: chainselectors.PHAROS_ATLANTIC_TESTNET.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
+	// Integration not ready yet
+	// {Selector: chainselectors.PHAROS_ATLANTIC_TESTNET.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
 
 	// Worldchain
 	{Selector: chainselectors.ETHEREUM_TESTNET_SEPOLIA_WORLDCHAIN_1.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
