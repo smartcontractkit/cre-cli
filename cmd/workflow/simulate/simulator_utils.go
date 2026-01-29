@@ -60,6 +60,34 @@ var SupportedEVM = []ChainConfig{
 	// ZkSync
 	{Selector: chainselectors.ETHEREUM_MAINNET_ZKSYNC_1.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
 	{Selector: chainselectors.ETHEREUM_TESTNET_SEPOLIA_ZKSYNC_1.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
+
+	// Jovay
+	{Selector: chainselectors.JOVAY_TESTNET.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
+
+	// Pharos
+	// Integration not ready yet
+	// {Selector: chainselectors.PHAROS_ATLANTIC_TESTNET.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
+
+	// Worldchain
+	{Selector: chainselectors.ETHEREUM_TESTNET_SEPOLIA_WORLDCHAIN_1.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
+
+	// Plasma
+	{Selector: chainselectors.PLASMA_TESTNET.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
+
+	// Linea
+	{Selector: chainselectors.ETHEREUM_TESTNET_SEPOLIA_LINEA_1.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
+
+	// Ink
+	{Selector: chainselectors.INK_TESTNET_SEPOLIA.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
+
+	// Hyperliquid
+	{Selector: chainselectors.HYPERLIQUID_TESTNET.Selector, Forwarder: "0xB27fA1c28288c50542527F64BCda22C9FbAc24CB"},
+
+	// Apechain
+	{Selector: chainselectors.APECHAIN_TESTNET_CURTIS.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
+
+	// Arc
+	{Selector: chainselectors.ARC_TESTNET.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
 }
 
 // parse "ChainSelector:<digits>" from trigger id, e.g. "evm:ChainSelector:5009297550715157269@1.0.0 LogTrigger"
