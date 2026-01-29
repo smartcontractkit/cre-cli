@@ -13,6 +13,15 @@
 #       url: "<select your own rpc url>"
 #     - chain-name: ethereum-mainnet                # Required if your workflow interacts with this chain
 #       url: "<select your own rpc url>"
+#
+# Experimental chains (automatically used by the simulator when present):
+# Use this for chains not yet in official chain-selectors (e.g., hackathons, new chain integrations).
+# In your workflow, reference the chain as evm:ChainSelector:<chain-id>@1.0.0
+#
+#   experimental-chains:
+#     - chain-id: 12345                             # The numeric chain ID
+#       rpc-url: "https://rpc.example.com"          # RPC endpoint URL
+#       forwarder: "0x..."                          # Forwarder contract address on the chain
 
 # ==========================================================================
 staging-settings:

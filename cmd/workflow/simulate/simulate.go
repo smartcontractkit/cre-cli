@@ -52,7 +52,7 @@ type Inputs struct {
 	SecretsPath   string                       `validate:"omitempty,file,ascii,max=97"`
 	EngineLogs    bool                         `validate:"omitempty" cli:"--engine-logs"`
 	Broadcast     bool                         `validate:"-"`
-	EVMClients    map[uint64]*ethclient.Client `validate:"omitempty"` // multichain clients keyed by selector
+	EVMClients    map[uint64]*ethclient.Client `validate:"omitempty"` // multichain clients keyed by selector (or chain ID for experimental)
 	EthPrivateKey *ecdsa.PrivateKey            `validate:"omitempty"`
 	WorkflowName  string                       `validate:"required"`
 	// Non-interactive mode options
@@ -61,6 +61,8 @@ type Inputs struct {
 	HTTPPayload    string `validate:"-"` // JSON string or @/path/to/file.json
 	EVMTxHash      string `validate:"-"` // 0x-prefixed
 	EVMEventIndex  int    `validate:"-"`
+	// Experimental chains support (for chains not in official chain-selectors)
+	ExperimentalForwarders map[uint64]common.Address `validate:"-"` // forwarders keyed by chain ID
 }
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
@@ -134,8 +136,65 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 		clients[chain.Selector] = c
 	}
 
+	// Experimental chains support (automatically loaded from config if present)
+	experimentalForwarders := make(map[uint64]common.Address)
+
+	expChains, err := settings.GetExperimentalChains(v)
+	if err != nil {
+		return Inputs{}, fmt.Errorf("failed to load experimental chains config: %w", err)
+	}
+
+	for _, ec := range expChains {
+		// Validate required fields
+		if ec.ChainID == 0 {
+			return Inputs{}, fmt.Errorf("experimental chain missing chain-id")
+		}
+		if strings.TrimSpace(ec.RPCURL) == "" {
+			return Inputs{}, fmt.Errorf("experimental chain %d missing rpc-url", ec.ChainID)
+		}
+		if strings.TrimSpace(ec.Forwarder) == "" {
+			return Inputs{}, fmt.Errorf("experimental chain %d missing forwarder", ec.ChainID)
+		}
+
+		// Check if chain ID already exists (supported chain)
+		if _, exists := clients[ec.ChainID]; exists {
+			// Find the supported chain's forwarder
+			var supportedForwarder string
+			for _, supported := range SupportedEVM {
+				if supported.Selector == ec.ChainID {
+					supportedForwarder = supported.Forwarder
+					break
+				}
+			}
+
+			expFwd := common.HexToAddress(ec.Forwarder)
+			if supportedForwarder != "" && common.HexToAddress(supportedForwarder) == expFwd {
+				// Same forwarder, just debug log
+				h.log.Debug().Uint64("chain-id", ec.ChainID).Msg("Experimental chain matches supported chain config")
+				continue
+			}
+
+			// Different forwarder - respect user's config, warn about override
+			fmt.Printf("Warning: experimental chain %d overrides supported chain forwarder (supported: %s, experimental: %s)\n", ec.ChainID, supportedForwarder, ec.Forwarder)
+
+			// Use existing client but override the forwarder
+			experimentalForwarders[ec.ChainID] = expFwd
+			continue
+		}
+
+		// Dial the RPC
+		c, err := ethclient.Dial(ec.RPCURL)
+		if err != nil {
+			return Inputs{}, fmt.Errorf("failed to create eth client for experimental chain %d: %w", ec.ChainID, err)
+		}
+
+		clients[ec.ChainID] = c
+		experimentalForwarders[ec.ChainID] = common.HexToAddress(ec.Forwarder)
+		fmt.Printf("Added experimental chain (chain-id: %d)\n", ec.ChainID)
+	}
+
 	if len(clients) == 0 {
-		return Inputs{}, fmt.Errorf("no RPC URLs found for supported chains")
+		return Inputs{}, fmt.Errorf("no RPC URLs found for supported or experimental chains")
 	}
 
 	pk, err := crypto.HexToECDSA(creSettings.User.EthPrivateKey)
@@ -152,19 +211,20 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 	}
 
 	return Inputs{
-		WorkflowPath:   creSettings.Workflow.WorkflowArtifactSettings.WorkflowPath,
-		ConfigPath:     creSettings.Workflow.WorkflowArtifactSettings.ConfigPath,
-		SecretsPath:    creSettings.Workflow.WorkflowArtifactSettings.SecretsPath,
-		EngineLogs:     v.GetBool("engine-logs"),
-		Broadcast:      v.GetBool("broadcast"),
-		EVMClients:     clients,
-		EthPrivateKey:  pk,
-		WorkflowName:   creSettings.Workflow.UserWorkflowSettings.WorkflowName,
-		NonInteractive: v.GetBool("non-interactive"),
-		TriggerIndex:   v.GetInt("trigger-index"),
-		HTTPPayload:    v.GetString("http-payload"),
-		EVMTxHash:      v.GetString("evm-tx-hash"),
-		EVMEventIndex:  v.GetInt("evm-event-index"),
+		WorkflowPath:           creSettings.Workflow.WorkflowArtifactSettings.WorkflowPath,
+		ConfigPath:             creSettings.Workflow.WorkflowArtifactSettings.ConfigPath,
+		SecretsPath:            creSettings.Workflow.WorkflowArtifactSettings.SecretsPath,
+		EngineLogs:             v.GetBool("engine-logs"),
+		Broadcast:              v.GetBool("broadcast"),
+		EVMClients:             clients,
+		EthPrivateKey:          pk,
+		WorkflowName:           creSettings.Workflow.UserWorkflowSettings.WorkflowName,
+		NonInteractive:         v.GetBool("non-interactive"),
+		TriggerIndex:           v.GetInt("trigger-index"),
+		HTTPPayload:            v.GetString("http-payload"),
+		EVMTxHash:              v.GetString("evm-tx-hash"),
+		EVMEventIndex:          v.GetInt("evm-event-index"),
+		ExperimentalForwarders: experimentalForwarders,
 	}, nil
 }
 
@@ -183,7 +243,7 @@ func (h *handler) ValidateInputs(inputs Inputs) error {
 		return fmt.Errorf("you must configure a valid private key to perform on-chain writes. Please set your private key in the .env file before using the -–broadcast flag")
 	}
 
-	if err := runRPCHealthCheck(inputs.EVMClients); err != nil {
+	if err := runRPCHealthCheck(inputs.EVMClients, inputs.ExperimentalForwarders); err != nil {
 		// we don't block execution, just show the error to the user
 		// because some RPCs in settings might not be used in workflow and some RPCs might have hiccups
 		fmt.Printf("Warning: some RPCs in settings are not functioning properly, please check: %v\n", err)
@@ -336,6 +396,11 @@ func run(
 			if _, ok := inputs.EVMClients[c.Selector]; ok && strings.TrimSpace(c.Forwarder) != "" {
 				forwarders[c.Selector] = common.HexToAddress(c.Forwarder)
 			}
+		}
+
+		// Merge experimental forwarders (keyed by chain ID)
+		for chainID, fwdAddr := range inputs.ExperimentalForwarders {
+			forwarders[chainID] = fwdAddr
 		}
 
 		manualTriggerCapConfig := ManualTriggerCapabilitiesConfig{
