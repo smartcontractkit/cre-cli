@@ -13,16 +13,16 @@ import (
 
 // Config names (YAML field paths)
 const (
-	WorkflowOwnerSettingName  = "account.workflow-owner-address"
-	WorkflowNameSettingName   = "user-workflow.workflow-name"
-	WorkflowPathSettingName   = "workflow-artifacts.workflow-path"
-	ConfigPathSettingName     = "workflow-artifacts.config-path"
-	SecretsPathSettingName    = "workflow-artifacts.secrets-path"
-	SethConfigPathSettingName = "logging.seth-config-path"
-	RegistriesSettingName          = "contracts.registries"
-	KeystoneSettingName            = "contracts.keystone"
-	RpcsSettingName                = "rpcs"
-	ExperimentalChainsSettingName  = "experimental-chains" // only used with: cre workflow simulate --enable-experimental-chains
+	WorkflowOwnerSettingName      = "account.workflow-owner-address"
+	WorkflowNameSettingName       = "user-workflow.workflow-name"
+	WorkflowPathSettingName       = "workflow-artifacts.workflow-path"
+	ConfigPathSettingName         = "workflow-artifacts.config-path"
+	SecretsPathSettingName        = "workflow-artifacts.secrets-path"
+	SethConfigPathSettingName     = "logging.seth-config-path"
+	RegistriesSettingName         = "contracts.registries"
+	KeystoneSettingName           = "contracts.keystone"
+	RpcsSettingName               = "rpcs"
+	ExperimentalChainsSettingName = "experimental-chains" // only used with: cre workflow simulate --enable-experimental-chains
 )
 
 type Flag struct {
