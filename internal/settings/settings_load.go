@@ -22,7 +22,7 @@ const (
 	RegistriesSettingName         = "contracts.registries"
 	KeystoneSettingName           = "contracts.keystone"
 	RpcsSettingName               = "rpcs"
-	ExperimentalChainsSettingName = "experimental-chains" // only used with: cre workflow simulate --enable-experimental-chains
+	ExperimentalChainsSettingName = "experimental-chains" // used by simulator when present in target config
 )
 
 type Flag struct {

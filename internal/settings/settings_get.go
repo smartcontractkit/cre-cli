@@ -37,7 +37,7 @@ type RpcEndpoint struct {
 }
 
 // ExperimentalChain represents an EVM chain not in official chain-selectors.
-// Used only when simulate command is run with --enable-experimental-chains.
+// Automatically used by the simulator when present in the target's experimental-chains config.
 // The ChainID is used as the selector key for EVM clients and forwarders.
 type ExperimentalChain struct {
 	ChainID   uint64 `mapstructure:"chain-id" yaml:"chain-id"`

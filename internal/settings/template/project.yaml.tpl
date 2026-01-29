@@ -14,7 +14,7 @@
 #     - chain-name: ethereum-mainnet                # Required if your workflow interacts with this chain
 #       url: "<select your own rpc url>"
 #
-# Experimental chains (for simulator only, use with: cre workflow simulate --enable-experimental-chains):
+# Experimental chains (automatically used by the simulator when present):
 # Use this for chains not yet in official chain-selectors (e.g., hackathons, new chain integrations).
 # In your workflow, reference the chain as evm:ChainSelector:<chain-id>@1.0.0
 #
