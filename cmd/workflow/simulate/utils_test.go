@@ -151,7 +151,7 @@ func TestHealthCheck_NoClientsConfigured(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected error for no clients configured")
 	}
-	mustContain(t, err.Error(), "check your settings: no RPC URLs found for supported chains")
+	mustContain(t, err.Error(), "check your settings: no RPC URLs found for supported or experimental chains")
 }
 
 func TestHealthCheck_NilClient(t *testing.T) {
