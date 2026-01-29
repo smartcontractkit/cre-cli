@@ -19,9 +19,10 @@ const (
 	ConfigPathSettingName     = "workflow-artifacts.config-path"
 	SecretsPathSettingName    = "workflow-artifacts.secrets-path"
 	SethConfigPathSettingName = "logging.seth-config-path"
-	RegistriesSettingName     = "contracts.registries"
-	KeystoneSettingName       = "contracts.keystone"
-	RpcsSettingName           = "rpcs"
+	RegistriesSettingName          = "contracts.registries"
+	KeystoneSettingName            = "contracts.keystone"
+	RpcsSettingName                = "rpcs"
+	ExperimentalChainsSettingName  = "experimental-chains" // only used with: cre workflow simulate --enable-experimental-chains
 )
 
 type Flag struct {

@@ -36,6 +36,15 @@ type RpcEndpoint struct {
 	Url string `mapstructure:"url" yaml:"url"`
 }
 
+// ExperimentalChain represents an EVM chain not in official chain-selectors.
+// Used only when simulate command is run with --enable-experimental-chains.
+// The ChainID is used as the selector key for EVM clients and forwarders.
+type ExperimentalChain struct {
+	ChainID   uint64 `mapstructure:"chain-id" yaml:"chain-id"`
+	RPCURL    string `mapstructure:"rpc-url" yaml:"rpc-url"`
+	Forwarder string `mapstructure:"forwarder" yaml:"forwarder"`
+}
+
 func GetRpcUrlSettings(v *viper.Viper, chainName string) (string, error) {
 	target, err := GetTarget(v)
 	if err != nil {
@@ -56,6 +65,28 @@ func GetRpcUrlSettings(v *viper.Viper, chainName string) (string, error) {
 	}
 
 	return "", fmt.Errorf("rpc url not found for chain %s", chainName)
+}
+
+// GetExperimentalChains reads the experimental-chains list from the current target.
+// Returns an empty slice if the key is not set or unmarshalling fails.
+func GetExperimentalChains(v *viper.Viper) ([]ExperimentalChain, error) {
+	target, err := GetTarget(v)
+	if err != nil {
+		return nil, err
+	}
+
+	keyWithTarget := fmt.Sprintf("%s.%s", target, ExperimentalChainsSettingName)
+	if !v.IsSet(keyWithTarget) {
+		return nil, nil
+	}
+
+	var chains []ExperimentalChain
+	err = v.UnmarshalKey(keyWithTarget, &chains)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal experimental-chains: %w", err)
+	}
+
+	return chains, nil
 }
 
 func GetEnvironmentVariable(filePath, key string) (string, error) {

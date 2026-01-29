@@ -52,7 +52,7 @@ type Inputs struct {
 	SecretsPath   string                       `validate:"omitempty,file,ascii,max=97"`
 	EngineLogs    bool                         `validate:"omitempty" cli:"--engine-logs"`
 	Broadcast     bool                         `validate:"-"`
-	EVMClients    map[uint64]*ethclient.Client `validate:"omitempty"` // multichain clients keyed by selector
+	EVMClients    map[uint64]*ethclient.Client `validate:"omitempty"` // multichain clients keyed by selector (or chain ID for experimental)
 	EthPrivateKey *ecdsa.PrivateKey            `validate:"omitempty"`
 	WorkflowName  string                       `validate:"required"`
 	// Non-interactive mode options
@@ -61,6 +61,10 @@ type Inputs struct {
 	HTTPPayload    string `validate:"-"` // JSON string or @/path/to/file.json
 	EVMTxHash      string `validate:"-"` // 0x-prefixed
 	EVMEventIndex  int    `validate:"-"`
+	// Experimental chains support (for chains not in official chain-selectors)
+	EnableExperimentalChains bool                      `validate:"-"`
+	ExperimentalForwarders   map[uint64]common.Address `validate:"-"` // forwarders keyed by chain ID
+	ExperimentalChainIDs     map[uint64]struct{}       `validate:"-"` // set of experimental chain IDs for health check
 }
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
@@ -93,6 +97,8 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	simulateCmd.Flags().String("http-payload", "", "HTTP trigger payload as JSON string or path to JSON file (with or without @ prefix)")
 	simulateCmd.Flags().String("evm-tx-hash", "", "EVM trigger transaction hash (0x...)")
 	simulateCmd.Flags().Int("evm-event-index", -1, "EVM trigger log index (0-based)")
+	// Experimental chains flag
+	simulateCmd.Flags().Bool("enable-experimental-chains", false, "Enable experimental chains: use chain-id, RPC URL, and forwarder from experimental-chains config for simulator EVM read/write")
 	return simulateCmd
 }
 
@@ -134,8 +140,54 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 		clients[chain.Selector] = c
 	}
 
+	// Experimental chains support
+	enableExperimental := v.GetBool("enable-experimental-chains")
+	experimentalForwarders := make(map[uint64]common.Address)
+	experimentalChainIDs := make(map[uint64]struct{})
+
+	if enableExperimental {
+		expChains, err := settings.GetExperimentalChains(v)
+		if err != nil {
+			h.log.Warn().Err(err).Msg("Failed to load experimental chains config")
+		} else {
+			for _, ec := range expChains {
+				// Validate required fields
+				if ec.ChainID == 0 {
+					h.log.Warn().Msg("Experimental chain missing chain-id; skipping")
+					continue
+				}
+				if strings.TrimSpace(ec.RPCURL) == "" {
+					h.log.Warn().Uint64("chain-id", ec.ChainID).Msg("Experimental chain missing rpc-url; skipping")
+					continue
+				}
+				if strings.TrimSpace(ec.Forwarder) == "" {
+					h.log.Warn().Uint64("chain-id", ec.ChainID).Msg("Experimental chain missing forwarder; skipping")
+					continue
+				}
+
+				// Skip if chain ID already exists (supported chain takes precedence)
+				if _, exists := clients[ec.ChainID]; exists {
+					h.log.Debug().Uint64("chain-id", ec.ChainID).Msg("Experimental chain ID conflicts with supported chain; skipping")
+					continue
+				}
+
+				// Dial the RPC
+				c, err := ethclient.Dial(ec.RPCURL)
+				if err != nil {
+					fmt.Printf("failed to create eth client for experimental chain %d: %v\n", ec.ChainID, err)
+					continue
+				}
+
+				clients[ec.ChainID] = c
+				experimentalForwarders[ec.ChainID] = common.HexToAddress(ec.Forwarder)
+				experimentalChainIDs[ec.ChainID] = struct{}{}
+				h.log.Info().Uint64("chain-id", ec.ChainID).Msg("Added experimental chain")
+			}
+		}
+	}
+
 	if len(clients) == 0 {
-		return Inputs{}, fmt.Errorf("no RPC URLs found for supported chains")
+		return Inputs{}, fmt.Errorf("no RPC URLs found for supported or experimental chains")
 	}
 
 	pk, err := crypto.HexToECDSA(creSettings.User.EthPrivateKey)
@@ -152,19 +204,22 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 	}
 
 	return Inputs{
-		WorkflowPath:   creSettings.Workflow.WorkflowArtifactSettings.WorkflowPath,
-		ConfigPath:     creSettings.Workflow.WorkflowArtifactSettings.ConfigPath,
-		SecretsPath:    creSettings.Workflow.WorkflowArtifactSettings.SecretsPath,
-		EngineLogs:     v.GetBool("engine-logs"),
-		Broadcast:      v.GetBool("broadcast"),
-		EVMClients:     clients,
-		EthPrivateKey:  pk,
-		WorkflowName:   creSettings.Workflow.UserWorkflowSettings.WorkflowName,
-		NonInteractive: v.GetBool("non-interactive"),
-		TriggerIndex:   v.GetInt("trigger-index"),
-		HTTPPayload:    v.GetString("http-payload"),
-		EVMTxHash:      v.GetString("evm-tx-hash"),
-		EVMEventIndex:  v.GetInt("evm-event-index"),
+		WorkflowPath:             creSettings.Workflow.WorkflowArtifactSettings.WorkflowPath,
+		ConfigPath:               creSettings.Workflow.WorkflowArtifactSettings.ConfigPath,
+		SecretsPath:              creSettings.Workflow.WorkflowArtifactSettings.SecretsPath,
+		EngineLogs:               v.GetBool("engine-logs"),
+		Broadcast:                v.GetBool("broadcast"),
+		EVMClients:               clients,
+		EthPrivateKey:            pk,
+		WorkflowName:             creSettings.Workflow.UserWorkflowSettings.WorkflowName,
+		NonInteractive:           v.GetBool("non-interactive"),
+		TriggerIndex:             v.GetInt("trigger-index"),
+		HTTPPayload:              v.GetString("http-payload"),
+		EVMTxHash:                v.GetString("evm-tx-hash"),
+		EVMEventIndex:            v.GetInt("evm-event-index"),
+		EnableExperimentalChains: enableExperimental,
+		ExperimentalForwarders:   experimentalForwarders,
+		ExperimentalChainIDs:     experimentalChainIDs,
 	}, nil
 }
 
@@ -183,7 +238,7 @@ func (h *handler) ValidateInputs(inputs Inputs) error {
 		return fmt.Errorf("you must configure a valid private key to perform on-chain writes. Please set your private key in the .env file before using the -–broadcast flag")
 	}
 
-	if err := runRPCHealthCheck(inputs.EVMClients); err != nil {
+	if err := runRPCHealthCheck(inputs.EVMClients, inputs.ExperimentalChainIDs); err != nil {
 		// we don't block execution, just show the error to the user
 		// because some RPCs in settings might not be used in workflow and some RPCs might have hiccups
 		fmt.Printf("Warning: some RPCs in settings are not functioning properly, please check: %v\n", err)
@@ -336,6 +391,11 @@ func run(
 			if _, ok := inputs.EVMClients[c.Selector]; ok && strings.TrimSpace(c.Forwarder) != "" {
 				forwarders[c.Selector] = common.HexToAddress(c.Forwarder)
 			}
+		}
+
+		// Merge experimental forwarders (keyed by chain ID)
+		for chainID, fwdAddr := range inputs.ExperimentalForwarders {
+			forwarders[chainID] = fwdAddr
 		}
 
 		manualTriggerCapConfig := ManualTriggerCapabilitiesConfig{

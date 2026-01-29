@@ -80,9 +80,10 @@ func parseChainSelectorFromTriggerID(id string) (uint64, bool) {
 }
 
 // runRPCHealthCheck runs connectivity check against every configured client.
-func runRPCHealthCheck(clients map[uint64]*ethclient.Client) error {
+// experimentalChainIDs is a set of chain IDs that are experimental (not in chain-selectors).
+func runRPCHealthCheck(clients map[uint64]*ethclient.Client, experimentalChainIDs map[uint64]struct{}) error {
 	if len(clients) == 0 {
-		return fmt.Errorf("check your settings: no RPC URLs found for supported chains")
+		return fmt.Errorf("check your settings: no RPC URLs found for supported or experimental chains")
 	}
 
 	var errs []error
@@ -93,9 +94,18 @@ func runRPCHealthCheck(clients map[uint64]*ethclient.Client) error {
 			continue
 		}
 
-		chainName, err := settings.GetChainNameByChainSelector(selector)
-		if err != nil {
-			return err
+		// Determine chain label for error messages
+		var chainLabel string
+		if _, isExperimental := experimentalChainIDs[selector]; isExperimental {
+			chainLabel = fmt.Sprintf("experimental chain %d", selector)
+		} else {
+			name, err := settings.GetChainNameByChainSelector(selector)
+			if err != nil {
+				// If we can't get the name, use the selector as the label
+				chainLabel = fmt.Sprintf("chain %d", selector)
+			} else {
+				chainLabel = name
+			}
 		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -103,11 +113,11 @@ func runRPCHealthCheck(clients map[uint64]*ethclient.Client) error {
 		cancel() // don't defer in a loop
 
 		if err != nil {
-			errs = append(errs, fmt.Errorf("[%s] failed RPC health check: %w", chainName, err))
+			errs = append(errs, fmt.Errorf("[%s] failed RPC health check: %w", chainLabel, err))
 			continue
 		}
 		if chainID == nil || chainID.Sign() <= 0 {
-			errs = append(errs, fmt.Errorf("[%s] invalid RPC response: empty or zero chain ID", chainName))
+			errs = append(errs, fmt.Errorf("[%s] invalid RPC response: empty or zero chain ID", chainLabel))
 			continue
 		}
 	}
