@@ -63,7 +63,6 @@ type Inputs struct {
 	EVMEventIndex  int    `validate:"-"`
 	// Experimental chains support (for chains not in official chain-selectors)
 	ExperimentalForwarders map[uint64]common.Address `validate:"-"` // forwarders keyed by chain ID
-	ExperimentalChainIDs   map[uint64]struct{}       `validate:"-"` // set of experimental chain IDs for health check
 }
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
@@ -139,45 +138,62 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 
 	// Experimental chains support (automatically loaded from config if present)
 	experimentalForwarders := make(map[uint64]common.Address)
-	experimentalChainIDs := make(map[uint64]struct{})
 
 	expChains, err := settings.GetExperimentalChains(v)
 	if err != nil {
-		h.log.Warn().Err(err).Msg("Failed to load experimental chains config")
-	} else {
-		for _, ec := range expChains {
-			// Validate required fields
-			if ec.ChainID == 0 {
-				h.log.Warn().Msg("Experimental chain missing chain-id; skipping")
-				continue
-			}
-			if strings.TrimSpace(ec.RPCURL) == "" {
-				h.log.Warn().Uint64("chain-id", ec.ChainID).Msg("Experimental chain missing rpc-url; skipping")
-				continue
-			}
-			if strings.TrimSpace(ec.Forwarder) == "" {
-				h.log.Warn().Uint64("chain-id", ec.ChainID).Msg("Experimental chain missing forwarder; skipping")
-				continue
-			}
+		return Inputs{}, fmt.Errorf("failed to load experimental chains config: %w", err)
+	}
 
-			// Skip if chain ID already exists (supported chain takes precedence)
-			if _, exists := clients[ec.ChainID]; exists {
-				h.log.Debug().Uint64("chain-id", ec.ChainID).Msg("Experimental chain ID conflicts with supported chain; skipping")
-				continue
-			}
-
-			// Dial the RPC
-			c, err := ethclient.Dial(ec.RPCURL)
-			if err != nil {
-				fmt.Printf("failed to create eth client for experimental chain %d: %v\n", ec.ChainID, err)
-				continue
-			}
-
-			clients[ec.ChainID] = c
-			experimentalForwarders[ec.ChainID] = common.HexToAddress(ec.Forwarder)
-			experimentalChainIDs[ec.ChainID] = struct{}{}
-			h.log.Info().Uint64("chain-id", ec.ChainID).Msg("Added experimental chain")
+	for _, ec := range expChains {
+		// Validate required fields
+		if ec.ChainID == 0 {
+			return Inputs{}, fmt.Errorf("experimental chain missing chain-id")
 		}
+		if strings.TrimSpace(ec.RPCURL) == "" {
+			return Inputs{}, fmt.Errorf("experimental chain %d missing rpc-url", ec.ChainID)
+		}
+		if strings.TrimSpace(ec.Forwarder) == "" {
+			return Inputs{}, fmt.Errorf("experimental chain %d missing forwarder", ec.ChainID)
+		}
+
+		// Check if chain ID already exists (supported chain)
+		if _, exists := clients[ec.ChainID]; exists {
+			// Find the supported chain's forwarder
+			var supportedForwarder string
+			for _, supported := range SupportedEVM {
+				if supported.Selector == ec.ChainID {
+					supportedForwarder = supported.Forwarder
+					break
+				}
+			}
+
+			expFwd := common.HexToAddress(ec.Forwarder)
+			if supportedForwarder != "" && common.HexToAddress(supportedForwarder) == expFwd {
+				// Same forwarder, just debug log
+				h.log.Debug().Uint64("chain-id", ec.ChainID).Msg("Experimental chain matches supported chain config")
+				continue
+			}
+
+			// Different forwarder - respect user's config, warn about override
+			h.log.Warn().Uint64("chain-id", ec.ChainID).
+				Str("supported-forwarder", supportedForwarder).
+				Str("experimental-forwarder", ec.Forwarder).
+				Msg("Experimental chain overrides supported chain forwarder")
+
+			// Use existing client but override the forwarder
+			experimentalForwarders[ec.ChainID] = expFwd
+			continue
+		}
+
+		// Dial the RPC
+		c, err := ethclient.Dial(ec.RPCURL)
+		if err != nil {
+			return Inputs{}, fmt.Errorf("failed to create eth client for experimental chain %d: %w", ec.ChainID, err)
+		}
+
+		clients[ec.ChainID] = c
+		experimentalForwarders[ec.ChainID] = common.HexToAddress(ec.Forwarder)
+		h.log.Info().Uint64("chain-id", ec.ChainID).Msg("Added experimental chain")
 	}
 
 	if len(clients) == 0 {
@@ -212,7 +228,6 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 		EVMTxHash:              v.GetString("evm-tx-hash"),
 		EVMEventIndex:          v.GetInt("evm-event-index"),
 		ExperimentalForwarders: experimentalForwarders,
-		ExperimentalChainIDs:   experimentalChainIDs,
 	}, nil
 }
 
@@ -231,7 +246,7 @@ func (h *handler) ValidateInputs(inputs Inputs) error {
 		return fmt.Errorf("you must configure a valid private key to perform on-chain writes. Please set your private key in the .env file before using the -–broadcast flag")
 	}
 
-	if err := runRPCHealthCheck(inputs.EVMClients, inputs.ExperimentalChainIDs); err != nil {
+	if err := runRPCHealthCheck(inputs.EVMClients, inputs.ExperimentalForwarders); err != nil {
 		// we don't block execution, just show the error to the user
 		// because some RPCs in settings might not be used in workflow and some RPCs might have hiccups
 		fmt.Printf("Warning: some RPCs in settings are not functioning properly, please check: %v\n", err)

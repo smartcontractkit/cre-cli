@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 
 	chainselectors "github.com/smartcontractkit/chain-selectors"
@@ -80,8 +81,8 @@ func parseChainSelectorFromTriggerID(id string) (uint64, bool) {
 }
 
 // runRPCHealthCheck runs connectivity check against every configured client.
-// experimentalChainIDs is a set of chain IDs that are experimental (not in chain-selectors).
-func runRPCHealthCheck(clients map[uint64]*ethclient.Client, experimentalChainIDs map[uint64]struct{}) error {
+// experimentalForwarders keys identify experimental chains (not in chain-selectors).
+func runRPCHealthCheck(clients map[uint64]*ethclient.Client, experimentalForwarders map[uint64]common.Address) error {
 	if len(clients) == 0 {
 		return fmt.Errorf("check your settings: no RPC URLs found for supported or experimental chains")
 	}
@@ -96,7 +97,7 @@ func runRPCHealthCheck(clients map[uint64]*ethclient.Client, experimentalChainID
 
 		// Determine chain label for error messages
 		var chainLabel string
-		if _, isExperimental := experimentalChainIDs[selector]; isExperimental {
+		if _, isExperimental := experimentalForwarders[selector]; isExperimental {
 			chainLabel = fmt.Sprintf("experimental chain %d", selector)
 		} else {
 			name, err := settings.GetChainNameByChainSelector(selector)
