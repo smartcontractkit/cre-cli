@@ -214,6 +214,26 @@ func newRootCommand() *cobra.Command {
 		return false
 	})
 
+	// Lipgloss-styled template functions for help
+	cobra.AddTemplateFunc("styleTitle", func(s string) string {
+		return ui.TitleStyle.Render(s)
+	})
+	cobra.AddTemplateFunc("styleSection", func(s string) string {
+		return ui.BoldStyle.Foreground(ui.TitleStyle.GetForeground()).Render(s)
+	})
+	cobra.AddTemplateFunc("styleCommand", func(s string) string {
+		return ui.StepStyle.Render(s)
+	})
+	cobra.AddTemplateFunc("styleDim", func(s string) string {
+		return ui.DimStyle.Render(s)
+	})
+	cobra.AddTemplateFunc("styleSuccess", func(s string) string {
+		return ui.SuccessStyle.Render(s)
+	})
+	cobra.AddTemplateFunc("styleCode", func(s string) string {
+		return ui.DimStyle.Render(s)
+	})
+
 	rootCmd.SetHelpTemplate(helpTemplate)
 
 	// Definition of global flags:
