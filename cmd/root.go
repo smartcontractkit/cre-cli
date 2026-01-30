@@ -388,6 +388,7 @@ func isLoadCredentials(cmd *cobra.Command) bool {
 	var excludedCommands = map[string]struct{}{
 		"cre version":               {},
 		"cre login":                 {},
+		"cre logout":                {},
 		"cre completion bash":       {},
 		"cre completion fish":       {},
 		"cre completion powershell": {},

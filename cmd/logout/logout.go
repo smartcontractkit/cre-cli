@@ -14,6 +14,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
+	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
 var (
@@ -55,10 +56,13 @@ func (h *handler) execute() error {
 	}
 	credPath := filepath.Join(home, credentials.ConfigDir, credentials.ConfigFile)
 
-	if h.credentials.Tokens == nil {
-		fmt.Println("user not logged in")
+	if h.credentials == nil || h.credentials.Tokens == nil {
+		ui.Warning("You are not logged in")
 		return nil
 	}
+
+	spinner := ui.NewSpinner()
+	spinner.Start("Logging out...")
 
 	if h.credentials.AuthType == credentials.AuthTypeBearer && h.credentials.Tokens.RefreshToken != "" {
 		h.log.Debug().Msg("Revoking refresh token")
@@ -84,9 +88,11 @@ func (h *handler) execute() error {
 	}
 
 	if err := os.Remove(credPath); err != nil && !os.IsNotExist(err) {
+		spinner.Stop()
 		return fmt.Errorf("failed to delete credentials file: %w", err)
 	}
 
-	fmt.Println("Logged out successfully")
+	spinner.Stop()
+	ui.Success("Logged out successfully")
 	return nil
 }
