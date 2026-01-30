@@ -91,6 +91,12 @@ Use "{{.CommandPath}} [command] --help" for more information about a command.
     to login into your cre account, then:
   $ cre init
     to create your first cre project.
+{{- if needsDeployAccess}}
+
+🔑 Ready to deploy? Run:
+  $ cre account access
+    to request deployment access.
+{{- end}}
 
 📘 Need more help?
   Visit https://docs.chain.link/cre

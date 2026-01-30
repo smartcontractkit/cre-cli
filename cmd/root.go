@@ -25,6 +25,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/cmd/workflow"
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/context"
+	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/logger"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
@@ -172,6 +173,22 @@ func newRootCommand() *cobra.Command {
 			}
 		}
 		return false
+	})
+
+	cobra.AddTemplateFunc("needsDeployAccess", func() bool {
+		creds := runtimeContext.Credentials
+		if creds == nil {
+			var err error
+			creds, err = credentials.New(rootLogger)
+			if err != nil {
+				return false
+			}
+		}
+		deployAccess, err := creds.GetDeploymentAccessStatus()
+		if err != nil {
+			return false
+		}
+		return !deployAccess.HasAccess
 	})
 
 	rootCmd.SetHelpTemplate(helpTemplate)
