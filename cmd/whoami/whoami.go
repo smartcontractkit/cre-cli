@@ -82,6 +82,12 @@ func (h *Handler) Execute(ctx context.Context) error {
 		return fmt.Errorf("graphql request failed: %w", err)
 	}
 
+	// Get deployment access status
+	deployAccess, err := h.credentials.GetDeploymentAccessStatus()
+	if err != nil {
+		h.log.Debug().Err(err).Msg("failed to get deployment access status")
+	}
+
 	fmt.Println("")
 	fmt.Println("Account details retrieved:")
 	fmt.Println("")
@@ -90,6 +96,16 @@ func (h *Handler) Execute(ctx context.Context) error {
 	}
 	fmt.Printf("\tOrganization ID:   %s\n", respEnvelope.GetOrganization.OrganizationID)
 	fmt.Printf("\tOrganization Name: %s\n", respEnvelope.GetOrganization.DisplayName)
+
+	// Display deployment access status
+	if deployAccess != nil {
+		if deployAccess.HasAccess {
+			fmt.Printf("\tDeploy Access:     Enabled\n")
+		} else {
+			fmt.Printf("\tDeploy Access:     Not enabled (run 'cre account access' to request)\n")
+		}
+	}
+
 	fmt.Println("")
 
 	return nil
