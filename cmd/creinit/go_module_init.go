@@ -2,11 +2,9 @@ package creinit
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 
 	"github.com/rs/zerolog"
 )
@@ -18,47 +16,46 @@ const (
 	CronCapabilitiesVersion = "v1.0.0-beta.0"
 )
 
-func initializeGoModule(logger *zerolog.Logger, workingDirectory, moduleName string) error {
-	var deps []string
+// InstalledDependencies contains info about installed Go dependencies
+type InstalledDependencies struct {
+	ModuleName string
+	Deps       []string
+}
+
+func initializeGoModule(logger *zerolog.Logger, workingDirectory, moduleName string) (*InstalledDependencies, error) {
+	result := &InstalledDependencies{
+		ModuleName: moduleName,
+		Deps: []string{
+			"cre-sdk-go@" + SdkVersion,
+			"capabilities/blockchain/evm@" + EVMCapabilitiesVersion,
+			"capabilities/networking/http@" + HTTPCapabilitiesVersion,
+			"capabilities/scheduler/cron@" + CronCapabilitiesVersion,
+		},
+	}
 
 	if shouldInitGoProject(workingDirectory) {
 		err := runCommand(logger, workingDirectory, "go", "mod", "init", moduleName)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		fmt.Printf("→ Module initialized: %s\n", moduleName)
 	}
 
-	captureDep := func(args ...string) error {
-		output, err := runCommandCaptureOutput(logger, workingDirectory, args...)
-		if err != nil {
-			return err
-		}
-		deps = append(deps, parseAddedModules(string(output))...)
-		return nil
+	if err := runCommand(logger, workingDirectory, "go", "get", "github.com/smartcontractkit/cre-sdk-go@"+SdkVersion); err != nil {
+		return nil, err
 	}
-
-	if err := captureDep("go", "get", "github.com/smartcontractkit/cre-sdk-go@"+SdkVersion); err != nil {
-		return err
+	if err := runCommand(logger, workingDirectory, "go", "get", "github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm@"+EVMCapabilitiesVersion); err != nil {
+		return nil, err
 	}
-	if err := captureDep("go", "get", "github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm@"+EVMCapabilitiesVersion); err != nil {
-		return err
+	if err := runCommand(logger, workingDirectory, "go", "get", "github.com/smartcontractkit/cre-sdk-go/capabilities/networking/http@"+HTTPCapabilitiesVersion); err != nil {
+		return nil, err
 	}
-	if err := captureDep("go", "get", "github.com/smartcontractkit/cre-sdk-go/capabilities/networking/http@"+HTTPCapabilitiesVersion); err != nil {
-		return err
-	}
-	if err := captureDep("go", "get", "github.com/smartcontractkit/cre-sdk-go/capabilities/scheduler/cron@"+CronCapabilitiesVersion); err != nil {
-		return err
+	if err := runCommand(logger, workingDirectory, "go", "get", "github.com/smartcontractkit/cre-sdk-go/capabilities/scheduler/cron@"+CronCapabilitiesVersion); err != nil {
+		return nil, err
 	}
 
 	_ = runCommand(logger, workingDirectory, "go", "mod", "tidy")
 
-	fmt.Printf("→ Dependencies installed: \n")
-	for _, dep := range deps {
-		fmt.Printf("\t•\t%s\n", dep)
-	}
-
-	return nil
+	return result, nil
 }
 
 func shouldInitGoProject(directory string) bool {
@@ -103,14 +100,3 @@ func runCommandCaptureOutput(logger *zerolog.Logger, dir string, args ...string)
 	return output, nil
 }
 
-func parseAddedModules(output string) []string {
-	var modules []string
-	lines := strings.Split(output, "\n")
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "go: added ") {
-			modules = append(modules, strings.TrimPrefix(line, "go: added "))
-		}
-	}
-	return modules
-}

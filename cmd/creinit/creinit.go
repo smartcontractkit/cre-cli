@@ -403,32 +403,58 @@ func (h *handler) Execute(inputs Inputs) error {
 		return err
 	}
 
+	projectName := filepath.Base(projectRoot)
+	spinner := ui.NewSpinner()
+
+	// Copy secrets file
+	spinner.Start("Copying secrets file...")
 	if err := h.copySecretsFileIfExists(projectRoot, selectedWorkflowTemplate); err != nil {
+		spinner.Stop()
 		return fmt.Errorf("failed to copy secrets file: %w", err)
 	}
 
-	projectName := filepath.Base(projectRoot)
-
-	fmt.Println()
-	fmt.Println(ui.DimStyle.Render("  Generating project files..."))
-
+	// Generate workflow template
+	spinner.Update("Generating workflow files...")
 	if err := h.generateWorkflowTemplate(workflowDirectory, selectedWorkflowTemplate, projectName); err != nil {
+		spinner.Stop()
 		return fmt.Errorf("failed to scaffold workflow: %w", err)
 	}
 
+	// Generate contracts template
+	spinner.Update("Generating contracts...")
 	if err := h.generateContractsTemplate(projectRoot, selectedWorkflowTemplate, projectName); err != nil {
+		spinner.Stop()
 		return fmt.Errorf("failed to scaffold contracts: %w", err)
 	}
 
+	// Initialize Go module if needed
+	var installedDeps *InstalledDependencies
 	if selectedLanguageTemplate.Lang == TemplateLangGo {
-		if err := initializeGoModule(h.log, projectRoot, projectName); err != nil {
-			return fmt.Errorf("failed to initialize Go module: %w", err)
+		spinner.Update("Installing Go dependencies...")
+		var goErr error
+		installedDeps, goErr = initializeGoModule(h.log, projectRoot, projectName)
+		if goErr != nil {
+			spinner.Stop()
+			return fmt.Errorf("failed to initialize Go module: %w", goErr)
 		}
 	}
 
+	// Generate workflow settings
+	spinner.Update("Generating workflow settings...")
 	_, err = settings.GenerateWorkflowSettingsFile(workflowDirectory, workflowName, selectedLanguageTemplate.EntryPoint)
+	spinner.Stop()
 	if err != nil {
 		return fmt.Errorf("failed to generate %s file: %w", constants.DefaultWorkflowSettingsFileName, err)
+	}
+
+	// Show installed dependencies in a box after spinner stops
+	if installedDeps != nil {
+		ui.Line()
+		depList := "Dependencies installed:"
+		for _, dep := range installedDeps.Deps {
+			depList += "\n  • " + dep
+		}
+		ui.Box(depList)
 	}
 
 	if h.runtimeContext != nil {
@@ -446,51 +472,45 @@ func (h *handler) Execute(inputs Inputs) error {
 }
 
 func (h *handler) printSuccessMessage(projectRoot, workflowName string, lang TemplateLanguage) {
-	fmt.Println()
-	fmt.Println(ui.SuccessStyle.Render("  ✓ Project created successfully!"))
-	fmt.Println()
+	ui.Line()
+	ui.Success("Project created successfully!")
+	ui.Line()
 
 	var steps string
 	if lang == TemplateLangGo {
-		steps = fmt.Sprintf(`  %s
+		steps = fmt.Sprintf(`%s
+     %s
 
-  %s
-  %s
-
-  %s
-  %s`,
-			ui.StepStyle.Render("1. Navigate to your project:"),
-			ui.DimStyle.Render("     cd "+filepath.Base(projectRoot)),
-			"",
-			ui.StepStyle.Render("2. Run the workflow:"),
-			ui.DimStyle.Render("     cre workflow simulate "+workflowName))
+%s
+     %s`,
+			ui.RenderStep("1. Navigate to your project:"),
+			ui.RenderDim("cd "+filepath.Base(projectRoot)),
+			ui.RenderStep("2. Run the workflow:"),
+			ui.RenderDim("cre workflow simulate "+workflowName))
 	} else {
-		steps = fmt.Sprintf(`  %s
+		steps = fmt.Sprintf(`%s
+     %s
 
-  %s
-  %s
+%s
+     %s
 
-  %s
-  %s
+%s
+     %s
 
-  %s
-  %s
-
-  %s
-  %s`,
-			ui.StepStyle.Render("1. Navigate to your project:"),
-			ui.DimStyle.Render("     cd "+filepath.Base(projectRoot)),
-			"",
-			ui.StepStyle.Render("2. Install Bun (if needed):"),
-			ui.DimStyle.Render("     npm install -g bun"),
-			ui.StepStyle.Render("3. Install dependencies:"),
-			ui.DimStyle.Render("     bun install --cwd ./"+workflowName),
-			ui.StepStyle.Render("4. Run the workflow:"),
-			ui.DimStyle.Render("     cre workflow simulate "+workflowName))
+%s
+     %s`,
+			ui.RenderStep("1. Navigate to your project:"),
+			ui.RenderDim("cd "+filepath.Base(projectRoot)),
+			ui.RenderStep("2. Install Bun (if needed):"),
+			ui.RenderDim("npm install -g bun"),
+			ui.RenderStep("3. Install dependencies:"),
+			ui.RenderDim("bun install --cwd ./"+workflowName),
+			ui.RenderStep("4. Run the workflow:"),
+			ui.RenderDim("cre workflow simulate "+workflowName))
 	}
 
-	fmt.Println(ui.BoxStyle.Render("Next steps\n\n" + steps))
-	fmt.Println()
+	ui.Box("Next steps\n\n" + steps)
+	ui.Line()
 }
 
 type TitledTemplate interface {
