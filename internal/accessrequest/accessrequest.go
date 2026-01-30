@@ -1,6 +1,7 @@
 package accessrequest
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/base64"
@@ -9,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/machinebox/graphql"
 	"github.com/rs/zerolog"
@@ -67,6 +69,21 @@ func (r *Requester) PromptAndSubmitRequest(ctx context.Context) error {
 		return nil
 	}
 
+	fmt.Println("")
+	fmt.Println("Briefly describe your use case (what are you building with CRE?):")
+	fmt.Print("> ")
+
+	reader := bufio.NewReader(r.stdin)
+	useCase, err := reader.ReadString('\n')
+	if err != nil {
+		return fmt.Errorf("failed to read use case: %w", err)
+	}
+	useCase = strings.TrimSpace(useCase)
+
+	if useCase == "" {
+		return fmt.Errorf("use case description is required")
+	}
+
 	user, err := r.FetchUserInfo(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to fetch user info: %w", err)
@@ -75,7 +92,7 @@ func (r *Requester) PromptAndSubmitRequest(ctx context.Context) error {
 	fmt.Println("")
 	fmt.Println("Submitting access request...")
 
-	if err := r.SubmitAccessRequest(user); err != nil {
+	if err := r.SubmitAccessRequest(user, useCase); err != nil {
 		return fmt.Errorf("failed to submit access request: %w", err)
 	}
 
@@ -123,7 +140,7 @@ func (r *Requester) FetchUserInfo(ctx context.Context) (*UserInfo, error) {
 	}, nil
 }
 
-func (r *Requester) SubmitAccessRequest(user *UserInfo) error {
+func (r *Requester) SubmitAccessRequest(user *UserInfo, useCase string) error {
 	username := os.Getenv(EnvVarZendeskUsername)
 	password := os.Getenv(EnvVarZendeskPassword)
 
@@ -131,11 +148,18 @@ func (r *Requester) SubmitAccessRequest(user *UserInfo) error {
 		return fmt.Errorf("zendesk credentials not configured (set %s and %s environment variables)", EnvVarZendeskUsername, EnvVarZendeskPassword)
 	}
 
+	body := fmt.Sprintf(`Deployment access request submitted via CRE CLI.
+
+Organization ID: %s
+
+Use Case:
+%s`, user.OrganizationID, useCase)
+
 	ticket := map[string]interface{}{
 		"ticket": map[string]interface{}{
 			"subject": "CRE Deployment Access Request",
 			"comment": map[string]interface{}{
-				"body": fmt.Sprintf("Deployment access request submitted via CRE CLI.\n\nOrganization ID: %s", user.OrganizationID),
+				"body": body,
 			},
 			"brand_id": zendeskBrandID,
 			"custom_fields": []map[string]interface{}{
@@ -151,12 +175,12 @@ func (r *Requester) SubmitAccessRequest(user *UserInfo) error {
 		},
 	}
 
-	body, err := json.Marshal(ticket)
+	jsonBody, err := json.Marshal(ticket)
 	if err != nil {
 		return fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	req, err := http.NewRequest(http.MethodPost, zendeskAPIURL, bytes.NewReader(body))
+	req, err := http.NewRequest(http.MethodPost, zendeskAPIURL, bytes.NewReader(jsonBody))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
