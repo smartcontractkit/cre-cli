@@ -29,6 +29,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/telemetry"
+	"github.com/smartcontractkit/cre-cli/internal/ui"
 	intupdate "github.com/smartcontractkit/cre-cli/internal/update"
 )
 
@@ -96,9 +97,19 @@ func newRootCommand() *cobra.Command {
 			log := runtimeContext.Logger
 			v := runtimeContext.Viper
 
+			// Start the global spinner for commands that do initialization work
+			spinner := ui.GlobalSpinner()
+			showSpinner := shouldShowSpinner(cmd)
+			if showSpinner {
+				spinner.Start("Initializing...")
+			}
+
 			// add binding for all existing command flags via Viper
 			// this step has to run first because flags have higher precedence over configuration parameters and defaults values
 			if err := v.BindPFlags(cmd.Flags()); err != nil {
+				if showSpinner {
+					spinner.Stop()
+				}
 				return fmt.Errorf("failed to bind flags: %w", err)
 			}
 
@@ -112,15 +123,27 @@ func newRootCommand() *cobra.Command {
 				runtimeContext.ClientFactory = client.NewFactory(&newLogger, v)
 			}
 
+			if showSpinner {
+				spinner.Update("Loading environment...")
+			}
 			err := runtimeContext.AttachEnvironmentSet()
 			if err != nil {
+				if showSpinner {
+					spinner.Stop()
+				}
 				return fmt.Errorf("failed to load environment details: %w", err)
 			}
 
 			if isLoadCredentials(cmd) {
+				if showSpinner {
+					spinner.Update("Validating credentials...")
+				}
 				skipValidation := shouldSkipValidation(cmd)
 				err := runtimeContext.AttachCredentials(cmd.Context(), skipValidation)
 				if err != nil {
+					if showSpinner {
+						spinner.Stop()
+					}
 					return fmt.Errorf("authentication required: %w", err)
 				}
 
@@ -128,6 +151,9 @@ func newRootCommand() *cobra.Command {
 				cmdPath := cmd.CommandPath()
 				if cmdPath == "cre account link-key" || cmdPath == "cre workflow deploy" {
 					if err := runtimeContext.Credentials.CheckIsUngatedOrganization(); err != nil {
+						if showSpinner {
+							spinner.Stop()
+						}
 						return err
 					}
 				}
@@ -135,16 +161,30 @@ func newRootCommand() *cobra.Command {
 
 			// load settings from yaml files
 			if isLoadSettings(cmd) {
+				if showSpinner {
+					spinner.Update("Loading settings...")
+				}
 				// Set execution context (project root + workflow directory if applicable)
 				projectRootFlag := runtimeContext.Viper.GetString(settings.Flags.ProjectRoot.Name)
 				if err := context.SetExecutionContext(cmd, args, projectRootFlag, rootLogger); err != nil {
+					if showSpinner {
+						spinner.Stop()
+					}
 					return err
 				}
 
 				err := runtimeContext.AttachSettings(cmd, isLoadDeploymentRPC(cmd))
 				if err != nil {
+					if showSpinner {
+						spinner.Stop()
+					}
 					return fmt.Errorf("%w", err)
 				}
+			}
+
+			// Stop the initialization spinner - commands can start their own if needed
+			if showSpinner {
+				spinner.Stop()
 			}
 
 			return nil
@@ -339,6 +379,30 @@ func shouldCheckForUpdates(cmd *cobra.Command) bool {
 	}
 
 	_, exists := excludedCommands[cmd.Name()]
+	return !exists
+}
+
+func shouldShowSpinner(cmd *cobra.Command) bool {
+	// Don't show spinner for commands that don't do async work
+	// or commands that have their own interactive UI (like init)
+	var excludedCommands = map[string]struct{}{
+		"cre":                       {},
+		"cre version":               {},
+		"cre help":                  {},
+		"cre completion bash":       {},
+		"cre completion fish":       {},
+		"cre completion powershell": {},
+		"cre completion zsh":        {},
+		"cre init":                  {}, // Has its own Huh forms UI
+		"cre login":                 {}, // Has its own interactive flow
+		"cre logout":                {},
+		"cre update":                {},
+		"cre workflow":              {}, // Just shows help
+		"cre account":               {}, // Just shows help
+		"cre secrets":               {}, // Just shows help
+	}
+
+	_, exists := excludedCommands[cmd.CommandPath()]
 	return !exists
 }
 

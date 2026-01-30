@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/huh"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -19,6 +18,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
+	"github.com/smartcontractkit/cre-cli/internal/ui"
 	"github.com/smartcontractkit/cre-cli/internal/validation"
 )
 
@@ -77,28 +77,6 @@ var languageTemplates = []LanguageTemplate{
 	},
 }
 
-// Styles
-var (
-	titleStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color("12")).
-			MarginBottom(1)
-
-	successStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color("10"))
-
-	boxStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("12")).
-			Padding(0, 1)
-
-	dimStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("8"))
-
-	stepStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("14"))
-)
 
 type Inputs struct {
 	ProjectName  string `validate:"omitempty,project_name" cli:"project-name"`
@@ -185,7 +163,7 @@ func (h *handler) Execute(inputs Inputs) error {
 	}
 
 	fmt.Println()
-	fmt.Println(titleStyle.Render("Create a new CRE project"))
+	fmt.Println(ui.TitleStyle.Render("Create a new CRE project"))
 
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -239,7 +217,7 @@ func (h *handler) Execute(inputs Inputs) error {
 
 			if projName == "" {
 				projName = defaultName
-				fmt.Println(dimStyle.Render("  Using default: " + defaultName))
+				fmt.Println(ui.DimStyle.Render("  Using default: " + defaultName))
 			}
 		}
 
@@ -370,7 +348,7 @@ func (h *handler) Execute(inputs Inputs) error {
 
 				if rpcURL == "" {
 					rpcURL = defaultRPC
-					fmt.Println(dimStyle.Render("  Using default RPC URL"))
+					fmt.Println(ui.DimStyle.Render("  Using default RPC URL"))
 				}
 			}
 			repl["EthSepoliaRpcUrl"] = rpcURL
@@ -379,7 +357,7 @@ func (h *handler) Execute(inputs Inputs) error {
 			return e
 		}
 		if selectedWorkflowTemplate.Name == PoRTemplate {
-			fmt.Println(dimStyle.Render(fmt.Sprintf("  RPC set to %s (editable in %s)",
+			fmt.Println(ui.DimStyle.Render(fmt.Sprintf("  RPC set to %s (editable in %s)",
 				rpcURL,
 				filepath.Join(filepath.Base(projectRoot), constants.DefaultProjectSettingsFileName))))
 		}
@@ -415,7 +393,7 @@ func (h *handler) Execute(inputs Inputs) error {
 
 		if workflowName == "" {
 			workflowName = defaultName
-			fmt.Println(dimStyle.Render("  Using default: " + defaultName))
+			fmt.Println(ui.DimStyle.Render("  Using default: " + defaultName))
 		}
 	}
 
@@ -432,7 +410,7 @@ func (h *handler) Execute(inputs Inputs) error {
 	projectName := filepath.Base(projectRoot)
 
 	fmt.Println()
-	fmt.Println(dimStyle.Render("  Generating project files..."))
+	fmt.Println(ui.DimStyle.Render("  Generating project files..."))
 
 	if err := h.generateWorkflowTemplate(workflowDirectory, selectedWorkflowTemplate, projectName); err != nil {
 		return fmt.Errorf("failed to scaffold workflow: %w", err)
@@ -469,7 +447,7 @@ func (h *handler) Execute(inputs Inputs) error {
 
 func (h *handler) printSuccessMessage(projectRoot, workflowName string, lang TemplateLanguage) {
 	fmt.Println()
-	fmt.Println(successStyle.Render("  ✓ Project created successfully!"))
+	fmt.Println(ui.SuccessStyle.Render("  ✓ Project created successfully!"))
 	fmt.Println()
 
 	var steps string
@@ -481,11 +459,11 @@ func (h *handler) printSuccessMessage(projectRoot, workflowName string, lang Tem
 
   %s
   %s`,
-			stepStyle.Render("1. Navigate to your project:"),
-			dimStyle.Render("     cd "+filepath.Base(projectRoot)),
+			ui.StepStyle.Render("1. Navigate to your project:"),
+			ui.DimStyle.Render("     cd "+filepath.Base(projectRoot)),
 			"",
-			stepStyle.Render("2. Run the workflow:"),
-			dimStyle.Render("     cre workflow simulate "+workflowName))
+			ui.StepStyle.Render("2. Run the workflow:"),
+			ui.DimStyle.Render("     cre workflow simulate "+workflowName))
 	} else {
 		steps = fmt.Sprintf(`  %s
 
@@ -500,18 +478,18 @@ func (h *handler) printSuccessMessage(projectRoot, workflowName string, lang Tem
 
   %s
   %s`,
-			stepStyle.Render("1. Navigate to your project:"),
-			dimStyle.Render("     cd "+filepath.Base(projectRoot)),
+			ui.StepStyle.Render("1. Navigate to your project:"),
+			ui.DimStyle.Render("     cd "+filepath.Base(projectRoot)),
 			"",
-			stepStyle.Render("2. Install Bun (if needed):"),
-			dimStyle.Render("     npm install -g bun"),
-			stepStyle.Render("3. Install dependencies:"),
-			dimStyle.Render("     bun install --cwd ./"+workflowName),
-			stepStyle.Render("4. Run the workflow:"),
-			dimStyle.Render("     cre workflow simulate "+workflowName))
+			ui.StepStyle.Render("2. Install Bun (if needed):"),
+			ui.DimStyle.Render("     npm install -g bun"),
+			ui.StepStyle.Render("3. Install dependencies:"),
+			ui.DimStyle.Render("     bun install --cwd ./"+workflowName),
+			ui.StepStyle.Render("4. Run the workflow:"),
+			ui.DimStyle.Render("     cre workflow simulate "+workflowName))
 	}
 
-	fmt.Println(boxStyle.Render("Next steps\n\n" + steps))
+	fmt.Println(ui.BoxStyle.Render("Next steps\n\n" + steps))
 	fmt.Println()
 }
 
