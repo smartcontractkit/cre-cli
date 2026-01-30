@@ -94,6 +94,10 @@ func newRootCommand() *cobra.Command {
 		RunE: helpRunE,
 
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			// Silence usage for runtime errors - at this point flag parsing succeeded,
+			// so any errors from here are runtime errors, not usage errors
+			cmd.SilenceUsage = true
+
 			executingCommand = cmd
 			executingArgs = args
 
