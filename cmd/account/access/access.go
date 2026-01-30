@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/client/graphqlclient"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
+	"github.com/smartcontractkit/cre-cli/internal/prompt"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 )
 
@@ -38,7 +40,7 @@ func New(runtimeCtx *runtime.Context) *cobra.Command {
 		Long:  "Check your deployment access status or request access to deploy workflows.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			h := NewHandler(runtimeCtx)
+			h := NewHandler(runtimeCtx, cmd.InOrStdin())
 			return h.Execute(cmd.Context())
 		},
 	}
@@ -50,13 +52,15 @@ type Handler struct {
 	log            *zerolog.Logger
 	credentials    *credentials.Credentials
 	environmentSet *environments.EnvironmentSet
+	stdin          io.Reader
 }
 
-func NewHandler(ctx *runtime.Context) *Handler {
+func NewHandler(ctx *runtime.Context, stdin io.Reader) *Handler {
 	return &Handler{
 		log:            ctx.Logger,
 		credentials:    ctx.Credentials,
 		environmentSet: ctx.EnvironmentSet,
+		stdin:          stdin,
 	}
 }
 
@@ -86,10 +90,22 @@ func (h *Handler) Execute(ctx context.Context) error {
 		return nil
 	}
 
-	// User doesn't have access - submit request to Zendesk
+	// User doesn't have access - prompt to submit request
 	fmt.Println("")
 	fmt.Println("Deployment access is not yet enabled for your organization.")
 	fmt.Println("")
+
+	// Ask user if they want to request access
+	shouldRequest, err := prompt.YesNoPrompt(h.stdin, "Request deployment access?")
+	if err != nil {
+		return fmt.Errorf("failed to get user confirmation: %w", err)
+	}
+
+	if !shouldRequest {
+		fmt.Println("")
+		fmt.Println("Access request canceled.")
+		return nil
+	}
 
 	// Fetch user info for the request
 	user, err := h.fetchUserInfo(ctx)
@@ -97,6 +113,7 @@ func (h *Handler) Execute(ctx context.Context) error {
 		return fmt.Errorf("failed to fetch user info: %w", err)
 	}
 
+	fmt.Println("")
 	fmt.Println("Submitting access request...")
 
 	if err := h.submitAccessRequest(user); err != nil {
@@ -118,8 +135,6 @@ func (h *Handler) fetchUserInfo(ctx context.Context) (*userInfo, error) {
 	query GetAccountDetails {
 		getAccountDetails {
 			emailAddress
-			firstName
-			lastName
 		}
 		getOrganization {
 			organizationId
@@ -132,8 +147,6 @@ func (h *Handler) fetchUserInfo(ctx context.Context) (*userInfo, error) {
 	var resp struct {
 		GetAccountDetails struct {
 			EmailAddress string `json:"emailAddress"`
-			FirstName    string `json:"firstName"`
-			LastName     string `json:"lastName"`
 		} `json:"getAccountDetails"`
 		GetOrganization struct {
 			OrganizationID string `json:"organizationId"`
@@ -144,10 +157,8 @@ func (h *Handler) fetchUserInfo(ctx context.Context) (*userInfo, error) {
 		return nil, fmt.Errorf("graphql request failed: %w", err)
 	}
 
-	name := resp.GetAccountDetails.FirstName
-	if resp.GetAccountDetails.LastName != "" {
-		name += " " + resp.GetAccountDetails.LastName
-	}
+	// Use email as name since firstName/lastName are not available in the schema
+	name := resp.GetAccountDetails.EmailAddress
 
 	return &userInfo{
 		Email:          resp.GetAccountDetails.EmailAddress,
