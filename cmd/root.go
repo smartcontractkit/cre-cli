@@ -25,6 +25,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/cmd/workflow"
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/context"
+	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/logger"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
@@ -126,7 +127,7 @@ func newRootCommand() *cobra.Command {
 
 				// Check if organization is ungated for commands that require it
 				cmdPath := cmd.CommandPath()
-				if cmdPath == "cre account link-key" || cmdPath == "cre workflow deploy" {
+				if cmdPath == "cre account link-key" {
 					if err := runtimeContext.Credentials.CheckIsUngatedOrganization(); err != nil {
 						return err
 					}
@@ -172,6 +173,22 @@ func newRootCommand() *cobra.Command {
 			}
 		}
 		return false
+	})
+
+	cobra.AddTemplateFunc("needsDeployAccess", func() bool {
+		creds := runtimeContext.Credentials
+		if creds == nil {
+			var err error
+			creds, err = credentials.New(rootLogger)
+			if err != nil {
+				return false
+			}
+		}
+		deployAccess, err := creds.GetDeploymentAccessStatus()
+		if err != nil {
+			return false
+		}
+		return !deployAccess.HasAccess
 	})
 
 	rootCmd.SetHelpTemplate(helpTemplate)
@@ -261,6 +278,7 @@ func isLoadSettings(cmd *cobra.Command) bool {
 		"cre login":                 {},
 		"cre logout":                {},
 		"cre whoami":                {},
+		"cre account access":        {},
 		"cre account list-key":      {},
 		"cre init":                  {},
 		"cre generate-bindings":     {},
