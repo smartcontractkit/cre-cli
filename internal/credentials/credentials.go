@@ -47,7 +47,7 @@ type DeploymentAccess struct {
 }
 
 // UngatedOrgRequiredMsg is the error message shown when an organization does not have ungated access.
-var UngatedOrgRequiredMsg = "\n✖ Workflow deployment is currently in early access. We're onboarding organizations gradually.\n\nWant to deploy?\n→ Request access here: https://cre.chain.link/request-access\n"
+var UngatedOrgRequiredMsg = "\n✖ Workflow deployment is currently in early access. We're onboarding organizations gradually.\n\nWant to deploy?\n→ Run 'cre account access' to request access\n"
 
 func New(logger *zerolog.Logger) (*Credentials, error) {
 	cfg := &Credentials{
