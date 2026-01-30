@@ -214,24 +214,27 @@ func newRootCommand() *cobra.Command {
 		return false
 	})
 
-	// Lipgloss-styled template functions for help
+	// Lipgloss-styled template functions for help (using Chainlink brand colors)
 	cobra.AddTemplateFunc("styleTitle", func(s string) string {
 		return ui.TitleStyle.Render(s)
 	})
 	cobra.AddTemplateFunc("styleSection", func(s string) string {
-		return ui.BoldStyle.Foreground(ui.TitleStyle.GetForeground()).Render(s)
+		return ui.TitleStyle.Render(s)
 	})
 	cobra.AddTemplateFunc("styleCommand", func(s string) string {
-		return ui.StepStyle.Render(s)
+		return ui.CommandStyle.Render(s) // Light Blue - prominent
 	})
 	cobra.AddTemplateFunc("styleDim", func(s string) string {
-		return ui.DimStyle.Render(s)
+		return ui.DimStyle.Render(s) // Gray - less important
 	})
 	cobra.AddTemplateFunc("styleSuccess", func(s string) string {
-		return ui.SuccessStyle.Render(s)
+		return ui.SuccessStyle.Render(s) // Green
 	})
 	cobra.AddTemplateFunc("styleCode", func(s string) string {
-		return ui.DimStyle.Render(s)
+		return ui.CodeStyle.Render(s) // Light Blue - visible
+	})
+	cobra.AddTemplateFunc("styleURL", func(s string) string {
+		return ui.URLStyle.Render(s) // Chainlink Blue, underlined
 	})
 
 	rootCmd.SetHelpTemplate(helpTemplate)

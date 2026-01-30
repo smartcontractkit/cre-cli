@@ -11,8 +11,8 @@ import (
 	"golang.org/x/term"
 )
 
-// SpinnerStyle for the spinner character
-var spinnerStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("12"))
+// SpinnerStyle for the spinner character (Blue 500 - bright and visible)
+var spinnerStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(ColorBlue500))
 
 // globalSpinner is the shared spinner instance for the entire CLI lifecycle
 var (

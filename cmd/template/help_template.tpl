@@ -93,5 +93,5 @@
     to create your first cre project.
 
 {{styleSection "Need more help?"}}
-  Visit {{styleCommand "https://docs.chain.link/cre"}}
+  Visit {{styleURL "https://docs.chain.link/cre"}}
 

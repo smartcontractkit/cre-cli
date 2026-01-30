@@ -5,37 +5,42 @@ import "fmt"
 // Output helpers - use these for consistent styled output across commands.
 // These functions make it easy to migrate from raw fmt.Println calls.
 
-// Title prints a styled title/header
+// Title prints a styled title/header (high visibility - Chainlink Blue)
 func Title(text string) {
 	fmt.Println(TitleStyle.Render(text))
 }
 
-// Success prints a success message with checkmark
+// Success prints a success message with checkmark (Green)
 func Success(text string) {
-	fmt.Println(SuccessStyle.Render("  ✓ " + text))
+	fmt.Println(SuccessStyle.Render("✓ " + text))
 }
 
-// Error prints an error message
+// Error prints an error message (Orange - high contrast)
 func Error(text string) {
-	fmt.Println(ErrorStyle.Render("  ✗ " + text))
+	fmt.Println(ErrorStyle.Render("✗ " + text))
 }
 
-// Warning prints a warning message
+// Warning prints a warning message (Yellow)
 func Warning(text string) {
-	fmt.Println(WarningStyle.Render("  ! " + text))
+	fmt.Println(WarningStyle.Render("! " + text))
 }
 
-// Dim prints dimmed/secondary text
+// Dim prints dimmed/secondary text (Gray - less important)
 func Dim(text string) {
 	fmt.Println(DimStyle.Render("  " + text))
 }
 
-// Step prints a numbered step instruction
+// Step prints a step instruction (Light Blue - visible)
 func Step(text string) {
 	fmt.Println(StepStyle.Render(text))
 }
 
-// Box prints text in a bordered box
+// Command prints a CLI command (Bold Light Blue - prominent)
+func Command(text string) {
+	fmt.Println(CommandStyle.Render(text))
+}
+
+// Box prints text in a bordered box (Chainlink Blue border)
 func Box(text string) {
 	fmt.Println(BoxStyle.Render(text))
 }
@@ -45,9 +50,14 @@ func Bold(text string) {
 	fmt.Println(BoldStyle.Render(text))
 }
 
-// Code prints text styled as code
+// Code prints text styled as code (Light Blue)
 func Code(text string) {
 	fmt.Println(CodeStyle.Render(text))
+}
+
+// URL prints a styled URL (Chainlink Blue, underlined)
+func URL(text string) {
+	fmt.Println(URLStyle.Render(text))
 }
 
 // Line prints an empty line
@@ -106,4 +116,16 @@ func RenderBold(text string) string {
 
 func RenderCode(text string) string {
 	return CodeStyle.Render(text)
+}
+
+func RenderCommand(text string) string {
+	return CommandStyle.Render(text)
+}
+
+func RenderURL(text string) string {
+	return URLStyle.Render(text)
+}
+
+func RenderAccent(text string) string {
+	return AccentStyle.Render(text)
 }

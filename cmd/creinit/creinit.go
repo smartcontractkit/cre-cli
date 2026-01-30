@@ -22,6 +22,9 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/validation"
 )
 
+// chainlinkTheme for all Huh forms in this package
+var chainlinkTheme = ui.ChainlinkTheme()
+
 //go:embed template/workflow/**/*
 var workflowTemplatesContent embed.FS
 
@@ -209,7 +212,7 @@ func (h *handler) Execute(inputs Inputs) error {
 							return validation.IsValidProjectName(name)
 						}),
 				),
-			)
+			).WithTheme(chainlinkTheme)
 
 			if err := form.Run(); err != nil {
 				return fmt.Errorf("project name input cancelled: %w", err)
@@ -271,7 +274,7 @@ func (h *handler) Execute(inputs Inputs) error {
 						Options(languageOptions...).
 						Value(&selectedLang),
 				),
-			)
+			).WithTheme(chainlinkTheme)
 
 			if err := form.Run(); err != nil {
 				return fmt.Errorf("language selection aborted: %w", err)
@@ -310,7 +313,7 @@ func (h *handler) Execute(inputs Inputs) error {
 					Options(templateOptions...).
 					Value(&selectedTemplate),
 			),
-		)
+		).WithTheme(chainlinkTheme)
 
 		if err := form.Run(); err != nil {
 			return fmt.Errorf("template selection aborted: %w", err)
@@ -340,7 +343,7 @@ func (h *handler) Execute(inputs Inputs) error {
 							Placeholder(defaultRPC).
 							Value(&rpcURL),
 					),
-				)
+				).WithTheme(chainlinkTheme)
 
 				if err := form.Run(); err != nil {
 					return err
@@ -385,7 +388,7 @@ func (h *handler) Execute(inputs Inputs) error {
 						return validation.IsValidWorkflowName(name)
 					}),
 			),
-		)
+		).WithTheme(chainlinkTheme)
 
 		if err := form.Run(); err != nil {
 			return fmt.Errorf("workflow name input cancelled: %w", err)
@@ -675,7 +678,7 @@ func (h *handler) ensureProjectDirectoryExists(dirPath string) error {
 					Negative("No").
 					Value(&overwrite),
 			),
-		)
+		).WithTheme(chainlinkTheme)
 
 		if err := form.Run(); err != nil {
 			return err
