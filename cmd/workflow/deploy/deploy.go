@@ -126,6 +126,11 @@ func newHandler(ctx *runtime.Context, stdin io.Reader) *handler {
 		wg:               sync.WaitGroup{},
 		wrcErr:           nil,
 	}
+
+	return &h
+}
+
+func (h *handler) initWorkflowRegistryClient() {
 	h.wg.Add(1)
 	go func() {
 		defer h.wg.Done()
@@ -136,8 +141,6 @@ func newHandler(ctx *runtime.Context, stdin io.Reader) *handler {
 		}
 		h.wrc = wrc
 	}()
-
-	return &h
 }
 
 func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
@@ -190,6 +193,8 @@ func (h *handler) Execute(ctx context.Context) error {
 	if !deployAccess.HasAccess {
 		return h.accessRequester.PromptAndSubmitRequest(ctx)
 	}
+
+	h.initWorkflowRegistryClient()
 
 	h.displayWorkflowDetails()
 
