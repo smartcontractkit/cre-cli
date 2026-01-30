@@ -54,7 +54,8 @@ func TestHandlerExecute(t *testing.T) {
 			},
 			wantErr: false,
 			wantLogSnips: []string{
-				"Account details retrieved:", "Email:             alice@example.com",
+				"Account Details",
+				"Email:             alice@example.com",
 				"Organization ID:   org-42",
 				"Organization Name: Alice's Org",
 			},
@@ -83,7 +84,7 @@ func TestHandlerExecute(t *testing.T) {
 			},
 			wantErr: false,
 			wantLogSnips: []string{
-				"Account details retrieved:",
+				"Account Details",
 				"Organization ID:   org-42",
 				"Organization Name: Alice's Org",
 			},

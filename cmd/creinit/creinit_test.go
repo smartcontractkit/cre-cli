@@ -191,8 +191,7 @@ func TestInitExecuteFlows(t *testing.T) {
 			}
 
 			ctx := sim.NewRuntimeContext()
-			mockStdin := testutil.NewMockStdinReader(tc.mockResponses)
-			h := newHandler(ctx, mockStdin)
+			h := newHandler(ctx)
 
 			require.NoError(t, h.ValidateInputs(inputs))
 			require.NoError(t, h.Execute(inputs))
@@ -227,8 +226,7 @@ func TestInsideExistingProjectAddsWorkflow(t *testing.T) {
 		WorkflowName: "",
 	}
 
-	mockStdin := testutil.NewMockStdinReader([]string{"wf-inside-existing-project", ""})
-	h := newHandler(sim.NewRuntimeContext(), mockStdin)
+	h := newHandler(sim.NewRuntimeContext())
 
 	require.NoError(t, h.ValidateInputs(inputs))
 	require.NoError(t, h.Execute(inputs))
@@ -259,9 +257,7 @@ func TestInitWithTypescriptTemplateSkipsGoScaffold(t *testing.T) {
 		WorkflowName: "",
 	}
 
-	// Ensure workflow name meets 10-char minimum
-	mockStdin := testutil.NewMockStdinReader([]string{"ts-workflow-01"})
-	h := newHandler(sim.NewRuntimeContext(), mockStdin)
+	h := newHandler(sim.NewRuntimeContext())
 
 	require.NoError(t, h.ValidateInputs(inputs))
 	require.NoError(t, h.Execute(inputs))
@@ -299,8 +295,7 @@ func TestInsideExistingProjectAddsTypescriptWorkflowSkipsGoScaffold(t *testing.T
 		WorkflowName: "",
 	}
 
-	mockStdin := testutil.NewMockStdinReader([]string{"ts-wf-existing"})
-	h := newHandler(sim.NewRuntimeContext(), mockStdin)
+	h := newHandler(sim.NewRuntimeContext())
 
 	require.NoError(t, h.ValidateInputs(inputs))
 	require.NoError(t, h.Execute(inputs))
