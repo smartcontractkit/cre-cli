@@ -1,7 +1,6 @@
 package access
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/rs/zerolog"
@@ -9,7 +8,6 @@ import (
 
 	"github.com/smartcontractkit/cre-cli/internal/accessrequest"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
-	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 )
 
@@ -21,7 +19,7 @@ func New(runtimeCtx *runtime.Context) *cobra.Command {
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			h := NewHandler(runtimeCtx, cmd.InOrStdin())
-			return h.Execute(cmd.Context())
+			return h.Execute()
 		},
 	}
 
@@ -29,22 +27,20 @@ func New(runtimeCtx *runtime.Context) *cobra.Command {
 }
 
 type Handler struct {
-	log            *zerolog.Logger
-	credentials    *credentials.Credentials
-	environmentSet *environments.EnvironmentSet
-	requester      *accessrequest.Requester
+	log         *zerolog.Logger
+	credentials *credentials.Credentials
+	requester   *accessrequest.Requester
 }
 
 func NewHandler(ctx *runtime.Context, stdin interface{ Read([]byte) (int, error) }) *Handler {
 	return &Handler{
-		log:            ctx.Logger,
-		credentials:    ctx.Credentials,
-		environmentSet: ctx.EnvironmentSet,
-		requester:      accessrequest.NewRequester(ctx.Credentials, ctx.EnvironmentSet, ctx.Logger, stdin),
+		log:         ctx.Logger,
+		credentials: ctx.Credentials,
+		requester:   accessrequest.NewRequester(ctx.Credentials, ctx.Logger, stdin),
 	}
 }
 
-func (h *Handler) Execute(ctx context.Context) error {
+func (h *Handler) Execute() error {
 	deployAccess, err := h.credentials.GetDeploymentAccessStatus()
 	if err != nil {
 		return fmt.Errorf("failed to check deployment access: %w", err)
@@ -63,5 +59,5 @@ func (h *Handler) Execute(ctx context.Context) error {
 		return nil
 	}
 
-	return h.requester.PromptAndSubmitRequest(ctx)
+	return h.requester.PromptAndSubmitRequest()
 }
