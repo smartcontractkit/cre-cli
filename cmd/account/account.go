@@ -13,8 +13,8 @@ import (
 func New(runtimeContext *runtime.Context) *cobra.Command {
 	accountCmd := &cobra.Command{
 		Use:   "account",
-		Short: "Manages account",
-		Long:  "Manage your linked public key addresses for workflow operations.",
+		Short: "Manage account and request deploy access",
+		Long:  "Manage your linked public key addresses for workflow operations and request deployment access.",
 	}
 
 	accountCmd.AddCommand(access.New(runtimeContext))
