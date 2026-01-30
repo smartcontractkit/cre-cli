@@ -126,7 +126,7 @@ func newRootCommand() *cobra.Command {
 
 				// Check if organization is ungated for commands that require it
 				cmdPath := cmd.CommandPath()
-				if cmdPath == "cre account link-key" || cmdPath == "cre workflow deploy" {
+				if cmdPath == "cre account link-key" {
 					if err := runtimeContext.Credentials.CheckIsUngatedOrganization(); err != nil {
 						return err
 					}
