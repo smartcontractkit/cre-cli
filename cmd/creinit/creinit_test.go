@@ -76,97 +76,83 @@ func requireNoDirExists(t *testing.T, dirPath string) {
 }
 
 func TestInitExecuteFlows(t *testing.T) {
+	// All inputs are provided via flags to avoid interactive prompts
 	cases := []struct {
 		name                string
 		projectNameFlag     string
 		templateIDFlag      uint32
 		workflowNameFlag    string
 		rpcURLFlag          string
-		mockResponses       []string
 		expectProjectDirRel string
 		expectWorkflowName  string
 		expectTemplateFiles []string
 	}{
 		{
-			name:             "explicit project, default template via prompt, custom workflow via prompt",
-			projectNameFlag:  "myproj",
-			templateIDFlag:   0,
-			workflowNameFlag: "",
-			rpcURLFlag:       "",
-			// "" (language default -> Golang), "" (workflow default -> PoR), "" (RPC URL accept default), "myworkflow"
-			mockResponses:       []string{"", "", "", "myworkflow"},
+			name:                "Go PoR template with all flags",
+			projectNameFlag:     "myproj",
+			templateIDFlag:      1, // Golang PoR
+			workflowNameFlag:    "myworkflow",
+			rpcURLFlag:          "https://sepolia.example/rpc",
 			expectProjectDirRel: "myproj",
 			expectWorkflowName:  "myworkflow",
 			expectTemplateFiles: GetTemplateFileListGo(),
 		},
 		{
-			name:             "only project, default template+workflow via prompt",
-			projectNameFlag:  "alpha",
-			templateIDFlag:   0,
-			workflowNameFlag: "",
-			rpcURLFlag:       "",
-			// defaults to PoR -> include extra "" for RPC URL
-			mockResponses:       []string{"", "", "", "default-wf"},
+			name:                "Go HelloWorld template with all flags",
+			projectNameFlag:     "alpha",
+			templateIDFlag:      2, // Golang HelloWorld
+			workflowNameFlag:    "default-wf",
+			rpcURLFlag:          "",
 			expectProjectDirRel: "alpha",
 			expectWorkflowName:  "default-wf",
 			expectTemplateFiles: GetTemplateFileListGo(),
 		},
 		{
-			name:             "no flags: prompt project, blank template, prompt workflow",
-			projectNameFlag:  "",
-			templateIDFlag:   0,
-			workflowNameFlag: "",
-			rpcURLFlag:       "",
-			// "projX" (project), "1" (pick Golang), "2" (pick HelloWorld/blank), "workflow-X" (name)
-			// No RPC prompt here since PoR was NOT selected
-			mockResponses:       []string{"projX", "1", "2", "", "workflow-X"},
+			name:                "Go HelloWorld with different project name",
+			projectNameFlag:     "projX",
+			templateIDFlag:      2, // Golang HelloWorld
+			workflowNameFlag:    "workflow-X",
+			rpcURLFlag:          "",
 			expectProjectDirRel: "projX",
 			expectWorkflowName:  "workflow-X",
 			expectTemplateFiles: GetTemplateFileListGo(),
 		},
 		{
-			name:             "workflow-name flag only, default template, no workflow prompt",
-			projectNameFlag:  "projFlag",
-			templateIDFlag:   0,
-			workflowNameFlag: "flagged-wf",
-			rpcURLFlag:       "",
-			// defaults to PoR → include RPC URL accept
-			mockResponses:       []string{"", "", ""},
+			name:                "Go PoR with workflow flag",
+			projectNameFlag:     "projFlag",
+			templateIDFlag:      1, // Golang PoR
+			workflowNameFlag:    "flagged-wf",
+			rpcURLFlag:          "https://sepolia.example/rpc",
 			expectProjectDirRel: "projFlag",
 			expectWorkflowName:  "flagged-wf",
 			expectTemplateFiles: GetTemplateFileListGo(),
 		},
 		{
-			name:                "template-id flag only, no template prompt",
+			name:                "Go HelloWorld template by ID",
 			projectNameFlag:     "tplProj",
-			templateIDFlag:      2,
-			workflowNameFlag:    "",
+			templateIDFlag:      2, // Golang HelloWorld
+			workflowNameFlag:    "workflow-Tpl",
 			rpcURLFlag:          "",
-			mockResponses:       []string{"workflow-Tpl"},
 			expectProjectDirRel: "tplProj",
 			expectWorkflowName:  "workflow-Tpl",
 			expectTemplateFiles: GetTemplateFileListGo(),
 		},
 		{
-			name:             "PoR template via flag with rpc-url provided (skips RPC prompt)",
-			projectNameFlag:  "porWithFlag",
-			templateIDFlag:   1, // Golang PoR
-			workflowNameFlag: "",
-			rpcURLFlag:       "https://sepolia.example/rpc",
-			// Only needs a workflow name prompt
-			mockResponses:       []string{"por-wf-01"},
+			name:                "Go PoR template with rpc-url",
+			projectNameFlag:     "porWithFlag",
+			templateIDFlag:      1, // Golang PoR
+			workflowNameFlag:    "por-wf-01",
+			rpcURLFlag:          "https://sepolia.example/rpc",
 			expectProjectDirRel: "porWithFlag",
 			expectWorkflowName:  "por-wf-01",
 			expectTemplateFiles: GetTemplateFileListGo(),
 		},
 		{
-			name:             "TS template with rpc-url provided (flag ignored; no RPC prompt needed)",
-			projectNameFlag:  "tsWithRpcFlag",
-			templateIDFlag:   3, // TypeScript HelloWorld
-			workflowNameFlag: "",
-			rpcURLFlag:       "https://sepolia.example/rpc",
-			// Just the workflow name prompt
-			mockResponses:       []string{"ts-wf-flag"},
+			name:                "TS HelloWorld template with rpc-url (ignored)",
+			projectNameFlag:     "tsWithRpcFlag",
+			templateIDFlag:      3, // TypeScript HelloWorld
+			workflowNameFlag:    "ts-wf-flag",
+			rpcURLFlag:          "https://sepolia.example/rpc",
 			expectProjectDirRel: "tsWithRpcFlag",
 			expectWorkflowName:  "ts-wf-flag",
 			expectTemplateFiles: GetTemplateFileListTS(),
@@ -222,8 +208,8 @@ func TestInsideExistingProjectAddsWorkflow(t *testing.T) {
 
 	inputs := Inputs{
 		ProjectName:  "",
-		TemplateID:   2,
-		WorkflowName: "",
+		TemplateID:   2, // Golang HelloWorld
+		WorkflowName: "wf-inside-existing-project",
 	}
 
 	h := newHandler(sim.NewRuntimeContext())
@@ -254,7 +240,7 @@ func TestInitWithTypescriptTemplateSkipsGoScaffold(t *testing.T) {
 	inputs := Inputs{
 		ProjectName:  "tsProj",
 		TemplateID:   3, // TypeScript template
-		WorkflowName: "",
+		WorkflowName: "ts-workflow-01",
 	}
 
 	h := newHandler(sim.NewRuntimeContext())
@@ -291,8 +277,8 @@ func TestInsideExistingProjectAddsTypescriptWorkflowSkipsGoScaffold(t *testing.T
 
 	inputs := Inputs{
 		ProjectName:  "",
-		TemplateID:   3,
-		WorkflowName: "",
+		TemplateID:   3, // TypeScript HelloWorld
+		WorkflowName: "ts-wf-existing",
 	}
 
 	h := newHandler(sim.NewRuntimeContext())
