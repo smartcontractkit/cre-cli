@@ -59,6 +59,13 @@ func New(runtimeCtx *runtime.Context) *cobra.Command {
 	return cmd
 }
 
+// Run executes the login flow directly without going through Cobra.
+// This is useful for prompting login from other commands when auth is required.
+func Run(runtimeCtx *runtime.Context) error {
+	h := newHandler(runtimeCtx)
+	return h.execute()
+}
+
 type handler struct {
 	environmentSet   *environments.EnvironmentSet
 	log              *zerolog.Logger

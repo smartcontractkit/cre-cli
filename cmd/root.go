@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/huh"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -151,7 +152,39 @@ func newRootCommand() *cobra.Command {
 					if showSpinner {
 						spinner.Stop()
 					}
-					return fmt.Errorf("authentication required: %w", err)
+
+					// Prompt user to login
+					ui.Line()
+					ui.Warning("You are not logged in")
+					ui.Line()
+
+					var runLogin bool
+					confirmForm := huh.NewForm(
+						huh.NewGroup(
+							huh.NewConfirm().
+								Title("Would you like to login now?").
+								Affirmative("Yes, login").
+								Negative("No, cancel").
+								Value(&runLogin),
+						),
+					).WithTheme(ui.ChainlinkTheme())
+
+					if formErr := confirmForm.Run(); formErr != nil {
+						return fmt.Errorf("authentication required: %w", err)
+					}
+
+					if !runLogin {
+						return fmt.Errorf("authentication required: %w", err)
+					}
+
+					// Run login flow
+					ui.Line()
+					if loginErr := login.Run(runtimeContext); loginErr != nil {
+						return fmt.Errorf("login failed: %w", loginErr)
+					}
+
+					// Exit after successful login - user can re-run their command
+					os.Exit(0)
 				}
 
 				// Check if organization is ungated for commands that require it
