@@ -91,6 +91,12 @@
     to login into your cre account, then:
   {{styleCode "$ cre init"}}
     to create your first cre project.
+{{- if needsDeployAccess}}
+
+🔑 Ready to deploy? Run:
+  $ cre account access
+    to request deployment access.
+{{- end}}
 
 {{styleSection "Need more help?"}}
   Visit {{styleURL "https://docs.chain.link/cre"}}
