@@ -24,6 +24,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
+	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
 var (
@@ -64,6 +65,7 @@ type handler struct {
 	lastPKCEVerifier string
 	lastState        string
 	retryCount       int
+	spinner          *ui.Spinner
 }
 
 const maxOrgNotFoundRetries = 3
@@ -72,33 +74,57 @@ func newHandler(ctx *runtime.Context) *handler {
 	return &handler{
 		log:            ctx.Logger,
 		environmentSet: ctx.EnvironmentSet,
+		spinner:        ui.NewSpinner(),
 	}
 }
 
 func (h *handler) execute() error {
+	// Welcome message
+	ui.Title("CRE Login")
+	ui.Line()
+	ui.Dim("Authenticate with your Chainlink account")
+	ui.Line()
+
 	code, err := h.startAuthFlow()
 	if err != nil {
+		h.spinner.StopAll()
 		return err
 	}
 
+	h.spinner.Update("Exchanging authorization code...")
 	tokenSet, err := h.exchangeCodeForTokens(context.Background(), code)
 	if err != nil {
+		h.spinner.StopAll()
 		h.log.Error().Err(err).Msg("code exchange failed")
 		return err
 	}
 
+	h.spinner.Update("Saving credentials...")
 	if err := credentials.SaveCredentials(tokenSet); err != nil {
+		h.spinner.StopAll()
 		h.log.Error().Err(err).Msg("failed to save credentials")
 		return err
 	}
 
-	fmt.Println("Login completed successfully")
-	fmt.Println("To get started, run: cre init")
+	h.spinner.Stop()
+	ui.Line()
+	ui.Success("Login completed successfully!")
+	ui.Line()
+
+	// Show next steps in a styled box
+	nextSteps := ui.RenderBold("Next steps:") + "\n" +
+		"  " + ui.RenderCommand("cre init") + "  Create a new CRE project\n" +
+		"  " + ui.RenderCommand("cre whoami") + "  View your account info"
+	ui.Box(nextSteps)
+	ui.Line()
+
 	return nil
 }
 
 func (h *handler) startAuthFlow() (string, error) {
 	codeCh := make(chan string, 1)
+
+	h.spinner.Start("Preparing authentication...")
 
 	server, listener, err := h.setupServer(codeCh)
 	if err != nil {
@@ -124,9 +150,20 @@ func (h *handler) startAuthFlow() (string, error) {
 	h.lastState = randomState()
 
 	authURL := h.buildAuthURL(challenge, h.lastState)
-	fmt.Printf("Opening browser to %s\n", authURL)
+
+	h.spinner.Update("Opening browser...")
+
 	if err := openBrowser(authURL, rt.GOOS); err != nil {
-		h.log.Warn().Err(err).Msg("could not open browser, please navigate manually")
+		// Browser couldn't open - stop spinner and show manual instructions
+		h.spinner.Stop()
+		ui.Warning("Could not open browser automatically")
+		ui.Line()
+		ui.Step("Please open this URL in your browser:")
+		ui.URL(authURL)
+		ui.Line()
+		h.spinner.Start("Waiting for authentication...")
+	} else {
+		h.spinner.Update("Waiting for authentication in browser...")
 	}
 
 	select {
@@ -182,7 +219,7 @@ func (h *handler) callbackHandler(codeCh chan string) http.HandlerFunc {
 				// Build the new auth URL for redirect
 				authURL := h.buildAuthURL(challenge, h.lastState)
 
-				fmt.Printf("Your organization is being created, please wait (attempt %d/%d)...\n", h.retryCount, maxOrgNotFoundRetries)
+				h.spinner.Update(fmt.Sprintf("Organization setup in progress (attempt %d/%d)...", h.retryCount, maxOrgNotFoundRetries))
 				h.serveWaitingPage(w, authURL)
 				return
 			}
