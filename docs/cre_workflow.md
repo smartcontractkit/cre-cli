@@ -31,6 +31,7 @@ cre workflow [optional flags]
 * [cre workflow activate](cre_workflow_activate.md)	 - Activates workflow on the Workflow Registry contract
 * [cre workflow delete](cre_workflow_delete.md)	 - Deletes all versions of a workflow from the Workflow Registry
 * [cre workflow deploy](cre_workflow_deploy.md)	 - Deploys a workflow to the Workflow Registry contract
+* [cre workflow generate-id](cre_workflow_generate-id.md)	 - Display the workflow ID
 * [cre workflow pause](cre_workflow_pause.md)	 - Pauses workflow on the Workflow Registry contract
 * [cre workflow simulate](cre_workflow_simulate.md)	 - Simulates a workflow
 
