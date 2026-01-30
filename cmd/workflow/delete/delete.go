@@ -23,6 +23,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/types"
+	"github.com/smartcontractkit/cre-cli/internal/ui"
 	"github.com/smartcontractkit/cre-cli/internal/validation"
 )
 
@@ -150,24 +151,24 @@ func (h *handler) Execute() error {
 		return fmt.Errorf("failed to get workflow list: %w", err)
 	}
 	if len(allWorkflows) == 0 {
-		fmt.Printf("No workflows found for name: %s\n", workflowName)
+		ui.Warning(fmt.Sprintf("No workflows found for name: %s", workflowName))
 		return nil
 	}
 
 	// Note: The way deploy is set up, there will only ever be one workflow in the command for now
 	h.runtimeContext.Workflow.ID = hex.EncodeToString(allWorkflows[0].WorkflowId[:])
 
-	fmt.Printf("Found %d workflow(s) to delete for name: %s\n", len(allWorkflows), workflowName)
+	ui.Bold(fmt.Sprintf("Found %d workflow(s) to delete for name: %s", len(allWorkflows), workflowName))
 	for i, wf := range allWorkflows {
 		status := map[uint8]string{0: "ACTIVE", 1: "PAUSED"}[wf.Status]
-		fmt.Printf("   %d. Workflow\n", i+1)
-		fmt.Printf("      ID:              %s\n", hex.EncodeToString(wf.WorkflowId[:]))
-		fmt.Printf("      Owner:           %s\n", wf.Owner.Hex())
-		fmt.Printf("      DON Family:      %s\n", wf.DonFamily)
-		fmt.Printf("      Tag:             %s\n", wf.Tag)
-		fmt.Printf("      Binary URL:      %s\n", wf.BinaryUrl)
-		fmt.Printf("      Workflow Status: %s\n", status)
-		fmt.Println("")
+		ui.Print(fmt.Sprintf("   %d. Workflow", i+1))
+		ui.Dim(fmt.Sprintf("      ID:              %s", hex.EncodeToString(wf.WorkflowId[:])))
+		ui.Dim(fmt.Sprintf("      Owner:           %s", wf.Owner.Hex()))
+		ui.Dim(fmt.Sprintf("      DON Family:      %s", wf.DonFamily))
+		ui.Dim(fmt.Sprintf("      Tag:             %s", wf.Tag))
+		ui.Dim(fmt.Sprintf("      Binary URL:      %s", wf.BinaryUrl))
+		ui.Dim(fmt.Sprintf("      Workflow Status: %s", status))
+		ui.Line()
 	}
 
 	shouldDeleteWorkflow, err := h.shouldDeleteWorkflow(h.inputs.SkipConfirmation, workflowName)
@@ -175,11 +176,11 @@ func (h *handler) Execute() error {
 		return err
 	}
 	if !shouldDeleteWorkflow {
-		fmt.Println("Workflow deletion canceled")
+		ui.Warning("Workflow deletion canceled")
 		return nil
 	}
 
-	fmt.Printf("Deleting %d workflow(s)...\n", len(allWorkflows))
+	ui.Dim(fmt.Sprintf("Deleting %d workflow(s)...", len(allWorkflows)))
 	var errs []error
 	for _, wf := range allWorkflows {
 		txOut, err := h.wrc.DeleteWorkflow(wf.WorkflowId)
@@ -193,24 +194,24 @@ func (h *handler) Execute() error {
 		}
 		switch txOut.Type {
 		case client.Regular:
-			fmt.Println("Transaction confirmed")
-			fmt.Printf("View on explorer: \033]8;;%s/tx/%s\033\\%s/tx/%s\033]8;;\033\\\n", h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash, h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash)
-			fmt.Printf("[OK] Deleted workflow ID: %s\n", hex.EncodeToString(wf.WorkflowId[:]))
+			ui.Success("Transaction confirmed")
+			ui.URL(fmt.Sprintf("%s/tx/%s", h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash))
+			ui.Success(fmt.Sprintf("Deleted workflow ID: %s", hex.EncodeToString(wf.WorkflowId[:])))
 
 		case client.Raw:
-			fmt.Println("")
-			fmt.Println("MSIG workflow deletion transaction prepared!")
-			fmt.Println("")
-			fmt.Println("Next steps:")
-			fmt.Println("")
-			fmt.Println("   1. Submit the following transaction on the target chain:")
-			fmt.Printf("      Chain:   %s\n", h.inputs.WorkflowRegistryContractChainName)
-			fmt.Printf("      Contract Address: %s\n", txOut.RawTx.To)
-			fmt.Println("")
-			fmt.Println("   2. Use the following transaction data:")
-			fmt.Println("")
-			fmt.Printf("      %x\n", txOut.RawTx.Data)
-			fmt.Println("")
+			ui.Line()
+			ui.Success("MSIG workflow deletion transaction prepared!")
+			ui.Line()
+			ui.Bold("Next steps:")
+			ui.Line()
+			ui.Print("   1. Submit the following transaction on the target chain:")
+			ui.Dim(fmt.Sprintf("      Chain:            %s", h.inputs.WorkflowRegistryContractChainName))
+			ui.Dim(fmt.Sprintf("      Contract Address: %s", txOut.RawTx.To))
+			ui.Line()
+			ui.Print("   2. Use the following transaction data:")
+			ui.Line()
+			ui.Code(fmt.Sprintf("      %x", txOut.RawTx.Data))
+			ui.Line()
 
 		case client.Changeset:
 			chainSelector, err := settings.GetChainSelectorByChainName(h.environmentSet.WorkflowRegistryChainName)
@@ -219,7 +220,7 @@ func (h *handler) Execute() error {
 			}
 			mcmsConfig, err := settings.GetMCMSConfig(h.settings, chainSelector)
 			if err != nil {
-				fmt.Println("\nMCMS config not found or is incorrect, skipping MCMS config in changeset")
+				ui.Warning("MCMS config not found or is incorrect, skipping MCMS config in changeset")
 			}
 			cldSettings := h.settings.CLDSettings
 			changesets := []types.Changeset{
@@ -255,7 +256,7 @@ func (h *handler) Execute() error {
 	if len(errs) > 0 {
 		return fmt.Errorf("failed to delete some workflows: %w", errors.Join(errs...))
 	}
-	fmt.Println("Workflows deleted successfully.")
+	ui.Success("Workflows deleted successfully")
 	return nil
 }
 
@@ -289,7 +290,9 @@ func (h *handler) askForWorkflowDeletionConfirmation(expectedWorkflowName string
 }
 
 func (h *handler) displayWorkflowDetails() {
-	fmt.Printf("\nDeleting Workflow : \t %s\n", h.inputs.WorkflowName)
-	fmt.Printf("Target : \t\t %s\n", h.settings.User.TargetName)
-	fmt.Printf("Owner Address : \t %s\n\n", h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress)
+	ui.Line()
+	ui.Title(fmt.Sprintf("Deleting Workflow: %s", h.inputs.WorkflowName))
+	ui.Dim(fmt.Sprintf("Target:        %s", h.settings.User.TargetName))
+	ui.Dim(fmt.Sprintf("Owner Address: %s", h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress))
+	ui.Line()
 }
