@@ -165,8 +165,8 @@ func (h *handler) Execute(inputs Inputs) error {
 		return fmt.Errorf("handler inputs not validated")
 	}
 
-	fmt.Println()
-	fmt.Println(ui.TitleStyle.Render("Create a new CRE project"))
+	ui.Line()
+	ui.Title("Create a new CRE project")
 
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -220,7 +220,7 @@ func (h *handler) Execute(inputs Inputs) error {
 
 			if projName == "" {
 				projName = defaultName
-				fmt.Println(ui.DimStyle.Render("  Using default: " + defaultName))
+				ui.Dim("  Using default: " + defaultName)
 			}
 		}
 
@@ -351,7 +351,7 @@ func (h *handler) Execute(inputs Inputs) error {
 
 				if rpcURL == "" {
 					rpcURL = defaultRPC
-					fmt.Println(ui.DimStyle.Render("  Using default RPC URL"))
+					ui.Dim("  Using default RPC URL")
 				}
 			}
 			repl["EthSepoliaRpcUrl"] = rpcURL
@@ -360,9 +360,9 @@ func (h *handler) Execute(inputs Inputs) error {
 			return e
 		}
 		if selectedWorkflowTemplate.Name == PoRTemplate {
-			fmt.Println(ui.DimStyle.Render(fmt.Sprintf("  RPC set to %s (editable in %s)",
+			ui.Dim(fmt.Sprintf("  RPC set to %s (editable in %s)",
 				rpcURL,
-				filepath.Join(filepath.Base(projectRoot), constants.DefaultProjectSettingsFileName))))
+				filepath.Join(filepath.Base(projectRoot), constants.DefaultProjectSettingsFileName)))
 		}
 		if _, e := settings.GenerateProjectEnvFile(projectRoot, os.Stdin); e != nil {
 			return e
@@ -396,7 +396,7 @@ func (h *handler) Execute(inputs Inputs) error {
 
 		if workflowName == "" {
 			workflowName = defaultName
-			fmt.Println(ui.DimStyle.Render("  Using default: " + defaultName))
+			ui.Dim("  Using default: " + defaultName)
 		}
 	}
 
