@@ -187,7 +187,7 @@ func (w *telemetryWriter) handleWorkflowEvent(telLog TelemetryLog, eventType str
 				return
 			}
 			timestamp := FormatTimestamp(workflowEvent.Timestamp)
-			w.simLogger.PrintTimestampedLog(timestamp, "WORKFLOW", "WorkflowExecutionStarted", ColorMagenta)
+			w.simLogger.PrintTimestampedLog(timestamp, "WORKFLOW", "WorkflowExecutionStarted", StyleMagenta)
 
 			// Display trigger information
 			if workflowEvent.TriggerID != "" {
@@ -258,13 +258,13 @@ func (w *telemetryWriter) formatUserLogs(logs *pb.UserLogs) {
 		// Format the log message
 		level := GetLogLevel(logLine.Message)
 		msg := CleanLogMessage(logLine.Message)
-		levelColor := GetColor(level)
+		levelStyle := GetStyle(level)
 
 		// Highlight level keywords in the message
-		highlightedMsg := HighlightLogLevels(msg, levelColor)
+		highlightedMsg := HighlightLogLevels(msg, levelStyle)
 
 		// Always use current timestamp for consistency with other logs
-		w.simLogger.PrintTimestampedLog(time.Now().Format("2006-01-02T15:04:05Z"), "USER LOG", highlightedMsg, ColorBrightCyan)
+		w.simLogger.PrintTimestampedLog(time.Now().Format("2006-01-02T15:04:05Z"), "USER LOG", highlightedMsg, StyleBrightCyan)
 	}
 }
 

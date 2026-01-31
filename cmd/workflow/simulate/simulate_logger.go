@@ -2,13 +2,14 @@ package simulate
 
 import (
 	"fmt"
-	"os"
 	"reflect"
 	"regexp"
 	"strings"
 	"time"
 
-	"github.com/fatih/color"
+	"github.com/charmbracelet/lipgloss"
+
+	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
 // LogLevel represents the level of a simulation log
@@ -21,14 +22,14 @@ const (
 	LogLevelError   LogLevel = "ERROR"
 )
 
-// Color instances for consistent styling
+// Style instances for consistent styling (using Chainlink Blocks palette)
 var (
-	ColorBlue       = color.New(color.FgBlue)
-	ColorBrightCyan = color.New(color.FgCyan, color.Bold)
-	ColorYellow     = color.New(color.FgYellow)
-	ColorRed        = color.New(color.FgRed)
-	ColorGreen      = color.New(color.FgGreen)
-	ColorMagenta    = color.New(color.FgMagenta)
+	StyleBlue       = lipgloss.NewStyle().Foreground(lipgloss.Color(ui.ColorBlue500))
+	StyleBrightCyan = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(ui.ColorTeal400))
+	StyleYellow     = lipgloss.NewStyle().Foreground(lipgloss.Color(ui.ColorYellow400))
+	StyleRed        = lipgloss.NewStyle().Foreground(lipgloss.Color(ui.ColorRed400))
+	StyleGreen      = lipgloss.NewStyle().Foreground(lipgloss.Color(ui.ColorGreen400))
+	StyleMagenta    = lipgloss.NewStyle().Foreground(lipgloss.Color(ui.ColorPurple400))
 )
 
 // SimulationLogger provides an easy interface for formatted simulation logs
@@ -38,9 +39,6 @@ type SimulationLogger struct {
 
 // NewSimulationLogger creates a new simulation logger with verbosity control
 func NewSimulationLogger(verbosity bool) *SimulationLogger {
-	// Smart color detection for end users
-	enableColors := shouldEnableColors()
-	color.NoColor = !enableColors
 	return &SimulationLogger{verbosity: verbosity}
 }
 
@@ -86,50 +84,55 @@ func (s *SimulationLogger) formatSimulationLog(level LogLevel, message string, f
 		}
 	}
 
-	// Get color for the log level
-	var levelColor *color.Color
+	// Get style for the log level
+	var levelStyle lipgloss.Style
 	switch level {
 	case LogLevelDebug:
-		levelColor = ColorBlue
+		levelStyle = StyleBlue
 	case LogLevelInfo:
-		levelColor = ColorBrightCyan
+		levelStyle = StyleBrightCyan
 	case LogLevelWarning:
-		levelColor = ColorYellow
+		levelStyle = StyleYellow
 	case LogLevelError:
-		levelColor = ColorRed
+		levelStyle = StyleRed
 	default:
-		levelColor = ColorBrightCyan
+		levelStyle = StyleBrightCyan
 	}
 
-	// Format with timestamp and level-specific color
-	ColorBlue.Printf("%s ", timestamp)
-	levelColor.Printf("[SIMULATION]")
-	fmt.Printf(" %s\n", formattedMessage)
+	// Format with timestamp and level-specific style
+	fmt.Printf("%s %s %s\n",
+		StyleBlue.Render(timestamp),
+		levelStyle.Render("[SIMULATION]"),
+		formattedMessage)
 }
 
-// PrintTimestampedLog prints a log with timestamp and colored prefix
-func (s *SimulationLogger) PrintTimestampedLog(timestamp, prefix, message string, prefixColor *color.Color) {
-	ColorBlue.Printf("%s ", timestamp)
-	prefixColor.Printf("[%s]", prefix)
-	fmt.Printf(" %s\n", message)
+// PrintTimestampedLog prints a log with timestamp and styled prefix
+func (s *SimulationLogger) PrintTimestampedLog(timestamp, prefix, message string, prefixStyle lipgloss.Style) {
+	fmt.Printf("%s %s %s\n",
+		StyleBlue.Render(timestamp),
+		prefixStyle.Render("["+prefix+"]"),
+		message)
 }
 
-// PrintTimestampedLogWithStatus prints a log with timestamp, prefix, and colored status
+// PrintTimestampedLogWithStatus prints a log with timestamp, prefix, and styled status
 func (s *SimulationLogger) PrintTimestampedLogWithStatus(timestamp, prefix, message, status string) {
-	ColorBlue.Printf("%s ", timestamp)
-	ColorMagenta.Printf("[%s]", prefix)
-	fmt.Printf(" %s", message)
-	statusColor := GetColor(status)
-	statusColor.Printf("%s\n", status)
+	statusStyle := GetStyle(status)
+	fmt.Printf("%s %s %s%s\n",
+		StyleBlue.Render(timestamp),
+		StyleMagenta.Render("["+prefix+"]"),
+		message,
+		statusStyle.Render(status))
 }
 
-// PrintStepLog prints a capability step log with timestamp and colored status
+// PrintStepLog prints a capability step log with timestamp and styled status
 func (s *SimulationLogger) PrintStepLog(timestamp, component, stepRef, capability, status string) {
-	ColorBlue.Printf("%s ", timestamp)
-	ColorBrightCyan.Printf("[%s]", component)
-	fmt.Printf("       step[%s]   Capability: %s - ", stepRef, capability)
-	statusColor := GetColor(status)
-	statusColor.Printf("%s\n", status)
+	statusStyle := GetStyle(status)
+	fmt.Printf("%s %s       step[%s]   Capability: %s - %s\n",
+		StyleBlue.Render(timestamp),
+		StyleBrightCyan.Render("["+component+"]"),
+		stepRef,
+		capability,
+		statusStyle.Render(status))
 }
 
 // PrintWorkflowMetadata prints workflow metadata with proper indentation
@@ -189,33 +192,33 @@ func isEmptyValue(v interface{}) bool {
 	}
 }
 
-// GetColor returns the appropriate color for a given status/level
-func GetColor(status string) *color.Color {
+// GetStyle returns the appropriate style for a given status/level
+func GetStyle(status string) lipgloss.Style {
 	switch strings.ToUpper(status) {
 	case "SUCCESS":
-		return ColorGreen
+		return StyleGreen
 	case "FAILED", "ERROR", "ERRORED":
-		return ColorRed
+		return StyleRed
 	case "WARNING", "WARN":
-		return ColorYellow
+		return StyleYellow
 	case "DEBUG":
-		return ColorBlue
+		return StyleBlue
 	case "INFO":
-		return ColorBrightCyan
+		return StyleBrightCyan
 	case "WORKFLOW": // Added for workflow events
-		return ColorMagenta
+		return StyleMagenta
 	default:
-		return ColorBrightCyan
+		return StyleBrightCyan
 	}
 }
 
 // HighlightLogLevels highlights INFO, WARN, ERROR in log messages
-func HighlightLogLevels(msg string, levelColor *color.Color) string {
-	// Replace level keywords with colored versions
-	msg = strings.ReplaceAll(msg, "level=INFO", levelColor.Sprint("level=INFO"))
-	msg = strings.ReplaceAll(msg, "level=WARN", levelColor.Sprint("level=WARN"))
-	msg = strings.ReplaceAll(msg, "level=ERROR", levelColor.Sprint("level=ERROR"))
-	msg = strings.ReplaceAll(msg, "level=DEBUG", levelColor.Sprint("level=DEBUG"))
+func HighlightLogLevels(msg string, levelStyle lipgloss.Style) string {
+	// Replace level keywords with styled versions
+	msg = strings.ReplaceAll(msg, "level=INFO", levelStyle.Render("level=INFO"))
+	msg = strings.ReplaceAll(msg, "level=WARN", levelStyle.Render("level=WARN"))
+	msg = strings.ReplaceAll(msg, "level=ERROR", levelStyle.Render("level=ERROR"))
+	msg = strings.ReplaceAll(msg, "level=DEBUG", levelStyle.Render("level=DEBUG"))
 	return msg
 }
 
@@ -297,27 +300,3 @@ func MapCapabilityStatus(status string) string {
 	}
 }
 
-// shouldEnableColors determines if colors should be enabled based on environment
-func shouldEnableColors() bool {
-	// Check if explicitly disabled
-	if os.Getenv("NO_COLOR") != "" {
-		return false
-	}
-
-	// Check if explicitly enabled
-	if os.Getenv("FORCE_COLOR") != "" {
-		return true
-	}
-
-	// Check if we're in a CI environment (usually no colors)
-	ciEnvs := []string{"CI", "GITHUB_ACTIONS", "GITLAB_CI", "JENKINS", "TRAVIS", "CIRCLECI"}
-	for _, env := range ciEnvs {
-		if os.Getenv(env) != "" {
-			return false
-		}
-	}
-
-	// Default to true - always enable colors for better user experience
-	// Users can disable with --no-color or NO_COLOR=1
-	return true
-}
