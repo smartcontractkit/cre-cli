@@ -3,7 +3,6 @@ package simulate
 import (
 	"encoding/base64"
 	"encoding/json"
-	"fmt"
 	"strings"
 	"time"
 
@@ -11,6 +10,8 @@ import (
 
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	pb "github.com/smartcontractkit/chainlink-protos/workflows/go/events"
+
+	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
 // entity types for clarity and organization
@@ -191,7 +192,7 @@ func (w *telemetryWriter) handleWorkflowEvent(telLog TelemetryLog, eventType str
 
 			// Display trigger information
 			if workflowEvent.TriggerID != "" {
-				fmt.Printf("  TriggerID: %s\n", workflowEvent.TriggerID)
+				ui.Printf("  TriggerID: %s\n", workflowEvent.TriggerID)
 			}
 			// Display workflow metadata if available
 			w.simLogger.PrintWorkflowMetadata(workflowEvent.M)

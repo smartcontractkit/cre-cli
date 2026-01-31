@@ -233,7 +233,7 @@ func (h *handler) Execute(inputs Inputs) error {
 	if err == nil {
 		envPath := filepath.Join(projectRoot, constants.DefaultEnvFileName)
 		if !h.pathExists(envPath) {
-			if _, err := settings.GenerateProjectEnvFile(projectRoot, os.Stdin); err != nil {
+			if _, err := settings.GenerateProjectEnvFile(projectRoot); err != nil {
 				return err
 			}
 		}
@@ -364,7 +364,7 @@ func (h *handler) Execute(inputs Inputs) error {
 				rpcURL,
 				filepath.Join(filepath.Base(projectRoot), constants.DefaultProjectSettingsFileName)))
 		}
-		if _, e := settings.GenerateProjectEnvFile(projectRoot, os.Stdin); e != nil {
+		if _, e := settings.GenerateProjectEnvFile(projectRoot); e != nil {
 			return e
 		}
 	}

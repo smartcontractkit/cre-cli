@@ -37,6 +37,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/types"
+	"github.com/smartcontractkit/cre-cli/internal/ui"
 	"github.com/smartcontractkit/cre-cli/internal/validation"
 )
 
@@ -195,27 +196,27 @@ func (h *Handler) PackAllowlistRequestTxData(reqDigest [32]byte, duration time.D
 }
 
 func (h *Handler) LogMSIGNextSteps(txData string, digest [32]byte, bundlePath string) error {
-	fmt.Println("")
-	fmt.Println("MSIG transaction prepared!")
-	fmt.Println("")
-	fmt.Println("Next steps:")
-	fmt.Println("")
-	fmt.Println("   1. Submit the following transaction on the target chain:")
-	fmt.Printf("      Chain:            %s\n", h.EnvironmentSet.WorkflowRegistryChainName)
-	fmt.Printf("      Contract Address: %s\n", h.EnvironmentSet.WorkflowRegistryAddress)
-	fmt.Println("")
-	fmt.Println("   2. Use the following transaction data:")
-	fmt.Println("")
-	fmt.Printf("      %s\n", txData)
-	fmt.Println("")
-	fmt.Println("   3. Save this bundle file; you will need it on the second run:")
-	fmt.Printf("      Bundle Path: %s\n", bundlePath)
-	fmt.Printf("      Digest:      0x%s\n", hex.EncodeToString(digest[:]))
-	fmt.Println("")
-	fmt.Println("   4. After the transaction is finalized on-chain, run:")
-	fmt.Println("")
-	fmt.Println("      cre secrets execute", bundlePath, "--unsigned")
-	fmt.Println("")
+	ui.Line()
+	ui.Success("MSIG transaction prepared!")
+	ui.Line()
+	ui.Bold("Next steps:")
+	ui.Line()
+	ui.Print("   1. Submit the following transaction on the target chain:")
+	ui.Printf("      Chain:            %s\n", h.EnvironmentSet.WorkflowRegistryChainName)
+	ui.Printf("      Contract Address: %s\n", h.EnvironmentSet.WorkflowRegistryAddress)
+	ui.Line()
+	ui.Print("   2. Use the following transaction data:")
+	ui.Line()
+	ui.Code(txData)
+	ui.Line()
+	ui.Print("   3. Save this bundle file; you will need it on the second run:")
+	ui.Printf("      Bundle Path: %s\n", bundlePath)
+	ui.Printf("      Digest:      0x%s\n", hex.EncodeToString(digest[:]))
+	ui.Line()
+	ui.Print("   4. After the transaction is finalized on-chain, run:")
+	ui.Line()
+	ui.Code(fmt.Sprintf("cre secrets execute %s --unsigned", bundlePath))
+	ui.Line()
 	return nil
 }
 
@@ -352,7 +353,7 @@ func (h *Handler) Execute(
 	duration time.Duration,
 	ownerType string,
 ) error {
-	fmt.Println("Verifying ownership...")
+	ui.Dim("Verifying ownership...")
 	if err := h.EnsureOwnerLinkedOrFail(); err != nil {
 		return err
 	}
@@ -433,7 +434,7 @@ func (h *Handler) Execute(
 	}
 
 	if txOut == nil && allowlisted {
-		fmt.Printf("Digest already allowlisted; proceeding to gateway POST: owner=%s, digest=0x%x\n", ownerAddr.Hex(), digest)
+		ui.Dim(fmt.Sprintf("Digest already allowlisted; proceeding to gateway POST: owner=%s, digest=0x%x", ownerAddr.Hex(), digest))
 		return gatewayPost()
 	}
 
@@ -451,9 +452,10 @@ func (h *Handler) Execute(
 
 	switch txOut.Type {
 	case client.Regular:
-		fmt.Println("Transaction confirmed")
-		fmt.Printf("Digest allowlisted; proceeding to gateway POST: owner=%s, digest=0x%x\n", ownerAddr.Hex(), digest)
-		fmt.Printf("View on explorer: \033]8;;%s/tx/%s\033\\%s/tx/%s\033]8;;\033\\\n", h.EnvironmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash, h.EnvironmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash)
+		ui.Success("Transaction confirmed")
+		ui.Dim(fmt.Sprintf("Digest allowlisted; proceeding to gateway POST: owner=%s, digest=0x%x", ownerAddr.Hex(), digest))
+		explorerURL := fmt.Sprintf("%s/tx/%s", h.EnvironmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash)
+		ui.URL(explorerURL)
 		return gatewayPost()
 	case client.Raw:
 		if err := SaveBundle(bundlePath, ub); err != nil {
@@ -472,7 +474,7 @@ func (h *Handler) Execute(
 		}
 		mcmsConfig, err := settings.GetMCMSConfig(h.Settings, chainSelector)
 		if err != nil {
-			fmt.Println("\nMCMS config not found or is incorrect, skipping MCMS config in changeset")
+			ui.Warning("MCMS config not found or is incorrect, skipping MCMS config in changeset")
 		}
 		cldSettings := h.Settings.CLDSettings
 		changesets := []types.Changeset{
@@ -546,11 +548,10 @@ func (h *Handler) ParseVaultGatewayResponse(method string, respBody []byte) erro
 				key, owner, ns = id.GetKey(), id.GetOwner(), id.GetNamespace()
 			}
 			if r.GetSuccess() {
-				fmt.Printf("Secret created: secret_id=%s, owner=%s, namespace=%s\n", key, owner, ns)
+				ui.Success(fmt.Sprintf("Secret created: secret_id=%s, owner=%s, namespace=%s", key, owner, ns))
 			} else {
-				fmt.Printf("Secret create failed: secret_id=%s owner=%s namespace=%s success=%t error=%s\n",
-					key, owner, ns, false, r.GetError(),
-				)
+				ui.Error(fmt.Sprintf("Secret create failed: secret_id=%s owner=%s namespace=%s error=%s",
+					key, owner, ns, r.GetError()))
 			}
 		}
 	case vaulttypes.MethodSecretsUpdate:
@@ -565,11 +566,10 @@ func (h *Handler) ParseVaultGatewayResponse(method string, respBody []byte) erro
 				key, owner, ns = id.GetKey(), id.GetOwner(), id.GetNamespace()
 			}
 			if r.GetSuccess() {
-				fmt.Printf("Secret updated: secret_id=%s, owner=%s, namespace=%s\n", key, owner, ns)
+				ui.Success(fmt.Sprintf("Secret updated: secret_id=%s, owner=%s, namespace=%s", key, owner, ns))
 			} else {
-				fmt.Printf("Secret update failed: secret_id=%s owner=%s namespace=%s success=%t error=%s\n",
-					key, owner, ns, false, r.GetError(),
-				)
+				ui.Error(fmt.Sprintf("Secret update failed: secret_id=%s owner=%s namespace=%s error=%s",
+					key, owner, ns, r.GetError()))
 			}
 		}
 	case vaulttypes.MethodSecretsDelete:
@@ -584,11 +584,10 @@ func (h *Handler) ParseVaultGatewayResponse(method string, respBody []byte) erro
 				key, owner, ns = id.GetKey(), id.GetOwner(), id.GetNamespace()
 			}
 			if r.GetSuccess() {
-				fmt.Printf("Secret deleted: secret_id=%s, owner=%s, namespace=%s\n", key, owner, ns)
+				ui.Success(fmt.Sprintf("Secret deleted: secret_id=%s, owner=%s, namespace=%s", key, owner, ns))
 			} else {
-				fmt.Printf("Secret delete failed: secret_id=%s owner=%s namespace=%s success=%t error=%s\n",
-					key, owner, ns, false, r.GetError(),
-				)
+				ui.Error(fmt.Sprintf("Secret delete failed: secret_id=%s owner=%s namespace=%s error=%s",
+					key, owner, ns, r.GetError()))
 			}
 		}
 	case vaulttypes.MethodSecretsList:
@@ -598,15 +597,13 @@ func (h *Handler) ParseVaultGatewayResponse(method string, respBody []byte) erro
 		}
 
 		if !p.GetSuccess() {
-			fmt.Printf("secret list failed: success=%t error=%s\n",
-				false, p.GetError(),
-			)
+			ui.Error(fmt.Sprintf("Secret list failed: error=%s", p.GetError()))
 			break
 		}
 
 		ids := p.GetIdentifiers()
 		if len(ids) == 0 {
-			fmt.Println("No secrets found")
+			ui.Dim("No secrets found")
 			break
 		}
 		for _, id := range ids {
@@ -614,7 +611,7 @@ func (h *Handler) ParseVaultGatewayResponse(method string, respBody []byte) erro
 			if id != nil {
 				key, owner, ns = id.GetKey(), id.GetOwner(), id.GetNamespace()
 			}
-			fmt.Printf("Secret identifier: secret_id=%s, owner=%s, namespace=%s\n", key, owner, ns)
+			ui.Print(fmt.Sprintf("Secret identifier: secret_id=%s, owner=%s, namespace=%s", key, owner, ns))
 		}
 	default:
 		// Unknown/unsupported method — don’t fail, just surface it explicitly
@@ -635,7 +632,7 @@ func (h *Handler) EnsureOwnerLinkedOrFail() error {
 		return fmt.Errorf("failed to check owner link status: %w", err)
 	}
 
-	fmt.Printf("Workflow owner link status: owner=%s, linked=%v\n", ownerAddr.Hex(), linked)
+	ui.Dim(fmt.Sprintf("Workflow owner link status: owner=%s, linked=%v", ownerAddr.Hex(), linked))
 
 	if linked {
 		// Owner is linked on contract, now verify it's linked to the current user's account
@@ -648,7 +645,7 @@ func (h *Handler) EnsureOwnerLinkedOrFail() error {
 			return fmt.Errorf("key %s is linked to another account. Please use a different owner address", ownerAddr.Hex())
 		}
 
-		fmt.Println("Key ownership verified")
+		ui.Success("Key ownership verified")
 		return nil
 	}
 
