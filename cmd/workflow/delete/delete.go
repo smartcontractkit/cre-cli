@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/charmbracelet/huh"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/jedib0t/go-pretty/v6/text"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -19,7 +19,6 @@ import (
 	cmdCommon "github.com/smartcontractkit/cre-cli/cmd/common"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
-	"github.com/smartcontractkit/cre-cli/internal/prompt"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/types"
@@ -273,16 +272,20 @@ func (h *handler) shouldDeleteWorkflow(skipConfirmation bool, workflowName strin
 }
 
 func (h *handler) askForWorkflowDeletionConfirmation(expectedWorkflowName string) (bool, error) {
-	promptWarning := fmt.Sprintf("Are you sure you want to delete the workflow '%s'?\n%s\n", expectedWorkflowName, text.FgRed.Sprint("This action cannot be undone."))
-	fmt.Println(promptWarning)
+	ui.Warning(fmt.Sprintf("Are you sure you want to delete the workflow '%s'?", expectedWorkflowName))
+	ui.Error("This action cannot be undone.")
+	ui.Line()
 
-	promptText := fmt.Sprintf("To confirm, type the workflow name: %s", expectedWorkflowName)
 	var result string
-	err := prompt.SimplePrompt(h.stdin, promptText, func(input string) error {
-		result = input
-		return nil
-	})
-	if err != nil {
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewInput().
+				Title(fmt.Sprintf("To confirm, type the workflow name: %s", expectedWorkflowName)).
+				Value(&result),
+		),
+	).WithTheme(ui.ChainlinkTheme())
+
+	if err := form.Run(); err != nil {
 		return false, fmt.Errorf("failed to get workflow name confirmation: %w", err)
 	}
 
