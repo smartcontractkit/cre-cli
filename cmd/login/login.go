@@ -7,11 +7,13 @@ import (
 	"embed"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"os/exec"
 	rt "runtime"
 	"strings"
@@ -19,6 +21,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
@@ -38,6 +41,9 @@ var (
 	// when a user doesn't belong to any organization during the auth flow.
 	// This typically happens during sign-up when the organization hasn't been created yet.
 	OrgMembershipErrorSubstring = "user does not belong to any organization"
+
+	// ErrUserCancelled is returned when the user cancels the login flow
+	ErrUserCancelled = "login cancelled by user"
 )
 
 //go:embed htmlPages/*.html
@@ -95,6 +101,11 @@ func (h *handler) execute() error {
 	code, err := h.startAuthFlow()
 	if err != nil {
 		h.spinner.StopAll()
+		if err.Error() == ErrUserCancelled {
+			ui.Line()
+			ui.Warning("Login cancelled")
+			return nil
+		}
 		return err
 	}
 
@@ -130,6 +141,7 @@ func (h *handler) execute() error {
 
 func (h *handler) startAuthFlow() (string, error) {
 	codeCh := make(chan string, 1)
+	cancelCh := make(chan struct{}, 1)
 
 	h.spinner.Start("Preparing authentication...")
 
@@ -158,24 +170,30 @@ func (h *handler) startAuthFlow() (string, error) {
 
 	authURL := h.buildAuthURL(challenge, h.lastState)
 
-	h.spinner.Update("Opening browser...")
+	h.spinner.Stop()
+	ui.Step("Opening browser to:")
+	ui.URL(authURL)
+	ui.Line()
 
 	if err := openBrowser(authURL, rt.GOOS); err != nil {
-		// Browser couldn't open - stop spinner and show manual instructions
-		h.spinner.Stop()
 		ui.Warning("Could not open browser automatically")
+		ui.Dim("Please open the URL above in your browser")
 		ui.Line()
-		ui.Step("Please open this URL in your browser:")
-		ui.URL(authURL)
-		ui.Line()
-		h.spinner.Start("Waiting for authentication...")
-	} else {
-		h.spinner.Update("Waiting for authentication in browser...")
 	}
+
+	h.spinner.Start("Waiting for authentication...")
+
+	// Start listening for escape key to cancel
+	go listenForEscape(cancelCh)
+
+	// Show cancel instruction
+	ui.Dim("Press Escape or Ctrl+C to cancel")
 
 	select {
 	case code := <-codeCh:
 		return code, nil
+	case <-cancelCh:
+		return "", errors.New(ErrUserCancelled)
 	case <-time.After(500 * time.Second):
 		return "", fmt.Errorf("timeout waiting for authorization code")
 	}
@@ -403,4 +421,39 @@ func randomState() string {
 		return fmt.Sprintf("%d", time.Now().UnixNano())
 	}
 	return base64.RawURLEncoding.EncodeToString(b)
+}
+
+// listenForEscape listens for Escape key or Ctrl+C and signals cancellation.
+// This runs in a goroutine and puts the terminal in raw mode to capture keypresses.
+func listenForEscape(cancelCh chan struct{}) {
+	// Check if stdin is a terminal
+	if !term.IsTerminal(int(os.Stdin.Fd())) {
+		return
+	}
+
+	// Save terminal state and put in raw mode
+	oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
+	if err != nil {
+		return
+	}
+	defer term.Restore(int(os.Stdin.Fd()), oldState)
+
+	buf := make([]byte, 3)
+	for {
+		n, err := os.Stdin.Read(buf)
+		if err != nil {
+			return
+		}
+
+		if n > 0 {
+			// Check for Escape key (0x1b) or Ctrl+C (0x03)
+			if buf[0] == 0x1b || buf[0] == 0x03 {
+				select {
+				case cancelCh <- struct{}{}:
+				default:
+				}
+				return
+			}
+		}
+	}
 }
