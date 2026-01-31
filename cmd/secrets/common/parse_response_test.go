@@ -400,8 +400,8 @@ func TestParseVaultGatewayResponse_List_Failure(t *testing.T) {
 
 	out := output.String()
 
-	// With fmt.Printf, the summary error is now on stdout
-	if !strings.Contains(out, "secret list failed") {
+	// With ui.Error, the summary error is now on stdout with ✗ prefix
+	if !strings.Contains(strings.ToLower(out), "secret list failed") {
 		t.Fatalf("expected summary error line 'secret list failed' on stdout, got:\n%s", out)
 	}
 	// And the error text should be present there too
