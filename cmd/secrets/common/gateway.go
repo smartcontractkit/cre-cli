@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/avast/retry-go/v4"
+
+	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
 type GatewayClient interface {
@@ -61,7 +63,7 @@ func (g *HTTPClient) Post(body []byte) ([]byte, int, error) {
 		retry.Delay(delay),
 		retry.LastErrorOnly(true),
 		retry.OnRetry(func(n uint, err error) {
-			fmt.Printf("Waiting for on-chain allowlist finalization... (attempt %d/%d): %v\n", n+1, attempts, err)
+			ui.Dim(fmt.Sprintf("Waiting for on-chain allowlist finalization... (attempt %d/%d): %v", n+1, attempts, err))
 		}),
 	)
 

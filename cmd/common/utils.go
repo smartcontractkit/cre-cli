@@ -25,6 +25,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/logger"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	inttypes "github.com/smartcontractkit/cre-cli/internal/types"
+	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
 func ValidateEventSignature(l *zerolog.Logger, tx *seth.DecodedTransaction, e abi.Event) (bool, int) {
@@ -255,9 +256,9 @@ func WriteChangesetFile(fileName string, changesetFile *inttypes.ChangesetFile, 
 		return fmt.Errorf("failed to write changeset yaml file: %w", err)
 	}
 
-	fmt.Println("")
-	fmt.Println("Changeset YAML file generated!")
-	fmt.Printf("File: %s\n", fullFilePath)
-	fmt.Println("")
+	ui.Line()
+	ui.Success("Changeset YAML file generated!")
+	ui.Code(fullFilePath)
+	ui.Line()
 	return nil
 }

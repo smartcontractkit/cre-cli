@@ -44,7 +44,7 @@ func getLatestTag() (string, error) {
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
 		if err != nil {
-			fmt.Println("Error closing response body:", err)
+			ui.Warning("Error closing response body: " + err.Error())
 		}
 	}(resp.Body)
 	var info releaseInfo
@@ -135,7 +135,7 @@ func untar(assetPath string) (string, error) {
 	defer func(f *os.File) {
 		err := f.Close()
 		if err != nil {
-			fmt.Println("Error closing file:", err)
+			ui.Warning("Error closing file: " + err.Error())
 		}
 	}(f)
 	gz, err := gzip.NewReader(f)
@@ -145,7 +145,7 @@ func untar(assetPath string) (string, error) {
 	defer func(gz *gzip.Reader) {
 		err := gz.Close()
 		if err != nil {
-			fmt.Println("Error closing gzip reader:", err)
+			ui.Warning("Error closing gzip reader: " + err.Error())
 		}
 	}(gz)
 	// Untar
@@ -219,7 +219,7 @@ func unzip(assetPath string) (string, error) {
 	defer func(zr *zip.ReadCloser) {
 		err := zr.Close()
 		if err != nil {
-			fmt.Println("Error closing zip reader:", err)
+			ui.Warning("Error closing zip reader: " + err.Error())
 		}
 	}(zr)
 	for _, f := range zr.File {
