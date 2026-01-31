@@ -20,9 +20,37 @@ func Error(text string) {
 	fmt.Println(ErrorStyle.Render("✗ " + text))
 }
 
+// ErrorWithHelp prints an error message with a helpful suggestion
+func ErrorWithHelp(text, suggestion string) {
+	fmt.Println(ErrorStyle.Render("✗ " + text))
+	fmt.Println(DimStyle.Render("  → " + suggestion))
+}
+
+// ErrorWithSuggestions prints an error message with multiple suggestions
+func ErrorWithSuggestions(text string, suggestions []string) {
+	fmt.Println(ErrorStyle.Render("✗ " + text))
+	for _, suggestion := range suggestions {
+		fmt.Println(DimStyle.Render("  → " + suggestion))
+	}
+}
+
 // Warning prints a warning message (Yellow)
 func Warning(text string) {
 	fmt.Println(WarningStyle.Render("! " + text))
+}
+
+// WarningWithHelp prints a warning message with a helpful suggestion
+func WarningWithHelp(text, suggestion string) {
+	fmt.Println(WarningStyle.Render("! " + text))
+	fmt.Println(DimStyle.Render("  → " + suggestion))
+}
+
+// WarningWithSuggestions prints a warning message with multiple suggestions
+func WarningWithSuggestions(text string, suggestions []string) {
+	fmt.Println(WarningStyle.Render("! " + text))
+	for _, suggestion := range suggestions {
+		fmt.Println(DimStyle.Render("  → " + suggestion))
+	}
 }
 
 // Dim prints dimmed/secondary text (Gray - less important)
