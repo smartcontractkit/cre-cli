@@ -25,6 +25,9 @@ import (
 // chainlinkTheme for all Huh forms in this package
 var chainlinkTheme = ui.ChainlinkTheme()
 
+// chainlinkKeyMap for Tab autocomplete
+var chainlinkKeyMap = ui.ChainlinkKeyMap()
+
 //go:embed template/workflow/**/*
 var workflowTemplatesContent embed.FS
 
@@ -203,6 +206,7 @@ func (h *handler) Execute(inputs Inputs) error {
 						Title("Project name").
 						Description("Name for your new CRE project").
 						Placeholder(defaultName).
+						Suggestions([]string{defaultName}).
 						Value(&projName).
 						Validate(func(s string) error {
 							name := s
@@ -212,7 +216,7 @@ func (h *handler) Execute(inputs Inputs) error {
 							return validation.IsValidProjectName(name)
 						}),
 				),
-			).WithTheme(chainlinkTheme)
+			).WithTheme(chainlinkTheme).WithKeyMap(chainlinkKeyMap)
 
 			if err := form.Run(); err != nil {
 				return fmt.Errorf("project name input cancelled: %w", err)
@@ -220,7 +224,6 @@ func (h *handler) Execute(inputs Inputs) error {
 
 			if projName == "" {
 				projName = defaultName
-				ui.Dim("  Using default: " + defaultName)
 			}
 		}
 
@@ -341,9 +344,10 @@ func (h *handler) Execute(inputs Inputs) error {
 							Title("Sepolia RPC URL").
 							Description("RPC endpoint for Ethereum Sepolia testnet").
 							Placeholder(defaultRPC).
+							Suggestions([]string{defaultRPC}).
 							Value(&rpcURL),
 					),
-				).WithTheme(chainlinkTheme)
+				).WithTheme(chainlinkTheme).WithKeyMap(chainlinkKeyMap)
 
 				if err := form.Run(); err != nil {
 					return err
@@ -351,7 +355,6 @@ func (h *handler) Execute(inputs Inputs) error {
 
 				if rpcURL == "" {
 					rpcURL = defaultRPC
-					ui.Dim("  Using default RPC URL")
 				}
 			}
 			repl["EthSepoliaRpcUrl"] = rpcURL
@@ -379,6 +382,7 @@ func (h *handler) Execute(inputs Inputs) error {
 					Title("Workflow name").
 					Description("Name for your workflow").
 					Placeholder(defaultName).
+					Suggestions([]string{defaultName}).
 					Value(&workflowName).
 					Validate(func(s string) error {
 						name := s
@@ -388,7 +392,7 @@ func (h *handler) Execute(inputs Inputs) error {
 						return validation.IsValidWorkflowName(name)
 					}),
 			),
-		).WithTheme(chainlinkTheme)
+		).WithTheme(chainlinkTheme).WithKeyMap(chainlinkKeyMap)
 
 		if err := form.Run(); err != nil {
 			return fmt.Errorf("workflow name input cancelled: %w", err)
@@ -396,7 +400,6 @@ func (h *handler) Execute(inputs Inputs) error {
 
 		if workflowName == "" {
 			workflowName = defaultName
-			ui.Dim("  Using default: " + defaultName)
 		}
 	}
 

@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -35,4 +36,23 @@ func ChainlinkTheme() *huh.Theme {
 	t.Blurred.UnselectedOption = t.Blurred.UnselectedOption.Foreground(lipgloss.Color(ColorGray600))
 
 	return t
+}
+
+// ChainlinkKeyMap returns a custom keymap that uses Tab for autocomplete
+func ChainlinkKeyMap() *huh.KeyMap {
+	km := huh.NewDefaultKeyMap()
+
+	// Change AcceptSuggestion from ctrl+e to tab
+	km.Input.AcceptSuggestion = key.NewBinding(
+		key.WithKeys("tab"),
+		key.WithHelp("tab", "complete"),
+	)
+
+	// Remove tab from Next (keep only enter)
+	km.Input.Next = key.NewBinding(
+		key.WithKeys("enter"),
+		key.WithHelp("enter", "next"),
+	)
+
+	return km
 }

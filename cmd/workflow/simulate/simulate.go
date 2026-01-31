@@ -888,6 +888,7 @@ func getEVMTriggerLog(ctx context.Context, ethClient *ethclient.Client) (*evm.Lo
 				Title("Event Index").
 				Description("Log event index (0-based)").
 				Placeholder("0").
+				Suggestions([]string{"0"}).
 				Value(&eventIndexInput).
 				Validate(func(s string) error {
 					if strings.TrimSpace(s) == "" {
@@ -899,7 +900,7 @@ func getEVMTriggerLog(ctx context.Context, ethClient *ethclient.Client) (*evm.Lo
 					return nil
 				}),
 		),
-	).WithTheme(ui.ChainlinkTheme())
+	).WithTheme(ui.ChainlinkTheme()).WithKeyMap(ui.ChainlinkKeyMap())
 
 	if err := form.Run(); err != nil {
 		return nil, fmt.Errorf("EVM trigger input cancelled: %w", err)
