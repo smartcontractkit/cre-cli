@@ -13,6 +13,7 @@ import (
 	linkkey "github.com/smartcontractkit/cre-cli/cmd/account/link_key"
 	"github.com/smartcontractkit/cre-cli/internal/client/graphqlclient"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
+	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
 const (
@@ -28,7 +29,7 @@ func (h *handler) ensureOwnerLinkedOrFail() error {
 		return fmt.Errorf("failed to check owner link status: %w", err)
 	}
 
-	fmt.Printf("Workflow owner link status: owner=%s, linked=%v\n", ownerAddr.Hex(), linked)
+	ui.Dim(fmt.Sprintf("Workflow owner link status: owner=%s, linked=%v", ownerAddr.Hex(), linked))
 
 	if linked {
 		// Owner is linked on contract, now verify it's linked to the current user's account
@@ -41,16 +42,16 @@ func (h *handler) ensureOwnerLinkedOrFail() error {
 			return fmt.Errorf("key %s is linked to another account. Please use a different owner address", ownerAddr.Hex())
 		}
 
-		fmt.Println("Key ownership verified")
+		ui.Success("Key ownership verified")
 		return nil
 	}
 
-	fmt.Printf("Owner not linked. Attempting auto-link: owner=%s\n", ownerAddr.Hex())
+	ui.Dim(fmt.Sprintf("Owner not linked. Attempting auto-link: owner=%s", ownerAddr.Hex()))
 	if err := h.tryAutoLink(); err != nil {
 		return fmt.Errorf("auto-link attempt failed: %w", err)
 	}
 
-	fmt.Printf("Auto-link successful: owner=%s\n", ownerAddr.Hex())
+	ui.Success(fmt.Sprintf("Auto-link successful: owner=%s", ownerAddr.Hex()))
 
 	// Wait for linking process to complete
 	if err := h.waitForBackendLinkProcessing(ownerAddr); err != nil {
@@ -80,18 +81,18 @@ func (h *handler) autoLinkMSIGAndExit() (halt bool, err error) {
 			return false, fmt.Errorf("MSIG key %s is linked to another account. Please use a different owner address", ownerAddr.Hex())
 		}
 
-		fmt.Printf("MSIG key ownership verified. Continuing deploy: owner=%s\n", ownerAddr.Hex())
+		ui.Success(fmt.Sprintf("MSIG key ownership verified. Continuing deploy: owner=%s", ownerAddr.Hex()))
 		return false, nil
 	}
 
-	fmt.Printf("MSIG workflow owner link status: owner=%s, linked=%v\n", ownerAddr.Hex(), linked)
-	fmt.Printf("MSIG owner: attempting auto-link... owner=%s\n", ownerAddr.Hex())
+	ui.Dim(fmt.Sprintf("MSIG workflow owner link status: owner=%s, linked=%v", ownerAddr.Hex(), linked))
+	ui.Dim(fmt.Sprintf("MSIG owner: attempting auto-link... owner=%s", ownerAddr.Hex()))
 
 	if err := h.tryAutoLink(); err != nil {
 		return false, fmt.Errorf("MSIG auto-link attempt failed: %w", err)
 	}
 
-	fmt.Println("MSIG auto-link initiated. Halting deploy. Submit the multisig transaction, then re-run deploy.")
+	ui.Warning("MSIG auto-link initiated. Halting deploy. Submit the multisig transaction, then re-run deploy.")
 	return true, nil
 }
 
@@ -174,11 +175,11 @@ func (h *handler) waitForBackendLinkProcessing(ownerAddr common.Address) error {
 	const retryDelay = 3 * time.Second
 	const initialBlockWait = 36 * time.Second // Wait for 3 block confirmations (~12s per block)
 
-	fmt.Println("")
-	fmt.Println("✓ Transaction confirmed on-chain.")
-	fmt.Println("  Waiting for 3 block confirmations before verification completes...")
-	fmt.Println("  Note: This is a one-time linking process. Future deployments from this address will not require this step.")
-	fmt.Println("")
+	ui.Line()
+	ui.Success("Transaction confirmed on-chain.")
+	ui.Dim("  Waiting for 3 block confirmations before verification completes...")
+	ui.Dim("  Note: This is a one-time linking process. Future deployments from this address will not require this step.")
+	ui.Line()
 
 	// Wait for 3 block confirmations before polling
 	time.Sleep(initialBlockWait)
@@ -201,7 +202,7 @@ func (h *handler) waitForBackendLinkProcessing(ownerAddr common.Address) error {
 		retry.LastErrorOnly(true),
 		retry.OnRetry(func(n uint, err error) {
 			h.log.Debug().Uint("attempt", n+1).Uint("maxAttempts", maxAttempts).Err(err).Msg("Retrying link status check")
-			fmt.Printf("  Waiting for verification... (attempt %d/%d)\n", n+1, maxAttempts)
+			ui.Dim(fmt.Sprintf("  Waiting for verification... (attempt %d/%d)", n+1, maxAttempts))
 		}),
 	)
 
@@ -209,6 +210,6 @@ func (h *handler) waitForBackendLinkProcessing(ownerAddr common.Address) error {
 		return fmt.Errorf("linking process timeout after %d attempts: %w", maxAttempts, err)
 	}
 
-	fmt.Printf("✓ Linking verified: owner=%s\n", ownerAddr.Hex())
+	ui.Success(fmt.Sprintf("Linking verified: owner=%s", ownerAddr.Hex()))
 	return nil
 }

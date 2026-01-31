@@ -11,6 +11,7 @@ import (
 	cmdCommon "github.com/smartcontractkit/cre-cli/cmd/common"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/types"
+	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
 func (h *handler) upsert() error {
@@ -42,7 +43,7 @@ func (h *handler) prepareUpsertParams() (client.RegisterWorkflowV2Parameters, er
 		status = *h.existingWorkflowStatus
 	}
 
-	fmt.Printf("Preparing transaction for workflowID: %s\n", workflowID)
+	ui.Dim(fmt.Sprintf("Preparing transaction for workflowID: %s", workflowID))
 	return client.RegisterWorkflowV2Parameters{
 		WorkflowName: workflowName,
 		Tag:          workflowTag,
@@ -66,34 +67,36 @@ func (h *handler) handleUpsert(params client.RegisterWorkflowV2Parameters) error
 	}
 	switch txOut.Type {
 	case client.Regular:
-		fmt.Println("Transaction confirmed")
-		fmt.Printf("View on explorer: \033]8;;%s/tx/%s\033\\%s/tx/%s\033]8;;\033\\\n", h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash, h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash)
-		fmt.Println("\n[OK] Workflow deployed successfully")
-		fmt.Println("\nDetails:")
-		fmt.Printf("   Contract address:\t%s\n", h.environmentSet.WorkflowRegistryAddress)
-		fmt.Printf("   Transaction hash:\t%s\n", txOut.Hash)
-		fmt.Printf("   Workflow Name:\t%s\n", workflowName)
-		fmt.Printf("   Workflow ID:\t%s\n", h.workflowArtifact.WorkflowID)
-		fmt.Printf("   Binary URL:\t%s\n", h.inputs.BinaryURL)
+		ui.Success("Transaction confirmed")
+		ui.URL(fmt.Sprintf("%s/tx/%s", h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash))
+		ui.Line()
+		ui.Success("Workflow deployed successfully")
+		ui.Line()
+		ui.Bold("Details:")
+		ui.Dim(fmt.Sprintf("   Contract address: %s", h.environmentSet.WorkflowRegistryAddress))
+		ui.Dim(fmt.Sprintf("   Transaction hash: %s", txOut.Hash))
+		ui.Dim(fmt.Sprintf("   Workflow Name:    %s", workflowName))
+		ui.Dim(fmt.Sprintf("   Workflow ID:      %s", h.workflowArtifact.WorkflowID))
+		ui.Dim(fmt.Sprintf("   Binary URL:       %s", h.inputs.BinaryURL))
 		if h.inputs.ConfigURL != nil && *h.inputs.ConfigURL != "" {
-			fmt.Printf("   Config URL:\t%s\n", *h.inputs.ConfigURL)
+			ui.Dim(fmt.Sprintf("   Config URL:       %s", *h.inputs.ConfigURL))
 		}
 
 	case client.Raw:
-		fmt.Println("")
-		fmt.Println("MSIG workflow deployment transaction prepared!")
-		fmt.Printf("To Deploy %s:%s with workflow ID: %s\n", workflowName, workflowTag, hex.EncodeToString(params.WorkflowID[:]))
-		fmt.Println("")
-		fmt.Println("Next steps:")
-		fmt.Println("")
-		fmt.Println("   1. Submit the following transaction on the target chain:")
-		fmt.Printf("      Chain:   %s\n", h.inputs.WorkflowRegistryContractChainName)
-		fmt.Printf("      Contract Address: %s\n", txOut.RawTx.To)
-		fmt.Println("")
-		fmt.Println("   2. Use the following transaction data:")
-		fmt.Println("")
-		fmt.Printf("      %x\n", txOut.RawTx.Data)
-		fmt.Println("")
+		ui.Line()
+		ui.Success("MSIG workflow deployment transaction prepared!")
+		ui.Dim(fmt.Sprintf("To Deploy %s:%s with workflow ID: %s", workflowName, workflowTag, hex.EncodeToString(params.WorkflowID[:])))
+		ui.Line()
+		ui.Bold("Next steps:")
+		ui.Line()
+		ui.Print("   1. Submit the following transaction on the target chain:")
+		ui.Dim(fmt.Sprintf("      Chain:            %s", h.inputs.WorkflowRegistryContractChainName))
+		ui.Dim(fmt.Sprintf("      Contract Address: %s", txOut.RawTx.To))
+		ui.Line()
+		ui.Print("   2. Use the following transaction data:")
+		ui.Line()
+		ui.Code(fmt.Sprintf("      %x", txOut.RawTx.Data))
+		ui.Line()
 
 	case client.Changeset:
 		chainSelector, err := settings.GetChainSelectorByChainName(h.environmentSet.WorkflowRegistryChainName)
@@ -102,7 +105,7 @@ func (h *handler) handleUpsert(params client.RegisterWorkflowV2Parameters) error
 		}
 		mcmsConfig, err := settings.GetMCMSConfig(h.settings, chainSelector)
 		if err != nil {
-			fmt.Println("\nMCMS config not found or is incorrect, skipping MCMS config in changeset")
+			ui.Warning("MCMS config not found or is incorrect, skipping MCMS config in changeset")
 		}
 		cldSettings := h.settings.CLDSettings
 		changesets := []types.Changeset{

@@ -14,6 +14,7 @@ import (
 
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
+	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
 func TestSaveCredentials_WritesYAML(t *testing.T) {
@@ -78,7 +79,7 @@ func TestOpenBrowser_UnsupportedOS(t *testing.T) {
 }
 
 func TestServeEmbeddedHTML_ErrorOnMissingFile(t *testing.T) {
-	h := &handler{log: &zerolog.Logger{}}
+	h := &handler{log: &zerolog.Logger{}, spinner: ui.NewSpinner()}
 	w := httptest.NewRecorder()
 	h.serveEmbeddedHTML(w, "htmlPages/doesnotexist.html", http.StatusOK)
 	resp := w.Result()
@@ -143,6 +144,7 @@ func TestCallbackHandler_OrgMembershipError(t *testing.T) {
 		log:        &logger,
 		lastState:  "test-state",
 		retryCount: 0,
+		spinner:    ui.NewSpinner(),
 		environmentSet: &environments.EnvironmentSet{
 			ClientID: "test-client-id",
 			AuthBase: "https://auth.example.com",
@@ -195,6 +197,7 @@ func TestCallbackHandler_OrgMembershipError_MaxRetries(t *testing.T) {
 		log:        &logger,
 		lastState:  "test-state",
 		retryCount: maxOrgNotFoundRetries, // Already at max retries
+		spinner:    ui.NewSpinner(),
 		environmentSet: &environments.EnvironmentSet{
 			ClientID: "test-client-id",
 			AuthBase: "https://auth.example.com",
@@ -234,6 +237,7 @@ func TestCallbackHandler_GenericAuth0Error(t *testing.T) {
 	h := &handler{
 		log:       &logger,
 		lastState: "test-state",
+		spinner:   ui.NewSpinner(),
 		environmentSet: &environments.EnvironmentSet{
 			ClientID: "test-client-id",
 			AuthBase: "https://auth.example.com",
@@ -270,7 +274,7 @@ func TestCallbackHandler_GenericAuth0Error(t *testing.T) {
 
 func TestServeWaitingPage(t *testing.T) {
 	logger := zerolog.Nop()
-	h := &handler{log: &logger}
+	h := &handler{log: &logger, spinner: ui.NewSpinner()}
 
 	w := httptest.NewRecorder()
 	redirectURL := "https://auth.example.com/authorize?client_id=test&state=abc123"

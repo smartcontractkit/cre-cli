@@ -1,11 +1,10 @@
 package version
 
 import (
-	"fmt"
-
 	"github.com/spf13/cobra"
 
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
+	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
 // Default placeholder value
@@ -17,7 +16,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 		Short: "Print the cre version",
 		Long:  "This command prints the current version of the cre",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Println("cre", Version)
+			ui.Title("CRE CLI " + Version)
 			return nil
 		},
 	}

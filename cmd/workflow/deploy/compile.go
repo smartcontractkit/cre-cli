@@ -13,13 +13,14 @@ import (
 
 	cmdcommon "github.com/smartcontractkit/cre-cli/cmd/common"
 	"github.com/smartcontractkit/cre-cli/internal/constants"
+	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
 func (h *handler) Compile() error {
 	if !h.validated {
 		return fmt.Errorf("handler h.inputs not validated")
 	}
-	fmt.Println("Compiling workflow...")
+	ui.Dim("Compiling workflow...")
 
 	if h.inputs.OutputPath == "" {
 		h.inputs.OutputPath = defaultOutputPath
@@ -74,13 +75,14 @@ func (h *handler) Compile() error {
 
 	buildOutput, err := buildCmd.CombinedOutput()
 	if err != nil {
-		fmt.Println(string(buildOutput))
+		ui.Error("Build failed:")
+		ui.Print(string(buildOutput))
 
 		out := strings.TrimSpace(string(buildOutput))
 		return fmt.Errorf("failed to compile workflow: %w\nbuild output:\n%s", err, out)
 	}
 	h.log.Debug().Msgf("Build output: %s", buildOutput)
-	fmt.Println("Workflow compiled successfully")
+	ui.Success("Workflow compiled successfully")
 
 	tmpWasmLocation := filepath.Join(workflowRootFolder, tmpWasmFileName)
 	wasmFile, err := os.ReadFile(tmpWasmLocation)

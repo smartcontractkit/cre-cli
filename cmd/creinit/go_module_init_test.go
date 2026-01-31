@@ -40,7 +40,7 @@ func TestInitializeGoModule_InEmptyProject(t *testing.T) {
 	tempDir := prepareTempDirWithMainFile(t)
 	moduleName := "testmodule"
 
-	err := initializeGoModule(logger, tempDir, moduleName)
+	_, err := initializeGoModule(logger, tempDir, moduleName)
 	assert.NoError(t, err)
 
 	// Check go.mod file was generated
@@ -70,7 +70,7 @@ func TestInitializeGoModule_InExistingProject(t *testing.T) {
 
 	goModFilePath := createGoModFile(t, tempDir, "module oldmodule")
 
-	err := initializeGoModule(logger, tempDir, moduleName)
+	_, err := initializeGoModule(logger, tempDir, moduleName)
 	assert.NoError(t, err)
 
 	// Check go.mod file was not changed
@@ -103,7 +103,7 @@ func TestInitializeGoModule_GoModInitFails(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Attempt to initialize Go module
-	err = initializeGoModule(logger, tempDir, moduleName)
+	_, err = initializeGoModule(logger, tempDir, moduleName)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "exit status 1")
 
