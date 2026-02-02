@@ -39,7 +39,7 @@ func (r *Requester) PromptAndSubmitRequest() error {
 	ui.Warning("Deployment access is not yet enabled for your organization.")
 	ui.Line()
 
-	var shouldRequest bool
+	shouldRequest := true
 	confirmForm := huh.NewForm(
 		huh.NewGroup(
 			huh.NewConfirm().
