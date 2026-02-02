@@ -255,7 +255,6 @@ func newRootCommand() *cobra.Command {
 		return false
 	})
 
-<<<<<<< HEAD
 	// Lipgloss-styled template functions for help (using Chainlink brand colors)
 	cobra.AddTemplateFunc("styleTitle", func(s string) string {
 		return ui.TitleStyle.Render(s)
@@ -277,7 +276,7 @@ func newRootCommand() *cobra.Command {
 	})
 	cobra.AddTemplateFunc("styleURL", func(s string) string {
 		return ui.URLStyle.Render(s) // Chainlink Blue, underlined
-=======
+	})
 	cobra.AddTemplateFunc("needsDeployAccess", func() bool {
 		creds := runtimeContext.Credentials
 		if creds == nil {
@@ -292,7 +291,6 @@ func newRootCommand() *cobra.Command {
 			return false
 		}
 		return !deployAccess.HasAccess
->>>>>>> eea3004 (Add deploy access hint to global help template for gated users)
 	})
 
 	rootCmd.SetHelpTemplate(helpTemplate)

@@ -121,7 +121,7 @@ func newHandler(ctx *runtime.Context, stdin io.Reader) *handler {
 		workflowArtifact: &workflowArtifact{},
 		wrc:              nil,
 		runtimeContext:   ctx,
-		accessRequester:  accessrequest.NewRequester(ctx.Credentials, ctx.Logger, stdin),
+		accessRequester:  accessrequest.NewRequester(ctx.Credentials, ctx.Logger),
 		validated:        false,
 		wg:               sync.WaitGroup{},
 		wrcErr:           nil,

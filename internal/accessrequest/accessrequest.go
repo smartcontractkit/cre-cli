@@ -1,19 +1,17 @@
 package accessrequest
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
-	"strings"
 
+	"github.com/charmbracelet/huh"
 	"github.com/rs/zerolog"
 
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
-	"github.com/smartcontractkit/cre-cli/internal/prompt"
+	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
 const (
@@ -27,60 +25,74 @@ type AccessRequest struct {
 type Requester struct {
 	credentials *credentials.Credentials
 	log         *zerolog.Logger
-	stdin       io.Reader
 }
 
-func NewRequester(creds *credentials.Credentials, log *zerolog.Logger, stdin io.Reader) *Requester {
+func NewRequester(creds *credentials.Credentials, log *zerolog.Logger) *Requester {
 	return &Requester{
 		credentials: creds,
 		log:         log,
-		stdin:       stdin,
 	}
 }
 
 func (r *Requester) PromptAndSubmitRequest() error {
-	fmt.Println("")
-	fmt.Println("Deployment access is not yet enabled for your organization.")
-	fmt.Println("")
+	ui.Line()
+	ui.Warning("Deployment access is not yet enabled for your organization.")
+	ui.Line()
 
-	shouldRequest, err := prompt.YesNoPrompt(r.stdin, "Request deployment access?")
-	if err != nil {
+	var shouldRequest bool
+	confirmForm := huh.NewForm(
+		huh.NewGroup(
+			huh.NewConfirm().
+				Title("Request deployment access?").
+				Value(&shouldRequest),
+		),
+	).WithTheme(ui.ChainlinkTheme())
+
+	if err := confirmForm.Run(); err != nil {
 		return fmt.Errorf("failed to get user confirmation: %w", err)
 	}
 
 	if !shouldRequest {
-		fmt.Println("")
-		fmt.Println("Access request canceled.")
+		ui.Line()
+		ui.Dim("Access request canceled.")
 		return nil
 	}
 
-	fmt.Println("")
-	fmt.Println("Briefly describe your use case (what are you building with CRE?):")
-	fmt.Print("> ")
+	var useCase string
+	inputForm := huh.NewForm(
+		huh.NewGroup(
+			huh.NewText().
+				Title("Briefly describe your use case").
+				Description("What are you building with CRE?").
+				Value(&useCase).
+				Validate(func(s string) error {
+					if s == "" {
+						return fmt.Errorf("use case description is required")
+					}
+					return nil
+				}),
+		),
+	).WithTheme(ui.ChainlinkTheme())
 
-	reader := bufio.NewReader(r.stdin)
-	useCase, err := reader.ReadString('\n')
-	if err != nil {
+	if err := inputForm.Run(); err != nil {
 		return fmt.Errorf("failed to read use case: %w", err)
 	}
-	useCase = strings.TrimSpace(useCase)
 
-	if useCase == "" {
-		return fmt.Errorf("use case description is required")
-	}
-
-	fmt.Println("")
-	fmt.Println("Submitting access request...")
+	ui.Line()
+	spinner := ui.NewSpinner()
+	spinner.Start("Submitting access request...")
 
 	if err := r.SubmitAccessRequest(useCase); err != nil {
+		spinner.Stop()
 		return fmt.Errorf("failed to submit access request: %w", err)
 	}
 
-	fmt.Println("")
-	fmt.Println("Access request submitted successfully!")
-	fmt.Println("")
-	fmt.Println("Our team will review your request and get back to you shortly.")
-	fmt.Println("")
+	spinner.Stop()
+	ui.Line()
+	ui.Success("Access request submitted successfully!")
+	ui.Line()
+	ui.Dim("Our team will review your request and get back to you shortly.")
+	ui.Line()
 
 	return nil
 }
@@ -95,7 +107,7 @@ func (r *Requester) SubmitAccessRequest(useCase string) error {
 		UseCase: useCase,
 	}
 
-	jsonBody, err := json.MarshalIndent(reqBody, "", "  ")
+	jsonBody, err := json.Marshal(reqBody)
 	if err != nil {
 		return fmt.Errorf("failed to marshal request: %w", err)
 	}
@@ -105,17 +117,10 @@ func (r *Requester) SubmitAccessRequest(useCase string) error {
 	}
 	token := r.credentials.Tokens.AccessToken
 
-	fmt.Println("")
-	fmt.Println("Request Details:")
-	fmt.Println("----------------")
-	fmt.Printf("URL: %s\n", apiURL)
-	fmt.Printf("Method: POST\n")
-	fmt.Println("Headers:")
-	fmt.Println("  Content-Type: application/json")
-	fmt.Printf("  Authorization: Bearer %s\n", token)
-	fmt.Println("Body:")
-	fmt.Println(string(jsonBody))
-	fmt.Println("----------------")
+	r.log.Debug().
+		Str("url", apiURL).
+		Str("method", "POST").
+		Msg("submitting access request")
 
 	req, err := http.NewRequest(http.MethodPost, apiURL, bytes.NewReader(jsonBody))
 	if err != nil {

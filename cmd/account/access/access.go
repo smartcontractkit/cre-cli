@@ -9,6 +9,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/accessrequest"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
+	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
 func New(runtimeCtx *runtime.Context) *cobra.Command {
@@ -18,7 +19,7 @@ func New(runtimeCtx *runtime.Context) *cobra.Command {
 		Long:  "Check your deployment access status or request access to deploy workflows.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			h := NewHandler(runtimeCtx, cmd.InOrStdin())
+			h := NewHandler(runtimeCtx)
 			return h.Execute()
 		},
 	}
@@ -32,11 +33,11 @@ type Handler struct {
 	requester   *accessrequest.Requester
 }
 
-func NewHandler(ctx *runtime.Context, stdin interface{ Read([]byte) (int, error) }) *Handler {
+func NewHandler(ctx *runtime.Context) *Handler {
 	return &Handler{
 		log:         ctx.Logger,
 		credentials: ctx.Credentials,
-		requester:   accessrequest.NewRequester(ctx.Credentials, ctx.Logger, stdin),
+		requester:   accessrequest.NewRequester(ctx.Credentials, ctx.Logger),
 	}
 }
 
@@ -47,15 +48,15 @@ func (h *Handler) Execute() error {
 	}
 
 	if deployAccess.HasAccess {
-		fmt.Println("")
-		fmt.Println("You have deployment access enabled for your organization.")
-		fmt.Println("")
-		fmt.Println("You're all set to deploy workflows. Get started with:")
-		fmt.Println("")
-		fmt.Println("  cre workflow deploy")
-		fmt.Println("")
-		fmt.Println("For more information, run 'cre workflow deploy --help'")
-		fmt.Println("")
+		ui.Line()
+		ui.Success("You have deployment access enabled for your organization.")
+		ui.Line()
+		ui.Print("You're all set to deploy workflows. Get started with:")
+		ui.Line()
+		ui.Command("  cre workflow deploy")
+		ui.Line()
+		ui.Dim("For more information, run 'cre workflow deploy --help'")
+		ui.Line()
 		return nil
 	}
 
