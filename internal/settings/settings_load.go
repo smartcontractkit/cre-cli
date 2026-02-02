@@ -22,7 +22,7 @@ const (
 	RegistriesSettingName         = "contracts.registries"
 	KeystoneSettingName           = "contracts.keystone"
 	RpcsSettingName               = "rpcs"
-	ExperimentalChainsSettingName = "experimental-chains" // used by simulator when present in target config
+	ExperimentalChainsSettingName = "experimental-chains" // deprecated: experimental chains are now derived from rpcs entries with chain-selector set
 )
 
 type Flag struct {
