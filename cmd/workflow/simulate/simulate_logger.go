@@ -299,4 +299,3 @@ func MapCapabilityStatus(status string) string {
 		return strings.ToUpper(status)
 	}
 }
-

@@ -83,7 +83,6 @@ var languageTemplates = []LanguageTemplate{
 	},
 }
 
-
 type Inputs struct {
 	ProjectName  string `validate:"omitempty,project_name" cli:"project-name"`
 	TemplateID   uint32 `validate:"omitempty,min=0"`
@@ -529,28 +528,6 @@ func (w WorkflowTemplate) GetTitle() string {
 
 func (l LanguageTemplate) GetTitle() string {
 	return l.Title
-}
-
-func extractTitles[T TitledTemplate](templates []T) []string {
-	titles := make([]string, len(templates))
-	for i, template := range templates {
-		titles[i] = template.GetTitle()
-	}
-	return titles
-}
-
-func (h *handler) extractLanguageTitles(templates []LanguageTemplate) []string {
-	return extractTitles(templates)
-}
-
-func (h *handler) extractWorkflowTitles(templates []WorkflowTemplate) []string {
-	visibleTemplates := make([]WorkflowTemplate, 0, len(templates))
-	for _, t := range templates {
-		if !t.Hidden {
-			visibleTemplates = append(visibleTemplates, t)
-		}
-	}
-	return extractTitles(visibleTemplates)
 }
 
 func (h *handler) getLanguageTemplateByTitle(title string) (LanguageTemplate, error) {

@@ -82,21 +82,3 @@ func runCommand(logger *zerolog.Logger, dir, command string, args ...string) err
 	logger.Debug().Msgf("Command succeeded: %s %v", command, args)
 	return nil
 }
-
-func runCommandCaptureOutput(logger *zerolog.Logger, dir string, args ...string) ([]byte, error) {
-	logger.Debug().Msgf("Running command: %v in directory: %s", args, dir)
-
-	// #nosec G204 -- args are internal and validated
-	cmd := exec.Command(args[0], args[1:]...)
-	cmd.Dir = dir
-
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		logger.Error().Err(err).Msgf("Command failed: %v\nOutput:\n%s", args, output)
-		return output, err
-	}
-
-	logger.Debug().Msgf("Command succeeded: %v", args)
-	return output, nil
-}
-
