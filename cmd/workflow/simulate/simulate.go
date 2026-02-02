@@ -364,14 +364,10 @@ func (h *handler) showDeployAccessHint() {
 	}
 
 	if !deployAccess.HasAccess {
-		fmt.Println("")
-		fmt.Println("─────────────────────────────────────────────────────────────")
-		fmt.Println("")
-		fmt.Println("  Simulation complete! Ready to deploy your workflow?")
-		fmt.Println("")
-		fmt.Println("  Run 'cre account access' to request deployment access.")
-		fmt.Println("")
-		fmt.Println("─────────────────────────────────────────────────────────────")
+		ui.Line()
+		message := ui.RenderSuccess("Simulation complete!") + " Ready to deploy your workflow?\n\n" +
+			"Run " + ui.RenderCommand("cre account access") + " to request deployment access."
+		ui.Box(message)
 	}
 }
 
