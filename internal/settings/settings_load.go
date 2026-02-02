@@ -13,16 +13,15 @@ import (
 
 // Config names (YAML field paths)
 const (
-	WorkflowOwnerSettingName      = "account.workflow-owner-address"
-	WorkflowNameSettingName       = "user-workflow.workflow-name"
-	WorkflowPathSettingName       = "workflow-artifacts.workflow-path"
-	ConfigPathSettingName         = "workflow-artifacts.config-path"
-	SecretsPathSettingName        = "workflow-artifacts.secrets-path"
-	SethConfigPathSettingName     = "logging.seth-config-path"
-	RegistriesSettingName         = "contracts.registries"
-	KeystoneSettingName           = "contracts.keystone"
-	RpcsSettingName               = "rpcs"
-	ExperimentalChainsSettingName = "experimental-chains" // deprecated: experimental chains are now derived from rpcs entries with chain-selector set
+	WorkflowOwnerSettingName  = "account.workflow-owner-address"
+	WorkflowNameSettingName   = "user-workflow.workflow-name"
+	WorkflowPathSettingName   = "workflow-artifacts.workflow-path"
+	ConfigPathSettingName     = "workflow-artifacts.config-path"
+	SecretsPathSettingName    = "workflow-artifacts.secrets-path"
+	SethConfigPathSettingName = "logging.seth-config-path"
+	RegistriesSettingName     = "contracts.registries"
+	KeystoneSettingName       = "contracts.keystone"
+	RpcsSettingName           = "rpcs"
 )
 
 type Flag struct {
