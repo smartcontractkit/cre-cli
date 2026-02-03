@@ -167,72 +167,75 @@ func (h *handler) Execute(inputs Inputs) error {
 		return fmt.Errorf("handler inputs not validated")
 	}
 
-	ui.Line()
-	ui.Title("Create a new CRE project")
-
 	cwd, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("unable to get working directory: %w", err)
 	}
 	startDir := cwd
 
-	projectRoot, existingProjectLanguage, err := func(dir string) (string, string, error) {
-		for {
-			if h.pathExists(filepath.Join(dir, constants.DefaultProjectSettingsFileName)) {
+	// Detect if we're in an existing project
+	existingProjectRoot, existingProjectLanguage, existingErr := h.findExistingProject(startDir)
+	isNewProject := existingErr != nil
 
-				if h.pathExists(filepath.Join(dir, constants.DefaultIsGoFileName)) {
-					return dir, "Golang", nil
-				}
+	// If template ID provided via flag, resolve it now
+	var selectedWorkflowTemplate WorkflowTemplate
+	var selectedLanguageTemplate LanguageTemplate
 
-				return dir, "Typescript", nil
-			}
-			parent := filepath.Dir(dir)
-			if parent == dir {
-				return "", "", fmt.Errorf("no existing project found")
-			}
-			dir = parent
+	if inputs.TemplateID != 0 {
+		wt, lt, findErr := h.getWorkflowTemplateByID(inputs.TemplateID)
+		if findErr != nil {
+			return fmt.Errorf("invalid template ID %d: %w", inputs.TemplateID, findErr)
 		}
-	}(startDir)
+		selectedWorkflowTemplate = wt
+		selectedLanguageTemplate = lt
+	}
 
+	// Run the interactive wizard
+	result, err := RunWizard(inputs, isNewProject, existingProjectLanguage)
 	if err != nil {
-		projName := inputs.ProjectName
-		if projName == "" {
-			defaultName := constants.DefaultProjectName
+		return fmt.Errorf("wizard error: %w", err)
+	}
+	if result.Cancelled {
+		return fmt.Errorf("cre init cancelled")
+	}
 
-			form := huh.NewForm(
-				huh.NewGroup(
-					huh.NewInput().
-						Title("Project name").
-						Description("Name for your new CRE project").
-						Placeholder(defaultName).
-						Suggestions([]string{defaultName}).
-						Value(&projName).
-						Validate(func(s string) error {
-							name := s
-							if name == "" {
-								name = defaultName
-							}
-							return validation.IsValidProjectName(name)
-						}),
-				),
-			).WithTheme(chainlinkTheme).WithKeyMap(chainlinkKeyMap)
+	// Extract values from wizard result
+	projName := result.ProjectName
+	selectedLang := result.Language
+	rpcURL := result.RPCURL
+	workflowName := result.WorkflowName
 
-			if err := form.Run(); err != nil {
-				return fmt.Errorf("project name input cancelled: %w", err)
-			}
+	// Apply defaults
+	if projName == "" {
+		projName = constants.DefaultProjectName
+	}
+	if workflowName == "" {
+		workflowName = constants.DefaultWorkflowName
+	}
 
-			if projName == "" {
-				projName = defaultName
-			}
-		}
+	// Resolve templates from wizard if not provided via flag
+	if inputs.TemplateID == 0 {
+		selectedLanguageTemplate, _ = h.getLanguageTemplateByTitle(selectedLang)
+		selectedWorkflowTemplate, _ = h.getWorkflowTemplateByTitle(result.TemplateName, selectedLanguageTemplate.Workflows)
+	}
 
-		projectRoot = filepath.Join(startDir, projName, "/")
+	// Determine project root
+	var projectRoot string
+	if isNewProject {
+		projectRoot = filepath.Join(startDir, projName) + "/"
+	} else {
+		projectRoot = existingProjectRoot
+	}
+
+	// Create project directory if new project
+	if isNewProject {
 		if err := h.ensureProjectDirectoryExists(projectRoot); err != nil {
 			return err
 		}
 	}
 
-	if err == nil {
+	// Ensure env file exists for existing projects
+	if !isNewProject {
 		envPath := filepath.Join(projectRoot, constants.DefaultEnvFileName)
 		if !h.pathExists(envPath) {
 			if _, err := settings.GenerateProjectEnvFile(projectRoot); err != nil {
@@ -241,169 +244,22 @@ func (h *handler) Execute(inputs Inputs) error {
 		}
 	}
 
-	var selectedWorkflowTemplate WorkflowTemplate
-	var selectedLanguageTemplate LanguageTemplate
-	var workflowTemplates []WorkflowTemplate
-
-	if inputs.TemplateID != 0 {
-		var findErr error
-		selectedWorkflowTemplate, selectedLanguageTemplate, findErr = h.getWorkflowTemplateByID(inputs.TemplateID)
-		if findErr != nil {
-			return fmt.Errorf("invalid template ID %d: %w", inputs.TemplateID, findErr)
-		}
-	} else {
-		if existingProjectLanguage != "" {
-			var templateErr error
-			selectedLanguageTemplate, templateErr = h.getLanguageTemplateByTitle(existingProjectLanguage)
-			workflowTemplates = selectedLanguageTemplate.Workflows
-
-			if templateErr != nil {
-				return fmt.Errorf("invalid template %s: %w", existingProjectLanguage, templateErr)
-			}
-		}
-
-		if len(workflowTemplates) < 1 {
-			languageOptions := make([]huh.Option[string], len(languageTemplates))
-			for i, lang := range languageTemplates {
-				languageOptions[i] = huh.NewOption(lang.Title, lang.Title)
-			}
-
-			var selectedLang string
-			form := huh.NewForm(
-				huh.NewGroup(
-					huh.NewSelect[string]().
-						Title("What language do you want to use?").
-						Options(languageOptions...).
-						Value(&selectedLang),
-				),
-			).WithTheme(chainlinkTheme)
-
-			if err := form.Run(); err != nil {
-				return fmt.Errorf("language selection aborted: %w", err)
-			}
-
-			selected, selErr := h.getLanguageTemplateByTitle(selectedLang)
-			if selErr != nil {
-				return selErr
-			}
-			selectedLanguageTemplate = selected
-			workflowTemplates = selectedLanguageTemplate.Workflows
-		}
-
-		visibleTemplates := make([]WorkflowTemplate, 0, len(workflowTemplates))
-		for _, t := range workflowTemplates {
-			if !t.Hidden {
-				visibleTemplates = append(visibleTemplates, t)
-			}
-		}
-
-		templateOptions := make([]huh.Option[string], len(visibleTemplates))
-		for i, tpl := range visibleTemplates {
-			parts := strings.SplitN(tpl.Title, ": ", 2)
-			label := tpl.Title
-			if len(parts) == 2 {
-				label = parts[0]
-			}
-			templateOptions[i] = huh.NewOption(label, tpl.Title)
-		}
-
-		var selectedTemplate string
-		form := huh.NewForm(
-			huh.NewGroup(
-				huh.NewSelect[string]().
-					Title("Pick a workflow template").
-					Options(templateOptions...).
-					Value(&selectedTemplate),
-			),
-		).WithTheme(chainlinkTheme)
-
-		if err := form.Run(); err != nil {
-			return fmt.Errorf("template selection aborted: %w", err)
-		}
-
-		selected, selErr := h.getWorkflowTemplateByTitle(selectedTemplate, workflowTemplates)
-		if selErr != nil {
-			return selErr
-		}
-		selectedWorkflowTemplate = selected
-	}
-
-	if err != nil {
+	// Create project settings for new projects
+	if isNewProject {
 		repl := settings.GetDefaultReplacements()
-		rpcURL := ""
 		if selectedWorkflowTemplate.Name == PoRTemplate {
-			if strings.TrimSpace(inputs.RPCUrl) != "" {
-				rpcURL = strings.TrimSpace(inputs.RPCUrl)
-			} else {
-				defaultRPC := constants.DefaultEthSepoliaRpcUrl
-
-				form := huh.NewForm(
-					huh.NewGroup(
-						huh.NewInput().
-							Title("Sepolia RPC URL").
-							Description("RPC endpoint for Ethereum Sepolia testnet").
-							Placeholder(defaultRPC).
-							Suggestions([]string{defaultRPC}).
-							Value(&rpcURL),
-					),
-				).WithTheme(chainlinkTheme).WithKeyMap(chainlinkKeyMap)
-
-				if err := form.Run(); err != nil {
-					return err
-				}
-
-				if rpcURL == "" {
-					rpcURL = defaultRPC
-				}
-			}
 			repl["EthSepoliaRpcUrl"] = rpcURL
 		}
 		if e := settings.FindOrCreateProjectSettings(projectRoot, repl); e != nil {
 			return e
-		}
-		if selectedWorkflowTemplate.Name == PoRTemplate {
-			ui.Dim(fmt.Sprintf("  RPC set to %s (editable in %s)",
-				rpcURL,
-				filepath.Join(filepath.Base(projectRoot), constants.DefaultProjectSettingsFileName)))
 		}
 		if _, e := settings.GenerateProjectEnvFile(projectRoot); e != nil {
 			return e
 		}
 	}
 
-	workflowName := strings.TrimSpace(inputs.WorkflowName)
-	if workflowName == "" {
-		defaultName := constants.DefaultWorkflowName
-
-		form := huh.NewForm(
-			huh.NewGroup(
-				huh.NewInput().
-					Title("Workflow name").
-					Description("Name for your workflow").
-					Placeholder(defaultName).
-					Suggestions([]string{defaultName}).
-					Value(&workflowName).
-					Validate(func(s string) error {
-						name := s
-						if name == "" {
-							name = defaultName
-						}
-						return validation.IsValidWorkflowName(name)
-					}),
-			),
-		).WithTheme(chainlinkTheme).WithKeyMap(chainlinkKeyMap)
-
-		if err := form.Run(); err != nil {
-			return fmt.Errorf("workflow name input cancelled: %w", err)
-		}
-
-		if workflowName == "" {
-			workflowName = defaultName
-		}
-	}
-
+	// Create workflow directory
 	workflowDirectory := filepath.Join(projectRoot, workflowName)
-
 	if err := h.ensureProjectDirectoryExists(workflowDirectory); err != nil {
 		return err
 	}
@@ -474,6 +330,23 @@ func (h *handler) Execute(inputs Inputs) error {
 	h.printSuccessMessage(projectRoot, workflowName, selectedLanguageTemplate.Lang)
 
 	return nil
+}
+
+// findExistingProject walks up from the given directory looking for a project settings file
+func (h *handler) findExistingProject(dir string) (string, string, error) {
+	for {
+		if h.pathExists(filepath.Join(dir, constants.DefaultProjectSettingsFileName)) {
+			if h.pathExists(filepath.Join(dir, constants.DefaultIsGoFileName)) {
+				return dir, "Golang", nil
+			}
+			return dir, "Typescript", nil
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return "", "", fmt.Errorf("no existing project found")
+		}
+		dir = parent
+	}
 }
 
 func (h *handler) printSuccessMessage(projectRoot, workflowName string, lang TemplateLanguage) {
