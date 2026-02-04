@@ -353,35 +353,19 @@ func (h *handler) printSuccessMessage(projectRoot, workflowName string, lang Tem
 
 	var steps string
 	if lang == TemplateLangGo {
-		steps = fmt.Sprintf(`%s
-     %s
-
-%s
-     %s`,
-			ui.RenderStep("1. Navigate to your project:"),
-			ui.RenderDim("cd "+filepath.Base(projectRoot)),
-			ui.RenderStep("2. Run the workflow:"),
-			ui.RenderDim("cre workflow simulate "+workflowName))
+		steps = ui.RenderStep("1. Navigate to your project:") + "\n" +
+			"     " + ui.RenderDim("cd "+filepath.Base(projectRoot)) + "\n\n" +
+			ui.RenderStep("2. Run the workflow:") + "\n" +
+			"     " + ui.RenderDim("cre workflow simulate "+workflowName)
 	} else {
-		steps = fmt.Sprintf(`%s
-     %s
-
-%s
-     %s
-
-%s
-     %s
-
-%s
-     %s`,
-			ui.RenderStep("1. Navigate to your project:"),
-			ui.RenderDim("cd "+filepath.Base(projectRoot)),
-			ui.RenderStep("2. Install Bun (if needed):"),
-			ui.RenderDim("npm install -g bun"),
-			ui.RenderStep("3. Install dependencies:"),
-			ui.RenderDim("bun install --cwd ./"+workflowName),
-			ui.RenderStep("4. Run the workflow:"),
-			ui.RenderDim("cre workflow simulate "+workflowName))
+		steps = ui.RenderStep("1. Navigate to your project:") + "\n" +
+			"     " + ui.RenderDim("cd "+filepath.Base(projectRoot)) + "\n\n" +
+			ui.RenderStep("2. Install Bun (if needed):") + "\n" +
+			"     " + ui.RenderDim("npm install -g bun") + "\n\n" +
+			ui.RenderStep("3. Install dependencies:") + "\n" +
+			"     " + ui.RenderDim("bun install --cwd ./"+workflowName) + "\n\n" +
+			ui.RenderStep("4. Run the workflow:") + "\n" +
+			"     " + ui.RenderDim("cre workflow simulate "+workflowName)
 	}
 
 	ui.Box("Next steps\n\n" + steps)
