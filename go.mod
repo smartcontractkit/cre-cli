@@ -26,13 +26,13 @@ require (
 	github.com/smartcontractkit/chain-selectors v1.0.88
 	github.com/smartcontractkit/chainlink-common v0.9.6-0.20260107095648-223976d2b9f1
 	github.com/smartcontractkit/chainlink-evm/gethwrappers v0.0.0-20251211123524-f0c4fe7cfc0a
-	github.com/smartcontractkit/chainlink-protos/cre/go v0.0.0-20260128170729-2a6a688427f5
+	github.com/smartcontractkit/chainlink-protos/cre/go v0.0.0-20260130141950-d29de571de72
 	github.com/smartcontractkit/chainlink-protos/workflows/go v0.0.0-20260106052706-6dd937cb5ec6
 	github.com/smartcontractkit/chainlink-testing-framework/seth v1.51.3
 	github.com/smartcontractkit/chainlink/deployment v0.0.0-20260109210342-7c60a208545f
 	github.com/smartcontractkit/chainlink/v2 v2.29.1-cre-beta.0.0.20260109132812-ceed3e450cb6
-	github.com/smartcontractkit/cre-sdk-go v1.1.4
-	github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm v1.0.0-beta.3
+	github.com/smartcontractkit/cre-sdk-go v1.1.5
+	github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm v1.0.0-beta.4
 	github.com/smartcontractkit/mcms v0.31.1
 	github.com/smartcontractkit/tdh2/go/tdh2 v0.0.0-20251120172354-e8ec0386b06c
 	github.com/spf13/cobra v1.10.1
