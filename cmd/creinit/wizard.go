@@ -12,7 +12,23 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/validation"
 )
 
-// Wizard steps
+const creLogo = `
+      ÷÷÷                                          ÷÷÷
+   ÷÷÷÷÷÷                                          ÷÷÷÷÷÷
+÷÷÷÷÷÷÷÷÷                                          ÷÷÷÷÷÷÷÷÷
+÷÷÷÷÷÷       ÷÷÷÷÷÷÷÷÷÷  ÷÷÷÷÷÷÷÷÷÷  ÷÷÷÷÷÷÷÷÷÷       ÷÷÷÷÷÷
+÷÷÷÷÷÷       ÷÷÷÷÷÷÷÷÷÷  ÷÷÷÷÷÷÷÷÷÷  ÷÷÷÷÷÷÷÷÷÷       ÷÷÷÷÷÷
+÷÷÷÷÷÷       ÷÷÷÷    ÷÷÷ ÷÷÷   ÷÷÷÷  ÷÷÷              ÷÷÷÷÷÷
+÷÷÷÷÷÷       ÷÷÷         ÷÷÷÷÷÷÷÷÷   ÷÷÷÷÷÷÷÷÷÷       ÷÷÷÷÷÷
+÷÷÷÷÷÷       ÷÷÷         ÷÷÷÷÷÷÷÷    ÷÷÷÷÷÷÷÷÷÷       ÷÷÷÷÷÷
+÷÷÷÷÷÷       ÷÷÷÷    ÷÷÷ ÷÷÷  ÷÷÷÷   ÷÷÷              ÷÷÷÷÷÷
+÷÷÷÷÷÷       ÷÷÷÷÷÷÷÷÷÷  ÷÷÷   ÷÷÷÷  ÷÷÷÷÷÷÷÷÷÷       ÷÷÷÷÷÷
+÷÷÷÷÷÷       ÷÷÷÷÷÷÷÷÷÷  ÷÷÷    ÷÷÷÷ ÷÷÷÷÷÷÷÷÷÷       ÷÷÷÷÷÷
+÷÷÷÷÷÷÷÷÷                                          ÷÷÷÷÷÷÷÷÷
+   ÷÷÷÷÷÷                                          ÷÷÷÷÷÷
+      ÷÷÷                                          ÷÷÷
+`
+
 type wizardStep int
 
 const (
@@ -66,6 +82,7 @@ type wizardModel struct {
 	cancelled bool
 
 	// Styles
+	logoStyle     lipgloss.Style
 	titleStyle    lipgloss.Style
 	dimStyle      lipgloss.Style
 	promptStyle   lipgloss.Style
@@ -119,6 +136,7 @@ func newWizardModel(inputs Inputs, isNewProject bool, existingLanguage string) w
 		languageOptions: langOpts,
 
 		// Styles using ui package colors
+		logoStyle:     lipgloss.NewStyle().Foreground(lipgloss.Color(ui.ColorBlue500)).Bold(true),
 		titleStyle:    lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(ui.ColorBlue500)),
 		dimStyle:      lipgloss.NewStyle().Foreground(lipgloss.Color(ui.ColorGray500)),
 		promptStyle:   lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(ui.ColorBlue400)),
@@ -361,6 +379,10 @@ func (m wizardModel) View() string {
 	}
 
 	var b strings.Builder
+
+	// Logo
+	b.WriteString(m.logoStyle.Render(creLogo))
+	b.WriteString("\n")
 
 	// Title
 	b.WriteString(m.titleStyle.Render("Create a new CRE project"))
