@@ -25,9 +25,6 @@ import (
 // chainlinkTheme for all Huh forms in this package
 var chainlinkTheme = ui.ChainlinkTheme()
 
-// chainlinkKeyMap for Tab autocomplete
-var chainlinkKeyMap = ui.ChainlinkKeyMap()
-
 //go:embed template/workflow/**/*
 var workflowTemplatesContent embed.FS
 
@@ -51,7 +48,7 @@ type WorkflowTemplate struct {
 	Title  string
 	ID     uint32
 	Name   string
-	Hidden bool
+	Hidden bool // If true, this template will be hidden from the user selection prompt
 }
 
 type LanguageTemplate struct {
@@ -167,72 +164,75 @@ func (h *handler) Execute(inputs Inputs) error {
 		return fmt.Errorf("handler inputs not validated")
 	}
 
-	ui.Line()
-	ui.Title("Create a new CRE project")
-
 	cwd, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("unable to get working directory: %w", err)
 	}
 	startDir := cwd
 
-	projectRoot, existingProjectLanguage, err := func(dir string) (string, string, error) {
-		for {
-			if h.pathExists(filepath.Join(dir, constants.DefaultProjectSettingsFileName)) {
+	// Detect if we're in an existing project
+	existingProjectRoot, existingProjectLanguage, existingErr := h.findExistingProject(startDir)
+	isNewProject := existingErr != nil
 
-				if h.pathExists(filepath.Join(dir, constants.DefaultIsGoFileName)) {
-					return dir, "Golang", nil
-				}
+	// If template ID provided via flag, resolve it now
+	var selectedWorkflowTemplate WorkflowTemplate
+	var selectedLanguageTemplate LanguageTemplate
 
-				return dir, "Typescript", nil
-			}
-			parent := filepath.Dir(dir)
-			if parent == dir {
-				return "", "", fmt.Errorf("no existing project found")
-			}
-			dir = parent
+	if inputs.TemplateID != 0 {
+		wt, lt, findErr := h.getWorkflowTemplateByID(inputs.TemplateID)
+		if findErr != nil {
+			return fmt.Errorf("invalid template ID %d: %w", inputs.TemplateID, findErr)
 		}
-	}(startDir)
+		selectedWorkflowTemplate = wt
+		selectedLanguageTemplate = lt
+	}
 
+	// Run the interactive wizard
+	result, err := RunWizard(inputs, isNewProject, existingProjectLanguage)
 	if err != nil {
-		projName := inputs.ProjectName
-		if projName == "" {
-			defaultName := constants.DefaultProjectName
+		return fmt.Errorf("wizard error: %w", err)
+	}
+	if result.Cancelled {
+		return fmt.Errorf("cre init cancelled")
+	}
 
-			form := huh.NewForm(
-				huh.NewGroup(
-					huh.NewInput().
-						Title("Project name").
-						Description("Name for your new CRE project").
-						Placeholder(defaultName).
-						Suggestions([]string{defaultName}).
-						Value(&projName).
-						Validate(func(s string) error {
-							name := s
-							if name == "" {
-								name = defaultName
-							}
-							return validation.IsValidProjectName(name)
-						}),
-				),
-			).WithTheme(chainlinkTheme).WithKeyMap(chainlinkKeyMap)
+	// Extract values from wizard result
+	projName := result.ProjectName
+	selectedLang := result.Language
+	rpcURL := result.RPCURL
+	workflowName := result.WorkflowName
 
-			if err := form.Run(); err != nil {
-				return fmt.Errorf("project name input cancelled: %w", err)
-			}
+	// Apply defaults
+	if projName == "" {
+		projName = constants.DefaultProjectName
+	}
+	if workflowName == "" {
+		workflowName = constants.DefaultWorkflowName
+	}
 
-			if projName == "" {
-				projName = defaultName
-			}
-		}
+	// Resolve templates from wizard if not provided via flag
+	if inputs.TemplateID == 0 {
+		selectedLanguageTemplate, _ = h.getLanguageTemplateByTitle(selectedLang)
+		selectedWorkflowTemplate, _ = h.getWorkflowTemplateByTitle(result.TemplateName, selectedLanguageTemplate.Workflows)
+	}
 
-		projectRoot = filepath.Join(startDir, projName, "/")
+	// Determine project root
+	var projectRoot string
+	if isNewProject {
+		projectRoot = filepath.Join(startDir, projName) + "/"
+	} else {
+		projectRoot = existingProjectRoot
+	}
+
+	// Create project directory if new project
+	if isNewProject {
 		if err := h.ensureProjectDirectoryExists(projectRoot); err != nil {
 			return err
 		}
 	}
 
-	if err == nil {
+	// Ensure env file exists for existing projects
+	if !isNewProject {
 		envPath := filepath.Join(projectRoot, constants.DefaultEnvFileName)
 		if !h.pathExists(envPath) {
 			if _, err := settings.GenerateProjectEnvFile(projectRoot); err != nil {
@@ -241,173 +241,27 @@ func (h *handler) Execute(inputs Inputs) error {
 		}
 	}
 
-	var selectedWorkflowTemplate WorkflowTemplate
-	var selectedLanguageTemplate LanguageTemplate
-	var workflowTemplates []WorkflowTemplate
-
-	if inputs.TemplateID != 0 {
-		var findErr error
-		selectedWorkflowTemplate, selectedLanguageTemplate, findErr = h.getWorkflowTemplateByID(inputs.TemplateID)
-		if findErr != nil {
-			return fmt.Errorf("invalid template ID %d: %w", inputs.TemplateID, findErr)
-		}
-	} else {
-		if existingProjectLanguage != "" {
-			var templateErr error
-			selectedLanguageTemplate, templateErr = h.getLanguageTemplateByTitle(existingProjectLanguage)
-			workflowTemplates = selectedLanguageTemplate.Workflows
-
-			if templateErr != nil {
-				return fmt.Errorf("invalid template %s: %w", existingProjectLanguage, templateErr)
-			}
-		}
-
-		if len(workflowTemplates) < 1 {
-			languageOptions := make([]huh.Option[string], len(languageTemplates))
-			for i, lang := range languageTemplates {
-				languageOptions[i] = huh.NewOption(lang.Title, lang.Title)
-			}
-
-			var selectedLang string
-			form := huh.NewForm(
-				huh.NewGroup(
-					huh.NewSelect[string]().
-						Title("What language do you want to use?").
-						Options(languageOptions...).
-						Value(&selectedLang),
-				),
-			).WithTheme(chainlinkTheme)
-
-			if err := form.Run(); err != nil {
-				return fmt.Errorf("language selection aborted: %w", err)
-			}
-
-			selected, selErr := h.getLanguageTemplateByTitle(selectedLang)
-			if selErr != nil {
-				return selErr
-			}
-			selectedLanguageTemplate = selected
-			workflowTemplates = selectedLanguageTemplate.Workflows
-		}
-
-		visibleTemplates := make([]WorkflowTemplate, 0, len(workflowTemplates))
-		for _, t := range workflowTemplates {
-			if !t.Hidden {
-				visibleTemplates = append(visibleTemplates, t)
-			}
-		}
-
-		templateOptions := make([]huh.Option[string], len(visibleTemplates))
-		for i, tpl := range visibleTemplates {
-			parts := strings.SplitN(tpl.Title, ": ", 2)
-			label := tpl.Title
-			if len(parts) == 2 {
-				label = parts[0]
-			}
-			templateOptions[i] = huh.NewOption(label, tpl.Title)
-		}
-
-		var selectedTemplate string
-		form := huh.NewForm(
-			huh.NewGroup(
-				huh.NewSelect[string]().
-					Title("Pick a workflow template").
-					Options(templateOptions...).
-					Value(&selectedTemplate),
-			),
-		).WithTheme(chainlinkTheme)
-
-		if err := form.Run(); err != nil {
-			return fmt.Errorf("template selection aborted: %w", err)
-		}
-
-		selected, selErr := h.getWorkflowTemplateByTitle(selectedTemplate, workflowTemplates)
-		if selErr != nil {
-			return selErr
-		}
-		selectedWorkflowTemplate = selected
-	}
-
-	if err != nil {
+	// Create project settings for new projects
+	if isNewProject {
 		repl := settings.GetDefaultReplacements()
-		rpcURL := ""
 		if selectedWorkflowTemplate.Name == PoRTemplate {
-			if strings.TrimSpace(inputs.RPCUrl) != "" {
-				rpcURL = strings.TrimSpace(inputs.RPCUrl)
-			} else {
-				defaultRPC := constants.DefaultEthSepoliaRpcUrl
-
-				form := huh.NewForm(
-					huh.NewGroup(
-						huh.NewInput().
-							Title("Sepolia RPC URL").
-							Description("RPC endpoint for Ethereum Sepolia testnet").
-							Placeholder(defaultRPC).
-							Suggestions([]string{defaultRPC}).
-							Value(&rpcURL),
-					),
-				).WithTheme(chainlinkTheme).WithKeyMap(chainlinkKeyMap)
-
-				if err := form.Run(); err != nil {
-					return err
-				}
-
-				if rpcURL == "" {
-					rpcURL = defaultRPC
-				}
-			}
 			repl["EthSepoliaRpcUrl"] = rpcURL
 		}
 		if e := settings.FindOrCreateProjectSettings(projectRoot, repl); e != nil {
 			return e
-		}
-		if selectedWorkflowTemplate.Name == PoRTemplate {
-			ui.Dim(fmt.Sprintf("  RPC set to %s (editable in %s)",
-				rpcURL,
-				filepath.Join(filepath.Base(projectRoot), constants.DefaultProjectSettingsFileName)))
 		}
 		if _, e := settings.GenerateProjectEnvFile(projectRoot); e != nil {
 			return e
 		}
 	}
 
-	workflowName := strings.TrimSpace(inputs.WorkflowName)
-	if workflowName == "" {
-		defaultName := constants.DefaultWorkflowName
-
-		form := huh.NewForm(
-			huh.NewGroup(
-				huh.NewInput().
-					Title("Workflow name").
-					Description("Name for your workflow").
-					Placeholder(defaultName).
-					Suggestions([]string{defaultName}).
-					Value(&workflowName).
-					Validate(func(s string) error {
-						name := s
-						if name == "" {
-							name = defaultName
-						}
-						return validation.IsValidWorkflowName(name)
-					}),
-			),
-		).WithTheme(chainlinkTheme).WithKeyMap(chainlinkKeyMap)
-
-		if err := form.Run(); err != nil {
-			return fmt.Errorf("workflow name input cancelled: %w", err)
-		}
-
-		if workflowName == "" {
-			workflowName = defaultName
-		}
-	}
-
+	// Create workflow directory
 	workflowDirectory := filepath.Join(projectRoot, workflowName)
-
 	if err := h.ensureProjectDirectoryExists(workflowDirectory); err != nil {
 		return err
 	}
 
+	// Get project name from project root
 	projectName := filepath.Base(projectRoot)
 	spinner := ui.NewSpinner()
 
@@ -427,7 +281,8 @@ func (h *handler) Execute(inputs Inputs) error {
 
 	// Generate contracts template
 	spinner.Update("Generating contracts...")
-	if err := h.generateContractsTemplate(projectRoot, selectedWorkflowTemplate, projectName); err != nil {
+	contractsGenerated, err := h.generateContractsTemplate(projectRoot, selectedWorkflowTemplate, projectName)
+	if err != nil {
 		spinner.Stop()
 		return fmt.Errorf("failed to scaffold contracts: %w", err)
 	}
@@ -450,6 +305,13 @@ func (h *handler) Execute(inputs Inputs) error {
 	spinner.Stop()
 	if err != nil {
 		return fmt.Errorf("failed to generate %s file: %w", constants.DefaultWorkflowSettingsFileName, err)
+	}
+
+	// Show what was created
+	ui.Line()
+	ui.Dim("Files created in " + workflowDirectory)
+	if contractsGenerated {
+		ui.Dim("Contracts generated in " + filepath.Join(projectRoot, "contracts"))
 	}
 
 	// Show installed dependencies in a box after spinner stops
@@ -476,6 +338,23 @@ func (h *handler) Execute(inputs Inputs) error {
 	return nil
 }
 
+// findExistingProject walks up from the given directory looking for a project settings file
+func (h *handler) findExistingProject(dir string) (projectRoot string, language string, err error) {
+	for {
+		if h.pathExists(filepath.Join(dir, constants.DefaultProjectSettingsFileName)) {
+			if h.pathExists(filepath.Join(dir, constants.DefaultIsGoFileName)) {
+				return dir, "Golang", nil
+			}
+			return dir, "Typescript", nil
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return "", "", fmt.Errorf("no existing project found")
+		}
+		dir = parent
+	}
+}
+
 func (h *handler) printSuccessMessage(projectRoot, workflowName string, lang TemplateLanguage) {
 	ui.Line()
 	ui.Success("Project created successfully!")
@@ -483,35 +362,19 @@ func (h *handler) printSuccessMessage(projectRoot, workflowName string, lang Tem
 
 	var steps string
 	if lang == TemplateLangGo {
-		steps = fmt.Sprintf(`%s
-     %s
-
-%s
-     %s`,
-			ui.RenderStep("1. Navigate to your project:"),
-			ui.RenderDim("cd "+filepath.Base(projectRoot)),
-			ui.RenderStep("2. Run the workflow:"),
-			ui.RenderDim("cre workflow simulate "+workflowName))
+		steps = ui.RenderStep("1. Navigate to your project:") + "\n" +
+			"     " + ui.RenderDim("cd "+filepath.Base(projectRoot)) + "\n\n" +
+			ui.RenderStep("2. Run the workflow:") + "\n" +
+			"     " + ui.RenderDim("cre workflow simulate "+workflowName)
 	} else {
-		steps = fmt.Sprintf(`%s
-     %s
-
-%s
-     %s
-
-%s
-     %s
-
-%s
-     %s`,
-			ui.RenderStep("1. Navigate to your project:"),
-			ui.RenderDim("cd "+filepath.Base(projectRoot)),
-			ui.RenderStep("2. Install Bun (if needed):"),
-			ui.RenderDim("npm install -g bun"),
-			ui.RenderStep("3. Install dependencies:"),
-			ui.RenderDim("bun install --cwd ./"+workflowName),
-			ui.RenderStep("4. Run the workflow:"),
-			ui.RenderDim("cre workflow simulate "+workflowName))
+		steps = ui.RenderStep("1. Navigate to your project:") + "\n" +
+			"     " + ui.RenderDim("cd "+filepath.Base(projectRoot)) + "\n\n" +
+			ui.RenderStep("2. Install Bun (if needed):") + "\n" +
+			"     " + ui.RenderDim("npm install -g bun") + "\n\n" +
+			ui.RenderStep("3. Install dependencies:") + "\n" +
+			"     " + ui.RenderDim("bun install --cwd ./"+workflowName) + "\n\n" +
+			ui.RenderStep("4. Run the workflow:") + "\n" +
+			"     " + ui.RenderDim("cre workflow simulate "+workflowName)
 	}
 
 	ui.Box("Next steps\n\n" + steps)
@@ -549,20 +412,25 @@ func (h *handler) getWorkflowTemplateByTitle(title string, workflowTemplates []W
 	return WorkflowTemplate{}, errors.New("template not found")
 }
 
+// Copy the content of the secrets file (if exists for this workflow template) to the project root
 func (h *handler) copySecretsFileIfExists(projectRoot string, template WorkflowTemplate) error {
+	// When referencing embedded template files, the path is relative and separated by forward slashes
 	sourceSecretsFilePath := "template/workflow/" + template.Folder + "/" + SecretsFileName
 	destinationSecretsFilePath := filepath.Join(projectRoot, SecretsFileName)
 
+	// Ensure the secrets file exists in the template directory
 	if _, err := fs.Stat(workflowTemplatesContent, sourceSecretsFilePath); err != nil {
 		h.log.Debug().Msg("Secrets file doesn't exist for this template, skipping")
 		return nil
 	}
 
+	// Read the content of the secrets file from the template
 	secretsFileContent, err := workflowTemplatesContent.ReadFile(sourceSecretsFilePath)
 	if err != nil {
 		return fmt.Errorf("failed to read secrets file: %w", err)
 	}
 
+	// Write the file content to the target path
 	if err := os.WriteFile(destinationSecretsFilePath, []byte(secretsFileContent), 0600); err != nil {
 		return fmt.Errorf("failed to write file: %w", err)
 	}
@@ -572,57 +440,74 @@ func (h *handler) copySecretsFileIfExists(projectRoot string, template WorkflowT
 	return nil
 }
 
+// generateWorkflowTemplate copies the content of template/workflow/{{templateName}} and removes "tpl" extension
 func (h *handler) generateWorkflowTemplate(workingDirectory string, template WorkflowTemplate, projectName string) error {
 	h.log.Debug().Msgf("Generating template: %s", template.Title)
 
+	// Construct the path to the specific template directory
+	// When referencing embedded template files, the path is relative and separated by forward slashes
 	templatePath := "template/workflow/" + template.Folder
 
+	// Ensure the specified template directory exists
 	if _, err := fs.Stat(workflowTemplatesContent, templatePath); err != nil {
 		return fmt.Errorf("template directory doesn't exist: %w", err)
 	}
 
+	// Walk through all files & folders under templatePath
 	walkErr := fs.WalkDir(workflowTemplatesContent, templatePath, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
-			return err
+			return err // propagate I/O errors
 		}
 
+		// Compute the path of this entry relative to templatePath
 		relPath, _ := filepath.Rel(templatePath, path)
 
+		// Skip the top-level directory itself
 		if relPath == "." {
 			return nil
 		}
 
+		// Skip contracts directory - it will be handled separately
 		if strings.HasPrefix(relPath, "contracts") {
 			return nil
 		}
 
+		// If it's a directory, just create the matching directory in the working dir
 		if d.IsDir() {
 			return os.MkdirAll(filepath.Join(workingDirectory, relPath), 0o755)
 		}
 
+		// Skip the secrets file if it exists, this one is copied separately into the project root
 		if strings.Contains(relPath, SecretsFileName) {
 			return nil
 		}
 
+		// Determine the target file path
 		var targetPath string
 		if strings.HasSuffix(relPath, ".tpl") {
+			// Remove `.tpl` extension for files with `.tpl`
 			outputFileName := strings.TrimSuffix(relPath, ".tpl")
 			targetPath = filepath.Join(workingDirectory, outputFileName)
 		} else {
+			// Copy other files as-is
 			targetPath = filepath.Join(workingDirectory, relPath)
 		}
 
+		// Read the file content
 		content, err := workflowTemplatesContent.ReadFile(path)
 		if err != nil {
 			return fmt.Errorf("failed to read file: %w", err)
 		}
 
+		// Replace template variables with actual values
 		finalContent := strings.ReplaceAll(string(content), "{{projectName}}", projectName)
 
+		// Ensure the target directory exists
 		if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
 			return fmt.Errorf("failed to create directory for: %w", err)
 		}
 
+		// Write the file content to the target path
 		if err := os.WriteFile(targetPath, []byte(finalContent), 0600); err != nil {
 			return fmt.Errorf("failed to write file: %w", err)
 		}
@@ -677,55 +562,73 @@ func (h *handler) ensureProjectDirectoryExists(dirPath string) error {
 	return nil
 }
 
-func (h *handler) generateContractsTemplate(projectRoot string, template WorkflowTemplate, projectName string) error {
+// generateContractsTemplate generates contracts at project level if template has contracts
+func (h *handler) generateContractsTemplate(projectRoot string, template WorkflowTemplate, projectName string) (generated bool, err error) {
+	// Construct the path to the contracts directory in the template
+	// When referencing embedded template files, the path is relative and separated by forward slashes
 	templateContractsPath := "template/workflow/" + template.Folder + "/contracts"
 
+	// Check if this template has contracts
 	if _, err := fs.Stat(workflowTemplatesContent, templateContractsPath); err != nil {
-		return nil
+		// No contracts directory in this template, skip
+		return false, nil
 	}
 
 	h.log.Debug().Msgf("Generating contracts for template: %s", template.Title)
 
+	// Create contracts directory at project level
 	contractsDirectory := filepath.Join(projectRoot, "contracts")
 
+	// Walk through all files & folders under contracts template
 	walkErr := fs.WalkDir(workflowTemplatesContent, templateContractsPath, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
-			return err
+			return err // propagate I/O errors
 		}
 
+		// Compute the path of this entry relative to templateContractsPath
 		relPath, _ := filepath.Rel(templateContractsPath, path)
 
+		// Skip the top-level directory itself
 		if relPath == "." {
 			return nil
 		}
 
+		// Skip keep.tpl file used to copy empty directory
 		if d.Name() == "keep.tpl" {
 			return nil
 		}
 
+		// If it's a directory, just create the matching directory in the contracts dir
 		if d.IsDir() {
 			return os.MkdirAll(filepath.Join(contractsDirectory, relPath), 0o755)
 		}
 
+		// Determine the target file path
 		var targetPath string
 		if strings.HasSuffix(relPath, ".tpl") {
+			// Remove `.tpl` extension for files with `.tpl`
 			outputFileName := strings.TrimSuffix(relPath, ".tpl")
 			targetPath = filepath.Join(contractsDirectory, outputFileName)
 		} else {
+			// Copy other files as-is
 			targetPath = filepath.Join(contractsDirectory, relPath)
 		}
 
+		// Read the file content
 		content, err := workflowTemplatesContent.ReadFile(path)
 		if err != nil {
 			return fmt.Errorf("failed to read file: %w", err)
 		}
 
+		// Replace template variables with actual values
 		finalContent := strings.ReplaceAll(string(content), "{{projectName}}", projectName)
 
+		// Ensure the target directory exists
 		if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
 			return fmt.Errorf("failed to create directory for: %w", err)
 		}
 
+		// Write the file content to the target path
 		if err := os.WriteFile(targetPath, []byte(finalContent), 0600); err != nil {
 			return fmt.Errorf("failed to write file: %w", err)
 		}
@@ -734,7 +637,7 @@ func (h *handler) generateContractsTemplate(projectRoot string, template Workflo
 		return nil
 	})
 
-	return walkErr
+	return true, walkErr
 }
 
 func (h *handler) pathExists(filePath string) bool {

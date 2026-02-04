@@ -42,6 +42,7 @@ type progressErrMsg struct{ err error }
 type downloadModel struct {
 	progress progress.Model
 	message  string
+	percent  float64
 	done     bool
 	err      error
 }
@@ -57,18 +58,14 @@ func (m downloadModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 	case progressMsg:
-		cmd := m.progress.SetPercent(float64(msg))
-		return m, cmd
+		m.percent = float64(msg)
+		return m, nil
 	case progressDoneMsg:
 		m.done = true
 		return m, tea.Quit
 	case progressErrMsg:
 		m.err = msg.err
 		return m, tea.Quit
-	case progress.FrameMsg:
-		progressModel, cmd := m.progress.Update(msg)
-		m.progress = progressModel.(progress.Model)
-		return m, cmd
 	}
 	return m, nil
 }
@@ -78,7 +75,8 @@ func (m downloadModel) View() string {
 		return ""
 	}
 	pad := strings.Repeat(" ", 2)
-	return "\n" + pad + DimStyle.Render(m.message) + "\n" + pad + m.progress.View() + "\n"
+	// Use ViewAs for immediate rendering without animation lag
+	return "\n" + pad + DimStyle.Render(m.message) + "\n" + pad + m.progress.ViewAs(m.percent) + "\n"
 }
 
 // DownloadWithProgress downloads a file with a progress bar display.
