@@ -48,7 +48,7 @@ type WorkflowTemplate struct {
 	Title  string
 	ID     uint32
 	Name   string
-	Hidden bool
+	Hidden bool // If true, this template will be hidden from the user selection prompt
 }
 
 type LanguageTemplate struct {
@@ -261,6 +261,7 @@ func (h *handler) Execute(inputs Inputs) error {
 		return err
 	}
 
+	// Get project name from project root
 	projectName := filepath.Base(projectRoot)
 	spinner := ui.NewSpinner()
 
@@ -411,20 +412,25 @@ func (h *handler) getWorkflowTemplateByTitle(title string, workflowTemplates []W
 	return WorkflowTemplate{}, errors.New("template not found")
 }
 
+// Copy the content of the secrets file (if exists for this workflow template) to the project root
 func (h *handler) copySecretsFileIfExists(projectRoot string, template WorkflowTemplate) error {
+	// When referencing embedded template files, the path is relative and separated by forward slashes
 	sourceSecretsFilePath := "template/workflow/" + template.Folder + "/" + SecretsFileName
 	destinationSecretsFilePath := filepath.Join(projectRoot, SecretsFileName)
 
+	// Ensure the secrets file exists in the template directory
 	if _, err := fs.Stat(workflowTemplatesContent, sourceSecretsFilePath); err != nil {
 		h.log.Debug().Msg("Secrets file doesn't exist for this template, skipping")
 		return nil
 	}
 
+	// Read the content of the secrets file from the template
 	secretsFileContent, err := workflowTemplatesContent.ReadFile(sourceSecretsFilePath)
 	if err != nil {
 		return fmt.Errorf("failed to read secrets file: %w", err)
 	}
 
+	// Write the file content to the target path
 	if err := os.WriteFile(destinationSecretsFilePath, []byte(secretsFileContent), 0600); err != nil {
 		return fmt.Errorf("failed to write file: %w", err)
 	}
@@ -434,57 +440,74 @@ func (h *handler) copySecretsFileIfExists(projectRoot string, template WorkflowT
 	return nil
 }
 
+// generateWorkflowTemplate copies the content of template/workflow/{{templateName}} and removes "tpl" extension
 func (h *handler) generateWorkflowTemplate(workingDirectory string, template WorkflowTemplate, projectName string) error {
 	h.log.Debug().Msgf("Generating template: %s", template.Title)
 
+	// Construct the path to the specific template directory
+	// When referencing embedded template files, the path is relative and separated by forward slashes
 	templatePath := "template/workflow/" + template.Folder
 
+	// Ensure the specified template directory exists
 	if _, err := fs.Stat(workflowTemplatesContent, templatePath); err != nil {
 		return fmt.Errorf("template directory doesn't exist: %w", err)
 	}
 
+	// Walk through all files & folders under templatePath
 	walkErr := fs.WalkDir(workflowTemplatesContent, templatePath, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
-			return err
+			return err // propagate I/O errors
 		}
 
+		// Compute the path of this entry relative to templatePath
 		relPath, _ := filepath.Rel(templatePath, path)
 
+		// Skip the top-level directory itself
 		if relPath == "." {
 			return nil
 		}
 
+		// Skip contracts directory - it will be handled separately
 		if strings.HasPrefix(relPath, "contracts") {
 			return nil
 		}
 
+		// If it's a directory, just create the matching directory in the working dir
 		if d.IsDir() {
 			return os.MkdirAll(filepath.Join(workingDirectory, relPath), 0o755)
 		}
 
+		// Skip the secrets file if it exists, this one is copied separately into the project root
 		if strings.Contains(relPath, SecretsFileName) {
 			return nil
 		}
 
+		// Determine the target file path
 		var targetPath string
 		if strings.HasSuffix(relPath, ".tpl") {
+			// Remove `.tpl` extension for files with `.tpl`
 			outputFileName := strings.TrimSuffix(relPath, ".tpl")
 			targetPath = filepath.Join(workingDirectory, outputFileName)
 		} else {
+			// Copy other files as-is
 			targetPath = filepath.Join(workingDirectory, relPath)
 		}
 
+		// Read the file content
 		content, err := workflowTemplatesContent.ReadFile(path)
 		if err != nil {
 			return fmt.Errorf("failed to read file: %w", err)
 		}
 
+		// Replace template variables with actual values
 		finalContent := strings.ReplaceAll(string(content), "{{projectName}}", projectName)
 
+		// Ensure the target directory exists
 		if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
 			return fmt.Errorf("failed to create directory for: %w", err)
 		}
 
+		// Write the file content to the target path
 		if err := os.WriteFile(targetPath, []byte(finalContent), 0600); err != nil {
 			return fmt.Errorf("failed to write file: %w", err)
 		}
@@ -539,55 +562,73 @@ func (h *handler) ensureProjectDirectoryExists(dirPath string) error {
 	return nil
 }
 
+// generateContractsTemplate generates contracts at project level if template has contracts
 func (h *handler) generateContractsTemplate(projectRoot string, template WorkflowTemplate, projectName string) (generated bool, err error) {
+	// Construct the path to the contracts directory in the template
+	// When referencing embedded template files, the path is relative and separated by forward slashes
 	templateContractsPath := "template/workflow/" + template.Folder + "/contracts"
 
+	// Check if this template has contracts
 	if _, err := fs.Stat(workflowTemplatesContent, templateContractsPath); err != nil {
+		// No contracts directory in this template, skip
 		return false, nil
 	}
 
 	h.log.Debug().Msgf("Generating contracts for template: %s", template.Title)
 
+	// Create contracts directory at project level
 	contractsDirectory := filepath.Join(projectRoot, "contracts")
 
+	// Walk through all files & folders under contracts template
 	walkErr := fs.WalkDir(workflowTemplatesContent, templateContractsPath, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
-			return err
+			return err // propagate I/O errors
 		}
 
+		// Compute the path of this entry relative to templateContractsPath
 		relPath, _ := filepath.Rel(templateContractsPath, path)
 
+		// Skip the top-level directory itself
 		if relPath == "." {
 			return nil
 		}
 
+		// Skip keep.tpl file used to copy empty directory
 		if d.Name() == "keep.tpl" {
 			return nil
 		}
 
+		// If it's a directory, just create the matching directory in the contracts dir
 		if d.IsDir() {
 			return os.MkdirAll(filepath.Join(contractsDirectory, relPath), 0o755)
 		}
 
+		// Determine the target file path
 		var targetPath string
 		if strings.HasSuffix(relPath, ".tpl") {
+			// Remove `.tpl` extension for files with `.tpl`
 			outputFileName := strings.TrimSuffix(relPath, ".tpl")
 			targetPath = filepath.Join(contractsDirectory, outputFileName)
 		} else {
+			// Copy other files as-is
 			targetPath = filepath.Join(contractsDirectory, relPath)
 		}
 
+		// Read the file content
 		content, err := workflowTemplatesContent.ReadFile(path)
 		if err != nil {
 			return fmt.Errorf("failed to read file: %w", err)
 		}
 
+		// Replace template variables with actual values
 		finalContent := strings.ReplaceAll(string(content), "{{projectName}}", projectName)
 
+		// Ensure the target directory exists
 		if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
 			return fmt.Errorf("failed to create directory for: %w", err)
 		}
 
+		// Write the file content to the target path
 		if err := os.WriteFile(targetPath, []byte(finalContent), 0600); err != nil {
 			return fmt.Errorf("failed to write file: %w", err)
 		}
