@@ -280,7 +280,8 @@ func (h *handler) Execute(inputs Inputs) error {
 
 	// Generate contracts template
 	spinner.Update("Generating contracts...")
-	if err := h.generateContractsTemplate(projectRoot, selectedWorkflowTemplate, projectName); err != nil {
+	contractsGenerated, err := h.generateContractsTemplate(projectRoot, selectedWorkflowTemplate, projectName)
+	if err != nil {
 		spinner.Stop()
 		return fmt.Errorf("failed to scaffold contracts: %w", err)
 	}
@@ -303,6 +304,13 @@ func (h *handler) Execute(inputs Inputs) error {
 	spinner.Stop()
 	if err != nil {
 		return fmt.Errorf("failed to generate %s file: %w", constants.DefaultWorkflowSettingsFileName, err)
+	}
+
+	// Show what was created
+	ui.Line()
+	ui.Dim("Files created in " + workflowDirectory)
+	if contractsGenerated {
+		ui.Dim("Contracts generated in " + filepath.Join(projectRoot, "contracts"))
 	}
 
 	// Show installed dependencies in a box after spinner stops
@@ -531,11 +539,11 @@ func (h *handler) ensureProjectDirectoryExists(dirPath string) error {
 	return nil
 }
 
-func (h *handler) generateContractsTemplate(projectRoot string, template WorkflowTemplate, projectName string) error {
+func (h *handler) generateContractsTemplate(projectRoot string, template WorkflowTemplate, projectName string) (generated bool, err error) {
 	templateContractsPath := "template/workflow/" + template.Folder + "/contracts"
 
 	if _, err := fs.Stat(workflowTemplatesContent, templateContractsPath); err != nil {
-		return nil
+		return false, nil
 	}
 
 	h.log.Debug().Msgf("Generating contracts for template: %s", template.Title)
@@ -588,7 +596,7 @@ func (h *handler) generateContractsTemplate(projectRoot string, template Workflo
 		return nil
 	})
 
-	return walkErr
+	return true, walkErr
 }
 
 func (h *handler) pathExists(filePath string) bool {
