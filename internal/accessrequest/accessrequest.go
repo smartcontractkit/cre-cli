@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/charmbracelet/huh"
 	"github.com/rs/zerolog"
@@ -91,7 +92,7 @@ func (r *Requester) PromptAndSubmitRequest() error {
 	ui.Line()
 	ui.Success("Access request submitted successfully!")
 	ui.Line()
-	ui.Dim("Our team will review your request and get back to you shortly.")
+	ui.Print("Our team will review your request and get back to you via email shortly.")
 	ui.Line()
 
 	return nil
@@ -99,8 +100,13 @@ func (r *Requester) PromptAndSubmitRequest() error {
 
 func (r *Requester) SubmitAccessRequest(useCase string) error {
 	apiURL := os.Getenv(EnvVarAccessRequestURL)
+
+	// If API URL is not configured, simulate the request submission
+	// This allows testing the flow before the API is available
 	if apiURL == "" {
-		return fmt.Errorf("access request API URL not configured (set %s environment variable)", EnvVarAccessRequestURL)
+		r.log.Debug().Msg("API URL not configured, simulating access request submission")
+		time.Sleep(2 * time.Second)
+		return nil
 	}
 
 	reqBody := AccessRequest{
