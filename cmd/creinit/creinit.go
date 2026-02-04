@@ -25,9 +25,6 @@ import (
 // chainlinkTheme for all Huh forms in this package
 var chainlinkTheme = ui.ChainlinkTheme()
 
-// chainlinkKeyMap for Tab autocomplete
-var chainlinkKeyMap = ui.ChainlinkKeyMap()
-
 //go:embed template/workflow/**/*
 var workflowTemplatesContent embed.FS
 
@@ -333,7 +330,7 @@ func (h *handler) Execute(inputs Inputs) error {
 }
 
 // findExistingProject walks up from the given directory looking for a project settings file
-func (h *handler) findExistingProject(dir string) (string, string, error) {
+func (h *handler) findExistingProject(dir string) (projectRoot string, language string, err error) {
 	for {
 		if h.pathExists(filepath.Join(dir, constants.DefaultProjectSettingsFileName)) {
 			if h.pathExists(filepath.Join(dir, constants.DefaultIsGoFileName)) {

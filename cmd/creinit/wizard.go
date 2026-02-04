@@ -42,17 +42,17 @@ type wizardModel struct {
 	workflowInput textinput.Model
 
 	// Select state
-	languageOptions  []string
-	languageCursor   int
-	templateOptions  []string
-	templateTitles   []string // Full titles for lookup
-	templateCursor   int
+	languageOptions []string
+	languageCursor  int
+	templateOptions []string
+	templateTitles  []string // Full titles for lookup
+	templateCursor  int
 
 	// Flags to skip steps
-	skipProjectName bool
-	skipLanguage    bool
-	skipTemplate    bool
-	skipRPCUrl      bool
+	skipProjectName  bool
+	skipLanguage     bool
+	skipTemplate     bool
+	skipRPCUrl       bool
 	skipWorkflowName bool
 
 	// Whether PoR template is selected (needs RPC URL)
@@ -278,6 +278,8 @@ func (m wizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.rpcInput, cmd = m.rpcInput.Update(msg)
 	case stepWorkflowName:
 		m.workflowInput, cmd = m.workflowInput.Update(msg)
+	case stepLanguage, stepTemplate, stepDone:
+		// No text input to update for these steps
 	}
 
 	return m, cmd
@@ -341,6 +343,9 @@ func (m wizardModel) handleEnter() (tea.Model, tea.Cmd) {
 		m.workflowName = value
 		m.step++
 		m.advanceToNextStep()
+
+	case stepDone:
+		// Already done, nothing to do
 	}
 
 	if m.completed {
@@ -449,6 +454,9 @@ func (m wizardModel) View() string {
 		b.WriteString("  ")
 		b.WriteString(m.workflowInput.View())
 		b.WriteString("\n")
+
+	case stepDone:
+		// Nothing to render, wizard is complete
 	}
 
 	// Error message
