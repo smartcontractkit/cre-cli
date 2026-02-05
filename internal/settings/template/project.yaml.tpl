@@ -16,13 +16,12 @@
 #
 # Experimental chains (automatically used by the simulator when present):
 # Use this for chains not yet in official chain-selectors (e.g., hackathons, new chain integrations).
-# Add chain-selector and forwarder to an rpcs entry to mark it as experimental.
-# In your workflow, reference the chain as evm:ChainSelector:<chain-selector>@1.0.0
+# In your workflow, reference the chain as evm:ChainSelector:<chain-id>@1.0.0
 #
-#     - chain-name: my-experimental-chain           # Optional label for the chain
-#       chain-selector: 5299555114858065850         # Chain selector (required for experimental)
-#       url: "https://rpc.example.com"              # RPC endpoint URL
-#       forwarder: "0x..."                          # Forwarder contract address (required when chain-selector is set)
+#   experimental-chains:
+#     - chain-id: 12345                             # The numeric chain ID
+#       rpc-url: "https://rpc.example.com"          # RPC endpoint URL
+#       forwarder: "0x..."                          # Forwarder contract address on the chain
 
 # ==========================================================================
 staging-settings:
