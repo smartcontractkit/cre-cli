@@ -156,11 +156,11 @@ func TestResolveInputs_TagTruncation(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name            string
-		workflowName    string
-		expectedTag     string
-		expectedTagLen  int
-		shouldTruncate  bool
+		name           string
+		workflowName   string
+		expectedTag    string
+		expectedTagLen int
+		shouldTruncate bool
 	}{
 		{
 			name:           "short name is not truncated",
