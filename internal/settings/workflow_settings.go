@@ -137,30 +137,11 @@ func flattenWorkflowSettingsToViper(v *viper.Viper, target string) error {
 func validateSettings(config *WorkflowSettings) error {
 	// TODO validate that all chain names mentioned for the contracts above have a matching URL specified
 	for _, rpc := range config.RPCs {
-		// Determine a label for error messages
-		var label string
-		if rpc.ChainSelector != 0 {
-			label = fmt.Sprintf("chain-selector %d", rpc.ChainSelector)
-		} else {
-			label = rpc.ChainName
-		}
-
-		// Always validate the URL
 		if err := isValidRpcUrl(rpc.Url); err != nil {
-			return errors.Wrap(err, "invalid rpc url for "+label)
+			return errors.Wrap(err, "invalid rpc url for "+rpc.ChainName)
 		}
-
-		if rpc.ChainSelector != 0 {
-			// Experimental chain: require forwarder, skip chain-name validation
-			if strings.TrimSpace(rpc.Forwarder) == "" {
-				return fmt.Errorf("experimental chain (chain-selector %d) requires forwarder", rpc.ChainSelector)
-			}
-			// Skip chain-name validation for experimental chains (may not be in chain-selectors registry)
-		} else {
-			// Standard chain: validate chain-name as before
-			if err := IsValidChainName(rpc.ChainName); err != nil {
-				return err
-			}
+		if err := IsValidChainName(rpc.ChainName); err != nil {
+			return err
 		}
 	}
 	return nil
