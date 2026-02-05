@@ -152,6 +152,82 @@ func TestWorkflowDeployCommand(t *testing.T) {
 	})
 }
 
+func TestResolveInputs_TagTruncation(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name            string
+		workflowName    string
+		expectedTag     string
+		expectedTagLen  int
+		shouldTruncate  bool
+	}{
+		{
+			name:           "short name is not truncated",
+			workflowName:   "my-workflow",
+			expectedTag:    "my-workflow",
+			expectedTagLen: 11,
+			shouldTruncate: false,
+		},
+		{
+			name:           "exactly 32 char name is not truncated",
+			workflowName:   "exactly-32-characters-long-name1",
+			expectedTag:    "exactly-32-characters-long-name1",
+			expectedTagLen: 32,
+			shouldTruncate: false,
+		},
+		{
+			name:           "33 char name is truncated to 32",
+			workflowName:   "exactly-33-characters-long-name12",
+			expectedTag:    "exactly-33-characters-long-name1",
+			expectedTagLen: 32,
+			shouldTruncate: true,
+		},
+		{
+			name:           "64 char name is truncated to 32",
+			workflowName:   "this-is-a-maximum-length-workflow-name-with-exactly-64-character",
+			expectedTag:    "this-is-a-maximum-length-workflo",
+			expectedTagLen: 32,
+			shouldTruncate: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
+			defer simulatedEnvironment.Close()
+
+			ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
+			handler := newHandler(ctx, buf)
+
+			ctx.Settings = createTestSettings(
+				chainsim.TestAddress,
+				"eoa",
+				tt.workflowName,
+				"testdata/basic_workflow/main.go",
+				"",
+			)
+			handler.settings = ctx.Settings
+
+			inputs, err := handler.ResolveInputs(ctx.Viper)
+			require.NoError(t, err)
+
+			assert.Equal(t, tt.workflowName, inputs.WorkflowName, "WorkflowName should always be the full name")
+			assert.Equal(t, tt.expectedTag, inputs.WorkflowTag, "WorkflowTag should be truncated to 32 bytes when name exceeds limit")
+			assert.Equal(t, tt.expectedTagLen, len(inputs.WorkflowTag), "WorkflowTag length mismatch")
+
+			if tt.shouldTruncate {
+				assert.NotEqual(t, inputs.WorkflowName, inputs.WorkflowTag, "tag should differ from name when truncated")
+				assert.True(t, len(inputs.WorkflowName) > 32, "original name should be longer than 32")
+			} else {
+				assert.Equal(t, inputs.WorkflowName, inputs.WorkflowTag, "tag should equal name when not truncated")
+			}
+		})
+	}
+}
+
 func stringPtr(s string) *string {
 	return &s
 }
