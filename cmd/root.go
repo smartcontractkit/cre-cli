@@ -105,30 +105,28 @@ func newRootCommand() *cobra.Command {
 			log := runtimeContext.Logger
 			v := runtimeContext.Viper
 
-			// Start the global spinner for commands that do initialization work
-			spinner := ui.GlobalSpinner()
-			showSpinner := shouldShowSpinner(cmd)
-			if showSpinner {
-				spinner.Start("Initializing...")
-			}
-
 			// add binding for all existing command flags via Viper
 			// this step has to run first because flags have higher precedence over configuration parameters and defaults values
 			if err := v.BindPFlags(cmd.Flags()); err != nil {
-				if showSpinner {
-					spinner.Stop()
-				}
 				return fmt.Errorf("failed to bind flags: %w", err)
 			}
 
-			// Update log level if verbose flag is set
+			// Update log level if verbose flag is set — must happen before spinner starts
 			if verbose := v.GetBool(settings.Flags.Verbose.Name); verbose {
+				ui.SetVerbose(true)
 				newLogger := log.Level(zerolog.DebugLevel)
 				if _, found := os.LookupEnv("SETH_LOG_LEVEL"); !found {
 					os.Setenv("SETH_LOG_LEVEL", "debug")
 				}
 				runtimeContext.Logger = &newLogger
 				runtimeContext.ClientFactory = client.NewFactory(&newLogger, v)
+			}
+
+			// Start the global spinner for commands that do initialization work
+			spinner := ui.GlobalSpinner()
+			showSpinner := shouldShowSpinner(cmd)
+			if showSpinner {
+				spinner.Start("Initializing...")
 			}
 
 			if showSpinner {

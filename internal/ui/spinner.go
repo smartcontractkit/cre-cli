@@ -119,7 +119,7 @@ func (s *Spinner) Start(message string) {
 		return
 	}
 
-	if !s.isTTY {
+	if !s.isTTY || verbose {
 		// Non-TTY: just print the message once
 		fmt.Fprintf(os.Stderr, "%s\n", DimStyle.Render(message))
 		return

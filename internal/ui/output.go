@@ -2,6 +2,15 @@ package ui
 
 import "fmt"
 
+// verbose disables animated UI components (spinners) to avoid
+// interleaving with debug log output on stderr.
+var verbose bool
+
+// SetVerbose enables or disables verbose mode for UI components.
+func SetVerbose(v bool) {
+	verbose = v
+}
+
 // Output helpers - use these for consistent styled output across commands.
 // These functions make it easy to migrate from raw fmt.Println calls.
 
