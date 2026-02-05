@@ -34,20 +34,15 @@ type RpcEndpoint struct {
 	// "private URL" can be feeded to the settings file by specifying the env var name where the real URL is kept, e.g.
 	// url_private: RPC_URL_ETH_SEPOLIA
 	Url string `mapstructure:"url" yaml:"url"`
-	// ChainSelector identifies experimental chains (not in official chain-selectors).
-	// When set (non-zero), the entry is treated as an experimental chain and Forwarder is required.
-	ChainSelector uint64 `mapstructure:"chain-selector" yaml:"chain-selector"`
-	// Forwarder is the forwarder contract address. Required when ChainSelector is set.
-	Forwarder string `mapstructure:"forwarder" yaml:"forwarder"`
 }
 
 // ExperimentalChain represents an EVM chain not in official chain-selectors.
-// Automatically derived from rpcs entries that have chain-selector set.
-// The Selector is used as the key for EVM clients and forwarders.
+// Automatically used by the simulator when present in the target's experimental-chains config.
+// The ChainID is used as the selector key for EVM clients and forwarders.
 type ExperimentalChain struct {
-	Selector  uint64 // derived from RpcEndpoint.ChainSelector
-	RPCURL    string // derived from RpcEndpoint.Url
-	Forwarder string // derived from RpcEndpoint.Forwarder
+	ChainID   uint64 `mapstructure:"chain-id" yaml:"chain-id"`
+	RPCURL    string `mapstructure:"rpc-url" yaml:"rpc-url"`
+	Forwarder string `mapstructure:"forwarder" yaml:"forwarder"`
 }
 
 func GetRpcUrlSettings(v *viper.Viper, chainName string) (string, error) {
@@ -72,39 +67,23 @@ func GetRpcUrlSettings(v *viper.Viper, chainName string) (string, error) {
 	return "", fmt.Errorf("rpc url not found for chain %s", chainName)
 }
 
-// GetExperimentalChains derives experimental chains from rpcs entries that have chain-selector set.
-// An entry with chain-selector != 0 is treated as an experimental chain and requires forwarder to be set.
-// Returns an empty slice if no experimental chains are configured.
+// GetExperimentalChains reads the experimental-chains list from the current target.
+// Returns an empty slice if the key is not set or unmarshalling fails.
 func GetExperimentalChains(v *viper.Viper) ([]ExperimentalChain, error) {
 	target, err := GetTarget(v)
 	if err != nil {
 		return nil, err
 	}
 
-	keyWithTarget := fmt.Sprintf("%s.%s", target, RpcsSettingName)
+	keyWithTarget := fmt.Sprintf("%s.%s", target, ExperimentalChainsSettingName)
 	if !v.IsSet(keyWithTarget) {
 		return nil, nil
 	}
 
-	var rpcs []RpcEndpoint
-	err = v.UnmarshalKey(keyWithTarget, &rpcs)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal rpcs: %w", err)
-	}
-
 	var chains []ExperimentalChain
-	for _, rpc := range rpcs {
-		if rpc.ChainSelector == 0 {
-			continue // not an experimental chain
-		}
-		if strings.TrimSpace(rpc.Forwarder) == "" {
-			return nil, fmt.Errorf("experimental chain (chain-selector %d) requires forwarder", rpc.ChainSelector)
-		}
-		chains = append(chains, ExperimentalChain{
-			Selector:  rpc.ChainSelector,
-			RPCURL:    rpc.Url,
-			Forwarder: rpc.Forwarder,
-		})
+	err = v.UnmarshalKey(keyWithTarget, &chains)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal experimental-chains: %w", err)
 	}
 
 	return chains, nil
