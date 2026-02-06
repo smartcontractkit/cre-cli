@@ -1,90 +1,30 @@
 package creinit
 
 import (
-	"embed"
-	"errors"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/charmbracelet/huh"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/smartcontractkit/cre-cli/cmd/client"
+	"github.com/smartcontractkit/cre-cli/internal/config"
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
+	"github.com/smartcontractkit/cre-cli/internal/templaterepo"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 	"github.com/smartcontractkit/cre-cli/internal/validation"
 )
 
-// chainlinkTheme for all Huh forms in this package
 var chainlinkTheme = ui.ChainlinkTheme()
-
-//go:embed template/workflow/**/*
-var workflowTemplatesContent embed.FS
-
-const SecretsFileName = "secrets.yaml"
-
-type TemplateLanguage string
-
-const (
-	TemplateLangGo TemplateLanguage = "go"
-	TemplateLangTS TemplateLanguage = "typescript"
-)
-
-const (
-	HelloWorldTemplate string = "HelloWorld"
-	PoRTemplate        string = "PoR"
-	ConfHTTPTemplate   string = "ConfHTTP"
-)
-
-type WorkflowTemplate struct {
-	Folder string
-	Title  string
-	ID     uint32
-	Name   string
-	Hidden bool // If true, this template will be hidden from the user selection prompt
-}
-
-type LanguageTemplate struct {
-	Title      string
-	Lang       TemplateLanguage
-	EntryPoint string
-	Workflows  []WorkflowTemplate
-}
-
-var languageTemplates = []LanguageTemplate{
-	{
-		Title:      "Golang",
-		Lang:       TemplateLangGo,
-		EntryPoint: ".",
-		Workflows: []WorkflowTemplate{
-			{Folder: "porExampleDev", Title: "Custom data feed: Updating on-chain data periodically using offchain API data", ID: 1, Name: PoRTemplate},
-			{Folder: "blankTemplate", Title: "Helloworld: A Golang Hello World example", ID: 2, Name: HelloWorldTemplate},
-		},
-	},
-	{
-		Title:      "Typescript",
-		Lang:       TemplateLangTS,
-		EntryPoint: "./main.ts",
-		Workflows: []WorkflowTemplate{
-			{Folder: "typescriptSimpleExample", Title: "Helloworld: Typescript Hello World example", ID: 3, Name: HelloWorldTemplate},
-			{Folder: "typescriptPorExampleDev", Title: "Custom data feed: Typescript updating on-chain data periodically using offchain API data", ID: 4, Name: PoRTemplate},
-			{Folder: "typescriptConfHTTP", Title: "Confidential Http: Typescript example using the confidential http capability", ID: 5, Name: ConfHTTPTemplate, Hidden: true},
-		},
-	},
-}
 
 type Inputs struct {
 	ProjectName  string `validate:"omitempty,project_name" cli:"project-name"`
-	TemplateID   uint32 `validate:"omitempty,min=0"`
+	TemplateName string `validate:"omitempty" cli:"template"`
 	WorkflowName string `validate:"omitempty,workflow_name" cli:"workflow-name"`
-	RPCUrl       string `validate:"omitempty,url" cli:"rpc-url"`
 }
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
@@ -95,7 +35,9 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 		Long: `Initialize a new CRE project or add a workflow to an existing one.
 
 This sets up the project structure, configuration, and starter files so you can
-build, test, and deploy workflows quickly.`,
+build, test, and deploy workflows quickly.
+
+Templates are fetched dynamically from GitHub repositories.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			handler := newHandler(runtimeContext)
@@ -114,24 +56,41 @@ build, test, and deploy workflows quickly.`,
 
 	initCmd.Flags().StringP("project-name", "p", "", "Name for the new project")
 	initCmd.Flags().StringP("workflow-name", "w", "", "Name for the new workflow")
-	initCmd.Flags().Uint32P("template-id", "t", 0, "ID of the workflow template to use")
-	initCmd.Flags().String("rpc-url", "", "Sepolia RPC URL to use with template")
+	initCmd.Flags().StringP("template", "t", "", "Name of the template to use (e.g., kv-store-go)")
+	initCmd.Flags().Bool("refresh", false, "Bypass template cache and fetch fresh data")
+	initCmd.Flags().String("template-repo", "", "Template repository (format: owner/repo@ref)")
 
 	return initCmd
 }
 
 type handler struct {
 	log            *zerolog.Logger
-	clientFactory  client.Factory
 	runtimeContext *runtime.Context
+	registry       RegistryInterface
 	validated      bool
+}
+
+// RegistryInterface abstracts the registry for testing.
+type RegistryInterface interface {
+	ListTemplates(refresh bool) ([]templaterepo.TemplateSummary, error)
+	GetTemplate(name string, refresh bool) (*templaterepo.TemplateSummary, error)
+	ScaffoldTemplate(tmpl *templaterepo.TemplateSummary, destDir, workflowName string, onProgress func(string)) error
 }
 
 func newHandler(ctx *runtime.Context) *handler {
 	return &handler{
 		log:            ctx.Logger,
-		clientFactory:  ctx.ClientFactory,
 		runtimeContext: ctx,
+		validated:      false,
+	}
+}
+
+// newHandlerWithRegistry creates a handler with an injected registry (for testing).
+func newHandlerWithRegistry(ctx *runtime.Context, registry RegistryInterface) *handler {
+	return &handler{
+		log:            ctx.Logger,
+		runtimeContext: ctx,
+		registry:       registry,
 		validated:      false,
 	}
 }
@@ -139,9 +98,8 @@ func newHandler(ctx *runtime.Context) *handler {
 func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 	return Inputs{
 		ProjectName:  v.GetString("project-name"),
-		TemplateID:   v.GetUint32("template-id"),
+		TemplateName: v.GetString("template"),
 		WorkflowName: v.GetString("workflow-name"),
-		RPCUrl:       v.GetString("rpc-url"),
 	}, nil
 }
 
@@ -171,24 +129,49 @@ func (h *handler) Execute(inputs Inputs) error {
 	startDir := cwd
 
 	// Detect if we're in an existing project
-	existingProjectRoot, existingProjectLanguage, existingErr := h.findExistingProject(startDir)
+	existingProjectRoot, _, existingErr := h.findExistingProject(startDir)
 	isNewProject := existingErr != nil
 
-	// If template ID provided via flag, resolve it now
-	var selectedWorkflowTemplate WorkflowTemplate
-	var selectedLanguageTemplate LanguageTemplate
+	// Create the registry if not injected (normal flow)
+	if h.registry == nil {
+		v := h.runtimeContext.Viper
+		flagRepo := v.GetString("template-repo")
+		sources := config.LoadTemplateSources(h.log, flagRepo)
 
-	if inputs.TemplateID != 0 {
-		wt, lt, findErr := h.getWorkflowTemplateByID(inputs.TemplateID)
-		if findErr != nil {
-			return fmt.Errorf("invalid template ID %d: %w", inputs.TemplateID, findErr)
+		reg, err := templaterepo.NewRegistry(h.log, sources)
+		if err != nil {
+			return fmt.Errorf("failed to create template registry: %w", err)
 		}
-		selectedWorkflowTemplate = wt
-		selectedLanguageTemplate = lt
+		h.registry = reg
+	}
+
+	refresh := h.runtimeContext.Viper.GetBool("refresh")
+
+	// Fetch the template list
+	spinner := ui.NewSpinner()
+	spinner.Start("Fetching templates...")
+	templates, err := h.registry.ListTemplates(refresh)
+	spinner.Stop()
+	if err != nil {
+		return fmt.Errorf("failed to fetch templates: %w", err)
+	}
+
+	// Resolve template from flag if provided
+	var selectedTemplate *templaterepo.TemplateSummary
+	if inputs.TemplateName != "" {
+		for i := range templates {
+			if templates[i].Name == inputs.TemplateName {
+				selectedTemplate = &templates[i]
+				break
+			}
+		}
+		if selectedTemplate == nil {
+			return fmt.Errorf("template %q not found", inputs.TemplateName)
+		}
 	}
 
 	// Run the interactive wizard
-	result, err := RunWizard(inputs, isNewProject, existingProjectLanguage)
+	result, err := RunWizard(inputs, isNewProject, templates, selectedTemplate)
 	if err != nil {
 		return fmt.Errorf("wizard error: %w", err)
 	}
@@ -198,8 +181,6 @@ func (h *handler) Execute(inputs Inputs) error {
 
 	// Extract values from wizard result
 	projName := result.ProjectName
-	selectedLang := result.Language
-	rpcURL := result.RPCURL
 	workflowName := result.WorkflowName
 
 	// Apply defaults
@@ -210,10 +191,12 @@ func (h *handler) Execute(inputs Inputs) error {
 		workflowName = constants.DefaultWorkflowName
 	}
 
-	// Resolve templates from wizard if not provided via flag
-	if inputs.TemplateID == 0 {
-		selectedLanguageTemplate, _ = h.getLanguageTemplateByTitle(selectedLang)
-		selectedWorkflowTemplate, _ = h.getWorkflowTemplateByTitle(result.TemplateName, selectedLanguageTemplate.Workflows)
+	// Resolve the selected template from wizard if not from flag
+	if selectedTemplate == nil {
+		selectedTemplate = result.SelectedTemplate
+	}
+	if selectedTemplate == nil {
+		return fmt.Errorf("no template selected")
 	}
 
 	// Determine project root
@@ -244,9 +227,6 @@ func (h *handler) Execute(inputs Inputs) error {
 	// Create project settings for new projects
 	if isNewProject {
 		repl := settings.GetDefaultReplacements()
-		if selectedWorkflowTemplate.Name == PoRTemplate {
-			repl["EthSepoliaRpcUrl"] = rpcURL
-		}
 		if e := settings.FindOrCreateProjectSettings(projectRoot, repl); e != nil {
 			return e
 		}
@@ -255,85 +235,44 @@ func (h *handler) Execute(inputs Inputs) error {
 		}
 	}
 
-	// Create workflow directory
-	workflowDirectory := filepath.Join(projectRoot, workflowName)
-	if err := h.ensureProjectDirectoryExists(workflowDirectory); err != nil {
-		return err
-	}
-
-	// Get project name from project root
-	projectName := filepath.Base(projectRoot)
-	spinner := ui.NewSpinner()
-
-	// Copy secrets file
-	spinner.Start("Copying secrets file...")
-	if err := h.copySecretsFileIfExists(projectRoot, selectedWorkflowTemplate); err != nil {
-		spinner.Stop()
-		return fmt.Errorf("failed to copy secrets file: %w", err)
-	}
-
-	// Generate workflow template
-	spinner.Update("Generating workflow files...")
-	if err := h.generateWorkflowTemplate(workflowDirectory, selectedWorkflowTemplate, projectName); err != nil {
-		spinner.Stop()
-		return fmt.Errorf("failed to scaffold workflow: %w", err)
-	}
-
-	// Generate contracts template
-	spinner.Update("Generating contracts...")
-	contractsGenerated, err := h.generateContractsTemplate(projectRoot, selectedWorkflowTemplate, projectName)
+	// Scaffold the template
+	scaffoldSpinner := ui.NewSpinner()
+	scaffoldSpinner.Start("Scaffolding template...")
+	err = h.registry.ScaffoldTemplate(selectedTemplate, projectRoot, workflowName, func(msg string) {
+		scaffoldSpinner.Update(msg)
+	})
+	scaffoldSpinner.Stop()
 	if err != nil {
-		spinner.Stop()
-		return fmt.Errorf("failed to scaffold contracts: %w", err)
+		return fmt.Errorf("failed to scaffold template: %w", err)
 	}
 
-	// Initialize Go module if needed
-	var installedDeps *InstalledDependencies
-	if selectedLanguageTemplate.Lang == TemplateLangGo {
-		spinner.Update("Installing Go dependencies...")
-		var goErr error
-		installedDeps, goErr = initializeGoModule(h.log, projectRoot, projectName)
-		if goErr != nil {
-			spinner.Stop()
-			return fmt.Errorf("failed to initialize Go module: %w", goErr)
-		}
+	// Determine language-specific entry point
+	entryPoint := "."
+	if selectedTemplate.Language == "typescript" {
+		entryPoint = "./main.ts"
 	}
 
 	// Generate workflow settings
-	spinner.Update("Generating workflow settings...")
-	_, err = settings.GenerateWorkflowSettingsFile(workflowDirectory, workflowName, selectedLanguageTemplate.EntryPoint)
-	spinner.Stop()
+	workflowDirectory := filepath.Join(projectRoot, workflowName)
+	_, err = settings.GenerateWorkflowSettingsFile(workflowDirectory, workflowName, entryPoint)
 	if err != nil {
 		return fmt.Errorf("failed to generate %s file: %w", constants.DefaultWorkflowSettingsFileName, err)
 	}
 
 	// Show what was created
 	ui.Line()
-	ui.Dim("Files created in " + workflowDirectory)
-	if contractsGenerated {
-		ui.Dim("Contracts generated in " + filepath.Join(projectRoot, "contracts"))
-	}
-
-	// Show installed dependencies in a box after spinner stops
-	if installedDeps != nil {
-		ui.Line()
-		depList := "Dependencies installed:"
-		for _, dep := range installedDeps.Deps {
-			depList += "\n  • " + dep
-		}
-		ui.Box(depList)
-	}
+	ui.Dim("Files created in " + projectRoot)
 
 	if h.runtimeContext != nil {
-		switch selectedLanguageTemplate.Lang {
-		case TemplateLangGo:
+		switch selectedTemplate.Language {
+		case "go":
 			h.runtimeContext.Workflow.Language = constants.WorkflowLanguageGolang
-		case TemplateLangTS:
+		case "typescript":
 			h.runtimeContext.Workflow.Language = constants.WorkflowLanguageTypeScript
 		}
 	}
 
-	h.printSuccessMessage(projectRoot, workflowName, selectedLanguageTemplate.Lang)
+	h.printSuccessMessage(projectRoot, workflowName, selectedTemplate.Language)
 
 	return nil
 }
@@ -343,9 +282,9 @@ func (h *handler) findExistingProject(dir string) (projectRoot string, language 
 	for {
 		if h.pathExists(filepath.Join(dir, constants.DefaultProjectSettingsFileName)) {
 			if h.pathExists(filepath.Join(dir, constants.DefaultIsGoFileName)) {
-				return dir, "Golang", nil
+				return dir, "go", nil
 			}
-			return dir, "Typescript", nil
+			return dir, "typescript", nil
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {
@@ -355,13 +294,13 @@ func (h *handler) findExistingProject(dir string) (projectRoot string, language 
 	}
 }
 
-func (h *handler) printSuccessMessage(projectRoot, workflowName string, lang TemplateLanguage) {
+func (h *handler) printSuccessMessage(projectRoot, workflowName, language string) {
 	ui.Line()
 	ui.Success("Project created successfully!")
 	ui.Line()
 
 	var steps string
-	if lang == TemplateLangGo {
+	if language == "go" {
 		steps = ui.RenderStep("1. Navigate to your project:") + "\n" +
 			"     " + ui.RenderDim("cd "+filepath.Base(projectRoot)) + "\n\n" +
 			ui.RenderStep("2. Run the workflow:") + "\n" +
@@ -379,156 +318,6 @@ func (h *handler) printSuccessMessage(projectRoot, workflowName string, lang Tem
 
 	ui.Box("Next steps\n\n" + steps)
 	ui.Line()
-}
-
-type TitledTemplate interface {
-	GetTitle() string
-}
-
-func (w WorkflowTemplate) GetTitle() string {
-	return w.Title
-}
-
-func (l LanguageTemplate) GetTitle() string {
-	return l.Title
-}
-
-func (h *handler) getLanguageTemplateByTitle(title string) (LanguageTemplate, error) {
-	for _, lang := range languageTemplates {
-		if lang.Title == title {
-			return lang, nil
-		}
-	}
-
-	return LanguageTemplate{}, errors.New("language not found")
-}
-
-func (h *handler) getWorkflowTemplateByTitle(title string, workflowTemplates []WorkflowTemplate) (WorkflowTemplate, error) {
-	for _, template := range workflowTemplates {
-		if template.Title == title {
-			return template, nil
-		}
-	}
-	return WorkflowTemplate{}, errors.New("template not found")
-}
-
-// Copy the content of the secrets file (if exists for this workflow template) to the project root
-func (h *handler) copySecretsFileIfExists(projectRoot string, template WorkflowTemplate) error {
-	// When referencing embedded template files, the path is relative and separated by forward slashes
-	sourceSecretsFilePath := "template/workflow/" + template.Folder + "/" + SecretsFileName
-	destinationSecretsFilePath := filepath.Join(projectRoot, SecretsFileName)
-
-	// Ensure the secrets file exists in the template directory
-	if _, err := fs.Stat(workflowTemplatesContent, sourceSecretsFilePath); err != nil {
-		h.log.Debug().Msg("Secrets file doesn't exist for this template, skipping")
-		return nil
-	}
-
-	// Read the content of the secrets file from the template
-	secretsFileContent, err := workflowTemplatesContent.ReadFile(sourceSecretsFilePath)
-	if err != nil {
-		return fmt.Errorf("failed to read secrets file: %w", err)
-	}
-
-	// Write the file content to the target path
-	if err := os.WriteFile(destinationSecretsFilePath, []byte(secretsFileContent), 0600); err != nil {
-		return fmt.Errorf("failed to write file: %w", err)
-	}
-
-	h.log.Debug().Msgf("Detected secrets file for this template, copied file to: %s", destinationSecretsFilePath)
-
-	return nil
-}
-
-// generateWorkflowTemplate copies the content of template/workflow/{{templateName}} and removes "tpl" extension
-func (h *handler) generateWorkflowTemplate(workingDirectory string, template WorkflowTemplate, projectName string) error {
-	h.log.Debug().Msgf("Generating template: %s", template.Title)
-
-	// Construct the path to the specific template directory
-	// When referencing embedded template files, the path is relative and separated by forward slashes
-	templatePath := "template/workflow/" + template.Folder
-
-	// Ensure the specified template directory exists
-	if _, err := fs.Stat(workflowTemplatesContent, templatePath); err != nil {
-		return fmt.Errorf("template directory doesn't exist: %w", err)
-	}
-
-	// Walk through all files & folders under templatePath
-	walkErr := fs.WalkDir(workflowTemplatesContent, templatePath, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err // propagate I/O errors
-		}
-
-		// Compute the path of this entry relative to templatePath
-		relPath, _ := filepath.Rel(templatePath, path)
-
-		// Skip the top-level directory itself
-		if relPath == "." {
-			return nil
-		}
-
-		// Skip contracts directory - it will be handled separately
-		if strings.HasPrefix(relPath, "contracts") {
-			return nil
-		}
-
-		// If it's a directory, just create the matching directory in the working dir
-		if d.IsDir() {
-			return os.MkdirAll(filepath.Join(workingDirectory, relPath), 0o755)
-		}
-
-		// Skip the secrets file if it exists, this one is copied separately into the project root
-		if strings.Contains(relPath, SecretsFileName) {
-			return nil
-		}
-
-		// Determine the target file path
-		var targetPath string
-		if strings.HasSuffix(relPath, ".tpl") {
-			// Remove `.tpl` extension for files with `.tpl`
-			outputFileName := strings.TrimSuffix(relPath, ".tpl")
-			targetPath = filepath.Join(workingDirectory, outputFileName)
-		} else {
-			// Copy other files as-is
-			targetPath = filepath.Join(workingDirectory, relPath)
-		}
-
-		// Read the file content
-		content, err := workflowTemplatesContent.ReadFile(path)
-		if err != nil {
-			return fmt.Errorf("failed to read file: %w", err)
-		}
-
-		// Replace template variables with actual values
-		finalContent := strings.ReplaceAll(string(content), "{{projectName}}", projectName)
-
-		// Ensure the target directory exists
-		if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
-			return fmt.Errorf("failed to create directory for: %w", err)
-		}
-
-		// Write the file content to the target path
-		if err := os.WriteFile(targetPath, []byte(finalContent), 0600); err != nil {
-			return fmt.Errorf("failed to write file: %w", err)
-		}
-
-		h.log.Debug().Msgf("Copied file to: %s", targetPath)
-		return nil
-	})
-
-	return walkErr
-}
-
-func (h *handler) getWorkflowTemplateByID(id uint32) (WorkflowTemplate, LanguageTemplate, error) {
-	for _, lang := range languageTemplates {
-		for _, tpl := range lang.Workflows {
-			if tpl.ID == id {
-				return tpl, lang, nil
-			}
-		}
-	}
-
-	return WorkflowTemplate{}, LanguageTemplate{}, fmt.Errorf("template with ID %d not found", id)
 }
 
 func (h *handler) ensureProjectDirectoryExists(dirPath string) error {
@@ -560,84 +349,6 @@ func (h *handler) ensureProjectDirectoryExists(dirPath string) error {
 		return fmt.Errorf("failed to create directory %s: %w", dirPath, err)
 	}
 	return nil
-}
-
-// generateContractsTemplate generates contracts at project level if template has contracts
-func (h *handler) generateContractsTemplate(projectRoot string, template WorkflowTemplate, projectName string) (generated bool, err error) {
-	// Construct the path to the contracts directory in the template
-	// When referencing embedded template files, the path is relative and separated by forward slashes
-	templateContractsPath := "template/workflow/" + template.Folder + "/contracts"
-
-	// Check if this template has contracts
-	if _, err := fs.Stat(workflowTemplatesContent, templateContractsPath); err != nil {
-		// No contracts directory in this template, skip
-		return false, nil
-	}
-
-	h.log.Debug().Msgf("Generating contracts for template: %s", template.Title)
-
-	// Create contracts directory at project level
-	contractsDirectory := filepath.Join(projectRoot, "contracts")
-
-	// Walk through all files & folders under contracts template
-	walkErr := fs.WalkDir(workflowTemplatesContent, templateContractsPath, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err // propagate I/O errors
-		}
-
-		// Compute the path of this entry relative to templateContractsPath
-		relPath, _ := filepath.Rel(templateContractsPath, path)
-
-		// Skip the top-level directory itself
-		if relPath == "." {
-			return nil
-		}
-
-		// Skip keep.tpl file used to copy empty directory
-		if d.Name() == "keep.tpl" {
-			return nil
-		}
-
-		// If it's a directory, just create the matching directory in the contracts dir
-		if d.IsDir() {
-			return os.MkdirAll(filepath.Join(contractsDirectory, relPath), 0o755)
-		}
-
-		// Determine the target file path
-		var targetPath string
-		if strings.HasSuffix(relPath, ".tpl") {
-			// Remove `.tpl` extension for files with `.tpl`
-			outputFileName := strings.TrimSuffix(relPath, ".tpl")
-			targetPath = filepath.Join(contractsDirectory, outputFileName)
-		} else {
-			// Copy other files as-is
-			targetPath = filepath.Join(contractsDirectory, relPath)
-		}
-
-		// Read the file content
-		content, err := workflowTemplatesContent.ReadFile(path)
-		if err != nil {
-			return fmt.Errorf("failed to read file: %w", err)
-		}
-
-		// Replace template variables with actual values
-		finalContent := strings.ReplaceAll(string(content), "{{projectName}}", projectName)
-
-		// Ensure the target directory exists
-		if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
-			return fmt.Errorf("failed to create directory for: %w", err)
-		}
-
-		// Write the file content to the target path
-		if err := os.WriteFile(targetPath, []byte(finalContent), 0600); err != nil {
-			return fmt.Errorf("failed to write file: %w", err)
-		}
-
-		h.log.Debug().Msgf("Copied contracts file to: %s", targetPath)
-		return nil
-	})
-
-	return true, walkErr
 }
 
 func (h *handler) pathExists(filePath string) bool {

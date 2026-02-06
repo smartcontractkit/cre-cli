@@ -10,8 +10,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/smartcontractkit/cre-cli/cmd/creinit"
 	"github.com/smartcontractkit/cre-cli/cmd/generate-bindings/bindings"
+	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 	"github.com/smartcontractkit/cre-cli/internal/validation"
@@ -315,12 +315,12 @@ func (h *handler) Execute(inputs Inputs) error {
 		spinner := ui.NewSpinner()
 		spinner.Start("Installing dependencies...")
 
-		err = runCommand(inputs.ProjectRoot, "go", "get", "github.com/smartcontractkit/cre-sdk-go@"+creinit.SdkVersion)
+		err = runCommand(inputs.ProjectRoot, "go", "get", "github.com/smartcontractkit/cre-sdk-go@"+constants.SdkVersion)
 		if err != nil {
 			spinner.Stop()
 			return err
 		}
-		err = runCommand(inputs.ProjectRoot, "go", "get", "github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm@"+creinit.EVMCapabilitiesVersion)
+		err = runCommand(inputs.ProjectRoot, "go", "get", "github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm@"+constants.EVMCapabilitiesVersion)
 		if err != nil {
 			spinner.Stop()
 			return err

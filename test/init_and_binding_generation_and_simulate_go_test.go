@@ -23,7 +23,7 @@ func TestE2EInit_DevPoRTemplate(t *testing.T) {
 	tempDir := t.TempDir()
 	projectName := "e2e-init-test"
 	workflowName := "devPoRWorkflow"
-	templateID := "1"
+	templateName := "cre-custom-data-feed-go" // Go PoR template from cre-templates repo
 	projectRoot := filepath.Join(tempDir, projectName)
 	workflowDirectory := filepath.Join(projectRoot, workflowName)
 
@@ -72,9 +72,8 @@ func TestE2EInit_DevPoRTemplate(t *testing.T) {
 		"init",
 		"--project-root", tempDir,
 		"--project-name", projectName,
-		"--template-id", templateID,
+		"--template", templateName,
 		"--workflow-name", workflowName,
-		"--rpc-url", constants.DefaultEthSepoliaRpcUrl,
 	}
 	var stdout, stderr bytes.Buffer
 	initCmd := exec.Command(CLIPath, initArgs...)
