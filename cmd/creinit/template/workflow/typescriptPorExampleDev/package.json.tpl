@@ -4,11 +4,11 @@
   "main": "dist/main.js",
   "private": true,
   "scripts": {
-    "postinstall": "bunx cre-setup"
+    "postinstall": "bun x cre-setup"
   },
   "license": "UNLICENSED",
   "dependencies": {
-    "@chainlink/cre-sdk": "^1.0.7",
+    "@chainlink/cre-sdk": "^1.0.8",
     "viem": "2.34.0",
     "zod": "3.25.76"
   },
