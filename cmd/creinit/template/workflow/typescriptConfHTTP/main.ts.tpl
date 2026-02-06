@@ -29,16 +29,12 @@ type ResponseValues = {
 }
 
 const fetchResult = (sendRequester: ConfidentialHTTPSendRequester, config: Config) => {
-	const { responses } = sendRequester
-		.sendRequests({
-			input: {
-				requests: [
-					{
-						url: config.url,
-						method: 'GET',
-						headers: ['secret-header: {{.SECRET_HEADER}}'],
-					},
-				],
+	const response = sendRequester
+		.sendRequest({
+			request: {
+				url: config.url,
+				method: 'GET',
+				headers: ['secret-header: {{.SECRET_HEADER}}'],
 			},
 			vaultDonSecrets: [
 				{
@@ -48,7 +44,6 @@ const fetchResult = (sendRequester: ConfidentialHTTPSendRequester, config: Confi
 			],
 		})
 		.result()
-	const response = responses[0]
 
 	if (!ok(response)) {
 		throw new Error(`HTTP request failed with status: ${response.statusCode}`)
@@ -62,7 +57,7 @@ const onCronTrigger = (runtime: Runtime<Config>) => {
 
 	const confHTTPClient = new ConfidentialHTTPClient()
 	const result = confHTTPClient
-		.sendRequests(
+		.sendRequest(
 			runtime,
 			fetchResult,
 			consensusIdenticalAggregation(),

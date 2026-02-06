@@ -106,12 +106,12 @@ func doPOR(config *Config, runtime cre.Runtime, runTime time.Time) (string, erro
 	logger.Info("ReserveInfo", "reserveInfo", reserveInfo)
 
 	confHttpClient := &confidentialhttp.Client{}
-	confOutput, err := confidentialhttp.SendRequests(
+	confOutput, err := confidentialhttp.SendRequest(
 		config,
 		runtime,
 		confHttpClient,
 		fetchPORConfidential,
-		cre.ConsensusIdenticalAggregation[*confidentialhttp.HTTPEnclaveResponseData](),
+		cre.ConsensusIdenticalAggregation[*confidentialhttp.HTTPResponse](),
 	).Await()
 	if err != nil {
 		logger.Error("error fetching conf por", "err", err)
@@ -121,7 +121,7 @@ func doPOR(config *Config, runtime cre.Runtime, runTime time.Time) (string, erro
 
 	// Compare responses
 	porResp := &PORResponse{}
-	if err = json.Unmarshal(confOutput.Responses[0].Body, porResp); err != nil {
+	if err = json.Unmarshal(confOutput.Body, porResp); err != nil {
 		return "", err
 	}
 
@@ -272,15 +272,11 @@ func updateReserves(config *Config, runtime cre.Runtime, totalSupply *big.Int, t
 	return nil
 }
 
-func fetchPORConfidential(config *Config, logger *slog.Logger, sendRequester *confidentialhttp.SendRequestser) (*confidentialhttp.HTTPEnclaveResponseData, error) {
-	return sendRequester.SendRequests(&confidentialhttp.EnclaveActionInput{
-		Input: &confidentialhttp.HTTPEnclaveRequestData{
-			Requests: []*confidentialhttp.Request{
-				{
-					Url:    config.URL,
-					Method: "GET",
-				},
-			},
+func fetchPORConfidential(config *Config, logger *slog.Logger, sendRequester *confidentialhttp.SendRequester) (*confidentialhttp.HTTPResponse, error) {
+	return sendRequester.SendRequest(&confidentialhttp.ConfidentialHTTPRequest{
+		Request: &confidentialhttp.HTTPRequest{
+			Url:    config.URL,
+			Method: "GET",
 		},
 		// No Vault DON Secrets in this example
 	}).Await()
