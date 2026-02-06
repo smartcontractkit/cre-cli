@@ -1,6 +1,7 @@
 package access
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/rs/zerolog"
@@ -20,7 +21,7 @@ func New(runtimeCtx *runtime.Context) *cobra.Command {
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			h := NewHandler(runtimeCtx)
-			return h.Execute()
+			return h.Execute(cmd.Context())
 		},
 	}
 
@@ -37,11 +38,11 @@ func NewHandler(ctx *runtime.Context) *Handler {
 	return &Handler{
 		log:         ctx.Logger,
 		credentials: ctx.Credentials,
-		requester:   accessrequest.NewRequester(ctx.Credentials, ctx.Logger),
+		requester:   accessrequest.NewRequester(ctx.Credentials, ctx.EnvironmentSet, ctx.Logger),
 	}
 }
 
-func (h *Handler) Execute() error {
+func (h *Handler) Execute(ctx context.Context) error {
 	deployAccess, err := h.credentials.GetDeploymentAccessStatus()
 	if err != nil {
 		return fmt.Errorf("failed to check deployment access: %w", err)
@@ -60,5 +61,5 @@ func (h *Handler) Execute() error {
 		return nil
 	}
 
-	return h.requester.PromptAndSubmitRequest()
+	return h.requester.PromptAndSubmitRequest(ctx)
 }

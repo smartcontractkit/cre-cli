@@ -121,7 +121,7 @@ func newHandler(ctx *runtime.Context, stdin io.Reader) *handler {
 		workflowArtifact: &workflowArtifact{},
 		wrc:              nil,
 		runtimeContext:   ctx,
-		accessRequester:  accessrequest.NewRequester(ctx.Credentials, ctx.Logger),
+		accessRequester:  accessrequest.NewRequester(ctx.Credentials, ctx.EnvironmentSet, ctx.Logger),
 		validated:        false,
 		wg:               sync.WaitGroup{},
 		wrcErr:           nil,
@@ -191,7 +191,7 @@ func (h *handler) Execute(ctx context.Context) error {
 	}
 
 	if !deployAccess.HasAccess {
-		return h.accessRequester.PromptAndSubmitRequest()
+		return h.accessRequester.PromptAndSubmitRequest(ctx)
 	}
 
 	h.initWorkflowRegistryClient()

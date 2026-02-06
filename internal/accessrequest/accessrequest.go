@@ -1,41 +1,42 @@
 package accessrequest
 
 import (
-	"bytes"
-	"encoding/json"
+	"context"
 	"fmt"
-	"net/http"
-	"os"
-	"time"
 
 	"github.com/charmbracelet/huh"
+	"github.com/machinebox/graphql"
 	"github.com/rs/zerolog"
 
+	"github.com/smartcontractkit/cre-cli/internal/client/graphqlclient"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
+	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
-const (
-	EnvVarAccessRequestURL = "CRE_ACCESS_REQUEST_URL"
-)
-
-type AccessRequest struct {
-	UseCase string `json:"useCase"`
-}
+const requestDeploymentAccessMutation = `
+mutation RequestDeploymentAccess($input: RequestDeploymentAccessInput!) {
+  requestDeploymentAccess(input: $input) {
+    success
+    message
+  }
+}`
 
 type Requester struct {
-	credentials *credentials.Credentials
-	log         *zerolog.Logger
+	credentials    *credentials.Credentials
+	environmentSet *environments.EnvironmentSet
+	log            *zerolog.Logger
 }
 
-func NewRequester(creds *credentials.Credentials, log *zerolog.Logger) *Requester {
+func NewRequester(creds *credentials.Credentials, environmentSet *environments.EnvironmentSet, log *zerolog.Logger) *Requester {
 	return &Requester{
-		credentials: creds,
-		log:         log,
+		credentials:    creds,
+		environmentSet: environmentSet,
+		log:            log,
 	}
 }
 
-func (r *Requester) PromptAndSubmitRequest() error {
+func (r *Requester) PromptAndSubmitRequest(ctx context.Context) error {
 	ui.Line()
 	ui.Warning("Deployment access is not yet enabled for your organization.")
 	ui.Line()
@@ -83,7 +84,7 @@ func (r *Requester) PromptAndSubmitRequest() error {
 	spinner := ui.NewSpinner()
 	spinner.Start("Submitting access request...")
 
-	if err := r.SubmitAccessRequest(useCase); err != nil {
+	if err := r.SubmitAccessRequest(ctx, useCase); err != nil {
 		spinner.Stop()
 		return fmt.Errorf("failed to submit access request: %w", err)
 	}
@@ -98,52 +99,31 @@ func (r *Requester) PromptAndSubmitRequest() error {
 	return nil
 }
 
-func (r *Requester) SubmitAccessRequest(useCase string) error {
-	apiURL := os.Getenv(EnvVarAccessRequestURL)
+func (r *Requester) SubmitAccessRequest(ctx context.Context, useCase string) error {
+	client := graphqlclient.New(r.credentials, r.environmentSet, r.log)
 
-	// If API URL is not configured, simulate the request submission
-	// This allows testing the flow before the API is available
-	if apiURL == "" {
-		r.log.Debug().Msg("API URL not configured, simulating access request submission")
-		time.Sleep(2 * time.Second)
-		return nil
+	req := graphql.NewRequest(requestDeploymentAccessMutation)
+	req.Var("input", map[string]any{
+		"description": useCase,
+	})
+
+	var resp struct {
+		RequestDeploymentAccess struct {
+			Success bool    `json:"success"`
+			Message *string `json:"message"`
+		} `json:"requestDeploymentAccess"`
 	}
 
-	reqBody := AccessRequest{
-		UseCase: useCase,
+	if err := client.Execute(ctx, req, &resp); err != nil {
+		return fmt.Errorf("graphql request failed: %w", err)
 	}
 
-	jsonBody, err := json.Marshal(reqBody)
-	if err != nil {
-		return fmt.Errorf("failed to marshal request: %w", err)
-	}
-
-	if r.credentials.Tokens == nil || r.credentials.Tokens.AccessToken == "" {
-		return fmt.Errorf("no access token available - please run 'cre login' first")
-	}
-	token := r.credentials.Tokens.AccessToken
-
-	r.log.Debug().
-		Str("url", apiURL).
-		Str("method", "POST").
-		Msg("submitting access request")
-
-	req, err := http.NewRequest(http.MethodPost, apiURL, bytes.NewReader(jsonBody))
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to send request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("access request API returned status %d", resp.StatusCode)
+	if !resp.RequestDeploymentAccess.Success {
+		msg := "access request was not successful"
+		if resp.RequestDeploymentAccess.Message != nil {
+			msg = *resp.RequestDeploymentAccess.Message
+		}
+		return fmt.Errorf("request failed: %s", msg)
 	}
 
 	return nil
