@@ -21,9 +21,9 @@ const configSchema = z.object({
 type Config = z.infer<typeof configSchema>
 
 type ResponseValues = {
-	result: {
-		headers: {
-			'secret-header': string
+	multiHeaders: {
+		'secret-header': {
+			values: string[]
 		}
 	}
 }
@@ -34,7 +34,11 @@ const fetchResult = (sendRequester: ConfidentialHTTPSendRequester, config: Confi
 			request: {
 				url: config.url,
 				method: 'GET',
-				headers: ['secret-header: {{.SECRET_HEADER}}'],
+				multiHeaders: {
+					'secret-header': {
+						values: ['{{.SECRET_HEADER}}'],
+					},
+				},
 			},
 			vaultDonSecrets: [
 				{
