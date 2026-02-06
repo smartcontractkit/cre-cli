@@ -4,8 +4,11 @@ import (
 	"encoding/base64"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	workflowUtils "github.com/smartcontractkit/chainlink-common/pkg/workflows"
+
+	"github.com/smartcontractkit/cre-cli/internal/placeholder"
 )
 
 type workflowArtifact struct {
@@ -35,9 +38,75 @@ func (h *handler) prepareWorkflowConfig() ([]byte, error) {
 			h.log.Error().Err(err).Str("path", h.inputs.ConfigPath).Msg("Failed to read config file")
 			return nil, err
 		}
+
+		// Apply placeholder substitution for deployed contract addresses
+		configData, err = h.substituteContractPlaceholders(configData)
+		if err != nil {
+			return nil, fmt.Errorf("failed to substitute contract placeholders: %w", err)
+		}
 	}
 	h.log.Debug().Msg("Workflow config is ready")
 	return configData, nil
+}
+
+// substituteContractPlaceholders replaces {{contracts.Name.address}} placeholders with deployed addresses
+func (h *handler) substituteContractPlaceholders(configData []byte) ([]byte, error) {
+	// Find project root by looking for parent directory containing project.yaml
+	workflowDir := filepath.Dir(h.inputs.WorkflowPath)
+	projectRoot := findProjectRoot(workflowDir)
+	if projectRoot == "" {
+		h.log.Debug().Msg("Project root not found, skipping placeholder substitution")
+		return configData, nil
+	}
+
+	substitutor, err := placeholder.NewSubstitutor(projectRoot)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create placeholder substitutor: %w", err)
+	}
+
+	if !substitutor.HasDeployedContracts() {
+		// Check if there are placeholders that need substitution
+		placeholders := placeholder.FindPlaceholders(string(configData))
+		if len(placeholders) > 0 {
+			return nil, fmt.Errorf("found %d contract placeholder(s) in config but no deployed_contracts.yaml found. Run 'cre contract deploy' first", len(placeholders))
+		}
+		h.log.Debug().Msg("No deployed_contracts.yaml found, skipping placeholder substitution")
+		return configData, nil
+	}
+
+	substituted, err := substitutor.SubstituteString(string(configData))
+	if err != nil {
+		return nil, err
+	}
+
+	// Log substitutions that were made
+	contracts := substitutor.GetAllDeployedContracts()
+	if len(contracts) > 0 {
+		h.log.Debug().Int("contracts", len(contracts)).Msg("Substituted contract address placeholders")
+		for name, addr := range contracts {
+			h.log.Debug().Str("contract", name).Str("address", addr).Msg("Placeholder substitution")
+		}
+	}
+
+	return []byte(substituted), nil
+}
+
+// findProjectRoot searches upward from the given directory for a project.yaml file
+func findProjectRoot(startDir string) string {
+	dir := startDir
+	for {
+		projectFile := filepath.Join(dir, "project.yaml")
+		if _, err := os.Stat(projectFile); err == nil {
+			return dir
+		}
+
+		parentDir := filepath.Dir(dir)
+		if parentDir == dir {
+			// Reached filesystem root
+			return ""
+		}
+		dir = parentDir
+	}
 }
 
 func (h *handler) PrepareWorkflowArtifact() error {
