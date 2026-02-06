@@ -13,6 +13,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/cmd/creinit"
 	"github.com/smartcontractkit/cre-cli/cmd/generate-bindings/bindings"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
+	"github.com/smartcontractkit/cre-cli/internal/ui"
 	"github.com/smartcontractkit/cre-cli/internal/validation"
 )
 
@@ -229,7 +230,7 @@ func (h *handler) processAbiDirectory(inputs Inputs) error {
 		// Create output file path in contract-specific directory
 		outputFile := filepath.Join(contractOutDir, contractName+".go")
 
-		fmt.Printf("Processing ABI file: %s, contract: %s, package: %s, output: %s\n", abiFile, contractName, packageName, outputFile)
+		ui.Dim(fmt.Sprintf("Processing: %s -> %s", contractName, outputFile))
 
 		err = bindings.GenerateBindings(
 			"", // combinedJSONPath - empty for now
@@ -265,7 +266,7 @@ func (h *handler) processSingleAbi(inputs Inputs) error {
 	// Create output file path in contract-specific directory
 	outputFile := filepath.Join(contractOutDir, contractName+".go")
 
-	fmt.Printf("Processing single ABI file: %s, contract: %s, package: %s, output: %s\n", inputs.AbiPath, contractName, packageName, outputFile)
+	ui.Dim(fmt.Sprintf("Processing: %s -> %s", contractName, outputFile))
 
 	return bindings.GenerateBindings(
 		"", // combinedJSONPath - empty for now
@@ -277,7 +278,7 @@ func (h *handler) processSingleAbi(inputs Inputs) error {
 }
 
 func (h *handler) Execute(inputs Inputs) error {
-	fmt.Printf("GenerateBindings would be called here: projectRoot=%s, chainFamily=%s, language=%s, abiPath=%s, pkgName=%s, outPath=%s\n", inputs.ProjectRoot, inputs.ChainFamily, inputs.Language, inputs.AbiPath, inputs.PkgName, inputs.OutPath)
+	ui.Dim(fmt.Sprintf("Project: %s, Chain: %s, Language: %s", inputs.ProjectRoot, inputs.ChainFamily, inputs.Language))
 
 	// Validate language
 	switch inputs.Language {
@@ -311,17 +312,26 @@ func (h *handler) Execute(inputs Inputs) error {
 			}
 		}
 
+		spinner := ui.NewSpinner()
+		spinner.Start("Installing dependencies...")
+
 		err = runCommand(inputs.ProjectRoot, "go", "get", "github.com/smartcontractkit/cre-sdk-go@"+creinit.SdkVersion)
 		if err != nil {
+			spinner.Stop()
 			return err
 		}
 		err = runCommand(inputs.ProjectRoot, "go", "get", "github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm@"+creinit.EVMCapabilitiesVersion)
 		if err != nil {
+			spinner.Stop()
 			return err
 		}
 		if err = runCommand(inputs.ProjectRoot, "go", "mod", "tidy"); err != nil {
+			spinner.Stop()
 			return err
 		}
+
+		spinner.Stop()
+		ui.Success("Bindings generated successfully")
 		return nil
 	default:
 		return fmt.Errorf("unsupported chain family: %s", inputs.ChainFamily)

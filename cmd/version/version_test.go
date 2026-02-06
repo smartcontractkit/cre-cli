@@ -21,12 +21,12 @@ func TestVersionCommand(t *testing.T) {
 		{
 			name:     "Release version",
 			version:  "version v1.0.3-beta0",
-			expected: "cre version v1.0.3-beta0",
+			expected: "CRE CLI version v1.0.3-beta0",
 		},
 		{
 			name:     "Local build hash",
 			version:  "build c8ab91c87c7135aa7c57669bb454e6a3287139d7",
-			expected: "cre build c8ab91c87c7135aa7c57669bb454e6a3287139d7",
+			expected: "CRE CLI build c8ab91c87c7135aa7c57669bb454e6a3287139d7",
 		},
 	}
 

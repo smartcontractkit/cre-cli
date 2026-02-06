@@ -7,12 +7,12 @@ import (
 	"fmt"
 	"io"
 	"math/big"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/charmbracelet/huh"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/google/uuid"
 	"github.com/machinebox/graphql"
@@ -26,10 +26,10 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
-	"github.com/smartcontractkit/cre-cli/internal/prompt"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/types"
+	"github.com/smartcontractkit/cre-cli/internal/ui"
 	"github.com/smartcontractkit/cre-cli/internal/validation"
 )
 
@@ -59,7 +59,7 @@ type initiateLinkingResponse struct {
 }
 
 func Exec(ctx *runtime.Context, in Inputs) error {
-	h := newHandler(ctx, os.Stdin)
+	h := newHandler(ctx, nil)
 
 	if err := h.ValidateInputs(in); err != nil {
 		return err
@@ -161,10 +161,14 @@ func (h *handler) Execute(in Inputs) error {
 	h.displayDetails()
 
 	if in.WorkflowOwnerLabel == "" {
-		if err := prompt.SimplePrompt(h.stdin, "Provide a label for your owner address", func(inputLabel string) error {
-			in.WorkflowOwnerLabel = inputLabel
-			return nil
-		}); err != nil {
+		form := huh.NewForm(
+			huh.NewGroup(
+				huh.NewInput().
+					Title("Provide a label for your owner address").
+					Value(&in.WorkflowOwnerLabel),
+			),
+		).WithTheme(ui.ChainlinkTheme())
+		if err := form.Run(); err != nil {
 			return err
 		}
 	}
@@ -182,7 +186,7 @@ func (h *handler) Execute(in Inputs) error {
 		return nil
 	}
 
-	fmt.Printf("Starting linking: owner=%s, label=%s\n", in.WorkflowOwner, in.WorkflowOwnerLabel)
+	ui.Dim(fmt.Sprintf("Starting linking: owner=%s, label=%s", in.WorkflowOwner, in.WorkflowOwnerLabel))
 
 	resp, err := h.callInitiateLinking(context.Background(), in)
 	if err != nil {
@@ -198,7 +202,7 @@ func (h *handler) Execute(in Inputs) error {
 	h.log.Debug().Msg("\nRaw linking response payload:\n\n" + string(prettyResp))
 
 	if in.WorkflowRegistryContractAddress == resp.ContractAddress {
-		fmt.Println("Contract address validation passed")
+		ui.Success("Contract address validation passed")
 	} else {
 		h.log.Warn().Msg("The workflowRegistryContractAddress in your settings does not match the one returned by the server")
 		return fmt.Errorf("contract address validation failed")
@@ -299,11 +303,14 @@ func (h *handler) linkOwner(resp initiateLinkingResponse) error {
 
 	switch txOut.Type {
 	case client.Regular:
-		fmt.Println("Transaction confirmed")
-		fmt.Printf("View on explorer: \033]8;;%s/tx/%s\033\\%s/tx/%s\033]8;;\033\\\n", h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash, h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash)
-		fmt.Println("\n[OK] web3 address linked to your CRE organization successfully")
-		fmt.Println("\nNote: Linking verification may take up to 60 seconds.")
-		fmt.Println("\n→ You can now deploy workflows using this address")
+		ui.Success("Transaction confirmed")
+		ui.URL(fmt.Sprintf("%s/tx/%s", h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash))
+		ui.Line()
+		ui.Success("web3 address linked to your CRE organization successfully")
+		ui.Line()
+		ui.Dim("Note: Linking verification may take up to 60 seconds.")
+		ui.Line()
+		ui.Bold("You can now deploy workflows using this address")
 
 	case client.Raw:
 		selector, err := strconv.ParseUint(resp.ChainSelector, 10, 64)
@@ -317,19 +324,19 @@ func (h *handler) linkOwner(resp initiateLinkingResponse) error {
 			return err
 		}
 
-		fmt.Println("")
-		fmt.Println("Ownership linking initialized successfully!")
-		fmt.Println("")
-		fmt.Println("Next steps:")
-		fmt.Println("")
-		fmt.Println("   1. Submit the following transaction on the target chain:")
-		fmt.Printf("      Chain:            %s\n", ChainName)
-		fmt.Printf("      Contract Address: %s\n", txOut.RawTx.To)
-		fmt.Println("")
-		fmt.Println("   2. Use the following transaction data:")
-		fmt.Println("")
-		fmt.Printf("      %x\n", txOut.RawTx.Data)
-		fmt.Println("")
+		ui.Line()
+		ui.Success("Ownership linking initialized successfully!")
+		ui.Line()
+		ui.Bold("Next steps:")
+		ui.Line()
+		ui.Print("   1. Submit the following transaction on the target chain:")
+		ui.Dim(fmt.Sprintf("      Chain:            %s", ChainName))
+		ui.Dim(fmt.Sprintf("      Contract Address: %s", txOut.RawTx.To))
+		ui.Line()
+		ui.Print("   2. Use the following transaction data:")
+		ui.Line()
+		ui.Code(fmt.Sprintf("      %x", txOut.RawTx.Data))
+		ui.Line()
 
 	case client.Changeset:
 		chainSelector, err := settings.GetChainSelectorByChainName(h.environmentSet.WorkflowRegistryChainName)
@@ -338,7 +345,7 @@ func (h *handler) linkOwner(resp initiateLinkingResponse) error {
 		}
 		mcmsConfig, err := settings.GetMCMSConfig(h.settings, chainSelector)
 		if err != nil {
-			fmt.Println("\nMCMS config not found or is incorrect, skipping MCMS config in changeset")
+			ui.Warning("MCMS config not found or is incorrect, skipping MCMS config in changeset")
 		}
 		cldSettings := h.settings.CLDSettings
 		changesets := []types.Changeset{
@@ -370,13 +377,13 @@ func (h *handler) linkOwner(resp initiateLinkingResponse) error {
 		h.log.Warn().Msgf("Unsupported transaction type: %s", txOut.Type)
 	}
 
-	fmt.Println("Linked successfully")
+	ui.Success("Linked successfully")
 	return nil
 }
 
 func (h *handler) checkIfAlreadyLinked() (bool, error) {
 	ownerAddr := common.HexToAddress(h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress)
-	fmt.Println("\nChecking existing registrations...")
+	ui.Dim("Checking existing registrations...")
 
 	linked, err := h.wrc.IsOwnerLinked(ownerAddr)
 	if err != nil {
@@ -384,16 +391,18 @@ func (h *handler) checkIfAlreadyLinked() (bool, error) {
 	}
 
 	if linked {
-		fmt.Println("web3 address already linked")
+		ui.Success("web3 address already linked")
 		return true, nil
 	}
 
-	fmt.Println("✓ No existing link found for this address")
+	ui.Success("No existing link found for this address")
 	return false, nil
 }
 
 func (h *handler) displayDetails() {
-	fmt.Println("Linking web3 key to your CRE organization")
-	fmt.Printf("Target : \t\t %s\n", h.settings.User.TargetName)
-	fmt.Printf("✔ Using Address : \t %s\n\n", h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress)
+	ui.Line()
+	ui.Title("Linking web3 key to your CRE organization")
+	ui.Dim(fmt.Sprintf("Target:        %s", h.settings.User.TargetName))
+	ui.Dim(fmt.Sprintf("Owner Address: %s", h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress))
+	ui.Line()
 }

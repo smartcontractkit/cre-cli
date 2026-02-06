@@ -25,6 +25,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/types"
+	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
 // cre secrets list --timeout 1h
@@ -75,10 +76,13 @@ func New(ctx *runtime.Context) *cobra.Command {
 
 // Execute performs: build request → (MSIG step 1 bundle OR EOA allowlist+post) → parse.
 func Execute(h *common.Handler, namespace string, duration time.Duration, ownerType string) error {
-	fmt.Println("Verifying ownership...")
+	spinner := ui.NewSpinner()
+	spinner.Start("Verifying ownership...")
 	if err := h.EnsureOwnerLinkedOrFail(); err != nil {
+		spinner.Stop()
 		return err
 	}
+	spinner.Stop()
 
 	if namespace == "" {
 		namespace = "main"
@@ -140,7 +144,7 @@ func Execute(h *common.Handler, namespace string, duration time.Duration, ownerT
 	}
 
 	if txOut == nil && allowlisted {
-		fmt.Printf("Digest already allowlisted; proceeding to gateway POST: owner=%s, digest=0x%x\n", ownerAddr.Hex(), digest)
+		ui.Dim(fmt.Sprintf("Digest already allowlisted; proceeding to gateway POST: owner=%s, digest=0x%x", ownerAddr.Hex(), digest))
 		return gatewayPost()
 	}
 
@@ -162,9 +166,9 @@ func Execute(h *common.Handler, namespace string, duration time.Duration, ownerT
 
 	switch txOut.Type {
 	case client.Regular:
-		fmt.Println("Transaction confirmed")
-		fmt.Printf("Digest allowlisted; proceeding to gateway POST: owner=%s, digest=0x%x\n", ownerAddr.Hex(), digest)
-		fmt.Printf("View on explorer: \033]8;;%s/tx/%s\033\\%s/tx/%s\033]8;;\033\\\n", h.EnvironmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash, h.EnvironmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash)
+		ui.Success("Transaction confirmed")
+		ui.Dim(fmt.Sprintf("Digest allowlisted; proceeding to gateway POST: owner=%s, digest=0x%x", ownerAddr.Hex(), digest))
+		ui.URL(fmt.Sprintf("%s/tx/%s", h.EnvironmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash))
 		return gatewayPost()
 	case client.Raw:
 
@@ -184,7 +188,7 @@ func Execute(h *common.Handler, namespace string, duration time.Duration, ownerT
 		}
 		mcmsConfig, err := settings.GetMCMSConfig(h.Settings, chainSelector)
 		if err != nil {
-			fmt.Println("\nMCMS config not found or is incorrect, skipping MCMS config in changeset")
+			ui.Warning("MCMS config not found or is incorrect, skipping MCMS config in changeset")
 		}
 		cldSettings := h.Settings.CLDSettings
 		changesets := []types.Changeset{

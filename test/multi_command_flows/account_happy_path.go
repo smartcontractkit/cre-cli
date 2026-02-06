@@ -277,7 +277,7 @@ func RunAccountHappyPath(t *testing.T, tc TestConfig, testEthURL, chainName stri
 
 		// Check for linked owner (if link succeeded) or empty list (if link failed at contract level)
 		if isOwnerLinked {
-			require.Contains(t, out, "Linked Owners:", "should show linked owners section")
+			require.Contains(t, out, "Linked Owners", "should show linked owners section")
 			require.Contains(t, out, "owner-label-1", "should show the owner label")
 			require.Contains(t, out, constants.TestAddress4, "should show owner address")
 			require.Contains(t, out, "Chain Selector:", "should show chain selector")
