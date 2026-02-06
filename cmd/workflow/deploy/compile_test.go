@@ -1,6 +1,7 @@
 package deploy
 
 import (
+	"context"
 	"encoding/base64"
 	"errors"
 	"io"
@@ -212,7 +213,7 @@ func TestCompileCmd(t *testing.T) {
 					err := handler.ValidateInputs()
 					require.NoError(t, err)
 
-					err = handler.Execute()
+					err = handler.Execute(context.Background())
 
 					w.Close()
 					os.Stdout = oldStdout
