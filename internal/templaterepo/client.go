@@ -338,7 +338,12 @@ func (c *Client) extractTarball(r io.Reader, templatePath, destDir string, exclu
 			return fmt.Errorf("tar read error: %w", err)
 		}
 
-		// Detect top-level prefix from the first entry
+		// Skip PAX global/extended headers — these are metadata records, not real files
+		if header.Typeflag == tar.TypeXGlobalHeader || header.Typeflag == tar.TypeXHeader {
+			continue
+		}
+
+		// Detect top-level prefix from the first real directory entry
 		if topLevelPrefix == "" {
 			parts := strings.SplitN(header.Name, "/", 2)
 			if len(parts) >= 1 {
@@ -377,10 +382,12 @@ func (c *Client) extractTarball(r io.Reader, templatePath, destDir string, exclu
 
 		switch header.Typeflag {
 		case tar.TypeDir:
+			c.logger.Debug().Msgf("Extracting dir: %s -> %s", name, targetPath)
 			if err := os.MkdirAll(targetPath, 0755); err != nil {
 				return fmt.Errorf("failed to create directory %s: %w", targetPath, err)
 			}
 		case tar.TypeReg:
+			c.logger.Debug().Msgf("Extracting file: %s -> %s", name, targetPath)
 			if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
 				return fmt.Errorf("failed to create parent directory: %w", err)
 			}
@@ -395,8 +402,6 @@ func (c *Client) extractTarball(r io.Reader, templatePath, destDir string, exclu
 				return fmt.Errorf("failed to write file %s: %w", targetPath, err)
 			}
 			f.Close()
-
-			c.logger.Debug().Msgf("Extracted: %s", targetPath)
 		}
 	}
 

@@ -22,7 +22,7 @@ const (
 var DefaultSource = templaterepo.RepoSource{
 	Owner: "smartcontractkit",
 	Repo:  "cre-templates",
-	Ref:   "main",
+	Ref:   "feature/template-standard",
 }
 
 // Config represents the CLI configuration file at ~/.cre/config.yaml.
