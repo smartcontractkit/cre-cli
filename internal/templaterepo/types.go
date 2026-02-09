@@ -10,8 +10,9 @@ type TemplateMetadata struct {
 	Category    string   `yaml:"category"`    // Topic category (e.g., "web3")
 	Author      string   `yaml:"author"`
 	License     string   `yaml:"license"`
-	Tags        []string `yaml:"tags"`    // Searchable tags
-	Exclude     []string `yaml:"exclude"` // Files/dirs to exclude when copying
+	Tags        []string `yaml:"tags"`      // Searchable tags
+	Exclude     []string `yaml:"exclude"`   // Files/dirs to exclude when copying
+	Networks    []string `yaml:"networks"`  // Required chain names (e.g., "ethereum-testnet-sepolia")
 }
 
 // TemplateSummary is TemplateMetadata plus location info, populated during discovery.

@@ -49,6 +49,39 @@ func GetDefaultReplacements() map[string]string {
 	}
 }
 
+// BuildRPCsListYAML generates the indented rpcs YAML block for project.yaml.
+// If networks is empty, falls back to the default (ethereum-testnet-sepolia).
+func BuildRPCsListYAML(networks []string, rpcURLs map[string]string) string {
+	if len(networks) == 0 {
+		networks = []string{constants.DefaultEthSepoliaChainName}
+		if rpcURLs == nil {
+			rpcURLs = make(map[string]string)
+		}
+		if _, ok := rpcURLs[constants.DefaultEthSepoliaChainName]; !ok {
+			rpcURLs[constants.DefaultEthSepoliaChainName] = constants.DefaultEthSepoliaRpcUrl
+		}
+	}
+
+	var sb strings.Builder
+	sb.WriteString("  rpcs:\n")
+	for _, network := range networks {
+		url := ""
+		if rpcURLs != nil {
+			url = rpcURLs[network]
+		}
+		fmt.Fprintf(&sb, "    - chain-name: %s\n", network)
+		fmt.Fprintf(&sb, "      url: %s\n", url)
+	}
+	return sb.String()
+}
+
+// GetReplacementsWithNetworks returns template replacements including a dynamic RPCs list.
+func GetReplacementsWithNetworks(networks []string, rpcURLs map[string]string) map[string]string {
+	repl := GetDefaultReplacements()
+	repl["RPCsList"] = BuildRPCsListYAML(networks, rpcURLs)
+	return repl
+}
+
 func GenerateFileFromTemplate(outputPath string, templateContent string, replacements map[string]string) error {
 	var replacerArgs []string
 	for key, value := range replacements {

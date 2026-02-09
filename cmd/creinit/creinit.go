@@ -2,8 +2,11 @@ package creinit
 
 import (
 	"fmt"
+	"maps"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/charmbracelet/huh"
 	"github.com/rs/zerolog"
@@ -22,9 +25,10 @@ import (
 var chainlinkTheme = ui.ChainlinkTheme()
 
 type Inputs struct {
-	ProjectName  string `validate:"omitempty,project_name" cli:"project-name"`
-	TemplateName string `validate:"omitempty" cli:"template"`
-	WorkflowName string `validate:"omitempty,workflow_name" cli:"workflow-name"`
+	ProjectName  string            `validate:"omitempty,project_name" cli:"project-name"`
+	TemplateName string            `validate:"omitempty" cli:"template"`
+	WorkflowName string            `validate:"omitempty,workflow_name" cli:"workflow-name"`
+	RpcURLs      map[string]string // chain-name -> url, from --rpc-url flags
 }
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
@@ -58,6 +62,7 @@ Templates are fetched dynamically from GitHub repositories.`,
 	initCmd.Flags().StringP("workflow-name", "w", "", "Name for the new workflow")
 	initCmd.Flags().StringP("template", "t", "", "Name of the template to use (e.g., kv-store-go)")
 	initCmd.Flags().Bool("refresh", false, "Bypass template cache and fetch fresh data")
+	initCmd.Flags().StringArray("rpc-url", nil, "RPC URL for a network (format: chain-name=url, repeatable)")
 
 	// Deprecated: --template-id is kept for backwards compatibility, maps to hello-world-go
 	initCmd.Flags().Uint32("template-id", 0, "")
@@ -112,10 +117,21 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 		}
 	}
 
+	// Parse --rpc-url flag values (chain-name=url)
+	rpcURLs := make(map[string]string)
+	for _, raw := range v.GetStringSlice("rpc-url") {
+		parts := strings.SplitN(raw, "=", 2)
+		if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+			return Inputs{}, fmt.Errorf("invalid --rpc-url format %q: expected chain-name=url", raw)
+		}
+		rpcURLs[parts[0]] = parts[1]
+	}
+
 	return Inputs{
 		ProjectName:  v.GetString("project-name"),
 		TemplateName: templateName,
 		WorkflowName: v.GetString("workflow-name"),
+		RpcURLs:      rpcURLs,
 	}, nil
 }
 
@@ -238,9 +254,26 @@ func (h *handler) Execute(inputs Inputs) error {
 		}
 	}
 
+	// Determine networks and merge RPC URLs from wizard + flags
+	networks := selectedTemplate.Networks
+	networkRPCs := result.NetworkRPCs
+	if networkRPCs == nil {
+		networkRPCs = make(map[string]string)
+	}
+	// Flags take precedence over wizard input
+	maps.Copy(networkRPCs, inputs.RpcURLs)
+	// Validate any provided RPC URLs
+	for chain, rpcURL := range networkRPCs {
+		if rpcURL != "" {
+			if u, parseErr := url.Parse(rpcURL); parseErr != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+				return fmt.Errorf("invalid RPC URL for %s: must be a valid http/https URL", chain)
+			}
+		}
+	}
+
 	// Create project settings for new projects
 	if isNewProject {
-		repl := settings.GetDefaultReplacements()
+		repl := settings.GetReplacementsWithNetworks(networks, networkRPCs)
 		if e := settings.FindOrCreateProjectSettings(projectRoot, repl); e != nil {
 			return e
 		}

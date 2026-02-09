@@ -20,9 +20,10 @@ cre init [optional flags]
 ```
   -h, --help                   help for init
   -p, --project-name string    Name for the new project
+      --refresh                Bypass template cache and fetch fresh data
+      --rpc-url stringArray    RPC URL for a network (format: chain-name=url, repeatable)
   -t, --template string        Name of the template to use (e.g., kv-store-go)
   -w, --workflow-name string   Name for the new workflow
-      --refresh                Bypass template cache and fetch fresh data
 ```
 
 ### Options inherited from parent commands

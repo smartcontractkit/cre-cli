@@ -1,6 +1,8 @@
 package creinit
 
 import (
+	"fmt"
+	"net/url"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -35,6 +37,7 @@ type wizardStep int
 const (
 	stepProjectName wizardStep = iota
 	stepTemplate
+	stepNetworkRPCs
 	stepWorkflowName
 	stepDone
 )
@@ -58,6 +61,16 @@ type wizardModel struct {
 	templates      []templaterepo.TemplateSummary
 	templateCursor int
 	filterText     string
+
+	// RPC URL inputs
+	networks        []string          // from selected template's Networks
+	networkRPCs     map[string]string // chain-name -> url (collected results)
+	rpcInputs       []textinput.Model // one text input per network
+	rpcCursor       int               // which network RPC input is active
+	skipNetworkRPCs bool              // skip if no networks or all RPCs provided via flags
+
+	// Pre-provided RPC URLs from flags
+	flagRpcURLs map[string]string
 
 	// Flags to skip steps
 	skipProjectName  bool
@@ -87,6 +100,7 @@ type WizardResult struct {
 	ProjectName      string
 	WorkflowName     string
 	SelectedTemplate *templaterepo.TemplateSummary
+	NetworkRPCs      map[string]string // chain-name -> rpc-url
 	Completed        bool
 	Cancelled        bool
 }
@@ -104,11 +118,17 @@ func newWizardModel(inputs Inputs, isNewProject bool, templates []templaterepo.T
 	wi.CharLimit = 64
 	wi.Width = 40
 
+	flagRPCs := inputs.RpcURLs
+	if flagRPCs == nil {
+		flagRPCs = make(map[string]string)
+	}
+
 	m := wizardModel{
 		step:          stepProjectName,
 		projectInput:  pi,
 		workflowInput: wi,
 		templates:     templates,
+		flagRpcURLs:   flagRPCs,
 
 		// Styles
 		logoStyle:     lipgloss.NewStyle().Foreground(lipgloss.Color(ui.ColorBlue500)).Bold(true),
@@ -134,6 +154,7 @@ func newWizardModel(inputs Inputs, isNewProject bool, templates []templaterepo.T
 	if preselected != nil {
 		m.selectedTemplate = preselected
 		m.skipTemplate = true
+		m.initNetworkRPCInputs()
 	}
 
 	if inputs.WorkflowName != "" {
@@ -145,6 +166,39 @@ func newWizardModel(inputs Inputs, isNewProject bool, templates []templaterepo.T
 	m.advanceToNextStep()
 
 	return m
+}
+
+// initNetworkRPCInputs sets up RPC URL inputs based on the selected template's Networks.
+func (m *wizardModel) initNetworkRPCInputs() {
+	networks := m.selectedTemplate.Networks
+	if len(networks) == 0 {
+		m.skipNetworkRPCs = true
+		return
+	}
+
+	m.networks = networks
+	m.networkRPCs = make(map[string]string)
+	m.rpcInputs = make([]textinput.Model, len(networks))
+
+	allProvided := true
+	for i, network := range networks {
+		ti := textinput.New()
+		ti.Placeholder = "https://..."
+		ti.CharLimit = 256
+		ti.Width = 60
+
+		if rpcURL, ok := m.flagRpcURLs[network]; ok {
+			m.networkRPCs[network] = rpcURL
+		} else {
+			allProvided = false
+		}
+
+		m.rpcInputs[i] = ti
+	}
+
+	if allProvided {
+		m.skipNetworkRPCs = true
+	}
 }
 
 func (m *wizardModel) advanceToNextStep() {
@@ -163,6 +217,22 @@ func (m *wizardModel) advanceToNextStep() {
 				continue
 			}
 			return
+		case stepNetworkRPCs:
+			if m.skipNetworkRPCs {
+				m.step++
+				continue
+			}
+			// Focus the first unfilled RPC input
+			for i, network := range m.networks {
+				if _, ok := m.networkRPCs[network]; !ok {
+					m.rpcCursor = i
+					m.rpcInputs[i].Focus()
+					return
+				}
+			}
+			// All filled, advance
+			m.step++
+			continue
 		case stepWorkflowName:
 			if m.skipWorkflowName {
 				m.step++
@@ -264,6 +334,10 @@ func (m wizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.projectInput, cmd = m.projectInput.Update(msg)
 	case stepWorkflowName:
 		m.workflowInput, cmd = m.workflowInput.Update(msg)
+	case stepNetworkRPCs:
+		if m.rpcCursor < len(m.rpcInputs) {
+			m.rpcInputs[m.rpcCursor], cmd = m.rpcInputs[m.rpcCursor].Update(msg)
+		}
 	case stepTemplate, stepDone:
 		// No text input to update for these steps
 	}
@@ -297,8 +371,31 @@ func (m wizardModel) handleEnter() (tea.Model, tea.Cmd) {
 		}
 		selected := filtered[m.templateCursor]
 		m.selectedTemplate = &selected
+		m.initNetworkRPCInputs()
 		m.step++
 		m.advanceToNextStep()
+
+	case stepNetworkRPCs:
+		value := strings.TrimSpace(m.rpcInputs[m.rpcCursor].Value())
+		network := m.networks[m.rpcCursor]
+
+		if value != "" {
+			if err := validateRpcURL(value); err != nil {
+				m.err = fmt.Sprintf("Invalid URL for %s: %s", network, err.Error())
+				return m, nil
+			}
+			m.networkRPCs[network] = value
+		}
+		// Empty value means user skipped — leave blank
+
+		if m.rpcCursor < len(m.networks)-1 {
+			m.rpcInputs[m.rpcCursor].Blur()
+			m.rpcCursor++
+			m.rpcInputs[m.rpcCursor].Focus()
+		} else {
+			m.step++
+			m.advanceToNextStep()
+		}
 
 	case stepWorkflowName:
 		value := m.workflowInput.Value()
@@ -448,6 +545,31 @@ func (m wizardModel) View() string {
 			}
 		}
 
+	case stepNetworkRPCs:
+		b.WriteString(m.promptStyle.Render("  Configure RPC URLs"))
+		b.WriteString("\n")
+		b.WriteString(m.dimStyle.Render("  Enter RPC URLs for the required networks (leave blank to fill later)"))
+		b.WriteString("\n\n")
+
+		for i, network := range m.networks {
+			if i < m.rpcCursor {
+				// Already answered
+				rpcVal := m.networkRPCs[network]
+				if rpcVal == "" {
+					rpcVal = "(skipped)"
+				}
+				b.WriteString(m.dimStyle.Render(fmt.Sprintf("  %s: %s", network, rpcVal)))
+				b.WriteString("\n")
+			} else if i == m.rpcCursor {
+				// Current input
+				b.WriteString(m.promptStyle.Render(fmt.Sprintf("  %s", network)))
+				b.WriteString("\n")
+				b.WriteString("  ")
+				b.WriteString(m.rpcInputs[i].View())
+				b.WriteString("\n")
+			}
+		}
+
 	case stepWorkflowName:
 		b.WriteString(m.promptStyle.Render("  Workflow name"))
 		b.WriteString("\n")
@@ -485,6 +607,7 @@ func (m wizardModel) Result() WizardResult {
 		ProjectName:      m.projectName,
 		WorkflowName:     m.workflowName,
 		SelectedTemplate: m.selectedTemplate,
+		NetworkRPCs:      m.networkRPCs,
 		Completed:        m.completed,
 		Cancelled:        m.cancelled,
 	}
@@ -507,4 +630,19 @@ func RunWizard(inputs Inputs, isNewProject bool, templates []templaterepo.Templa
 
 	result := finalModel.(wizardModel).Result()
 	return result, nil
+}
+
+// validateRpcURL validates that a URL is a valid HTTP/HTTPS URL.
+func validateRpcURL(rawURL string) error {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return fmt.Errorf("invalid URL format")
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return fmt.Errorf("URL must start with http:// or https://")
+	}
+	if u.Host == "" {
+		return fmt.Errorf("URL must have a host")
+	}
+	return nil
 }
