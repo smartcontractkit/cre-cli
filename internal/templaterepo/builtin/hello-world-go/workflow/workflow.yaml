@@ -1,0 +1,4 @@
+triggers:
+  - type: cron
+    config:
+      schedule: "*/30 * * * * *"

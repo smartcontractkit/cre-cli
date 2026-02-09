@@ -43,9 +43,11 @@ func NewRegistryWithCache(logger *zerolog.Logger, client *Client, cache *Cache, 
 }
 
 // ListTemplates discovers and returns all templates from configured sources.
+// The built-in hello-world template is always included first.
 // If refresh is true, the cache is bypassed.
 func (r *Registry) ListTemplates(refresh bool) ([]TemplateSummary, error) {
-	var allTemplates []TemplateSummary
+	// Always include the built-in template
+	allTemplates := []TemplateSummary{BuiltInTemplate}
 
 	for _, source := range r.sources {
 		templates, err := r.listFromSource(source, refresh)
@@ -54,10 +56,6 @@ func (r *Registry) ListTemplates(refresh bool) ([]TemplateSummary, error) {
 			continue
 		}
 		allTemplates = append(allTemplates, templates...)
-	}
-
-	if len(allTemplates) == 0 {
-		return nil, fmt.Errorf("no templates found from any source. Check your network connection and try again")
 	}
 
 	return allTemplates, nil
@@ -82,6 +80,14 @@ func (r *Registry) GetTemplate(name string, refresh bool) (*TemplateSummary, err
 // ScaffoldTemplate downloads and extracts a template into destDir,
 // then renames the template's workflow directory to the user's workflow name.
 func (r *Registry) ScaffoldTemplate(tmpl *TemplateSummary, destDir, workflowName string, onProgress func(string)) error {
+	// Handle built-in templates directly from embedded FS
+	if tmpl.BuiltIn {
+		if onProgress != nil {
+			onProgress("Scaffolding built-in template...")
+		}
+		return ScaffoldBuiltIn(r.logger, destDir, workflowName)
+	}
+
 	if onProgress != nil {
 		onProgress("Downloading template...")
 	}

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -96,10 +97,14 @@ func TestRegistryListTemplates(t *testing.T) {
 	client := NewClient(logger)
 	registry := NewRegistryWithCache(logger, client, cache, []RepoSource{source})
 
-	// List should return all cached templates
+	// List should return built-in + all cached templates
 	templates, err := registry.ListTemplates(false)
 	require.NoError(t, err)
-	assert.Len(t, templates, 3)
+	assert.Len(t, templates, 4) // 1 built-in + 3 remote
+
+	// Built-in should be first
+	assert.Equal(t, "hello-world-go", templates[0].Name)
+	assert.True(t, templates[0].BuiltIn)
 }
 
 func TestRegistryGetTemplate(t *testing.T) {
@@ -178,7 +183,7 @@ func TestRegistryMultipleSources(t *testing.T) {
 
 	templates, err := registry.ListTemplates(false)
 	require.NoError(t, err)
-	assert.Len(t, templates, 2)
+	assert.Len(t, templates, 3) // 1 built-in + 2 remote
 
 	// Should find templates from both sources
 	tmplA, err := registry.GetTemplate("template-a", false)
@@ -188,6 +193,45 @@ func TestRegistryMultipleSources(t *testing.T) {
 	tmplB, err := registry.GetTemplate("template-b", false)
 	require.NoError(t, err)
 	assert.Equal(t, "org2", tmplB.Source.Owner)
+}
+
+func TestScaffoldBuiltIn(t *testing.T) {
+	logger := testutil.NewTestLogger()
+	destDir := t.TempDir()
+	workflowName := "my-wf"
+
+	err := ScaffoldBuiltIn(logger, destDir, workflowName)
+	require.NoError(t, err)
+
+	// Check that key files were extracted
+	expectedFiles := []string{
+		filepath.Join(workflowName, "main.go"),
+		filepath.Join(workflowName, "workflow.yaml"),
+		filepath.Join(workflowName, "README.md"),
+		filepath.Join(workflowName, "config.staging.json"),
+		filepath.Join(workflowName, "config.production.json"),
+		"secrets.yaml",
+	}
+	for _, f := range expectedFiles {
+		fullPath := filepath.Join(destDir, f)
+		assert.FileExists(t, fullPath, "missing file: %s", f)
+	}
+}
+
+func TestBuiltInAlwaysAvailableOffline(t *testing.T) {
+	logger := testutil.NewTestLogger()
+	cacheDir := t.TempDir()
+	cache := NewCacheWithDir(logger, cacheDir)
+
+	// No sources configured, no cache — simulates fully offline
+	client := NewClient(logger)
+	registry := NewRegistryWithCache(logger, client, cache, []RepoSource{})
+
+	templates, err := registry.ListTemplates(false)
+	require.NoError(t, err)
+	assert.Len(t, templates, 1)
+	assert.Equal(t, "hello-world-go", templates[0].Name)
+	assert.True(t, templates[0].BuiltIn)
 }
 
 func TestRepoSourceString(t *testing.T) {

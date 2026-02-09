@@ -17,8 +17,9 @@ type TemplateMetadata struct {
 // TemplateSummary is TemplateMetadata plus location info, populated during discovery.
 type TemplateSummary struct {
 	TemplateMetadata
-	Path   string     // Relative path in repo (e.g., "building-blocks/kv-store/kv-store-go")
-	Source RepoSource // Which repo this came from
+	Path    string     // Relative path in repo (e.g., "building-blocks/kv-store/kv-store-go")
+	Source  RepoSource // Which repo this came from
+	BuiltIn bool       // True if this is an embedded built-in template
 }
 
 // RepoSource identifies a GitHub repository and ref.
