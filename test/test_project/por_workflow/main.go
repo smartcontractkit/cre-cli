@@ -112,6 +112,16 @@ func doPOR(config *Config, runtime cre.Runtime, runTime time.Time) (string, erro
 				Request: &confidentialhttp.HTTPRequest{
 					Url:    config.URL,
 					Method: "GET",
+					MultiHeaders: map[string]*confidentialhttp.HeaderValues{
+						"Authorization": {
+							Values: []string{"Basic {{.API_KEY}}"},
+						},
+					},
+				},
+				VaultDonSecrets: []*confidentialhttp.SecretIdentifier{
+					{
+						Key: "API_KEY",
+					},
 				},
 				EncryptOutput: true,
 			}).Await()
@@ -281,6 +291,9 @@ func fetchPOR(config *Config, logger *slog.Logger, sendRequester *http.SendReque
 	httpActionOut, err := sendRequester.SendRequest(&http.Request{
 		Method: "GET",
 		Url:    config.URL,
+		Headers: map[string]string{
+			"Authorization": "Basic test-api", // not secret.
+		},
 	}).Await()
 	if err != nil {
 		return nil, err

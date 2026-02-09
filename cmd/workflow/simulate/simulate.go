@@ -418,7 +418,7 @@ func run(
 		}
 
 		computeLggr := lggr.Named("ActionsCapabilities")
-		computeCaps, err := NewFakeActionCapabilities(ctx, computeLggr, registry)
+		computeCaps, err := NewFakeActionCapabilities(ctx, computeLggr, registry, inputs.SecretsPath)
 		if err != nil {
 			fmt.Printf("failed to create compute capabilities: %v\n", err)
 			os.Exit(1)

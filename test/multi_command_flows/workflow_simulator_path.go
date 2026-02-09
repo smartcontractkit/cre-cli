@@ -44,6 +44,10 @@ func startMockPORServer(t *testing.T) *httptest.Server {
 	}
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		headers := r.Header
+		auth := headers.Get("Authorization")
+		expectedAuth := "Basic " + os.Getenv("CRE_API_KEY")
+		require.Equal(t, expectedAuth, auth, "expected Authorization header to match")
 		resp := porResponse{
 			AccountName: "mock-account",
 			TotalTrust:  1.0,
