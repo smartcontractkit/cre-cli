@@ -120,7 +120,7 @@ func doPOR(config *Config, runtime cre.Runtime, runTime time.Time) (string, erro
 				},
 				VaultDonSecrets: []*confidentialhttp.SecretIdentifier{
 					{
-						Key: "API_KEY", //asdasdsad
+						Key: "API_KEY",
 					},
 				},
 				EncryptOutput: true,
