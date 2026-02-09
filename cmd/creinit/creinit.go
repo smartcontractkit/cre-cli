@@ -58,7 +58,11 @@ Templates are fetched dynamically from GitHub repositories.`,
 	initCmd.Flags().StringP("workflow-name", "w", "", "Name for the new workflow")
 	initCmd.Flags().StringP("template", "t", "", "Name of the template to use (e.g., kv-store-go)")
 	initCmd.Flags().Bool("refresh", false, "Bypass template cache and fetch fresh data")
-	initCmd.Flags().String("template-repo", "", "Template repository (format: owner/repo@ref)")
+
+	// Deprecated: --template-id is kept for backwards compatibility, maps to hello-world-go
+	initCmd.Flags().Uint32("template-id", 0, "")
+	_ = initCmd.Flags().MarkDeprecated("template-id", "use --template instead")
+	_ = initCmd.Flags().MarkHidden("template-id")
 
 	return initCmd
 }
@@ -96,9 +100,17 @@ func newHandlerWithRegistry(ctx *runtime.Context, registry RegistryInterface) *h
 }
 
 func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
+	templateName := v.GetString("template")
+
+	// Handle deprecated --template-id: any value maps to the built-in hello-world-go
+	if v.GetUint32("template-id") != 0 && templateName == "" {
+		h.log.Warn().Msg("--template-id is deprecated, use --template instead. Falling back to hello-world-go")
+		templateName = "hello-world-go"
+	}
+
 	return Inputs{
 		ProjectName:  v.GetString("project-name"),
-		TemplateName: v.GetString("template"),
+		TemplateName: templateName,
 		WorkflowName: v.GetString("workflow-name"),
 	}, nil
 }
@@ -134,9 +146,7 @@ func (h *handler) Execute(inputs Inputs) error {
 
 	// Create the registry if not injected (normal flow)
 	if h.registry == nil {
-		v := h.runtimeContext.Viper
-		flagRepo := v.GetString("template-repo")
-		sources := config.LoadTemplateSources(h.log, flagRepo)
+		sources := config.LoadTemplateSources(h.log)
 
 		reg, err := templaterepo.NewRegistry(h.log, sources)
 		if err != nil {

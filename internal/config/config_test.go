@@ -44,23 +44,12 @@ func TestLoadTemplateSourcesDefault(t *testing.T) {
 	logger := testutil.NewTestLogger()
 
 	// Ensure env var is not set
-	os.Unsetenv("CRE_TEMPLATE_REPOS")
+	t.Setenv("CRE_TEMPLATE_REPOS", "")
 
-	sources := LoadTemplateSources(logger, "")
+	sources := LoadTemplateSources(logger)
 	require.Len(t, sources, 1)
 	assert.Equal(t, "smartcontractkit", sources[0].Owner)
 	assert.Equal(t, "cre-templates", sources[0].Repo)
-	assert.Equal(t, "main", sources[0].Ref)
-}
-
-func TestLoadTemplateSourcesFromFlag(t *testing.T) {
-	logger := testutil.NewTestLogger()
-
-	sources := LoadTemplateSources(logger, "myorg/my-templates@develop")
-	require.Len(t, sources, 1)
-	assert.Equal(t, "myorg", sources[0].Owner)
-	assert.Equal(t, "my-templates", sources[0].Repo)
-	assert.Equal(t, "develop", sources[0].Ref)
 }
 
 func TestLoadTemplateSourcesFromEnv(t *testing.T) {
@@ -68,7 +57,7 @@ func TestLoadTemplateSourcesFromEnv(t *testing.T) {
 
 	t.Setenv("CRE_TEMPLATE_REPOS", "org1/repo1@main,org2/repo2@v1.0")
 
-	sources := LoadTemplateSources(logger, "")
+	sources := LoadTemplateSources(logger)
 	require.Len(t, sources, 2)
 	assert.Equal(t, "org1", sources[0].Owner)
 	assert.Equal(t, "repo1", sources[0].Repo)
@@ -80,7 +69,7 @@ func TestLoadTemplateSourcesFromConfigFile(t *testing.T) {
 	logger := testutil.NewTestLogger()
 
 	// Ensure env var is not set
-	os.Unsetenv("CRE_TEMPLATE_REPOS")
+	t.Setenv("CRE_TEMPLATE_REPOS", "")
 
 	// Create a temporary config file
 	homeDir := t.TempDir()
@@ -100,20 +89,19 @@ func TestLoadTemplateSourcesFromConfigFile(t *testing.T) {
 		0600,
 	))
 
-	sources := LoadTemplateSources(logger, "")
+	sources := LoadTemplateSources(logger)
 	require.Len(t, sources, 1)
 	assert.Equal(t, "custom-org", sources[0].Owner)
 	assert.Equal(t, "custom-templates", sources[0].Repo)
 	assert.Equal(t, "release", sources[0].Ref)
 }
 
-func TestFlagOverridesEnv(t *testing.T) {
+func TestEnvOverridesConfigFile(t *testing.T) {
 	logger := testutil.NewTestLogger()
 
 	t.Setenv("CRE_TEMPLATE_REPOS", "env-org/env-repo@main")
 
-	// Flag should take precedence
-	sources := LoadTemplateSources(logger, "flag-org/flag-repo@develop")
+	sources := LoadTemplateSources(logger)
 	require.Len(t, sources, 1)
-	assert.Equal(t, "flag-org", sources[0].Owner)
+	assert.Equal(t, "env-org", sources[0].Owner)
 }

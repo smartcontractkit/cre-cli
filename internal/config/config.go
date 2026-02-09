@@ -38,22 +38,11 @@ type TemplateRepo struct {
 }
 
 // LoadTemplateSources returns the list of template sources, checking (in priority order):
-// 1. CLI flag --template-repo (if provided)
-// 2. CRE_TEMPLATE_REPOS environment variable
-// 3. ~/.cre/config.yaml
-// 4. Default: smartcontractkit/cre-templates@main
-func LoadTemplateSources(logger *zerolog.Logger, flagRepo string) []templaterepo.RepoSource {
-	// Priority 1: CLI flag
-	if flagRepo != "" {
-		source, err := ParseRepoString(flagRepo)
-		if err != nil {
-			logger.Warn().Err(err).Msgf("Invalid --template-repo value: %s, using default", flagRepo)
-		} else {
-			return []templaterepo.RepoSource{source}
-		}
-	}
-
-	// Priority 2: Environment variable
+// 1. CRE_TEMPLATE_REPOS environment variable
+// 2. ~/.cre/config.yaml
+// 3. Default: smartcontractkit/cre-templates@main
+func LoadTemplateSources(logger *zerolog.Logger) []templaterepo.RepoSource {
+	// Priority 1: Environment variable
 	if envVal := os.Getenv(envVarName); envVal != "" {
 		sources, err := parseEnvRepos(envVal)
 		if err != nil {
