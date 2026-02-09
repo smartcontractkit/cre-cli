@@ -46,8 +46,8 @@ func NewRegistryWithCache(logger *zerolog.Logger, client *Client, cache *Cache, 
 // The built-in hello-world template is always included first.
 // If refresh is true, the cache is bypassed.
 func (r *Registry) ListTemplates(refresh bool) ([]TemplateSummary, error) {
-	// Always include the built-in template
-	allTemplates := []TemplateSummary{BuiltInTemplate}
+	// Always include the built-in templates first
+	allTemplates := append([]TemplateSummary{}, BuiltInTemplates()...)
 
 	for _, source := range r.sources {
 		templates, err := r.listFromSource(source, refresh)
@@ -85,7 +85,7 @@ func (r *Registry) ScaffoldTemplate(tmpl *TemplateSummary, destDir, workflowName
 		if onProgress != nil {
 			onProgress("Scaffolding built-in template...")
 		}
-		return ScaffoldBuiltIn(r.logger, destDir, workflowName)
+		return ScaffoldBuiltIn(r.logger, tmpl.Name, destDir, workflowName)
 	}
 
 	if onProgress != nil {

@@ -11,10 +11,13 @@ import (
 )
 
 //go:embed builtin/hello-world-go/* builtin/hello-world-go/**/*
-var builtinFS embed.FS
+var builtinGoFS embed.FS
 
-// BuiltInTemplate is the embedded hello-world Go template that is always available.
-var BuiltInTemplate = TemplateSummary{
+//go:embed builtin/hello-world-ts/* builtin/hello-world-ts/**/*
+var builtinTSFS embed.FS
+
+// BuiltInGoTemplate is the embedded hello-world Go template that is always available.
+var BuiltInGoTemplate = TemplateSummary{
 	TemplateMetadata: TemplateMetadata{
 		Kind:        "building-block",
 		Name:        "hello-world-go",
@@ -30,12 +33,44 @@ var BuiltInTemplate = TemplateSummary{
 	BuiltIn: true,
 }
 
-// ScaffoldBuiltIn extracts the embedded hello-world template to destDir,
-// renaming the workflow directory to the user's workflow name.
-func ScaffoldBuiltIn(logger *zerolog.Logger, destDir, workflowName string) error {
-	templateRoot := "builtin/hello-world-go"
+// BuiltInTSTemplate is the embedded hello-world TypeScript template that is always available.
+var BuiltInTSTemplate = TemplateSummary{
+	TemplateMetadata: TemplateMetadata{
+		Kind:        "building-block",
+		Name:        "hello-world-ts",
+		Title:       "Hello World (TypeScript)",
+		Description: "A minimal cron-triggered workflow to get started from scratch",
+		Language:    "typescript",
+		Category:    "getting-started",
+		Author:      "Chainlink",
+		License:     "MIT",
+		Tags:        []string{"cron", "starter", "minimal"},
+	},
+	Path:    "builtin/hello-world-ts",
+	BuiltIn: true,
+}
 
-	err := fs.WalkDir(builtinFS, templateRoot, func(path string, d fs.DirEntry, err error) error {
+// BuiltInTemplates returns all built-in templates.
+func BuiltInTemplates() []TemplateSummary {
+	return []TemplateSummary{BuiltInGoTemplate, BuiltInTSTemplate}
+}
+
+// ScaffoldBuiltIn extracts the appropriate embedded hello-world template to destDir,
+// renaming the workflow directory to the user's workflow name.
+func ScaffoldBuiltIn(logger *zerolog.Logger, templateName, destDir, workflowName string) error {
+	var embeddedFS embed.FS
+	var templateRoot string
+
+	switch templateName {
+	case "hello-world-ts":
+		embeddedFS = builtinTSFS
+		templateRoot = "builtin/hello-world-ts"
+	default:
+		embeddedFS = builtinGoFS
+		templateRoot = "builtin/hello-world-go"
+	}
+
+	err := fs.WalkDir(embeddedFS, templateRoot, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -67,7 +102,7 @@ func ScaffoldBuiltIn(logger *zerolog.Logger, destDir, workflowName string) error
 		}
 
 		// Read from embed
-		content, readErr := builtinFS.ReadFile(path)
+		content, readErr := embeddedFS.ReadFile(path)
 		if readErr != nil {
 			return fmt.Errorf("failed to read embedded file %s: %w", path, readErr)
 		}

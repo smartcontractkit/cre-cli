@@ -97,14 +97,16 @@ func TestRegistryListTemplates(t *testing.T) {
 	client := NewClient(logger)
 	registry := NewRegistryWithCache(logger, client, cache, []RepoSource{source})
 
-	// List should return built-in + all cached templates
+	// List should return built-ins + all cached templates
 	templates, err := registry.ListTemplates(false)
 	require.NoError(t, err)
-	assert.Len(t, templates, 4) // 1 built-in + 3 remote
+	assert.Len(t, templates, 5) // 2 built-in + 3 remote
 
-	// Built-in should be first
+	// Built-ins should be first
 	assert.Equal(t, "hello-world-go", templates[0].Name)
 	assert.True(t, templates[0].BuiltIn)
+	assert.Equal(t, "hello-world-ts", templates[1].Name)
+	assert.True(t, templates[1].BuiltIn)
 }
 
 func TestRegistryGetTemplate(t *testing.T) {
@@ -183,7 +185,7 @@ func TestRegistryMultipleSources(t *testing.T) {
 
 	templates, err := registry.ListTemplates(false)
 	require.NoError(t, err)
-	assert.Len(t, templates, 3) // 1 built-in + 2 remote
+	assert.Len(t, templates, 4) // 2 built-in + 2 remote
 
 	// Should find templates from both sources
 	tmplA, err := registry.GetTemplate("template-a", false)
@@ -195,17 +197,42 @@ func TestRegistryMultipleSources(t *testing.T) {
 	assert.Equal(t, "org2", tmplB.Source.Owner)
 }
 
-func TestScaffoldBuiltIn(t *testing.T) {
+func TestScaffoldBuiltInGo(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	destDir := t.TempDir()
 	workflowName := "my-wf"
 
-	err := ScaffoldBuiltIn(logger, destDir, workflowName)
+	err := ScaffoldBuiltIn(logger, "hello-world-go", destDir, workflowName)
 	require.NoError(t, err)
 
 	// Check that key files were extracted
 	expectedFiles := []string{
 		filepath.Join(workflowName, "main.go"),
+		filepath.Join(workflowName, "workflow.yaml"),
+		filepath.Join(workflowName, "README.md"),
+		filepath.Join(workflowName, "config.staging.json"),
+		filepath.Join(workflowName, "config.production.json"),
+		"secrets.yaml",
+	}
+	for _, f := range expectedFiles {
+		fullPath := filepath.Join(destDir, f)
+		assert.FileExists(t, fullPath, "missing file: %s", f)
+	}
+}
+
+func TestScaffoldBuiltInTS(t *testing.T) {
+	logger := testutil.NewTestLogger()
+	destDir := t.TempDir()
+	workflowName := "my-ts-wf"
+
+	err := ScaffoldBuiltIn(logger, "hello-world-ts", destDir, workflowName)
+	require.NoError(t, err)
+
+	// Check that key files were extracted
+	expectedFiles := []string{
+		filepath.Join(workflowName, "main.ts"),
+		filepath.Join(workflowName, "package.json"),
+		filepath.Join(workflowName, "tsconfig.json"),
 		filepath.Join(workflowName, "workflow.yaml"),
 		filepath.Join(workflowName, "README.md"),
 		filepath.Join(workflowName, "config.staging.json"),
@@ -229,9 +256,11 @@ func TestBuiltInAlwaysAvailableOffline(t *testing.T) {
 
 	templates, err := registry.ListTemplates(false)
 	require.NoError(t, err)
-	assert.Len(t, templates, 1)
+	assert.Len(t, templates, 2)
 	assert.Equal(t, "hello-world-go", templates[0].Name)
 	assert.True(t, templates[0].BuiltIn)
+	assert.Equal(t, "hello-world-ts", templates[1].Name)
+	assert.True(t, templates[1].BuiltIn)
 }
 
 func TestRepoSourceString(t *testing.T) {
