@@ -1,7 +1,7 @@
 package generator
 
 import (
-	. "github.com/dave/jennifer/jen"
+	. "github.com/dave/jennifer/jen" //nolint:staticcheck // ST1019: dot import used for code generation convenience
 )
 
 func (g *Generator) genfile_doc() (*OutputFile, error) {

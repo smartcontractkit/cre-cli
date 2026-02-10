@@ -8,7 +8,7 @@ import (
 	"fmt"
 
 	"github.com/dave/jennifer/jen"
-	. "github.com/dave/jennifer/jen"
+	. "github.com/dave/jennifer/jen" //nolint:staticcheck // ST1019: dot import used for code generation convenience
 	"github.com/gagliardetto/anchor-go/tools"
 )
 
@@ -244,47 +244,6 @@ func (g *Generator) genfile_constructor() (*OutputFile, error) {
 		Name: "constructor.go",
 		File: file,
 	}, nil
-}
-
-func getAccountInfoLambda() *Statement {
-	// func(bn uint64) cre.Promise[*solana.GetAccountInfoWithOptsReply] {
-	// 	return c.client.GetAccountInfoWithOpts(runtime, &solana.GetAccountInfoWithOptsRequest{
-	// 		Account: types.PublicKey(accountAddress),
-	// 		Opts:    &solana.GetAccountInfoOpts{MinContextSlot: &bn},
-	// 	})
-	// }
-	return Func().
-		Params(Id("bn").Uint64()).
-		Qual(PkgCRE, "Promise").Types(Op("*").Qual(PkgSolanaCre, "GetAccountInfoWithOptsReply")).
-		Block(
-			Return(
-				Id("c").Dot("client").Dot("GetAccountInfoWithOpts").Call(
-					Id("runtime"),
-					Op("&").Qual(PkgSolanaCre, "GetAccountInfoWithOptsRequest").Values(Dict{
-						Id("Account"): Id("accountAddress").Dot("Bytes").Call(),
-						Id("Opts"): Op("&").Qual(PkgSolanaCre, "GetAccountInfoOpts").Values(Dict{
-							Id("MinContextSlot"): Id("bn"),
-						}),
-					}),
-				),
-			),
-		)
-}
-
-func parseAccountLambda(name string) *Statement {
-	// func(response *solana.GetAccountInfoWithOptsReply) (*DataAccount, error) {
-	// 	return ParseAccount_DataAccount(response.Value.Data.AsDecodedBinary)
-	// }
-	return Func().
-		Params(Id("response").Op("*").Qual(PkgSolanaCre, "GetAccountInfoWithOptsReply")).
-		Params(Op("*").Id(name), Error()).
-		Block(
-			Return(
-				Id("ParseAccount_" + name).Call(
-					Id("response").Dot("Value").Dot("Data").Dot("GetRaw").Call(),
-				),
-			),
-		)
 }
 
 func (g *Generator) generateCodecAccountMethods() ([]Code, error) {
