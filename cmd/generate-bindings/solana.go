@@ -127,7 +127,7 @@ func processSolanaSingleIdl(inputs SolanaInputs) error {
 	// Extract contract name from IDL file path
 	contractName := filepath.Base(inputs.IdlPath)
 	if filepath.Ext(contractName) == ".json" {
-		contractName = contractName[:len(contractName)-4] // Remove .json extension
+		contractName = contractName[:len(contractName)-5] // Remove .json extension
 	}
 
 	// Create per-contract output directory

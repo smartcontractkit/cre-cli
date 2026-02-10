@@ -114,23 +114,6 @@ func creWriteReportFromStructs(exportedAccountName string, g *Generator) Code {
 				}),
 			).Line()
 
-			// typedAccountList := make([]solana.PublicKey, len(accountList))
-			// block.Id("typedAccountList").Op(":=").
-			// 	Id("make").Call(
-			// 	Index().Qual(PkgSolanaCre, "PublicKey"),
-			// 	Id("len").Call(Id("accountList")),
-			// )
-
-			// // for i, account := range accountList {
-			// //     typedAccountList[i] = solana.PublicKey(account)
-			// // }
-			// block.For(
-			// 	List(Id("i"), Id("account")).Op(":=").Range().Id("accountList"),
-			// ).Block(
-			// 	Id("typedAccountList").Index(Id("i")).Op("=").
-			// 		Qual(PkgSolanaCre, "PublicKey").Call(Id("account")),
-			// ).Line()
-
 			//return cre.ThenPromise(promise, func(report *cre.Report) cre.Promise[*solana.WriteReportReply] {
 			// 	return c.client.WriteReport(runtime, &solana.WriteCreReportRequest{
 			// 		AccountList: typedAccountList,
