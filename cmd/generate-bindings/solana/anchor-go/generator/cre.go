@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/dave/jennifer/jen"
 	. "github.com/dave/jennifer/jen" //nolint:staticcheck // ST1019: dot import used for code generation convenience
 	"github.com/gagliardetto/anchor-go/tools"
 )
@@ -162,7 +161,7 @@ func creWriteReportFromStructsLambda() *Statement {
 			Return(
 				Id("c").Dot("client").Dot("WriteReport").Call(
 					Id("runtime"),
-					Op("&").Qual(PkgSolanaCre, "WriteCreReportRequest").Values(jen.Dict{
+					Op("&").Qual(PkgSolanaCre, "WriteCreReportRequest").Values(Dict{
 						Id("Receiver"):          Id("ProgramID").Dot("Bytes").Call(),
 						Id("Report"):            Id("report"),
 						Id("RemainingAccounts"): Id("remainingAccounts"),

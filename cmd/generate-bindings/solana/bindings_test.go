@@ -5,14 +5,15 @@ import (
 	"testing"
 
 	"github.com/gagliardetto/solana-go"
-	ocr3types "github.com/smartcontractkit/chainlink-common/pkg/capabilities/consensus/ocr3/types"
-	"github.com/smartcontractkit/chainlink-protos/cre/go/sdk"
-	realSolana "github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/solana"
-	realSolanaMock "github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/solana/mock"
-	"github.com/smartcontractkit/cre-sdk-go/cre/testutils"
-	consensusmock "github.com/smartcontractkit/cre-sdk-go/internal_testing/capabilities/consensus/mock"
 	"github.com/test-go/testify/require"
 	"google.golang.org/protobuf/proto"
+
+	ocr3types "github.com/smartcontractkit/chainlink-common/pkg/capabilities/consensus/ocr3/types"
+	"github.com/smartcontractkit/chainlink-protos/cre/go/sdk"
+	solanasdk "github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/solana"
+	solanasdkmock "github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/solana/mock"
+	"github.com/smartcontractkit/cre-sdk-go/cre/testutils"
+	consensusmock "github.com/smartcontractkit/cre-sdk-go/internal_testing/capabilities/consensus/mock"
 
 	datastorage "github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana/testdata/data_storage"
 )
@@ -70,7 +71,7 @@ func TestGeneratedBindingsCodec(t *testing.T) {
 }
 
 func TestWriteReportMethods(t *testing.T) {
-	client := &realSolana.Client{ChainSelector: anyChainSelector}
+	client := &solanasdk.Client{ChainSelector: anyChainSelector}
 	ds, err := datastorage.NewDataStorage(client)
 	require.NoError(t, err, "Failed to create DataStorage instance")
 
@@ -97,11 +98,11 @@ func TestWriteReportMethods(t *testing.T) {
 		}, nil
 	}
 
-	solanaCap, err := realSolanaMock.NewClientCapability(anyChainSelector, t)
+	solanaCap, err := solanasdkmock.NewClientCapability(anyChainSelector, t)
 	require.NoError(t, err, "Failed to create Solana client capability")
-	solanaCap.WriteReport = func(_ context.Context, req *realSolana.WriteReportRequest) (*realSolana.WriteReportReply, error) {
-		return &realSolana.WriteReportReply{
-			TxStatus:    realSolana.TxStatus_TX_STATUS_SUCCESS,
+	solanaCap.WriteReport = func(_ context.Context, req *solanasdk.WriteReportRequest) (*solanasdk.WriteReportReply, error) {
+		return &solanasdk.WriteReportReply{
+			TxStatus:    solanasdk.TxStatus_TX_STATUS_SUCCESS,
 			TxSignature: []byte{0x01, 0x02, 0x03, 0x04},
 		}, nil
 	}
@@ -116,14 +117,14 @@ func TestWriteReportMethods(t *testing.T) {
 	response, err := reply.Await()
 	require.NoError(t, err, "Awaiting WriteReportDataStorageUserData reply should not return an error")
 	require.NotNil(t, response, "Response from WriteReportDataStorageUserData should not be nil")
-	require.True(t, proto.Equal(&realSolana.WriteReportReply{
-		TxStatus:    realSolana.TxStatus_TX_STATUS_SUCCESS,
+	require.True(t, proto.Equal(&solanasdk.WriteReportReply{
+		TxStatus:    solanasdk.TxStatus_TX_STATUS_SUCCESS,
 		TxSignature: []byte{0x01, 0x02, 0x03, 0x04},
 	}, response), "Response should match expected WriteReportReply")
 }
 
 func TestEncodeStruct(t *testing.T) {
-	client := &realSolana.Client{ChainSelector: anyChainSelector}
+	client := &solanasdk.Client{ChainSelector: anyChainSelector}
 	ds, err := datastorage.NewDataStorage(client)
 	require.NoError(t, err, "Failed to create DataStorage instance")
 
