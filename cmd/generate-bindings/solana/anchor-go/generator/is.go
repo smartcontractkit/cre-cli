@@ -1,3 +1,4 @@
+//nolint:all // Forked from anchor-go generator, maintaining original code structure
 package generator
 
 import "github.com/gagliardetto/anchor-go/idl/idltype"
