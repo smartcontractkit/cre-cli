@@ -117,13 +117,13 @@ func doPOR(config *Config, runtime cre.Runtime, runTime time.Time) (string, erro
 							Values: []string{"Basic {{.API_KEY}}"},
 						},
 					},
+					EncryptOutput: true,
 				},
 				VaultDonSecrets: []*confidentialhttp.SecretIdentifier{
 					{
 						Key: "API_KEY",
 					},
 				},
-				EncryptOutput: true,
 			}).Await()
 			if err != nil {
 				logger.Error("error fetching conf por", "err", err)
