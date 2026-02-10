@@ -125,7 +125,6 @@ func GenerateBindings(
 				if err != nil {
 					panic(err)
 				}
-				defer goFile.Close()
 
 				slog.Info("Writing file",
 					"filepath", assetFilepath,
@@ -134,8 +133,10 @@ func GenerateBindings(
 				)
 				err = file.File.Render(goFile)
 				if err != nil {
+					goFile.Close()
 					panic(err)
 				}
+				goFile.Close()
 			}
 		}
 		// executeCmd(outputDir, "go", "mod", "tidy")
