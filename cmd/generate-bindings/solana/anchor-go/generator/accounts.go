@@ -1,4 +1,3 @@
-// Code copied from https://github.com/gagliardetto/anchor-go/blob/main/generator/accounts.go
 package generator
 
 import (
