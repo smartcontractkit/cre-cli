@@ -54,9 +54,9 @@ const (
 	WorkflowLanguageGolang     = "golang"
 	WorkflowLanguageTypeScript = "typescript"
 
-	// SDK dependency versions (used by generate-bindings)
-	SdkVersion              = "v1.1.4"
-	EVMCapabilitiesVersion  = "v1.0.0-beta.3"
+	// SDK dependency versions (used by generate-bindings and go module init)
+	SdkVersion              = "v1.2.0"
+	EVMCapabilitiesVersion  = "v1.0.0-beta.5"
 	HTTPCapabilitiesVersion = "v1.0.0-beta.0"
 	CronCapabilitiesVersion = "v1.0.0-beta.0"
 

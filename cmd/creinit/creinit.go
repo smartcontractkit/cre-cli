@@ -298,6 +298,14 @@ func (h *handler) Execute(inputs Inputs) error {
 		}
 	}
 
+	// Initialize Go module if needed (built-in templates don't ship go.mod)
+	if selectedTemplate.Language == "go" && !h.pathExists(filepath.Join(projectRoot, "go.mod")) {
+		projectName := filepath.Base(projectRoot)
+		if err := initializeGoModule(h.log, projectRoot, projectName); err != nil {
+			return fmt.Errorf("failed to initialize Go module: %w", err)
+		}
+	}
+
 	// Determine language-specific entry point
 	entryPoint := "."
 	if selectedTemplate.Language == "typescript" {
