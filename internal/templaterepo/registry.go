@@ -131,11 +131,36 @@ func (r *Registry) ScaffoldTemplate(tmpl *TemplateSummary, destDir, workflowName
 	return r.renameWorkflowDir(tmpl, destDir, workflowName)
 }
 
-// renameWorkflowDir finds a workflow-like directory in the extracted template
-// and renames it to the user's workflow name.
+// renameWorkflowDir renames or organizes workflow directories after extraction.
+// It branches on len(tmpl.Workflows):
+//   - >1: multi-workflow, no renaming (directory names are semantically meaningful)
+//   - ==1: single workflow, rename from template dir to user's workflowName
+//   - ==0: no workflows field (backwards compat), use heuristic fallback
 func (r *Registry) renameWorkflowDir(tmpl *TemplateSummary, destDir, workflowName string) error {
-	// Look for a directory that contains workflow source files (main.go, main.ts, workflow.yaml)
-	// In the cre-templates repo, templates have a subdirectory like "my-workflow/"
+	workflows := tmpl.Workflows
+
+	// Multi-workflow: no renaming — directory names are semantically meaningful
+	if len(workflows) > 1 {
+		return nil
+	}
+
+	// Single workflow with known dir name from template.yaml
+	if len(workflows) == 1 {
+		srcName := workflows[0].Dir
+		if srcName == workflowName {
+			return nil
+		}
+		src := filepath.Join(destDir, srcName)
+		dst := filepath.Join(destDir, workflowName)
+		if _, err := os.Stat(src); err != nil {
+			return fmt.Errorf("workflow directory %q not found in template: %w", srcName, err)
+		}
+		r.logger.Debug().Msgf("Renaming workflow dir %s -> %s", srcName, workflowName)
+		return os.Rename(src, dst)
+	}
+
+	// len(workflows) == 0: no workflows field (backwards compat)
+	// Fall back to existing heuristic
 	entries, err := os.ReadDir(destDir)
 	if err != nil {
 		return nil // No renaming needed if we can't read the dir

@@ -218,7 +218,11 @@ func (h *handler) Execute(inputs Inputs) error {
 		projName = constants.DefaultProjectName
 	}
 	if workflowName == "" {
-		workflowName = constants.DefaultWorkflowName
+		if selectedTemplate != nil && len(selectedTemplate.Workflows) == 1 {
+			workflowName = selectedTemplate.Workflows[0].Dir
+		} else {
+			workflowName = constants.DefaultWorkflowName
+		}
 	}
 
 	// Resolve the selected template from wizard if not from flag
@@ -312,11 +316,29 @@ func (h *handler) Execute(inputs Inputs) error {
 		entryPoint = "./main.ts"
 	}
 
-	// Generate workflow settings
-	workflowDirectory := filepath.Join(projectRoot, workflowName)
-	_, err = settings.GenerateWorkflowSettingsFile(workflowDirectory, workflowName, entryPoint)
-	if err != nil {
-		return fmt.Errorf("failed to generate %s file: %w", constants.DefaultWorkflowSettingsFileName, err)
+	// Generate workflow settings (skip if template already ships a workflow.yaml)
+	if len(selectedTemplate.Workflows) > 1 {
+		// Multi-workflow: generate workflow.yaml in each declared workflow dir
+		for _, wf := range selectedTemplate.Workflows {
+			wfDir := filepath.Join(projectRoot, wf.Dir)
+			wfSettingsPath := filepath.Join(wfDir, constants.DefaultWorkflowSettingsFileName)
+			if _, err := os.Stat(wfSettingsPath); err == nil {
+				h.log.Debug().Msgf("Skipping workflow.yaml generation for %s (already exists from template)", wf.Dir)
+				continue
+			}
+			if _, err := settings.GenerateWorkflowSettingsFile(wfDir, wf.Dir, entryPoint); err != nil {
+				return fmt.Errorf("failed to generate workflow settings for %s: %w", wf.Dir, err)
+			}
+		}
+	} else {
+		// Single workflow (or no workflows field / built-in): current behavior
+		workflowDirectory := filepath.Join(projectRoot, workflowName)
+		wfSettingsPath := filepath.Join(workflowDirectory, constants.DefaultWorkflowSettingsFileName)
+		if _, err := os.Stat(wfSettingsPath); err == nil {
+			h.log.Debug().Msgf("Skipping workflow.yaml generation (already exists from template)")
+		} else if _, err := settings.GenerateWorkflowSettingsFile(workflowDirectory, workflowName, entryPoint); err != nil {
+			return fmt.Errorf("failed to generate %s file: %w", constants.DefaultWorkflowSettingsFileName, err)
+		}
 	}
 
 	// Show what was created
@@ -332,7 +354,7 @@ func (h *handler) Execute(inputs Inputs) error {
 		}
 	}
 
-	h.printSuccessMessage(projectRoot, workflowName, selectedTemplate.Language)
+	h.printSuccessMessage(projectRoot, selectedTemplate, workflowName)
 
 	return nil
 }
@@ -354,30 +376,77 @@ func (h *handler) findExistingProject(dir string) (projectRoot string, language 
 	}
 }
 
-func (h *handler) printSuccessMessage(projectRoot, workflowName, language string) {
+func (h *handler) printSuccessMessage(projectRoot string, tmpl *templaterepo.TemplateSummary, workflowName string) {
+	language := tmpl.Language
+	workflows := tmpl.Workflows
+	isMultiWorkflow := len(workflows) > 1
+
 	ui.Line()
 	ui.Success("Project created successfully!")
 	ui.Line()
 
-	var steps string
-	if language == "go" {
-		steps = ui.RenderStep("1. Navigate to your project:") + "\n" +
-			"     " + ui.RenderDim("cd "+filepath.Base(projectRoot)) + "\n\n" +
-			ui.RenderStep("2. Run the workflow:") + "\n" +
-			"     " + ui.RenderDim("cre workflow simulate "+workflowName)
-	} else {
-		steps = ui.RenderStep("1. Navigate to your project:") + "\n" +
-			"     " + ui.RenderDim("cd "+filepath.Base(projectRoot)) + "\n\n" +
-			ui.RenderStep("2. Install Bun (if needed):") + "\n" +
-			"     " + ui.RenderDim("npm install -g bun") + "\n\n" +
-			ui.RenderStep("3. Install dependencies:") + "\n" +
-			"     " + ui.RenderDim("bun install --cwd ./"+workflowName) + "\n\n" +
-			ui.RenderStep("4. Run the workflow:") + "\n" +
-			"     " + ui.RenderDim("cre workflow simulate "+workflowName)
+	// Workflow summary (multi-workflow only, shown BEFORE the box)
+	if isMultiWorkflow {
+		fmt.Printf("  This template includes %d workflows:\n", len(workflows))
+		for _, wf := range workflows {
+			if wf.Description != "" {
+				fmt.Printf("    - %s — %s\n", wf.Dir, wf.Description)
+			} else {
+				fmt.Printf("    - %s\n", wf.Dir)
+			}
+		}
+		ui.Line()
 	}
+
+	// Determine which workflow name to use in example commands
+	primaryWorkflow := workflowName
+	if isMultiWorkflow {
+		primaryWorkflow = workflows[0].Dir
+	}
+
+	var sb strings.Builder
+	if language == "go" {
+		sb.WriteString(ui.RenderStep("1. Navigate to your project:") + "\n")
+		sb.WriteString("     " + ui.RenderDim("cd "+filepath.Base(projectRoot)) + "\n\n")
+
+		if isMultiWorkflow {
+			sb.WriteString(ui.RenderStep("2. Run a workflow:") + "\n")
+			for _, wf := range workflows {
+				sb.WriteString("     " + ui.RenderDim("cre workflow simulate "+wf.Dir) + "\n")
+			}
+		} else {
+			sb.WriteString(ui.RenderStep("2. Run the workflow:") + "\n")
+			sb.WriteString("     " + ui.RenderDim("cre workflow simulate "+primaryWorkflow))
+		}
+	} else {
+		sb.WriteString(ui.RenderStep("1. Navigate to your project:") + "\n")
+		sb.WriteString("     " + ui.RenderDim("cd "+filepath.Base(projectRoot)) + "\n\n")
+		sb.WriteString(ui.RenderStep("2. Install Bun (if needed):") + "\n")
+		sb.WriteString("     " + ui.RenderDim("npm install -g bun") + "\n\n")
+		sb.WriteString(ui.RenderStep("3. Install dependencies:") + "\n")
+		sb.WriteString("     " + ui.RenderDim("bun install --cwd ./"+primaryWorkflow) + "\n\n")
+
+		if isMultiWorkflow {
+			sb.WriteString(ui.RenderStep("4. Run a workflow:") + "\n")
+			for _, wf := range workflows {
+				sb.WriteString("     " + ui.RenderDim("cre workflow simulate "+wf.Dir) + "\n")
+			}
+		} else {
+			sb.WriteString(ui.RenderStep("4. Run the workflow:") + "\n")
+			sb.WriteString("     " + ui.RenderDim("cre workflow simulate "+primaryWorkflow))
+		}
+	}
+
+	steps := sb.String()
 
 	ui.Box("Next steps\n\n" + steps)
 	ui.Line()
+
+	// postInit: template-specific prerequisites (OUTSIDE the box)
+	if tmpl.PostInit != "" {
+		fmt.Println("  " + strings.TrimSpace(tmpl.PostInit))
+		ui.Line()
+	}
 }
 
 func (h *handler) ensureProjectDirectoryExists(dirPath string) error {

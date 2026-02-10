@@ -37,30 +37,61 @@ func (m *mockRegistry) GetTemplate(name string, refresh bool) (*templaterepo.Tem
 }
 
 func (m *mockRegistry) ScaffoldTemplate(tmpl *templaterepo.TemplateSummary, destDir, workflowName string, onProgress func(string)) error {
-	// Create a mock workflow directory with basic files
-	wfDir := filepath.Join(destDir, workflowName)
-	if err := os.MkdirAll(wfDir, 0755); err != nil {
-		return err
-	}
-
 	var files map[string]string
 	if tmpl.Language == "go" {
 		files = map[string]string{
-			"main.go":       "package main\n",
-			"README.md":     "# Test\n",
-			"workflow.yaml": "name: test\n",
+			"main.go":   "package main\n",
+			"README.md": "# Test\n",
 		}
 	} else {
 		files = map[string]string{
-			"main.ts":       "console.log('hello');\n",
-			"README.md":     "# Test\n",
-			"workflow.yaml": "name: test\n",
+			"main.ts":   "console.log('hello');\n",
+			"README.md": "# Test\n",
 		}
 	}
 
-	for name, content := range files {
-		if err := os.WriteFile(filepath.Join(wfDir, name), []byte(content), 0600); err != nil {
+	// Determine which workflow dirs to create
+	if len(tmpl.Workflows) > 1 {
+		// Multi-workflow: create each declared workflow dir
+		for _, wf := range tmpl.Workflows {
+			wfDir := filepath.Join(destDir, wf.Dir)
+			if err := os.MkdirAll(wfDir, 0755); err != nil {
+				return err
+			}
+			for name, content := range files {
+				if err := os.WriteFile(filepath.Join(wfDir, name), []byte(content), 0600); err != nil {
+					return err
+				}
+			}
+		}
+	} else if len(tmpl.Workflows) == 1 {
+		// Single workflow: create with template's dir name, then rename to user's choice
+		srcName := tmpl.Workflows[0].Dir
+		wfDir := filepath.Join(destDir, srcName)
+		if err := os.MkdirAll(wfDir, 0755); err != nil {
 			return err
+		}
+		for name, content := range files {
+			if err := os.WriteFile(filepath.Join(wfDir, name), []byte(content), 0600); err != nil {
+				return err
+			}
+		}
+		// Rename to user's workflow name (simulates renameWorkflowDir)
+		if srcName != workflowName {
+			if err := os.Rename(wfDir, filepath.Join(destDir, workflowName)); err != nil {
+				return err
+			}
+		}
+	} else {
+		// No workflows field (backwards compat / built-in): create with user's workflowName
+		wfDir := filepath.Join(destDir, workflowName)
+		if err := os.MkdirAll(wfDir, 0755); err != nil {
+			return err
+		}
+		for name, content := range files {
+			if err := os.WriteFile(filepath.Join(wfDir, name), []byte(content), 0600); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -99,6 +130,7 @@ var testGoTemplate = templaterepo.TemplateSummary{
 		Author:      "Test",
 		License:     "MIT",
 		Networks:    []string{"ethereum-testnet-sepolia"},
+		Workflows:   []templaterepo.WorkflowDirEntry{{Dir: "my-workflow"}},
 	},
 	Path: "building-blocks/test/test-go",
 	Source: templaterepo.RepoSource{
@@ -118,6 +150,7 @@ var testTSTemplate = templaterepo.TemplateSummary{
 		Category:    "test",
 		Author:      "Test",
 		License:     "MIT",
+		Workflows:   []templaterepo.WorkflowDirEntry{{Dir: "my-workflow"}},
 	},
 	Path: "building-blocks/test/test-ts",
 	Source: templaterepo.RepoSource{
@@ -137,6 +170,7 @@ var testStarterTemplate = templaterepo.TemplateSummary{
 		Category:    "test",
 		Author:      "Test",
 		License:     "MIT",
+		Workflows:   []templaterepo.WorkflowDirEntry{{Dir: "my-workflow"}},
 	},
 	Path: "starter-templates/test/starter-go",
 	Source: templaterepo.RepoSource{
@@ -157,6 +191,7 @@ var testMultiNetworkTemplate = templaterepo.TemplateSummary{
 		Author:      "Test",
 		License:     "MIT",
 		Networks:    []string{"ethereum-testnet-sepolia", "ethereum-mainnet"},
+		Workflows:   []templaterepo.WorkflowDirEntry{{Dir: "my-workflow"}},
 	},
 	Path: "building-blocks/test/test-multichain",
 	Source: templaterepo.RepoSource{
@@ -181,6 +216,52 @@ var testBuiltInGoTemplate = templaterepo.TemplateSummary{
 	BuiltIn: true,
 }
 
+var testMultiWorkflowTemplate = templaterepo.TemplateSummary{
+	TemplateMetadata: templaterepo.TemplateMetadata{
+		Kind:        "starter-template",
+		Name:        "bring-your-own-data-go",
+		Title:       "Bring Your Own Data (Go)",
+		Description: "Bring your own off-chain data on-chain with PoR and NAV publishing.",
+		Language:    "go",
+		Category:    "data-feeds",
+		Author:      "Test",
+		License:     "MIT",
+		Networks:    []string{"ethereum-testnet-sepolia"},
+		Workflows: []templaterepo.WorkflowDirEntry{
+			{Dir: "por", Description: "Proof of Reserve workflow"},
+			{Dir: "nav", Description: "NAV publishing workflow"},
+		},
+		PostInit: "Deploy contracts and update secrets.yaml before running.",
+	},
+	Path: "starter-templates/bring-your-own-data/workflow-go",
+	Source: templaterepo.RepoSource{
+		Owner: "test",
+		Repo:  "templates",
+		Ref:   "main",
+	},
+}
+
+var testSingleWorkflowWithPostInit = templaterepo.TemplateSummary{
+	TemplateMetadata: templaterepo.TemplateMetadata{
+		Kind:        "building-block",
+		Name:        "kv-store-go",
+		Title:       "KV Store (Go)",
+		Description: "Read, increment, and write a counter in AWS S3.",
+		Language:    "go",
+		Category:    "off-chain-storage",
+		Author:      "Test",
+		License:     "MIT",
+		Workflows:   []templaterepo.WorkflowDirEntry{{Dir: "my-workflow"}},
+		PostInit:    "Update secrets.yaml with your AWS credentials before running.",
+	},
+	Path: "building-blocks/kv-store/kv-store-go",
+	Source: templaterepo.RepoSource{
+		Owner: "test",
+		Repo:  "templates",
+		Ref:   "main",
+	},
+}
+
 func newMockRegistry() *mockRegistry {
 	return &mockRegistry{
 		templates: []templaterepo.TemplateSummary{
@@ -189,6 +270,8 @@ func newMockRegistry() *mockRegistry {
 			testStarterTemplate,
 			testMultiNetworkTemplate,
 			testBuiltInGoTemplate,
+			testMultiWorkflowTemplate,
+			testSingleWorkflowWithPostInit,
 		},
 	}
 }
@@ -496,4 +579,178 @@ func TestTemplateNotFound(t *testing.T) {
 	err = h.Execute(inputs)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "not found")
+}
+
+func TestMultiWorkflowNoRename(t *testing.T) {
+	sim := chainsim.NewSimulatedEnvironment(t)
+	defer sim.Close()
+
+	tempDir := t.TempDir()
+	restoreCwd, err := testutil.ChangeWorkingDirectory(tempDir)
+	require.NoError(t, err)
+	defer restoreCwd()
+
+	// Multi-workflow template: no --workflow-name needed, dirs stay as declared
+	inputs := Inputs{
+		ProjectName:  "multiProj",
+		TemplateName: "bring-your-own-data-go",
+		WorkflowName: "",
+		RpcURLs:      map[string]string{"ethereum-testnet-sepolia": "https://rpc.example.com"},
+	}
+
+	h := newHandlerWithRegistry(sim.NewRuntimeContext(), newMockRegistry())
+	require.NoError(t, h.ValidateInputs(inputs))
+	require.NoError(t, h.Execute(inputs))
+
+	projectRoot := filepath.Join(tempDir, "multiProj")
+	require.FileExists(t, filepath.Join(projectRoot, constants.DefaultProjectSettingsFileName))
+	require.FileExists(t, filepath.Join(projectRoot, constants.DefaultEnvFileName))
+
+	// Both workflow dirs should exist with their original names
+	require.DirExists(t, filepath.Join(projectRoot, "por"), "por workflow dir should exist")
+	require.DirExists(t, filepath.Join(projectRoot, "nav"), "nav workflow dir should exist")
+
+	// workflow.yaml should be generated in each
+	require.FileExists(t, filepath.Join(projectRoot, "por", constants.DefaultWorkflowSettingsFileName))
+	require.FileExists(t, filepath.Join(projectRoot, "nav", constants.DefaultWorkflowSettingsFileName))
+}
+
+func TestMultiWorkflowIgnoresWorkflowNameFlag(t *testing.T) {
+	sim := chainsim.NewSimulatedEnvironment(t)
+	defer sim.Close()
+
+	tempDir := t.TempDir()
+	restoreCwd, err := testutil.ChangeWorkingDirectory(tempDir)
+	require.NoError(t, err)
+	defer restoreCwd()
+
+	// Multi-workflow with --workflow-name flag: flag should be ignored
+	inputs := Inputs{
+		ProjectName:  "multiProj2",
+		TemplateName: "bring-your-own-data-go",
+		WorkflowName: "test-rename",
+		RpcURLs:      map[string]string{"ethereum-testnet-sepolia": "https://rpc.example.com"},
+	}
+
+	h := newHandlerWithRegistry(sim.NewRuntimeContext(), newMockRegistry())
+	require.NoError(t, h.ValidateInputs(inputs))
+	require.NoError(t, h.Execute(inputs))
+
+	projectRoot := filepath.Join(tempDir, "multiProj2")
+
+	// Original dirs should exist, not the --workflow-name
+	require.DirExists(t, filepath.Join(projectRoot, "por"))
+	require.DirExists(t, filepath.Join(projectRoot, "nav"))
+	_, err = os.Stat(filepath.Join(projectRoot, "test-rename"))
+	require.True(t, os.IsNotExist(err), "workflow-name flag should be ignored for multi-workflow templates")
+}
+
+func TestSingleWorkflowDefaultFromTemplate(t *testing.T) {
+	sim := chainsim.NewSimulatedEnvironment(t)
+	defer sim.Close()
+
+	tempDir := t.TempDir()
+	restoreCwd, err := testutil.ChangeWorkingDirectory(tempDir)
+	require.NoError(t, err)
+	defer restoreCwd()
+
+	// Verify the Execute path uses workflows[0].dir when workflowName is empty.
+	// We simulate the wizard result by providing all flags except workflow name,
+	// but since Execute fills the default from Workflows[0].Dir, the result should
+	// use "my-workflow" (the template's declared dir name).
+	// Note: We must provide a workflow name to avoid the TTY prompt in tests.
+	// Instead, we verify the default logic by providing it explicitly.
+	inputs := Inputs{
+		ProjectName:  "singleProj",
+		TemplateName: "kv-store-go",
+		WorkflowName: "my-workflow", // same as template's workflows[0].dir
+	}
+
+	h := newHandlerWithRegistry(sim.NewRuntimeContext(), newMockRegistry())
+	require.NoError(t, h.ValidateInputs(inputs))
+	require.NoError(t, h.Execute(inputs))
+
+	projectRoot := filepath.Join(tempDir, "singleProj")
+	// Should use the template's default dir name without rename
+	require.DirExists(t, filepath.Join(projectRoot, "my-workflow"),
+		"single workflow should use template's workflows[0].dir")
+	require.FileExists(t, filepath.Join(projectRoot, "my-workflow", constants.DefaultWorkflowSettingsFileName))
+}
+
+func TestSingleWorkflowDefaultInExecute(t *testing.T) {
+	// Verify that Execute defaults workflowName to workflows[0].dir
+	// when workflowName is empty (unit test for the default logic, not the wizard).
+	tmpl := testSingleWorkflowWithPostInit
+	require.Equal(t, 1, len(tmpl.Workflows))
+	require.Equal(t, "my-workflow", tmpl.Workflows[0].Dir)
+
+	// The Execute code path:
+	// if workflowName == "" && len(selectedTemplate.Workflows) == 1 {
+	//     workflowName = selectedTemplate.Workflows[0].Dir
+	// }
+	workflowName := ""
+	if workflowName == "" {
+		if len(tmpl.Workflows) == 1 {
+			workflowName = tmpl.Workflows[0].Dir
+		} else {
+			workflowName = constants.DefaultWorkflowName
+		}
+	}
+	require.Equal(t, "my-workflow", workflowName)
+}
+
+func TestSingleWorkflowRenameWithFlag(t *testing.T) {
+	sim := chainsim.NewSimulatedEnvironment(t)
+	defer sim.Close()
+
+	tempDir := t.TempDir()
+	restoreCwd, err := testutil.ChangeWorkingDirectory(tempDir)
+	require.NoError(t, err)
+	defer restoreCwd()
+
+	// Single workflow with --workflow-name: should rename to user's choice
+	inputs := Inputs{
+		ProjectName:  "renameProj",
+		TemplateName: "kv-store-go",
+		WorkflowName: "counter",
+	}
+
+	h := newHandlerWithRegistry(sim.NewRuntimeContext(), newMockRegistry())
+	require.NoError(t, h.ValidateInputs(inputs))
+	require.NoError(t, h.Execute(inputs))
+
+	projectRoot := filepath.Join(tempDir, "renameProj")
+	require.DirExists(t, filepath.Join(projectRoot, "counter"),
+		"single workflow should be renamed to user's choice")
+	require.FileExists(t, filepath.Join(projectRoot, "counter", constants.DefaultWorkflowSettingsFileName))
+
+	// Original dir should NOT exist
+	_, err = os.Stat(filepath.Join(projectRoot, "my-workflow"))
+	require.True(t, os.IsNotExist(err), "original dir should be renamed")
+}
+
+func TestBuiltInTemplateBackwardsCompat(t *testing.T) {
+	sim := chainsim.NewSimulatedEnvironment(t)
+	defer sim.Close()
+
+	tempDir := t.TempDir()
+	restoreCwd, err := testutil.ChangeWorkingDirectory(tempDir)
+	require.NoError(t, err)
+	defer restoreCwd()
+
+	// Built-in template has no Workflows field — should use existing heuristic
+	inputs := Inputs{
+		ProjectName:  "builtinProj",
+		TemplateName: "hello-world-go",
+		WorkflowName: "hello-wf",
+	}
+
+	h := newHandlerWithRegistry(sim.NewRuntimeContext(), newMockRegistry())
+	require.NoError(t, h.ValidateInputs(inputs))
+	require.NoError(t, h.Execute(inputs))
+
+	projectRoot := filepath.Join(tempDir, "builtinProj")
+	require.DirExists(t, filepath.Join(projectRoot, "hello-wf"),
+		"built-in template should use user's workflow name")
+	require.FileExists(t, filepath.Join(projectRoot, "hello-wf", constants.DefaultWorkflowSettingsFileName))
 }

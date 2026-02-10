@@ -283,7 +283,18 @@ func newWizardModel(inputs Inputs, isNewProject bool, templates []templaterepo.T
 }
 
 // initNetworkRPCInputs sets up RPC URL inputs based on the selected template's Networks.
+// It also configures workflow name behavior based on the template's Workflows field.
 func (m *wizardModel) initNetworkRPCInputs() {
+	// Multi-workflow templates: skip workflow name prompt (dirs are semantically meaningful)
+	if len(m.selectedTemplate.Workflows) > 1 {
+		m.skipWorkflowName = true
+	}
+
+	// Single workflow: use its dir name as the default placeholder
+	if len(m.selectedTemplate.Workflows) == 1 {
+		m.workflowInput.Placeholder = m.selectedTemplate.Workflows[0].Dir
+	}
+
 	networks := m.selectedTemplate.Networks
 	if len(networks) == 0 {
 		m.skipNetworkRPCs = true
@@ -510,7 +521,11 @@ func (m wizardModel) handleEnter(msgs ...tea.Msg) (tea.Model, tea.Cmd) {
 	case stepWorkflowName:
 		value := m.workflowInput.Value()
 		if value == "" {
-			value = constants.DefaultWorkflowName
+			if m.selectedTemplate != nil && len(m.selectedTemplate.Workflows) == 1 {
+				value = m.selectedTemplate.Workflows[0].Dir
+			} else {
+				value = constants.DefaultWorkflowName
+			}
 		}
 		if err := validation.IsValidWorkflowName(value); err != nil {
 			m.err = err.Error()
