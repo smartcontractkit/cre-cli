@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -19,11 +18,11 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 )
 
-func TestE2EInit_DevPoRTemplate(t *testing.T) {
+func TestE2EInit_DevPoRTemplateTS(t *testing.T) {
 	tempDir := t.TempDir()
 	projectName := "e2e-init-test"
 	workflowName := "devPoRWorkflow"
-	templateID := "1"
+	templateID := "4"
 	projectRoot := filepath.Join(tempDir, projectName)
 	workflowDirectory := filepath.Join(projectRoot, workflowName)
 
@@ -94,74 +93,47 @@ func TestE2EInit_DevPoRTemplate(t *testing.T) {
 	require.FileExists(t, filepath.Join(projectRoot, constants.DefaultEnvFileName))
 	require.DirExists(t, workflowDirectory)
 
-	expectedFiles := []string{"README.md", "main.go", "workflow.yaml", "workflow.go", "workflow_test.go"}
+	expectedFiles := []string{"README.md", "main.ts", "workflow.yaml", "package.json"}
 	for _, f := range expectedFiles {
 		require.FileExists(t, filepath.Join(workflowDirectory, f), "missing workflow file %q", f)
 	}
 
-	// cre generate-bindings
+	// --- bun install in the workflow directory ---
 	stdout.Reset()
 	stderr.Reset()
-	bindingsCmd := exec.Command(CLIPath, "generate-bindings", "evm")
-	bindingsCmd.Dir = projectRoot
-	bindingsCmd.Stdout = &stdout
-	bindingsCmd.Stderr = &stderr
+	bunCmd := exec.Command("bun", "install")
+	bunCmd.Dir = workflowDirectory
+	bunCmd.Stdout = &stdout
+	bunCmd.Stderr = &stderr
 
 	require.NoError(
 		t,
-		bindingsCmd.Run(),
-		"cre generate-bindings failed:\nSTDOUT:\n%s\nSTDERR:\n%s",
+		bunCmd.Run(),
+		"bun install failed:\nSTDOUT:\n%s\nSTDERR:\n%s",
 		stdout.String(),
 		stderr.String(),
 	)
 
-	// go mod tidy on project root to sync dependencies
+	// --- cre workflow simulate devPoRWorkflow ---
 	stdout.Reset()
 	stderr.Reset()
-	tidyCmd := exec.Command("go", "mod", "tidy")
-	tidyCmd.Dir = projectRoot
-	tidyCmd.Stdout = &stdout
-	tidyCmd.Stderr = &stderr
+	simulateArgs := []string{
+		"workflow", "simulate",
+		workflowName,
+		"--project-root", projectRoot,
+		"--non-interactive",
+		"--trigger-index=0",
+	}
+	simulateCmd := exec.Command(CLIPath, simulateArgs...)
+	simulateCmd.Dir = projectRoot
+	simulateCmd.Stdout = &stdout
+	simulateCmd.Stderr = &stderr
 
 	require.NoError(
 		t,
-		tidyCmd.Run(),
-		"go mod tidy failed:\nSTDOUT:\n%s\nSTDERR:\n%s",
+		simulateCmd.Run(),
+		"cre workflow simulate failed:\nSTDOUT:\n%s\nSTDERR:\n%s",
 		stdout.String(),
 		stderr.String(),
 	)
-
-	// Check that the generated main.go file compiles successfully for WASM target
-	stdout.Reset()
-	stderr.Reset()
-	buildCmd := exec.Command("go", "build", "-o", "workflow.wasm", ".")
-	buildCmd.Dir = workflowDirectory
-	buildCmd.Env = append(os.Environ(), "GOOS=wasip1", "GOARCH=wasm")
-	buildCmd.Stdout = &stdout
-	buildCmd.Stderr = &stderr
-
-	require.NoError(
-		t,
-		buildCmd.Run(),
-		"generated main.go failed to compile for WASM target:\nSTDOUT:\n%s\nSTDERR:\n%s",
-		stdout.String(),
-		stderr.String(),
-	)
-
-	// Run the generated workflow tests to ensure they compile and pass
-	stdout.Reset()
-	stderr.Reset()
-	testCmd := exec.Command("go", "test", "-v", "./...")
-	testCmd.Dir = workflowDirectory
-	testCmd.Stdout = &stdout
-	testCmd.Stderr = &stderr
-
-	require.NoError(
-		t,
-		testCmd.Run(),
-		"generated workflow tests failed:\nSTDOUT:\n%s\nSTDERR:\n%s",
-		stdout.String(),
-		stderr.String(),
-	)
-
 }

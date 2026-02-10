@@ -36,6 +36,15 @@ type RpcEndpoint struct {
 	Url string `mapstructure:"url" yaml:"url"`
 }
 
+// ExperimentalChain represents an EVM chain not in official chain-selectors.
+// Automatically used by the simulator when present in the target's experimental-chains config.
+// The ChainSelector is used as the selector key for EVM clients and forwarders.
+type ExperimentalChain struct {
+	ChainSelector uint64 `mapstructure:"chain-selector" yaml:"chain-selector"`
+	RPCURL        string `mapstructure:"rpc-url" yaml:"rpc-url"`
+	Forwarder     string `mapstructure:"forwarder" yaml:"forwarder"`
+}
+
 func GetRpcUrlSettings(v *viper.Viper, chainName string) (string, error) {
 	target, err := GetTarget(v)
 	if err != nil {
@@ -56,6 +65,28 @@ func GetRpcUrlSettings(v *viper.Viper, chainName string) (string, error) {
 	}
 
 	return "", fmt.Errorf("rpc url not found for chain %s", chainName)
+}
+
+// GetExperimentalChains reads the experimental-chains list from the current target.
+// Returns an empty slice if the key is not set or unmarshalling fails.
+func GetExperimentalChains(v *viper.Viper) ([]ExperimentalChain, error) {
+	target, err := GetTarget(v)
+	if err != nil {
+		return nil, err
+	}
+
+	keyWithTarget := fmt.Sprintf("%s.%s", target, ExperimentalChainsSettingName)
+	if !v.IsSet(keyWithTarget) {
+		return nil, nil
+	}
+
+	var chains []ExperimentalChain
+	err = v.UnmarshalKey(keyWithTarget, &chains)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal experimental-chains: %w", err)
+	}
+
+	return chains, nil
 }
 
 func GetEnvironmentVariable(filePath, key string) (string, error) {
@@ -81,9 +112,9 @@ func GetWorkflowOwner(v *viper.Viper) (ownerAddress string, ownerType string, er
 		return "", "", err
 	}
 
-	// if --unsigned flag is set, owner must be set in settings
+	// if --unsigned flag or --changeset is set, owner must be set in settings
 	ownerKey := fmt.Sprintf("%s.%s", target, WorkflowOwnerSettingName)
-	if v.IsSet(Flags.RawTxFlag.Name) {
+	if v.IsSet(Flags.RawTxFlag.Name) || v.IsSet(Flags.Changeset.Name) {
 		if v.IsSet(ownerKey) {
 			owner := strings.TrimSpace(v.GetString(ownerKey))
 			if owner != "" {
@@ -100,7 +131,7 @@ func GetWorkflowOwner(v *viper.Viper) (ownerAddress string, ownerType string, er
 		return "", "", errors.New(msg)
 	}
 
-	// unsigned is not set, it is EOA path
+	// unsigned or changeset is not set, it is EOA path
 	rawPrivKey := v.GetString(EthPrivateKeyEnvVar)
 	normPrivKey := NormalizeHexKey(rawPrivKey)
 	ownerAddress, err = ethkeys.DeriveEthAddressFromPrivateKey(normPrivKey)

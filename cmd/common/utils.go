@@ -17,11 +17,15 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/rs/zerolog"
+	"sigs.k8s.io/yaml"
 
 	"github.com/smartcontractkit/chainlink-testing-framework/seth"
 
 	"github.com/smartcontractkit/cre-cli/internal/constants"
+	"github.com/smartcontractkit/cre-cli/internal/context"
 	"github.com/smartcontractkit/cre-cli/internal/logger"
+	"github.com/smartcontractkit/cre-cli/internal/settings"
+	inttypes "github.com/smartcontractkit/cre-cli/internal/types"
 )
 
 func ValidateEventSignature(l *zerolog.Logger, tx *seth.DecodedTransaction, e abi.Event) (bool, int) {
@@ -213,4 +217,55 @@ func GetBuildCmd(inputFile string, outputFile string, rootFolder string) *exec.C
 	buildCmd.Dir = rootFolder
 
 	return buildCmd
+}
+
+func WriteChangesetFile(fileName string, changesetFile *inttypes.ChangesetFile, settings *settings.Settings) error {
+	// Set project context to ensure we're in the correct directory for writing the changeset file
+	// This is needed because workflow commands set the workflow directory as the context, but path for changeset file is relative to the project root
+	err := context.SetProjectContext("")
+	if err != nil {
+		return err
+	}
+
+	fullFilePath := filepath.Join(
+		filepath.Clean(settings.CLDSettings.CLDPath),
+		"domains",
+		settings.CLDSettings.Domain,
+		settings.CLDSettings.Environment,
+		"durable_pipelines",
+		"inputs",
+		fileName,
+	)
+
+	// if file exists, read it and append the new changesets
+	if _, err := os.Stat(fullFilePath); err == nil {
+		existingYamlData, err := os.ReadFile(fullFilePath)
+		if err != nil {
+			return fmt.Errorf("failed to read existing changeset yaml file: %w", err)
+		}
+
+		var existingChangesetFile inttypes.ChangesetFile
+		if err := yaml.Unmarshal(existingYamlData, &existingChangesetFile); err != nil {
+			return fmt.Errorf("failed to unmarshal existing changeset yaml: %w", err)
+		}
+
+		// Append new changesets to the existing ones
+		existingChangesetFile.Changesets = append(existingChangesetFile.Changesets, changesetFile.Changesets...)
+		changesetFile = &existingChangesetFile
+	}
+
+	yamlData, err := yaml.Marshal(&changesetFile)
+	if err != nil {
+		return fmt.Errorf("failed to marshal changeset to yaml: %w", err)
+	}
+
+	if err := os.WriteFile(fullFilePath, yamlData, 0600); err != nil {
+		return fmt.Errorf("failed to write changeset yaml file: %w", err)
+	}
+
+	fmt.Println("")
+	fmt.Println("Changeset YAML file generated!")
+	fmt.Printf("File: %s\n", fullFilePath)
+	fmt.Println("")
+	return nil
 }

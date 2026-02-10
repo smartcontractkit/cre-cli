@@ -147,17 +147,17 @@ func mustContain(t *testing.T, s string, subs ...string) {
 }
 
 func TestHealthCheck_NoClientsConfigured(t *testing.T) {
-	err := runRPCHealthCheck(map[uint64]*ethclient.Client{})
+	err := runRPCHealthCheck(map[uint64]*ethclient.Client{}, nil)
 	if err == nil {
 		t.Fatalf("expected error for no clients configured")
 	}
-	mustContain(t, err.Error(), "check your settings: no RPC URLs found for supported chains")
+	mustContain(t, err.Error(), "check your settings: no RPC URLs found for supported or experimental chains")
 }
 
 func TestHealthCheck_NilClient(t *testing.T) {
 	err := runRPCHealthCheck(map[uint64]*ethclient.Client{
 		123: nil, // resolver is not called for nil clients
-	})
+	}, nil)
 	if err == nil {
 		t.Fatalf("expected error for nil client")
 	}
@@ -175,7 +175,7 @@ func TestHealthCheck_AllOK(t *testing.T) {
 
 	err := runRPCHealthCheck(map[uint64]*ethclient.Client{
 		selectorSepolia: cOK,
-	})
+	}, nil)
 	if err != nil {
 		t.Fatalf("expected nil error, got: %v", err)
 	}
@@ -190,7 +190,7 @@ func TestHealthCheck_RPCError_usesChainName(t *testing.T) {
 
 	err := runRPCHealthCheck(map[uint64]*ethclient.Client{
 		selectorSepolia: cErr,
-	})
+	}, nil)
 	if err == nil {
 		t.Fatalf("expected error for RPC failure")
 	}
@@ -210,7 +210,7 @@ func TestHealthCheck_ZeroChainID_usesChainName(t *testing.T) {
 
 	err := runRPCHealthCheck(map[uint64]*ethclient.Client{
 		selectorSepolia: cZero,
-	})
+	}, nil)
 	if err == nil {
 		t.Fatalf("expected error for zero chain id")
 	}
@@ -230,7 +230,7 @@ func TestHealthCheck_AggregatesMultipleErrors(t *testing.T) {
 	err := runRPCHealthCheck(map[uint64]*ethclient.Client{
 		selectorSepolia: cErr, // named failure
 		777:             nil,  // nil client (numeric selector path)
-	})
+	}, nil)
 	if err == nil {
 		t.Fatalf("expected aggregated error")
 	}

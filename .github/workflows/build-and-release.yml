@@ -12,10 +12,11 @@ jobs:
       id-token: write
       contents: read
     environment: Publish
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}-4cores-16GB
     strategy:
       matrix:
         arch: [amd64, arm64]
+        os: [ubuntu24.04, ubuntu22.04]
     steps:
       - name: Checkout Repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # actions/checkout@v4.2.2
@@ -23,7 +24,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@3041bf56c941b39c61721a86cd11f3bb1338122a # actions/setup-go@v5.2.0
         with:
-          go-version: "1.24"
+          go-version: "1.25"
 
       - name: Setup GitHub Token
         id: setup-github-token
@@ -39,7 +40,7 @@ jobs:
         run: |
           sudo apt-get update
           if [ "${{ matrix.arch }}" == "arm64" ]; then
-            sudo apt-get install -y gcc-aarch64-linux-gnu libc6-dev-arm64-cross libstdc++-13-dev-arm64-cross libstdc++-12-dev-arm64-cross
+            sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu libc6-dev-arm64-cross $(if [ "${{ matrix.os }}" = "ubuntu24.04" ]; then echo "libstdc++-13-dev-arm64-cross"; fi) libstdc++-12-dev-arm64-cross
           elif [ "${{ matrix.arch }}" == "amd64" ]; then
             sudo apt-get install -y gcc-x86-64-linux-gnu libc6-dev-amd64-cross
           fi
@@ -58,6 +59,7 @@ jobs:
           GOARCH: ${{ matrix.arch }}
           CGO_ENABLED: 1
           CC: ${{ matrix.arch == 'amd64' && 'x86_64-linux-gnu-gcc' || matrix.arch == 'arm64' && 'aarch64-linux-gnu-gcc' || '' }}
+          CXX: ${{ matrix.arch == 'arm64' && 'aarch64-linux-gnu-g++' || '' }}
           GITHUB_TOKEN: ${{ steps.setup-github-token.outputs.access-token }}
         run: |
           VERSION="${{ github.ref_name }}"
@@ -122,7 +124,7 @@ jobs:
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@6f51ac03b9356f520e9adb1b1b7802705f340c2b # actions/upload-artifact@v4.5.0
         with:
-          name: cre_linux_${{ matrix.arch }}
+          name: cre_linux_${{ matrix.arch }}_${{ matrix.os }}
           path: |
             cre_${{ github.ref_name }}_linux_${{ matrix.arch }}.tar.gz
             cre_${{ github.ref_name }}_linux_${{ matrix.arch }}
@@ -147,7 +149,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@3041bf56c941b39c61721a86cd11f3bb1338122a # actions/setup-go@v5.2.0
         with:
-          go-version: "1.24"
+          go-version: "1.25"
 
       - name: Setup GitHub Token
         id: setup-github-token
@@ -248,7 +250,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@3041bf56c941b39c61721a86cd11f3bb1338122a # actions/stup-go@v5.2.0
         with:
-          go-version: "1.24"
+          go-version: "1.25"
 
       - name: Setup GitHub Token
         id: setup-github-token
@@ -406,14 +408,26 @@ jobs:
       - name: Download Build Artifacts for linux/amd64
         uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # actions/download-artifact@v4.1.8
         with:
-          name: cre_linux_amd64
+          name: cre_linux_amd64_ubuntu24.04
           path: ./linux_amd64
 
       - name: Download Build Artifacts for linux/arm64
         uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # actions/download-artifact@v4.1.8
         with:
-          name: cre_linux_arm64
+          name: cre_linux_arm64_ubuntu24.04
           path: ./linux_arm64
+
+      - name: Download Build Artifacts for linux/amd64 (ldd-2.35)
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # actions/download-artifact@v4.1.8
+        with:
+          name: cre_linux_amd64_ubuntu22.04
+          path: ./linux_amd64_ldd2-35
+
+      - name: Download Build Artifacts for linux/arm64 (ldd-2.35)
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # actions/download-artifact@v4.1.8
+        with:
+          name: cre_linux_arm64_ubuntu22.04
+          path: ./linux_arm64_ldd2-35
 
       - name: Download Build Artifacts for darwin/amd64
         uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # actions/download-artifact@v4.1.8
@@ -443,6 +457,12 @@ jobs:
 
             # Linux arm64 tar.gz
             echo "cre_${VERSION}_linux_arm64.tar.gz: $(shasum -a 256 ./linux_arm64/cre_${VERSION}_linux_arm64.tar.gz | awk '{print $1}')"
+          
+            # Linux amd64 tar.gz (ldd-2.35)
+            echo "cre_${VERSION}_linux_amd64.tar.gz (ldd-2.35): $(shasum -a 256 ./linux_amd64_ldd2-35/cre_${VERSION}_linux_amd64.tar.gz | awk '{print $1}')"
+
+            # Linux arm64 tar.gz (ldd-2.35)
+            echo "cre_${VERSION}_linux_arm64.tar.gz (ldd-2.35): $(shasum -a 256 ./linux_arm64_ldd2-35/cre_${VERSION}_linux_arm64.tar.gz | awk '{print $1}')"
 
             # Darwin amd64 zip
             echo "cre_${VERSION}_darwin_amd64.zip: $(shasum -a 256 ./darwin_amd64/cre_${VERSION}_darwin_amd64.zip | awk '{print $1}')"
@@ -510,6 +530,50 @@ jobs:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: ./linux_arm64/cre_${{ github.ref_name }}_linux_arm64.sig
           asset_name: cre_linux_arm64.sig
+          asset_content_type: application/octet-stream
+
+      # Upload Release Assets for linux/amd64 Tarball
+      - name: Upload Release Assets for linux/amd64(ldd-2.35) Tarball
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./linux_amd64_ldd2-35/cre_${{ github.ref_name }}_linux_amd64.tar.gz
+          asset_name: cre_linux_amd64_ldd2-35.tar.gz
+          asset_content_type: application/octet-stream
+
+      # Upload Release Assets for linux/amd64 Signature
+      - name: Upload Release Assets for linux/amd64(ldd-2.35) Signature
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./linux_amd64_ldd2-35/cre_${{ github.ref_name }}_linux_amd64.sig
+          asset_name: cre_linux_amd64_ldd2-35.sig
+          asset_content_type: application/octet-stream
+
+      # Upload Release Assets for linux/arm64 Tarball
+      - name: Upload Release Assets for linux/arm64(ldd-2.35) Tarball
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./linux_arm64_ldd2-35/cre_${{ github.ref_name }}_linux_arm64.tar.gz
+          asset_name: cre_linux_arm64_ldd2-35.tar.gz
+          asset_content_type: application/octet-stream
+
+      # Upload Release Assets for linux/arm64 Signature
+      - name: Upload Release Assets for linux/arm64(ldd-2.35) Signature
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./linux_arm64_ldd2-35/cre_${{ github.ref_name }}_linux_arm64.sig
+          asset_name: cre_linux_arm64_ldd2-35.sig
           asset_content_type: application/octet-stream
 
       # Upload Release Assets for darwin/amd64 Zip

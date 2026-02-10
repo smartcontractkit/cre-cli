@@ -19,6 +19,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm"
+	"github.com/smartcontractkit/cre-sdk-go/capabilities/networking/confidentialhttp"
 	"github.com/smartcontractkit/cre-sdk-go/capabilities/networking/http"
 	"github.com/smartcontractkit/cre-sdk-go/capabilities/scheduler/cron"
 	"github.com/smartcontractkit/cre-sdk-go/cre"
@@ -103,6 +104,54 @@ func doPOR(config *Config, runtime cre.Runtime, runTime time.Time) (string, erro
 	}
 
 	logger.Info("ReserveInfo", "reserveInfo", reserveInfo)
+
+	porResp, err := cre.RunInNodeMode(*config, runtime,
+		func(config Config, nodeRuntime cre.NodeRuntime) (PORResponse, error) {
+			confHttpClient := confidentialhttp.Client{}
+			confOutput, err := confHttpClient.SendRequest(nodeRuntime, &confidentialhttp.ConfidentialHTTPRequest{
+				Request: &confidentialhttp.HTTPRequest{
+					Url:    config.URL,
+					Method: "GET",
+					MultiHeaders: map[string]*confidentialhttp.HeaderValues{
+						"Authorization": {
+							Values: []string{"Basic {{.API_KEY}}"},
+						},
+					},
+				},
+				VaultDonSecrets: []*confidentialhttp.SecretIdentifier{
+					{
+						Key: "API_KEY",
+					},
+				},
+				EncryptOutput: true,
+			}).Await()
+			if err != nil {
+				logger.Error("error fetching conf por", "err", err)
+				return PORResponse{}, err
+			}
+			logger.Info("Conf POR response", "response", confOutput)
+
+			porResp := &PORResponse{}
+			if err = json.Unmarshal(confOutput.Body, porResp); err != nil {
+				return PORResponse{}, err
+			}
+
+			return *porResp, nil
+		}, cre.ConsensusIdenticalAggregation[PORResponse](),
+	).Await()
+
+	if porResp.Ripcord {
+		return "", errors.New("ripcord is true")
+	}
+
+	confReserveInfo := &ReserveInfo{
+		LastUpdated:  porResp.UpdatedAt.UTC(),
+		TotalReserve: decimal.NewFromFloat(porResp.TotalToken),
+	}
+
+	if !confReserveInfo.TotalReserve.Equal(reserveInfo.TotalReserve) || !confReserveInfo.LastUpdated.Equal(reserveInfo.LastUpdated) {
+		logger.Error("Mismatch between confidential and regular POR responses")
+	}
 
 	totalSupply, err := getTotalSupply(config, runtime)
 	if err != nil {
@@ -242,6 +291,9 @@ func fetchPOR(config *Config, logger *slog.Logger, sendRequester *http.SendReque
 	httpActionOut, err := sendRequester.SendRequest(&http.Request{
 		Method: "GET",
 		Url:    config.URL,
+		Headers: map[string]string{
+			"Authorization": "Basic test-api", // not secret.
+		},
 	}).Await()
 	if err != nil {
 		return nil, err

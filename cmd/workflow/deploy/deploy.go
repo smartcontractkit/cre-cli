@@ -65,6 +65,10 @@ type handler struct {
 
 	validated bool
 
+	// existingWorkflowStatus stores the status of an existing workflow when updating.
+	// nil means this is a new workflow, otherwise it contains the current status (0=active, 1=paused).
+	existingWorkflowStatus *uint8
+
 	wg     sync.WaitGroup
 	wrcErr error
 }
@@ -94,7 +98,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 		},
 	}
 
-	settings.AddRawTxFlag(deployCmd)
+	settings.AddTxnTypeFlags(deployCmd)
 	settings.AddSkipConfirmation(deployCmd)
 	deployCmd.Flags().StringP("output", "o", defaultOutputPath, "The output file for the compiled WASM binary encoded in base64")
 	deployCmd.Flags().StringP("owner-label", "l", "", "Label for the workflow owner (used during auto-link if owner is not already linked)")
@@ -139,10 +143,15 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 		configURL = &url
 	}
 
+	workflowTag := h.settings.Workflow.UserWorkflowSettings.WorkflowName
+	if len(workflowTag) > 32 {
+		workflowTag = workflowTag[:32]
+	}
+
 	return Inputs{
 		WorkflowName:  h.settings.Workflow.UserWorkflowSettings.WorkflowName,
 		WorkflowOwner: h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress,
-		WorkflowTag:   h.settings.Workflow.UserWorkflowSettings.WorkflowName,
+		WorkflowTag:   workflowTag,
 		ConfigURL:     configURL,
 		DonFamily:     h.environmentSet.DonFamily,
 
@@ -225,6 +234,18 @@ func (h *handler) Execute() error {
 		}
 	}
 
+	if err := checkUserDonLimitBeforeDeploy(
+		h.wrc,
+		h.wrc,
+		common.HexToAddress(h.inputs.WorkflowOwner),
+		h.inputs.DonFamily,
+		h.inputs.WorkflowName,
+		h.inputs.KeepAlive,
+		h.existingWorkflowStatus,
+	); err != nil {
+		return err
+	}
+
 	fmt.Println("\nUploading files...")
 	if err := h.uploadArtifacts(); err != nil {
 		return fmt.Errorf("failed to upload workflow: %w", err)
@@ -237,7 +258,7 @@ func (h *handler) Execute() error {
 }
 
 func (h *handler) workflowExists() error {
-	workflow, err := h.wrc.GetWorkflow(common.HexToAddress(h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress), h.inputs.WorkflowName, h.inputs.WorkflowName)
+	workflow, err := h.wrc.GetWorkflow(common.HexToAddress(h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress), h.inputs.WorkflowName, h.inputs.WorkflowTag)
 	if err != nil {
 		return err
 	}
@@ -246,6 +267,8 @@ func (h *handler) workflowExists() error {
 
 	}
 	if workflow.WorkflowName == h.inputs.WorkflowName {
+		status := workflow.Status
+		h.existingWorkflowStatus = &status
 		return fmt.Errorf("workflow with name %s already exists", h.inputs.WorkflowName)
 	}
 	return nil

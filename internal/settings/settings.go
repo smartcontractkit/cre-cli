@@ -36,6 +36,7 @@ type Settings struct {
 	Workflow        WorkflowSettings
 	User            UserSettings
 	StorageSettings WorkflowStorageSettings
+	CLDSettings     CLDSettings
 }
 
 // UserSettings stores user-specific configurations.
@@ -81,6 +82,11 @@ func New(logger *zerolog.Logger, v *viper.Viper, cmd *cobra.Command, registryCha
 	}
 	storageSettings := LoadWorkflowStorageSettings(logger, v)
 
+	cldSettings, err := loadCLDSettings(logger, v, cmd, registryChainName)
+	if err != nil {
+		return nil, err
+	}
+
 	rawPrivKey := v.GetString(EthPrivateKeyEnvVar)
 	normPrivKey := NormalizeHexKey(rawPrivKey)
 
@@ -91,6 +97,7 @@ func New(logger *zerolog.Logger, v *viper.Viper, cmd *cobra.Command, registryCha
 		},
 		Workflow:        workflowSettings,
 		StorageSettings: storageSettings,
+		CLDSettings:     cldSettings,
 	}, nil
 }
 

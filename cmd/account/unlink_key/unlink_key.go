@@ -20,12 +20,14 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/smartcontractkit/cre-cli/cmd/client"
+	cmdCommon "github.com/smartcontractkit/cre-cli/cmd/common"
 	"github.com/smartcontractkit/cre-cli/internal/client/graphqlclient"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/prompt"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
+	"github.com/smartcontractkit/cre-cli/internal/types"
 	"github.com/smartcontractkit/cre-cli/internal/validation"
 )
 
@@ -83,7 +85,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 			return h.Execute(in)
 		},
 	}
-	settings.AddRawTxFlag(cmd)
+	settings.AddTxnTypeFlags(cmd)
 	settings.AddSkipConfirmation(cmd)
 	return cmd
 }
@@ -257,6 +259,8 @@ func (h *handler) unlinkOwner(owner string, resp initiateUnlinkingResponse) erro
 		fmt.Println("Transaction confirmed")
 		fmt.Printf("View on explorer: \033]8;;%s/tx/%s\033\\%s/tx/%s\033]8;;\033\\\n", h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash, h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash)
 		fmt.Println("\n[OK] web3 address unlinked from your CRE organization successfully")
+		fmt.Println("\nNote: Unlinking verification may take up to 60 seconds.")
+		fmt.Println("      You must wait for verification to complete before linking this address again.")
 		fmt.Println("\n→ This address can no longer deploy workflows on behalf of your organization")
 
 	case client.Raw:
@@ -285,6 +289,41 @@ func (h *handler) unlinkOwner(owner string, resp initiateUnlinkingResponse) erro
 		fmt.Println("")
 		fmt.Printf("      %s\n", resp.TransactionData)
 		fmt.Println("")
+
+	case client.Changeset:
+		chainSelector, err := settings.GetChainSelectorByChainName(h.environmentSet.WorkflowRegistryChainName)
+		if err != nil {
+			return fmt.Errorf("failed to get chain selector for chain %q: %w", h.environmentSet.WorkflowRegistryChainName, err)
+		}
+		mcmsConfig, err := settings.GetMCMSConfig(h.settings, chainSelector)
+		if err != nil {
+			fmt.Println("\nMCMS config not found or is incorrect, skipping MCMS config in changeset")
+		}
+		cldSettings := h.settings.CLDSettings
+		changesets := []types.Changeset{
+			{
+				UnlinkOwner: &types.UnlinkOwner{
+					Payload: types.UserUnlinkOwnerInput{
+						ValidityTimestamp:         ts,
+						Signature:                 common.Bytes2Hex(sigBytes),
+						ChainSelector:             chainSelector,
+						MCMSConfig:                mcmsConfig,
+						WorkflowRegistryQualifier: cldSettings.WorkflowRegistryQualifier,
+					},
+				},
+			},
+		}
+		csFile := types.NewChangesetFile(cldSettings.Environment, cldSettings.Domain, cldSettings.MergeProposals, changesets)
+
+		var fileName string
+		if cldSettings.ChangesetFile != "" {
+			fileName = cldSettings.ChangesetFile
+		} else {
+			fileName = fmt.Sprintf("UnlinkOwner_%s_%s.yaml", h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress, time.Now().Format("20060102_150405"))
+		}
+
+		return cmdCommon.WriteChangesetFile(fileName, csFile, h.settings)
+
 	default:
 		h.log.Warn().Msgf("Unsupported transaction type: %s", txOut.Type)
 	}

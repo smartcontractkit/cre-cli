@@ -88,6 +88,8 @@ func (f *factoryImpl) GetTxType() TxType {
 		return Raw
 	} else if f.viper.GetBool(settings.Flags.Ledger.Name) {
 		return Ledger
+	} else if f.viper.GetBool(settings.Flags.Changeset.Name) {
+		return Changeset
 	}
 	return Regular
 }
