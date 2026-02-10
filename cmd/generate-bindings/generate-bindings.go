@@ -41,7 +41,6 @@ Supports EVM chain family and Go language.
 Each contract gets its own package subdirectory to avoid naming conflicts.
 For example, IERC20.abi generates bindings in generated/ierc20/ package.`,
 		Example: "  cre generate-bindings-evm",
-		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			inputs, err := resolveEvmInputs(runtimeContext.Viper)
 			if err != nil {

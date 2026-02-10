@@ -22,10 +22,10 @@ cre generate-bindings-solana [optional flags]
 ### Options
 
 ```
-  -a, --abi string            Path to ABI directory (defaults to contracts/{chain-family}/src/abi/)
   -h, --help                  help for generate-bindings-solana
+  -i, --idl string            Path to IDL directory (defaults to contracts/solana/src/idl/)
   -l, --language string       Target language (go) (default "go")
-  -k, --pkg string            Base package name (each contract gets its own subdirectory) (default "bindings")
+  -o, --out string            Path to output directory (defaults to contracts/solana/src/generated/)
   -p, --project-root string   Path to project root directory (defaults to current directory)
 ```
 

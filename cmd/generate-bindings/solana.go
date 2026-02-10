@@ -183,7 +183,8 @@ func executeSolana(inputs SolanaInputs) error {
 	if err != nil {
 		return err
 	}
-	if err = runCommand(inputs.ProjectRoot, "go", "mod", "tidy"); err != nil {
+	err = runCommand(inputs.ProjectRoot, "go", "mod", "tidy")
+	if err != nil {
 		return err
 	}
 

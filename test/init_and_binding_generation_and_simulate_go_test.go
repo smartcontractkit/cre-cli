@@ -102,7 +102,7 @@ func TestE2EInit_DevPoRTemplate(t *testing.T) {
 	// cre generate-bindings
 	stdout.Reset()
 	stderr.Reset()
-	bindingsCmd := exec.Command(CLIPath, "generate-bindings", "evm")
+	bindingsCmd := exec.Command(CLIPath, "generate-bindings-evm")
 	bindingsCmd.Dir = projectRoot
 	bindingsCmd.Stdout = &stdout
 	bindingsCmd.Stderr = &stderr
