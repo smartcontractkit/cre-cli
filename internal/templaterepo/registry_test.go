@@ -208,7 +208,6 @@ func TestScaffoldBuiltInGo(t *testing.T) {
 	// Check that key files were extracted
 	expectedFiles := []string{
 		filepath.Join(workflowName, "main.go"),
-		filepath.Join(workflowName, "workflow.yaml"),
 		filepath.Join(workflowName, "README.md"),
 		filepath.Join(workflowName, "config.staging.json"),
 		filepath.Join(workflowName, "config.production.json"),
@@ -233,7 +232,6 @@ func TestScaffoldBuiltInTS(t *testing.T) {
 		filepath.Join(workflowName, "main.ts"),
 		filepath.Join(workflowName, "package.json"),
 		filepath.Join(workflowName, "tsconfig.json"),
-		filepath.Join(workflowName, "workflow.yaml"),
 		filepath.Join(workflowName, "README.md"),
 		filepath.Join(workflowName, "config.staging.json"),
 		filepath.Join(workflowName, "config.production.json"),
