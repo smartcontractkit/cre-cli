@@ -119,14 +119,11 @@ func creWriteReportFromStructs(exportedAccountName string, g *Generator) Code {
 			block.Add(creWriteReportErrorBlock())
 
 			// encodedAccountList, err := EncodeAccountList(accountList)
-			block.List(Id("encodedAccountList"), Id("err")).Op(":=").
-				Qual(PkgBindings, "EncodeAccountList").Call(Id("remainingAccounts"))
-
-			// if err block
-			block.Add(creWriteReportErrorBlock())
+			block.Id("encodedAccountList").Op(":=").
+				Qual(PkgBindings, "CalculateAccountsHash").Call(Id("remainingAccounts")).Line()
 
 			// fwdReport := ForwarderReport{Payload: encodedInput, AccountHash: encodedAccountList}
-			block.Id("fwdReport").Op(":=").Qual(PkgSolanaCre, "ForwarderReport").Values(Dict{
+			block.Id("fwdReport").Op(":=").Qual(PkgBindings, "ForwarderReport").Values(Dict{
 				Id("Payload"):     Id("encodedInput"),
 				Id("AccountHash"): Id("encodedAccountList"),
 			})

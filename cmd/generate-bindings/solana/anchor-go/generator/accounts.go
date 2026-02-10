@@ -117,7 +117,7 @@ func (g *Generator) gen_accountParser(accountNames []string) (Code, error) {
 			code.Line().Line()
 
 			// Read account data onchain using read capability
-			code.Add(creReadAccountFn(name, g))
+			// code.Add(creReadAccountFn(name, g))
 			code.Line().Line()
 		}
 	}

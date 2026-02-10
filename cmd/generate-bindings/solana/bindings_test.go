@@ -2,7 +2,6 @@ package solana_test
 
 import (
 	"context"
-	"math/big"
 	"testing"
 
 	"github.com/gagliardetto/solana-go"
@@ -13,9 +12,6 @@ import (
 	"github.com/smartcontractkit/chainlink-protos/cre/go/sdk"
 	realSolana "github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/solana"
 	realSolanaMock "github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/solana/mock"
-
-	// "github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana_bindings/testdata/forwarder"
-	// "github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana_bindings/testdata/receiver"
 
 	datastorage "github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana/testdata/data_storage"
 	"github.com/smartcontractkit/cre-sdk-go/cre/testutils"
@@ -78,54 +74,6 @@ func TestGeneratedBindingsCodec(t *testing.T) {
 		// }
 		// _, err = codec.EncodeOnReportMethodCall(onReport)
 		// require.NoError(t, err)
-	})
-}
-
-func TestReadMethods(t *testing.T) {
-	t.Run("single", func(t *testing.T) {
-		client := &realSolana.Client{ChainSelector: anyChainSelector}
-		ds, err := datastorage.NewDataStorage(client)
-		require.NoError(t, err, "Failed to create DataStorage instance")
-
-		// Encode the expected string response
-		dataAccount := datastorage.DataAccount{
-			Sender: "testSender",
-			Key:    "testKey",
-			Value:  "testValue",
-		}
-		encodedData, err := dataAccount.Marshal()
-		require.NoError(t, err)
-
-		dataAccountDiscriminator := datastorage.Account_DataAccount
-		dataAccountDiscriminatorBytes := dataAccountDiscriminator[:]
-		encodedData = append(dataAccountDiscriminatorBytes, encodedData...)
-
-		solanaCap, err := realSolanaMock.NewClientCapability(anyChainSelector, t)
-		require.NoError(t, err, "Failed to create EVM client capability")
-
-		solanaCap.GetAccountInfoWithOpts = func(_ context.Context, input *realSolana.GetAccountInfoWithOptsRequest) (*realSolana.GetAccountInfoWithOptsReply, error) {
-			reply := &realSolana.GetAccountInfoWithOptsReply{
-				Value: &realSolana.Account{
-					Data: &realSolana.DataBytesOrJSON{
-						// AsDecodedBinary: encodedData,
-						Body: &realSolana.DataBytesOrJSON_Raw{
-							Raw: encodedData,
-						},
-					},
-				},
-			}
-			return reply, nil
-		}
-		runtime := testutils.NewRuntime(t, testutils.Secrets{})
-		randomAddress, err := solana.NewRandomPrivateKey()
-		require.NoError(t, err)
-		testBigInt := big.NewInt(123456)
-		reply := ds.ReadAccount_DataAccount(runtime, randomAddress.PublicKey(), testBigInt)
-		require.NotNil(t, reply, "ReadData should return a non-nil promise")
-
-		resp, err := reply.Await()
-		require.NoError(t, err, "Awaiting ReadData reply should not return an error")
-		require.Equal(t, dataAccount.Value, resp.Value, "Decoded value should match expected string")
 	})
 }
 
@@ -197,6 +145,54 @@ func TestEncodeStruct(t *testing.T) {
 	require.NoError(t, err, "Encoding DataStorageDataAccount should not return an error")
 	require.NotNil(t, encoded, "Encoded data should not be nil")
 }
+
+// func TestReadMethods(t *testing.T) {
+// 	t.Run("single", func(t *testing.T) {
+// 		client := &realSolana.Client{ChainSelector: anyChainSelector}
+// 		ds, err := datastorage.NewDataStorage(client)
+// 		require.NoError(t, err, "Failed to create DataStorage instance")
+
+// 		// Encode the expected string response
+// 		dataAccount := datastorage.DataAccount{
+// 			Sender: "testSender",
+// 			Key:    "testKey",
+// 			Value:  "testValue",
+// 		}
+// 		encodedData, err := dataAccount.Marshal()
+// 		require.NoError(t, err)
+
+// 		dataAccountDiscriminator := datastorage.Account_DataAccount
+// 		dataAccountDiscriminatorBytes := dataAccountDiscriminator[:]
+// 		encodedData = append(dataAccountDiscriminatorBytes, encodedData...)
+
+// 		solanaCap, err := realSolanaMock.NewClientCapability(anyChainSelector, t)
+// 		require.NoError(t, err, "Failed to create EVM client capability")
+
+// 		solanaCap.GetAccountInfoWithOpts = func(_ context.Context, input *realSolana.GetAccountInfoWithOptsRequest) (*realSolana.GetAccountInfoWithOptsReply, error) {
+// 			reply := &realSolana.GetAccountInfoWithOptsReply{
+// 				Value: &realSolana.Account{
+// 					Data: &realSolana.DataBytesOrJSON{
+// 						// AsDecodedBinary: encodedData,
+// 						Body: &realSolana.DataBytesOrJSON_Raw{
+// 							Raw: encodedData,
+// 						},
+// 					},
+// 				},
+// 			}
+// 			return reply, nil
+// 		}
+// 		runtime := testutils.NewRuntime(t, testutils.Secrets{})
+// 		randomAddress, err := solana.NewRandomPrivateKey()
+// 		require.NoError(t, err)
+// 		testBigInt := big.NewInt(123456)
+// 		reply := ds.ReadAccount_DataAccount(runtime, randomAddress.PublicKey(), testBigInt)
+// 		require.NotNil(t, reply, "ReadData should return a non-nil promise")
+
+// 		resp, err := reply.Await()
+// 		require.NoError(t, err, "Awaiting ReadData reply should not return an error")
+// 		require.Equal(t, dataAccount.Value, resp.Value, "Decoded value should match expected string")
+// 	})
+// }
 
 // func TestDecodeEvents(t *testing.T) {
 // 	t.Run("Success", func(t *testing.T) {

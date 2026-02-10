@@ -7,10 +7,6 @@ package data_storage
 import (
 	"fmt"
 	binary "github.com/gagliardetto/binary"
-	solanago "github.com/gagliardetto/solana-go"
-	solana "github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/solana"
-	cre "github.com/smartcontractkit/cre-sdk-go/cre"
-	"math/big"
 )
 
 func ParseAnyAccount(accountData []byte) (any, error) {
@@ -51,22 +47,4 @@ func ParseAccount_DataAccount(accountData []byte) (*DataAccount, error) {
 
 func (c *Codec) DecodeDataAccount(data []byte) (*DataAccount, error) {
 	return ParseAccount_DataAccount(data)
-}
-
-func (c *DataStorage) ReadAccount_DataAccount(
-	runtime cre.Runtime,
-	accountAddress solanago.PublicKey,
-	blockNumber *big.Int,
-) cre.Promise[*DataAccount] {
-	// cre account read
-	bn := cre.PromiseFromResult(uint64(blockNumber.Int64()), nil)
-	promise := cre.ThenPromise(bn, func(bn uint64) cre.Promise[*solana.GetAccountInfoWithOptsReply] {
-		return c.client.GetAccountInfoWithOpts(runtime, &solana.GetAccountInfoWithOptsRequest{
-			Account: accountAddress.Bytes(),
-			Opts:    &solana.GetAccountInfoOpts{MinContextSlot: bn},
-		})
-	})
-	return cre.Then(promise, func(response *solana.GetAccountInfoWithOptsReply) (*DataAccount, error) {
-		return ParseAccount_DataAccount(response.Value.Data.GetRaw())
-	})
 }

@@ -24,7 +24,7 @@ const (
 	PkgTestifyRequire = "github.com/stretchr/testify/require"
 	PkgSolanaCre      = "github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana/cre-sdk-go/capabilities/blockchain/solana"
 	PkgRealSolanaCre  = "github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/solana"
-	PkgBindings       = "github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana/cre-sdk-go/capabilities/blockchain/solana/bindings"
+	PkgBindings       = "github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/solana/bindings"
 	PkgSolanaTypes    = "github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana/cre-sdk-go/types"
 	PkgIdl            = "github.com/gagliardetto/anchor-go/idl"
 	PkgAnchorIdlCodec = "github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana/cre-sdk-go/anchorcodec"

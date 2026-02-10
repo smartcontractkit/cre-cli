@@ -10,9 +10,8 @@ import (
 	binary "github.com/gagliardetto/binary"
 	solanago "github.com/gagliardetto/solana-go"
 	sdk "github.com/smartcontractkit/chainlink-protos/cre/go/sdk"
-	solana1 "github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana/cre-sdk-go/capabilities/blockchain/solana"
-	bindings "github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana/cre-sdk-go/capabilities/blockchain/solana/bindings"
 	solana "github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/solana"
+	bindings "github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/solana/bindings"
 	cre "github.com/smartcontractkit/cre-sdk-go/cre"
 )
 
@@ -90,12 +89,9 @@ func (c *DataStorage) WriteReportFromAccessLogged(
 		return cre.PromiseFromResult[*solana.WriteReportReply](nil, err)
 	}
 
-	encodedAccountList, err := bindings.EncodeAccountList(remainingAccounts)
-	if err != nil {
-		return cre.PromiseFromResult[*solana.WriteReportReply](nil, err)
-	}
+	encodedAccountList := bindings.CalculateAccountsHash(remainingAccounts)
 
-	fwdReport := solana1.ForwarderReport{
+	fwdReport := bindings.ForwarderReport{
 		AccountHash: encodedAccountList,
 		Payload:     encodedInput,
 	}
@@ -205,12 +201,9 @@ func (c *DataStorage) WriteReportFromDataAccount(
 		return cre.PromiseFromResult[*solana.WriteReportReply](nil, err)
 	}
 
-	encodedAccountList, err := bindings.EncodeAccountList(remainingAccounts)
-	if err != nil {
-		return cre.PromiseFromResult[*solana.WriteReportReply](nil, err)
-	}
+	encodedAccountList := bindings.CalculateAccountsHash(remainingAccounts)
 
-	fwdReport := solana1.ForwarderReport{
+	fwdReport := bindings.ForwarderReport{
 		AccountHash: encodedAccountList,
 		Payload:     encodedInput,
 	}
@@ -342,12 +335,9 @@ func (c *DataStorage) WriteReportFromDynamicEvent(
 		return cre.PromiseFromResult[*solana.WriteReportReply](nil, err)
 	}
 
-	encodedAccountList, err := bindings.EncodeAccountList(remainingAccounts)
-	if err != nil {
-		return cre.PromiseFromResult[*solana.WriteReportReply](nil, err)
-	}
+	encodedAccountList := bindings.CalculateAccountsHash(remainingAccounts)
 
-	fwdReport := solana1.ForwarderReport{
+	fwdReport := bindings.ForwarderReport{
 		AccountHash: encodedAccountList,
 		Payload:     encodedInput,
 	}
@@ -423,12 +413,9 @@ func (c *DataStorage) WriteReportFromNoFields(
 		return cre.PromiseFromResult[*solana.WriteReportReply](nil, err)
 	}
 
-	encodedAccountList, err := bindings.EncodeAccountList(remainingAccounts)
-	if err != nil {
-		return cre.PromiseFromResult[*solana.WriteReportReply](nil, err)
-	}
+	encodedAccountList := bindings.CalculateAccountsHash(remainingAccounts)
 
-	fwdReport := solana1.ForwarderReport{
+	fwdReport := bindings.ForwarderReport{
 		AccountHash: encodedAccountList,
 		Payload:     encodedInput,
 	}
@@ -527,12 +514,9 @@ func (c *DataStorage) WriteReportFromUpdateReserves(
 		return cre.PromiseFromResult[*solana.WriteReportReply](nil, err)
 	}
 
-	encodedAccountList, err := bindings.EncodeAccountList(remainingAccounts)
-	if err != nil {
-		return cre.PromiseFromResult[*solana.WriteReportReply](nil, err)
-	}
+	encodedAccountList := bindings.CalculateAccountsHash(remainingAccounts)
 
-	fwdReport := solana1.ForwarderReport{
+	fwdReport := bindings.ForwarderReport{
 		AccountHash: encodedAccountList,
 		Payload:     encodedInput,
 	}
@@ -631,12 +615,9 @@ func (c *DataStorage) WriteReportFromUserData(
 		return cre.PromiseFromResult[*solana.WriteReportReply](nil, err)
 	}
 
-	encodedAccountList, err := bindings.EncodeAccountList(remainingAccounts)
-	if err != nil {
-		return cre.PromiseFromResult[*solana.WriteReportReply](nil, err)
-	}
+	encodedAccountList := bindings.CalculateAccountsHash(remainingAccounts)
 
-	fwdReport := solana1.ForwarderReport{
+	fwdReport := bindings.ForwarderReport{
 		AccountHash: encodedAccountList,
 		Payload:     encodedInput,
 	}
