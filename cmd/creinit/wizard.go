@@ -3,8 +3,10 @@ package creinit
 import (
 	"fmt"
 	"net/url"
+	"slices"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -32,6 +34,103 @@ const creLogo = `
       ÷÷÷                                          ÷÷÷
 `
 
+// templateItem wraps TemplateSummary for use with bubbles/list.
+type templateItem struct {
+	templaterepo.TemplateSummary
+}
+
+func (t templateItem) Title() string {
+	if t.TemplateSummary.Title != "" {
+		return t.TemplateSummary.Title
+	}
+	return t.TemplateSummary.Name
+}
+func (t templateItem) Description() string { return t.TemplateSummary.Description }
+func (t templateItem) FilterValue() string {
+	return t.TemplateSummary.Title + " " + t.TemplateSummary.Name + " " + t.TemplateSummary.Language
+}
+
+// languageFilter controls template list filtering by language.
+type languageFilter int
+
+const (
+	filterAll languageFilter = iota
+	filterGo
+	filterTS
+)
+
+func (f languageFilter) String() string {
+	switch f {
+	case filterGo:
+		return "Go"
+	case filterTS:
+		return "TypeScript"
+	default:
+		return "All"
+	}
+}
+
+func (f languageFilter) next() languageFilter {
+	switch f {
+	case filterAll:
+		return filterGo
+	case filterGo:
+		return filterTS
+	default:
+		return filterAll
+	}
+}
+
+// sortTemplates sorts templates: built-in first, then by kind, then alphabetical by title.
+func sortTemplates(templates []templaterepo.TemplateSummary) []templaterepo.TemplateSummary {
+	sorted := slices.Clone(templates)
+	slices.SortStableFunc(sorted, func(a, b templaterepo.TemplateSummary) int {
+		// Built-in first
+		if a.BuiltIn != b.BuiltIn {
+			if a.BuiltIn {
+				return -1
+			}
+			return 1
+		}
+		// Then by kind (building-block before starter-template)
+		if a.Kind != b.Kind {
+			return strings.Compare(a.Kind, b.Kind)
+		}
+		// Then alphabetical by title
+		return strings.Compare(a.Title, b.Title)
+	})
+	return sorted
+}
+
+// newTemplateDelegate creates a styled item delegate for the template list.
+func newTemplateDelegate() list.DefaultDelegate {
+	d := list.NewDefaultDelegate()
+	d.Styles.SelectedTitle = lipgloss.NewStyle().
+		Foreground(lipgloss.Color(ui.ColorBlue500)).Bold(true).
+		Border(lipgloss.NormalBorder(), false, false, false, true).
+		BorderForeground(lipgloss.Color(ui.ColorBlue500)).
+		Padding(0, 0, 0, 1)
+	d.Styles.SelectedDesc = lipgloss.NewStyle().
+		Foreground(lipgloss.Color(ui.ColorBlue300)).
+		Border(lipgloss.NormalBorder(), false, false, false, true).
+		BorderForeground(lipgloss.Color(ui.ColorBlue500)).
+		Padding(0, 0, 0, 1)
+	d.Styles.NormalTitle = lipgloss.NewStyle().
+		Foreground(lipgloss.Color(ui.ColorGray50)).
+		Padding(0, 0, 0, 2)
+	d.Styles.NormalDesc = lipgloss.NewStyle().
+		Foreground(lipgloss.Color(ui.ColorGray500)).
+		Padding(0, 0, 0, 2)
+	d.Styles.DimmedTitle = lipgloss.NewStyle().
+		Foreground(lipgloss.Color(ui.ColorGray500)).
+		Padding(0, 0, 0, 2)
+	d.Styles.DimmedDesc = lipgloss.NewStyle().
+		Foreground(lipgloss.Color(ui.ColorGray700)).
+		Padding(0, 0, 0, 2)
+	d.SetSpacing(0)
+	return d
+}
+
 type wizardStep int
 
 const (
@@ -58,9 +157,9 @@ type wizardModel struct {
 	workflowInput textinput.Model
 
 	// Template list
-	templates      []templaterepo.TemplateSummary
-	templateCursor int
-	filterText     string
+	templates    []templaterepo.TemplateSummary
+	templateList list.Model
+	langFilter   languageFilter
 
 	// RPC URL inputs
 	networks        []string          // from selected template's Networks
@@ -123,11 +222,26 @@ func newWizardModel(inputs Inputs, isNewProject bool, templates []templaterepo.T
 		flagRPCs = make(map[string]string)
 	}
 
+	// Build sorted template list items
+	sorted := sortTemplates(templates)
+	items := make([]list.Item, len(sorted))
+	for i, t := range sorted {
+		items[i] = templateItem{t}
+	}
+
+	tl := list.New(items, newTemplateDelegate(), 80, 14)
+	tl.SetShowTitle(false)
+	tl.SetShowStatusBar(false)
+	tl.SetShowHelp(false)
+	tl.SetFilteringEnabled(true)
+	tl.Styles.NoItems = lipgloss.NewStyle().Foreground(lipgloss.Color(ui.ColorGray500)).Padding(0, 0, 0, 2)
+
 	m := wizardModel{
 		step:          stepProjectName,
 		projectInput:  pi,
 		workflowInput: wi,
-		templates:     templates,
+		templates:     sorted,
+		templateList:  tl,
 		flagRpcURLs:   flagRPCs,
 
 		// Styles
@@ -247,39 +361,17 @@ func (m *wizardModel) advanceToNextStep() {
 	}
 }
 
-// filteredTemplates returns the templates that match the current filter text.
-func (m *wizardModel) filteredTemplates() []templaterepo.TemplateSummary {
-	if m.filterText == "" {
-		return m.templates
-	}
-	filter := strings.ToLower(m.filterText)
-	var filtered []templaterepo.TemplateSummary
+// rebuildTemplateItems filters m.templates by the current langFilter and updates the list.
+func (m *wizardModel) rebuildTemplateItems() {
+	var items []list.Item
 	for _, t := range m.templates {
-		if strings.Contains(strings.ToLower(t.Name), filter) ||
-			strings.Contains(strings.ToLower(t.Title), filter) ||
-			strings.Contains(strings.ToLower(t.Description), filter) ||
-			strings.Contains(strings.ToLower(t.Language), filter) ||
-			strings.Contains(strings.ToLower(t.Kind), filter) {
-			filtered = append(filtered, t)
-		}
-		// Check tags
-		for _, tag := range t.Tags {
-			if strings.Contains(strings.ToLower(tag), filter) {
-				filtered = append(filtered, t)
-				break
-			}
+		if m.langFilter == filterAll ||
+			(m.langFilter == filterGo && strings.EqualFold(t.Language, "go")) ||
+			(m.langFilter == filterTS && strings.EqualFold(t.Language, "typescript")) {
+			items = append(items, templateItem{t})
 		}
 	}
-	// Remove duplicates from tag matching
-	seen := make(map[string]bool)
-	var unique []templaterepo.TemplateSummary
-	for _, t := range filtered {
-		if !seen[t.Name] {
-			seen[t.Name] = true
-			unique = append(unique, t)
-		}
-	}
-	return unique
+	m.templateList.SetItems(items)
 }
 
 func (m wizardModel) Init() tea.Cmd {
@@ -288,42 +380,53 @@ func (m wizardModel) Init() tea.Cmd {
 
 func (m wizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		if m.step == stepTemplate {
+			m.templateList.SetWidth(msg.Width)
+			// Reserve space for header (logo + title + tabs + help)
+			m.templateList.SetHeight(max(msg.Height-24, 5))
+		}
+		return m, nil
+
 	case tea.KeyMsg:
 		m.err = ""
 
+		// Template step: delegate most keys to the list
+		if m.step == stepTemplate {
+			switch msg.String() {
+			case "ctrl+c":
+				m.cancelled = true
+				return m, tea.Quit
+			case "esc":
+				// If filtering, let list handle esc to cancel filter
+				if m.templateList.FilterState() == list.Filtering {
+					var cmd tea.Cmd
+					m.templateList, cmd = m.templateList.Update(msg)
+					return m, cmd
+				}
+				m.cancelled = true
+				return m, tea.Quit
+			case "tab":
+				m.langFilter = m.langFilter.next()
+				m.rebuildTemplateItems()
+				return m, nil
+			case "enter":
+				return m.handleEnter(msg)
+			default:
+				// Delegate all other keys to the list (navigation, filtering, etc.)
+				var cmd tea.Cmd
+				m.templateList, cmd = m.templateList.Update(msg)
+				return m, cmd
+			}
+		}
+
+		// Non-template steps
 		switch msg.String() {
 		case "ctrl+c", "esc":
 			m.cancelled = true
 			return m, tea.Quit
-
 		case "enter":
 			return m.handleEnter()
-
-		case "up", "k":
-			if m.step == stepTemplate && m.templateCursor > 0 {
-				m.templateCursor--
-			}
-
-		case "down", "j":
-			if m.step == stepTemplate {
-				filtered := m.filteredTemplates()
-				if m.templateCursor < len(filtered)-1 {
-					m.templateCursor++
-				}
-			}
-
-		case "backspace":
-			if m.step == stepTemplate && len(m.filterText) > 0 {
-				m.filterText = m.filterText[:len(m.filterText)-1]
-				m.templateCursor = 0
-			}
-
-		default:
-			// Type-to-filter for template step
-			if m.step == stepTemplate && len(msg.String()) == 1 {
-				m.filterText += msg.String()
-				m.templateCursor = 0
-			}
 		}
 	}
 
@@ -339,13 +442,13 @@ func (m wizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.rpcInputs[m.rpcCursor], cmd = m.rpcInputs[m.rpcCursor].Update(msg)
 		}
 	case stepTemplate, stepDone:
-		// No text input to update for these steps
+		// Handled above
 	}
 
 	return m, cmd
 }
 
-func (m wizardModel) handleEnter() (tea.Model, tea.Cmd) {
+func (m wizardModel) handleEnter(msgs ...tea.Msg) (tea.Model, tea.Cmd) {
 	switch m.step {
 	case stepProjectName:
 		value := m.projectInput.Value()
@@ -361,16 +464,23 @@ func (m wizardModel) handleEnter() (tea.Model, tea.Cmd) {
 		m.advanceToNextStep()
 
 	case stepTemplate:
-		filtered := m.filteredTemplates()
-		if len(filtered) == 0 {
-			m.err = "No templates match your filter"
+		// If the list is in filter mode, let it apply the filter
+		if m.templateList.FilterState() == list.Filtering {
+			if len(msgs) > 0 {
+				var cmd tea.Cmd
+				m.templateList, cmd = m.templateList.Update(msgs[0])
+				return m, cmd
+			}
 			return m, nil
 		}
-		if m.templateCursor >= len(filtered) {
-			m.templateCursor = len(filtered) - 1
+		// Otherwise select the highlighted item
+		selected, ok := m.templateList.SelectedItem().(templateItem)
+		if !ok {
+			m.err = "No template selected"
+			return m, nil
 		}
-		selected := filtered[m.templateCursor]
-		m.selectedTemplate = &selected
+		tmpl := selected.TemplateSummary
+		m.selectedTemplate = &tmpl
 		m.initNetworkRPCInputs()
 		m.step++
 		m.advanceToNextStep()
@@ -465,85 +575,31 @@ func (m wizardModel) View() string {
 	case stepTemplate:
 		b.WriteString(m.promptStyle.Render("  Pick a template"))
 		b.WriteString("\n")
-		if m.filterText != "" {
-			b.WriteString(m.dimStyle.Render("  Filter: " + m.filterText))
-			b.WriteString("\n")
-		} else {
-			b.WriteString(m.dimStyle.Render("  Type to filter, ↑/↓ to navigate"))
-			b.WriteString("\n")
+
+		// Language filter tabs
+		tabs := []struct {
+			filter languageFilter
+			label  string
+		}{
+			{filterAll, "All"},
+			{filterGo, "Go"},
+			{filterTS, "TypeScript"},
 		}
-		b.WriteString("\n")
-
-		filtered := m.filteredTemplates()
-
-		// Group by kind
-		var buildingBlocks, starterTemplates []templaterepo.TemplateSummary
-		globalIdx := 0
-		idxMap := make(map[int]int) // cursor index -> index in filtered
-
-		for i, t := range filtered {
-			if t.Kind == "building-block" {
-				buildingBlocks = append(buildingBlocks, t)
+		b.WriteString("  ")
+		for i, tab := range tabs {
+			if i > 0 {
+				b.WriteString("  ")
+			}
+			if tab.filter == m.langFilter {
+				b.WriteString(m.selectedStyle.Render("[" + tab.label + "]"))
 			} else {
-				starterTemplates = append(starterTemplates, t)
+				b.WriteString(m.dimStyle.Render(" " + tab.label + " "))
 			}
-			_ = i
 		}
+		b.WriteString("\n\n")
 
-		// Render Building Blocks section
-		if len(buildingBlocks) > 0 {
-			b.WriteString(m.titleStyle.Render("  Building Blocks"))
-			b.WriteString("\n")
-			for _, t := range buildingBlocks {
-				idxMap[globalIdx] = globalIdx
-				cursor := "    "
-				if globalIdx == m.templateCursor {
-					cursor = m.cursorStyle.Render("  > ")
-					b.WriteString(cursor)
-					b.WriteString(m.selectedStyle.Render(t.Title))
-				} else {
-					b.WriteString(cursor)
-					b.WriteString(t.Title)
-				}
-				b.WriteString(" ")
-				b.WriteString(m.tagStyle.Render("[" + t.Language + "]"))
-				b.WriteString("\n")
-				if globalIdx == m.templateCursor && t.Description != "" {
-					b.WriteString("      ")
-					b.WriteString(m.dimStyle.Render(t.Description))
-					b.WriteString("\n")
-				}
-				globalIdx++
-			}
-			b.WriteString("\n")
-		}
-
-		// Render Starter Templates section
-		if len(starterTemplates) > 0 {
-			b.WriteString(m.titleStyle.Render("  Starter Templates"))
-			b.WriteString("\n")
-			for _, t := range starterTemplates {
-				idxMap[globalIdx] = globalIdx
-				cursor := "    "
-				if globalIdx == m.templateCursor {
-					cursor = m.cursorStyle.Render("  > ")
-					b.WriteString(cursor)
-					b.WriteString(m.selectedStyle.Render(t.Title))
-				} else {
-					b.WriteString(cursor)
-					b.WriteString(t.Title)
-				}
-				b.WriteString(" ")
-				b.WriteString(m.tagStyle.Render("[" + t.Language + "]"))
-				b.WriteString("\n")
-				if globalIdx == m.templateCursor && t.Description != "" {
-					b.WriteString("      ")
-					b.WriteString(m.dimStyle.Render(t.Description))
-					b.WriteString("\n")
-				}
-				globalIdx++
-			}
-		}
+		// Render the list
+		b.WriteString(m.templateList.View())
 
 	case stepNetworkRPCs:
 		b.WriteString(m.promptStyle.Render("  RPC URL overrides (optional)"))
@@ -593,7 +649,7 @@ func (m wizardModel) View() string {
 	// Help text
 	b.WriteString("\n")
 	if m.step == stepTemplate {
-		b.WriteString(m.helpStyle.Render("  ↑/↓ navigate • type to filter • enter select • esc cancel"))
+		b.WriteString(m.helpStyle.Render("  tab language filter • / search • ↑/↓ navigate • enter select • esc cancel"))
 	} else {
 		b.WriteString(m.helpStyle.Render("  enter confirm • esc cancel"))
 	}
