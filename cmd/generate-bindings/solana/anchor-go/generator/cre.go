@@ -1,3 +1,6 @@
+// This file contains all the cre specific code for the generator.
+// The other files are copied from https://github.com/gagliardetto/anchor-go/blob/main/generator/
+// They simply call functions in this file.
 package generator
 
 import (
@@ -7,6 +10,19 @@ import (
 	"github.com/dave/jennifer/jen"
 	. "github.com/dave/jennifer/jen"
 	"github.com/gagliardetto/anchor-go/tools"
+)
+
+const (
+	// cre
+	PkgBig         = "math/big"
+	PkgIdl         = "github.com/gagliardetto/anchor-go/idl"
+	PkgJson        = "encoding/json"
+	PkgCRE         = "github.com/smartcontractkit/cre-sdk-go/cre"
+	PkgPb          = "github.com/smartcontractkit/chainlink-protos/cre/go/values/pb"
+	PkgPbSdk       = "github.com/smartcontractkit/chainlink-protos/cre/go/sdk"
+	PkgSolanaCre   = "github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/solana"
+	PkgBindings    = "github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/solana/bindings"
+	PkgSolanaTypes = "github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana/cre-sdk-go/types"
 )
 
 // func (c *Codec) Decode<name>(data []byte) (*<name>, error) {

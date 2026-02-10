@@ -17,15 +17,3 @@ func TestGenerateBindings(t *testing.T) {
 		t.Fatal(err)
 	}
 }
-
-func TestGenerateBindingsOld(t *testing.T) {
-	if err := evm.GenerateBindings(
-		"./testdata/DataStorage_combined.json",
-		"",
-		"bindingsold",
-		"",
-		"./testdata/bindingsold.go",
-	); err != nil {
-		t.Fatal(err)
-	}
-}
