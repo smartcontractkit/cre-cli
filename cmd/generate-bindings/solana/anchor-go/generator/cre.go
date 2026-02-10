@@ -1,13 +1,15 @@
 // This file contains all the cre specific code for the generator.
 // The other files are copied from https://github.com/gagliardetto/anchor-go/blob/main/generator/
 // They simply call functions in this file.
+//
+//nolint:all
 package generator
 
 import (
 	"encoding/json"
 	"fmt"
 
-	. "github.com/dave/jennifer/jen" //nolint:staticcheck // ST1019: dot import used for code generation convenience
+	. "github.com/dave/jennifer/jen"
 	"github.com/gagliardetto/anchor-go/tools"
 )
 

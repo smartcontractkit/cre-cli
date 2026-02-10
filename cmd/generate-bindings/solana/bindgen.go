@@ -139,9 +139,6 @@ func GenerateBindings(
 				goFile.Close()
 			}
 		}
-		// executeCmd(outputDir, "go", "mod", "tidy")
-		// executeCmd(outputDir, "go", "fmt")
-		// executeCmd(outputDir, "go", "build", "-o", "/dev/null") // Just to ensure everything compiles.
 		slog.Info("Generation completed successfully",
 			"outputDir", options.OutputDir,
 			"modPath", options.ModPath,

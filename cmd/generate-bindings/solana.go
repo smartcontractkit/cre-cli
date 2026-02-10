@@ -7,11 +7,12 @@ import (
 
 	"github.com/spf13/viper"
 
+	"github.com/smartcontractkit/cre-cli/cmd/creinit"
 	"github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana"
 	"github.com/smartcontractkit/cre-cli/internal/validation"
 )
 
-func resolveSolanaInputs(args []string, v *viper.Viper) (SolanaInputs, error) {
+func resolveSolanaInputs(v *viper.Viper) (SolanaInputs, error) {
 	// Get current working directory as default project root
 	currentDir, err := os.Getwd()
 	if err != nil {
@@ -32,7 +33,7 @@ func resolveSolanaInputs(args []string, v *viper.Viper) (SolanaInputs, error) {
 	// Language defaults are handled by StringP
 	language := v.GetString("language")
 
-	// Resolve ABI path with fallback to contracts/{chainFamily}/src/abi/
+	// Resolve IDL path with fallback to contracts/solana/src/idl/
 	idlPath := v.GetString("idl")
 	if idlPath == "" {
 		idlPath = filepath.Join(projectRoot, "contracts", "solana", "src", "idl")
@@ -71,7 +72,7 @@ func validateSolanaInputs(inputs SolanaInputs) error {
 	if info, err := os.Stat(inputs.IdlPath); err == nil && info.IsDir() {
 		files, err := filepath.Glob(filepath.Join(inputs.IdlPath, "*.json"))
 		if err != nil {
-			return fmt.Errorf("failed to check for ABI files in directory: %w", err)
+			return fmt.Errorf("failed to check for IDL files in directory: %w", err)
 		}
 		if len(files) == 0 {
 			return fmt.Errorf("no .json files found in directory: %s", inputs.IdlPath)
@@ -174,18 +175,17 @@ func executeSolana(inputs SolanaInputs) error {
 		}
 	}
 
-	// TODO: Add Solana-specific SDK dependencies when available
-	// err = runCommand(inputs.ProjectRoot, "go", "get", "github.com/smartcontractkit/cre-sdk-go@"+creinit.SdkVersion)
-	// if err != nil {
-	// 	return err
-	// }
-	// err = runCommand(inputs.ProjectRoot, "go", "get", "github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/solana@"+creinit.SolanaCapabilitiesVersion)
-	// if err != nil {
-	// 	return err
-	// }
-	// if err = runCommand(inputs.ProjectRoot, "go", "mod", "tidy"); err != nil {
-	// 	return err
-	// }
+	err = runCommand(inputs.ProjectRoot, "go", "get", "github.com/smartcontractkit/cre-sdk-go@"+creinit.SdkVersion)
+	if err != nil {
+		return err
+	}
+	err = runCommand(inputs.ProjectRoot, "go", "get", "github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/solana@"+creinit.SolanaCapabilitiesVersion)
+	if err != nil {
+		return err
+	}
+	if err = runCommand(inputs.ProjectRoot, "go", "mod", "tidy"); err != nil {
+		return err
+	}
 
 	return nil
 }

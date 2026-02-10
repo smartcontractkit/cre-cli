@@ -25,7 +25,6 @@ func runCommand(dir string, command string, args ...string) error {
 
 type EvmInputs struct {
 	ProjectRoot string `validate:"required,dir" cli:"--project-root"`
-	ChainFamily string `validate:"required,oneof=evm" cli:"--chain-family"`
 	Language    string `validate:"required,oneof=go" cli:"--language"`
 	// just keeping it simple for now
 	AbiPath string `validate:"required,path_read" cli:"--abi"`
@@ -35,16 +34,16 @@ type EvmInputs struct {
 
 func NewEvmBindings(runtimeContext *runtime.Context) *cobra.Command {
 	generateBindingsCmd := &cobra.Command{
-		Use:   "generate-bindings <chain-family>",
+		Use:   "generate-bindings-evm",
 		Short: "Generate bindings from contract ABI",
 		Long: `This command generates bindings from contract ABI files.
 Supports EVM chain family and Go language.
 Each contract gets its own package subdirectory to avoid naming conflicts.
 For example, IERC20.abi generates bindings in generated/ierc20/ package.`,
-		Example: "  cre generate-bindings evm",
+		Example: "  cre generate-bindings-evm",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			inputs, err := resolveEvmInputs(args, runtimeContext.Viper)
+			inputs, err := resolveEvmInputs(runtimeContext.Viper)
 			if err != nil {
 				return err
 			}
@@ -57,7 +56,7 @@ For example, IERC20.abi generates bindings in generated/ierc20/ package.`,
 
 	generateBindingsCmd.Flags().StringP("project-root", "p", "", "Path to project root directory (defaults to current directory)")
 	generateBindingsCmd.Flags().StringP("language", "l", "go", "Target language (go)")
-	generateBindingsCmd.Flags().StringP("abi", "a", "", "Path to ABI directory (defaults to contracts/{chain-family}/src/abi/)")
+	generateBindingsCmd.Flags().StringP("abi", "a", "", "Path to ABI directory (defaults to contracts/evm/src/abi/)")
 	generateBindingsCmd.Flags().StringP("pkg", "k", "bindings", "Base package name (each contract gets its own subdirectory)")
 
 	return generateBindingsCmd
@@ -66,10 +65,8 @@ For example, IERC20.abi generates bindings in generated/ierc20/ package.`,
 type SolanaInputs struct {
 	ProjectRoot string `validate:"required,dir" cli:"--project-root"`
 	Language    string `validate:"required,oneof=go" cli:"--language"`
-	// just keeping it simple for now
-	IdlPath string `validate:"required,path_read" cli:"--idl"`
-	// PkgName string `validate:"required" cli:"--pkg"`
-	OutPath string `validate:"required" cli:"--out"`
+	IdlPath     string `validate:"required,path_read" cli:"--idl"`
+	OutPath     string `validate:"required" cli:"--out"`
 }
 
 func NewSolanaBindings(runtimeContext *runtime.Context) *cobra.Command {
@@ -82,7 +79,7 @@ Each contract gets its own package subdirectory to avoid naming conflicts.
 For example, data_storage.json generates bindings in generated/data_storage/ package.`,
 		Example: "  cre generate-bindings-solana",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			inputs, err := resolveSolanaInputs(args, runtimeContext.Viper)
+			inputs, err := resolveSolanaInputs(runtimeContext.Viper)
 			if err != nil {
 				return err
 			}
@@ -95,8 +92,8 @@ For example, data_storage.json generates bindings in generated/data_storage/ pac
 
 	generateBindingsCmd.Flags().StringP("project-root", "p", "", "Path to project root directory (defaults to current directory)")
 	generateBindingsCmd.Flags().StringP("language", "l", "go", "Target language (go)")
-	generateBindingsCmd.Flags().StringP("abi", "a", "", "Path to ABI directory (defaults to contracts/{chain-family}/src/abi/)")
-	generateBindingsCmd.Flags().StringP("pkg", "k", "bindings", "Base package name (each contract gets its own subdirectory)")
+	generateBindingsCmd.Flags().StringP("idl", "i", "", "Path to IDL directory (defaults to contracts/solana/src/idl/)")
+	generateBindingsCmd.Flags().StringP("out", "o", "", "Path to output directory (defaults to contracts/solana/src/generated/)")
 
 	return generateBindingsCmd
 }

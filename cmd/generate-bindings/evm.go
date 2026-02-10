@@ -12,7 +12,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/validation"
 )
 
-func resolveEvmInputs(args []string, v *viper.Viper) (EvmInputs, error) {
+func resolveEvmInputs(v *viper.Viper) (EvmInputs, error) {
 	// Get current working directory as default project root
 	currentDir, err := os.Getwd()
 	if err != nil {
@@ -30,27 +30,23 @@ func resolveEvmInputs(args []string, v *viper.Viper) (EvmInputs, error) {
 		return EvmInputs{}, fmt.Errorf("contracts folder not found in project root: %s", contractsPath)
 	}
 
-	// Chain family is now a positional argument
-	chainFamily := args[0]
-
 	// Language defaults are handled by StringP
 	language := v.GetString("language")
 
 	// Resolve ABI path with fallback to contracts/{chainFamily}/src/abi/
 	abiPath := v.GetString("abi")
 	if abiPath == "" {
-		abiPath = filepath.Join(projectRoot, "contracts", chainFamily, "src", "abi")
+		abiPath = filepath.Join(projectRoot, "contracts", "evm", "src", "abi")
 	}
 
 	// Package name defaults are handled by StringP
 	pkgName := v.GetString("pkg")
 
 	// Output path is contracts/{chainFamily}/src/generated/ under projectRoot
-	outPath := filepath.Join(projectRoot, "contracts", chainFamily, "src", "generated")
+	outPath := filepath.Join(projectRoot, "contracts", "evm", "src", "generated")
 
 	return EvmInputs{
 		ProjectRoot: projectRoot,
-		ChainFamily: chainFamily,
 		Language:    language,
 		AbiPath:     abiPath,
 		PkgName:     pkgName,
@@ -218,8 +214,6 @@ func processEvmSingleAbi(inputs EvmInputs) error {
 }
 
 func executeEvm(inputs EvmInputs) error {
-	fmt.Printf("GenerateBindings would be called here: projectRoot=%s, chainFamily=%s, language=%s, abiPath=%s, pkgName=%s, outPath=%s\n", inputs.ProjectRoot, inputs.ChainFamily, inputs.Language, inputs.AbiPath, inputs.PkgName, inputs.OutPath)
-
 	// Validate language
 	switch inputs.Language {
 	case "go":
@@ -229,42 +223,37 @@ func executeEvm(inputs EvmInputs) error {
 	}
 
 	// Validate chain family and handle accordingly
-	switch inputs.ChainFamily {
-	case "evm":
-		// Create output directory if it doesn't exist
-		if err := os.MkdirAll(inputs.OutPath, 0o755); err != nil {
-			return fmt.Errorf("failed to create output directory: %w", err)
-		}
-
-		// Check if ABI path is a directory or file
-		info, err := os.Stat(inputs.AbiPath)
-		if err != nil {
-			return fmt.Errorf("failed to access ABI path: %w", err)
-		}
-
-		if info.IsDir() {
-			if err := processEvmAbiDirectory(inputs); err != nil {
-				return err
-			}
-		} else {
-			if err := processEvmSingleAbi(inputs); err != nil {
-				return err
-			}
-		}
-
-		err = runCommand(inputs.ProjectRoot, "go", "get", "github.com/smartcontractkit/cre-sdk-go@"+creinit.SdkVersion)
-		if err != nil {
-			return err
-		}
-		err = runCommand(inputs.ProjectRoot, "go", "get", "github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm@"+creinit.EVMCapabilitiesVersion)
-		if err != nil {
-			return err
-		}
-		if err = runCommand(inputs.ProjectRoot, "go", "mod", "tidy"); err != nil {
-			return err
-		}
-		return nil
-	default:
-		return fmt.Errorf("unsupported chain family: %s", inputs.ChainFamily)
+	// Create output directory if it doesn't exist
+	if err := os.MkdirAll(inputs.OutPath, 0o755); err != nil {
+		return fmt.Errorf("failed to create output directory: %w", err)
 	}
+
+	// Check if ABI path is a directory or file
+	info, err := os.Stat(inputs.AbiPath)
+	if err != nil {
+		return fmt.Errorf("failed to access ABI path: %w", err)
+	}
+
+	if info.IsDir() {
+		if err := processEvmAbiDirectory(inputs); err != nil {
+			return err
+		}
+	} else {
+		if err := processEvmSingleAbi(inputs); err != nil {
+			return err
+		}
+	}
+
+	err = runCommand(inputs.ProjectRoot, "go", "get", "github.com/smartcontractkit/cre-sdk-go@"+creinit.SdkVersion)
+	if err != nil {
+		return err
+	}
+	err = runCommand(inputs.ProjectRoot, "go", "get", "github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm@"+creinit.EVMCapabilitiesVersion)
+	if err != nil {
+		return err
+	}
+	if err = runCommand(inputs.ProjectRoot, "go", "mod", "tidy"); err != nil {
+		return err
+	}
+	return nil
 }
