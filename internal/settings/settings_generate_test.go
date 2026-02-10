@@ -1,6 +1,8 @@
 package settings
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -64,4 +66,88 @@ func TestGetReplacementsWithNetworks(t *testing.T) {
 	assert.Contains(t, repl["RPCsList"], "chain-name: ethereum-testnet-sepolia")
 	// Should still have all default replacements
 	assert.Contains(t, repl, "ConfigPathStaging")
+}
+
+func TestPatchProjectRPCs(t *testing.T) {
+	t.Run("patches matching chain URLs", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		yamlPath := filepath.Join(tmpDir, "project.yaml")
+
+		original := `# comment preserved
+staging-settings:
+  rpcs:
+    - chain-name: ethereum-testnet-sepolia
+      url: https://old-sepolia.com
+    - chain-name: ethereum-mainnet
+      url: https://old-mainnet.com
+production-settings:
+  rpcs:
+    - chain-name: ethereum-testnet-sepolia
+      url: https://old-sepolia.com
+    - chain-name: ethereum-mainnet
+      url: https://old-mainnet.com
+`
+		require.NoError(t, os.WriteFile(yamlPath, []byte(original), 0600))
+
+		err := PatchProjectRPCs(yamlPath, map[string]string{
+			"ethereum-testnet-sepolia": "https://new-sepolia.com",
+		})
+		require.NoError(t, err)
+
+		content, err := os.ReadFile(yamlPath)
+		require.NoError(t, err)
+		s := string(content)
+
+		// Patched chain should have new URL
+		assert.Contains(t, s, "https://new-sepolia.com")
+		// Unmatched chain should keep original URL
+		assert.Contains(t, s, "https://old-mainnet.com")
+		// Old URL should be gone for patched chain
+		assert.NotContains(t, s, "https://old-sepolia.com")
+		// Both sections should be patched
+		assert.Contains(t, s, "staging-settings")
+		assert.Contains(t, s, "production-settings")
+	})
+
+	t.Run("no-op with empty rpcURLs", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		yamlPath := filepath.Join(tmpDir, "project.yaml")
+
+		original := `staging-settings:
+  rpcs:
+    - chain-name: ethereum-testnet-sepolia
+      url: https://original.com
+`
+		require.NoError(t, os.WriteFile(yamlPath, []byte(original), 0600))
+
+		err := PatchProjectRPCs(yamlPath, map[string]string{})
+		require.NoError(t, err)
+
+		content, err := os.ReadFile(yamlPath)
+		require.NoError(t, err)
+		// File should be unchanged
+		assert.Equal(t, original, string(content))
+	})
+
+	t.Run("skips empty URL values", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		yamlPath := filepath.Join(tmpDir, "project.yaml")
+
+		original := `staging-settings:
+  rpcs:
+    - chain-name: ethereum-testnet-sepolia
+      url: https://original.com
+`
+		require.NoError(t, os.WriteFile(yamlPath, []byte(original), 0600))
+
+		err := PatchProjectRPCs(yamlPath, map[string]string{
+			"ethereum-testnet-sepolia": "",
+		})
+		require.NoError(t, err)
+
+		content, err := os.ReadFile(yamlPath)
+		require.NoError(t, err)
+		// Original URL should be preserved when user provides empty value
+		assert.Contains(t, string(content), "https://original.com")
+	})
 }

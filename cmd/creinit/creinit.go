@@ -244,23 +244,11 @@ func (h *handler) Execute(inputs Inputs) error {
 		}
 	}
 
-	// Ensure env file exists for existing projects
-	if !isNewProject {
-		envPath := filepath.Join(projectRoot, constants.DefaultEnvFileName)
-		if !h.pathExists(envPath) {
-			if _, err := settings.GenerateProjectEnvFile(projectRoot); err != nil {
-				return err
-			}
-		}
-	}
-
-	// Determine networks and merge RPC URLs from wizard + flags
-	networks := selectedTemplate.Networks
+	// Merge RPC URLs from wizard + flags (flags take precedence)
 	networkRPCs := result.NetworkRPCs
 	if networkRPCs == nil {
 		networkRPCs = make(map[string]string)
 	}
-	// Flags take precedence over wizard input
 	maps.Copy(networkRPCs, inputs.RpcURLs)
 	// Validate any provided RPC URLs
 	for chain, rpcURL := range networkRPCs {
@@ -271,18 +259,7 @@ func (h *handler) Execute(inputs Inputs) error {
 		}
 	}
 
-	// Create project settings for new projects
-	if isNewProject {
-		repl := settings.GetReplacementsWithNetworks(networks, networkRPCs)
-		if e := settings.FindOrCreateProjectSettings(projectRoot, repl); e != nil {
-			return e
-		}
-		if _, e := settings.GenerateProjectEnvFile(projectRoot); e != nil {
-			return e
-		}
-	}
-
-	// Scaffold the template
+	// Scaffold the template first — remote templates include project.yaml, .env, etc.
 	scaffoldSpinner := ui.NewSpinner()
 	scaffoldSpinner.Start("Scaffolding template...")
 	err = h.registry.ScaffoldTemplate(selectedTemplate, projectRoot, workflowName, func(msg string) {
@@ -291,6 +268,34 @@ func (h *handler) Execute(inputs Inputs) error {
 	scaffoldSpinner.Stop()
 	if err != nil {
 		return fmt.Errorf("failed to scaffold template: %w", err)
+	}
+
+	// Handle project.yaml:
+	// - Remote templates ship their own project.yaml → patch user-provided RPC URLs into it
+	// - Built-in templates have no project.yaml → generate one from the CLI template
+	projectYAMLPath := filepath.Join(projectRoot, constants.DefaultProjectSettingsFileName)
+	if isNewProject {
+		if h.pathExists(projectYAMLPath) {
+			// Template provided its own project.yaml — patch RPC URLs if user provided any
+			if err := settings.PatchProjectRPCs(projectYAMLPath, networkRPCs); err != nil {
+				return fmt.Errorf("failed to update RPC URLs in project.yaml: %w", err)
+			}
+		} else {
+			// No project.yaml from template (e.g., built-in) — generate one
+			networks := selectedTemplate.Networks
+			repl := settings.GetReplacementsWithNetworks(networks, networkRPCs)
+			if e := settings.FindOrCreateProjectSettings(projectRoot, repl); e != nil {
+				return e
+			}
+		}
+	}
+
+	// Handle .env: keep template's version if it exists, otherwise generate
+	envPath := filepath.Join(projectRoot, constants.DefaultEnvFileName)
+	if !h.pathExists(envPath) {
+		if _, e := settings.GenerateProjectEnvFile(projectRoot); e != nil {
+			return e
+		}
 	}
 
 	// Determine language-specific entry point

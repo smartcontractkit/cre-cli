@@ -46,20 +46,40 @@ func (m *mockRegistry) ScaffoldTemplate(tmpl *templaterepo.TemplateSummary, dest
 	var files map[string]string
 	if tmpl.Language == "go" {
 		files = map[string]string{
-			"main.go":    "package main\n",
-			"README.md":  "# Test\n",
+			"main.go":       "package main\n",
+			"README.md":     "# Test\n",
 			"workflow.yaml": "name: test\n",
 		}
 	} else {
 		files = map[string]string{
-			"main.ts":    "console.log('hello');\n",
-			"README.md":  "# Test\n",
+			"main.ts":       "console.log('hello');\n",
+			"README.md":     "# Test\n",
 			"workflow.yaml": "name: test\n",
 		}
 	}
 
 	for name, content := range files {
 		if err := os.WriteFile(filepath.Join(wfDir, name), []byte(content), 0600); err != nil {
+			return err
+		}
+	}
+
+	// Simulate remote template behavior: ship project.yaml and .env at root.
+	// Built-in templates don't include these (the CLI generates them).
+	if !tmpl.BuiltIn {
+		networks := tmpl.Networks
+		if len(networks) == 0 {
+			networks = []string{"ethereum-testnet-sepolia"}
+		}
+		var rpcsBlock string
+		for _, n := range networks {
+			rpcsBlock += fmt.Sprintf("    - chain-name: %s\n      url: https://default-rpc.example.com\n", n)
+		}
+		projectYAML := fmt.Sprintf("staging-settings:\n  rpcs:\n%sproduction-settings:\n  rpcs:\n%s", rpcsBlock, rpcsBlock)
+		if err := os.WriteFile(filepath.Join(destDir, "project.yaml"), []byte(projectYAML), 0600); err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(destDir, ".env"), []byte("GITHUB_API_TOKEN=test-token\nETH_PRIVATE_KEY=test-key\n"), 0600); err != nil {
 			return err
 		}
 	}
@@ -146,6 +166,21 @@ var testMultiNetworkTemplate = templaterepo.TemplateSummary{
 	},
 }
 
+var testBuiltInGoTemplate = templaterepo.TemplateSummary{
+	TemplateMetadata: templaterepo.TemplateMetadata{
+		Kind:        "building-block",
+		Name:        "hello-world-go",
+		Title:       "Hello World (Go)",
+		Description: "A built-in Go template",
+		Language:    "go",
+		Category:    "getting-started",
+		Author:      "Test",
+		License:     "MIT",
+	},
+	Path:    "builtin/hello-world-go",
+	BuiltIn: true,
+}
+
 func newMockRegistry() *mockRegistry {
 	return &mockRegistry{
 		templates: []templaterepo.TemplateSummary{
@@ -153,6 +188,7 @@ func newMockRegistry() *mockRegistry {
 			testTSTemplate,
 			testStarterTemplate,
 			testMultiNetworkTemplate,
+			testBuiltInGoTemplate,
 		},
 	}
 }
@@ -365,8 +401,12 @@ func TestInitWithRpcUrlFlags(t *testing.T) {
 	projectYAML, err := os.ReadFile(filepath.Join(projectRoot, constants.DefaultProjectSettingsFileName))
 	require.NoError(t, err)
 	content := string(projectYAML)
+
+	// User-provided URLs should replace the mock's default placeholder URLs
 	require.Contains(t, content, "ethereum-testnet-sepolia")
 	require.Contains(t, content, "https://sepolia.example.com")
+	require.NotContains(t, content, "https://default-rpc.example.com",
+		"mock default URLs should be replaced by user-provided URLs")
 	require.Contains(t, content, "ethereum-mainnet")
 	require.Contains(t, content, "https://mainnet.example.com")
 }
@@ -380,10 +420,11 @@ func TestInitNoNetworksFallsBackToDefault(t *testing.T) {
 	require.NoError(t, err)
 	defer restoreCwd()
 
-	// testTSTemplate has no Networks field
+	// Built-in template has no project.yaml from scaffold,
+	// so the CLI generates one with default networks.
 	inputs := Inputs{
 		ProjectName:  "defaultProj",
-		TemplateName: "test-ts",
+		TemplateName: "hello-world-go",
 		WorkflowName: "default-wf",
 	}
 
@@ -397,6 +438,41 @@ func TestInitNoNetworksFallsBackToDefault(t *testing.T) {
 	content := string(projectYAML)
 	require.Contains(t, content, "ethereum-testnet-sepolia")
 	require.Contains(t, content, constants.DefaultEthSepoliaRpcUrl)
+}
+
+func TestInitRemoteTemplateKeepsProjectYAML(t *testing.T) {
+	sim := chainsim.NewSimulatedEnvironment(t)
+	defer sim.Close()
+
+	tempDir := t.TempDir()
+	restoreCwd, err := testutil.ChangeWorkingDirectory(tempDir)
+	require.NoError(t, err)
+	defer restoreCwd()
+
+	// Remote template (test-ts) has no Networks — mock creates project.yaml with default chain.
+	// CLI should preserve the template's project.yaml (no patching needed since no user RPCs).
+	inputs := Inputs{
+		ProjectName:  "remoteProj",
+		TemplateName: "test-ts",
+		WorkflowName: "ts-wf",
+	}
+
+	h := newHandlerWithRegistry(sim.NewRuntimeContext(), newMockRegistry())
+	require.NoError(t, h.ValidateInputs(inputs))
+	require.NoError(t, h.Execute(inputs))
+
+	projectRoot := filepath.Join(tempDir, "remoteProj")
+	projectYAML, err := os.ReadFile(filepath.Join(projectRoot, constants.DefaultProjectSettingsFileName))
+	require.NoError(t, err)
+	content := string(projectYAML)
+	// Template's project.yaml should be preserved (contains mock's default URL)
+	require.Contains(t, content, "ethereum-testnet-sepolia")
+	require.Contains(t, content, "https://default-rpc.example.com")
+
+	// Template's .env should be preserved
+	envContent, err := os.ReadFile(filepath.Join(projectRoot, constants.DefaultEnvFileName))
+	require.NoError(t, err)
+	require.Contains(t, string(envContent), "GITHUB_API_TOKEN=test-token")
 }
 
 func TestTemplateNotFound(t *testing.T) {

@@ -546,9 +546,9 @@ func (m wizardModel) View() string {
 		}
 
 	case stepNetworkRPCs:
-		b.WriteString(m.promptStyle.Render("  Configure RPC URLs"))
+		b.WriteString(m.promptStyle.Render("  RPC URL overrides (optional)"))
 		b.WriteString("\n")
-		b.WriteString(m.dimStyle.Render("  Enter RPC URLs for the required networks (leave blank to fill later)"))
+		b.WriteString(m.dimStyle.Render("  The template has default RPC URLs. Press Enter to keep them, or type a URL to override."))
 		b.WriteString("\n\n")
 
 		for i, network := range m.networks {

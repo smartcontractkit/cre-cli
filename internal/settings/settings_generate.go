@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/huh"
+	"gopkg.in/yaml.v3"
 
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/context"
@@ -208,6 +209,88 @@ func GenerateWorkflowSettingsFile(workingDirectory string, workflowName string, 
 	}
 
 	return outputPath, nil
+}
+
+// PatchProjectRPCs updates RPC URLs in an existing project.yaml file.
+// It uses the yaml.Node API to preserve comments and formatting.
+// Only entries whose chain-name matches a key in rpcURLs are updated.
+func PatchProjectRPCs(projectYAMLPath string, rpcURLs map[string]string) error {
+	if len(rpcURLs) == 0 {
+		return nil
+	}
+
+	data, err := os.ReadFile(projectYAMLPath)
+	if err != nil {
+		return fmt.Errorf("failed to read project.yaml: %w", err)
+	}
+
+	var root yaml.Node
+	if err := yaml.Unmarshal(data, &root); err != nil {
+		return fmt.Errorf("failed to parse project.yaml: %w", err)
+	}
+
+	patchRPCNodes(&root, rpcURLs)
+
+	out, err := yaml.Marshal(&root)
+	if err != nil {
+		return fmt.Errorf("failed to marshal project.yaml: %w", err)
+	}
+
+	return os.WriteFile(projectYAMLPath, out, 0600)
+}
+
+// patchRPCNodes recursively walks the YAML node tree and updates RPC URL values.
+func patchRPCNodes(node *yaml.Node, rpcURLs map[string]string) {
+	if node == nil {
+		return
+	}
+
+	switch node.Kind {
+	case yaml.DocumentNode:
+		for _, child := range node.Content {
+			patchRPCNodes(child, rpcURLs)
+		}
+	case yaml.MappingNode:
+		for i := 0; i < len(node.Content)-1; i += 2 {
+			key := node.Content[i]
+			value := node.Content[i+1]
+
+			if key.Value == "rpcs" && value.Kind == yaml.SequenceNode {
+				for _, entry := range value.Content {
+					patchRPCEntry(entry, rpcURLs)
+				}
+			} else {
+				patchRPCNodes(value, rpcURLs)
+			}
+		}
+	}
+}
+
+// patchRPCEntry updates the url field of a single RPC entry if chain-name matches.
+func patchRPCEntry(entry *yaml.Node, rpcURLs map[string]string) {
+	if entry.Kind != yaml.MappingNode {
+		return
+	}
+
+	var chainNameNode, urlNode *yaml.Node
+	for i := 0; i < len(entry.Content)-1; i += 2 {
+		key := entry.Content[i]
+		value := entry.Content[i+1]
+		if key.Value == "chain-name" {
+			chainNameNode = value
+		}
+		if key.Value == "url" {
+			urlNode = value
+		}
+	}
+
+	if chainNameNode != nil && urlNode != nil {
+		if newURL, ok := rpcURLs[chainNameNode.Value]; ok && newURL != "" {
+			urlNode.Value = newURL
+			urlNode.Tag = "!!str"
+			urlNode.Style = 0
+		}
+	}
 }
 
 func GenerateGitIgnoreFile(workingDirectory string) (string, error) {
