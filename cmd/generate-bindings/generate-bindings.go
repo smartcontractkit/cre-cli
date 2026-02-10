@@ -5,8 +5,9 @@ import (
 	"os"
 	"os/exec"
 
-	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/spf13/cobra"
+
+	"github.com/smartcontractkit/cre-cli/internal/runtime"
 )
 
 // runCommand executes a command in a specified directory

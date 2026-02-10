@@ -5,17 +5,16 @@ import (
 	"testing"
 
 	"github.com/gagliardetto/solana-go"
-	"github.com/test-go/testify/require"
-	"google.golang.org/protobuf/proto"
-
 	ocr3types "github.com/smartcontractkit/chainlink-common/pkg/capabilities/consensus/ocr3/types"
 	"github.com/smartcontractkit/chainlink-protos/cre/go/sdk"
 	realSolana "github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/solana"
 	realSolanaMock "github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/solana/mock"
-
-	datastorage "github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana/testdata/data_storage"
 	"github.com/smartcontractkit/cre-sdk-go/cre/testutils"
 	consensusmock "github.com/smartcontractkit/cre-sdk-go/internal_testing/capabilities/consensus/mock"
+	"github.com/test-go/testify/require"
+	"google.golang.org/protobuf/proto"
+
+	datastorage "github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana/testdata/data_storage"
 )
 
 const anyChainSelector = uint64(1337)
