@@ -17,7 +17,6 @@ require (
 	github.com/gagliardetto/anchor-go v1.0.1-0.20250824230401-85e63d2061fb
 	github.com/gagliardetto/binary v0.8.0
 	github.com/gagliardetto/solana-go v1.13.0
-	github.com/gagliardetto/utilz v0.1.3
 	github.com/go-playground/locales v0.14.1
 	github.com/go-playground/universal-translator v0.18.1
 	github.com/go-playground/validator/v10 v10.28.0
@@ -34,7 +33,6 @@ require (
 	github.com/smartcontractkit/chainlink-evm/gethwrappers v0.0.0-20251222115927-36a18321243c
 	github.com/smartcontractkit/chainlink-protos/cre/go v0.0.0-20260206000552-087e235a7963
 	github.com/smartcontractkit/chainlink-protos/workflows/go v0.0.0-20260106052706-6dd937cb5ec6
-	github.com/smartcontractkit/chainlink-solana v1.1.2-0.20260121103211-89fe83165431
 	github.com/smartcontractkit/chainlink-testing-framework/seth v1.51.3
 	github.com/smartcontractkit/chainlink/deployment v0.0.0-20260109210342-7c60a208545f
 	github.com/smartcontractkit/chainlink/v2 v2.29.1-cre-beta.0.0.20260209203649-eeb0170a4b93
@@ -161,6 +159,7 @@ require (
 	github.com/fxamacker/cbor/v2 v2.7.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.10 // indirect
 	github.com/gagliardetto/treeout v0.1.4 // indirect
+	github.com/gagliardetto/utilz v0.1.3 // indirect
 	github.com/getsentry/sentry-go v0.27.0 // indirect
 	github.com/gin-contrib/sessions v0.0.5 // indirect
 	github.com/gin-contrib/sse v0.1.0 // indirect
@@ -319,6 +318,7 @@ require (
 	github.com/smartcontractkit/chainlink-protos/linking-service/go v0.0.0-20251002192024-d2ad9222409b // indirect
 	github.com/smartcontractkit/chainlink-protos/storage-service v0.3.0 // indirect
 	github.com/smartcontractkit/chainlink-protos/svr v1.1.1-0.20260203131522-bb8bc5c423b3 // indirect
+	github.com/smartcontractkit/chainlink-solana v1.1.2-0.20260121103211-89fe83165431 // indirect
 	github.com/smartcontractkit/chainlink-sui v0.0.0-20260124000807-bff5e296dfb7 // indirect
 	github.com/smartcontractkit/chainlink-tron/relayer v0.0.11-0.20251014143056-a0c6328c91e9 // indirect
 	github.com/smartcontractkit/freeport v0.1.3-0.20250716200817-cb5dfd0e369e // indirect
