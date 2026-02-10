@@ -8,12 +8,8 @@ import (
 )
 
 const (
-	PkgBinary   = "github.com/gagliardetto/binary"
-	PkgCRE      = "github.com/smartcontractkit/cre-sdk-go/cre"
-	PkgPb       = "github.com/smartcontractkit/chainlink-protos/cre/go/values/pb"
-	PkgPb2      = "github.com/smartcontractkit/chainlink-protos/cre/go/sdk"
-	PkgSolanaGo = "github.com/gagliardetto/solana-go"
-
+	PkgBinary         = "github.com/gagliardetto/binary"
+	PkgSolanaGo       = "github.com/gagliardetto/solana-go"
 	PkgSolanaGoText   = "github.com/gagliardetto/solana-go/text"
 	PkgAnchorGoErrors = "github.com/gagliardetto/anchor-go/errors"
 	PkgBig            = "math/big"
@@ -22,13 +18,18 @@ const (
 	PkgFormat         = "github.com/gagliardetto/solana-go/text/format"
 	PkgGoFuzz         = "github.com/gagliardetto/gofuzz"
 	PkgTestifyRequire = "github.com/stretchr/testify/require"
-	PkgSolanaCre      = "github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana/cre-sdk-go/capabilities/blockchain/solana"
-	PkgRealSolanaCre  = "github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/solana"
-	PkgBindings       = "github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/solana/bindings"
-	PkgSolanaTypes    = "github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana/cre-sdk-go/types"
+
 	PkgIdl            = "github.com/gagliardetto/anchor-go/idl"
 	PkgAnchorIdlCodec = "github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana/cre-sdk-go/anchorcodec"
 	PkgJson           = "encoding/json"
+
+	// cre
+	PkgCRE         = "github.com/smartcontractkit/cre-sdk-go/cre"
+	PkgPb          = "github.com/smartcontractkit/chainlink-protos/cre/go/values/pb"
+	PkgPbSdk       = "github.com/smartcontractkit/chainlink-protos/cre/go/sdk"
+	PkgSolanaCre   = "github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/solana"
+	PkgBindings    = "github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/solana/bindings"
+	PkgSolanaTypes = "github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana/cre-sdk-go/types"
 )
 
 func WriteFile(outDir string, assetFileName string, file *File) error {

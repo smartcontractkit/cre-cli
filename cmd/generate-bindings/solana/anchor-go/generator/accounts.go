@@ -1,3 +1,4 @@
+// Code copied from https://github.com/gagliardetto/anchor-go/blob/main/generator/accounts.go
 package generator
 
 import (
@@ -114,10 +115,6 @@ func (g *Generator) gen_accountParser(accountNames []string) (Code, error) {
 
 			// DecodeAccount method for the codec
 			code.Add(creDecodeAccountFn(name))
-			code.Line().Line()
-
-			// Read account data onchain using read capability
-			// code.Add(creReadAccountFn(name, g))
 			code.Line().Line()
 		}
 	}

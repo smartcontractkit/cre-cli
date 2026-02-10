@@ -106,30 +106,7 @@ func (g *Generator) gen_eventParser(eventNames []string) (Code, error) {
 					block.Return(Id("event"), Nil())
 				})
 			code.Line().Line()
-
-			// code.Add(creEventFuncs(name, g))
 		}
 	}
 	return code, nil
 }
-
-/*
-type LogTriggerConfig struct {
-	Name          string
-	Address       lptypes.PublicKey
-	EventName     string
-	EventSig      lptypes.EventSignature
-	StartingBlock int64
-	EventIdl      lptypes.EventIdl
-	SubkeyPaths   [][]string
-	Retention     time.Duration
-	MaxLogsKept   int64
-	SubkeyFilters []SubkeyFilterCriteria
-}
-
-type SubkeyFilterCriteria struct {
-	SubkeyIndex uint64
-	Comparers   []primitives.ValueComparator
-}
-
-*/
