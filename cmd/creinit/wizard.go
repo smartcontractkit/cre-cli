@@ -50,7 +50,8 @@ func (t templateItem) Title() string {
 }
 func (t templateItem) Description() string { return t.TemplateSummary.Description }
 func (t templateItem) FilterValue() string {
-	return t.TemplateSummary.Title + " " + t.TemplateSummary.Name + " " + t.TemplateSummary.Language
+	s := t.TemplateSummary
+	return s.Title + " " + s.Name + " " + s.Description + " " + s.Language + " " + s.Category + " " + strings.Join(s.Tags, " ")
 }
 
 // languageFilter controls template list filtering by language.
@@ -513,8 +514,8 @@ func (m wizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cancelled = true
 				return m, tea.Quit
 			case "esc":
-				// If filtering, let list handle esc to cancel filter
-				if m.templateList.FilterState() == list.Filtering {
+				// If filtering or filter applied, let list handle esc to cancel/clear filter
+				if m.templateList.FilterState() == list.Filtering || m.templateList.FilterState() == list.FilterApplied {
 					var cmd tea.Cmd
 					m.templateList, cmd = m.templateList.Update(msg)
 					return m, cmd
@@ -599,8 +600,11 @@ func (m wizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.rpcCursor < len(m.rpcInputs) {
 			m.rpcInputs[m.rpcCursor], cmd = m.rpcInputs[m.rpcCursor].Update(msg)
 		}
-	case stepTemplate, stepDone:
-		// Handled above
+	case stepTemplate:
+		// Forward non-key messages (e.g. FilterMatchesMsg) to the list
+		m.templateList, cmd = m.templateList.Update(msg)
+	case stepDone:
+		// Nothing to update
 	}
 
 	return m, cmd
@@ -797,7 +801,16 @@ func (m wizardModel) View() string {
 				b.WriteString(m.dimStyle.Render(" " + tab.label + " "))
 			}
 		}
-		b.WriteString("\n\n")
+		b.WriteString("\n")
+
+		// Show active filter indicator when filter is applied
+		if m.templateList.FilterState() == list.FilterApplied {
+			filterVal := m.templateList.FilterValue()
+			b.WriteString(m.dimStyle.Render(fmt.Sprintf("  Search: %q", filterVal)))
+			b.WriteString("  ")
+			b.WriteString(m.helpStyle.Render("esc to clear"))
+		}
+		b.WriteString("\n")
 
 		// Render the list
 		b.WriteString(m.templateList.View())
@@ -864,7 +877,14 @@ func (m wizardModel) View() string {
 	// Help text
 	b.WriteString("\n")
 	if m.step == stepTemplate {
-		b.WriteString(m.helpStyle.Render("  tab language filter • / search • ↑/↓ navigate • enter select • esc cancel"))
+		switch m.templateList.FilterState() {
+		case list.Filtering:
+			b.WriteString(m.helpStyle.Render("  enter apply • esc cancel search"))
+		case list.FilterApplied:
+			b.WriteString(m.helpStyle.Render("  ↑/↓ navigate • enter select • esc clear search"))
+		default:
+			b.WriteString(m.helpStyle.Render("  tab language filter • / search • ↑/↓ navigate • enter select • esc cancel"))
+		}
 	} else {
 		b.WriteString(m.helpStyle.Render("  enter confirm • esc cancel"))
 	}
