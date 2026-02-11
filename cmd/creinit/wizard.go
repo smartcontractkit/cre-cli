@@ -2,6 +2,7 @@ package creinit
 
 import (
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -104,33 +105,122 @@ func sortTemplates(templates []templaterepo.TemplateSummary) []templaterepo.Temp
 	return sorted
 }
 
-// newTemplateDelegate creates a styled item delegate for the template list.
-func newTemplateDelegate() list.DefaultDelegate {
-	d := list.NewDefaultDelegate()
-	d.Styles.SelectedTitle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color(ui.ColorBlue500)).Bold(true).
-		Border(lipgloss.NormalBorder(), false, false, false, true).
-		BorderForeground(lipgloss.Color(ui.ColorBlue500)).
-		Padding(0, 0, 0, 1)
-	d.Styles.SelectedDesc = lipgloss.NewStyle().
-		Foreground(lipgloss.Color(ui.ColorBlue300)).
-		Border(lipgloss.NormalBorder(), false, false, false, true).
-		BorderForeground(lipgloss.Color(ui.ColorBlue500)).
-		Padding(0, 0, 0, 1)
-	d.Styles.NormalTitle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color(ui.ColorGray50)).
-		Padding(0, 0, 0, 2)
-	d.Styles.NormalDesc = lipgloss.NewStyle().
-		Foreground(lipgloss.Color(ui.ColorGray500)).
-		Padding(0, 0, 0, 2)
-	d.Styles.DimmedTitle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color(ui.ColorGray500)).
-		Padding(0, 0, 0, 2)
-	d.Styles.DimmedDesc = lipgloss.NewStyle().
-		Foreground(lipgloss.Color(ui.ColorGray700)).
-		Padding(0, 0, 0, 2)
-	d.SetSpacing(0)
-	return d
+// templateDelegate is a custom list delegate that renders each template as:
+//
+//	Title  Go
+//	Description line 1
+//	Description line 2
+type templateDelegate struct{}
+
+func (d templateDelegate) Height() int                                         { return 3 }
+func (d templateDelegate) Spacing() int                                        { return 1 }
+func (d templateDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd            { return nil }
+func (d templateDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
+	tmplItem, ok := item.(templateItem)
+	if !ok {
+		return
+	}
+
+	isSelected := index == m.Index()
+	isDimmed := m.FilterState() == list.Filtering && index != m.Index()
+
+	title := stripLangSuffix(tmplItem.Title())
+	lang := shortLang(tmplItem.TemplateSummary.Language)
+	desc := tmplItem.Description()
+
+	contentWidth := m.Width() - 4
+	if contentWidth < 20 {
+		contentWidth = 20
+	}
+
+	var (
+		titleStyle lipgloss.Style
+		descStyle  lipgloss.Style
+		langStyle  lipgloss.Style
+		prefix     string
+	)
+
+	borderChar := lipgloss.NewStyle().Foreground(lipgloss.Color(ui.ColorBlue500)).Render("│")
+
+	switch {
+	case isSelected:
+		prefix = borderChar + " "
+		titleStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(ui.ColorBlue500)).Bold(true)
+		descStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(ui.ColorBlue300))
+		langStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(ui.ColorTeal400)).Bold(true)
+	case isDimmed:
+		prefix = "  "
+		titleStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(ui.ColorGray600))
+		descStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(ui.ColorGray700))
+		langStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(ui.ColorGray700))
+	default:
+		prefix = "  "
+		titleStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(ui.ColorGray50))
+		descStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(ui.ColorGray500))
+		langStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(ui.ColorGray400))
+	}
+
+	// Line 1: title + language tag
+	fmt.Fprintf(w, "%s%s %s", prefix, titleStyle.Render(title), langStyle.Render(lang))
+
+	// Lines 2-3: description (word-wrapped, up to 2 lines)
+	descLines := wrapText(desc, contentWidth)
+	for i := 0; i < 2; i++ {
+		fmt.Fprint(w, "\n")
+		if i < len(descLines) {
+			line := descLines[i]
+			if i == 1 && len(descLines) > 2 {
+				line += "..."
+			}
+			fmt.Fprintf(w, "%s%s", prefix, descStyle.Render(line))
+		}
+	}
+}
+
+// shortLang returns a short display label for a template language.
+func shortLang(language string) string {
+	switch strings.ToLower(language) {
+	case "go":
+		return "Go"
+	case "typescript":
+		return "TS"
+	default:
+		return language
+	}
+}
+
+// stripLangSuffix removes trailing "(Go)" or "(TypeScript)" from a title.
+func stripLangSuffix(title string) string {
+	for _, suffix := range []string{" (Go)", " (TypeScript)", " (Typescript)"} {
+		if strings.HasSuffix(title, suffix) {
+			return strings.TrimSuffix(title, suffix)
+		}
+	}
+	return title
+}
+
+// wrapText splits text into lines that fit within maxWidth, breaking at word boundaries.
+func wrapText(text string, maxWidth int) []string {
+	if maxWidth <= 0 {
+		return []string{text}
+	}
+	words := strings.Fields(text)
+	if len(words) == 0 {
+		return nil
+	}
+
+	var lines []string
+	line := words[0]
+	for _, word := range words[1:] {
+		if len(line)+1+len(word) > maxWidth {
+			lines = append(lines, line)
+			line = word
+		} else {
+			line += " " + word
+		}
+	}
+	lines = append(lines, line)
+	return lines
 }
 
 type wizardStep int
@@ -240,7 +330,7 @@ func newWizardModel(inputs Inputs, isNewProject bool, startDir string, templates
 		items[i] = templateItem{t}
 	}
 
-	tl := list.New(items, newTemplateDelegate(), 80, 14)
+	tl := list.New(items, templateDelegate{}, 80, 20)
 	tl.SetShowTitle(false)
 	tl.SetShowStatusBar(false)
 	tl.SetShowHelp(false)
@@ -694,7 +784,7 @@ func (m wizardModel) View() string {
 		}{
 			{filterAll, "All"},
 			{filterGo, "Go"},
-			{filterTS, "TypeScript"},
+			{filterTS, "TS"},
 		}
 		b.WriteString("  ")
 		for i, tab := range tabs {
