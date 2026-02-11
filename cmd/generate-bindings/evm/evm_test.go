@@ -7,10 +7,11 @@ import (
 	"testing"
 
 	"github.com/rs/zerolog"
-	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/smartcontractkit/cre-cli/internal/runtime"
 )
 
 func TestContractNameToPackage(t *testing.T) {

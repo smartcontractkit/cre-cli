@@ -5,10 +5,11 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/smartcontractkit/cre-cli/internal/runtime"
 )
 
 func TestResolveSolanaInputs_DefaultFallbacks(t *testing.T) {
