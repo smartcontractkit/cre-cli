@@ -1,4 +1,4 @@
-## cre generate-bindings-solana
+## cre generate-bindings solana
 
 Generate bindings from contract IDL
 
@@ -10,7 +10,7 @@ Each contract gets its own package subdirectory to avoid naming conflicts.
 For example, data_storage.json generates bindings in generated/data_storage/ package.
 
 ```
-cre generate-bindings-solana [optional flags]
+cre generate-bindings solana [optional flags]
 ```
 
 ### Examples
@@ -22,7 +22,7 @@ cre generate-bindings-solana [optional flags]
 ### Options
 
 ```
-  -h, --help                  help for generate-bindings-solana
+  -h, --help                  help for solana
   -i, --idl string            Path to IDL directory (defaults to contracts/solana/src/idl/)
   -l, --language string       Target language (go) (default "go")
   -o, --out string            Path to output directory (defaults to contracts/solana/src/generated/)
@@ -39,5 +39,5 @@ cre generate-bindings-solana [optional flags]
 
 ### SEE ALSO
 
-* [cre](cre.md)	 - CRE CLI tool
+* [cre generate-bindings](cre_generate-bindings.md)	 - Generate bindings for contracts
 
