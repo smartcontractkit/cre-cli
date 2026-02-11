@@ -14,8 +14,6 @@ import (
 	"github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana/anchor-go/generator"
 )
 
-const defaultProgramName = "myprogram"
-
 func GenerateBindings(
 	pathToIdl string,
 	programName string,
