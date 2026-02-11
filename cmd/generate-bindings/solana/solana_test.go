@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -41,7 +42,10 @@ func TestResolveSolanaInputs_DefaultFallbacks(t *testing.T) {
 	v := viper.New()
 	v.Set("language", "go") // Default from StringP
 
-	inputs, err := resolveSolanaInputs(v)
+	runtimeCtx := &runtime.Context{}
+	handler := newHandler(runtimeCtx)
+
+	inputs, err := handler.ResolveInputs(v)
 	require.NoError(t, err)
 
 	// Use filepath.EvalSymlinks to handle macOS /var vs /private/var symlink issues
@@ -102,15 +106,18 @@ func TestProcessSolanaSingleIdl(t *testing.T) {
 	err = os.WriteFile(goModPath, []byte("module test/contracts\n\ngo 1.20\n"), 0600)
 	require.NoError(t, err)
 
-	inputs := SolanaInputs{
+	inputs := Inputs{
 		ProjectRoot: tempDir,
 		Language:    "go",
 		IdlPath:     idlFile,
 		OutPath:     outDir,
 	}
 
+	runtimeCtx := &runtime.Context{}
+	handler := newHandler(runtimeCtx)
+
 	// Process the single IDL file
-	err = processSolanaSingleIdl(inputs)
+	err = handler.processSingleIdl(inputs)
 
 	// We expect this might fail due to missing dependencies or generator issues,
 	// but we can verify that the contract directory was created
@@ -188,15 +195,18 @@ func TestProcessSolanaIdlDirectory(t *testing.T) {
 	err = os.WriteFile(goModPath, []byte("module test/contracts\n\ngo 1.20\n"), 0600)
 	require.NoError(t, err)
 
-	inputs := SolanaInputs{
+	inputs := Inputs{
 		ProjectRoot: tempDir,
 		Language:    "go",
 		IdlPath:     idlDir,
 		OutPath:     outDir,
 	}
 
+	runtimeCtx := &runtime.Context{}
+	handler := newHandler(runtimeCtx)
+
 	// Process the IDL directory
-	err = processSolanaIdlDirectory(inputs)
+	err = handler.processIdlDirectory(inputs)
 
 	// We expect this might fail due to missing dependencies or generator issues,
 	// but we can verify that the contract directories were created
@@ -223,14 +233,17 @@ func TestProcessSolanaIdlDirectory_NoIdlFiles(t *testing.T) {
 	err = os.MkdirAll(idlDir, 0755)
 	require.NoError(t, err)
 
-	inputs := SolanaInputs{
+	inputs := Inputs{
 		ProjectRoot: tempDir,
 		Language:    "go",
 		IdlPath:     idlDir,
 		OutPath:     outDir,
 	}
 
-	err = processSolanaIdlDirectory(inputs)
+	runtimeCtx := &runtime.Context{}
+	handler := newHandler(runtimeCtx)
+
+	err = handler.processIdlDirectory(inputs)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no .json files found")
 }

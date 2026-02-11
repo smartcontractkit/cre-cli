@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/rs/zerolog"
+	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -65,12 +67,15 @@ func TestResolveEvmInputs_DefaultFallbacks(t *testing.T) {
 	err = os.Chdir(tempDir)
 	require.NoError(t, err)
 
+	runtimeCtx := &runtime.Context{}
+	handler := newHandler(runtimeCtx)
+
 	// Test with minimal input
 	v := viper.New()
 	v.Set("language", "go")  // Default from StringP
 	v.Set("pkg", "bindings") // Default from StringP
 
-	inputs, err := resolveEvmInputs(v)
+	inputs, err := handler.ResolveInputs(v)
 	require.NoError(t, err)
 
 	// Use filepath.EvalSymlinks to handle macOS /var vs /private/var symlink issues
@@ -94,13 +99,16 @@ func TestResolveEvmInputs_CustomProjectRoot(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(tempDir)
 
+	runtimeCtx := &runtime.Context{}
+	handler := newHandler(runtimeCtx)
+
 	// Test with custom project root
 	v := viper.New()
 	v.Set("project-root", tempDir)
 	v.Set("language", "go")  // Default from StringP
 	v.Set("pkg", "bindings") // Default from StringP
 
-	_, err = resolveEvmInputs(v)
+	_, err = handler.ResolveInputs(v)
 	require.Error(t, err)
 
 	expectedErrMsg := fmt.Sprintf("contracts folder not found in project root: %s", tempDir)
@@ -135,13 +143,16 @@ func TestResolveEvmInputs_EmptyProjectRoot(t *testing.T) {
 	err = os.Chdir(tempDir)
 	require.NoError(t, err)
 
+	runtimeCtx := &runtime.Context{}
+	handler := newHandler(runtimeCtx)
+
 	// Test with empty project root (should use current directory)
 	v := viper.New()
 	v.Set("project-root", "")
 	v.Set("language", "go")  // Default from StringP
 	v.Set("pkg", "bindings") // Default from StringP
 
-	inputs, err := resolveEvmInputs(v)
+	inputs, err := handler.ResolveInputs(v)
 	require.NoError(t, err)
 
 	// Use filepath.EvalSymlinks to handle macOS /var vs /private/var symlink issues
@@ -170,8 +181,11 @@ func TestValidateEvmInputs_ValidEvmInputs(t *testing.T) {
 	err = os.WriteFile(abiFile, []byte(abiContent), 0600)
 	require.NoError(t, err)
 
+	runtimeCtx := &runtime.Context{}
+	handler := newHandler(runtimeCtx)
+
 	// Test validation with valid inputs (using single file)
-	inputs := EvmInputs{
+	inputs := Inputs{
 		ProjectRoot: tempDir,
 		Language:    "go",
 		AbiPath:     abiFile,
@@ -179,7 +193,7 @@ func TestValidateEvmInputs_ValidEvmInputs(t *testing.T) {
 		OutPath:     tempDir,
 	}
 
-	err = validateEvmInputs(inputs)
+	err = handler.ValidateInputs(inputs)
 	require.NoError(t, err)
 
 	// Test validation with directory containing .abi files
@@ -190,7 +204,7 @@ func TestValidateEvmInputs_ValidEvmInputs(t *testing.T) {
 	require.NoError(t, err)
 
 	inputs.AbiPath = abiDir
-	err = validateEvmInputs(inputs)
+	err = handler.ValidateInputs(inputs)
 	require.NoError(t, err)
 }
 
@@ -200,8 +214,11 @@ func TestValidateEvmInputs_InvalidLanguage(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(tempDir)
 
+	runtimeCtx := &runtime.Context{}
+	handler := newHandler(runtimeCtx)
+
 	// Test validation with invalid language
-	inputs := EvmInputs{
+	inputs := Inputs{
 		ProjectRoot: tempDir,
 		Language:    "typescript", // No longer supported
 		AbiPath:     tempDir,
@@ -209,14 +226,16 @@ func TestValidateEvmInputs_InvalidLanguage(t *testing.T) {
 		OutPath:     tempDir,
 	}
 
-	err = validateEvmInputs(inputs)
+	err = handler.ValidateInputs(inputs)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "language")
 }
 
 func TestValidateEvmInputs_NonExistentDirectory(t *testing.T) {
-	// Test validation with non-existent directory
-	inputs := EvmInputs{
+	runtimeCtx := &runtime.Context{}
+	handler := newHandler(runtimeCtx)
+
+	inputs := Inputs{
 		ProjectRoot: "/non/existent/path",
 		Language:    "go",
 		AbiPath:     "/non/existent/abi",
@@ -224,7 +243,7 @@ func TestValidateEvmInputs_NonExistentDirectory(t *testing.T) {
 		OutPath:     "/non/existent/out",
 	}
 
-	err := validateEvmInputs(inputs)
+	err := handler.ValidateInputs(inputs)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "project-root")
 }
@@ -248,7 +267,14 @@ func TestProcessAbiDirectory_MultipleFiles(t *testing.T) {
 	err = os.WriteFile(filepath.Join(abiDir, "Contract2.abi"), []byte(abiContent), 0600)
 	require.NoError(t, err)
 
-	inputs := EvmInputs{
+	// Create a mock logger to prevent nil pointer dereference
+	logger := zerolog.New(os.Stderr).With().Timestamp().Logger()
+	runtimeCtx := &runtime.Context{
+		Logger: &logger,
+	}
+	handler := newHandler(runtimeCtx)
+
+	inputs := Inputs{
 		ProjectRoot: tempDir,
 		Language:    "go",
 		AbiPath:     abiDir,
@@ -258,7 +284,7 @@ func TestProcessAbiDirectory_MultipleFiles(t *testing.T) {
 
 	// This test will fail because it tries to call the actual bindings.GenerateBindings
 	// but it tests the directory processing logic
-	err = processEvmAbiDirectory(inputs)
+	err = handler.processAbiDirectory(inputs)
 	// We expect an error because the bindings package requires actual ABI format
 	// but we can check that it created the expected directory structure
 	if err == nil {
@@ -302,7 +328,14 @@ func TestProcessAbiDirectory_CreatesPerContractDirectories(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	inputs := EvmInputs{
+	// Create a mock logger
+	logger := zerolog.New(os.Stderr).With().Timestamp().Logger()
+	runtimeCtx := &runtime.Context{
+		Logger: &logger,
+	}
+	handler := newHandler(runtimeCtx)
+
+	inputs := Inputs{
 		ProjectRoot: tempDir,
 		Language:    "go",
 		AbiPath:     abiDir,
@@ -311,7 +344,7 @@ func TestProcessAbiDirectory_CreatesPerContractDirectories(t *testing.T) {
 	}
 
 	// Try to process - the mock ABI content might actually work
-	err = processEvmAbiDirectory(inputs)
+	err = handler.processAbiDirectory(inputs)
 	if err != nil {
 		t.Logf("Expected error occurred: %v", err)
 	}
@@ -335,7 +368,13 @@ func TestProcessAbiDirectory_NoAbiFiles(t *testing.T) {
 	err = os.MkdirAll(abiDir, 0755)
 	require.NoError(t, err)
 
-	inputs := EvmInputs{
+	logger := zerolog.New(os.Stderr).With().Timestamp().Logger()
+	runtimeCtx := &runtime.Context{
+		Logger: &logger,
+	}
+	handler := newHandler(runtimeCtx)
+
+	inputs := Inputs{
 		ProjectRoot: tempDir,
 		Language:    "go",
 		AbiPath:     abiDir,
@@ -343,7 +382,7 @@ func TestProcessAbiDirectory_NoAbiFiles(t *testing.T) {
 		OutPath:     outDir,
 	}
 
-	err = processEvmAbiDirectory(inputs)
+	err = handler.processAbiDirectory(inputs)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no .abi files found")
 }
@@ -368,7 +407,13 @@ func TestProcessAbiDirectory_PackageNameCollision(t *testing.T) {
 	err = os.WriteFile(filepath.Join(abiDir, "test_contract.abi"), []byte(abiContent), 0600)
 	require.NoError(t, err)
 
-	inputs := EvmInputs{
+	logger := zerolog.New(os.Stderr).With().Timestamp().Logger()
+	runtimeCtx := &runtime.Context{
+		Logger: &logger,
+	}
+	handler := newHandler(runtimeCtx)
+
+	inputs := Inputs{
 		ProjectRoot: tempDir,
 		Language:    "go",
 		AbiPath:     abiDir,
@@ -376,14 +421,20 @@ func TestProcessAbiDirectory_PackageNameCollision(t *testing.T) {
 		OutPath:     outDir,
 	}
 
-	err = processEvmAbiDirectory(inputs)
+	err = handler.processAbiDirectory(inputs)
 	fmt.Println(err.Error())
 	require.Error(t, err)
 	require.Equal(t, err.Error(), "package name collision: multiple contracts would generate the same package name 'test_contract' (contracts are converted to snake_case for package names). Please rename one of your contract files to avoid this conflict")
 }
 
 func TestProcessAbiDirectory_NonExistentDirectory(t *testing.T) {
-	inputs := EvmInputs{
+	logger := zerolog.New(os.Stderr).With().Timestamp().Logger()
+	runtimeCtx := &runtime.Context{
+		Logger: &logger,
+	}
+	handler := newHandler(runtimeCtx)
+
+	inputs := Inputs{
 		ProjectRoot: "/tmp",
 		Language:    "go",
 		AbiPath:     "/non/existent/abi",
@@ -391,7 +442,7 @@ func TestProcessAbiDirectory_NonExistentDirectory(t *testing.T) {
 		OutPath:     "/tmp/out",
 	}
 
-	err := processEvmAbiDirectory(inputs)
+	err := handler.processAbiDirectory(inputs)
 	require.Error(t, err)
 	// For non-existent directory, filepath.Glob returns empty slice, so we get the "no .abi files found" error
 	assert.Contains(t, err.Error(), "no .abi files found")

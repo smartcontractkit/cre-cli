@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
+	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
@@ -14,7 +15,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/validation"
 )
 
-type EvmInputs struct {
+type Inputs struct {
 	ProjectRoot string `validate:"required,dir" cli:"--project-root"`
 	Language    string `validate:"required,oneof=go" cli:"--language"`
 	// just keeping it simple for now
@@ -33,14 +34,17 @@ Each contract gets its own package subdirectory to avoid naming conflicts.
 For example, IERC20.abi generates bindings in generated/ierc20/ package.`,
 		Example: "  cre generate-bindings-evm",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			inputs, err := resolveEvmInputs(runtimeContext.Viper)
+			handler := newHandler(runtimeContext)
+
+			inputs, err := handler.ResolveInputs(runtimeContext.Viper)
 			if err != nil {
 				return err
 			}
-			if err := validateEvmInputs(inputs); err != nil {
+			err = handler.ValidateInputs(inputs)
+			if err != nil {
 				return err
 			}
-			return executeEvm(inputs)
+			return handler.Execute(inputs)
 		},
 	}
 
@@ -52,11 +56,23 @@ For example, IERC20.abi generates bindings in generated/ierc20/ package.`,
 	return generateBindingsCmd
 }
 
-func resolveEvmInputs(v *viper.Viper) (EvmInputs, error) {
+type handler struct {
+	log       *zerolog.Logger
+	validated bool
+}
+
+func newHandler(ctx *runtime.Context) *handler {
+	return &handler{
+		log:       ctx.Logger,
+		validated: false,
+	}
+}
+
+func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 	// Get current working directory as default project root
 	currentDir, err := os.Getwd()
 	if err != nil {
-		return EvmInputs{}, fmt.Errorf("failed to get current working directory: %w", err)
+		return Inputs{}, fmt.Errorf("failed to get current working directory: %w", err)
 	}
 
 	// Resolve project root with fallback to current directory
@@ -67,7 +83,7 @@ func resolveEvmInputs(v *viper.Viper) (EvmInputs, error) {
 
 	contractsPath := filepath.Join(projectRoot, "contracts")
 	if _, err := os.Stat(contractsPath); err != nil {
-		return EvmInputs{}, fmt.Errorf("contracts folder not found in project root: %s", contractsPath)
+		return Inputs{}, fmt.Errorf("contracts folder not found in project root: %s", contractsPath)
 	}
 
 	// Language defaults are handled by StringP
@@ -85,7 +101,7 @@ func resolveEvmInputs(v *viper.Viper) (EvmInputs, error) {
 	// Output path is contracts/{chainFamily}/src/generated/ under projectRoot
 	outPath := filepath.Join(projectRoot, "contracts", "evm", "src", "generated")
 
-	return EvmInputs{
+	return Inputs{
 		ProjectRoot: projectRoot,
 		Language:    language,
 		AbiPath:     abiPath,
@@ -94,7 +110,7 @@ func resolveEvmInputs(v *viper.Viper) (EvmInputs, error) {
 	}, nil
 }
 
-func validateEvmInputs(inputs EvmInputs) error {
+func (h *handler) ValidateInputs(inputs Inputs) error {
 	validate, err := validation.NewValidator()
 	if err != nil {
 		return fmt.Errorf("failed to initialize validator: %w", err)
@@ -166,7 +182,7 @@ func contractNameToPackage(contractName string) string {
 	return string(result)
 }
 
-func processEvmAbiDirectory(inputs EvmInputs) error {
+func (h *handler) processAbiDirectory(inputs Inputs) error {
 	// Read all .abi files in the directory
 	files, err := filepath.Glob(filepath.Join(inputs.AbiPath, "*.abi"))
 	if err != nil {
@@ -223,7 +239,7 @@ func processEvmAbiDirectory(inputs EvmInputs) error {
 	return nil
 }
 
-func processEvmSingleAbi(inputs EvmInputs) error {
+func (h *handler) processSingleAbi(inputs Inputs) error {
 	// Extract contract name from ABI file path
 	contractName := filepath.Base(inputs.AbiPath)
 	if filepath.Ext(contractName) == ".abi" {
@@ -253,7 +269,7 @@ func processEvmSingleAbi(inputs EvmInputs) error {
 	)
 }
 
-func executeEvm(inputs EvmInputs) error {
+func (h *handler) Execute(inputs Inputs) error {
 	// Validate language
 	switch inputs.Language {
 	case "go":
@@ -275,11 +291,11 @@ func executeEvm(inputs EvmInputs) error {
 	}
 
 	if info.IsDir() {
-		if err := processEvmAbiDirectory(inputs); err != nil {
+		if err := h.processAbiDirectory(inputs); err != nil {
 			return err
 		}
 	} else {
-		if err := processEvmSingleAbi(inputs); err != nil {
+		if err := h.processSingleAbi(inputs); err != nil {
 			return err
 		}
 	}

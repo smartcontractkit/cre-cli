@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
+	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
@@ -14,7 +15,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/validation"
 )
 
-type SolanaInputs struct {
+type Inputs struct {
 	ProjectRoot string `validate:"required,dir" cli:"--project-root"`
 	Language    string `validate:"required,oneof=go" cli:"--language"`
 	IdlPath     string `validate:"required,path_read" cli:"--idl"`
@@ -31,14 +32,15 @@ Each contract gets its own package subdirectory to avoid naming conflicts.
 For example, data_storage.json generates bindings in generated/data_storage/ package.`,
 		Example: "  cre generate-bindings-solana",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			inputs, err := resolveSolanaInputs(runtimeContext.Viper)
+			handler := newHandler(runtimeContext)
+			inputs, err := handler.ResolveInputs(runtimeContext.Viper)
 			if err != nil {
 				return err
 			}
-			if err := validateSolanaInputs(inputs); err != nil {
+			if err := handler.ValidateInputs(inputs); err != nil {
 				return err
 			}
-			return executeSolana(inputs)
+			return handler.Execute(inputs)
 		},
 	}
 
@@ -49,11 +51,22 @@ For example, data_storage.json generates bindings in generated/data_storage/ pac
 
 	return generateBindingsCmd
 }
-func resolveSolanaInputs(v *viper.Viper) (SolanaInputs, error) {
+
+type handler struct {
+	log *zerolog.Logger
+}
+
+func newHandler(ctx *runtime.Context) *handler {
+	return &handler{
+		log: ctx.Logger,
+	}
+}
+
+func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 	// Get current working directory as default project root
 	currentDir, err := os.Getwd()
 	if err != nil {
-		return SolanaInputs{}, fmt.Errorf("failed to get current working directory: %w", err)
+		return Inputs{}, fmt.Errorf("failed to get current working directory: %w", err)
 	}
 
 	// Resolve project root with fallback to current directory
@@ -64,7 +77,7 @@ func resolveSolanaInputs(v *viper.Viper) (SolanaInputs, error) {
 
 	contractsPath := filepath.Join(projectRoot, "contracts")
 	if _, err := os.Stat(contractsPath); err != nil {
-		return SolanaInputs{}, fmt.Errorf("contracts folder not found in project root: %s", contractsPath)
+		return Inputs{}, fmt.Errorf("contracts folder not found in project root: %s", contractsPath)
 	}
 
 	// Language defaults are handled by StringP
@@ -79,7 +92,7 @@ func resolveSolanaInputs(v *viper.Viper) (SolanaInputs, error) {
 	// Output path is contracts/{chainFamily}/src/generated/ under projectRoot
 	outPath := filepath.Join(projectRoot, "contracts", "solana", "src", "generated")
 
-	return SolanaInputs{
+	return Inputs{
 		ProjectRoot: projectRoot,
 		Language:    language,
 		IdlPath:     idlPath,
@@ -87,7 +100,7 @@ func resolveSolanaInputs(v *viper.Viper) (SolanaInputs, error) {
 	}, nil
 }
 
-func validateSolanaInputs(inputs SolanaInputs) error {
+func (h *handler) ValidateInputs(inputs Inputs) error {
 	validate, err := validation.NewValidator()
 	if err != nil {
 		return fmt.Errorf("failed to initialize validator: %w", err)
@@ -119,7 +132,7 @@ func validateSolanaInputs(inputs SolanaInputs) error {
 	return nil
 }
 
-func processSolanaIdlDirectory(inputs SolanaInputs) error {
+func (h *handler) processIdlDirectory(inputs Inputs) error {
 	// Read all .json files in the directory
 	files, err := filepath.Glob(filepath.Join(inputs.IdlPath, "*.json"))
 	if err != nil {
@@ -160,7 +173,7 @@ func processSolanaIdlDirectory(inputs SolanaInputs) error {
 	return nil
 }
 
-func processSolanaSingleIdl(inputs SolanaInputs) error {
+func (h *handler) processSingleIdl(inputs Inputs) error {
 	// Extract contract name from IDL file path
 	contractName := filepath.Base(inputs.IdlPath)
 	if filepath.Ext(contractName) == ".json" {
@@ -182,7 +195,7 @@ func processSolanaSingleIdl(inputs SolanaInputs) error {
 	)
 }
 
-func executeSolana(inputs SolanaInputs) error {
+func (h *handler) Execute(inputs Inputs) error {
 	// Validate language
 	switch inputs.Language {
 	case "go":
@@ -203,11 +216,11 @@ func executeSolana(inputs SolanaInputs) error {
 	}
 
 	if info.IsDir() {
-		if err := processSolanaIdlDirectory(inputs); err != nil {
+		if err := h.processIdlDirectory(inputs); err != nil {
 			return err
 		}
 	} else {
-		if err := processSolanaSingleIdl(inputs); err != nil {
+		if err := h.processSingleIdl(inputs); err != nil {
 			return err
 		}
 	}
