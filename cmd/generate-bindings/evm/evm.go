@@ -1,16 +1,56 @@
-package generatebindings
+package evm
 
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 
+	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
 	"github.com/smartcontractkit/cre-cli/cmd/creinit"
-	"github.com/smartcontractkit/cre-cli/cmd/generate-bindings/evm"
+	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/validation"
 )
+
+type EvmInputs struct {
+	ProjectRoot string `validate:"required,dir" cli:"--project-root"`
+	Language    string `validate:"required,oneof=go" cli:"--language"`
+	// just keeping it simple for now
+	AbiPath string `validate:"required,path_read" cli:"--abi"`
+	PkgName string `validate:"required" cli:"--pkg"`
+	OutPath string `validate:"required" cli:"--out"`
+}
+
+func New(runtimeContext *runtime.Context) *cobra.Command {
+	generateBindingsCmd := &cobra.Command{
+		Use:   "evm",
+		Short: "Generate bindings from contract ABI",
+		Long: `This command generates bindings from contract ABI files.
+Supports EVM chain family and Go language.
+Each contract gets its own package subdirectory to avoid naming conflicts.
+For example, IERC20.abi generates bindings in generated/ierc20/ package.`,
+		Example: "  cre generate-bindings-evm",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			inputs, err := resolveEvmInputs(runtimeContext.Viper)
+			if err != nil {
+				return err
+			}
+			if err := validateEvmInputs(inputs); err != nil {
+				return err
+			}
+			return executeEvm(inputs)
+		},
+	}
+
+	generateBindingsCmd.Flags().StringP("project-root", "p", "", "Path to project root directory (defaults to current directory)")
+	generateBindingsCmd.Flags().StringP("language", "l", "go", "Target language (go)")
+	generateBindingsCmd.Flags().StringP("abi", "a", "", "Path to ABI directory (defaults to contracts/evm/src/abi/)")
+	generateBindingsCmd.Flags().StringP("pkg", "k", "bindings", "Base package name (each contract gets its own subdirectory)")
+
+	return generateBindingsCmd
+}
 
 func resolveEvmInputs(v *viper.Viper) (EvmInputs, error) {
 	// Get current working directory as default project root
@@ -168,7 +208,7 @@ func processEvmAbiDirectory(inputs EvmInputs) error {
 
 		fmt.Printf("Processing ABI file: %s, contract: %s, package: %s, output: %s\n", abiFile, contractName, packageName, outputFile)
 
-		err = evm.GenerateBindings(
+		err = GenerateBindings(
 			"", // combinedJSONPath - empty for now
 			abiFile,
 			packageName,  // Use contract-specific package name
@@ -204,7 +244,7 @@ func processEvmSingleAbi(inputs EvmInputs) error {
 
 	fmt.Printf("Processing single ABI file: %s, contract: %s, package: %s, output: %s\n", inputs.AbiPath, contractName, packageName, outputFile)
 
-	return evm.GenerateBindings(
+	return GenerateBindings(
 		"", // combinedJSONPath - empty for now
 		inputs.AbiPath,
 		packageName,  // Use contract-specific package name
@@ -256,5 +296,18 @@ func executeEvm(inputs EvmInputs) error {
 	if err != nil {
 		return err
 	}
+	return nil
+}
+
+// runCommand executes a command in a specified directory
+func runCommand(dir string, command string, args ...string) error {
+	cmd := exec.Command(command, args...)
+	cmd.Dir = dir
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to run %s: %w", command, err)
+	}
+
 	return nil
 }

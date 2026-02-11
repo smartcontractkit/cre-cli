@@ -213,8 +213,7 @@ func newRootCommand() *cobra.Command {
 	loginCmd := login.New(runtimeContext)
 	logoutCmd := logout.New(runtimeContext)
 	initCmd := creinit.New(runtimeContext)
-	genBindingsEvmCmd := generatebindings.NewEvmBindings(runtimeContext)
-	genBindingsSolanaCmd := generatebindings.NewSolanaBindings(runtimeContext)
+	generateBindingsCmd := generatebindings.New(runtimeContext)
 	accountCmd := account.New(runtimeContext)
 	whoamiCmd := whoami.New(runtimeContext)
 	updateCmd := update.New(runtimeContext)
@@ -248,8 +247,7 @@ func newRootCommand() *cobra.Command {
 		whoamiCmd,
 		secretsCmd,
 		workflowCmd,
-		genBindingsEvmCmd,
-		genBindingsSolanaCmd,
+		generateBindingsCmd,
 		updateCmd,
 	)
 
@@ -265,9 +263,8 @@ func isLoadSettings(cmd *cobra.Command) bool {
 		"cre whoami":                   {},
 		"cre account list-key":         {},
 		"cre init":                     {},
-		"cre generate-bindings":        {},
-		"cre generate-bindings-evm":    {},
-		"cre generate-bindings-solana": {},
+		"cre generate-bindings evm":    {},
+		"cre generate-bindings solana": {},
 		"cre completion bash":          {},
 		"cre completion fish":          {},
 		"cre completion powershell":    {},

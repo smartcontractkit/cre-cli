@@ -1,4 +1,4 @@
-package generatebindings
+package solana
 
 import (
 	"os"

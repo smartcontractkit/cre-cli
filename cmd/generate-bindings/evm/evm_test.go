@@ -1,4 +1,4 @@
-package generatebindings
+package evm
 
 import (
 	"fmt"
@@ -9,8 +9,6 @@ import (
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/smartcontractkit/cre-cli/cmd/generate-bindings/evm"
 )
 
 func TestContractNameToPackage(t *testing.T) {
@@ -509,7 +507,7 @@ func TestGenerateBindings_UnconventionalNaming(t *testing.T) {
 			require.NoError(t, err)
 
 			outFile := filepath.Join(tempDir, "bindings.go")
-			err = evm.GenerateBindings("", abiFile, tc.pkgName, tc.typeName, outFile)
+			err = GenerateBindings("", abiFile, tc.pkgName, tc.typeName, outFile)
 
 			if tc.shouldFail {
 				require.Error(t, err, "Expected binding generation to fail for %s", tc.name)

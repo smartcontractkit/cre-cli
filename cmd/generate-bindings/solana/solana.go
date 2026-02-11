@@ -1,17 +1,54 @@
-package generatebindings
+package solana
 
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 
+	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
 	"github.com/smartcontractkit/cre-cli/cmd/creinit"
-	"github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana"
+	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/validation"
 )
 
+type SolanaInputs struct {
+	ProjectRoot string `validate:"required,dir" cli:"--project-root"`
+	Language    string `validate:"required,oneof=go" cli:"--language"`
+	IdlPath     string `validate:"required,path_read" cli:"--idl"`
+	OutPath     string `validate:"required" cli:"--out"`
+}
+
+func New(runtimeContext *runtime.Context) *cobra.Command {
+	var generateBindingsCmd = &cobra.Command{
+		Use:   "solana",
+		Short: "Generate bindings from contract IDL",
+		Long: `This command generates bindings from contract IDL files.
+Supports Solana chain family and Go language.
+Each contract gets its own package subdirectory to avoid naming conflicts.
+For example, data_storage.json generates bindings in generated/data_storage/ package.`,
+		Example: "  cre generate-bindings-solana",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			inputs, err := resolveSolanaInputs(runtimeContext.Viper)
+			if err != nil {
+				return err
+			}
+			if err := validateSolanaInputs(inputs); err != nil {
+				return err
+			}
+			return executeSolana(inputs)
+		},
+	}
+
+	generateBindingsCmd.Flags().StringP("project-root", "p", "", "Path to project root directory (defaults to current directory)")
+	generateBindingsCmd.Flags().StringP("language", "l", "go", "Target language (go)")
+	generateBindingsCmd.Flags().StringP("idl", "i", "", "Path to IDL directory (defaults to contracts/solana/src/idl/)")
+	generateBindingsCmd.Flags().StringP("out", "o", "", "Path to output directory (defaults to contracts/solana/src/generated/)")
+
+	return generateBindingsCmd
+}
 func resolveSolanaInputs(v *viper.Viper) (SolanaInputs, error) {
 	// Get current working directory as default project root
 	currentDir, err := os.Getwd()
@@ -110,7 +147,7 @@ func processSolanaIdlDirectory(inputs SolanaInputs) error {
 
 		fmt.Printf("Processing IDL file: %s, contract: %s, output: %s\n", idlFile, contractName, outputFile)
 
-		err = solana.GenerateBindings(
+		err = GenerateBindings(
 			idlFile,
 			contractName,
 			contractOutDir,
@@ -138,7 +175,7 @@ func processSolanaSingleIdl(inputs SolanaInputs) error {
 
 	fmt.Printf("Processing single IDL file: %s, contract: %s, output: %s\n", inputs.IdlPath, contractName, contractOutDir)
 
-	return solana.GenerateBindings(
+	return GenerateBindings(
 		inputs.IdlPath,
 		contractName,
 		contractOutDir,
@@ -186,6 +223,19 @@ func executeSolana(inputs SolanaInputs) error {
 	err = runCommand(inputs.ProjectRoot, "go", "mod", "tidy")
 	if err != nil {
 		return err
+	}
+
+	return nil
+}
+
+// runCommand executes a command in a specified directory
+func runCommand(dir string, command string, args ...string) error {
+	cmd := exec.Command(command, args...)
+	cmd.Dir = dir
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to run %s: %w", command, err)
 	}
 
 	return nil
