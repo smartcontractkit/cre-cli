@@ -3,6 +3,8 @@ package creinit
 import (
 	"fmt"
 	"net/url"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 
@@ -176,6 +178,13 @@ type wizardModel struct {
 	skipTemplate     bool
 	skipWorkflowName bool
 
+	// Directory existence check (inline overwrite confirmation)
+	startDir         string // cwd, passed from Execute
+	isNewProject     bool   // whether creating a new project
+	dirExistsConfirm bool   // showing inline "overwrite?" prompt
+	dirExistsYes     bool   // cursor position: true=Yes, false=No
+	overwriteDir     bool   // user confirmed overwrite
+
 	// Error message for validation
 	err string
 
@@ -192,6 +201,7 @@ type wizardModel struct {
 	cursorStyle   lipgloss.Style
 	helpStyle     lipgloss.Style
 	tagStyle      lipgloss.Style
+	warnStyle     lipgloss.Style
 }
 
 // WizardResult contains the wizard output
@@ -200,11 +210,12 @@ type WizardResult struct {
 	WorkflowName     string
 	SelectedTemplate *templaterepo.TemplateSummary
 	NetworkRPCs      map[string]string // chain-name -> rpc-url
+	OverwriteDir     bool              // user confirmed directory overwrite in wizard
 	Completed        bool
 	Cancelled        bool
 }
 
-func newWizardModel(inputs Inputs, isNewProject bool, templates []templaterepo.TemplateSummary, preselected *templaterepo.TemplateSummary) wizardModel {
+func newWizardModel(inputs Inputs, isNewProject bool, startDir string, templates []templaterepo.TemplateSummary, preselected *templaterepo.TemplateSummary) wizardModel {
 	// Project name input
 	pi := textinput.New()
 	pi.Placeholder = constants.DefaultProjectName
@@ -243,6 +254,8 @@ func newWizardModel(inputs Inputs, isNewProject bool, templates []templaterepo.T
 		templates:     sorted,
 		templateList:  tl,
 		flagRpcURLs:   flagRPCs,
+		startDir:      startDir,
+		isNewProject:  isNewProject,
 
 		// Styles
 		logoStyle:     lipgloss.NewStyle().Foreground(lipgloss.Color(ui.ColorBlue500)).Bold(true),
@@ -253,6 +266,7 @@ func newWizardModel(inputs Inputs, isNewProject bool, templates []templaterepo.T
 		cursorStyle:   lipgloss.NewStyle().Foreground(lipgloss.Color(ui.ColorBlue500)),
 		helpStyle:     lipgloss.NewStyle().Foreground(lipgloss.Color(ui.ColorGray500)),
 		tagStyle:      lipgloss.NewStyle().Foreground(lipgloss.Color(ui.ColorGray400)),
+		warnStyle:     lipgloss.NewStyle().Foreground(lipgloss.Color(ui.ColorOrange500)),
 	}
 
 	// Handle pre-populated values and skip flags
@@ -432,6 +446,49 @@ func (m wizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// Non-template steps
+		// Handle inline directory overwrite confirmation
+		if m.dirExistsConfirm {
+			switch msg.String() {
+			case "ctrl+c":
+				m.cancelled = true
+				return m, tea.Quit
+			case "esc":
+				// Cancel the confirm, go back to editing
+				m.dirExistsConfirm = false
+				m.projectInput.Focus()
+				return m, nil
+			case "left", "right", "tab":
+				m.dirExistsYes = !m.dirExistsYes
+				return m, nil
+			case "enter":
+				if m.dirExistsYes {
+					m.overwriteDir = true
+					m.projectName = m.projectInput.Value()
+					if m.projectName == "" {
+						m.projectName = constants.DefaultProjectName
+					}
+					m.dirExistsConfirm = false
+					m.step++
+					m.advanceToNextStep()
+					if m.completed {
+						return m, tea.Quit
+					}
+					return m, nil
+				}
+				// User said No — go back to editing
+				m.dirExistsConfirm = false
+				m.projectInput.Focus()
+				return m, nil
+			default:
+				// Any other key exits confirm and resumes typing
+				m.dirExistsConfirm = false
+				m.projectInput.Focus()
+				var cmd tea.Cmd
+				m.projectInput, cmd = m.projectInput.Update(msg)
+				return m, cmd
+			}
+		}
+
 		switch msg.String() {
 		case "ctrl+c", "esc":
 			m.cancelled = true
@@ -469,6 +526,16 @@ func (m wizardModel) handleEnter(msgs ...tea.Msg) (tea.Model, tea.Cmd) {
 		if err := validation.IsValidProjectName(value); err != nil {
 			m.err = err.Error()
 			return m, nil
+		}
+		// Check if the directory already exists (only for new projects)
+		if m.isNewProject && m.startDir != "" && !m.overwriteDir {
+			dirPath := filepath.Join(m.startDir, value)
+			if _, statErr := os.Stat(dirPath); statErr == nil {
+				m.dirExistsConfirm = true
+				m.dirExistsYes = true
+				m.projectInput.Blur()
+				return m, nil
+			}
 		}
 		m.projectName = value
 		m.step++
@@ -586,6 +653,35 @@ func (m wizardModel) View() string {
 		b.WriteString("  ")
 		b.WriteString(m.projectInput.View())
 		b.WriteString("\n")
+		// Real-time validation hint
+		if v := m.projectInput.Value(); v != "" && !m.dirExistsConfirm {
+			if err := validation.IsValidProjectName(v); err != nil {
+				b.WriteString(m.warnStyle.Render("  " + err.Error()))
+				b.WriteString("\n")
+			}
+		}
+		// Inline directory overwrite confirmation
+		if m.dirExistsConfirm {
+			value := m.projectInput.Value()
+			if value == "" {
+				value = constants.DefaultProjectName
+			}
+			dirPath := filepath.Join(m.startDir, value)
+			b.WriteString("\n")
+			b.WriteString(m.warnStyle.Render(fmt.Sprintf("  ⚠ Directory %s already exists. Overwrite?", dirPath)))
+			b.WriteString("\n")
+			yesLabel := "Yes"
+			noLabel := "No"
+			if m.dirExistsYes {
+				yesLabel = m.selectedStyle.Render("[Yes]")
+				noLabel = m.dimStyle.Render(" No ")
+			} else {
+				yesLabel = m.dimStyle.Render(" Yes ")
+				noLabel = m.selectedStyle.Render("[No]")
+			}
+			b.WriteString(fmt.Sprintf("      %s  %s", yesLabel, noLabel))
+			b.WriteString("\n")
+		}
 
 	case stepTemplate:
 		b.WriteString(m.promptStyle.Render("  Pick a template"))
@@ -638,6 +734,13 @@ func (m wizardModel) View() string {
 				b.WriteString("  ")
 				b.WriteString(m.rpcInputs[i].View())
 				b.WriteString("\n")
+				// Real-time validation hint for RPC URL
+				if v := strings.TrimSpace(m.rpcInputs[i].Value()); v != "" {
+					if err := validateRpcURL(v); err != nil {
+						b.WriteString(m.warnStyle.Render("  " + err.Error()))
+						b.WriteString("\n")
+					}
+				}
 			}
 		}
 
@@ -649,6 +752,13 @@ func (m wizardModel) View() string {
 		b.WriteString("  ")
 		b.WriteString(m.workflowInput.View())
 		b.WriteString("\n")
+		// Real-time validation hint
+		if v := m.workflowInput.Value(); v != "" {
+			if err := validation.IsValidWorkflowName(v); err != nil {
+				b.WriteString(m.warnStyle.Render("  " + err.Error()))
+				b.WriteString("\n")
+			}
+		}
 
 	case stepDone:
 		// Nothing to render
@@ -679,14 +789,15 @@ func (m wizardModel) Result() WizardResult {
 		WorkflowName:     m.workflowName,
 		SelectedTemplate: m.selectedTemplate,
 		NetworkRPCs:      m.networkRPCs,
+		OverwriteDir:     m.overwriteDir,
 		Completed:        m.completed,
 		Cancelled:        m.cancelled,
 	}
 }
 
 // RunWizard runs the interactive wizard and returns the result.
-func RunWizard(inputs Inputs, isNewProject bool, templates []templaterepo.TemplateSummary, preselected *templaterepo.TemplateSummary) (WizardResult, error) {
-	m := newWizardModel(inputs, isNewProject, templates, preselected)
+func RunWizard(inputs Inputs, isNewProject bool, startDir string, templates []templaterepo.TemplateSummary, preselected *templaterepo.TemplateSummary) (WizardResult, error) {
+	m := newWizardModel(inputs, isNewProject, startDir, templates, preselected)
 
 	// Check if all steps are skipped
 	if m.completed {

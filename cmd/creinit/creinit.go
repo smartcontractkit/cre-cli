@@ -201,7 +201,7 @@ func (h *handler) Execute(inputs Inputs) error {
 	}
 
 	// Run the interactive wizard
-	result, err := RunWizard(inputs, isNewProject, templates, selectedTemplate)
+	result, err := RunWizard(inputs, isNewProject, startDir, templates, selectedTemplate)
 	if err != nil {
 		return fmt.Errorf("wizard error: %w", err)
 	}
@@ -243,7 +243,7 @@ func (h *handler) Execute(inputs Inputs) error {
 
 	// Create project directory if new project
 	if isNewProject {
-		if err := h.ensureProjectDirectoryExists(projectRoot); err != nil {
+		if err := h.ensureProjectDirectoryExists(projectRoot, result.OverwriteDir); err != nil {
 			return err
 		}
 	}
@@ -449,29 +449,36 @@ func (h *handler) printSuccessMessage(projectRoot string, tmpl *templaterepo.Tem
 	}
 }
 
-func (h *handler) ensureProjectDirectoryExists(dirPath string) error {
+func (h *handler) ensureProjectDirectoryExists(dirPath string, alreadyConfirmedOverwrite bool) error {
 	if h.pathExists(dirPath) {
-		var overwrite bool
+		if alreadyConfirmedOverwrite {
+			// User already confirmed overwrite in the wizard
+			if err := os.RemoveAll(dirPath); err != nil {
+				return fmt.Errorf("failed to remove existing directory %s: %w", dirPath, err)
+			}
+		} else {
+			var overwrite bool
 
-		form := huh.NewForm(
-			huh.NewGroup(
-				huh.NewConfirm().
-					Title(fmt.Sprintf("Directory %s already exists. Overwrite?", dirPath)).
-					Affirmative("Yes").
-					Negative("No").
-					Value(&overwrite),
-			),
-		).WithTheme(chainlinkTheme)
+			form := huh.NewForm(
+				huh.NewGroup(
+					huh.NewConfirm().
+						Title(fmt.Sprintf("Directory %s already exists. Overwrite?", dirPath)).
+						Affirmative("Yes").
+						Negative("No").
+						Value(&overwrite),
+				),
+			).WithTheme(chainlinkTheme)
 
-		if err := form.Run(); err != nil {
-			return err
-		}
+			if err := form.Run(); err != nil {
+				return err
+			}
 
-		if !overwrite {
-			return fmt.Errorf("directory creation aborted by user")
-		}
-		if err := os.RemoveAll(dirPath); err != nil {
-			return fmt.Errorf("failed to remove existing directory %s: %w", dirPath, err)
+			if !overwrite {
+				return fmt.Errorf("directory creation aborted by user")
+			}
+			if err := os.RemoveAll(dirPath); err != nil {
+				return fmt.Errorf("failed to remove existing directory %s: %w", dirPath, err)
+			}
 		}
 	}
 	if err := os.MkdirAll(dirPath, 0755); err != nil {
