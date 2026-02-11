@@ -105,40 +105,34 @@ func doPOR(config *Config, runtime cre.Runtime, runTime time.Time) (string, erro
 
 	logger.Info("ReserveInfo", "reserveInfo", reserveInfo)
 
-	porResp, err := cre.RunInNodeMode(*config, runtime,
-		func(config Config, nodeRuntime cre.NodeRuntime) (PORResponse, error) {
-			confHttpClient := confidentialhttp.Client{}
-			confOutput, err := confHttpClient.SendRequest(nodeRuntime, &confidentialhttp.ConfidentialHTTPRequest{
-				Request: &confidentialhttp.HTTPRequest{
-					Url:    config.URL,
-					Method: "GET",
-					MultiHeaders: map[string]*confidentialhttp.HeaderValues{
-						"Authorization": {
-							Values: []string{"Basic {{.API_KEY}}"},
-						},
-					},
+	confHttpClient := confidentialhttp.Client{}
+	confOutput, err := confHttpClient.SendRequest(runtime, &confidentialhttp.ConfidentialHTTPRequest{
+		Request: &confidentialhttp.HTTPRequest{
+			Url:    config.URL,
+			Method: "GET",
+			MultiHeaders: map[string]*confidentialhttp.HeaderValues{
+				"Authorization": {
+					Values: []string{"Basic {{.API_KEY}}"},
 				},
-				VaultDonSecrets: []*confidentialhttp.SecretIdentifier{
-					{
-						Key: "API_KEY",
-					},
-				},
-				EncryptOutput: true,
-			}).Await()
-			if err != nil {
-				logger.Error("error fetching conf por", "err", err)
-				return PORResponse{}, err
-			}
-			logger.Info("Conf POR response", "response", confOutput)
+			},
+			EncryptOutput: true,
+		},
+		VaultDonSecrets: []*confidentialhttp.SecretIdentifier{
+			{
+				Key: "API_KEY",
+			},
+		},
+	}).Await()
+	if err != nil {
+		logger.Error("error fetching conf por", "err", err)
+		return "", err
+	}
+	logger.Info("Conf POR response", "response", confOutput)
 
-			porResp := &PORResponse{}
-			if err = json.Unmarshal(confOutput.Body, porResp); err != nil {
-				return PORResponse{}, err
-			}
-
-			return *porResp, nil
-		}, cre.ConsensusIdenticalAggregation[PORResponse](),
-	).Await()
+	porResp := &PORResponse{}
+	if err = json.Unmarshal(confOutput.Body, porResp); err != nil {
+		return "", err
+	}
 
 	if porResp.Ripcord {
 		return "", errors.New("ripcord is true")
