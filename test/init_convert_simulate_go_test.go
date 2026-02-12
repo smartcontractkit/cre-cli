@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -65,9 +66,15 @@ func TestE2EInit_ConvertToCustomBuild_Go(t *testing.T) {
 	mainBytes, err := os.ReadFile(mainPath)
 	require.NoError(t, err)
 	mainStr := string(mainBytes)
-	mainStr = strings.Replace(mainStr, "type ExecutionResult struct {\n\tResult string\n}", "type ExecutionResult struct {\n\tResult    string\n\tFlagProof string\n}", 1)
-	mainStr = strings.Replace(mainStr, "\t// Your logic here...\n\n\treturn &ExecutionResult{Result: fmt.Sprintf(\"Fired at %s\", scheduledTime)}, nil",
+	var nl = "\n"
+	if runtime.GOOS == "windows" {
+		nl = "\r\n"
+	}
+
+	mainStr = strings.Replace(mainStr, "type ExecutionResult struct {"+nl+"\tResult string"+nl+"}", "type ExecutionResult struct {"+nl+"\tResult    string"+nl+"\tFlagProof string"+nl+"}", 1)
+	mainStr = strings.Replace(mainStr, "\t// Your logic here..."+nl+nl+"\treturn &ExecutionResult{Result: fmt.Sprintf(\"Fired at %s\", scheduledTime)}, nil",
 		"\treturn &ExecutionResult{Result: fmt.Sprintf(\"Fired at %s\", scheduledTime), FlagProof: FlagProof}, nil", 1)
+
 	require.NoError(t, os.WriteFile(mainPath, []byte(mainStr), 0600))
 
 	constA := `//go:build customFlag
