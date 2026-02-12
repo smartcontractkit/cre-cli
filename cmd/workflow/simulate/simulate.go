@@ -146,22 +146,22 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 
 	for _, ec := range expChains {
 		// Validate required fields
-		if ec.ChainID == 0 {
-			return Inputs{}, fmt.Errorf("experimental chain missing chain-id")
+		if ec.ChainSelector == 0 {
+			return Inputs{}, fmt.Errorf("experimental chain missing chain-selector")
 		}
 		if strings.TrimSpace(ec.RPCURL) == "" {
-			return Inputs{}, fmt.Errorf("experimental chain %d missing rpc-url", ec.ChainID)
+			return Inputs{}, fmt.Errorf("experimental chain %d missing rpc-url", ec.ChainSelector)
 		}
 		if strings.TrimSpace(ec.Forwarder) == "" {
-			return Inputs{}, fmt.Errorf("experimental chain %d missing forwarder", ec.ChainID)
+			return Inputs{}, fmt.Errorf("experimental chain %d missing forwarder", ec.ChainSelector)
 		}
 
-		// Check if chain ID already exists (supported chain)
-		if _, exists := clients[ec.ChainID]; exists {
+		// Check if chain selector already exists (supported chain)
+		if _, exists := clients[ec.ChainSelector]; exists {
 			// Find the supported chain's forwarder
 			var supportedForwarder string
 			for _, supported := range SupportedEVM {
-				if supported.Selector == ec.ChainID {
+				if supported.Selector == ec.ChainSelector {
 					supportedForwarder = supported.Forwarder
 					break
 				}
@@ -170,27 +170,29 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 			expFwd := common.HexToAddress(ec.Forwarder)
 			if supportedForwarder != "" && common.HexToAddress(supportedForwarder) == expFwd {
 				// Same forwarder, just debug log
-				h.log.Debug().Uint64("chain-id", ec.ChainID).Msg("Experimental chain matches supported chain config")
+				h.log.Debug().Uint64("chain-selector", ec.ChainSelector).Msg("Experimental chain matches supported chain config")
 				continue
 			}
 
 			// Different forwarder - respect user's config, warn about override
-			ui.Warning(fmt.Sprintf("Experimental chain %d overrides supported chain forwarder (supported: %s, experimental: %s)", ec.ChainID, supportedForwarder, ec.Forwarder))
+			ui.Warning(fmt.Sprintf("Warning: experimental chain %d overrides supported chain forwarder (supported: %s, experimental: %s)\n", ec.ChainSelector, supportedForwarder, ec.Forwarder))
+
 
 			// Use existing client but override the forwarder
-			experimentalForwarders[ec.ChainID] = expFwd
+			experimentalForwarders[ec.ChainSelector] = expFwd
 			continue
 		}
 
 		// Dial the RPC
 		c, err := ethclient.Dial(ec.RPCURL)
 		if err != nil {
-			return Inputs{}, fmt.Errorf("failed to create eth client for experimental chain %d: %w", ec.ChainID, err)
+			return Inputs{}, fmt.Errorf("failed to create eth client for experimental chain %d: %w", ec.ChainSelector, err)
 		}
 
-		clients[ec.ChainID] = c
-		experimentalForwarders[ec.ChainID] = common.HexToAddress(ec.Forwarder)
-		ui.Dim(fmt.Sprintf("Added experimental chain (chain-id: %d)", ec.ChainID))
+		clients[ec.ChainSelector] = c
+		experimentalForwarders[ec.ChainSelector] = common.HexToAddress(ec.Forwarder)
+    ui.Dim(fmt.Sprintf("Added experimental chain (chain-selector: %d)\n", ec.ChainSelector))
+
 	}
 
 	if len(clients) == 0 {
@@ -425,7 +427,7 @@ func run(
 		}
 
 		computeLggr := lggr.Named("ActionsCapabilities")
-		computeCaps, err := NewFakeActionCapabilities(ctx, computeLggr, registry)
+		computeCaps, err := NewFakeActionCapabilities(ctx, computeLggr, registry, inputs.SecretsPath)
 		if err != nil {
 			ui.Error(fmt.Sprintf("Failed to create compute capabilities: %v", err))
 			os.Exit(1)

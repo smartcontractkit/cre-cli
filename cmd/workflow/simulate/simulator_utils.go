@@ -71,6 +71,7 @@ var SupportedEVM = []ChainConfig{
 
 	// Worldchain
 	{Selector: chainselectors.ETHEREUM_TESTNET_SEPOLIA_WORLDCHAIN_1.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
+	{Selector: chainselectors.ETHEREUM_MAINNET_WORLDCHAIN_1.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
 
 	// Plasma
 	{Selector: chainselectors.PLASMA_TESTNET.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},

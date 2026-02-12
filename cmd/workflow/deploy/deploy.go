@@ -142,10 +142,15 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 		configURL = &url
 	}
 
+	workflowTag := h.settings.Workflow.UserWorkflowSettings.WorkflowName
+	if len(workflowTag) > 32 {
+		workflowTag = workflowTag[:32]
+	}
+
 	return Inputs{
 		WorkflowName:  h.settings.Workflow.UserWorkflowSettings.WorkflowName,
 		WorkflowOwner: h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress,
-		WorkflowTag:   h.settings.Workflow.UserWorkflowSettings.WorkflowName,
+		WorkflowTag:   workflowTag,
 		ConfigURL:     configURL,
 		DonFamily:     h.environmentSet.DonFamily,
 
@@ -255,7 +260,7 @@ func (h *handler) Execute() error {
 }
 
 func (h *handler) workflowExists() error {
-	workflow, err := h.wrc.GetWorkflow(common.HexToAddress(h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress), h.inputs.WorkflowName, h.inputs.WorkflowName)
+	workflow, err := h.wrc.GetWorkflow(common.HexToAddress(h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress), h.inputs.WorkflowName, h.inputs.WorkflowTag)
 	if err != nil {
 		return err
 	}
