@@ -19,16 +19,20 @@ import (
 const (
 	apiTimeout     = 6 * time.Second
 	tarballTimeout = 30 * time.Second
+
+	// templateMetadataFile is the conventional path to a template's metadata file
+	// within its directory (e.g., "my-template/.cre/template.yaml").
+	templateMetadataFile = ".cre/template.yaml"
 )
 
 // standardIgnores are files/dirs always excluded when extracting templates.
 var standardIgnores = []string{
 	".git",
+	".cre",
 	"node_modules",
 	"bun.lock",
 	"tmp",
 	".DS_Store",
-	"template.yaml",
 }
 
 // Client handles GitHub API interactions for template discovery and download.
@@ -74,10 +78,10 @@ func (c *Client) DiscoverTemplates(source RepoSource) ([]TemplateSummary, error)
 		return nil, fmt.Errorf("failed to fetch repo tree: %w", err)
 	}
 
-	// Step 2: Filter for template.yaml paths
+	// Step 2: Filter for .cre/template.yaml paths
 	var templatePaths []string
 	for _, entry := range tree.Tree {
-		if entry.Type == "blob" && strings.HasSuffix(entry.Path, "template.yaml") {
+		if entry.Type == "blob" && strings.HasSuffix(entry.Path, templateMetadataFile) {
 			templatePaths = append(templatePaths, entry.Path)
 		}
 	}
@@ -93,8 +97,8 @@ func (c *Client) DiscoverTemplates(source RepoSource) ([]TemplateSummary, error)
 			continue
 		}
 
-		// Derive the template directory path (parent of template.yaml)
-		templateDir := filepath.Dir(path)
+		// Derive the template directory path (grandparent of .cre/template.yaml)
+		templateDir := filepath.Dir(filepath.Dir(path))
 		if templateDir == "." {
 			templateDir = ""
 		}
@@ -129,7 +133,7 @@ func (c *Client) DiscoverTemplatesWithSHA(source RepoSource) (*DiscoverTemplates
 
 	var templatePaths []string
 	for _, entry := range tree.Tree {
-		if entry.Type == "blob" && strings.HasSuffix(entry.Path, "template.yaml") {
+		if entry.Type == "blob" && strings.HasSuffix(entry.Path, templateMetadataFile) {
 			templatePaths = append(templatePaths, entry.Path)
 		}
 	}
@@ -144,7 +148,7 @@ func (c *Client) DiscoverTemplatesWithSHA(source RepoSource) (*DiscoverTemplates
 			continue
 		}
 
-		templateDir := filepath.Dir(path)
+		templateDir := filepath.Dir(filepath.Dir(path))
 		if templateDir == "." {
 			templateDir = ""
 		}

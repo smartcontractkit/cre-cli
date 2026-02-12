@@ -21,9 +21,9 @@ func TestDiscoverTemplates_FindsTemplateYaml(t *testing.T) {
 	treeResp := treeResponse{
 		SHA: "abc123",
 		Tree: []treeEntry{
-			{Path: "building-blocks/kv-store/kv-store-go/template.yaml", Type: "blob"},
+			{Path: "building-blocks/kv-store/kv-store-go/.cre/template.yaml", Type: "blob"},
 			{Path: "building-blocks/kv-store/kv-store-go/main.go", Type: "blob"},
-			{Path: "building-blocks/kv-store/kv-store-ts/template.yaml", Type: "blob"},
+			{Path: "building-blocks/kv-store/kv-store-ts/.cre/template.yaml", Type: "blob"},
 			{Path: "README.md", Type: "blob"},
 			{Path: "building-blocks", Type: "tree"},
 		},
@@ -56,10 +56,10 @@ tags: ["aws", "s3"]
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(treeResp)
 	})
-	mux.HandleFunc("/test/templates/main/building-blocks/kv-store/kv-store-go/template.yaml", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/test/templates/main/building-blocks/kv-store/kv-store-go/.cre/template.yaml", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(templateYAML))
 	})
-	mux.HandleFunc("/test/templates/main/building-blocks/kv-store/kv-store-ts/template.yaml", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/test/templates/main/building-blocks/kv-store/kv-store-ts/.cre/template.yaml", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(templateYAML2))
 	})
 
@@ -76,10 +76,11 @@ tags: ["aws", "s3"]
 	t.Run("shouldIgnore", func(t *testing.T) {
 		assert.True(t, shouldIgnore(".git/config", standardIgnores))
 		assert.True(t, shouldIgnore("node_modules/package.json", standardIgnores))
-		assert.True(t, shouldIgnore("template.yaml", standardIgnores))
+		assert.True(t, shouldIgnore(".cre/template.yaml", standardIgnores))
 		assert.True(t, shouldIgnore(".DS_Store", standardIgnores))
 		assert.False(t, shouldIgnore("main.go", standardIgnores))
 		assert.False(t, shouldIgnore("workflow.yaml", standardIgnores))
+		assert.False(t, shouldIgnore("template.yaml", standardIgnores))
 	})
 
 	t.Run("shouldIgnore with custom patterns", func(t *testing.T) {
@@ -103,10 +104,12 @@ func TestShouldIgnore(t *testing.T) {
 		{"bun.lock", standardIgnores, true},
 		{"tmp/cache", standardIgnores, true},
 		{".DS_Store", standardIgnores, true},
-		{"template.yaml", standardIgnores, true},
+		{".cre/template.yaml", standardIgnores, true},
+		{".cre", standardIgnores, true},
 		{"main.go", standardIgnores, false},
 		{"workflow.yaml", standardIgnores, false},
 		{"config.json", standardIgnores, false},
+		{"template.yaml", standardIgnores, false},
 
 		// Custom patterns
 		{"foo.test.js", []string{"*.test.js"}, true},
