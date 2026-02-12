@@ -6,7 +6,6 @@ import (
 	"io"
 	"sync"
 
-	"github.com/charmbracelet/huh"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
@@ -217,15 +216,8 @@ func (h *handler) Execute() error {
 			ui.Dim("This will update the existing workflow.")
 			// Ask for user confirmation before updating existing workflow
 			if !h.inputs.SkipConfirmation {
-				var confirm bool
-				confirmForm := huh.NewForm(
-					huh.NewGroup(
-						huh.NewConfirm().
-							Title("Are you sure you want to overwrite the workflow?").
-							Value(&confirm),
-					),
-				).WithTheme(ui.ChainlinkTheme())
-				if err := confirmForm.Run(); err != nil {
+				confirm, err := ui.Confirm("Are you sure you want to overwrite the workflow?")
+				if err != nil {
 					return err
 				}
 				if !confirm {

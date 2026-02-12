@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/charmbracelet/huh"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -21,9 +20,6 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 	"github.com/smartcontractkit/cre-cli/internal/validation"
 )
-
-// chainlinkTheme for all Huh forms in this package
-var chainlinkTheme = ui.ChainlinkTheme()
 
 //go:embed template/workflow/**/*
 var workflowTemplatesContent embed.FS
@@ -533,19 +529,11 @@ func (h *handler) getWorkflowTemplateByID(id uint32) (WorkflowTemplate, Language
 
 func (h *handler) ensureProjectDirectoryExists(dirPath string) error {
 	if h.pathExists(dirPath) {
-		var overwrite bool
-
-		form := huh.NewForm(
-			huh.NewGroup(
-				huh.NewConfirm().
-					Title(fmt.Sprintf("Directory %s already exists. Overwrite?", dirPath)).
-					Affirmative("Yes").
-					Negative("No").
-					Value(&overwrite),
-			),
-		).WithTheme(chainlinkTheme)
-
-		if err := form.Run(); err != nil {
+		overwrite, err := ui.Confirm(
+			fmt.Sprintf("Directory %s already exists. Overwrite?", dirPath),
+			ui.WithLabels("Yes", "No"),
+		)
+		if err != nil {
 			return err
 		}
 

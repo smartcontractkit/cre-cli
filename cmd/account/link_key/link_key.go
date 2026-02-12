@@ -12,7 +12,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/charmbracelet/huh"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/google/uuid"
 	"github.com/machinebox/graphql"
@@ -161,16 +160,11 @@ func (h *handler) Execute(in Inputs) error {
 	h.displayDetails()
 
 	if in.WorkflowOwnerLabel == "" {
-		form := huh.NewForm(
-			huh.NewGroup(
-				huh.NewInput().
-					Title("Provide a label for your owner address").
-					Value(&in.WorkflowOwnerLabel),
-			),
-		).WithTheme(ui.ChainlinkTheme())
-		if err := form.Run(); err != nil {
+		label, err := ui.Input("Provide a label for your owner address")
+		if err != nil {
 			return err
 		}
+		in.WorkflowOwnerLabel = label
 	}
 
 	h.wg.Wait()

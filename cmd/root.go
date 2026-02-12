@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/huh"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -156,18 +155,10 @@ func newRootCommand() *cobra.Command {
 					ui.Warning("You are not logged in")
 					ui.Line()
 
-					var runLogin bool
-					confirmForm := huh.NewForm(
-						huh.NewGroup(
-							huh.NewConfirm().
-								Title("Would you like to login now?").
-								Affirmative("Yes, login").
-								Negative("No, cancel").
-								Value(&runLogin),
-						),
-					).WithTheme(ui.ChainlinkTheme())
-
-					if formErr := confirmForm.Run(); formErr != nil {
+					runLogin, formErr := ui.Confirm("Would you like to login now?",
+						ui.WithLabels("Yes, login", "No, cancel"),
+					)
+					if formErr != nil {
 						return fmt.Errorf("authentication required: %w", err)
 					}
 

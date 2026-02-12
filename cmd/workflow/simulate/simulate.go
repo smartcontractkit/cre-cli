@@ -16,7 +16,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/charmbracelet/huh"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -606,26 +605,21 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 
 		var triggerIndex int
 		if len(triggerSub) > 1 {
-			// Build options for huh select
-			options := make([]huh.Option[int], len(triggerSub))
+			opts := make([]ui.SelectOption[int], len(triggerSub))
 			for i, trigger := range triggerSub {
-				options[i] = huh.NewOption(fmt.Sprintf("%s %s", trigger.GetId(), trigger.GetMethod()), i)
+				opts[i] = ui.SelectOption[int]{
+					Label: fmt.Sprintf("%s %s", trigger.GetId(), trigger.GetMethod()),
+					Value: i,
+				}
 			}
 
 			ui.Line()
-			form := huh.NewForm(
-				huh.NewGroup(
-					huh.NewSelect[int]().
-						Title("Workflow simulation ready. Please select a trigger:").
-						Options(options...).
-						Value(&triggerIndex),
-				),
-			).WithTheme(ui.ChainlinkTheme())
-
-			if err := form.Run(); err != nil {
+			selected, err := ui.Select("Workflow simulation ready. Please select a trigger:", opts)
+			if err != nil {
 				ui.Error(fmt.Sprintf("Trigger selection failed: %v", err))
 				os.Exit(1)
 			}
+			triggerIndex = selected
 
 			holder.TriggerToRun = triggerSub[triggerIndex]
 			ui.Line()
@@ -801,20 +795,12 @@ func cleanupBeholder() error {
 
 // getHTTPTriggerPayload prompts user for HTTP trigger data
 func getHTTPTriggerPayload() (*httptypedapi.Payload, error) {
-	var input string
-
 	ui.Line()
-	form := huh.NewForm(
-		huh.NewGroup(
-			huh.NewInput().
-				Title("HTTP Trigger Configuration").
-				Description("Enter a file path or JSON directly for the HTTP trigger").
-				Placeholder(`{"key": "value"} or ./payload.json`).
-				Value(&input),
-		),
-	).WithTheme(ui.ChainlinkTheme())
-
-	if err := form.Run(); err != nil {
+	input, err := ui.Input("HTTP Trigger Configuration",
+		ui.WithInputDescription("Enter a file path or JSON directly for the HTTP trigger"),
+		ui.WithPlaceholder(`{"key": "value"} or ./payload.json`),
+	)
+	if err != nil {
 		return nil, fmt.Errorf("HTTP trigger input cancelled: %w", err)
 	}
 
@@ -864,45 +850,43 @@ func getEVMTriggerLog(ctx context.Context, ethClient *ethclient.Client) (*evm.Lo
 	var eventIndexInput string
 
 	ui.Line()
-	form := huh.NewForm(
-		huh.NewGroup(
-			huh.NewInput().
-				Title("EVM Trigger Configuration").
-				Description("Transaction hash for the EVM log event").
-				Placeholder("0x...").
-				Value(&txHashInput).
-				Validate(func(s string) error {
-					s = strings.TrimSpace(s)
-					if s == "" {
-						return fmt.Errorf("transaction hash cannot be empty")
-					}
-					if !strings.HasPrefix(s, "0x") {
-						return fmt.Errorf("transaction hash must start with 0x")
-					}
-					if len(s) != 66 {
-						return fmt.Errorf("invalid transaction hash length: expected 66 characters, got %d", len(s))
-					}
-					return nil
-				}),
-			huh.NewInput().
-				Title("Event Index").
-				Description("Log event index (0-based)").
-				Placeholder("0").
-				Suggestions([]string{"0"}).
-				Value(&eventIndexInput).
-				Validate(func(s string) error {
-					if strings.TrimSpace(s) == "" {
-						return fmt.Errorf("event index cannot be empty")
-					}
-					if _, err := strconv.ParseUint(strings.TrimSpace(s), 10, 32); err != nil {
-						return fmt.Errorf("invalid event index: must be a number")
-					}
-					return nil
-				}),
-		),
-	).WithTheme(ui.ChainlinkTheme()).WithKeyMap(ui.ChainlinkKeyMap())
-
-	if err := form.Run(); err != nil {
+	if err := ui.InputForm([]ui.InputField{
+		{
+			Title:       "EVM Trigger Configuration",
+			Description: "Transaction hash for the EVM log event",
+			Placeholder: "0x...",
+			Value:       &txHashInput,
+			Validate: func(s string) error {
+				s = strings.TrimSpace(s)
+				if s == "" {
+					return fmt.Errorf("transaction hash cannot be empty")
+				}
+				if !strings.HasPrefix(s, "0x") {
+					return fmt.Errorf("transaction hash must start with 0x")
+				}
+				if len(s) != 66 {
+					return fmt.Errorf("invalid transaction hash length: expected 66 characters, got %d", len(s))
+				}
+				return nil
+			},
+		},
+		{
+			Title:       "Event Index",
+			Description: "Log event index (0-based)",
+			Placeholder: "0",
+			Suggestions: []string{"0"},
+			Value:       &eventIndexInput,
+			Validate: func(s string) error {
+				if strings.TrimSpace(s) == "" {
+					return fmt.Errorf("event index cannot be empty")
+				}
+				if _, err := strconv.ParseUint(strings.TrimSpace(s), 10, 32); err != nil {
+					return fmt.Errorf("invalid event index: must be a number")
+				}
+				return nil
+			},
+		},
+	}); err != nil {
 		return nil, fmt.Errorf("EVM trigger input cancelled: %w", err)
 	}
 
