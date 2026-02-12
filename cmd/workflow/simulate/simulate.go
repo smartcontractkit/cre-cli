@@ -177,7 +177,6 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 			// Different forwarder - respect user's config, warn about override
 			ui.Warning(fmt.Sprintf("Warning: experimental chain %d overrides supported chain forwarder (supported: %s, experimental: %s)\n", ec.ChainSelector, supportedForwarder, ec.Forwarder))
 
-
 			// Use existing client but override the forwarder
 			experimentalForwarders[ec.ChainSelector] = expFwd
 			continue
@@ -191,7 +190,7 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 
 		clients[ec.ChainSelector] = c
 		experimentalForwarders[ec.ChainSelector] = common.HexToAddress(ec.Forwarder)
-    ui.Dim(fmt.Sprintf("Added experimental chain (chain-selector: %d)\n", ec.ChainSelector))
+		ui.Dim(fmt.Sprintf("Added experimental chain (chain-selector: %d)\n", ec.ChainSelector))
 
 	}
 
