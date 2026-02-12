@@ -8,8 +8,7 @@
   },
   "license": "UNLICENSED",
   "dependencies": {
-    "@chainlink/cre-sdk": "file:/Users/ryantinianov/ts/cre-sdk-typescript/packages/cre-sdk/chainlink-cre-sdk-1.1.0.tgz",
-    "zod": "3.25.76"
+    "@chainlink/cre-sdk": "file:/Users/ryantinianov/ts/cre-sdk-typescript/packages/cre-sdk"
   },
   "devDependencies": {
     "@types/bun": "1.2.21"

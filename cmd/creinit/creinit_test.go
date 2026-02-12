@@ -3,6 +3,7 @@ package creinit
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -75,6 +76,82 @@ func requireNoDirExists(t *testing.T, dirPath string) {
 	require.Falsef(t, fi.IsDir(), "directory %s should NOT exist", dirPath)
 }
 
+// runLanguageSpecificTests runs the appropriate test suite based on the language field.
+// For TypeScript: runs bun install and bun test in the workflow directory.
+// For Go: runs go test ./... in the workflow directory.
+func runLanguageSpecificTests(t *testing.T, workflowDir, language string) {
+	t.Helper()
+
+	switch language {
+	case "typescript":
+		runTypescriptTests(t, workflowDir)
+	case "go":
+		runGoTests(t, workflowDir)
+	default:
+		t.Logf("Unknown language %q, skipping tests", language)
+	}
+}
+
+// runTypescriptTests executes TypeScript tests using bun.
+// Follows the cre init instructions: bun install --cwd <dir> then bun test in that directory.
+func runTypescriptTests(t *testing.T, workflowDir string) {
+	t.Helper()
+
+	testFile := filepath.Join(workflowDir, "main.test.ts")
+	if _, err := os.Stat(testFile); os.IsNotExist(err) {
+		t.Logf("Skipping TS tests: no main.test.ts in %s", workflowDir)
+		return
+	}
+
+	t.Logf("Running TypeScript tests in %s", workflowDir)
+
+	// Install dependencies using bun install --cwd (as instructed by cre init)
+	installCmd := exec.Command("bun", "install", "--cwd", workflowDir, "--ignore-scripts")
+	installOutput, err := installCmd.CombinedOutput()
+	require.NoError(t, err, "bun install failed in %s:\n%s", workflowDir, string(installOutput))
+	t.Logf("bun install succeeded")
+
+	// Run tests
+	testCmd := exec.Command("bun", "test")
+	testCmd.Dir = workflowDir
+	testOutput, err := testCmd.CombinedOutput()
+	require.NoError(t, err, "bun test failed in %s:\n%s", workflowDir, string(testOutput))
+	t.Logf("bun test passed:\n%s", string(testOutput))
+}
+
+// runGoTests executes Go tests in the workflow directory.
+func runGoTests(t *testing.T, workflowDir string) {
+	t.Helper()
+
+	// Check if there's a go.mod or any .go test files
+	hasGoTests := false
+	entries, err := os.ReadDir(workflowDir)
+	if err != nil {
+		t.Logf("Skipping Go tests: cannot read %s", workflowDir)
+		return
+	}
+
+	for _, entry := range entries {
+		if filepath.Ext(entry.Name()) == "_test.go" {
+			hasGoTests = true
+			break
+		}
+	}
+
+	if !hasGoTests {
+		t.Logf("Skipping Go tests: no *_test.go files in %s", workflowDir)
+		return
+	}
+
+	t.Logf("Running Go tests in %s", workflowDir)
+
+	testCmd := exec.Command("go", "test", "./...")
+	testCmd.Dir = workflowDir
+	testOutput, err := testCmd.CombinedOutput()
+	require.NoError(t, err, "go test failed in %s:\n%s", workflowDir, string(testOutput))
+	t.Logf("go test passed:\n%s", string(testOutput))
+}
+
 func TestInitExecuteFlows(t *testing.T) {
 	cases := []struct {
 		name                string
@@ -86,6 +163,7 @@ func TestInitExecuteFlows(t *testing.T) {
 		expectProjectDirRel string
 		expectWorkflowName  string
 		expectTemplateFiles []string
+		language            string // "go" or "typescript"
 	}{
 		{
 			name:             "explicit project, default template via prompt, custom workflow via prompt",
@@ -98,6 +176,7 @@ func TestInitExecuteFlows(t *testing.T) {
 			expectProjectDirRel: "myproj",
 			expectWorkflowName:  "myworkflow",
 			expectTemplateFiles: GetTemplateFileListGo(),
+			language:            "go",
 		},
 		{
 			name:             "only project, default template+workflow via prompt",
@@ -110,6 +189,7 @@ func TestInitExecuteFlows(t *testing.T) {
 			expectProjectDirRel: "alpha",
 			expectWorkflowName:  "default-wf",
 			expectTemplateFiles: GetTemplateFileListGo(),
+			language:            "go",
 		},
 		{
 			name:             "no flags: prompt project, blank template, prompt workflow",
@@ -123,6 +203,7 @@ func TestInitExecuteFlows(t *testing.T) {
 			expectProjectDirRel: "projX",
 			expectWorkflowName:  "workflow-X",
 			expectTemplateFiles: GetTemplateFileListGo(),
+			language:            "go",
 		},
 		{
 			name:             "workflow-name flag only, default template, no workflow prompt",
@@ -135,6 +216,7 @@ func TestInitExecuteFlows(t *testing.T) {
 			expectProjectDirRel: "projFlag",
 			expectWorkflowName:  "flagged-wf",
 			expectTemplateFiles: GetTemplateFileListGo(),
+			language:            "go",
 		},
 		{
 			name:                "template-id flag only, no template prompt",
@@ -146,6 +228,7 @@ func TestInitExecuteFlows(t *testing.T) {
 			expectProjectDirRel: "tplProj",
 			expectWorkflowName:  "workflow-Tpl",
 			expectTemplateFiles: GetTemplateFileListGo(),
+			language:            "go",
 		},
 		{
 			name:             "PoR template via flag with rpc-url provided (skips RPC prompt)",
@@ -158,6 +241,7 @@ func TestInitExecuteFlows(t *testing.T) {
 			expectProjectDirRel: "porWithFlag",
 			expectWorkflowName:  "por-wf-01",
 			expectTemplateFiles: GetTemplateFileListGo(),
+			language:            "go",
 		},
 		{
 			name:             "TS template with rpc-url provided (flag ignored; no RPC prompt needed)",
@@ -170,6 +254,31 @@ func TestInitExecuteFlows(t *testing.T) {
 			expectProjectDirRel: "tsWithRpcFlag",
 			expectWorkflowName:  "ts-wf-flag",
 			expectTemplateFiles: GetTemplateFileListTS(),
+			language:            "typescript",
+		},
+		{
+			name:             "TS PoR template",
+			projectNameFlag:  "tsPorProj",
+			templateIDFlag:   4, // TypeScript PoR
+			workflowNameFlag: "ts-por-wf",
+			rpcURLFlag:       "https://sepolia.example/rpc",
+			mockResponses:       []string{},
+			expectProjectDirRel: "tsPorProj",
+			expectWorkflowName:  "ts-por-wf",
+			expectTemplateFiles: GetTemplateFileListTS(),
+			language:            "typescript",
+		},
+		{
+			name:             "TS Confidential HTTP template",
+			projectNameFlag:  "tsConfHTTP",
+			templateIDFlag:   5, // TypeScript Confidential HTTP
+			workflowNameFlag: "ts-confhttp-wf",
+			rpcURLFlag:       "",
+			mockResponses:       []string{},
+			expectProjectDirRel: "tsConfHTTP",
+			expectWorkflowName:  "ts-confhttp-wf",
+			expectTemplateFiles: GetTemplateFileListTS(),
+			language:            "typescript",
 		},
 	}
 
@@ -199,8 +308,8 @@ func TestInitExecuteFlows(t *testing.T) {
 
 			projectRoot := filepath.Join(tempDir, tc.expectProjectDirRel)
 			validateInitProjectStructure(t, projectRoot, tc.expectWorkflowName, tc.expectTemplateFiles)
-			// NOTE: We deliberately don't assert Go/TS scaffolding here because the
-			// template chosen by prompt could vary; dedicated tests below cover both paths.
+
+			runLanguageSpecificTests(t, filepath.Join(projectRoot, tc.expectWorkflowName), tc.language)
 		})
 	}
 }
