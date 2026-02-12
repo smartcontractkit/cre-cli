@@ -124,8 +124,11 @@ require (
 	makefilePath := filepath.Join(workflowDirectory, "Makefile")
 	makefileContent := `.PHONY: build
 
+export GOOS := wasip1
+export GOARCH := wasm
+
 build:
-	GOOS=wasip1 GOARCH=wasm go build -tags customwasm -o wasm/workflow.wasm .
+	go build -tags customwasm -o wasm/workflow.wasm .
 `
 	require.NoError(t, os.WriteFile(makefilePath, []byte(makefileContent), 0600))
 

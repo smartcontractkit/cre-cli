@@ -1,4 +1,8 @@
 .PHONY: build
 
+export GOOS := wasip1
+export GOARCH := wasm
+export CGO_ENABLED := 0
+
 build:
-	GOOS=wasip1 GOARCH=wasm CGO_ENABLED=0 go build -o wasm/workflow.wasm -trimpath -ldflags="-buildid= -w -s" .
+	go build -o wasm/workflow.wasm -trimpath -ldflags="-buildid= -w -s" .

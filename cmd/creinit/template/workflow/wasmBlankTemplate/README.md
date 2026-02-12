@@ -23,10 +23,11 @@ This template provides a blank workflow template for self-compiled WASM workflow
 ## Example Makefile build target
 
 ```makefile
+# For Go workflows:
+export GOOS := wasip1
+export GOARCH := wasm
+export CGO_ENABLED := 0
+
 build:
-	# TODO: Add your build logic here
-	# Example for Go:
-	# GOOS=wasip1 GOARCH=wasm go build -o wasm/workflow.wasm .
-	@echo "Please implement the build target in the Makefile"
-	exit 1
+	go build -o wasm/workflow.wasm .
 ```
