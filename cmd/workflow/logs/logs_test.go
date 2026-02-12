@@ -210,10 +210,11 @@ func TestExecute(t *testing.T) {
 			require.NoError(t, err)
 		})
 
-		// The diagnostic tail should survive truncation
+		// Head (beginning) should be present
+		assert.Contains(t, output, "failed to execute enclave")
+		// Tail (last 40%) should survive truncation
 		assert.Contains(t, output, "expected PCR0 deadbeef, got cafebabe")
-		// The generic prefix should be dropped
-		assert.NotContains(t, output, "failed to execute enclave request")
+		// Middle should be elided
 		assert.Contains(t, output, "...")
 	})
 
