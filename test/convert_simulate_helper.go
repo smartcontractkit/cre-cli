@@ -2,7 +2,6 @@ package test
 
 import (
 	"bytes"
-	"os"
 	"os/exec"
 	"testing"
 
@@ -64,12 +63,13 @@ func convertRunConvert(t *testing.T, projectRoot, workflowDir string) {
 		"convert failed:\nSTDOUT:\n%s\nSTDERR:\n%s", stdout.String(), stderr.String())
 }
 
-func convertRunMakeBuild(t *testing.T, workflowDir string, env ...string) {
+func convertRunMakeBuild(t *testing.T, workflowDir string, makeArgs ...string) {
 	t.Helper()
 	var stdout, stderr bytes.Buffer
-	cmd := exec.Command("make", "build")
+	args := []string{"build"}
+	args = append(args, makeArgs...)
+	cmd := exec.Command("make", args...)
 	cmd.Dir = workflowDir
-	cmd.Env = append(os.Environ(), env...)
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	require.NoError(t, cmd.Run(),
