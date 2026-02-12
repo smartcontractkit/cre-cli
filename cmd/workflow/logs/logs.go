@@ -288,8 +288,9 @@ func (h *handler) printErrors(ctx context.Context, client *graphqlclient.Client,
 	for _, ev := range resp.WorkflowExecutionEvents.Data {
 		if ev.Status == "failure" && len(ev.Errors) > 0 {
 			errMsg := ev.Errors[0].Error
-			if len(errMsg) > 120 {
-				errMsg = errMsg[:120] + "..."
+			if len(errMsg) > 80 {
+				start := len(errMsg) * 2 / 5 // drop first 40%, keep the diagnostic tail
+				errMsg = "..." + errMsg[start:]
 			}
 			fmt.Printf("  -> %s: %s\n", ev.CapabilityID, errMsg)
 		}
