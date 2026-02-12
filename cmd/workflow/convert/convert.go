@@ -23,7 +23,7 @@ const (
 
 type Inputs struct {
 	WorkflowFolder string
-	Force         bool
+	Force          bool
 }
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
@@ -38,7 +38,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 			handler := newHandler(runtimeContext)
 			inputs := Inputs{
 				WorkflowFolder: args[0],
-				Force:         force,
+				Force:          force,
 			}
 			return handler.Execute(inputs)
 		},

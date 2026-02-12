@@ -12,10 +12,10 @@ import (
 
 func HasReadAccessToPath(fl validator.FieldLevel) bool {
 	path := mustBeString(fl)
-	return hasReadAccessToPath(path)
+	return checkReadAccess(path)
 }
 
-func hasReadAccessToPath(path string) bool {
+func checkReadAccess(path string) bool {
 	_, err := os.Stat(path)
 	if err != nil {
 		return false
@@ -33,9 +33,9 @@ func hasReadAccessToPath(path string) bool {
 func HasReadAccessToWorkflowPath(fl validator.FieldLevel) bool {
 	path := mustBeString(fl)
 	if strings.HasSuffix(path, ".wasm") {
-		return hasReadAccessToPath(filepath.Dir(path))
+		return checkReadAccess(filepath.Dir(path))
 	}
-	return hasReadAccessToPath(path)
+	return checkReadAccess(path)
 }
 
 func mustBeString(fl validator.FieldLevel) string {

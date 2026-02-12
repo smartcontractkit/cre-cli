@@ -29,6 +29,7 @@ cre workflow [optional flags]
 
 * [cre](cre.md)	 - CRE CLI tool
 * [cre workflow activate](cre_workflow_activate.md)	 - Activates workflow on the Workflow Registry contract
+* [cre workflow convert-to-custom-build](cre_workflow_convert-to-custom-build.md)	 - Converts an existing workflow to a custom (self-compiled) build
 * [cre workflow delete](cre_workflow_delete.md)	 - Deletes all versions of a workflow from the Workflow Registry
 * [cre workflow deploy](cre_workflow_deploy.md)	 - Deploys a workflow to the Workflow Registry contract
 * [cre workflow pause](cre_workflow_pause.md)	 - Pauses workflow on the Workflow Registry contract

@@ -14,16 +14,16 @@ import (
 )
 
 var customValidators = map[string]validator.Func{
-	"ecdsa_private_key":     isECDSAPrivateKey,
-	"uint8_string_array":    isUint8Array,
-	"json":                  files.IsValidJSON,
-	"path_read":             files.HasReadAccessToPath,
-	"project_name":          isProjectName,
-	"wasm":                  files.IsValidWASM,
-	"workflow_name":         isWorkflowName,
-	"workflow_owner":        isWorkflowOwner,
-	"workflow_path_read":    files.HasReadAccessToWorkflowPath,
-	"yaml":                  files.IsValidYAML,
+	"ecdsa_private_key":  isECDSAPrivateKey,
+	"uint8_string_array": isUint8Array,
+	"json":               files.IsValidJSON,
+	"path_read":          files.HasReadAccessToPath,
+	"project_name":       isProjectName,
+	"wasm":               files.IsValidWASM,
+	"workflow_name":      isWorkflowName,
+	"workflow_owner":     isWorkflowOwner,
+	"workflow_path_read": files.HasReadAccessToWorkflowPath,
+	"yaml":               files.IsValidYAML,
 }
 
 var customTranslations = map[string]string{
