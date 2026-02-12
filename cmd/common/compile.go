@@ -11,10 +11,9 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 )
 
-const (
-	makefileName      = "Makefile"
-	defaultWasmOutput = "wasm/workflow.wasm" // hardcoded in Makefile by convert; must match workflow-path default
-)
+const makefileName = "Makefile"
+
+var defaultWasmOutput = filepath.Join("wasm", "workflow.wasm")
 
 // getBuildCmd returns a single step that builds the workflow and returns the WASM bytes.
 func getBuildCmd(workflowRootFolder, mainFile, language string) (func() ([]byte, error), error) {
