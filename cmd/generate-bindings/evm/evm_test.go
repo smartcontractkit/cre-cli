@@ -1,4 +1,4 @@
-package generatebindings
+package evm
 
 import (
 	"fmt"
@@ -11,7 +11,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/smartcontractkit/cre-cli/cmd/generate-bindings/bindings"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 )
 
@@ -42,7 +41,7 @@ func TestContractNameToPackage(t *testing.T) {
 	}
 }
 
-func TestResolveInputs_DefaultFallbacks(t *testing.T) {
+func TestResolveEvmInputs_DefaultFallbacks(t *testing.T) {
 	// Create a temporary directory for testing
 	tempDir, err := os.MkdirTemp("", "generate-bindings-test")
 	require.NoError(t, err)
@@ -72,19 +71,18 @@ func TestResolveInputs_DefaultFallbacks(t *testing.T) {
 	runtimeCtx := &runtime.Context{}
 	handler := newHandler(runtimeCtx)
 
-	// Test with minimal input (only chain-family)
+	// Test with minimal input
 	v := viper.New()
 	v.Set("language", "go")  // Default from StringP
 	v.Set("pkg", "bindings") // Default from StringP
 
-	inputs, err := handler.ResolveInputs([]string{"evm"}, v)
+	inputs, err := handler.ResolveInputs(v)
 	require.NoError(t, err)
 
 	// Use filepath.EvalSymlinks to handle macOS /var vs /private/var symlink issues
 	expectedRoot, _ := filepath.EvalSymlinks(tempDir)
 	actualRoot, _ := filepath.EvalSymlinks(inputs.ProjectRoot)
 	assert.Equal(t, expectedRoot, actualRoot)
-	assert.Equal(t, "evm", inputs.ChainFamily)
 	assert.Equal(t, "go", inputs.Language)
 	expectedAbi, _ := filepath.EvalSymlinks(filepath.Join(tempDir, "contracts", "evm", "src", "abi"))
 	actualAbi, _ := filepath.EvalSymlinks(inputs.AbiPath)
@@ -96,7 +94,7 @@ func TestResolveInputs_DefaultFallbacks(t *testing.T) {
 }
 
 // command should run in projectRoot which contains contracts directory
-func TestResolveInputs_CustomProjectRoot(t *testing.T) {
+func TestResolveEvmInputs_CustomProjectRoot(t *testing.T) {
 	// Create a temporary directory for testing
 	tempDir, err := os.MkdirTemp("", "generate-bindings-test")
 	require.NoError(t, err)
@@ -111,7 +109,7 @@ func TestResolveInputs_CustomProjectRoot(t *testing.T) {
 	v.Set("language", "go")  // Default from StringP
 	v.Set("pkg", "bindings") // Default from StringP
 
-	_, err = handler.ResolveInputs([]string{"evm"}, v)
+	_, err = handler.ResolveInputs(v)
 	require.Error(t, err)
 
 	expectedErrMsg := fmt.Sprintf("contracts folder not found in project root: %s", tempDir)
@@ -119,7 +117,7 @@ func TestResolveInputs_CustomProjectRoot(t *testing.T) {
 }
 
 // Empty project root should default to current directory, and this should contain contracts and go.mod
-func TestResolveInputs_EmptyProjectRoot(t *testing.T) {
+func TestResolveEvmInputs_EmptyProjectRoot(t *testing.T) {
 	// Create a temporary directory for testing
 	tempDir, err := os.MkdirTemp("", "generate-bindings-test")
 	require.NoError(t, err)
@@ -155,14 +153,13 @@ func TestResolveInputs_EmptyProjectRoot(t *testing.T) {
 	v.Set("language", "go")  // Default from StringP
 	v.Set("pkg", "bindings") // Default from StringP
 
-	inputs, err := handler.ResolveInputs([]string{"evm"}, v)
+	inputs, err := handler.ResolveInputs(v)
 	require.NoError(t, err)
 
 	// Use filepath.EvalSymlinks to handle macOS /var vs /private/var symlink issues
 	expectedRoot, _ := filepath.EvalSymlinks(tempDir)
 	actualRoot, _ := filepath.EvalSymlinks(inputs.ProjectRoot)
 	assert.Equal(t, expectedRoot, actualRoot)
-	assert.Equal(t, "evm", inputs.ChainFamily)
 	assert.Equal(t, "go", inputs.Language)
 	expectedAbi, _ := filepath.EvalSymlinks(filepath.Join(tempDir, "contracts", "evm", "src", "abi"))
 	actualAbi, _ := filepath.EvalSymlinks(inputs.AbiPath)
@@ -173,26 +170,7 @@ func TestResolveInputs_EmptyProjectRoot(t *testing.T) {
 	assert.Equal(t, expectedOut, actualOut)
 }
 
-func TestValidateInputs_RequiredChainFamily(t *testing.T) {
-	runtimeCtx := &runtime.Context{}
-	handler := newHandler(runtimeCtx)
-
-	// Test validation with missing chain family
-	inputs := Inputs{
-		ProjectRoot: "/tmp",
-		ChainFamily: "", // Missing required field
-		Language:    "go",
-		AbiPath:     "/tmp/abi",
-		PkgName:     "bindings",
-		OutPath:     "/tmp/out",
-	}
-
-	err := handler.ValidateInputs(inputs)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "chain-family")
-}
-
-func TestValidateInputs_ValidInputs(t *testing.T) {
+func TestValidateEvmInputs_ValidEvmInputs(t *testing.T) {
 	// Create a temporary directory for testing
 	tempDir, err := os.MkdirTemp("", "generate-bindings-test")
 	require.NoError(t, err)
@@ -210,7 +188,6 @@ func TestValidateInputs_ValidInputs(t *testing.T) {
 	// Test validation with valid inputs (using single file)
 	inputs := Inputs{
 		ProjectRoot: tempDir,
-		ChainFamily: "evm",
 		Language:    "go",
 		AbiPath:     abiFile,
 		PkgName:     "bindings",
@@ -219,7 +196,6 @@ func TestValidateInputs_ValidInputs(t *testing.T) {
 
 	err = handler.ValidateInputs(inputs)
 	require.NoError(t, err)
-	assert.True(t, handler.validated)
 
 	// Test validation with directory containing .abi files
 	abiDir := filepath.Join(tempDir, "abi")
@@ -231,34 +207,9 @@ func TestValidateInputs_ValidInputs(t *testing.T) {
 	inputs.AbiPath = abiDir
 	err = handler.ValidateInputs(inputs)
 	require.NoError(t, err)
-	assert.True(t, handler.validated)
 }
 
-func TestValidateInputs_InvalidChainFamily(t *testing.T) {
-	// Create a temporary directory for testing
-	tempDir, err := os.MkdirTemp("", "generate-bindings-test")
-	require.NoError(t, err)
-	defer os.RemoveAll(tempDir)
-
-	runtimeCtx := &runtime.Context{}
-	handler := newHandler(runtimeCtx)
-
-	// Test validation with invalid chain family
-	inputs := Inputs{
-		ProjectRoot: tempDir,
-		ChainFamily: "solana", // No longer supported
-		Language:    "go",
-		AbiPath:     tempDir,
-		PkgName:     "bindings",
-		OutPath:     tempDir,
-	}
-
-	err = handler.ValidateInputs(inputs)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "chain-family")
-}
-
-func TestValidateInputs_InvalidLanguage(t *testing.T) {
+func TestValidateEvmInputs_InvalidLanguage(t *testing.T) {
 	// Create a temporary directory for testing
 	tempDir, err := os.MkdirTemp("", "generate-bindings-test")
 	require.NoError(t, err)
@@ -270,7 +221,6 @@ func TestValidateInputs_InvalidLanguage(t *testing.T) {
 	// Test validation with invalid language
 	inputs := Inputs{
 		ProjectRoot: tempDir,
-		ChainFamily: "evm",
 		Language:    "typescript", // No longer supported
 		AbiPath:     tempDir,
 		PkgName:     "bindings",
@@ -282,14 +232,12 @@ func TestValidateInputs_InvalidLanguage(t *testing.T) {
 	assert.Contains(t, err.Error(), "language")
 }
 
-func TestValidateInputs_NonExistentDirectory(t *testing.T) {
+func TestValidateEvmInputs_NonExistentDirectory(t *testing.T) {
 	runtimeCtx := &runtime.Context{}
 	handler := newHandler(runtimeCtx)
 
-	// Test validation with non-existent directory
 	inputs := Inputs{
 		ProjectRoot: "/non/existent/path",
-		ChainFamily: "evm",
 		Language:    "go",
 		AbiPath:     "/non/existent/abi",
 		PkgName:     "bindings",
@@ -329,7 +277,6 @@ func TestProcessAbiDirectory_MultipleFiles(t *testing.T) {
 
 	inputs := Inputs{
 		ProjectRoot: tempDir,
-		ChainFamily: "evm",
 		Language:    "go",
 		AbiPath:     abiDir,
 		PkgName:     "bindings",
@@ -391,7 +338,6 @@ func TestProcessAbiDirectory_CreatesPerContractDirectories(t *testing.T) {
 
 	inputs := Inputs{
 		ProjectRoot: tempDir,
-		ChainFamily: "evm",
 		Language:    "go",
 		AbiPath:     abiDir,
 		PkgName:     "bindings",
@@ -431,7 +377,6 @@ func TestProcessAbiDirectory_NoAbiFiles(t *testing.T) {
 
 	inputs := Inputs{
 		ProjectRoot: tempDir,
-		ChainFamily: "evm",
 		Language:    "go",
 		AbiPath:     abiDir,
 		PkgName:     "bindings",
@@ -471,7 +416,6 @@ func TestProcessAbiDirectory_PackageNameCollision(t *testing.T) {
 
 	inputs := Inputs{
 		ProjectRoot: tempDir,
-		ChainFamily: "evm",
 		Language:    "go",
 		AbiPath:     abiDir,
 		PkgName:     "bindings",
@@ -493,7 +437,6 @@ func TestProcessAbiDirectory_NonExistentDirectory(t *testing.T) {
 
 	inputs := Inputs{
 		ProjectRoot: "/tmp",
-		ChainFamily: "evm",
 		Language:    "go",
 		AbiPath:     "/non/existent/abi",
 		PkgName:     "bindings",
@@ -616,7 +559,7 @@ func TestGenerateBindings_UnconventionalNaming(t *testing.T) {
 			require.NoError(t, err)
 
 			outFile := filepath.Join(tempDir, "bindings.go")
-			err = bindings.GenerateBindings("", abiFile, tc.pkgName, tc.typeName, outFile)
+			err = GenerateBindings("", abiFile, tc.pkgName, tc.typeName, outFile)
 
 			if tc.shouldFail {
 				require.Error(t, err, "Expected binding generation to fail for %s", tc.name)

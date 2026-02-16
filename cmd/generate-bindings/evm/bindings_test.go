@@ -1,4 +1,4 @@
-package bindings_test
+package evm_test
 
 import (
 	"context"
@@ -20,7 +20,7 @@ import (
 	"github.com/smartcontractkit/cre-sdk-go/cre/testutils"
 	consensusmock "github.com/smartcontractkit/cre-sdk-go/internal_testing/capabilities/consensus/mock"
 
-	datastorage "github.com/smartcontractkit/cre-cli/cmd/generate-bindings/bindings/testdata"
+	datastorage "github.com/smartcontractkit/cre-cli/cmd/generate-bindings/evm/testdata"
 )
 
 const anyChainSelector = uint64(1337)

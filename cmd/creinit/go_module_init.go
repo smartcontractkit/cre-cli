@@ -12,10 +12,11 @@ import (
 )
 
 const (
-	SdkVersion              = "v1.2.0"
-	EVMCapabilitiesVersion  = "v1.0.0-beta.5"
-	HTTPCapabilitiesVersion = "v1.0.0-beta.0"
-	CronCapabilitiesVersion = "v1.0.0-beta.0"
+	SdkVersion                = "v1.2.0"
+	EVMCapabilitiesVersion    = "v1.0.0-beta.5"
+	SolanaCapabilitiesVersion = "v0.1.1-0.20260210120110-1f2d5201a23f"
+	HTTPCapabilitiesVersion   = "v1.0.0-beta.0"
+	CronCapabilitiesVersion   = "v1.0.0-beta.0"
 )
 
 func initializeGoModule(logger *zerolog.Logger, workingDirectory, moduleName string) error {

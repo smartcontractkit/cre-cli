@@ -213,7 +213,7 @@ func newRootCommand() *cobra.Command {
 	loginCmd := login.New(runtimeContext)
 	logoutCmd := logout.New(runtimeContext)
 	initCmd := creinit.New(runtimeContext)
-	genBindingsCmd := generatebindings.New(runtimeContext)
+	generateBindingsCmd := generatebindings.New(runtimeContext)
 	accountCmd := account.New(runtimeContext)
 	whoamiCmd := whoami.New(runtimeContext)
 	updateCmd := update.New(runtimeContext)
@@ -247,7 +247,7 @@ func newRootCommand() *cobra.Command {
 		whoamiCmd,
 		secretsCmd,
 		workflowCmd,
-		genBindingsCmd,
+		generateBindingsCmd,
 		updateCmd,
 	)
 
@@ -257,23 +257,24 @@ func newRootCommand() *cobra.Command {
 func isLoadSettings(cmd *cobra.Command) bool {
 	// It is not expected to have the settings file when running the following commands
 	var excludedCommands = map[string]struct{}{
-		"cre version":               {},
-		"cre login":                 {},
-		"cre logout":                {},
-		"cre whoami":                {},
-		"cre account list-key":      {},
-		"cre init":                  {},
-		"cre generate-bindings":     {},
-		"cre completion bash":       {},
-		"cre completion fish":       {},
-		"cre completion powershell": {},
-		"cre completion zsh":        {},
-		"cre help":                  {},
-		"cre update":                {},
-		"cre workflow":              {},
-		"cre account":               {},
-		"cre secrets":               {},
-		"cre":                       {},
+		"cre version":                  {},
+		"cre login":                    {},
+		"cre logout":                   {},
+		"cre whoami":                   {},
+		"cre account list-key":         {},
+		"cre init":                     {},
+		"cre generate-bindings evm":    {},
+		"cre generate-bindings solana": {},
+		"cre completion bash":          {},
+		"cre completion fish":          {},
+		"cre completion powershell":    {},
+		"cre completion zsh":           {},
+		"cre help":                     {},
+		"cre update":                   {},
+		"cre workflow":                 {},
+		"cre account":                  {},
+		"cre secrets":                  {},
+		"cre":                          {},
 	}
 
 	_, exists := excludedCommands[cmd.CommandPath()]
