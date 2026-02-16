@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/charmbracelet/huh"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -178,15 +177,8 @@ func (c *TxClient) executeTransactionByTxType(txFn func(opts *bind.TransactOpts)
 
 		// Ask for user confirmation before executing the transaction
 		if !c.config.SkipPrompt {
-			var confirm bool
-			confirmForm := huh.NewForm(
-				huh.NewGroup(
-					huh.NewConfirm().
-						Title("Do you want to execute this transaction?").
-						Value(&confirm),
-				),
-			).WithTheme(ui.ChainlinkTheme())
-			if err := confirmForm.Run(); err != nil {
+			confirm, err := ui.Confirm("Do you want to execute this transaction?")
+			if err != nil {
 				return TxOutput{}, err
 			}
 			if !confirm {

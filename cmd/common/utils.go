@@ -20,6 +20,7 @@ import (
 	"github.com/smartcontractkit/chainlink-testing-framework/seth"
 
 	"github.com/smartcontractkit/cre-cli/internal/constants"
+	"github.com/smartcontractkit/cre-cli/internal/context"
 	"github.com/smartcontractkit/cre-cli/internal/logger"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	inttypes "github.com/smartcontractkit/cre-cli/internal/types"
@@ -197,6 +198,13 @@ func GetBuildCmd(inputFile string, outputFile string, rootFolder string) *exec.C
 }
 
 func WriteChangesetFile(fileName string, changesetFile *inttypes.ChangesetFile, settings *settings.Settings) error {
+	// Set project context to ensure we're in the correct directory for writing the changeset file
+	// This is needed because workflow commands set the workflow directory as the context, but path for changeset file is relative to the project root
+	err := context.SetProjectContext("")
+	if err != nil {
+		return err
+	}
+
 	fullFilePath := filepath.Join(
 		filepath.Clean(settings.CLDSettings.CLDPath),
 		"domains",
