@@ -105,23 +105,32 @@ func doPOR(config *Config, runtime cre.Runtime, runTime time.Time) (string, erro
 
 	logger.Info("ReserveInfo", "reserveInfo", reserveInfo)
 
-	confHttpClient := &confidentialhttp.Client{}
-	confOutput, err := confidentialhttp.SendRequests(
-		config,
-		runtime,
-		confHttpClient,
-		fetchPORConfidential,
-		cre.ConsensusIdenticalAggregation[*confidentialhttp.HTTPEnclaveResponseData](),
-	).Await()
+	confHttpClient := confidentialhttp.Client{}
+	confOutput, err := confHttpClient.SendRequest(runtime, &confidentialhttp.ConfidentialHTTPRequest{
+		Request: &confidentialhttp.HTTPRequest{
+			Url:    config.URL,
+			Method: "GET",
+			MultiHeaders: map[string]*confidentialhttp.HeaderValues{
+				"Authorization": {
+					Values: []string{"Basic {{.API_KEY}}"},
+				},
+			},
+			EncryptOutput: true,
+		},
+		VaultDonSecrets: []*confidentialhttp.SecretIdentifier{
+			{
+				Key: "API_KEY",
+			},
+		},
+	}).Await()
 	if err != nil {
 		logger.Error("error fetching conf por", "err", err)
 		return "", err
 	}
 	logger.Info("Conf POR response", "response", confOutput)
 
-	// Compare responses
 	porResp := &PORResponse{}
-	if err = json.Unmarshal(confOutput.Responses[0].Body, porResp); err != nil {
+	if err = json.Unmarshal(confOutput.Body, porResp); err != nil {
 		return "", err
 	}
 
@@ -272,24 +281,13 @@ func updateReserves(config *Config, runtime cre.Runtime, totalSupply *big.Int, t
 	return nil
 }
 
-func fetchPORConfidential(config *Config, logger *slog.Logger, sendRequester *confidentialhttp.SendRequestser) (*confidentialhttp.HTTPEnclaveResponseData, error) {
-	return sendRequester.SendRequests(&confidentialhttp.EnclaveActionInput{
-		Input: &confidentialhttp.HTTPEnclaveRequestData{
-			Requests: []*confidentialhttp.Request{
-				{
-					Url:    config.URL,
-					Method: "GET",
-				},
-			},
-		},
-		// No Vault DON Secrets in this example
-	}).Await()
-}
-
 func fetchPOR(config *Config, logger *slog.Logger, sendRequester *http.SendRequester) (*ReserveInfo, error) {
 	httpActionOut, err := sendRequester.SendRequest(&http.Request{
 		Method: "GET",
 		Url:    config.URL,
+		Headers: map[string]string{
+			"Authorization": "Basic test-api", // not secret.
+		},
 	}).Await()
 	if err != nil {
 		return nil, err

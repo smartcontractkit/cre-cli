@@ -116,7 +116,7 @@ func createWorkflowDirectory(
 	}
 
 	// Copy workflow files
-	items := []string{"main.go", "config.json", "go.mod", "go.sum", "contracts"}
+	items := []string{"main.go", "config.json", "go.mod", "go.sum", "contracts", "secrets.yaml"}
 	for _, item := range items {
 		src := filepath.Join(sourceWorkflowDir, item)
 		dst := filepath.Join(workflowDir, item)
@@ -146,6 +146,12 @@ func createWorkflowDirectory(
 	workflowArtifacts := map[string]string{
 		"workflow-path": "./main.go",
 	}
+
+	// Add secrets-path if secrets.yaml exists
+	if _, err := os.Stat(filepath.Join(workflowDir, "secrets.yaml")); err == nil {
+		workflowArtifacts["secrets-path"] = "./secrets.yaml"
+	}
+
 	// Only add config-path if explicitly provided
 	if workflowConfigPath != "" {
 		workflowArtifacts["config-path"] = workflowConfigPath

@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"context"
 	"crypto/ecdsa"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -31,6 +30,8 @@ import (
 	httptypedapi "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/triggers/http"
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	"github.com/smartcontractkit/chainlink-common/pkg/services"
+	commonsettings "github.com/smartcontractkit/chainlink-common/pkg/settings"
+	"github.com/smartcontractkit/chainlink-common/pkg/settings/cresettings"
 	pb "github.com/smartcontractkit/chainlink-protos/cre/go/sdk"
 	"github.com/smartcontractkit/chainlink-protos/cre/go/values"
 	valuespb "github.com/smartcontractkit/chainlink-protos/cre/go/values/pb"
@@ -51,7 +52,7 @@ type Inputs struct {
 	SecretsPath   string                       `validate:"omitempty,file,ascii,max=97"`
 	EngineLogs    bool                         `validate:"omitempty" cli:"--engine-logs"`
 	Broadcast     bool                         `validate:"-"`
-	EVMClients    map[uint64]*ethclient.Client `validate:"omitempty"` // multichain clients keyed by selector
+	EVMClients    map[uint64]*ethclient.Client `validate:"omitempty"` // multichain clients keyed by selector (or chain ID for experimental)
 	EthPrivateKey *ecdsa.PrivateKey            `validate:"omitempty"`
 	WorkflowName  string                       `validate:"required"`
 	// Non-interactive mode options
@@ -60,6 +61,8 @@ type Inputs struct {
 	HTTPPayload    string `validate:"-"` // JSON string or @/path/to/file.json
 	EVMTxHash      string `validate:"-"` // 0x-prefixed
 	EVMEventIndex  int    `validate:"-"`
+	// Experimental chains support (for chains not in official chain-selectors)
+	ExperimentalForwarders map[uint64]common.Address `validate:"-"` // forwarders keyed by chain ID
 }
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
@@ -133,8 +136,65 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 		clients[chain.Selector] = c
 	}
 
+	// Experimental chains support (automatically loaded from config if present)
+	experimentalForwarders := make(map[uint64]common.Address)
+
+	expChains, err := settings.GetExperimentalChains(v)
+	if err != nil {
+		return Inputs{}, fmt.Errorf("failed to load experimental chains config: %w", err)
+	}
+
+	for _, ec := range expChains {
+		// Validate required fields
+		if ec.ChainSelector == 0 {
+			return Inputs{}, fmt.Errorf("experimental chain missing chain-selector")
+		}
+		if strings.TrimSpace(ec.RPCURL) == "" {
+			return Inputs{}, fmt.Errorf("experimental chain %d missing rpc-url", ec.ChainSelector)
+		}
+		if strings.TrimSpace(ec.Forwarder) == "" {
+			return Inputs{}, fmt.Errorf("experimental chain %d missing forwarder", ec.ChainSelector)
+		}
+
+		// Check if chain selector already exists (supported chain)
+		if _, exists := clients[ec.ChainSelector]; exists {
+			// Find the supported chain's forwarder
+			var supportedForwarder string
+			for _, supported := range SupportedEVM {
+				if supported.Selector == ec.ChainSelector {
+					supportedForwarder = supported.Forwarder
+					break
+				}
+			}
+
+			expFwd := common.HexToAddress(ec.Forwarder)
+			if supportedForwarder != "" && common.HexToAddress(supportedForwarder) == expFwd {
+				// Same forwarder, just debug log
+				h.log.Debug().Uint64("chain-selector", ec.ChainSelector).Msg("Experimental chain matches supported chain config")
+				continue
+			}
+
+			// Different forwarder - respect user's config, warn about override
+			fmt.Printf("Warning: experimental chain %d overrides supported chain forwarder (supported: %s, experimental: %s)\n", ec.ChainSelector, supportedForwarder, ec.Forwarder)
+
+			// Use existing client but override the forwarder
+			experimentalForwarders[ec.ChainSelector] = expFwd
+			continue
+		}
+
+		// Dial the RPC
+		c, err := ethclient.Dial(ec.RPCURL)
+		if err != nil {
+			return Inputs{}, fmt.Errorf("failed to create eth client for experimental chain %d: %w", ec.ChainSelector, err)
+		}
+
+		clients[ec.ChainSelector] = c
+		experimentalForwarders[ec.ChainSelector] = common.HexToAddress(ec.Forwarder)
+		fmt.Printf("Added experimental chain (chain-selector: %d)\n", ec.ChainSelector)
+	}
+
 	if len(clients) == 0 {
-		return Inputs{}, fmt.Errorf("no RPC URLs found for supported chains")
+		return Inputs{}, fmt.Errorf("no RPC URLs found for supported or experimental chains")
 	}
 
 	pk, err := crypto.HexToECDSA(creSettings.User.EthPrivateKey)
@@ -151,19 +211,20 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 	}
 
 	return Inputs{
-		WorkflowPath:   creSettings.Workflow.WorkflowArtifactSettings.WorkflowPath,
-		ConfigPath:     creSettings.Workflow.WorkflowArtifactSettings.ConfigPath,
-		SecretsPath:    creSettings.Workflow.WorkflowArtifactSettings.SecretsPath,
-		EngineLogs:     v.GetBool("engine-logs"),
-		Broadcast:      v.GetBool("broadcast"),
-		EVMClients:     clients,
-		EthPrivateKey:  pk,
-		WorkflowName:   creSettings.Workflow.UserWorkflowSettings.WorkflowName,
-		NonInteractive: v.GetBool("non-interactive"),
-		TriggerIndex:   v.GetInt("trigger-index"),
-		HTTPPayload:    v.GetString("http-payload"),
-		EVMTxHash:      v.GetString("evm-tx-hash"),
-		EVMEventIndex:  v.GetInt("evm-event-index"),
+		WorkflowPath:           creSettings.Workflow.WorkflowArtifactSettings.WorkflowPath,
+		ConfigPath:             creSettings.Workflow.WorkflowArtifactSettings.ConfigPath,
+		SecretsPath:            creSettings.Workflow.WorkflowArtifactSettings.SecretsPath,
+		EngineLogs:             v.GetBool("engine-logs"),
+		Broadcast:              v.GetBool("broadcast"),
+		EVMClients:             clients,
+		EthPrivateKey:          pk,
+		WorkflowName:           creSettings.Workflow.UserWorkflowSettings.WorkflowName,
+		NonInteractive:         v.GetBool("non-interactive"),
+		TriggerIndex:           v.GetInt("trigger-index"),
+		HTTPPayload:            v.GetString("http-payload"),
+		EVMTxHash:              v.GetString("evm-tx-hash"),
+		EVMEventIndex:          v.GetInt("evm-event-index"),
+		ExperimentalForwarders: experimentalForwarders,
 	}, nil
 }
 
@@ -182,7 +243,7 @@ func (h *handler) ValidateInputs(inputs Inputs) error {
 		return fmt.Errorf("you must configure a valid private key to perform on-chain writes. Please set your private key in the .env file before using the -–broadcast flag")
 	}
 
-	if err := runRPCHealthCheck(inputs.EVMClients); err != nil {
+	if err := runRPCHealthCheck(inputs.EVMClients, inputs.ExperimentalForwarders); err != nil {
 		// we don't block execution, just show the error to the user
 		// because some RPCs in settings might not be used in workflow and some RPCs might have hiccups
 		fmt.Printf("Warning: some RPCs in settings are not functioning properly, please check: %v\n", err)
@@ -337,6 +398,11 @@ func run(
 			}
 		}
 
+		// Merge experimental forwarders (keyed by chain ID)
+		for chainID, fwdAddr := range inputs.ExperimentalForwarders {
+			forwarders[chainID] = fwdAddr
+		}
+
 		manualTriggerCapConfig := ManualTriggerCapabilitiesConfig{
 			Clients:    inputs.EVMClients,
 			PrivateKey: inputs.EthPrivateKey,
@@ -352,7 +418,7 @@ func run(
 		}
 
 		computeLggr := lggr.Named("ActionsCapabilities")
-		computeCaps, err := NewFakeActionCapabilities(ctx, computeLggr, registry)
+		computeCaps, err := NewFakeActionCapabilities(ctx, computeLggr, registry, inputs.SecretsPath)
 		if err != nil {
 			fmt.Printf("failed to create compute capabilities: %v\n", err)
 			os.Exit(1)
@@ -437,15 +503,6 @@ func run(
 	}
 	emptyHook := func(context.Context, simulator.RunnerConfig, *capabilities.Registry, []services.Service) {}
 
-	// Ensure the workflow name is exactly 10 bytes before hex-encoding
-	raw := []byte(inputs.WorkflowName)
-
-	// Pad or truncate to exactly 10 bytes
-	padded := make([]byte, 10)
-	copy(padded, raw) // truncates if longer, zero-pads if shorter
-
-	encodedWorkflowName := hex.EncodeToString(padded)
-
 	simulator.NewRunner(&simulator.RunnerHooks{
 		Initialize:  simulatorInitialize,
 		BeforeStart: triggerInfoAndBeforeStart.BeforeStart,
@@ -453,7 +510,7 @@ func run(
 		AfterRun:    emptyHook,
 		Cleanup:     simulatorCleanup,
 		Finally:     emptyHook,
-	}).Run(ctx, encodedWorkflowName, binary, config, secrets, simulator.RunnerConfig{
+	}).Run(ctx, inputs.WorkflowName, binary, config, secrets, simulator.RunnerConfig{
 		EnableBeholder: true,
 		EnableBilling:  false,
 		Lggr:           engineLog,
@@ -472,6 +529,11 @@ func run(
 				os.Exit(1)
 			},
 			OnResultReceived: func(result *pb.ExecutionResult) {
+				if result == nil || result.Result == nil {
+					// OnExecutionError will print the error message of the crash.
+					return
+				}
+
 				fmt.Println()
 				switch r := result.Result.(type) {
 				case *pb.ExecutionResult_Value:
@@ -500,6 +562,12 @@ func run(
 				fmt.Println()
 				close(executionFinishedCh)
 			},
+		},
+		WorkflowSettingsCfgFn: func(cfg *cresettings.Workflows) {
+			cfg.ChainAllowed = commonsettings.PerChainSelector(
+				commonsettings.Bool(true), // Allow all chains in simulation
+				map[string]bool{},
+			)
 		},
 	})
 

@@ -3,6 +3,7 @@ package client
 import (
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"math/big"
 	"time"
 
@@ -387,6 +388,19 @@ func (wrc *WorkflowRegistryV2Client) GetMaxWorkflowsPerUserDON(user common.Addre
 	return val, err
 }
 
+func (wrc *WorkflowRegistryV2Client) GetMaxWorkflowsPerUserDONByFamily(user common.Address, donFamily string) (uint32, error) {
+	contract, err := workflow_registry_v2_wrapper.NewWorkflowRegistry(wrc.ContractAddress, wrc.EthClient.Client)
+	if err != nil {
+		wrc.Logger.Error().Err(err).Msg("Failed to connect for GetMaxWorkflowsPerUserDONByFamily")
+		return 0, err
+	}
+	val, err := contract.GetMaxWorkflowsPerUserDON(wrc.EthClient.NewCallOpts(), user, donFamily)
+	if err != nil {
+		wrc.Logger.Error().Err(err).Msg("GetMaxWorkflowsPerUserDONByFamily call failed")
+	}
+	return val, err
+}
+
 func (wrc *WorkflowRegistryV2Client) IsAllowedSigner(signer common.Address) (bool, error) {
 	contract, err := workflow_registry_v2_wrapper.NewWorkflowRegistry(wrc.ContractAddress, wrc.EthClient.Client)
 	if err != nil {
@@ -529,6 +543,67 @@ func (wrc *WorkflowRegistryV2Client) GetWorkflowListByOwnerAndName(owner common.
 		wrc.Logger.Error().Err(err).Msg("GetWorkflowListByOwnerAndName call failed")
 	}
 	return result, err
+}
+
+func (wrc *WorkflowRegistryV2Client) GetWorkflowListByOwner(owner common.Address, start, limit *big.Int) ([]workflow_registry_v2_wrapper.WorkflowRegistryWorkflowMetadataView, error) {
+	contract, err := workflow_registry_v2_wrapper.NewWorkflowRegistry(wrc.ContractAddress, wrc.EthClient.Client)
+	if err != nil {
+		wrc.Logger.Error().Err(err).Msg("Failed to connect for GetWorkflowListByOwner")
+		return nil, err
+	}
+
+	result, err := callContractMethodV2(wrc, func() ([]workflow_registry_v2_wrapper.WorkflowRegistryWorkflowMetadataView, error) {
+		return contract.GetWorkflowListByOwner(wrc.EthClient.NewCallOpts(), owner, start, limit)
+	})
+	if err != nil {
+		wrc.Logger.Error().Err(err).Msg("GetWorkflowListByOwner call failed")
+	}
+	return result, err
+}
+
+func (wrc *WorkflowRegistryV2Client) CheckUserDonLimit(
+	owner common.Address,
+	donFamily string,
+	pending uint32,
+) error {
+	const workflowStatusActive = uint8(0)
+	const workflowListPageSize = int64(200)
+
+	maxAllowed, err := wrc.GetMaxWorkflowsPerUserDONByFamily(owner, donFamily)
+	if err != nil {
+		return fmt.Errorf("failed to fetch per-user workflow limit: %w", err)
+	}
+
+	var currentActive uint32
+	start := big.NewInt(0)
+	limit := big.NewInt(workflowListPageSize)
+
+	for {
+		list, err := wrc.GetWorkflowListByOwner(owner, start, limit)
+		if err != nil {
+			return fmt.Errorf("failed to check active workflows for DON %s: %w", donFamily, err)
+		}
+		if len(list) == 0 {
+			break
+		}
+
+		for _, workflow := range list {
+			if workflow.Status == workflowStatusActive && workflow.DonFamily == donFamily {
+				currentActive++
+			}
+		}
+
+		start = big.NewInt(start.Int64() + int64(len(list)))
+		if int64(len(list)) < workflowListPageSize {
+			break
+		}
+	}
+
+	if currentActive+pending > maxAllowed {
+		return fmt.Errorf("workflow limit reached for DON %s: %d/%d active workflows", donFamily, currentActive, maxAllowed)
+	}
+
+	return nil
 }
 
 func (wrc *WorkflowRegistryV2Client) DeleteWorkflow(workflowID [32]byte) (*TxOutput, error) {
@@ -678,7 +753,7 @@ func (wrc *WorkflowRegistryV2Client) IsRequestAllowlisted(owner common.Address, 
 
 // AllowlistRequest sends the request digest to the WorkflowRegistry allowlist with a default expiry of now + 10 minutes.
 // `requestDigestHex` should be the hex string produced by utils.CalculateRequestDigest(...), with or without "0x".
-func (wrc *WorkflowRegistryV2Client) AllowlistRequest(requestDigest [32]byte, duration time.Duration) error {
+func (wrc *WorkflowRegistryV2Client) AllowlistRequest(requestDigest [32]byte, duration time.Duration) (*TxOutput, error) {
 	var contract workflowRegistryV2Contract
 	if wrc.Wr != nil {
 		contract = wrc.Wr
@@ -686,7 +761,7 @@ func (wrc *WorkflowRegistryV2Client) AllowlistRequest(requestDigest [32]byte, du
 		c, err := workflow_registry_v2_wrapper.NewWorkflowRegistry(wrc.ContractAddress, wrc.EthClient.Client)
 		if err != nil {
 			wrc.Logger.Error().Err(err).Msg("Failed to connect for AllowlistRequest")
-			return err
+			return nil, err
 		}
 		contract = c
 	}
@@ -694,26 +769,22 @@ func (wrc *WorkflowRegistryV2Client) AllowlistRequest(requestDigest [32]byte, du
 	// #nosec G115 -- int64 to uint32 conversion; Unix() returns seconds since epoch, which fits in uint32 until 2106
 	deadline := uint32(time.Now().Add(duration).Unix())
 
-	// Send tx; keep the same "callContractMethodV2" pattern you used for read-only calls.
-	// Here we return the tx hash string to the helper (it may log/track it).
-	_, err := callContractMethodV2(wrc, func() (string, error) {
-		tx, txErr := contract.AllowlistRequest(wrc.EthClient.NewTXOpts(), requestDigest, deadline)
-		if txErr != nil {
-			return "", txErr
-		}
-		// Return the tx hash string for visibility through the helper
-		return tx.Hash().Hex(), nil
-	})
-	if err != nil {
-		wrc.Logger.Error().Err(err).Msg("AllowlistRequest tx failed")
-		return err
+	txFn := func(opts *bind.TransactOpts) (*types.Transaction, error) {
+		return contract.AllowlistRequest(opts, requestDigest, deadline)
 	}
-
+	txOut, err := wrc.executeTransactionByTxType(txFn, "AllowlistRequest", "RequestAllowlisted", requestDigest, duration)
+	if err != nil {
+		wrc.Logger.Error().
+			Str("contract", wrc.ContractAddress.Hex()).
+			Err(err).
+			Msg("Failed to call AllowlistRequest")
+		return nil, err
+	}
 	wrc.Logger.Debug().
 		Str("digest", hex.EncodeToString(requestDigest[:])).
 		Str("deadline", time.Unix(int64(deadline), 0).UTC().Format(time.RFC3339)).
 		Msg("AllowlistRequest submitted")
-	return nil
+	return &txOut, nil
 }
 
 func callContractMethodV2[T any](wrc *WorkflowRegistryV2Client, contractMethod func() (T, error)) (T, error) {

@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 
 	chainselectors "github.com/smartcontractkit/chain-selectors"
@@ -53,6 +54,42 @@ var SupportedEVM = []ChainConfig{
 	// Optimism
 	{Selector: chainselectors.ETHEREUM_TESTNET_SEPOLIA_OPTIMISM_1.Selector, Forwarder: "0xa2888380dff3704a8ab6d1cd1a8f69c15fea5ee3"},
 	{Selector: chainselectors.ETHEREUM_MAINNET_OPTIMISM_1.Selector, Forwarder: "0x9119a1501550ed94a3f2794038ed9258337afa18"},
+
+	// Andesite (private testnet)
+	{Selector: chainselectors.PRIVATE_TESTNET_ANDESITE.Selector, Forwarder: "0xcF4629d8DC7a5fa17F4D77233F5b953225669821"},
+
+	// ZkSync
+	{Selector: chainselectors.ETHEREUM_MAINNET_ZKSYNC_1.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
+	{Selector: chainselectors.ETHEREUM_TESTNET_SEPOLIA_ZKSYNC_1.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
+
+	// Jovay
+	{Selector: chainselectors.JOVAY_TESTNET.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
+
+	// Pharos
+	// Integration not ready yet
+	// {Selector: chainselectors.PHAROS_ATLANTIC_TESTNET.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
+
+	// Worldchain
+	{Selector: chainselectors.ETHEREUM_TESTNET_SEPOLIA_WORLDCHAIN_1.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
+	{Selector: chainselectors.ETHEREUM_MAINNET_WORLDCHAIN_1.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
+
+	// Plasma
+	{Selector: chainselectors.PLASMA_TESTNET.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
+
+	// Linea
+	{Selector: chainselectors.ETHEREUM_TESTNET_SEPOLIA_LINEA_1.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
+
+	// Ink
+	{Selector: chainselectors.INK_TESTNET_SEPOLIA.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
+
+	// Hyperliquid
+	{Selector: chainselectors.HYPERLIQUID_TESTNET.Selector, Forwarder: "0xB27fA1c28288c50542527F64BCda22C9FbAc24CB"},
+
+	// Apechain
+	{Selector: chainselectors.APECHAIN_TESTNET_CURTIS.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
+
+	// Arc
+	{Selector: chainselectors.ARC_TESTNET.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
 }
 
 // parse "ChainSelector:<digits>" from trigger id, e.g. "evm:ChainSelector:5009297550715157269@1.0.0 LogTrigger"
@@ -73,9 +110,10 @@ func parseChainSelectorFromTriggerID(id string) (uint64, bool) {
 }
 
 // runRPCHealthCheck runs connectivity check against every configured client.
-func runRPCHealthCheck(clients map[uint64]*ethclient.Client) error {
+// experimentalForwarders keys identify experimental chains (not in chain-selectors).
+func runRPCHealthCheck(clients map[uint64]*ethclient.Client, experimentalForwarders map[uint64]common.Address) error {
 	if len(clients) == 0 {
-		return fmt.Errorf("check your settings: no RPC URLs found for supported chains")
+		return fmt.Errorf("check your settings: no RPC URLs found for supported or experimental chains")
 	}
 
 	var errs []error
@@ -86,9 +124,18 @@ func runRPCHealthCheck(clients map[uint64]*ethclient.Client) error {
 			continue
 		}
 
-		chainName, err := settings.GetChainNameByChainSelector(selector)
-		if err != nil {
-			return err
+		// Determine chain label for error messages
+		var chainLabel string
+		if _, isExperimental := experimentalForwarders[selector]; isExperimental {
+			chainLabel = fmt.Sprintf("experimental chain %d", selector)
+		} else {
+			name, err := settings.GetChainNameByChainSelector(selector)
+			if err != nil {
+				// If we can't get the name, use the selector as the label
+				chainLabel = fmt.Sprintf("chain %d", selector)
+			} else {
+				chainLabel = name
+			}
 		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -96,11 +143,11 @@ func runRPCHealthCheck(clients map[uint64]*ethclient.Client) error {
 		cancel() // don't defer in a loop
 
 		if err != nil {
-			errs = append(errs, fmt.Errorf("[%s] failed RPC health check: %w", chainName, err))
+			errs = append(errs, fmt.Errorf("[%s] failed RPC health check: %w", chainLabel, err))
 			continue
 		}
 		if chainID == nil || chainID.Sign() <= 0 {
-			errs = append(errs, fmt.Errorf("[%s] invalid RPC response: empty or zero chain ID", chainName))
+			errs = append(errs, fmt.Errorf("[%s] invalid RPC response: empty or zero chain ID", chainLabel))
 			continue
 		}
 	}
