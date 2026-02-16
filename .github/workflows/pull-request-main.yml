@@ -143,19 +143,12 @@ jobs:
       - name: Check if current branch exists in chainlink repo
         id: check-branch
         env:
-          BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
           GITHUB_TOKEN: ${{ steps.setup-github-token.outputs.access-token }}
         run: |
-          echo "Current branch: $BRANCH_NAME"
-
-          # Check if branch exists in the target repository
-          if gh api "repos/smartcontractkit/chainlink/branches/$BRANCH_NAME" --silent 2>/dev/null; then
-            echo "Branch $BRANCH_NAME exists in chainlink repository. Going to use it"
-            echo "target_branch=$BRANCH_NAME" >> "$GITHUB_OUTPUT"
-          else
-            echo "Branch $BRANCH_NAME does not exist in chainlink repository, will use develop"
-            echo "target_branch=develop" >> "$GITHUB_OUTPUT"
-          fi
+          # For security, always use a trusted branch of the chainlink repository
+          # rather than deriving it from pull request metadata.
+          echo "Using fixed target branch 'develop' for chainlink repository."
+          echo "target_branch=develop" >> "$GITHUB_OUTPUT"
 
       - name: Derive nightly image tag
         id: derive-nightly-image-tag
