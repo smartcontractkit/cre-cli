@@ -103,8 +103,8 @@ func (c *DataStorage) WriteReportFromAccessLogged(
 	promise := runtime.GenerateReport(&sdk.ReportRequest{
 		EncodedPayload: encodedFwdReport,
 		EncoderName:    "solana",
-		HashingAlgo:    "sha256",
-		SigningAlgo:    "ed25519",
+		HashingAlgo:    "keccak256",
+		SigningAlgo:    "ecdsa",
 	})
 
 	return cre.ThenPromise(promise, func(report *cre.Report) cre.Promise[*solana.WriteReportReply] {
@@ -215,8 +215,8 @@ func (c *DataStorage) WriteReportFromDataAccount(
 	promise := runtime.GenerateReport(&sdk.ReportRequest{
 		EncodedPayload: encodedFwdReport,
 		EncoderName:    "solana",
-		HashingAlgo:    "sha256",
-		SigningAlgo:    "ed25519",
+		HashingAlgo:    "keccak256",
+		SigningAlgo:    "ecdsa",
 	})
 
 	return cre.ThenPromise(promise, func(report *cre.Report) cre.Promise[*solana.WriteReportReply] {
@@ -349,8 +349,8 @@ func (c *DataStorage) WriteReportFromDynamicEvent(
 	promise := runtime.GenerateReport(&sdk.ReportRequest{
 		EncodedPayload: encodedFwdReport,
 		EncoderName:    "solana",
-		HashingAlgo:    "sha256",
-		SigningAlgo:    "ed25519",
+		HashingAlgo:    "keccak256",
+		SigningAlgo:    "ecdsa",
 	})
 
 	return cre.ThenPromise(promise, func(report *cre.Report) cre.Promise[*solana.WriteReportReply] {
@@ -427,8 +427,8 @@ func (c *DataStorage) WriteReportFromNoFields(
 	promise := runtime.GenerateReport(&sdk.ReportRequest{
 		EncodedPayload: encodedFwdReport,
 		EncoderName:    "solana",
-		HashingAlgo:    "sha256",
-		SigningAlgo:    "ed25519",
+		HashingAlgo:    "keccak256",
+		SigningAlgo:    "ecdsa",
 	})
 
 	return cre.ThenPromise(promise, func(report *cre.Report) cre.Promise[*solana.WriteReportReply] {
@@ -528,8 +528,8 @@ func (c *DataStorage) WriteReportFromUpdateReserves(
 	promise := runtime.GenerateReport(&sdk.ReportRequest{
 		EncodedPayload: encodedFwdReport,
 		EncoderName:    "solana",
-		HashingAlgo:    "sha256",
-		SigningAlgo:    "ed25519",
+		HashingAlgo:    "keccak256",
+		SigningAlgo:    "ecdsa",
 	})
 
 	return cre.ThenPromise(promise, func(report *cre.Report) cre.Promise[*solana.WriteReportReply] {
@@ -629,8 +629,8 @@ func (c *DataStorage) WriteReportFromUserData(
 	promise := runtime.GenerateReport(&sdk.ReportRequest{
 		EncodedPayload: encodedFwdReport,
 		EncoderName:    "solana",
-		HashingAlgo:    "sha256",
-		SigningAlgo:    "ed25519",
+		HashingAlgo:    "keccak256",
+		SigningAlgo:    "ecdsa",
 	})
 
 	return cre.ThenPromise(promise, func(report *cre.Report) cre.Promise[*solana.WriteReportReply] {
