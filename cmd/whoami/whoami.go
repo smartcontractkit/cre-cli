@@ -108,12 +108,10 @@ func (h *Handler) Execute(ctx context.Context) error {
 	}
 
 	// Add deployment access status
-	if deployAccess != nil {
-		if deployAccess.HasAccess {
-			details = fmt.Sprintf("%s\nDeploy Access:     Enabled", details)
-		} else {
-			details = fmt.Sprintf("%s\nDeploy Access:     Not enabled", details)
-		}
+	if deployAccess != nil && deployAccess.HasAccess {
+		details = fmt.Sprintf("%s\nDeploy Access:     Enabled", details)
+	} else {
+		details = fmt.Sprintf("%s\nDeploy Access:     Not enabled", details)
 	}
 
 	ui.Box(details)
