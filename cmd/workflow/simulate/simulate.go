@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -40,7 +39,7 @@ import (
 	v2 "github.com/smartcontractkit/chainlink/v2/core/services/workflows/v2"
 
 	cmdcommon "github.com/smartcontractkit/cre-cli/cmd/common"
-	"github.com/smartcontractkit/cre-cli/internal/constants"
+	"github.com/smartcontractkit/cre-cli/internal/build"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/validation"
@@ -264,17 +263,8 @@ func (h *handler) Execute(inputs Inputs) error {
 	if h.runtimeContext != nil {
 		h.runtimeContext.Workflow.Language = cmdcommon.GetWorkflowLanguage(workflowMainFile)
 
-		switch h.runtimeContext.Workflow.Language {
-		case constants.WorkflowLanguageTypeScript:
-			if err := cmdcommon.EnsureTool("bun"); err != nil {
-				return errors.New("bun is required for TypeScript workflows but was not found in PATH; install from https://bun.com/docs/installation")
-			}
-		case constants.WorkflowLanguageGolang:
-			if err := cmdcommon.EnsureTool("go"); err != nil {
-				return errors.New("go toolchain is required for Go workflows but was not found in PATH; install from https://go.dev/dl")
-			}
-		default:
-			return fmt.Errorf("unsupported workflow language for file %s", workflowMainFile)
+		if err := build.EnsureToolsForBuild(h.runtimeContext.Workflow.Language); err != nil {
+			return fmt.Errorf("failed to ensure build tools: %w", err)
 		}
 	}
 
