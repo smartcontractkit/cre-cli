@@ -743,7 +743,7 @@ func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inp
 				os.Exit(1)
 			}
 
-			log, err := getEVMTriggerLogFromValues(ctx, client, inputs.EVMTxHash, uint64(inputs.EVMEventIndex))
+			log, err := getEVMTriggerLogFromValues(ctx, client, inputs.EVMTxHash, uint64(inputs.EVMEventIndex)) // #nosec G115 -- EVMEventIndex validated >= 0 above
 			if err != nil {
 				ui.Error(fmt.Sprintf("Failed to build EVM trigger log: %v", err))
 				os.Exit(1)
