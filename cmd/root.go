@@ -2,6 +2,7 @@ package cmd
 
 import (
 	_ "embed"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -37,6 +38,12 @@ import (
 //go:embed template/help_template.tpl
 var helpTemplate string
 
+// errLoginCompleted is a sentinel error returned from PersistentPreRunE when
+// the auto-login flow completes successfully. Returning an error (instead of
+// calling os.Exit) lets Execute() emit telemetry and exit cleanly with code 0,
+// while still preventing Cobra from running the original command's RunE.
+var errLoginCompleted = errors.New("login completed successfully; please re-run your command")
+
 var (
 	// RootCmd represents the base command when called without any subcommands
 	RootCmd = newRootCommand()
@@ -51,8 +58,14 @@ func Execute() {
 
 	exitCode := 0
 	if err != nil {
-		ui.Error(err.Error())
-		exitCode = 1
+		if errors.Is(err, errLoginCompleted) {
+			// Auto-login succeeded — don't print an error, keep exit code 0.
+			// Clear err so telemetry records this as a success, not a failure.
+			err = nil
+		} else {
+			ui.Error(err.Error())
+			exitCode = 1
+		}
 	}
 
 	if executingCommand != nil && runtimeContextForTelemetry != nil {
@@ -173,8 +186,10 @@ func newRootCommand() *cobra.Command {
 						return fmt.Errorf("login failed: %w", loginErr)
 					}
 
-					// Exit after successful login - user can re-run their command
-					os.Exit(0)
+					// Signal Execute() to exit cleanly (code 0) without running
+					// the original command. The user needs to re-run their command
+					// now that credentials are available.
+					return errLoginCompleted
 				}
 
 				// Check if organization is ungated for commands that require it

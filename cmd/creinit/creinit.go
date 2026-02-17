@@ -208,8 +208,15 @@ func (h *handler) Execute(inputs Inputs) error {
 
 	// Resolve templates from wizard if not provided via flag
 	if inputs.TemplateID == 0 {
-		selectedLanguageTemplate, _ = h.getLanguageTemplateByTitle(selectedLang)
-		selectedWorkflowTemplate, _ = h.getWorkflowTemplateByTitle(result.TemplateName, selectedLanguageTemplate.Workflows)
+		var err error
+		selectedLanguageTemplate, err = h.getLanguageTemplateByTitle(selectedLang)
+		if err != nil {
+			return fmt.Errorf("failed to resolve language template %q: %w", selectedLang, err)
+		}
+		selectedWorkflowTemplate, err = h.getWorkflowTemplateByTitle(result.TemplateName, selectedLanguageTemplate.Workflows)
+		if err != nil {
+			return fmt.Errorf("failed to resolve workflow template %q: %w", result.TemplateName, err)
+		}
 	}
 
 	// Determine project root
