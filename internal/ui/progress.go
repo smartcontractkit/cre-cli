@@ -83,7 +83,7 @@ func (m downloadModel) View() string {
 // Returns the number of bytes downloaded and any error.
 func DownloadWithProgress(resp io.ReadCloser, contentLength int64, destFile *os.File, message string) error {
 	// Check if we're in a TTY
-	if !term.IsTerminal(int(os.Stderr.Fd())) || contentLength <= 0 {
+	if !term.IsTerminal(int(os.Stderr.Fd())) || contentLength <= 0 { // #nosec G115 -- stderr fd is always 2
 		// Non-TTY or unknown size: just copy without progress bar
 		_, err := io.Copy(destFile, resp)
 		return err
