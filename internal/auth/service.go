@@ -45,7 +45,7 @@ func (s *OAuthService) RefreshToken(ctx context.Context, oldTokenSet *credential
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	resp, err := httpClient.Do(req)
+	resp, err := httpClient.Do(req) // #nosec G704 -- URL is from trusted auth configuration
 	if err != nil {
 		return nil, fmt.Errorf("auth request failed: %w", err)
 	}
@@ -60,9 +60,9 @@ func (s *OAuthService) RefreshToken(ctx context.Context, oldTokenSet *credential
 	}
 
 	var tr struct {
-		AccessToken  string `json:"access_token"`
+		AccessToken  string `json:"access_token"` // #nosec G117 -- field name matches token response
 		IDToken      string `json:"id_token"`
-		RefreshToken string `json:"refresh_token"`
+		RefreshToken string `json:"refresh_token"` // #nosec G117 -- field name matches token response
 		ExpiresIn    int    `json:"expires_in"`
 		TokenType    string `json:"token_type"`
 	}
@@ -95,7 +95,7 @@ func (s *OAuthService) RevokeToken(ctx context.Context, token string) error {
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	resp, err := httpClient.Do(req)
+	resp, err := httpClient.Do(req) // #nosec G704 -- URL is from trusted auth configuration
 	if err != nil {
 		return fmt.Errorf("revocation failed: %w", err)
 	}

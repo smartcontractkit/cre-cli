@@ -216,7 +216,7 @@ func (c *Client) UploadToOrigin(g GeneratePresignedPostUrlForArtifactResponse, c
 	httpReq.Header.Set("Content-Type", w.FormDataContentType())
 
 	httpClient := &http.Client{Timeout: c.httpTimeout}
-	httpResp, err := httpClient.Do(httpReq)
+	httpResp, err := httpClient.Do(httpReq) // #nosec G704 -- URL is from trusted CLI configuration
 	if err != nil {
 		c.log.Error().Err(err).Msg("HTTP request to origin failed")
 		return err
