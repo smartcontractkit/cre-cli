@@ -13,7 +13,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/smartcontractkit/cre-cli/internal/config"
+	"github.com/smartcontractkit/cre-cli/internal/templateconfig"
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
@@ -63,6 +63,8 @@ Templates are fetched dynamically from GitHub repositories.`,
 	initCmd.Flags().StringP("template", "t", "", "Name of the template to use (e.g., kv-store-go)")
 	initCmd.Flags().Bool("refresh", false, "Bypass template cache and fetch fresh data")
 	initCmd.Flags().StringArray("rpc-url", nil, "RPC URL for a network (format: chain-name=url, repeatable)")
+	initCmd.Flags().String("add-repo", "", "Add a template repository (format: owner/repo[@ref])")
+	initCmd.Flags().Bool("replace", false, "When used with --add-repo, replace all existing repos instead of adding")
 
 	// Deprecated: --template-id is kept for backwards compatibility, maps to hello-world-go
 	initCmd.Flags().Uint32("template-id", 0, "")
@@ -154,6 +156,16 @@ func (h *handler) Execute(inputs Inputs) error {
 		return fmt.Errorf("handler inputs not validated")
 	}
 
+	// Handle --add-repo: manage template sources and return early
+	if addRepo := h.runtimeContext.Viper.GetString("add-repo"); addRepo != "" {
+		return h.handleAddRepo(addRepo)
+	}
+
+	// Ensure the default template config exists on first run
+	if err := templateconfig.EnsureDefaultConfig(h.log); err != nil {
+		h.log.Warn().Err(err).Msg("Failed to create default template config")
+	}
+
 	cwd, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("unable to get working directory: %w", err)
@@ -166,7 +178,7 @@ func (h *handler) Execute(inputs Inputs) error {
 
 	// Create the registry if not injected (normal flow)
 	if h.registry == nil {
-		sources := config.LoadTemplateSources(h.log)
+		sources := templateconfig.LoadTemplateSources(h.log)
 
 		reg, err := templaterepo.NewRegistry(h.log, sources)
 		if err != nil {
@@ -496,4 +508,66 @@ func (h *handler) pathExists(filePath string) bool {
 		return false
 	}
 	return false
+}
+
+// handleAddRepo adds or replaces template repositories in ~/.cre/template.yaml.
+func (h *handler) handleAddRepo(repoStr string) error {
+	newSource, err := templateconfig.ParseRepoString(repoStr)
+	if err != nil {
+		return fmt.Errorf("invalid repo format: %w", err)
+	}
+
+	// Ensure config file exists before loading
+	if err := templateconfig.EnsureDefaultConfig(h.log); err != nil {
+		return fmt.Errorf("failed to initialize template config: %w", err)
+	}
+
+	existing := templateconfig.LoadTemplateSources(h.log)
+	replace := h.runtimeContext.Viper.GetBool("replace")
+
+	var updated []templaterepo.RepoSource
+
+	if replace {
+		// Non-interactive: replace all repos
+		updated = []templaterepo.RepoSource{newSource}
+	} else {
+		// Interactive: ask the user
+		var mode string
+		form := huh.NewForm(
+			huh.NewGroup(
+				huh.NewSelect[string]().
+					Title("How would you like to add this repository?").
+					Options(
+						huh.NewOption("Add alongside existing repositories", "add"),
+						huh.NewOption("Replace all existing repositories", "replace"),
+					).
+					Value(&mode),
+			),
+		).WithTheme(chainlinkTheme)
+
+		if err := form.Run(); err != nil {
+			return fmt.Errorf("prompt cancelled: %w", err)
+		}
+
+		if mode == "replace" {
+			updated = []templaterepo.RepoSource{newSource}
+		} else {
+			updated = append(existing, newSource)
+		}
+	}
+
+	if err := templateconfig.SaveTemplateSources(updated); err != nil {
+		return fmt.Errorf("failed to save template config: %w", err)
+	}
+
+	ui.Line()
+	ui.Success("Template repository updated!")
+	ui.Line()
+	ui.Dim("Configured repositories:")
+	for _, s := range updated {
+		fmt.Printf("  - %s\n", s.String())
+	}
+	ui.Line()
+
+	return nil
 }
