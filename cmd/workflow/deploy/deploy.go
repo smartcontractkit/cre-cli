@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -16,9 +15,9 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
-	"github.com/smartcontractkit/cre-cli/internal/prompt"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
+	"github.com/smartcontractkit/cre-cli/internal/ui"
 	"github.com/smartcontractkit/cre-cli/internal/validation"
 )
 
@@ -199,7 +198,8 @@ func (h *handler) Execute() error {
 		return h.wrcErr
 	}
 
-	fmt.Println("\nVerifying ownership...")
+	ui.Line()
+	ui.Dim("Verifying ownership...")
 	if h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerType == constants.WorkflowOwnerTypeMSIG {
 		halt, err := h.autoLinkMSIGAndExit()
 		if err != nil {
@@ -217,11 +217,11 @@ func (h *handler) Execute() error {
 	existsErr := h.workflowExists()
 	if existsErr != nil {
 		if existsErr.Error() == "workflow with name "+h.inputs.WorkflowName+" already exists" {
-			fmt.Printf("Workflow %s already exists\n", h.inputs.WorkflowName)
-			fmt.Println("This will update the existing workflow.")
+			ui.Warning(fmt.Sprintf("Workflow %s already exists", h.inputs.WorkflowName))
+			ui.Dim("This will update the existing workflow.")
 			// Ask for user confirmation before updating existing workflow
 			if !h.inputs.SkipConfirmation {
-				confirm, err := prompt.YesNoPrompt(os.Stdin, "Are you sure you want to overwrite the workflow?")
+				confirm, err := ui.Confirm("Are you sure you want to overwrite the workflow?")
 				if err != nil {
 					return err
 				}
@@ -246,11 +246,13 @@ func (h *handler) Execute() error {
 		return err
 	}
 
-	fmt.Println("\nUploading files...")
+	ui.Line()
+	ui.Dim("Uploading files...")
 	if err := h.uploadArtifacts(); err != nil {
 		return fmt.Errorf("failed to upload workflow: %w", err)
 	}
-	fmt.Println("\nPreparing deployment transaction...")
+	ui.Line()
+	ui.Dim("Preparing deployment transaction...")
 	if err := h.upsert(); err != nil {
 		return fmt.Errorf("failed to register workflow: %w", err)
 	}
@@ -275,7 +277,9 @@ func (h *handler) workflowExists() error {
 }
 
 func (h *handler) displayWorkflowDetails() {
-	fmt.Printf("\nDeploying Workflow : \t %s\n", h.inputs.WorkflowName)
-	fmt.Printf("Target : \t\t %s\n", h.settings.User.TargetName)
-	fmt.Printf("Owner Address : \t %s\n\n", h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress)
+	ui.Line()
+	ui.Title(fmt.Sprintf("Deploying Workflow: %s", h.inputs.WorkflowName))
+	ui.Dim(fmt.Sprintf("Target:        %s", h.settings.User.TargetName))
+	ui.Dim(fmt.Sprintf("Owner Address: %s", h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress))
+	ui.Line()
 }

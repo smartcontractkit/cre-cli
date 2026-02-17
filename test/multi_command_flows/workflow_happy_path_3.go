@@ -370,7 +370,7 @@ func RunHappyPath3aWorkflow(t *testing.T, tc TestConfig, projectName, ownerAddre
 
 	// Step 1: Initialize new project with workflow
 	initOut, gqlURL := workflowInit(t, tc.GetProjectRootFlag(), projectName, workflowName)
-	require.Contains(t, initOut, "Workflow initialized successfully", "expected init to succeed.\nCLI OUTPUT:\n%s", initOut)
+	require.Contains(t, initOut, "Project created successfully", "expected init to succeed.\nCLI OUTPUT:\n%s", initOut)
 
 	// Build the project root flag pointing to the newly created project
 	parts := strings.Split(tc.GetProjectRootFlag(), "=")

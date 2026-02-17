@@ -3,7 +3,6 @@ package settings
 import (
 	_ "embed"
 	"fmt"
-	"io"
 	"os"
 	"path"
 	"path/filepath"
@@ -11,7 +10,7 @@ import (
 
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/context"
-	"github.com/smartcontractkit/cre-cli/internal/prompt"
+	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
 //go:embed template/project.yaml.tpl
@@ -64,15 +63,17 @@ func GenerateFileFromTemplate(outputPath string, templateContent string, replace
 	return nil
 }
 
-func GenerateProjectEnvFile(workingDirectory string, stdin io.Reader) (string, error) {
+func GenerateProjectEnvFile(workingDirectory string) (string, error) {
 	outputPath, err := filepath.Abs(path.Join(workingDirectory, constants.DefaultEnvFileName))
 	if err != nil {
 		return "", fmt.Errorf("failed to resolve absolute path for writing file: %w", err)
 	}
 
 	if _, err := os.Stat(outputPath); err == nil {
-		msg := fmt.Sprintf("A project environment file already exists at %s. Continuing will overwrite this file. Do you want to proceed?", outputPath)
-		shouldContinue, err := prompt.YesNoPrompt(stdin, msg)
+		shouldContinue, err := ui.Confirm(
+			fmt.Sprintf("A project environment file already exists at %s. Continuing will overwrite this file.", outputPath),
+			ui.WithDescription("Do you want to proceed?"),
+		)
 		if err != nil {
 			return "", fmt.Errorf("failed to prompt for file overwrite confirmation: %w", err)
 		}
@@ -98,7 +99,7 @@ func GenerateProjectEnvFile(workingDirectory string, stdin io.Reader) (string, e
 	return outputPath, nil
 }
 
-func GenerateProjectSettingsFile(workingDirectory string, stdin io.Reader) (string, bool, error) {
+func GenerateProjectSettingsFile(workingDirectory string) (string, bool, error) {
 	replacements := GetDefaultReplacements()
 
 	outputPath, err := filepath.Abs(path.Join(workingDirectory, constants.DefaultProjectSettingsFileName))
@@ -107,8 +108,10 @@ func GenerateProjectSettingsFile(workingDirectory string, stdin io.Reader) (stri
 	}
 
 	if _, err := os.Stat(outputPath); err == nil {
-		msg := fmt.Sprintf("A project settings file already exists at %s. Continuing will overwrite this file. Do you want to proceed?", outputPath)
-		shouldContinue, err := prompt.YesNoPrompt(stdin, msg)
+		shouldContinue, err := ui.Confirm(
+			fmt.Sprintf("A project settings file already exists at %s. Continuing will overwrite this file.", outputPath),
+			ui.WithDescription("Do you want to proceed?"),
+		)
 		if err != nil {
 			return "", false, fmt.Errorf("failed to prompt for file overwrite confirmation: %w", err)
 		}

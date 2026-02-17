@@ -19,6 +19,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/types"
+	"github.com/smartcontractkit/cre-cli/internal/ui"
 	"github.com/smartcontractkit/cre-cli/internal/validation"
 )
 
@@ -171,7 +172,7 @@ func (h *handler) Execute() error {
 		return err
 	}
 
-	fmt.Printf("Activating workflow: Name=%s, Owner=%s, WorkflowID=%s\n", workflowName, workflowOwner, hex.EncodeToString(latest.WorkflowId[:]))
+	ui.Dim(fmt.Sprintf("Activating workflow: Name=%s, Owner=%s, WorkflowID=%s", workflowName, workflowOwner, hex.EncodeToString(latest.WorkflowId[:])))
 
 	txOut, err := h.wrc.ActivateWorkflow(latest.WorkflowId, h.inputs.DonFamily)
 	if err != nil {
@@ -180,29 +181,30 @@ func (h *handler) Execute() error {
 
 	switch txOut.Type {
 	case client.Regular:
-		fmt.Printf("Transaction confirmed: %s\n", txOut.Hash)
-		fmt.Printf("View on explorer: \033]8;;%s/tx/%s\033\\%s/tx/%s\033]8;;\033\\\n", h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash, h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash)
-		fmt.Println("\n[OK] Workflow activated successfully")
-		fmt.Printf("   Contract address:\t%s\n", h.environmentSet.WorkflowRegistryAddress)
-		fmt.Printf("   Transaction hash:\t%s\n", txOut.Hash)
-		fmt.Printf("   Workflow Name:\t%s\n", workflowName)
-		fmt.Printf("   Workflow ID:\t%s\n", hex.EncodeToString(latest.WorkflowId[:]))
+		ui.Success(fmt.Sprintf("Transaction confirmed: %s", txOut.Hash))
+		ui.URL(fmt.Sprintf("%s/tx/%s", h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash))
+		ui.Line()
+		ui.Success("Workflow activated successfully")
+		ui.Dim(fmt.Sprintf("   Contract address: %s", h.environmentSet.WorkflowRegistryAddress))
+		ui.Dim(fmt.Sprintf("   Transaction hash: %s", txOut.Hash))
+		ui.Dim(fmt.Sprintf("   Workflow Name:    %s", workflowName))
+		ui.Dim(fmt.Sprintf("   Workflow ID:      %s", hex.EncodeToString(latest.WorkflowId[:])))
 
 	case client.Raw:
-		fmt.Println("")
-		fmt.Println("MSIG workflow activation transaction prepared!")
-		fmt.Printf("To Activate %s with workflowID: %s\n", workflowName, hex.EncodeToString(latest.WorkflowId[:]))
-		fmt.Println("")
-		fmt.Println("Next steps:")
-		fmt.Println("")
-		fmt.Println("   1. Submit the following transaction on the target chain:")
-		fmt.Printf("      Chain:   %s\n", h.inputs.WorkflowRegistryContractChainName)
-		fmt.Printf("      Contract Address: %s\n", txOut.RawTx.To)
-		fmt.Println("")
-		fmt.Println("   2. Use the following transaction data:")
-		fmt.Println("")
-		fmt.Printf("      %x\n", txOut.RawTx.Data)
-		fmt.Println("")
+		ui.Line()
+		ui.Success("MSIG workflow activation transaction prepared!")
+		ui.Dim(fmt.Sprintf("To Activate %s with workflowID: %s", workflowName, hex.EncodeToString(latest.WorkflowId[:])))
+		ui.Line()
+		ui.Bold("Next steps:")
+		ui.Line()
+		ui.Print("   1. Submit the following transaction on the target chain:")
+		ui.Dim(fmt.Sprintf("      Chain:            %s", h.inputs.WorkflowRegistryContractChainName))
+		ui.Dim(fmt.Sprintf("      Contract Address: %s", txOut.RawTx.To))
+		ui.Line()
+		ui.Print("   2. Use the following transaction data:")
+		ui.Line()
+		ui.Code(fmt.Sprintf("      %x", txOut.RawTx.Data))
+		ui.Line()
 
 	case client.Changeset:
 		chainSelector, err := settings.GetChainSelectorByChainName(h.environmentSet.WorkflowRegistryChainName)
@@ -211,7 +213,7 @@ func (h *handler) Execute() error {
 		}
 		mcmsConfig, err := settings.GetMCMSConfig(h.settings, chainSelector)
 		if err != nil {
-			fmt.Println("\nMCMS config not found or is incorrect, skipping MCMS config in changeset")
+			ui.Warning("MCMS config not found or is incorrect, skipping MCMS config in changeset")
 		}
 		cldSettings := h.settings.CLDSettings
 		changesets := []types.Changeset{
@@ -246,7 +248,9 @@ func (h *handler) Execute() error {
 }
 
 func (h *handler) displayWorkflowDetails() {
-	fmt.Printf("\nActivating Workflow : \t %s\n", h.inputs.WorkflowName)
-	fmt.Printf("Target : \t\t %s\n", h.settings.User.TargetName)
-	fmt.Printf("Owner Address : \t %s\n\n", h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress)
+	ui.Line()
+	ui.Title(fmt.Sprintf("Activating Workflow: %s", h.inputs.WorkflowName))
+	ui.Dim(fmt.Sprintf("Target:        %s", h.settings.User.TargetName))
+	ui.Dim(fmt.Sprintf("Owner Address: %s", h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress))
+	ui.Line()
 }

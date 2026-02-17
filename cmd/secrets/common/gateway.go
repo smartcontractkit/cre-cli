@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/avast/retry-go/v4"
+
+	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
 type GatewayClient interface {
@@ -61,7 +63,7 @@ func (g *HTTPClient) Post(body []byte) ([]byte, int, error) {
 		retry.Delay(delay),
 		retry.LastErrorOnly(true),
 		retry.OnRetry(func(n uint, err error) {
-			fmt.Printf("Waiting for on-chain allowlist finalization... (attempt %d/%d): %v\n", n+1, attempts, err)
+			ui.Dim(fmt.Sprintf("Waiting for on-chain allowlist finalization... (attempt %d/%d): %v", n+1, attempts, err))
 		}),
 	)
 
@@ -84,7 +86,7 @@ func (g *HTTPClient) postOnce(body []byte) ([]byte, int, error) {
 		return nil, 0, fmt.Errorf("HTTP client is not initialized")
 	}
 
-	resp, err := g.Client.Do(req)
+	resp, err := g.Client.Do(req) // #nosec G704 -- URL is from trusted CLI configuration
 	if err != nil {
 		return nil, 0, fmt.Errorf("HTTP request to gateway failed: %w", err)
 	}

@@ -1,9 +1,7 @@
 package common
 
 import (
-	"bufio"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -26,6 +24,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/logger"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	inttypes "github.com/smartcontractkit/cre-cli/internal/types"
+	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
 func ValidateEventSignature(l *zerolog.Logger, tx *seth.DecodedTransaction, e abi.Event) (bool, int) {
@@ -74,27 +73,6 @@ func GetDirectoryName() (string, error) {
 		return "", fmt.Errorf("failed to get working directory: %w", err)
 	}
 	return filepath.Base(wd), nil
-}
-
-func MustGetUserInputWithPrompt(l *zerolog.Logger, prompt string) (string, error) {
-	reader := bufio.NewReader(os.Stdin)
-	l.Info().Msg(prompt)
-	var input string
-
-	for attempt := 0; attempt < 5; attempt++ {
-		var err error
-		input, err = reader.ReadString('\n')
-		if err != nil {
-			l.Info().Msg("✋ Failed to read user input, please try again.")
-		}
-		if input != "\n" {
-			return strings.TrimRight(input, "\n"), nil
-		}
-		l.Info().Msg("✋ Invalid input, please try again")
-	}
-
-	l.Info().Msg("✋ Maximum number of attempts reached, aborting")
-	return "", errors.New("maximum attempts reached")
 }
 
 func AddTimeStampToFileName(fileName string) string {
@@ -263,9 +241,9 @@ func WriteChangesetFile(fileName string, changesetFile *inttypes.ChangesetFile, 
 		return fmt.Errorf("failed to write changeset yaml file: %w", err)
 	}
 
-	fmt.Println("")
-	fmt.Println("Changeset YAML file generated!")
-	fmt.Printf("File: %s\n", fullFilePath)
-	fmt.Println("")
+	ui.Line()
+	ui.Success("Changeset YAML file generated!")
+	ui.Code(fullFilePath)
+	ui.Line()
 	return nil
 }
