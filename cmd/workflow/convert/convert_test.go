@@ -5,9 +5,13 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 
 	"github.com/smartcontractkit/cre-cli/internal/constants"
+	"github.com/smartcontractkit/cre-cli/internal/runtime"
+	"github.com/smartcontractkit/cre-cli/internal/settings"
+	"github.com/smartcontractkit/cre-cli/internal/testutil"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
@@ -33,6 +37,56 @@ production-settings:
 	err := h.Execute(Inputs{WorkflowFolder: dir, Force: true})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "already a custom build")
+}
+
+func TestConvert_ProjectRootFlag_ResolvesWorkflowDir(t *testing.T) {
+	// Project layout: projectRoot/workflowName/ with workflow.yaml and main.go.
+	// Each subtest gets its own dir so they don't share state (second run would see "already custom build").
+	makeWorkflowUnderProjectRoot := func(t *testing.T) (projectRoot, workflowDir, workflowName string) {
+		t.Helper()
+		projectRoot = t.TempDir()
+		workflowName = "my-wf"
+		workflowDir = filepath.Join(projectRoot, workflowName)
+		require.NoError(t, os.MkdirAll(workflowDir, 0755))
+		workflowYAML := filepath.Join(workflowDir, constants.DefaultWorkflowSettingsFileName)
+		mainGo := filepath.Join(workflowDir, "main.go")
+		yamlContent := `staging-settings:
+  user-workflow:
+    workflow-name: "wf-staging"
+  workflow-artifacts:
+    workflow-path: "."
+    config-path: "./config.staging.json"
+production-settings:
+  user-workflow:
+    workflow-name: "wf-production"
+  workflow-artifacts:
+    workflow-path: "."
+    config-path: "./config.production.json"
+`
+		require.NoError(t, os.WriteFile(workflowYAML, []byte(yamlContent), 0600))
+		require.NoError(t, os.WriteFile(mainGo, []byte("package main\n"), 0600))
+		return projectRoot, workflowDir, workflowName
+	}
+
+	for _, flagName := range []string{"-R", "--project-root"} {
+		t.Helper()
+		projectRoot, workflowDir, workflowName := makeWorkflowUnderProjectRoot(t)
+		v := viper.New()
+		v.Set(settings.Flags.ProjectRoot.Name, projectRoot)
+		ctx := &runtime.Context{Viper: v, Logger: testutil.NewTestLogger()}
+		h := newHandler(ctx)
+		h.confirmFn = func(_ string, _ ...ui.ConfirmOption) (bool, error) { return true, nil }
+		err := h.Execute(Inputs{WorkflowFolder: workflowName, Force: false})
+		require.NoError(t, err)
+
+		workflowYAML := filepath.Join(workflowDir, constants.DefaultWorkflowSettingsFileName)
+		data, err := os.ReadFile(workflowYAML)
+		require.NoError(t, err)
+		require.Contains(t, string(data), wasmWorkflowPath, "flag %s: workflow.yaml should be updated", flagName)
+		require.FileExists(t, filepath.Join(workflowDir, "Makefile"), "flag %s: Makefile should be created in workflow dir", flagName)
+		require.DirExists(t, filepath.Join(workflowDir, "wasm"), "flag %s: wasm dir should exist", flagName)
+		
+	}
 }
 
 func TestConvert_Force_UpdatesYAMLAndCreatesMakefile(t *testing.T) {

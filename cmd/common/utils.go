@@ -200,10 +200,8 @@ func EnsureTool(bin string) error {
 }
 
 func WriteChangesetFile(fileName string, changesetFile *inttypes.ChangesetFile, settings *settings.Settings) error {
-	// Set project context to ensure we're in the correct directory for writing the changeset file
-	// This is needed because workflow commands set the workflow directory as the context, but path for changeset file is relative to the project root
-	err := context.SetProjectContext("")
-	if err != nil {
+	// Set project context so the changeset path is resolved from project root
+	if err := context.SetProjectContext(""); err != nil {
 		return err
 	}
 

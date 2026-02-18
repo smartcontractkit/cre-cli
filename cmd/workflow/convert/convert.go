@@ -13,6 +13,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
+	"github.com/smartcontractkit/cre-cli/internal/transformation"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
@@ -65,9 +66,31 @@ func newHandler(runtimeContext *runtime.Context) *handler {
 }
 
 func (h *handler) Execute(inputs Inputs) error {
-	workflowDir, err := filepath.Abs(inputs.WorkflowFolder)
-	if err != nil {
-		return fmt.Errorf("workflow folder path: %w", err)
+	projectRoot := ""
+	if h.runtimeContext != nil && h.runtimeContext.Viper != nil {
+		projectRoot = h.runtimeContext.Viper.GetString(settings.Flags.ProjectRoot.Name)
+	}
+	var workflowDir string
+	if projectRoot != "" {
+		// Use the same resolution as other workflow commands: ResolveWorkflowPath resolves relative to CWD
+		prevWd, err := os.Getwd()
+		if err != nil {
+			return fmt.Errorf("workflow folder path: %w", err)
+		}
+		if err := os.Chdir(projectRoot); err != nil {
+			return fmt.Errorf("project root path: %w", err)
+		}
+		defer func() { _ = os.Chdir(prevWd) }()
+		workflowDir, err = transformation.ResolveWorkflowPath(inputs.WorkflowFolder)
+		if err != nil {
+			return err
+		}
+	} else {
+		var err error
+		workflowDir, err = transformation.ResolveWorkflowPath(inputs.WorkflowFolder)
+		if err != nil {
+			return err
+		}
 	}
 	workflowYAML := filepath.Join(workflowDir, constants.DefaultWorkflowSettingsFileName)
 	currentPath, err := settings.GetWorkflowPathFromFile(workflowYAML)
