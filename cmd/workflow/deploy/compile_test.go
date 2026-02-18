@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/testutil/chainsim"
@@ -93,6 +94,11 @@ func TestCompileCmd(t *testing.T) {
 				defer simulatedEnvironment.Close()
 
 				ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
+				ctx.Credentials = &credentials.Credentials{
+					APIKey:      "test-api-key",
+					AuthType:    credentials.AuthTypeApiKey,
+					IsValidated: true,
+				}
 				handler := newHandler(ctx, buf)
 
 				ctx.Settings = createTestSettings(
@@ -199,6 +205,11 @@ func TestCompileCmd(t *testing.T) {
 					os.Stdout = w
 
 					ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
+					ctx.Credentials = &credentials.Credentials{
+						APIKey:      "test-api-key",
+						AuthType:    credentials.AuthTypeApiKey,
+						IsValidated: true,
+					}
 					handler := newHandler(ctx, buf)
 
 					ctx.Settings = createTestSettings(
