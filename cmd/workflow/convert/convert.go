@@ -47,13 +47,17 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	return convertCmd
 }
 
+// confirmFn is the type for the confirmation prompt; production uses ui.Confirm (Charm).
+type confirmFn func(title string, opts ...ui.ConfirmOption) (bool, error)
+
 type handler struct {
 	log            *zerolog.Logger
 	runtimeContext *runtime.Context
+	confirmFn      confirmFn // always set: ui.Confirm in production, test double in tests
 }
 
 func newHandler(runtimeContext *runtime.Context) *handler {
-	h := &handler{runtimeContext: runtimeContext}
+	h := &handler{runtimeContext: runtimeContext, confirmFn: ui.Confirm}
 	if runtimeContext != nil {
 		h.log = runtimeContext.Logger
 	}
@@ -83,7 +87,7 @@ func (h *handler) Execute(inputs Inputs) error {
 	}
 
 	if !inputs.Force {
-		confirmed, err := ui.Confirm(convertWarning, ui.WithLabels("Yes", "No"))
+		confirmed, err := h.confirmFn(convertWarning, ui.WithLabels("Yes", "No"))
 		if err != nil {
 			return err
 		}

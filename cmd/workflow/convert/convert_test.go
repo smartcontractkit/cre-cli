@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/smartcontractkit/cre-cli/internal/constants"
+	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
 func TestConvert_AlreadyWasm_ReturnsError(t *testing.T) {
@@ -71,15 +72,98 @@ production-settings:
 }
 
 func TestConvert_PromptNo_Cancels(t *testing.T) {
-	t.Skip("Charm ui.Confirm requires TTY; use Force in production or run test with TTY")
+	dir := t.TempDir()
+	workflowYAML := filepath.Join(dir, constants.DefaultWorkflowSettingsFileName)
+	mainGo := filepath.Join(dir, "main.go")
+	yamlContent := `staging-settings:
+  user-workflow:
+    workflow-name: "wf-staging"
+  workflow-artifacts:
+    workflow-path: "."
+    config-path: "./config.staging.json"
+production-settings:
+  user-workflow:
+    workflow-name: "wf-production"
+  workflow-artifacts:
+    workflow-path: "."
+    config-path: "./config.production.json"
+`
+	require.NoError(t, os.WriteFile(workflowYAML, []byte(yamlContent), 0600))
+	require.NoError(t, os.WriteFile(mainGo, []byte("package main\n"), 0600))
+
+	h := newHandler(nil)
+	h.confirmFn = func(_ string, _ ...ui.ConfirmOption) (bool, error) { return false, nil }
+	err := h.Execute(Inputs{WorkflowFolder: dir, Force: false})
+	require.NoError(t, err)
+
+	data, err := os.ReadFile(workflowYAML)
+	require.NoError(t, err)
+	require.Contains(t, string(data), "workflow-path: \".\"")
+	require.NotContains(t, string(data), wasmWorkflowPath)
+	require.NoFileExists(t, filepath.Join(dir, "Makefile"))
 }
 
 func TestConvert_PromptYes_Proceeds(t *testing.T) {
-	t.Skip("Charm ui.Confirm requires TTY; use Force in production or run test with TTY")
+	dir := t.TempDir()
+	workflowYAML := filepath.Join(dir, constants.DefaultWorkflowSettingsFileName)
+	mainGo := filepath.Join(dir, "main.go")
+	yamlContent := `staging-settings:
+  user-workflow:
+    workflow-name: "wf-staging"
+  workflow-artifacts:
+    workflow-path: "."
+    config-path: "./config.staging.json"
+production-settings:
+  user-workflow:
+    workflow-name: "wf-production"
+  workflow-artifacts:
+    workflow-path: "."
+    config-path: "./config.production.json"
+`
+	require.NoError(t, os.WriteFile(workflowYAML, []byte(yamlContent), 0600))
+	require.NoError(t, os.WriteFile(mainGo, []byte("package main\n"), 0600))
+
+	h := newHandler(nil)
+	h.confirmFn = func(_ string, _ ...ui.ConfirmOption) (bool, error) { return true, nil }
+	err := h.Execute(Inputs{WorkflowFolder: dir, Force: false})
+	require.NoError(t, err)
+
+	data, err := os.ReadFile(workflowYAML)
+	require.NoError(t, err)
+	require.Contains(t, string(data), wasmWorkflowPath)
+	require.FileExists(t, filepath.Join(dir, "Makefile"))
+	require.DirExists(t, filepath.Join(dir, "wasm"))
 }
 
 func TestConvert_PromptEmpty_DefaultsYes_Proceeds(t *testing.T) {
-	t.Skip("Charm ui.Confirm requires TTY; use Force in production or run test with TTY")
+	dir := t.TempDir()
+	workflowYAML := filepath.Join(dir, constants.DefaultWorkflowSettingsFileName)
+	mainGo := filepath.Join(dir, "main.go")
+	yamlContent := `staging-settings:
+  user-workflow:
+    workflow-name: "wf-staging"
+  workflow-artifacts:
+    workflow-path: "."
+    config-path: "./config.staging.json"
+production-settings:
+  user-workflow:
+    workflow-name: "wf-production"
+  workflow-artifacts:
+    workflow-path: "."
+    config-path: "./config.production.json"
+`
+	require.NoError(t, os.WriteFile(workflowYAML, []byte(yamlContent), 0600))
+	require.NoError(t, os.WriteFile(mainGo, []byte("package main\n"), 0600))
+
+	h := newHandler(nil)
+	h.confirmFn = func(_ string, _ ...ui.ConfirmOption) (bool, error) { return true, nil }
+	err := h.Execute(Inputs{WorkflowFolder: dir, Force: false})
+	require.NoError(t, err)
+
+	data, err := os.ReadFile(workflowYAML)
+	require.NoError(t, err)
+	require.Contains(t, string(data), wasmWorkflowPath)
+	require.FileExists(t, filepath.Join(dir, "Makefile"))
 }
 
 func TestConvert_TS_InstallsDepsIfNoNodeModules(t *testing.T) {
