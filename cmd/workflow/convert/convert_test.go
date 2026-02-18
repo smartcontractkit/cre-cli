@@ -69,7 +69,6 @@ production-settings:
 	}
 
 	for _, flagName := range []string{"-R", "--project-root"} {
-		t.Helper()
 		projectRoot, workflowDir, workflowName := makeWorkflowUnderProjectRoot(t)
 		v := viper.New()
 		v.Set(settings.Flags.ProjectRoot.Name, projectRoot)
@@ -85,7 +84,7 @@ production-settings:
 		require.Contains(t, string(data), wasmWorkflowPath, "flag %s: workflow.yaml should be updated", flagName)
 		require.FileExists(t, filepath.Join(workflowDir, "Makefile"), "flag %s: Makefile should be created in workflow dir", flagName)
 		require.DirExists(t, filepath.Join(workflowDir, "wasm"), "flag %s: wasm dir should exist", flagName)
-		
+
 	}
 }
 

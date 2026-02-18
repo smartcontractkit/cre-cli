@@ -374,7 +374,7 @@ func (h *handler) printSuccessMessage(projectRoot, workflowName, workflowDirecto
 			"     " + ui.RenderDim("cd "+projBase) + "\n\n" +
 			ui.RenderStep("2. Run the workflow:") + "\n" +
 			"     " + ui.RenderDim("cre workflow simulate "+workflowName) + "\n\n" +
-			ui.RenderStep("3. (Optional) Consult " + readmeHint + " to learn more about this template.")
+			ui.RenderStep("3. (Optional) Consult "+readmeHint+" to learn more about this template.")
 	case TemplateLangTS:
 		steps = ui.RenderStep("1. Navigate to your project:") + "\n" +
 			"     " + ui.RenderDim("cd "+projBase) + "\n\n" +
@@ -384,7 +384,7 @@ func (h *handler) printSuccessMessage(projectRoot, workflowName, workflowDirecto
 			"     " + ui.RenderDim("bun install --cwd ./"+workflowName) + "\n\n" +
 			ui.RenderStep("4. Run the workflow:") + "\n" +
 			"     " + ui.RenderDim("cre workflow simulate "+workflowName) + "\n\n" +
-			ui.RenderStep("5. (Optional) Consult " + readmeHint + " to learn more about this template.")
+			ui.RenderStep("5. (Optional) Consult "+readmeHint+" to learn more about this template.")
 	default:
 		steps = ui.RenderStep("1. Navigate to your project:") + "\n" +
 			"     " + ui.RenderDim("cd "+projBase) + "\n\n" +
