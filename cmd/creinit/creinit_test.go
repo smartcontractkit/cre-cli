@@ -243,24 +243,22 @@ func TestInitExecuteFlows(t *testing.T) {
 			language:            "typescript",
 		},
 		{
-			name:             "TS PoR template",
-			projectNameFlag:  "tsPorProj",
-			templateIDFlag:   4, // TypeScript PoR
-			workflowNameFlag: "ts-por-wf",
-			rpcURLFlag:       "https://sepolia.example/rpc",
-			mockResponses:       []string{},
+			name:                "TS PoR template",
+			projectNameFlag:     "tsPorProj",
+			templateIDFlag:      4, // TypeScript PoR
+			workflowNameFlag:    "ts-por-wf",
+			rpcURLFlag:          "https://sepolia.example/rpc",
 			expectProjectDirRel: "tsPorProj",
 			expectWorkflowName:  "ts-por-wf",
 			expectTemplateFiles: GetTemplateFileListTS(),
 			language:            "typescript",
 		},
 		{
-			name:             "TS Confidential HTTP template",
-			projectNameFlag:  "tsConfHTTP",
-			templateIDFlag:   5, // TypeScript Confidential HTTP
-			workflowNameFlag: "ts-confhttp-wf",
-			rpcURLFlag:       "",
-			mockResponses:       []string{},
+			name:                "TS Confidential HTTP template",
+			projectNameFlag:     "tsConfHTTP",
+			templateIDFlag:      5, // TypeScript Confidential HTTP
+			workflowNameFlag:    "ts-confhttp-wf",
+			rpcURLFlag:          "",
 			expectProjectDirRel: "tsConfHTTP",
 			expectWorkflowName:  "ts-confhttp-wf",
 			expectTemplateFiles: GetTemplateFileListTS(),
