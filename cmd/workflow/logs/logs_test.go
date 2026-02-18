@@ -180,6 +180,44 @@ func TestExecute(t *testing.T) {
 		assert.Greater(t, failureIdx, successIdx, "oldest execution should appear first")
 	})
 
+	t.Run("long error is truncated keeping tail", func(t *testing.T) {
+		longErr := "failed to execute enclave request. enclave ID: abc123, error: attestation validation failed for ExecuteBatch: expected PCR0 deadbeef, got cafebabe"
+		ts := newMockGraphQL(t, mockConfig{
+			workflows: []map[string]any{
+				{"uuid": "wf-1", "name": "test-workflow", "status": "ACTIVE"},
+			},
+			executions: []map[string]any{
+				{
+					"uuid":       "exec-1",
+					"status":     "FAILURE",
+					"startedAt":  "2026-02-12T16:00:00Z",
+					"finishedAt": "2026-02-12T16:00:01Z",
+				},
+			},
+			events: []map[string]any{
+				{
+					"capabilityID": "confidential-http@1.0.0",
+					"status":       "failure",
+					"errors":       []map[string]any{{"error": longErr, "count": 1}},
+				},
+			},
+		})
+		defer ts.Close()
+
+		output := captureStdout(t, func() {
+			h := newTestHandler(ts.URL, "test-workflow", false, 10)
+			err := h.Execute(context.Background())
+			require.NoError(t, err)
+		})
+
+		// Head (beginning) should be present
+		assert.Contains(t, output, "failed to execute enclave")
+		// Tail (last 40%) should survive truncation
+		assert.Contains(t, output, "expected PCR0 deadbeef, got cafebabe")
+		// Middle should be elided
+		assert.Contains(t, output, "...")
+	})
+
 	t.Run("workflow not found", func(t *testing.T) {
 		ts := newMockGraphQL(t, mockConfig{})
 		defer ts.Close()

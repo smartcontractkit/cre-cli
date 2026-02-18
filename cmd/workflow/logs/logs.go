@@ -289,7 +289,12 @@ func (h *handler) printErrors(ctx context.Context, client *graphqlclient.Client,
 		if ev.Status == "failure" && len(ev.Errors) > 0 {
 			errMsg := ev.Errors[0].Error
 			if len(errMsg) > 120 {
-				errMsg = errMsg[:120] + "..."
+				tail := errMsg[len(errMsg)-len(errMsg)*2/5:] // last 40%
+				head := 120 - len(tail) - 3
+				if head < 0 {
+					head = 0
+				}
+				errMsg = errMsg[:head] + "..." + tail
 			}
 			fmt.Printf("  -> %s: %s\n", ev.CapabilityID, errMsg)
 		}
