@@ -15,6 +15,7 @@ import (
 
 	"github.com/smartcontractkit/cre-cli/cmd/account"
 	"github.com/smartcontractkit/cre-cli/cmd/client"
+	"github.com/smartcontractkit/cre-cli/cmd/contract"
 	"github.com/smartcontractkit/cre-cli/cmd/creinit"
 	generatebindings "github.com/smartcontractkit/cre-cli/cmd/generate-bindings"
 	"github.com/smartcontractkit/cre-cli/cmd/login"
@@ -316,6 +317,7 @@ func newRootCommand() *cobra.Command {
 
 	secretsCmd := secrets.New(runtimeContext)
 	workflowCmd := workflow.New(runtimeContext)
+	contractCmd := contract.New(runtimeContext)
 	versionCmd := version.New(runtimeContext)
 	loginCmd := login.New(runtimeContext)
 	logoutCmd := logout.New(runtimeContext)
@@ -327,11 +329,13 @@ func newRootCommand() *cobra.Command {
 
 	secretsCmd.RunE = helpRunE
 	workflowCmd.RunE = helpRunE
+	contractCmd.RunE = helpRunE
 	accountCmd.RunE = helpRunE
 
 	// Define groups (order controls display order)
 	rootCmd.AddGroup(&cobra.Group{ID: "getting-started", Title: "Getting Started"})
 	rootCmd.AddGroup(&cobra.Group{ID: "account", Title: "Account"})
+	rootCmd.AddGroup(&cobra.Group{ID: "contract", Title: "Contract"})
 	rootCmd.AddGroup(&cobra.Group{ID: "workflow", Title: "Workflow"})
 	rootCmd.AddGroup(&cobra.Group{ID: "secret", Title: "Secret"})
 
@@ -342,6 +346,7 @@ func newRootCommand() *cobra.Command {
 	accountCmd.GroupID = "account"
 	whoamiCmd.GroupID = "account"
 
+	contractCmd.GroupID = "contract"
 	secretsCmd.GroupID = "secret"
 	workflowCmd.GroupID = "workflow"
 
@@ -352,6 +357,7 @@ func newRootCommand() *cobra.Command {
 		logoutCmd,
 		accountCmd,
 		whoamiCmd,
+		contractCmd,
 		secretsCmd,
 		workflowCmd,
 		genBindingsCmd,
@@ -378,6 +384,7 @@ func isLoadSettings(cmd *cobra.Command) bool {
 		"cre help":                  {},
 		"cre update":                {},
 		"cre workflow":              {},
+		"cre contract":              {},
 		"cre account":               {},
 		"cre secrets":               {},
 		"cre":                       {},
@@ -401,6 +408,8 @@ func isLoadCredentials(cmd *cobra.Command) bool {
 		"cre generate-bindings":     {},
 		"cre update":                {},
 		"cre workflow":              {},
+		"cre contract":              {},
+		"cre contract deploy":       {},
 		"cre account":               {},
 		"cre secrets":               {},
 		"cre":                       {},
@@ -416,6 +425,7 @@ func isLoadDeploymentRPC(cmd *cobra.Command) bool {
 		"cre workflow pause":     {},
 		"cre workflow activate":  {},
 		"cre workflow delete":    {},
+		"cre contract deploy":    {},
 		"cre account link-key":   {},
 		"cre account unlink-key": {},
 		"cre secrets create":     {},

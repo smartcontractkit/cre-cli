@@ -33,6 +33,7 @@ const bindEnvErrorMessage = "Not able to bind environment variables that represe
 
 // Settings holds user, project, and workflow configurations.
 type Settings struct {
+	ProjectRoot     string
 	Workflow        WorkflowSettings
 	User            UserSettings
 	StorageSettings WorkflowStorageSettings
@@ -90,7 +91,14 @@ func New(logger *zerolog.Logger, v *viper.Viper, cmd *cobra.Command, registryCha
 	rawPrivKey := v.GetString(EthPrivateKeyEnvVar)
 	normPrivKey := NormalizeHexKey(rawPrivKey)
 
+	// Get project root from CWD (already set by SetProjectContext in root.go)
+	projectRoot, err := os.Getwd()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get project root: %w", err)
+	}
+
 	return &Settings{
+		ProjectRoot: projectRoot,
 		User: UserSettings{
 			EthPrivateKey: normPrivKey,
 			TargetName:    target,
