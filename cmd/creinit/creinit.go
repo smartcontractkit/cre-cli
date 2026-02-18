@@ -29,9 +29,8 @@ const SecretsFileName = "secrets.yaml"
 type TemplateLanguage string
 
 const (
-	TemplateLangGo   TemplateLanguage = "go"
-	TemplateLangTS   TemplateLanguage = "typescript"
-	TemplateLangWasm TemplateLanguage = "wasm"
+	TemplateLangGo TemplateLanguage = "go"
+	TemplateLangTS TemplateLanguage = "typescript"
 )
 
 const (
@@ -73,14 +72,6 @@ var languageTemplates = []LanguageTemplate{
 			{Folder: "typescriptSimpleExample", Title: "Helloworld: Typescript Hello World example", ID: 3, Name: HelloWorldTemplate},
 			{Folder: "typescriptPorExampleDev", Title: "Custom data feed: Typescript updating on-chain data periodically using offchain API data", ID: 4, Name: PoRTemplate},
 			{Folder: "typescriptConfHTTP", Title: "Confidential Http: Typescript example using the confidential http capability", ID: 5, Name: ConfHTTPTemplate, Hidden: true},
-		},
-	},
-	{
-		Title:      "Self-compiled WASM (advanced)",
-		Lang:       TemplateLangWasm,
-		EntryPoint: "./wasm/workflow.wasm",
-		Workflows: []WorkflowTemplate{
-			{Folder: "wasmBlankTemplate", Title: "Blank: Self-compiled WASM workflow template", ID: 6, Name: HelloWorldTemplate},
 		},
 	},
 }
@@ -342,8 +333,6 @@ func (h *handler) Execute(inputs Inputs) error {
 			h.runtimeContext.Workflow.Language = constants.WorkflowLanguageGolang
 		case TemplateLangTS:
 			h.runtimeContext.Workflow.Language = constants.WorkflowLanguageTypeScript
-		case TemplateLangWasm:
-			h.runtimeContext.Workflow.Language = constants.WorkflowLanguageWasm
 		}
 	}
 
@@ -393,16 +382,6 @@ func (h *handler) printSuccessMessage(projectRoot, workflowName, workflowDirecto
 			"     " + ui.RenderDim("npm install -g bun") + "\n\n" +
 			ui.RenderStep("3. Install workflow dependencies:") + "\n" +
 			"     " + ui.RenderDim("bun install --cwd ./"+workflowName) + "\n\n" +
-			ui.RenderStep("4. Run the workflow:") + "\n" +
-			"     " + ui.RenderDim("cre workflow simulate "+workflowName) + "\n\n" +
-			ui.RenderStep("5. (Optional) Consult " + readmeHint + " to learn more about this template.")
-	case TemplateLangWasm:
-		steps = ui.RenderStep("1. Navigate to your project:") + "\n" +
-			"     " + ui.RenderDim("cd "+projBase) + "\n\n" +
-			ui.RenderStep("2. Add your build logic to the Makefile:") + "\n" +
-			"     " + ui.RenderDim("Edit "+workflowDirBase+"/Makefile and implement the 'build' target") + "\n\n" +
-			ui.RenderStep("3. Build your workflow:") + "\n" +
-			"     " + ui.RenderDim("cd "+workflowName+" && make build") + "\n\n" +
 			ui.RenderStep("4. Run the workflow:") + "\n" +
 			"     " + ui.RenderDim("cre workflow simulate "+workflowName) + "\n\n" +
 			ui.RenderStep("5. (Optional) Consult " + readmeHint + " to learn more about this template.")

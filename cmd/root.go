@@ -378,7 +378,7 @@ func isLoadSettings(cmd *cobra.Command) bool {
 		"cre help":                             {},
 		"cre update":                           {},
 		"cre workflow":                         {},
-		"cre workflow convert-to-custom-build": {},
+		"cre workflow custom-build": {},
 		"cre account":                          {},
 		"cre secrets":                          {},
 		"cre":                                  {},

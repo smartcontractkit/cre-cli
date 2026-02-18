@@ -29,11 +29,11 @@ type Inputs struct {
 func New(runtimeContext *runtime.Context) *cobra.Command {
 	var force bool
 	convertCmd := &cobra.Command{
-		Use:     "convert-to-custom-build <workflow-folder-path>",
+		Use:     "custom-build <workflow-folder-path>",
 		Short:   "Converts an existing workflow to a custom (self-compiled) build",
 		Long:    `Converts a Go or TypeScript workflow to use a custom build via Makefile, producing wasm/workflow.wasm. The workflow-path in workflow.yaml is updated to ./wasm/workflow.wasm. This cannot be undone.`,
 		Args:    cobra.ExactArgs(1),
-		Example: `cre workflow convert-to-custom-build ./my-workflow`,
+		Example: `cre workflow custom-build ./my-workflow`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			handler := newHandler(runtimeContext)
 			inputs := Inputs{

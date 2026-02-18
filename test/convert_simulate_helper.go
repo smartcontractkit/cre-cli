@@ -55,7 +55,7 @@ func ConvertSimulateBeforeAfter(t *testing.T, projectRoot, workflowDir, workflow
 func convertRunConvert(t *testing.T, projectRoot, workflowDir string) {
 	t.Helper()
 	var stdout, stderr bytes.Buffer
-	cmd := exec.Command(CLIPath, "workflow", "convert-to-custom-build", workflowDir, "-f")
+	cmd := exec.Command(CLIPath, "workflow", "custom-build", workflowDir, "-f")
 	cmd.Dir = projectRoot
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
