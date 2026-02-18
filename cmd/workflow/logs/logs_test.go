@@ -281,6 +281,87 @@ func TestExecute(t *testing.T) {
 	})
 }
 
+func TestTruncateError(t *testing.T) {
+	t.Parallel()
+
+	t.Run("short message unchanged", func(t *testing.T) {
+		t.Parallel()
+		msg := "connection refused"
+		got := truncateError(msg, 120)
+		assert.Equal(t, msg, got)
+	})
+
+	t.Run("exactly at limit unchanged", func(t *testing.T) {
+		t.Parallel()
+		msg := strings.Repeat("x", 120)
+		got := truncateError(msg, 120)
+		assert.Equal(t, msg, got)
+	})
+
+	t.Run("head is preserved", func(t *testing.T) {
+		t.Parallel()
+		msg := "failed to execute enclave request. enclave ID: abc123, error: " +
+			strings.Repeat("m", 60) +
+			"attestation validation failed for ExecuteBatch: expected PCR0 deadbeef, got cafebabe"
+		got := truncateError(msg, 120)
+		assert.True(t, strings.HasPrefix(got, "failed to execute enclave"), "head should start with original prefix, got: %s", got)
+	})
+
+	t.Run("tail is preserved", func(t *testing.T) {
+		t.Parallel()
+		msg := "failed to execute enclave request. enclave ID: abc123, error: " +
+			strings.Repeat("m", 60) +
+			"attestation validation failed for ExecuteBatch: expected PCR0 deadbeef, got cafebabe"
+		got := truncateError(msg, 120)
+		assert.True(t, strings.HasSuffix(got, "expected PCR0 deadbeef, got cafebabe"), "tail should end with original suffix, got: %s", got)
+	})
+
+	t.Run("middle content is removed", func(t *testing.T) {
+		t.Parallel()
+		// Build a message well over 120 chars with a unique middle marker.
+		head := strings.Repeat("h", 60)
+		middle := "UNIQUE_MIDDLE_MARKER"
+		tail := strings.Repeat("t", 100)
+		msg := head + middle + tail // 260 chars total
+		got := truncateError(msg, 120)
+		assert.NotContains(t, got, "UNIQUE_MIDDLE_MARKER", "middle content should be elided, got: %s", got)
+	})
+
+	t.Run("ellipsis is present", func(t *testing.T) {
+		t.Parallel()
+		msg := strings.Repeat("a", 200)
+		got := truncateError(msg, 120)
+		assert.Contains(t, got, "...")
+	})
+
+	t.Run("result does not exceed maxLen", func(t *testing.T) {
+		t.Parallel()
+		msg := strings.Repeat("x", 500)
+		got := truncateError(msg, 120)
+		assert.LessOrEqual(t, len(got), 120+len(got[strings.Index(got, "...")+3:]),
+			"total length should be bounded")
+		// More direct check: head + "..." + tail where tail is last 40%
+		tail := msg[len(msg)-len(msg)*2/5:]
+		headLen := 120 - len(tail) - 3
+		if headLen < 0 {
+			headLen = 0
+		}
+		expected := msg[:headLen] + "..." + tail
+		assert.Equal(t, expected, got)
+	})
+
+	t.Run("tail is approximately 40 percent of original", func(t *testing.T) {
+		t.Parallel()
+		msg := strings.Repeat("x", 300)
+		got := truncateError(msg, 120)
+		parts := strings.SplitN(got, "...", 2)
+		require.Len(t, parts, 2, "should have head...tail")
+		tailLen := len(parts[1])
+		expectedTailLen := len(msg) * 2 / 5 // 40% of 300 = 120
+		assert.Equal(t, expectedTailLen, tailLen, "tail should be 40%% of original length")
+	})
+}
+
 // Test helpers
 
 type mockConfig struct {

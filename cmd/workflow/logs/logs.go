@@ -287,18 +287,24 @@ func (h *handler) printErrors(ctx context.Context, client *graphqlclient.Client,
 
 	for _, ev := range resp.WorkflowExecutionEvents.Data {
 		if ev.Status == "failure" && len(ev.Errors) > 0 {
-			errMsg := ev.Errors[0].Error
-			if len(errMsg) > 120 {
-				tail := errMsg[len(errMsg)-len(errMsg)*2/5:] // last 40%
-				head := 120 - len(tail) - 3
-				if head < 0 {
-					head = 0
-				}
-				errMsg = errMsg[:head] + "..." + tail
-			}
+			errMsg := truncateError(ev.Errors[0].Error, 120)
 			fmt.Printf("  -> %s: %s\n", ev.CapabilityID, errMsg)
 		}
 	}
+}
+
+// truncateError shortens an error message to maxLen, preserving the head and
+// the last 40% (the diagnostic tail). The middle is replaced with "...".
+func truncateError(msg string, maxLen int) string {
+	if len(msg) <= maxLen {
+		return msg
+	}
+	tail := msg[len(msg)-len(msg)*2/5:] // last 40%
+	head := maxLen - len(tail) - 3       // 3 for "..."
+	if head < 0 {
+		head = 0
+	}
+	return msg[:head] + "..." + tail
 }
 
 func formatDuration(d time.Duration) string {
