@@ -56,7 +56,7 @@ const fetchResult = (sendRequester: ConfidentialHTTPSendRequester, config: Confi
 	return json(response) as ResponseValues
 }
 
-const onCronTrigger = (runtime: Runtime<Config>) => {
+export const onCronTrigger = (runtime: Runtime<Config>) => {
 	runtime.log('Confidential HTTP workflow triggered.')
 
 	const confHTTPClient = new ConfidentialHTTPClient()
@@ -75,7 +75,7 @@ const onCronTrigger = (runtime: Runtime<Config>) => {
 	}
 }
 
-const initWorkflow = (config: Config) => {
+export const initWorkflow = (config: Config) => {
 	const cron = new CronCapability()
 
 	return [handler(cron.trigger({ schedule: config.schedule }), onCronTrigger)]
