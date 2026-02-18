@@ -69,7 +69,7 @@ func (r *Requester) PromptAndSubmitRequest(ctx context.Context) error {
 				CharLimit(1500).
 				Value(&useCase).
 				Validate(func(s string) error {
-					if s == "" {
+					if strings.TrimSpace(s) == "" {
 						return fmt.Errorf("use case description is required")
 					}
 					return nil
