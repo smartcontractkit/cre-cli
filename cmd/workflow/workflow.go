@@ -6,6 +6,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/activate"
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/delete"
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/deploy"
+	"github.com/smartcontractkit/cre-cli/cmd/workflow/logs"
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/pause"
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/simulate"
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/test"
@@ -21,10 +22,11 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 
 	workflowCmd.AddCommand(activate.New(runtimeContext))
 	workflowCmd.AddCommand(delete.New(runtimeContext))
-	workflowCmd.AddCommand(pause.New(runtimeContext))
-	workflowCmd.AddCommand(test.New(runtimeContext))
 	workflowCmd.AddCommand(deploy.New(runtimeContext))
+	workflowCmd.AddCommand(logs.New(runtimeContext))
+	workflowCmd.AddCommand(pause.New(runtimeContext))
 	workflowCmd.AddCommand(simulate.New(runtimeContext))
+	workflowCmd.AddCommand(test.New(runtimeContext))
 
 	return workflowCmd
 }

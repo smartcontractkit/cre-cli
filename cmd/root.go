@@ -368,6 +368,7 @@ func isLoadSettings(cmd *cobra.Command) bool {
 		"cre login":                 {},
 		"cre logout":                {},
 		"cre whoami":                {},
+		"cre workflow logs":         {},
 		"cre account list-key":      {},
 		"cre init":                  {},
 		"cre generate-bindings":     {},
