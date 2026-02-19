@@ -20,6 +20,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/cmd/login"
 	"github.com/smartcontractkit/cre-cli/cmd/logout"
 	"github.com/smartcontractkit/cre-cli/cmd/secrets"
+	"github.com/smartcontractkit/cre-cli/cmd/templates"
 	"github.com/smartcontractkit/cre-cli/cmd/update"
 	"github.com/smartcontractkit/cre-cli/cmd/version"
 	"github.com/smartcontractkit/cre-cli/cmd/whoami"
@@ -334,10 +335,12 @@ func newRootCommand() *cobra.Command {
 	accountCmd := account.New(runtimeContext)
 	whoamiCmd := whoami.New(runtimeContext)
 	updateCmd := update.New(runtimeContext)
+	templatesCmd := templates.New(runtimeContext)
 
 	secretsCmd.RunE = helpRunE
 	workflowCmd.RunE = helpRunE
 	accountCmd.RunE = helpRunE
+	templatesCmd.RunE = helpRunE
 
 	// Define groups (order controls display order)
 	rootCmd.AddGroup(&cobra.Group{ID: "getting-started", Title: "Getting Started"})
@@ -346,6 +349,7 @@ func newRootCommand() *cobra.Command {
 	rootCmd.AddGroup(&cobra.Group{ID: "secret", Title: "Secret"})
 
 	initCmd.GroupID = "getting-started"
+	templatesCmd.GroupID = "getting-started"
 
 	loginCmd.GroupID = "account"
 	logoutCmd.GroupID = "account"
@@ -366,6 +370,7 @@ func newRootCommand() *cobra.Command {
 		workflowCmd,
 		genBindingsCmd,
 		updateCmd,
+		templatesCmd,
 	)
 
 	return rootCmd
@@ -391,6 +396,10 @@ func isLoadSettings(cmd *cobra.Command) bool {
 		"cre workflow":              {},
 		"cre account":               {},
 		"cre secrets":               {},
+		"cre templates":             {},
+		"cre templates list":        {},
+		"cre templates add":         {},
+		"cre templates remove":      {},
 		"cre":                       {},
 	}
 
@@ -414,6 +423,10 @@ func isLoadCredentials(cmd *cobra.Command) bool {
 		"cre workflow":              {},
 		"cre account":               {},
 		"cre secrets":               {},
+		"cre templates":             {},
+		"cre templates list":        {},
+		"cre templates add":         {},
+		"cre templates remove":      {},
 		"cre":                       {},
 	}
 
@@ -479,6 +492,10 @@ func shouldShowSpinner(cmd *cobra.Command) bool {
 		"cre workflow":              {}, // Just shows help
 		"cre account":               {}, // Just shows help
 		"cre secrets":               {}, // Just shows help
+		"cre templates":             {}, // Just shows help
+		"cre templates list":        {},
+		"cre templates add":         {},
+		"cre templates remove":      {},
 	}
 
 	_, exists := excludedCommands[cmd.CommandPath()]

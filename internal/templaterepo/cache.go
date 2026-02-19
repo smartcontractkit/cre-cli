@@ -137,6 +137,17 @@ func (c *Cache) IsTarballCached(source RepoSource, sha string) bool {
 	return time.Since(info.ModTime()) < tarballCacheDuration
 }
 
+// InvalidateTemplateList removes the cached template list for a repo source,
+// forcing a fresh fetch on the next ListTemplates call.
+func (c *Cache) InvalidateTemplateList(source RepoSource) {
+	path := c.templateListPath(source)
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		c.logger.Warn().Err(err).Msgf("Failed to invalidate cache for %s", source)
+	} else {
+		c.logger.Debug().Msgf("Invalidated template list cache for %s", source)
+	}
+}
+
 func (c *Cache) templateListPath(source RepoSource) string {
 	return filepath.Join(c.cacheDir, fmt.Sprintf("%s-%s-%s-templates.json", source.Owner, source.Repo, source.Ref))
 }
