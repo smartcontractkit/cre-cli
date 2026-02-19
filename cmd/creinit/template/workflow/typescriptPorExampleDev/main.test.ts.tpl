@@ -3,8 +3,8 @@ import { describe, expect } from "bun:test";
 import {
   newTestRuntime,
   test,
-  CapabilitiesNetworkingHttpV1alphaClientMock,
-  ClientCapabilityMock as EVMClientCapabilityMock,
+  HttpActionsMock,
+  EvmMock,
 } from "@chainlink/cre-sdk/test";
 import { initWorkflow, onCronTrigger, onLogTrigger, fetchReserveInfo } from "./main";
 import type { Config } from "./main";
@@ -46,7 +46,7 @@ const setupEVMMocks = (config: Config) => {
     throw new Error(`Network not found for chain selector: ${config.evms[0].chainSelectorName}`);
   }
 
-  const evmMock = EVMClientCapabilityMock.testInstance(network.chainSelector.selector);
+  const evmMock = EvmMock.testInstance(network.chainSelector.selector);
 
   // Mock contract calls - route based on target address and function signature
   evmMock.callContract = (req) => {
@@ -152,7 +152,7 @@ describe("fetchReserveInfo", () => {
     const runtime = newTestRuntime();
     runtime.config = mockConfig;
 
-    const httpMock = CapabilitiesNetworkingHttpV1alphaClientMock.testInstance();
+    const httpMock = HttpActionsMock.testInstance();
 
     const mockPORResponse = {
       accountName: "test-account",
@@ -188,7 +188,7 @@ describe("onCronTrigger", () => {
     runtime.config = mockConfig;
 
     // Setup HTTP mock for reserve info
-    const httpMock = CapabilitiesNetworkingHttpV1alphaClientMock.testInstance();
+    const httpMock = HttpActionsMock.testInstance();
     const mockPORResponse = {
       accountName: "TrueUSD",
       totalTrust: 1000000,

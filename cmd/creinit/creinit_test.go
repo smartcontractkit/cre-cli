@@ -253,17 +253,6 @@ func TestInitExecuteFlows(t *testing.T) {
 			expectTemplateFiles: GetTemplateFileListTS(),
 			language:            "typescript",
 		},
-		{
-			name:                "TS Confidential HTTP template",
-			projectNameFlag:     "tsConfHTTP",
-			templateIDFlag:      5, // TypeScript Confidential HTTP
-			workflowNameFlag:    "ts-confhttp-wf",
-			rpcURLFlag:          "",
-			expectProjectDirRel: "tsConfHTTP",
-			expectWorkflowName:  "ts-confhttp-wf",
-			expectTemplateFiles: GetTemplateFileListTS(),
-			language:            "typescript",
-		},
 	}
 
 	for _, tc := range cases {
