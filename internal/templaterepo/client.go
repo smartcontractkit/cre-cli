@@ -362,12 +362,20 @@ func (c *Client) extractTarball(r io.Reader, templatePath, destDir string, exclu
 		}
 
 		// Check if this file is under our template path
-		if !strings.HasPrefix(name, templatePath+"/") && name != templatePath {
-			continue
+		// When templatePath is empty, the entire repo is the template (root-level .cre/template.yaml)
+		if templatePath != "" {
+			if !strings.HasPrefix(name, templatePath+"/") && name != templatePath {
+				continue
+			}
 		}
 
 		// Get the relative path within the template
-		relPath := strings.TrimPrefix(name, templatePath+"/")
+		var relPath string
+		if templatePath == "" {
+			relPath = name
+		} else {
+			relPath = strings.TrimPrefix(name, templatePath+"/")
+		}
 		if relPath == "" {
 			continue
 		}
