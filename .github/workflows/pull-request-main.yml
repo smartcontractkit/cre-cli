@@ -140,16 +140,6 @@ jobs:
           BINARY_NAME="cre_linux_amd64"
           go build -ldflags "-X 'github.com/smartcontractkit/cre-cli/cmd/version.Version=version $VERSION'" -o "${BINARY_NAME}"
 
-      - name: Check if current branch exists in chainlink repo
-        id: check-branch
-        env:
-          GITHUB_TOKEN: ${{ steps.setup-github-token.outputs.access-token }}
-        run: |
-          # For security, always use a trusted branch of the chainlink repository
-          # rather than deriving it from pull request metadata.
-          echo "Using fixed target branch 'develop' for chainlink repository."
-          echo "target_branch=develop" >> "$GITHUB_OUTPUT"
-
       - name: Derive nightly image tag
         id: derive-nightly-image-tag
         shell: bash
@@ -162,7 +152,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # actions/checkout@v4.2.2
         with:
           repository: smartcontractkit/chainlink
-          ref: ${{ steps.check-branch.outputs.target_branch }}
+          ref: develop
           path: chainlink
 
       - name: Set up Go
