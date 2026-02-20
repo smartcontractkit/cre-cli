@@ -212,4 +212,51 @@ func TestMultiCommandHappyPaths(t *testing.T) {
 		// Run simulation happy path workflow
 		multi_command_flows.RunSimulationHappyPath(t, tc, tc.ProjectDirectory)
 	})
+
+	// Run Happy Path 4: Deploy -> Deploy again and confirm failure
+	t.Run("HappyPath4_DuplicateDeployRejectedGoLang", func(t *testing.T) {
+		anvilProc, testEthUrl := initTestEnv(t, "anvil-state.json")
+		defer StopAnvil(anvilProc)
+
+		// Set dummy API key for authentication
+		t.Setenv(credentials.CreApiKeyVar, "test-api")
+
+		// Setup environment variables for pre-baked registries from Anvil state dump
+		t.Setenv(environments.EnvVarWorkflowRegistryAddress, "0x5FbDB2315678afecb367f032d93F642f64180aa3")
+		t.Setenv(environments.EnvVarWorkflowRegistryChainName, chainselectors.ANVIL_DEVNET.Name)
+
+		tc := NewTestConfig(t)
+
+		// Use linked Address3 + its key
+		require.NoError(t, createCliEnvFile(tc.EnvFile, constants.TestPrivateKey3), "failed to create env file")
+		require.NoError(t, createProjectSettingsFile(tc.ProjectDirectory+"project.yaml", "", testEthUrl), "failed to create project.yaml")
+		require.NoError(t, createWorkflowDirectory(tc.ProjectDirectory, "happy-path-4-workflow", "", "blank_workflow"), "failed to create workflow directory")
+		t.Cleanup(tc.Cleanup(t))
+
+		// Run happy path 4 workflow
+		multi_command_flows.DuplicateDeployRejected(t, tc, "blank_workflow")
+	})
+
+	t.Run("HappyPath4_DuplicateDeployRejectedTypescript", func(t *testing.T) {
+		anvilProc, testEthUrl := initTestEnv(t, "anvil-state.json")
+		defer StopAnvil(anvilProc)
+
+		// Set dummy API key for authentication
+		t.Setenv(credentials.CreApiKeyVar, "test-api")
+
+		// Setup environment variables for pre-baked registries from Anvil state dump
+		t.Setenv(environments.EnvVarWorkflowRegistryAddress, "0x5FbDB2315678afecb367f032d93F642f64180aa3")
+		t.Setenv(environments.EnvVarWorkflowRegistryChainName, chainselectors.ANVIL_DEVNET.Name)
+
+		tc := NewTestConfig(t)
+
+		// Use linked Address3 + its key
+		require.NoError(t, createCliEnvFile(tc.EnvFile, constants.TestPrivateKey3), "failed to create env file")
+		require.NoError(t, createProjectSettingsFile(tc.ProjectDirectory+"project.yaml", "", testEthUrl), "failed to create project.yaml")
+		require.NoError(t, createWorkflowDirectory(tc.ProjectDirectory, "happy-path-4-workflow", "", "blank_workflow_ts"), "failed to create workflow directory")
+		t.Cleanup(tc.Cleanup(t))
+
+		// Run happy path 4 workflow
+		multi_command_flows.DuplicateDeployRejected(t, tc, "blank_workflow_ts")
+	})
 }

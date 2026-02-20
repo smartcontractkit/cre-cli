@@ -2,9 +2,11 @@ package test
 
 import (
 	"bufio"
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -115,8 +117,13 @@ func createWorkflowDirectory(
 		return fmt.Errorf("failed to create workflow directory: %w", err)
 	}
 
-	// Copy workflow files
-	items := []string{"main.go", "config.json", "go.mod", "go.sum", "contracts", "secrets.yaml"}
+	// Copy workflow files based on the workflowDirectoryName
+	var items []string
+	if strings.HasSuffix(workflowDirectoryName, "_ts") {
+		items = []string{"main.ts", "config.json", "package.json", "tsconfig.json", "contracts", "secrets.yaml"}
+	} else {
+		items = []string{"main.go", "config.json", "go.mod", "go.sum", "contracts", "secrets.yaml"}
+	}
 	for _, item := range items {
 		src := filepath.Join(sourceWorkflowDir, item)
 		dst := filepath.Join(workflowDir, item)
@@ -142,9 +149,13 @@ func createWorkflowDirectory(
 	// user-workflow fields
 	v.Set(fmt.Sprintf("%s.user-workflow.workflow-name", SettingsTarget), trimmedName)
 
+	workflowArtifacts := make(map[string]string)
 	// workflow-artifacts - initially create without config-path for first deployment
-	workflowArtifacts := map[string]string{
-		"workflow-path": "./main.go",
+	// if workflowDirectoryName has _ts suffix, set workflow-path to ./main.ts
+	if strings.HasSuffix(workflowDirectoryName, "_ts") {
+		workflowArtifacts["workflow-path"] = "./main.ts"
+	} else {
+		workflowArtifacts["workflow-path"] = "./main.go"
 	}
 
 	// Add secrets-path if secrets.yaml exists
@@ -162,6 +173,25 @@ func createWorkflowDirectory(
 	v.SetConfigType("yaml")
 	if err := v.WriteConfigAs(workflowSettingsPath); err != nil {
 		return fmt.Errorf("error writing workflow.yaml: %w", err)
+	}
+
+	// if TS then run `bun install`
+	if strings.HasSuffix(workflowDirectoryName, "_ts") {
+		bunCmd := exec.Command("bun", "install",)
+		bunCmd.Dir = workflowDir
+		var stdout, stderr bytes.Buffer
+		bunCmd.Stdout, bunCmd.Stderr = &stdout, &stderr
+
+		err :=bunCmd.Run()
+
+		output := stdout.String() + stderr.String()
+		L.Debug().
+			Str("BunInstallOutput", output).
+			Msg("Bun install output")
+
+	    if err != nil {
+			return fmt.Errorf("failed to run bun install: %w", err)
+		}
 	}
 
 	L.Debug().
