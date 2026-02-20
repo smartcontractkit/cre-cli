@@ -406,7 +406,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       actions: read
-      id-token: write
       contents: write
     steps:
       - name: Download Build Artifacts for linux/amd64
