@@ -405,6 +405,8 @@ jobs:
     needs: [build-linux, build-darwin, build-windows]
     runs-on: ubuntu-latest
     permissions:
+      actions: read
+      id-token: write
       contents: write
     steps:
       - name: Download Build Artifacts for linux/amd64
