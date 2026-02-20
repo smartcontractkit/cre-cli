@@ -195,7 +195,7 @@ func promptForTarget(logger *zerolog.Logger) (string, error) {
 	}
 
 	if len(targets) == 1 {
-		logger.Info().Msgf("Auto-selecting target: %s", targets[0])
+		logger.Debug().Msgf("Auto-selecting target: %s", targets[0])
 		return targets[0], nil
 	}
 
