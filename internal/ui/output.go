@@ -1,6 +1,9 @@
 package ui
 
-import "fmt"
+import (
+	"fmt"
+	"os"
+)
 
 // verbose disables animated UI components (spinners) to avoid
 // interleaving with debug log output on stderr.
@@ -24,41 +27,41 @@ func Success(text string) {
 	fmt.Println(SuccessStyle.Render("✓ " + text))
 }
 
-// Error prints an error message (Orange - high contrast)
+// Error prints an error message to stderr (Orange - high contrast)
 func Error(text string) {
-	fmt.Println(ErrorStyle.Render("✗ " + text))
+	fmt.Fprintln(os.Stderr, ErrorStyle.Render("✗ "+text))
 }
 
-// ErrorWithHelp prints an error message with a helpful suggestion
+// ErrorWithHelp prints an error message with a helpful suggestion to stderr
 func ErrorWithHelp(text, suggestion string) {
-	fmt.Println(ErrorStyle.Render("✗ " + text))
-	fmt.Println(DimStyle.Render("  → " + suggestion))
+	fmt.Fprintln(os.Stderr, ErrorStyle.Render("✗ "+text))
+	fmt.Fprintln(os.Stderr, DimStyle.Render("  → "+suggestion))
 }
 
-// ErrorWithSuggestions prints an error message with multiple suggestions
+// ErrorWithSuggestions prints an error message with multiple suggestions to stderr
 func ErrorWithSuggestions(text string, suggestions []string) {
-	fmt.Println(ErrorStyle.Render("✗ " + text))
+	fmt.Fprintln(os.Stderr, ErrorStyle.Render("✗ "+text))
 	for _, suggestion := range suggestions {
-		fmt.Println(DimStyle.Render("  → " + suggestion))
+		fmt.Fprintln(os.Stderr, DimStyle.Render("  → "+suggestion))
 	}
 }
 
-// Warning prints a warning message (Yellow)
+// Warning prints a warning message to stderr (Yellow)
 func Warning(text string) {
-	fmt.Println(WarningStyle.Render("! " + text))
+	fmt.Fprintln(os.Stderr, WarningStyle.Render("! "+text))
 }
 
-// WarningWithHelp prints a warning message with a helpful suggestion
+// WarningWithHelp prints a warning message with a helpful suggestion to stderr
 func WarningWithHelp(text, suggestion string) {
-	fmt.Println(WarningStyle.Render("! " + text))
-	fmt.Println(DimStyle.Render("  → " + suggestion))
+	fmt.Fprintln(os.Stderr, WarningStyle.Render("! "+text))
+	fmt.Fprintln(os.Stderr, DimStyle.Render("  → "+suggestion))
 }
 
-// WarningWithSuggestions prints a warning message with multiple suggestions
+// WarningWithSuggestions prints a warning message with multiple suggestions to stderr
 func WarningWithSuggestions(text string, suggestions []string) {
-	fmt.Println(WarningStyle.Render("! " + text))
+	fmt.Fprintln(os.Stderr, WarningStyle.Render("! "+text))
 	for _, suggestion := range suggestions {
-		fmt.Println(DimStyle.Render("  → " + suggestion))
+		fmt.Fprintln(os.Stderr, DimStyle.Render("  → "+suggestion))
 	}
 }
 

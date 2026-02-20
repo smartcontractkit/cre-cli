@@ -117,10 +117,13 @@ func encodeRPCBodyFromError(code int, msg string) []byte {
 }
 
 func TestParseVaultGatewayResponse_Create_LogsPerItem(t *testing.T) {
-	// Capture stdout
+	// Capture stdout (success messages) and stderr (error messages)
 	oldStdout := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
+	oldStderr := os.Stderr
+	rOut, wOut, _ := os.Pipe()
+	rErr, wErr, _ := os.Pipe()
+	os.Stdout = wOut
+	os.Stderr = wErr
 
 	var buf bytes.Buffer
 	h := newTestHandler(&buf)
@@ -130,29 +133,35 @@ func TestParseVaultGatewayResponse_Create_LogsPerItem(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	w.Close()
+	wOut.Close()
+	wErr.Close()
 	os.Stdout = oldStdout
-	var output strings.Builder
-	_, _ = io.Copy(&output, r)
+	os.Stderr = oldStderr
+	var stdoutBuf, stderrBuf strings.Builder
+	_, _ = io.Copy(&stdoutBuf, rOut)
+	_, _ = io.Copy(&stderrBuf, rErr)
 
-	out := output.String()
+	outStr := stdoutBuf.String()
+	errStr := stderrBuf.String()
+	combined := outStr + errStr
 
-	// Expect 2 successes + 1 failure (all on stdout)
-	if got := strings.Count(out, "Secret created"); got < 2 {
-		t.Fatalf("expected at least 2 'Secret created' outputs, got %d.\noutput:\n%s", got, out)
+	// Expect 2 successes on stdout
+	if got := strings.Count(outStr, "Secret created"); got < 2 {
+		t.Fatalf("expected at least 2 'Secret created' outputs on stdout, got %d.\nstdout:\n%s", got, outStr)
 	}
-	if got := strings.Count(out, "Secret create failed"); got != 1 {
-		t.Fatalf("expected 1 'Secret create failed' output, got %d.\noutput:\n%s", got, out)
+	// Expect 1 failure on stderr (ui.Error writes to stderr)
+	if got := strings.Count(errStr, "Secret create failed"); got != 1 {
+		t.Fatalf("expected 1 'Secret create failed' output on stderr, got %d.\nstderr:\n%s", got, errStr)
 	}
 
 	// Spot-check fields (first success)
-	if !strings.Contains(out, "k1") || !strings.Contains(out, "n1") || !strings.Contains(out, "o1") {
-		t.Fatalf("expected id/owner/namespace fields for first secret in output, got:\n%s", out)
+	if !strings.Contains(combined, "k1") || !strings.Contains(combined, "n1") || !strings.Contains(combined, "o1") {
+		t.Fatalf("expected id/owner/namespace fields for first secret in output, got:\nstdout: %s\nstderr: %s", outStr, errStr)
 	}
 
-	// Error text for failed item is on stdout
-	if !strings.Contains(out, "boom") {
-		t.Fatalf("expected error text to be printed for failed item, got:\n%s", out)
+	// Error text for failed item is on stderr
+	if !strings.Contains(errStr, "boom") {
+		t.Fatalf("expected error text to be printed for failed item on stderr, got:\nstderr: %s", errStr)
 	}
 }
 
@@ -380,10 +389,10 @@ func TestParseVaultGatewayResponse_List_EmptySuccess(t *testing.T) {
 }
 
 func TestParseVaultGatewayResponse_List_Failure(t *testing.T) {
-	// Capture stdout
-	oldStdout := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
+	// Capture stderr (ui.Error writes there)
+	oldStderr := os.Stderr
+	rErr, wErr, _ := os.Pipe()
+	os.Stderr = wErr
 
 	var buf bytes.Buffer
 	h := newTestHandler(&buf)
@@ -393,20 +402,20 @@ func TestParseVaultGatewayResponse_List_Failure(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	w.Close()
-	os.Stdout = oldStdout
-	var output strings.Builder
-	_, _ = io.Copy(&output, r)
+	wErr.Close()
+	os.Stderr = oldStderr
+	var stderrBuf strings.Builder
+	_, _ = io.Copy(&stderrBuf, rErr)
 
-	out := output.String()
+	errStr := stderrBuf.String()
 
-	// With ui.Error, the summary error is now on stdout with ✗ prefix
-	if !strings.Contains(strings.ToLower(out), "secret list failed") {
-		t.Fatalf("expected summary error line 'secret list failed' on stdout, got:\n%s", out)
+	// ui.Error writes to stderr with ✗ prefix
+	if !strings.Contains(strings.ToLower(errStr), "secret list failed") {
+		t.Fatalf("expected summary error line 'secret list failed' on stderr, got:\n%s", errStr)
 	}
 	// And the error text should be present there too
-	if !strings.Contains(out, "boom") { // match whatever error text your fixture uses
-		t.Fatalf("expected error text to be printed on stdout, got:\n%s", out)
+	if !strings.Contains(errStr, "boom") {
+		t.Fatalf("expected error text to be printed on stderr, got:\n%s", errStr)
 	}
 }
 

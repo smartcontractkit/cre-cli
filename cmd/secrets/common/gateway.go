@@ -86,7 +86,7 @@ func (g *HTTPClient) postOnce(body []byte) ([]byte, int, error) {
 		return nil, 0, fmt.Errorf("HTTP client is not initialized")
 	}
 
-	resp, err := g.Client.Do(req)
+	resp, err := g.Client.Do(req) // #nosec G704 -- URL is from trusted CLI configuration
 	if err != nil {
 		return nil, 0, fmt.Errorf("HTTP request to gateway failed: %w", err)
 	}

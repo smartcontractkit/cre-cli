@@ -129,7 +129,7 @@ func (m *ManualTriggers) Close() error {
 }
 
 // NewFakeCapabilities builds faked capabilities, then registers them with the capability registry.
-func NewFakeActionCapabilities(ctx context.Context, lggr logger.Logger, registry *capabilities.Registry) ([]services.Service, error) {
+func NewFakeActionCapabilities(ctx context.Context, lggr logger.Logger, registry *capabilities.Registry, secretsPath string) ([]services.Service, error) {
 	caps := make([]services.Service, 0)
 
 	// Consensus
@@ -157,7 +157,7 @@ func NewFakeActionCapabilities(ctx context.Context, lggr logger.Logger, registry
 	caps = append(caps, httpActionServer)
 
 	// Conf HTTP Action
-	confHTTPAction := fakes.NewDirectConfidentialHTTPAction(lggr)
+	confHTTPAction := fakes.NewDirectConfidentialHTTPAction(lggr, secretsPath)
 	confHTTPActionServer := confhttpserver.NewClientServer(confHTTPAction)
 	if err := registry.Add(ctx, confHTTPActionServer); err != nil {
 		return nil, err

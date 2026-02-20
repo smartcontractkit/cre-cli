@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/charmbracelet/huh"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
@@ -276,16 +275,8 @@ func (h *handler) askForWorkflowDeletionConfirmation(expectedWorkflowName string
 	ui.Error("This action cannot be undone.")
 	ui.Line()
 
-	var result string
-	form := huh.NewForm(
-		huh.NewGroup(
-			huh.NewInput().
-				Title(fmt.Sprintf("To confirm, type the workflow name: %s", expectedWorkflowName)).
-				Value(&result),
-		),
-	).WithTheme(ui.ChainlinkTheme())
-
-	if err := form.Run(); err != nil {
+	result, err := ui.Input(fmt.Sprintf("To confirm, type the workflow name: %s", expectedWorkflowName))
+	if err != nil {
 		return false, fmt.Errorf("failed to get workflow name confirmation: %w", err)
 	}
 

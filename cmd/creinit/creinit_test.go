@@ -317,6 +317,7 @@ func GetTemplateFileListTS() []string {
 }
 
 func TestInitExecuteFlows(t *testing.T) {
+	// All inputs are provided via flags to avoid interactive prompts
 	cases := []struct {
 		name                string
 		projectNameFlag     string

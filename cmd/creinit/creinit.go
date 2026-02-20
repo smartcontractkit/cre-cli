@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/charmbracelet/huh"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -21,8 +20,6 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 	"github.com/smartcontractkit/cre-cli/internal/validation"
 )
-
-var chainlinkTheme = ui.ChainlinkTheme()
 
 type Inputs struct {
 	ProjectName  string            `validate:"omitempty,project_name" cli:"project-name"`
@@ -298,18 +295,10 @@ func (h *handler) Execute(inputs Inputs) error {
 			}
 		}
 
-		// Handle .env
-		envPath := filepath.Join(projectRoot, constants.DefaultEnvFileName)
-		if !h.pathExists(envPath) {
-			if _, e := settings.GenerateProjectEnvFile(projectRoot); e != nil {
-				return e
-			}
-		}
-
 		// Initialize Go module if needed
 		if selectedTemplate.Language == "go" && !h.pathExists(filepath.Join(projectRoot, "go.mod")) {
 			projectName := filepath.Base(projectRoot)
-			if err := initializeGoModule(h.log, projectRoot, projectName); err != nil {
+			if _, err := initializeGoModule(h.log, projectRoot, projectName); err != nil {
 				return fmt.Errorf("failed to initialize Go module: %w", err)
 			}
 		}
@@ -340,6 +329,14 @@ func (h *handler) Execute(inputs Inputs) error {
 			} else if _, err := settings.GenerateWorkflowSettingsFile(workflowDirectory, workflowName, entryPoint); err != nil {
 				return fmt.Errorf("failed to generate %s file: %w", constants.DefaultWorkflowSettingsFileName, err)
 			}
+		}
+	}
+
+	// Ensure .env exists — dynamic templates with projectDir may not ship one
+	envPath := filepath.Join(projectRoot, constants.DefaultEnvFileName)
+	if !h.pathExists(envPath) {
+		if _, e := settings.GenerateProjectEnvFile(projectRoot); e != nil {
+			return e
 		}
 	}
 
@@ -467,19 +464,11 @@ func (h *handler) ensureProjectDirectoryExists(dirPath string, alreadyConfirmedO
 				return fmt.Errorf("failed to remove existing directory %s: %w", dirPath, err)
 			}
 		} else {
-			var overwrite bool
-
-			form := huh.NewForm(
-				huh.NewGroup(
-					huh.NewConfirm().
-						Title(fmt.Sprintf("Directory %s already exists. Overwrite?", dirPath)).
-						Affirmative("Yes").
-						Negative("No").
-						Value(&overwrite),
-				),
-			).WithTheme(chainlinkTheme)
-
-			if err := form.Run(); err != nil {
+			overwrite, err := ui.Confirm(
+				fmt.Sprintf("Directory %s already exists. Overwrite?", dirPath),
+				ui.WithLabels("Yes", "No"),
+			)
+			if err != nil {
 				return err
 			}
 
