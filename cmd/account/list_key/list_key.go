@@ -13,6 +13,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
+	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
 const queryListWorkflowOwners = `
@@ -88,6 +89,9 @@ type WorkflowOwner struct {
 }
 
 func (h *Handler) Execute(ctx context.Context) error {
+	spinner := ui.NewSpinner()
+	spinner.Start("Fetching workflow owners...")
+
 	req := graphql.NewRequest(queryListWorkflowOwners)
 
 	var respEnvelope struct {
@@ -97,32 +101,34 @@ func (h *Handler) Execute(ctx context.Context) error {
 	}
 
 	if err := h.client.Execute(ctx, req, &respEnvelope); err != nil {
+		spinner.Stop()
 		return fmt.Errorf("fetch workflow owners failed: %w", err)
 	}
 
-	fmt.Println("\nWorkflow owners retrieved successfully:")
+	spinner.Stop()
+	ui.Success("Workflow owners retrieved successfully")
 	h.logOwners("Linked Owners", respEnvelope.ListWorkflowOwners.LinkedOwners)
 
 	return nil
 }
 
 func (h *Handler) logOwners(label string, owners []WorkflowOwner) {
-	fmt.Println("")
+	ui.Line()
 	if len(owners) == 0 {
-		fmt.Printf("  No %s found\n", strings.ToLower(label))
+		ui.Warning(fmt.Sprintf("No %s found", strings.ToLower(label)))
 		return
 	}
 
-	fmt.Printf("%s:\n", label)
-	fmt.Println("")
+	ui.Title(label)
+	ui.Line()
 
 	for i, o := range owners {
-		fmt.Printf("  %d. %s\n", i+1, o.WorkflowOwnerLabel)
-		fmt.Printf("     Owner Address:    \t%s\n", o.WorkflowOwnerAddress)
-		fmt.Printf("     Status:          \t%s\n", o.VerificationStatus)
-		fmt.Printf("     Verified At:     \t%s\n", o.VerifiedAt)
-		fmt.Printf("     Chain Selector:  \t%s\n", o.ChainSelector)
-		fmt.Printf("     Contract Address:\t%s\n", o.ContractAddress)
-		fmt.Println("")
+		ui.Bold(fmt.Sprintf("%d. %s", i+1, o.WorkflowOwnerLabel))
+		ui.Dim(fmt.Sprintf("   Owner Address:     %s", o.WorkflowOwnerAddress))
+		ui.Dim(fmt.Sprintf("   Status:            %s", o.VerificationStatus))
+		ui.Dim(fmt.Sprintf("   Verified At:       %s", o.VerifiedAt))
+		ui.Dim(fmt.Sprintf("   Chain Selector:    %s", o.ChainSelector))
+		ui.Dim(fmt.Sprintf("   Contract Address:  %s", o.ContractAddress))
+		ui.Line()
 	}
 }
