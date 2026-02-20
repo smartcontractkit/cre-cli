@@ -21,6 +21,7 @@ import (
 
 	"github.com/smartcontractkit/cre-cli/cmd/version"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
+	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
 const (
@@ -43,7 +44,7 @@ func getLatestTag() (string, error) {
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
 		if err != nil {
-			fmt.Println("Error closing response body:", err)
+			ui.Warning("Error closing response body: " + err.Error())
 		}
 	}(resp.Body)
 	var info releaseInfo
@@ -90,29 +91,29 @@ func getAssetName() (asset string, platform string, err error) {
 	return asset, platform, nil
 }
 
-func downloadFile(url, dest string) error {
+func downloadFile(url, dest, message string) error {
 	resp, err := httpClient.Get(url)
 	if err != nil {
 		return err
 	}
 	defer func(Body io.ReadCloser) {
-		err := Body.Close()
-		if err != nil {
-			fmt.Println("Error closing response body:", err)
-		}
+		_ = Body.Close()
 	}(resp.Body)
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("bad status: %s", resp.Status)
+	}
+
 	out, err := os.Create(dest)
 	if err != nil {
 		return err
 	}
 	defer func(out *os.File) {
-		err := out.Close()
-		if err != nil {
-			fmt.Println("Error closing out file:", err)
-		}
+		_ = out.Close()
 	}(out)
-	_, err = io.Copy(out, resp.Body)
-	return err
+
+	// Use progress bar for download
+	return ui.DownloadWithProgress(resp.Body, resp.ContentLength, out, message)
 }
 
 func extractBinary(assetPath string) (string, error) {
@@ -134,7 +135,7 @@ func untar(assetPath string) (string, error) {
 	defer func(f *os.File) {
 		err := f.Close()
 		if err != nil {
-			fmt.Println("Error closing file:", err)
+			ui.Warning("Error closing file: " + err.Error())
 		}
 	}(f)
 	gz, err := gzip.NewReader(f)
@@ -144,7 +145,7 @@ func untar(assetPath string) (string, error) {
 	defer func(gz *gzip.Reader) {
 		err := gz.Close()
 		if err != nil {
-			fmt.Println("Error closing gzip reader:", err)
+			ui.Warning("Error closing gzip reader: " + err.Error())
 		}
 	}(gz)
 	// Untar
@@ -176,7 +177,7 @@ func untar(assetPath string) (string, error) {
 			if !strings.HasPrefix(absOutPath, absOutDir+string(os.PathSeparator)) && absOutPath != absOutDir {
 				return "", fmt.Errorf("tar extraction outside of output directory: %s", absOutPath)
 			}
-			out, err := os.Create(outPath)
+			out, err := os.Create(outPath) // #nosec G703 -- path validated against traversal above
 			if err != nil {
 				return "", err
 			}
@@ -218,7 +219,7 @@ func unzip(assetPath string) (string, error) {
 	defer func(zr *zip.ReadCloser) {
 		err := zr.Close()
 		if err != nil {
-			fmt.Println("Error closing zip reader:", err)
+			ui.Warning("Error closing zip reader: " + err.Error())
 		}
 	}(zr)
 	for _, f := range zr.File {
@@ -288,8 +289,11 @@ func replaceSelf(newBin string) error {
 	}
 	// On Windows, need to move after process exit
 	if osruntime.GOOS == "windows" {
-		fmt.Println("Please close all running cre processes and manually replace the binary at:", self)
-		fmt.Println("New binary downloaded at:", newBin)
+		ui.Warning("Automatic replacement not supported on Windows")
+		ui.Dim("Please close all running cre processes and manually replace the binary at:")
+		ui.Code(self)
+		ui.Dim("New binary downloaded at:")
+		ui.Code(newBin)
 		return fmt.Errorf("automatic replacement not supported on Windows")
 	}
 	// On Unix, can replace in-place
@@ -298,13 +302,15 @@ func replaceSelf(newBin string) error {
 
 // Run accepts the currentVersion string
 func Run(currentVersion string) error {
-	fmt.Println("Checking for updates...")
+	spinner := ui.NewSpinner()
+	spinner.Start("Checking for updates...")
+
 	tag, err := getLatestTag()
 	if err != nil {
+		spinner.Stop()
 		return fmt.Errorf("error fetching latest version: %w", err)
 	}
 
-	// --- New Update Check Logic ---
 	// Clean the current version string (e.g., "version v1.2.3" -> "v1.2.3")
 	cleanedCurrent := strings.Replace(currentVersion, "version", "", 1)
 	cleanedCurrent = strings.TrimSpace(cleanedCurrent)
@@ -317,59 +323,70 @@ func Run(currentVersion string) error {
 
 	if errCurrent != nil || errLatest != nil {
 		// If we can't parse either version, fall back to just updating.
-		// Print a warning to stderr.
-		fmt.Fprintf(os.Stderr, "Warning: could not compare versions (current: '%s', latest: '%s'). Proceeding with update.\n", cleanedCurrent, cleanedLatest)
-		if errCurrent != nil {
-			fmt.Fprintf(os.Stderr, "Current version parse error: %v\n", errCurrent)
-		}
-		if errLatest != nil {
-			fmt.Fprintf(os.Stderr, "Latest version parse error: %v\n", errLatest)
-		}
+		spinner.Stop()
+		ui.Warning(fmt.Sprintf("Could not compare versions (current: '%s', latest: '%s'). Proceeding with update.", cleanedCurrent, cleanedLatest))
+		spinner.Start("Updating...")
 	} else {
 		// Compare versions
 		if latestSemVer.LessThan(currentSemVer) || latestSemVer.Equal(currentSemVer) {
-			fmt.Printf("You are already using the latest version %s\n", currentSemVer.String())
-			return nil // Skip the update
+			spinner.Stop()
+			ui.Success(fmt.Sprintf("You are already using the latest version %s", currentSemVer.String()))
+			return nil
 		}
 	}
-	// --- End of New Logic ---
 
 	// If we're here, an update is needed.
-	fmt.Println("Updating cre CLI...")
-
 	asset, _, err := getAssetName()
 	if err != nil {
+		spinner.Stop()
 		return fmt.Errorf("error determining asset name: %w", err)
 	}
 	url := fmt.Sprintf("https://github.com/%s/releases/download/%s/%s", repo, tag, asset)
 	tmpDir, err := os.MkdirTemp("", "cre_update_")
 	if err != nil {
+		spinner.Stop()
 		return fmt.Errorf("error creating temp dir: %w", err)
-	}
-	assetPath := filepath.Join(tmpDir, asset)
-	fmt.Println("Downloading:", url)
-	if err := downloadFile(url, assetPath); err != nil {
-		return fmt.Errorf("download failed: %w", err)
-	}
-	binPath, err := extractBinary(assetPath)
-	if err != nil {
-		return fmt.Errorf("extraction failed: %w", err)
-	}
-	if err := os.Chmod(binPath, 0755); err != nil {
-		return fmt.Errorf("failed to set permissions: %w", err)
-	}
-	if err := replaceSelf(binPath); err != nil {
-		return fmt.Errorf("failed to replace binary: %w", err)
 	}
 	defer func(path string) {
 		_ = os.RemoveAll(path)
 	}(tmpDir)
-	fmt.Println("cre CLI updated to", tag)
+
+	// Stop spinner before showing progress bar
+	spinner.Stop()
+
+	assetPath := filepath.Join(tmpDir, asset)
+	downloadMsg := fmt.Sprintf("Downloading %s...", tag)
+	if err := downloadFile(url, assetPath, downloadMsg); err != nil {
+		return fmt.Errorf("download failed: %w", err)
+	}
+
+	// Start new spinner for extraction and installation
+	spinner.Start("Extracting...")
+	binPath, err := extractBinary(assetPath)
+	if err != nil {
+		spinner.Stop()
+		return fmt.Errorf("extraction failed: %w", err)
+	}
+
+	spinner.Update("Installing...")
+	if err := os.Chmod(binPath, 0755); err != nil {
+		spinner.Stop()
+		return fmt.Errorf("failed to set permissions: %w", err)
+	}
+	if err := replaceSelf(binPath); err != nil {
+		spinner.Stop()
+		return fmt.Errorf("failed to replace binary: %w", err)
+	}
+
+	spinner.Stop()
+	ui.Success(fmt.Sprintf("CRE CLI updated to %s", tag))
+	ui.Line()
+
 	cmd := exec.Command(cliName, "version")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
-		fmt.Println("Failed to run version command:", err)
+		ui.Warning("Failed to verify version: " + err.Error())
 	}
 	return nil
 }
