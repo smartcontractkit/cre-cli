@@ -343,6 +343,14 @@ func (h *handler) Execute(inputs Inputs) error {
 		}
 	}
 
+	// For templates that ship their own go.mod (projectDir set), run go mod tidy
+	// to ensure go.sum is populated after extraction.
+	if selectedTemplate.Language == "go" && h.pathExists(filepath.Join(projectRoot, "go.mod")) {
+		if err := runCommand(h.log, projectRoot, "go", "mod", "tidy"); err != nil {
+			h.log.Warn().Err(err).Msg("go mod tidy failed; you may need to run it manually")
+		}
+	}
+
 	// Show what was created
 	ui.Line()
 	ui.Dim("Files created in " + projectRoot)
