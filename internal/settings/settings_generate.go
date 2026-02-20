@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/charmbracelet/huh"
 	"gopkg.in/yaml.v3"
 
 	"github.com/smartcontractkit/cre-cli/internal/constants"
@@ -106,17 +105,11 @@ func GenerateProjectEnvFile(workingDirectory string) (string, error) {
 	}
 
 	if _, err := os.Stat(outputPath); err == nil {
-		var shouldContinue bool
-		form := huh.NewForm(
-			huh.NewGroup(
-				huh.NewConfirm().
-					Title(fmt.Sprintf("A project environment file already exists at %s. Continuing will overwrite this file.", outputPath)).
-					Description("Do you want to proceed?").
-					Value(&shouldContinue),
-			),
-		).WithTheme(ui.ChainlinkTheme())
-
-		if err := form.Run(); err != nil {
+		shouldContinue, err := ui.Confirm(
+			fmt.Sprintf("A project environment file already exists at %s. Continuing will overwrite this file.", outputPath),
+			ui.WithDescription("Do you want to proceed?"),
+		)
+		if err != nil {
 			return "", fmt.Errorf("failed to prompt for file overwrite confirmation: %w", err)
 		}
 		if !shouldContinue {
@@ -150,17 +143,11 @@ func GenerateProjectSettingsFile(workingDirectory string) (string, bool, error) 
 	}
 
 	if _, err := os.Stat(outputPath); err == nil {
-		var shouldContinue bool
-		form := huh.NewForm(
-			huh.NewGroup(
-				huh.NewConfirm().
-					Title(fmt.Sprintf("A project settings file already exists at %s. Continuing will overwrite this file.", outputPath)).
-					Description("Do you want to proceed?").
-					Value(&shouldContinue),
-			),
-		).WithTheme(ui.ChainlinkTheme())
-
-		if err := form.Run(); err != nil {
+		shouldContinue, err := ui.Confirm(
+			fmt.Sprintf("A project settings file already exists at %s. Continuing will overwrite this file.", outputPath),
+			ui.WithDescription("Do you want to proceed?"),
+		)
+		if err != nil {
 			return "", false, fmt.Errorf("failed to prompt for file overwrite confirmation: %w", err)
 		}
 		if !shouldContinue {

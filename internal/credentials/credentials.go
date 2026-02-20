@@ -14,16 +14,16 @@ import (
 )
 
 type CreLoginTokenSet struct {
-	AccessToken  string `json:"access_token"  yaml:"AccessToken"`
+	AccessToken  string `json:"access_token"  yaml:"AccessToken"` // #nosec G117 -- matches OAuth token response field
 	IDToken      string `json:"id_token"      yaml:"IDToken"`
-	RefreshToken string `json:"refresh_token" yaml:"RefreshToken"`
+	RefreshToken string `json:"refresh_token" yaml:"RefreshToken"` // #nosec G117 -- matches OAuth token response field
 	ExpiresIn    int    `json:"expires_in"    yaml:"ExpiresIn"`
 	TokenType    string `json:"token_type"    yaml:"TokenType"`
 }
 
 type Credentials struct {
 	Tokens      *CreLoginTokenSet `yaml:"tokens"`
-	APIKey      string            `yaml:"api_key"`
+	APIKey      string            `yaml:"api_key"` // #nosec G117 -- credential stored in secure config file
 	AuthType    string            `yaml:"auth_type"`
 	IsValidated bool              `yaml:"-"`
 	log         *zerolog.Logger

@@ -12,7 +12,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/charmbracelet/huh"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/google/uuid"
 	"github.com/machinebox/graphql"
@@ -163,15 +162,8 @@ func (h *handler) Execute(in Inputs) error {
 	if !in.SkipConfirmation {
 		ui.Warning("Unlink is a destructive action that will wipe out all workflows registered under your owner address.")
 		ui.Line()
-		var confirm bool
-		confirmForm := huh.NewForm(
-			huh.NewGroup(
-				huh.NewConfirm().
-					Title("Do you wish to proceed?").
-					Value(&confirm),
-			),
-		).WithTheme(ui.ChainlinkTheme())
-		if err := confirmForm.Run(); err != nil {
+		confirm, err := ui.Confirm("Do you wish to proceed?")
+		if err != nil {
 			return err
 		}
 		if !confirm {

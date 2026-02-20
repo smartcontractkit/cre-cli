@@ -4,19 +4,16 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math"
 	"math/big"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
-	"github.com/charmbracelet/huh"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -40,7 +37,6 @@ import (
 	v2 "github.com/smartcontractkit/chainlink/v2/core/services/workflows/v2"
 
 	cmdcommon "github.com/smartcontractkit/cre-cli/cmd/common"
-	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
@@ -49,7 +45,7 @@ import (
 )
 
 type Inputs struct {
-	WorkflowPath  string                       `validate:"required,path_read"`
+	WorkflowPath  string                       `validate:"required,workflow_path_read"`
 	ConfigPath    string                       `validate:"omitempty,file,ascii,max=97"`
 	SecretsPath   string                       `validate:"omitempty,file,ascii,max=97"`
 	EngineLogs    bool                         `validate:"omitempty" cli:"--engine-logs"`
@@ -150,22 +146,22 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 
 	for _, ec := range expChains {
 		// Validate required fields
-		if ec.ChainID == 0 {
-			return Inputs{}, fmt.Errorf("experimental chain missing chain-id")
+		if ec.ChainSelector == 0 {
+			return Inputs{}, fmt.Errorf("experimental chain missing chain-selector")
 		}
 		if strings.TrimSpace(ec.RPCURL) == "" {
-			return Inputs{}, fmt.Errorf("experimental chain %d missing rpc-url", ec.ChainID)
+			return Inputs{}, fmt.Errorf("experimental chain %d missing rpc-url", ec.ChainSelector)
 		}
 		if strings.TrimSpace(ec.Forwarder) == "" {
-			return Inputs{}, fmt.Errorf("experimental chain %d missing forwarder", ec.ChainID)
+			return Inputs{}, fmt.Errorf("experimental chain %d missing forwarder", ec.ChainSelector)
 		}
 
-		// Check if chain ID already exists (supported chain)
-		if _, exists := clients[ec.ChainID]; exists {
+		// Check if chain selector already exists (supported chain)
+		if _, exists := clients[ec.ChainSelector]; exists {
 			// Find the supported chain's forwarder
 			var supportedForwarder string
 			for _, supported := range SupportedEVM {
-				if supported.Selector == ec.ChainID {
+				if supported.Selector == ec.ChainSelector {
 					supportedForwarder = supported.Forwarder
 					break
 				}
@@ -174,27 +170,28 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 			expFwd := common.HexToAddress(ec.Forwarder)
 			if supportedForwarder != "" && common.HexToAddress(supportedForwarder) == expFwd {
 				// Same forwarder, just debug log
-				h.log.Debug().Uint64("chain-id", ec.ChainID).Msg("Experimental chain matches supported chain config")
+				h.log.Debug().Uint64("chain-selector", ec.ChainSelector).Msg("Experimental chain matches supported chain config")
 				continue
 			}
 
 			// Different forwarder - respect user's config, warn about override
-			ui.Warning(fmt.Sprintf("Experimental chain %d overrides supported chain forwarder (supported: %s, experimental: %s)", ec.ChainID, supportedForwarder, ec.Forwarder))
+			ui.Warning(fmt.Sprintf("Warning: experimental chain %d overrides supported chain forwarder (supported: %s, experimental: %s)\n", ec.ChainSelector, supportedForwarder, ec.Forwarder))
 
 			// Use existing client but override the forwarder
-			experimentalForwarders[ec.ChainID] = expFwd
+			experimentalForwarders[ec.ChainSelector] = expFwd
 			continue
 		}
 
 		// Dial the RPC
 		c, err := ethclient.Dial(ec.RPCURL)
 		if err != nil {
-			return Inputs{}, fmt.Errorf("failed to create eth client for experimental chain %d: %w", ec.ChainID, err)
+			return Inputs{}, fmt.Errorf("failed to create eth client for experimental chain %d: %w", ec.ChainSelector, err)
 		}
 
-		clients[ec.ChainID] = c
-		experimentalForwarders[ec.ChainID] = common.HexToAddress(ec.Forwarder)
-		ui.Dim(fmt.Sprintf("Added experimental chain (chain-id: %d)", ec.ChainID))
+		clients[ec.ChainSelector] = c
+		experimentalForwarders[ec.ChainSelector] = common.HexToAddress(ec.Forwarder)
+		ui.Dim(fmt.Sprintf("Added experimental chain (chain-selector: %d)\n", ec.ChainSelector))
+
 	}
 
 	if len(clients) == 0 {
@@ -261,57 +258,32 @@ func (h *handler) ValidateInputs(inputs Inputs) error {
 }
 
 func (h *handler) Execute(inputs Inputs) error {
-	// Compile the workflow
-	// terminal command: GOOS=wasip1 GOARCH=wasm go build -trimpath -ldflags="-buildid= -w -s" -o <output_path> <workflow_path>
-	workflowRootFolder := filepath.Dir(inputs.WorkflowPath)
-	tmpWasmFileName := "tmp.wasm"
-	workflowMainFile := filepath.Base(inputs.WorkflowPath)
-
-	// Set language in runtime context based on workflow file extension
+	workflowDir, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("workflow directory: %w", err)
+	}
+	resolvedWorkflowPath, err := cmdcommon.ResolveWorkflowPath(workflowDir, inputs.WorkflowPath)
+	if err != nil {
+		return fmt.Errorf("workflow path: %w", err)
+	}
+	_, workflowMainFile, err := cmdcommon.WorkflowPathRootAndMain(resolvedWorkflowPath)
+	if err != nil {
+		return fmt.Errorf("workflow path: %w", err)
+	}
 	if h.runtimeContext != nil {
 		h.runtimeContext.Workflow.Language = cmdcommon.GetWorkflowLanguage(workflowMainFile)
-
-		switch h.runtimeContext.Workflow.Language {
-		case constants.WorkflowLanguageTypeScript:
-			if err := cmdcommon.EnsureTool("bun"); err != nil {
-				return errors.New("bun is required for TypeScript workflows but was not found in PATH; install from https://bun.com/docs/installation")
-			}
-		case constants.WorkflowLanguageGolang:
-			if err := cmdcommon.EnsureTool("go"); err != nil {
-				return errors.New("go toolchain is required for Go workflows but was not found in PATH; install from https://go.dev/dl")
-			}
-		default:
-			return fmt.Errorf("unsupported workflow language for file %s", workflowMainFile)
-		}
 	}
 
-	buildCmd := cmdcommon.GetBuildCmd(workflowMainFile, tmpWasmFileName, workflowRootFolder)
-
-	h.log.Debug().
-		Str("Workflow directory", buildCmd.Dir).
-		Str("Command", buildCmd.String()).
-		Msg("Executing go build command")
-
-	// Execute the build command with spinner
 	spinner := ui.NewSpinner()
 	spinner.Start("Compiling workflow...")
-	buildOutput, err := buildCmd.CombinedOutput()
+	wasmFileBinary, err := cmdcommon.CompileWorkflowToWasm(resolvedWorkflowPath)
 	spinner.Stop()
-
 	if err != nil {
-		out := strings.TrimSpace(string(buildOutput))
-		h.log.Info().Msg(out)
-		return fmt.Errorf("failed to compile workflow: %w\nbuild output:\n%s", err, out)
+		ui.Error("Build failed:")
+		return fmt.Errorf("failed to compile workflow: %w", err)
 	}
-	h.log.Debug().Msgf("Build output: %s", buildOutput)
+	h.log.Debug().Msg("Workflow compiled")
 	ui.Success("Workflow compiled")
-
-	// Read the compiled workflow binary
-	tmpWasmLocation := filepath.Join(workflowRootFolder, tmpWasmFileName)
-	wasmFileBinary, err := os.ReadFile(tmpWasmLocation)
-	if err != nil {
-		return fmt.Errorf("failed to read workflow binary: %w", err)
-	}
 
 	// Read the config file
 	var config []byte
@@ -454,7 +426,7 @@ func run(
 		}
 
 		computeLggr := lggr.Named("ActionsCapabilities")
-		computeCaps, err := NewFakeActionCapabilities(ctx, computeLggr, registry)
+		computeCaps, err := NewFakeActionCapabilities(ctx, computeLggr, registry, inputs.SecretsPath)
 		if err != nil {
 			ui.Error(fmt.Sprintf("Failed to create compute capabilities: %v", err))
 			os.Exit(1)
@@ -634,26 +606,21 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 
 		var triggerIndex int
 		if len(triggerSub) > 1 {
-			// Build options for huh select
-			options := make([]huh.Option[int], len(triggerSub))
+			opts := make([]ui.SelectOption[int], len(triggerSub))
 			for i, trigger := range triggerSub {
-				options[i] = huh.NewOption(fmt.Sprintf("%s %s", trigger.GetId(), trigger.GetMethod()), i)
+				opts[i] = ui.SelectOption[int]{
+					Label: fmt.Sprintf("%s %s", trigger.GetId(), trigger.GetMethod()),
+					Value: i,
+				}
 			}
 
 			ui.Line()
-			form := huh.NewForm(
-				huh.NewGroup(
-					huh.NewSelect[int]().
-						Title("Workflow simulation ready. Please select a trigger:").
-						Options(options...).
-						Value(&triggerIndex),
-				),
-			).WithTheme(ui.ChainlinkTheme())
-
-			if err := form.Run(); err != nil {
+			selected, err := ui.Select("Workflow simulation ready. Please select a trigger:", opts)
+			if err != nil {
 				ui.Error(fmt.Sprintf("Trigger selection failed: %v", err))
 				os.Exit(1)
 			}
+			triggerIndex = selected
 
 			holder.TriggerToRun = triggerSub[triggerIndex]
 			ui.Line()
@@ -776,7 +743,7 @@ func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inp
 				os.Exit(1)
 			}
 
-			log, err := getEVMTriggerLogFromValues(ctx, client, inputs.EVMTxHash, uint64(inputs.EVMEventIndex))
+			log, err := getEVMTriggerLogFromValues(ctx, client, inputs.EVMTxHash, uint64(inputs.EVMEventIndex)) // #nosec G115 -- EVMEventIndex validated >= 0 above
 			if err != nil {
 				ui.Error(fmt.Sprintf("Failed to build EVM trigger log: %v", err))
 				os.Exit(1)
@@ -829,20 +796,12 @@ func cleanupBeholder() error {
 
 // getHTTPTriggerPayload prompts user for HTTP trigger data
 func getHTTPTriggerPayload() (*httptypedapi.Payload, error) {
-	var input string
-
 	ui.Line()
-	form := huh.NewForm(
-		huh.NewGroup(
-			huh.NewInput().
-				Title("HTTP Trigger Configuration").
-				Description("Enter a file path or JSON directly for the HTTP trigger").
-				Placeholder(`{"key": "value"} or ./payload.json`).
-				Value(&input),
-		),
-	).WithTheme(ui.ChainlinkTheme())
-
-	if err := form.Run(); err != nil {
+	input, err := ui.Input("HTTP Trigger Configuration",
+		ui.WithInputDescription("Enter a file path or JSON directly for the HTTP trigger"),
+		ui.WithPlaceholder(`{"key": "value"} or ./payload.json`),
+	)
+	if err != nil {
 		return nil, fmt.Errorf("HTTP trigger input cancelled: %w", err)
 	}
 
@@ -892,45 +851,43 @@ func getEVMTriggerLog(ctx context.Context, ethClient *ethclient.Client) (*evm.Lo
 	var eventIndexInput string
 
 	ui.Line()
-	form := huh.NewForm(
-		huh.NewGroup(
-			huh.NewInput().
-				Title("EVM Trigger Configuration").
-				Description("Transaction hash for the EVM log event").
-				Placeholder("0x...").
-				Value(&txHashInput).
-				Validate(func(s string) error {
-					s = strings.TrimSpace(s)
-					if s == "" {
-						return fmt.Errorf("transaction hash cannot be empty")
-					}
-					if !strings.HasPrefix(s, "0x") {
-						return fmt.Errorf("transaction hash must start with 0x")
-					}
-					if len(s) != 66 {
-						return fmt.Errorf("invalid transaction hash length: expected 66 characters, got %d", len(s))
-					}
-					return nil
-				}),
-			huh.NewInput().
-				Title("Event Index").
-				Description("Log event index (0-based)").
-				Placeholder("0").
-				Suggestions([]string{"0"}).
-				Value(&eventIndexInput).
-				Validate(func(s string) error {
-					if strings.TrimSpace(s) == "" {
-						return fmt.Errorf("event index cannot be empty")
-					}
-					if _, err := strconv.ParseUint(strings.TrimSpace(s), 10, 32); err != nil {
-						return fmt.Errorf("invalid event index: must be a number")
-					}
-					return nil
-				}),
-		),
-	).WithTheme(ui.ChainlinkTheme()).WithKeyMap(ui.ChainlinkKeyMap())
-
-	if err := form.Run(); err != nil {
+	if err := ui.InputForm([]ui.InputField{
+		{
+			Title:       "EVM Trigger Configuration",
+			Description: "Transaction hash for the EVM log event",
+			Placeholder: "0x...",
+			Value:       &txHashInput,
+			Validate: func(s string) error {
+				s = strings.TrimSpace(s)
+				if s == "" {
+					return fmt.Errorf("transaction hash cannot be empty")
+				}
+				if !strings.HasPrefix(s, "0x") {
+					return fmt.Errorf("transaction hash must start with 0x")
+				}
+				if len(s) != 66 {
+					return fmt.Errorf("invalid transaction hash length: expected 66 characters, got %d", len(s))
+				}
+				return nil
+			},
+		},
+		{
+			Title:       "Event Index",
+			Description: "Log event index (0-based)",
+			Placeholder: "0",
+			Suggestions: []string{"0"},
+			Value:       &eventIndexInput,
+			Validate: func(s string) error {
+				if strings.TrimSpace(s) == "" {
+					return fmt.Errorf("event index cannot be empty")
+				}
+				if _, err := strconv.ParseUint(strings.TrimSpace(s), 10, 32); err != nil {
+					return fmt.Errorf("invalid event index: must be a number")
+				}
+				return nil
+			},
+		},
+	}); err != nil {
 		return nil, fmt.Errorf("EVM trigger input cancelled: %w", err)
 	}
 

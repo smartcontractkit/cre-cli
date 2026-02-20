@@ -67,11 +67,11 @@ check_go_dependency() {
   fi
 }
 
-# Check Bun dependency and version (for TypeScript workflows using 'bunx cre-setup').
+# Check Bun dependency and version (for TypeScript workflows using 'bun x cre-setup').
 check_bun_dependency() {
   if ! command -v bun >/dev/null 2>&1; then
     echo "Warning: 'bun' is not installed."
-    echo "         Bun $REQUIRED_BUN_VERSION or later is recommended to run TypeScript CRE workflows (e.g. 'postinstall: bunx cre-setup')."
+    echo "         Bun $REQUIRED_BUN_VERSION or later is recommended to run TypeScript CRE workflows (e.g. 'postinstall: bun x cre-setup')."
     return
   fi
 

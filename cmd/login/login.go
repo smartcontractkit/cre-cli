@@ -361,7 +361,7 @@ func (h *handler) exchangeCodeForTokens(ctx context.Context, code string) (*cred
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	resp, err := httpClient.Do(req)
+	resp, err := httpClient.Do(req) // #nosec G704 -- URL is from trusted environment config
 	if err != nil {
 		return nil, fmt.Errorf("perform request: %w", err)
 	}

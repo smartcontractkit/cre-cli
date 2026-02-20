@@ -53,6 +53,7 @@ const (
 
 	WorkflowLanguageGolang     = "golang"
 	WorkflowLanguageTypeScript = "typescript"
+	WorkflowLanguageWasm       = "wasm"
 
 	// SDK dependency versions (used by generate-bindings and go module init)
 	SdkVersion              = "v1.2.0"

@@ -38,11 +38,11 @@ type RpcEndpoint struct {
 
 // ExperimentalChain represents an EVM chain not in official chain-selectors.
 // Automatically used by the simulator when present in the target's experimental-chains config.
-// The ChainID is used as the selector key for EVM clients and forwarders.
+// The ChainSelector is used as the selector key for EVM clients and forwarders.
 type ExperimentalChain struct {
-	ChainID   uint64 `mapstructure:"chain-id" yaml:"chain-id"`
-	RPCURL    string `mapstructure:"rpc-url" yaml:"rpc-url"`
-	Forwarder string `mapstructure:"forwarder" yaml:"forwarder"`
+	ChainSelector uint64 `mapstructure:"chain-selector" yaml:"chain-selector"`
+	RPCURL        string `mapstructure:"rpc-url" yaml:"rpc-url"`
+	Forwarder     string `mapstructure:"forwarder" yaml:"forwarder"`
 }
 
 func GetRpcUrlSettings(v *viper.Viper, chainName string) (string, error) {

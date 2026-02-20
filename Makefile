@@ -1,4 +1,4 @@
-.PHONY: all build build-admin lint test test-e2e clean goreleaser-dev-build install-tools install-foundry run-op gendoc
+.PHONY: all build build-admin lint test test-e2e test-quick clean goreleaser-dev-build install-tools install-foundry run-op gendoc
 
 # Go parameters
 COMMIT_SHA = $(shell git rev-parse HEAD)
@@ -28,6 +28,10 @@ test: lint
 
 test-e2e:
 	$(GOTEST) -v -p 5 ./test/
+
+# test-quick: run tests with 30s timeout, skipping slow/flaky e2e tests. Use -short so TestE2EInit_ConvertToCustomBuild_TS is skipped.
+test-quick:
+	$(GOTEST) ./... -v -short -skip 'MultiCommandHappyPaths|TestPostToGateway|TestBlankWorkflowSimulation|TestWaitForBackendLinkProcessing|TestTryAutoLink|TestCheckLinkStatusViaGraphQL|Fails to run tests with invalid Go code' -timeout 30s
 
 clean:
 	$(GOCLEAN)

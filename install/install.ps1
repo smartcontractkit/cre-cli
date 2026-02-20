@@ -79,7 +79,7 @@ function Test-GoDependency {
 function Test-BunDependency {
     if (-not (Get-Command bun -ErrorAction SilentlyContinue)) {
         Write-Warning "'bun' is not installed."
-        Write-Host "         Bun $RequiredBunVersion or later is recommended to run TypeScript CRE workflows (e.g. 'postinstall: bunx cre-setup')."
+        Write-Host "         Bun $RequiredBunVersion or later is recommended to run TypeScript CRE workflows (e.g. 'postinstall: bun x cre-setup')."
         return
     }
 
