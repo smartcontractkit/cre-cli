@@ -8,6 +8,7 @@ import (
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/spf13/viper"
+	"gopkg.in/yaml.v3"
 
 	chainSelectors "github.com/smartcontractkit/chain-selectors"
 
@@ -172,10 +173,49 @@ func GetTarget(v *viper.Viper) (string, error) {
 		return target, nil
 	}
 
-	return "", fmt.Errorf(
-		"target not set: specify --%s or set %s env var",
-		Flags.Target.Name, CreTargetEnvVar,
-	)
+	return "", nil
+}
+
+// GetAvailableTargets reads project.yaml and returns the top-level keys
+// that represent target configurations, preserving the order from the file.
+func GetAvailableTargets() ([]string, error) {
+	projectPath, err := getProjectSettingsPath()
+	if err != nil {
+		return nil, fmt.Errorf("failed to find project settings: %w", err)
+	}
+
+	data, err := os.ReadFile(projectPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read project settings: %w", err)
+	}
+
+	// Parse with yaml.v3 Node to preserve key order
+	var doc yaml.Node
+	if err := yaml.Unmarshal(data, &doc); err != nil {
+		return nil, fmt.Errorf("failed to parse project settings: %w", err)
+	}
+
+	if doc.Kind != yaml.DocumentNode || len(doc.Content) == 0 {
+		return nil, nil
+	}
+
+	root := doc.Content[0]
+	if root.Kind != yaml.MappingNode {
+		return nil, nil
+	}
+
+	// Mapping nodes alternate key, value, key, value...
+	// Only include keys whose values are mappings (actual target configs).
+	var targets []string
+	for i := 0; i+1 < len(root.Content); i += 2 {
+		key := root.Content[i]
+		val := root.Content[i+1]
+		if key.Kind == yaml.ScalarNode && val.Kind == yaml.MappingNode {
+			targets = append(targets, key.Value)
+		}
+	}
+
+	return targets, nil
 }
 
 func GetChainNameByChainSelector(chainSelector uint64) (string, error) {

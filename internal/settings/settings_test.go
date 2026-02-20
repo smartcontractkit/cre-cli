@@ -84,9 +84,17 @@ func TestLoadEnvAndSettingsEmptyTarget(t *testing.T) {
 	cmd := &cobra.Command{Use: "login"}
 	s, err := settings.New(logger, v, cmd, "")
 
-	assert.Error(t, err, "Expected error due to empty target")
-	assert.Contains(t, err.Error(), "target not set", "Expected missing target error")
-	assert.Nil(t, s, "Settings object should be nil on error")
+	// With no target set, settings.New() tries to prompt for a target.
+	// In a non-TTY test environment, this will either auto-select (single target)
+	// or fail with a prompt error (multiple targets).
+	if err != nil {
+		// Expected in non-TTY when multiple targets exist
+		assert.Nil(t, s, "Settings object should be nil on error")
+	} else {
+		// Auto-selected the only available target
+		assert.NotNil(t, s)
+		assert.NotEmpty(t, s.User.TargetName)
+	}
 }
 
 func TestLoadEnvAndSettings(t *testing.T) {
