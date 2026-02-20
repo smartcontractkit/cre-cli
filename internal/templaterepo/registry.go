@@ -99,7 +99,7 @@ func (r *Registry) ScaffoldTemplate(tmpl *TemplateSummary, destDir, workflowName
 		tarballPath := r.cache.TarballPath(tmpl.Source, treeSHA)
 		err := r.client.DownloadAndExtractTemplateFromCache(tarballPath, tmpl.Path, destDir, tmpl.Exclude)
 		if err == nil {
-			return r.renameWorkflowDir(tmpl, destDir, workflowName)
+			return r.maybeRenameWorkflowDir(tmpl, destDir, workflowName)
 		}
 		r.logger.Warn().Err(err).Msg("Failed to extract from cached tarball, re-downloading")
 	}
@@ -116,7 +116,7 @@ func (r *Registry) ScaffoldTemplate(tmpl *TemplateSummary, destDir, workflowName
 		if err != nil {
 			return fmt.Errorf("failed to download template: %w", err)
 		}
-		return r.renameWorkflowDir(tmpl, destDir, workflowName)
+		return r.maybeRenameWorkflowDir(tmpl, destDir, workflowName)
 	}
 
 	if onProgress != nil {
@@ -128,14 +128,20 @@ func (r *Registry) ScaffoldTemplate(tmpl *TemplateSummary, destDir, workflowName
 		return fmt.Errorf("failed to extract template: %w", err)
 	}
 
+	return r.maybeRenameWorkflowDir(tmpl, destDir, workflowName)
+}
+
+// maybeRenameWorkflowDir skips renaming for templates with projectDir set (copy-as-is),
+// otherwise delegates to renameWorkflowDir for built-in template handling.
+func (r *Registry) maybeRenameWorkflowDir(tmpl *TemplateSummary, destDir, workflowName string) error {
+	if tmpl.ProjectDir != "" {
+		return nil
+	}
 	return r.renameWorkflowDir(tmpl, destDir, workflowName)
 }
 
 // renameWorkflowDir renames or organizes workflow directories after extraction.
-// It branches on len(tmpl.Workflows):
-//   - >1: multi-workflow, no renaming (directory names are semantically meaningful)
-//   - ==1: single workflow, rename from template dir to user's workflowName
-//   - ==0: no workflows field (backwards compat), use heuristic fallback
+// Only used for built-in templates (no projectDir).
 func (r *Registry) renameWorkflowDir(tmpl *TemplateSummary, destDir, workflowName string) error {
 	workflows := tmpl.Workflows
 

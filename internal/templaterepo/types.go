@@ -9,7 +9,8 @@ type WorkflowDirEntry struct {
 // TemplateMetadata represents the contents of a template.yaml file.
 type TemplateMetadata struct {
 	Kind        string             `yaml:"kind"`        // "building-block" or "starter-template"
-	Name        string             `yaml:"name"`        // Unique slug identifier
+	ID          string             `yaml:"id"`          // Unique slug identifier (preferred over name)
+	Name        string             `yaml:"name"`        // Unique slug identifier (deprecated, use id)
 	Title       string             `yaml:"title"`       // Human-readable display name
 	Description string             `yaml:"description"` // Short description
 	Language    string             `yaml:"language"`     // "go" or "typescript"
@@ -21,6 +22,15 @@ type TemplateMetadata struct {
 	Networks    []string           `yaml:"networks"`   // Required chain names (e.g., "ethereum-testnet-sepolia")
 	Workflows   []WorkflowDirEntry `yaml:"workflows"`  // Workflow directories inside the template
 	PostInit    string             `yaml:"postInit"`   // Template-specific post-init instructions
+	ProjectDir  string             `yaml:"projectDir"` // CRE project directory within the template (e.g., "." or "cre-workflow")
+}
+
+// GetName returns the template identifier, preferring ID over Name for backward compatibility.
+func (t *TemplateMetadata) GetName() string {
+	if t.ID != "" {
+		return t.ID
+	}
+	return t.Name
 }
 
 // TemplateSummary is TemplateMetadata plus location info, populated during discovery.

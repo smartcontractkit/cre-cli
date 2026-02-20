@@ -390,8 +390,9 @@ func newWizardModel(inputs Inputs, isNewProject bool, startDir string, templates
 // initNetworkRPCInputs sets up RPC URL inputs based on the selected template's Networks.
 // It also configures workflow name behavior based on the template's Workflows field.
 func (m *wizardModel) initNetworkRPCInputs() {
-	// Multi-workflow templates: skip workflow name prompt (dirs are semantically meaningful)
-	if len(m.selectedTemplate.Workflows) > 1 {
+	// Skip workflow name prompt when template provides its own project structure,
+	// or for multi-workflow templates where dirs are semantically meaningful.
+	if m.selectedTemplate.ProjectDir != "" || len(m.selectedTemplate.Workflows) > 1 {
 		m.skipWorkflowName = true
 	}
 

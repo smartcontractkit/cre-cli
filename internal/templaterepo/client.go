@@ -312,8 +312,12 @@ func (c *Client) fetchTemplateMetadata(source RepoSource, path string) (*Templat
 		return nil, fmt.Errorf("failed to parse template.yaml at %s: %w", path, err)
 	}
 
+	// Support both "id" (new) and "name" (legacy) fields
+	if meta.ID != "" {
+		meta.Name = meta.ID
+	}
 	if meta.Name == "" {
-		return nil, fmt.Errorf("template.yaml at %s missing required field 'name'", path)
+		return nil, fmt.Errorf("template.yaml at %s missing required field 'name' or 'id'", path)
 	}
 
 	return &meta, nil
