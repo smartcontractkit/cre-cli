@@ -15,6 +15,7 @@ import (
 
 	cmdcommon "github.com/smartcontractkit/cre-cli/cmd/common"
 	"github.com/smartcontractkit/cre-cli/internal/constants"
+	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/testutil/chainsim"
 	"github.com/smartcontractkit/cre-cli/internal/validation"
@@ -93,6 +94,11 @@ func TestCompileCmd(t *testing.T) {
 				defer simulatedEnvironment.Close()
 
 				ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
+				ctx.Credentials = &credentials.Credentials{
+					APIKey:      "test-api-key",
+					AuthType:    credentials.AuthTypeApiKey,
+					IsValidated: true,
+				}
 				handler := newHandler(ctx, buf)
 
 				ctx.Settings = createTestSettings(
@@ -162,7 +168,7 @@ func TestCompileCmd(t *testing.T) {
 		outputFileName := "binary.wasm.br.b64"
 		outputPath := "./" + outputFileName
 
-		t.Run("errors", func(t *testing.T) {
+		t.Run("malformed workflow", func(t *testing.T) {
 			httpmock.Activate()
 			t.Cleanup(httpmock.DeactivateAndReset)
 

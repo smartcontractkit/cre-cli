@@ -1,19 +1,19 @@
-## cre account list-key
+## cre account access
 
-List workflow owners
+Check or request deployment access
 
 ### Synopsis
 
-Fetches workflow owners linked to your organisation
+Check your deployment access status or request access to deploy workflows.
 
 ```
-cre account list-key [optional flags]
+cre account access [optional flags]
 ```
 
 ### Options
 
 ```
-  -h, --help   help for list-key
+  -h, --help   help for access
 ```
 
 ### Options inherited from parent commands

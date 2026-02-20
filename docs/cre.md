@@ -22,7 +22,7 @@ cre [optional flags]
 
 ### SEE ALSO
 
-* [cre account](cre_account.md)	 - Manages account
+* [cre account](cre_account.md)	 - Manage account and request deploy access
 * [cre generate-bindings](cre_generate-bindings.md)	 - Generate bindings from contract ABI
 * [cre init](cre_init.md)	 - Initialize a new cre project (recommended starting point)
 * [cre login](cre_login.md)	 - Start authentication flow
