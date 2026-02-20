@@ -3,6 +3,7 @@ package accessrequest
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/charmbracelet/huh"
 	"github.com/machinebox/graphql"
