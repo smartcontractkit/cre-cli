@@ -24,6 +24,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
+	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
 var (
@@ -58,12 +59,20 @@ func New(runtimeCtx *runtime.Context) *cobra.Command {
 	return cmd
 }
 
+// Run executes the login flow directly without going through Cobra.
+// This is useful for prompting login from other commands when auth is required.
+func Run(runtimeCtx *runtime.Context) error {
+	h := newHandler(runtimeCtx)
+	return h.execute()
+}
+
 type handler struct {
 	environmentSet   *environments.EnvironmentSet
 	log              *zerolog.Logger
 	lastPKCEVerifier string
 	lastState        string
 	retryCount       int
+	spinner          *ui.Spinner
 }
 
 const maxOrgNotFoundRetries = 3
@@ -72,36 +81,65 @@ func newHandler(ctx *runtime.Context) *handler {
 	return &handler{
 		log:            ctx.Logger,
 		environmentSet: ctx.EnvironmentSet,
+		spinner:        ui.NewSpinner(),
 	}
 }
 
 func (h *handler) execute() error {
+	// Welcome message (no spinner yet)
+	ui.Title("CRE Login")
+	ui.Line()
+	ui.Dim("Authenticate with your Chainlink account")
+	ui.Line()
+
 	code, err := h.startAuthFlow()
 	if err != nil {
+		h.spinner.StopAll()
 		return err
 	}
 
+	// Use spinner for the token exchange
+	h.spinner.Start("Exchanging authorization code...")
 	tokenSet, err := h.exchangeCodeForTokens(context.Background(), code)
 	if err != nil {
+		h.spinner.StopAll()
 		h.log.Error().Err(err).Msg("code exchange failed")
 		return err
 	}
 
+	h.spinner.Update("Saving credentials...")
 	if err := credentials.SaveCredentials(tokenSet); err != nil {
+		h.spinner.StopAll()
 		h.log.Error().Err(err).Msg("failed to save credentials")
 		return err
 	}
 
-	fmt.Println("Login completed successfully")
-	fmt.Println("To get started, run: cre init")
+	// Stop spinner before final output
+	h.spinner.Stop()
+
+	ui.Line()
+	ui.Success("Login completed successfully!")
+	ui.Line()
+
+	// Show next steps in a styled box
+	nextSteps := ui.RenderBold("Next steps:") + "\n" +
+		"  " + ui.RenderCommand("cre init") + "  Create a new CRE project\n" +
+		"  " + ui.RenderCommand("cre whoami") + "  View your account info"
+	ui.Box(nextSteps)
+	ui.Line()
+
 	return nil
 }
 
 func (h *handler) startAuthFlow() (string, error) {
 	codeCh := make(chan string, 1)
 
+	// Use spinner while setting up server
+	h.spinner.Start("Preparing authentication...")
+
 	server, listener, err := h.setupServer(codeCh)
 	if err != nil {
+		h.spinner.Stop()
 		return "", err
 	}
 	defer func() {
@@ -118,19 +156,34 @@ func (h *handler) startAuthFlow() (string, error) {
 
 	verifier, challenge, err := generatePKCE()
 	if err != nil {
+		h.spinner.Stop()
 		return "", err
 	}
 	h.lastPKCEVerifier = verifier
 	h.lastState = randomState()
 
 	authURL := h.buildAuthURL(challenge, h.lastState)
-	fmt.Printf("Opening browser to %s\n", authURL)
+
+	// Stop spinner before showing URL (static content)
+	h.spinner.Stop()
+
+	// Show URL - this stays visible while user authenticates in browser
+	ui.Step("Opening browser to:")
+	ui.URL(authURL)
+	ui.Line()
+
 	if err := openBrowser(authURL, rt.GOOS); err != nil {
-		h.log.Warn().Err(err).Msg("could not open browser, please navigate manually")
+		ui.Warning("Could not open browser automatically")
+		ui.Dim("Please open the URL above in your browser")
+		ui.Line()
 	}
+
+	// Static waiting message (no spinner - user will see this when they return)
+	ui.Dim("Waiting for authentication... (Press Ctrl+C to cancel)")
 
 	select {
 	case code := <-codeCh:
+		ui.Line()
 		return code, nil
 	case <-time.After(500 * time.Second):
 		return "", fmt.Errorf("timeout waiting for authorization code")
@@ -182,7 +235,7 @@ func (h *handler) callbackHandler(codeCh chan string) http.HandlerFunc {
 				// Build the new auth URL for redirect
 				authURL := h.buildAuthURL(challenge, h.lastState)
 
-				fmt.Printf("Your organization is being created, please wait (attempt %d/%d)...\n", h.retryCount, maxOrgNotFoundRetries)
+				h.log.Debug().Int("attempt", h.retryCount).Int("max", maxOrgNotFoundRetries).Msg("organization setup in progress, retrying")
 				h.serveWaitingPage(w, authURL)
 				return
 			}
@@ -308,7 +361,7 @@ func (h *handler) exchangeCodeForTokens(ctx context.Context, code string) (*cred
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
-	resp, err := httpClient.Do(req)
+	resp, err := httpClient.Do(req) // #nosec G704 -- URL is from trusted environment config
 	if err != nil {
 		return nil, fmt.Errorf("perform request: %w", err)
 	}
