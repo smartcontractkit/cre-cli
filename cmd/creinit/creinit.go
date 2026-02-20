@@ -295,14 +295,6 @@ func (h *handler) Execute(inputs Inputs) error {
 			}
 		}
 
-		// Handle .env
-		envPath := filepath.Join(projectRoot, constants.DefaultEnvFileName)
-		if !h.pathExists(envPath) {
-			if _, e := settings.GenerateProjectEnvFile(projectRoot); e != nil {
-				return e
-			}
-		}
-
 		// Initialize Go module if needed
 		if selectedTemplate.Language == "go" && !h.pathExists(filepath.Join(projectRoot, "go.mod")) {
 			projectName := filepath.Base(projectRoot)
@@ -337,6 +329,14 @@ func (h *handler) Execute(inputs Inputs) error {
 			} else if _, err := settings.GenerateWorkflowSettingsFile(workflowDirectory, workflowName, entryPoint); err != nil {
 				return fmt.Errorf("failed to generate %s file: %w", constants.DefaultWorkflowSettingsFileName, err)
 			}
+		}
+	}
+
+	// Ensure .env exists — dynamic templates with projectDir may not ship one
+	envPath := filepath.Join(projectRoot, constants.DefaultEnvFileName)
+	if !h.pathExists(envPath) {
+		if _, e := settings.GenerateProjectEnvFile(projectRoot); e != nil {
+			return e
 		}
 	}
 
