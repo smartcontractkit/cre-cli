@@ -33,7 +33,7 @@ type Inputs struct {
 	ConfigURL *string `validate:"omitempty,http_url|eq="`
 
 	KeepAlive    bool
-	WorkflowPath string `validate:"required,path_read"`
+	WorkflowPath string `validate:"required,workflow_path_read"`
 	ConfigPath   string `validate:"omitempty,file,ascii,max=97" cli:"--config"`
 	OutputPath   string `validate:"omitempty,filepath,ascii,max=97" cli:"--output"`
 
