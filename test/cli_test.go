@@ -177,19 +177,19 @@ func createWorkflowDirectory(
 
 	// if TS then run `bun install`
 	if strings.HasSuffix(workflowDirectoryName, "_ts") {
-		bunCmd := exec.Command("bun", "install",)
+		bunCmd := exec.Command("bun", "install")
 		bunCmd.Dir = workflowDir
 		var stdout, stderr bytes.Buffer
 		bunCmd.Stdout, bunCmd.Stderr = &stdout, &stderr
 
-		err :=bunCmd.Run()
+		err := bunCmd.Run()
 
 		output := stdout.String() + stderr.String()
 		L.Debug().
 			Str("BunInstallOutput", output).
 			Msg("Bun install output")
 
-	    if err != nil {
+		if err != nil {
 			return fmt.Errorf("failed to run bun install: %w", err)
 		}
 	}

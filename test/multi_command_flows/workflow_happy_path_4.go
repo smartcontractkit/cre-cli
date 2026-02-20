@@ -113,7 +113,7 @@ func setupMock(t *testing.T, tc TestConfig) (output string, gqlURL string) {
 	return
 }
 
-func deployWorkflow(t *testing.T, tc TestConfig, workflowName string) (output string) {
+func deployWorkflow(t *testing.T, tc TestConfig, workflowName string) (output string, err error) {
 	// Build CLI args - CLI will automatically resolve workflow path using new context system
 	args := []string{
 		"workflow", "deploy",
@@ -129,10 +129,10 @@ func deployWorkflow(t *testing.T, tc TestConfig, workflowName string) (output st
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 
-	cmd.Run()
+	err = cmd.Run()
 
 	output = StripANSI(stdout.String() + stderr.String())
-	return output
+	return
 }
 
 // DuplicateDeployRejected deploys a workflow and then attempts to deploy it again, confirming that it fails.
@@ -142,10 +142,13 @@ func DuplicateDeployRejected(t *testing.T, tc TestConfig, workflowName string) {
 	// Set dummy API key
 	t.Setenv(credentials.CreApiKeyVar, "test-api")
 
-	out, _ := setupMock(t, tc)
+	setupMock(t, tc)
 
 	// Deploy with mocked storage - this creates the server and returns the GraphQL URL
-	out = deployWorkflow(t, tc, workflowName)
+	out, err := deployWorkflow(t, tc, workflowName)
+	if err != nil {
+		t.Fatalf("failed to deploy workflow: %v", err)
+	}
 	require.Contains(t, out, "Workflow compiled", "expected workflow to compile.\nCLI OUTPUT:\n%s", out)
 	require.Contains(t, out, "linked=true", "expected link-status true.\nCLI OUTPUT:\n%s", out)
 	require.Contains(t, out, "Uploaded binary", "expected binary upload to succeed.\nCLI OUTPUT:\n%s", out)
@@ -158,6 +161,6 @@ func DuplicateDeployRejected(t *testing.T, tc TestConfig, workflowName string) {
 	require.NotEmpty(t, workflowID, "expected workflowID to be not empty.\nCLI OUTPUT:\n%s", out)
 
 	// deploy workflow again and confirm it fails
-	out2 := deployWorkflow(t, tc, workflowName)
-	require.Contains(t, out2, "workflow with id "+workflowID+" already exists", "expected workflow to be already deployed.\nCLI OUTPUT:\n%s", out2	)
+	out2, _ := deployWorkflow(t, tc, workflowName) // ignore error, we expect it to fail
+	require.Contains(t, out2, "workflow with id "+workflowID+" already exists", "expected workflow to be already deployed.\nCLI OUTPUT:\n%s", out2)
 }
