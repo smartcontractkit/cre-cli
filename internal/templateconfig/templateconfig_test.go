@@ -48,7 +48,7 @@ func TestLoadTemplateSourcesDefault(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 
 	sources := LoadTemplateSources(logger)
-	require.Len(t, sources, 1)
+	require.Len(t, sources, len(DefaultSources))
 	assert.Equal(t, "smartcontractkit", sources[0].Owner)
 	assert.Equal(t, "cre-templates", sources[0].Repo)
 }
@@ -118,12 +118,12 @@ func TestEnsureDefaultConfig(t *testing.T) {
 
 		require.NoError(t, EnsureDefaultConfig(logger))
 
-		// File should exist with default source
+		// File should exist with default sources
 		sources := LoadTemplateSources(logger)
-		require.Len(t, sources, 1)
-		assert.Equal(t, DefaultSource.Owner, sources[0].Owner)
-		assert.Equal(t, DefaultSource.Repo, sources[0].Repo)
-		assert.Equal(t, DefaultSource.Ref, sources[0].Ref)
+		require.Len(t, sources, len(DefaultSources))
+		assert.Equal(t, DefaultSources[0].Owner, sources[0].Owner)
+		assert.Equal(t, DefaultSources[0].Repo, sources[0].Repo)
+		assert.Equal(t, DefaultSources[0].Ref, sources[0].Ref)
 	})
 
 	t.Run("no-op when file exists", func(t *testing.T) {
@@ -151,8 +151,8 @@ func TestAddRepoToExisting(t *testing.T) {
 	homeDir := t.TempDir()
 	t.Setenv("HOME", homeDir)
 
-	// Start with default
-	require.NoError(t, SaveTemplateSources([]templaterepo.RepoSource{DefaultSource}))
+	// Start with defaults
+	require.NoError(t, SaveTemplateSources(DefaultSources))
 
 	// Load, append, save
 	existing := LoadTemplateSources(logger)
@@ -160,9 +160,9 @@ func TestAddRepoToExisting(t *testing.T) {
 	updated := append(existing, newRepo)
 	require.NoError(t, SaveTemplateSources(updated))
 
-	// Verify both are present
+	// Verify all are present
 	final := LoadTemplateSources(logger)
-	require.Len(t, final, 2)
-	assert.Equal(t, DefaultSource.Owner, final[0].Owner)
-	assert.Equal(t, "my-org", final[1].Owner)
+	require.Len(t, final, len(DefaultSources)+1)
+	assert.Equal(t, DefaultSources[0].Owner, final[0].Owner)
+	assert.Equal(t, "my-org", final[len(final)-1].Owner)
 }

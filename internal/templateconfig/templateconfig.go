@@ -17,11 +17,18 @@ const (
 	configFileName = "template.yaml"
 )
 
-// DefaultSource is the default template repository.
-var DefaultSource = templaterepo.RepoSource{
-	Owner: "smartcontractkit",
-	Repo:  "cre-templates",
-	Ref:   "feature/template-standard",
+// DefaultSources are the default template repositories.
+var DefaultSources = []templaterepo.RepoSource{
+	{
+		Owner: "smartcontractkit",
+		Repo:  "cre-templates",
+		Ref:   "feature/template-standard",
+	},
+	{
+		Owner: "smartcontractkit",
+		Repo:  "cre-gcp-prediction-market-demo",
+		Ref:   "main",
+	},
 }
 
 // Config represents the CLI template configuration file at ~/.cre/template.yaml.
@@ -52,7 +59,7 @@ func LoadTemplateSources(logger *zerolog.Logger) []templaterepo.RepoSource {
 		return sources
 	}
 
-	return []templaterepo.RepoSource{DefaultSource}
+	return DefaultSources
 }
 
 // SaveTemplateSources writes the given sources to ~/.cre/template.yaml.
@@ -109,7 +116,7 @@ func EnsureDefaultConfig(logger *zerolog.Logger) error {
 	}
 
 	logger.Debug().Msg("Creating default template config at " + configPath)
-	return SaveTemplateSources([]templaterepo.RepoSource{DefaultSource})
+	return SaveTemplateSources(DefaultSources)
 }
 
 // ParseRepoString parses "owner/repo@ref" into a RepoSource.
