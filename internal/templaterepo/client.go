@@ -291,6 +291,7 @@ func (c *Client) fetchTemplateMetadata(source RepoSource, path string) (*Templat
 		return nil, err
 	}
 	req.Header.Set("User-Agent", "cre-cli")
+	c.setAuthHeaders(req)
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
