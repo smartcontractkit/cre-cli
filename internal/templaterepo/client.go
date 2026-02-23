@@ -352,6 +352,11 @@ func (c *Client) extractTarball(r io.Reader, templatePath, destDir string, exclu
 			continue
 		}
 
+		// Prevent Zip Slip: reject archive entries containing ".."
+		if strings.Contains(header.Name, "..") {
+			return fmt.Errorf("illegal file path in archive: %s", header.Name)
+		}
+
 		// Detect top-level prefix from the first real directory entry
 		if topLevelPrefix == "" {
 			parts := strings.SplitN(header.Name, "/", 2)
@@ -395,11 +400,6 @@ func (c *Client) extractTarball(r io.Reader, templatePath, destDir string, exclu
 			continue
 		}
 
-		// Prevent Zip Slip: sanitize relPath before joining with destDir
-		relPath = filepath.Clean(relPath)
-		if strings.HasPrefix(relPath, ".."+string(os.PathSeparator)) || relPath == ".." {
-			return fmt.Errorf("illegal file path in archive: %s", header.Name)
-		}
 		targetPath := filepath.Join(destDir, relPath)
 
 		switch header.Typeflag {
