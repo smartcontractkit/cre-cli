@@ -465,7 +465,7 @@ jobs:
           #     --output .qa-test-report-$(date +%Y-%m-%d).md
           #
           # Option B: Custom wrapper script
-          #   python3 .ai-test-agent/run.py --scope ${{ inputs.scope }}
+          #   ./scripts/run-ai-validation.sh --scope ${{ inputs.scope }}
           #
           # Option C: Direct API call to Claude
           #   .ai-test-agent/run.sh
