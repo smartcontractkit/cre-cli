@@ -76,7 +76,10 @@ func ScaffoldBuiltIn(logger *zerolog.Logger, templateName, destDir, workflowName
 		}
 
 		// Get path relative to the template root
-		relPath, _ := filepath.Rel(templateRoot, path)
+		relPath, relErr := filepath.Rel(templateRoot, path)
+		if relErr != nil {
+			return fmt.Errorf("failed to compute relative path for %s: %w", path, relErr)
+		}
 		if relPath == "." {
 			return nil
 		}
