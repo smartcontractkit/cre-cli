@@ -1,0 +1,64 @@
+#!/usr/bin/expect -f
+set timeout 180
+
+set root [pwd]
+set cli "$root/cre"
+if {![file exists $cli]} {
+  set cli "$root/.tmp/cre"
+}
+if {![file exists $cli]} {
+  puts "Binary not found at ./cre or ./.tmp/cre"
+  exit 1
+}
+
+set workdir "/tmp/cre-pty-overwrite-[clock seconds]"
+file mkdir $workdir
+cd $workdir
+
+# Prepare existing directory for NO path
+file mkdir "ovr-no"
+set f1 [open "ovr-no/sentinel.txt" w]
+puts $f1 "keep-no"
+close $f1
+
+spawn $cli init
+expect "Project name"
+send "ovr-no\r"
+expect "What language do you want to use?"
+send "\r"
+expect "Pick a workflow template"
+send "\033\[B\r"
+expect "Workflow name"
+send "wf-no\r"
+expect "Overwrite?"
+send "n\r"
+expect "directory creation aborted by user"
+if {![file exists "ovr-no/sentinel.txt"]} {
+  puts "Expected sentinel to remain for NO branch"
+  exit 1
+}
+
+# Prepare existing directory for YES path
+file mkdir "ovr-yes"
+set f2 [open "ovr-yes/sentinel.txt" w]
+puts $f2 "drop-yes"
+close $f2
+
+spawn $cli init
+expect "Project name"
+send "ovr-yes\r"
+expect "What language do you want to use?"
+send "\r"
+expect "Pick a workflow template"
+send "\033\[B\r"
+expect "Workflow name"
+send "wf-yes\r"
+expect "Overwrite?"
+send "y\r"
+expect "Project created successfully"
+if {[file exists "ovr-yes/sentinel.txt"]} {
+  puts "Expected sentinel to be removed for YES branch"
+  exit 1
+}
+
+exit 0

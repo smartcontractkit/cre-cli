@@ -1,0 +1,35 @@
+#!/usr/bin/expect -f
+set timeout 180
+
+set root [pwd]
+set cli "$root/cre"
+if {![file exists $cli]} {
+  set cli "$root/.tmp/cre"
+}
+if {![file exists $cli]} {
+  puts "Binary not found at ./cre or ./.tmp/cre"
+  exit 1
+}
+
+set workdir "/tmp/cre-pty-smoke-[clock seconds]"
+file mkdir $workdir
+cd $workdir
+
+spawn $cli init
+
+expect "Project name"
+send "pty-smoke\r"
+
+expect "What language do you want to use?"
+send "\r"
+
+expect "Pick a workflow template"
+send "\033\[B\r"
+
+expect "Workflow name"
+send "wf-smoke\r"
+
+expect {
+  "Project created successfully" { exit 0 }
+  timeout { puts "Timed out waiting for success"; exit 1 }
+}
