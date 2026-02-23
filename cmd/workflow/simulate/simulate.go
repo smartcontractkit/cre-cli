@@ -37,6 +37,7 @@ import (
 	v2 "github.com/smartcontractkit/chainlink/v2/core/services/workflows/v2"
 
 	cmdcommon "github.com/smartcontractkit/cre-cli/cmd/common"
+	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
@@ -98,6 +99,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 type handler struct {
 	log            *zerolog.Logger
 	runtimeContext *runtime.Context
+	credentials    *credentials.Credentials
 	validated      bool
 }
 
@@ -105,6 +107,7 @@ func newHandler(ctx *runtime.Context) *handler {
 	return &handler{
 		log:            ctx.Logger,
 		runtimeContext: ctx,
+		credentials:    ctx.Credentials,
 		validated:      false,
 	}
 }
@@ -312,7 +315,32 @@ func (h *handler) Execute(inputs Inputs) error {
 	// if logger instance is set to DEBUG, that means verbosity flag is set by the user
 	verbosity := h.log.GetLevel() == zerolog.DebugLevel
 
-	return run(ctx, wasmFileBinary, config, secrets, inputs, verbosity)
+	err = run(ctx, wasmFileBinary, config, secrets, inputs, verbosity)
+	if err != nil {
+		return err
+	}
+
+	h.showDeployAccessHint()
+
+	return nil
+}
+
+func (h *handler) showDeployAccessHint() {
+	if h.credentials == nil {
+		return
+	}
+
+	deployAccess, err := h.credentials.GetDeploymentAccessStatus()
+	if err != nil {
+		return
+	}
+
+	if !deployAccess.HasAccess {
+		ui.Line()
+		message := ui.RenderSuccess("Simulation complete!") + " Ready to deploy your workflow?\n\n" +
+			"Run " + ui.RenderCommand("cre account access") + " to request deployment access."
+		ui.Box(message)
+	}
 }
 
 // run instantiates the engine, starts it and blocks until the context is canceled.

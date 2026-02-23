@@ -1,6 +1,7 @@
 package deploy
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -12,6 +13,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/smartcontractkit/cre-cli/cmd/client"
+	"github.com/smartcontractkit/cre-cli/internal/accessrequest"
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
@@ -61,6 +63,7 @@ type handler struct {
 	workflowArtifact *workflowArtifact
 	wrc              *client.WorkflowRegistryV2Client
 	runtimeContext   *runtime.Context
+	accessRequester  *accessrequest.Requester
 
 	validated bool
 
@@ -93,7 +96,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 			if err := h.ValidateInputs(); err != nil {
 				return err
 			}
-			return h.Execute()
+			return h.Execute(cmd.Context())
 		},
 	}
 
@@ -117,10 +120,16 @@ func newHandler(ctx *runtime.Context, stdin io.Reader) *handler {
 		workflowArtifact: &workflowArtifact{},
 		wrc:              nil,
 		runtimeContext:   ctx,
+		accessRequester:  accessrequest.NewRequester(ctx.Credentials, ctx.EnvironmentSet, ctx.Logger),
 		validated:        false,
 		wg:               sync.WaitGroup{},
 		wrcErr:           nil,
 	}
+
+	return &h
+}
+
+func (h *handler) initWorkflowRegistryClient() {
 	h.wg.Add(1)
 	go func() {
 		defer h.wg.Done()
@@ -131,8 +140,6 @@ func newHandler(ctx *runtime.Context, stdin io.Reader) *handler {
 		}
 		h.wrc = wrc
 	}()
-
-	return &h
 }
 
 func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
@@ -181,7 +188,18 @@ func (h *handler) ValidateInputs() error {
 	return nil
 }
 
-func (h *handler) Execute() error {
+func (h *handler) Execute(ctx context.Context) error {
+	deployAccess, err := h.credentials.GetDeploymentAccessStatus()
+	if err != nil {
+		return fmt.Errorf("failed to check deployment access: %w", err)
+	}
+
+	if !deployAccess.HasAccess {
+		return h.accessRequester.PromptAndSubmitRequest(ctx)
+	}
+
+	h.initWorkflowRegistryClient()
+
 	h.displayWorkflowDetails()
 
 	if err := h.Compile(); err != nil {

@@ -32,6 +32,10 @@ jobs:
 
   ci-lint-misc:
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+      actions: read
     steps:
       - name: ci-lint-misc
         uses: smartcontractkit/.github/actions/ci-lint-misc@01d931b0455a754d12e7143cc54a5a3521a8f6f6 # ci-lint-misc@0.1.4
