@@ -16,8 +16,7 @@ import (
 
 // mockRegistry implements RegistryInterface for testing.
 type mockRegistry struct {
-	templates   []templaterepo.TemplateSummary
-	scaffoldDir string // if set, creates basic files in this dir on scaffold
+	templates []templaterepo.TemplateSummary
 }
 
 func (m *mockRegistry) ListTemplates(refresh bool) ([]templaterepo.TemplateSummary, error) {
@@ -473,7 +472,7 @@ func TestInitWithRpcUrlFlags(t *testing.T) {
 		WorkflowName: "rpc-workflow",
 		RpcURLs: map[string]string{
 			"ethereum-testnet-sepolia": "https://sepolia.example.com",
-			"ethereum-mainnet":        "https://mainnet.example.com",
+			"ethereum-mainnet":         "https://mainnet.example.com",
 		},
 	}
 

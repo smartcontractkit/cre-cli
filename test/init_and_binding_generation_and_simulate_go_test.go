@@ -80,7 +80,7 @@ func TestE2EInit_DevPoRTemplate(t *testing.T) {
 	// Check that the generated main.go file compiles successfully for WASM target
 	stdout.Reset()
 	stderr.Reset()
-	buildCmd := exec.Command("go", "build", "-o", filepath.Join(workflowDirectory, "workflow.wasm"), "./"+workflowName)
+	buildCmd := exec.Command("go", "build", "-o", filepath.Join(workflowDirectory, "workflow.wasm"), "./"+workflowName) //nolint:gosec // test code with controlled inputs
 	buildCmd.Dir = projectRoot
 	buildCmd.Env = append(os.Environ(), "GOOS=wasip1", "GOARCH=wasm")
 	buildCmd.Stdout = &stdout

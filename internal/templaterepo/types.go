@@ -13,8 +13,8 @@ type TemplateMetadata struct {
 	Name        string             `yaml:"name"`        // Unique slug identifier (deprecated, use id)
 	Title       string             `yaml:"title"`       // Human-readable display name
 	Description string             `yaml:"description"` // Short description
-	Language    string             `yaml:"language"`     // "go" or "typescript"
-	Category    string             `yaml:"category"`     // Topic category (e.g., "web3")
+	Language    string             `yaml:"language"`    // "go" or "typescript"
+	Category    string             `yaml:"category"`    // Topic category (e.g., "web3")
 	Author      string             `yaml:"author"`
 	License     string             `yaml:"license"`
 	Tags        []string           `yaml:"tags"`       // Searchable tags

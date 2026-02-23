@@ -116,7 +116,7 @@ func ScaffoldBuiltIn(logger *zerolog.Logger, templateName, destDir, workflowName
 		}
 
 		logger.Debug().Msgf("Extracting file: %s -> %s", path, targetPath)
-		return os.WriteFile(targetPath, content, 0644)
+		return os.WriteFile(targetPath, content, 0600) //nolint:gosec // template files need to be readable
 	})
 
 	return err

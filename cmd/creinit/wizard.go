@@ -46,7 +46,7 @@ func (t templateItem) Title() string {
 	if t.TemplateSummary.Title != "" {
 		return t.TemplateSummary.Title
 	}
-	return t.TemplateSummary.Name
+	return t.Name
 }
 func (t templateItem) Description() string { return t.TemplateSummary.Description }
 func (t templateItem) FilterValue() string {
@@ -113,9 +113,9 @@ func sortTemplates(templates []templaterepo.TemplateSummary) []templaterepo.Temp
 //	Description line 2
 type templateDelegate struct{}
 
-func (d templateDelegate) Height() int                                         { return 3 }
-func (d templateDelegate) Spacing() int                                        { return 1 }
-func (d templateDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd            { return nil }
+func (d templateDelegate) Height() int                             { return 3 }
+func (d templateDelegate) Spacing() int                            { return 1 }
+func (d templateDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd { return nil }
 func (d templateDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
 	tmplItem, ok := item.(templateItem)
 	if !ok {
@@ -126,7 +126,7 @@ func (d templateDelegate) Render(w io.Writer, m list.Model, index int, item list
 	isDimmed := m.FilterState() == list.Filtering && index != m.Index()
 
 	title := stripLangSuffix(tmplItem.Title())
-	lang := shortLang(tmplItem.TemplateSummary.Language)
+	lang := shortLang(tmplItem.Language)
 	desc := tmplItem.Description()
 
 	contentWidth := m.Width() - 4
@@ -765,8 +765,7 @@ func (m wizardModel) View() string {
 			b.WriteString("\n")
 			b.WriteString(m.warnStyle.Render(fmt.Sprintf("  ⚠ Directory %s already exists. Overwrite?", dirPath)))
 			b.WriteString("\n")
-			yesLabel := "Yes"
-			noLabel := "No"
+			var yesLabel, noLabel string
 			if m.dirExistsYes {
 				yesLabel = m.selectedStyle.Render("[Yes]")
 				noLabel = m.dimStyle.Render(" No ")
@@ -774,7 +773,7 @@ func (m wizardModel) View() string {
 				yesLabel = m.dimStyle.Render(" Yes ")
 				noLabel = m.selectedStyle.Render("[No]")
 			}
-			b.WriteString(fmt.Sprintf("      %s  %s", yesLabel, noLabel))
+			fmt.Fprintf(&b, "      %s  %s", yesLabel, noLabel)
 			b.WriteString("\n")
 		}
 

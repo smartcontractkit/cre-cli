@@ -232,7 +232,7 @@ func patchRPCNodes(node *yaml.Node, rpcURLs map[string]string) {
 		return
 	}
 
-	switch node.Kind {
+	switch node.Kind { //nolint:exhaustive // only document and mapping nodes need processing
 	case yaml.DocumentNode:
 		for _, child := range node.Content {
 			patchRPCNodes(child, rpcURLs)

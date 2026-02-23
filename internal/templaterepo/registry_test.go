@@ -1,9 +1,6 @@
 package templaterepo
 
 import (
-	"encoding/json"
-	"net/http"
-	"net/http/httptest"
 	"path/filepath"
 	"testing"
 
@@ -12,40 +9,6 @@ import (
 
 	"github.com/smartcontractkit/cre-cli/internal/testutil"
 )
-
-func newTestServer(templates map[string]string) *httptest.Server {
-	treeEntries := []treeEntry{}
-	for path := range templates {
-		treeEntries = append(treeEntries, treeEntry{Path: path, Type: "blob"})
-	}
-
-	treeResp := treeResponse{
-		SHA:  "testsha123",
-		Tree: treeEntries,
-	}
-
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		// Tree API
-		if r.URL.Query().Get("recursive") == "1" {
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(treeResp)
-			return
-		}
-
-		// Raw content
-		for path, content := range templates {
-			if r.URL.Path == "/raw/"+path {
-				w.Write([]byte(content))
-				return
-			}
-		}
-
-		w.WriteHeader(http.StatusNotFound)
-	})
-
-	return httptest.NewServer(mux)
-}
 
 func TestRegistryListTemplates(t *testing.T) {
 	logger := testutil.NewTestLogger()
