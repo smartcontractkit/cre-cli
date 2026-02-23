@@ -13,6 +13,79 @@ env:
   GO_VERSION: 1.25.3
 
 jobs:
+  template-compat-path-filter:
+    runs-on: ubuntu-latest
+    outputs:
+      run-template-compat: ${{ steps.filter.outputs.run_template_compat }}
+    steps:
+      - name: Checkout the repo
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 #4.1.7
+        with:
+          fetch-depth: 0
+
+      - name: Detect template-impacting changes
+        id: filter
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "merge_group" ]]; then
+            echo "run_template_compat=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          base_sha="${{ github.event.pull_request.base.sha }}"
+          head_sha="${{ github.event.pull_request.head.sha }}"
+          changed_files="$(git diff --name-only "${base_sha}" "${head_sha}")"
+
+          if echo "${changed_files}" | grep -E '^(cmd/creinit/|cmd/creinit/template/|test/)' >/dev/null; then
+            echo "run_template_compat=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run_template_compat=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  ci-test-template-compat:
+    needs: template-compat-path-filter
+    if: ${{ needs.template-compat-path-filter.outputs.run-template-compat == 'true' }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    permissions:
+      id-token: write
+      contents: read
+      actions: read
+    steps:
+      - name: setup-foundry
+        uses: foundry-rs/foundry-toolchain@82dee4ba654bd2146511f85f0d013af94670c4de # v1.4.0
+        with:
+          version: "v1.1.0"
+
+      - name: Install Bun (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          curl -fsSL https://bun.sh/install | bash
+          echo "$HOME/.bun/bin" >> "$GITHUB_PATH"
+
+      - name: Install Bun (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          powershell -c "irm bun.sh/install.ps1 | iex"
+          $bunBin = Join-Path $env:USERPROFILE ".bun\bin"
+          $bunBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: ci-test-template-compat
+        uses: smartcontractkit/.github/actions/ci-test-go@2b1d964024bb001ae9fba4f840019ac86ad1d824 #1.1.0
+        env:
+          TEST_LOG_LEVEL: debug
+        with:
+          go-test-cmd: go test -v -timeout 20m -run TestTemplateCompatibility ./test/
+          use-go-cache: "true"
+          aws-region: ${{ secrets.AWS_REGION }}
+          use-gati: "true"
+          aws-role-arn-gati: ${{ secrets.AWS_OIDC_DEV_PLATFORM_READ_REPOS_EXTERNAL_TOKEN_ISSUER_ROLE_ARN }}
+          aws-lambda-url-gati: ${{ secrets.AWS_DEV_SERVICES_TOKEN_ISSUER_LAMBDA_URL }}
+          artifact-name: go-test-template-compat-${{ matrix.os }}
+
   ci-lint:
     runs-on: ubuntu-latest-4cores-16GB
     permissions:
