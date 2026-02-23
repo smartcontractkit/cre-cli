@@ -144,23 +144,6 @@ jobs:
           BINARY_NAME="cre_linux_amd64"
           go build -ldflags "-X 'github.com/smartcontractkit/cre-cli/cmd/version.Version=version $VERSION'" -o "${BINARY_NAME}"
 
-      - name: Check if current branch exists in chainlink repo
-        id: check-branch
-        env:
-          BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
-          GITHUB_TOKEN: ${{ steps.setup-github-token.outputs.access-token }}
-        run: |
-          echo "Current branch: $BRANCH_NAME"
-
-          # Check if branch exists in the target repository
-          if gh api "repos/smartcontractkit/chainlink/branches/$BRANCH_NAME" --silent 2>/dev/null; then
-            echo "Branch $BRANCH_NAME exists in chainlink repository. Going to use it"
-            echo "target_branch=$BRANCH_NAME" >> "$GITHUB_OUTPUT"
-          else
-            echo "Branch $BRANCH_NAME does not exist in chainlink repository, will use develop"
-            echo "target_branch=develop" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Derive nightly image tag
         id: derive-nightly-image-tag
         shell: bash
@@ -173,7 +156,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # actions/checkout@v4.2.2
         with:
           repository: smartcontractkit/chainlink
-          ref: ${{ steps.check-branch.outputs.target_branch }}
+          ref: develop
           path: chainlink
 
       - name: Set up Go
