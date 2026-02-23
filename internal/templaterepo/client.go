@@ -396,6 +396,12 @@ func (c *Client) extractTarball(r io.Reader, templatePath, destDir string, exclu
 
 		targetPath := filepath.Join(destDir, relPath)
 
+		// Prevent Zip Slip: ensure the target path stays within destDir
+		cleanDest := filepath.Clean(destDir) + string(os.PathSeparator)
+		if !strings.HasPrefix(filepath.Clean(targetPath)+string(os.PathSeparator), cleanDest) && filepath.Clean(targetPath) != filepath.Clean(destDir) {
+			return fmt.Errorf("illegal file path in archive: %s", header.Name)
+		}
+
 		switch header.Typeflag {
 		case tar.TypeDir:
 			c.logger.Debug().Msgf("Extracting dir: %s -> %s", name, targetPath)
