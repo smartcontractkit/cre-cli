@@ -293,7 +293,7 @@ func (c *Client) fetchTemplateMetadata(source RepoSource, path string) (*Templat
 	req.Header.Set("User-Agent", "cre-cli")
 	c.setAuthHeaders(req)
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.httpClient.Do(req) //nolint:gosec // URL is constructed from validated repo source fields
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch %s: %w", path, err)
 	}
