@@ -96,13 +96,7 @@ func runLanguageSpecificTests(t *testing.T, workflowDir, language string) {
 // Follows the cre init instructions: bun install --cwd <dir> then bun test in that directory.
 func runTypescriptTests(t *testing.T, workflowDir string) {
 	t.Helper()
-
-	testFile := filepath.Join(workflowDir, "main.test.ts")
-	if _, err := os.Stat(testFile); os.IsNotExist(err) {
-		t.Logf("Skipping TS tests: no main.test.ts in %s", workflowDir)
-		return
-	}
-
+	
 	t.Logf("Running TypeScript tests in %s", workflowDir)
 
 	// Install dependencies using bun install --cwd (as instructed by cre init)
@@ -122,26 +116,6 @@ func runTypescriptTests(t *testing.T, workflowDir string) {
 // runGoTests executes Go tests in the workflow directory.
 func runGoTests(t *testing.T, workflowDir string) {
 	t.Helper()
-
-	// Check if there's a go.mod or any .go test files
-	hasGoTests := false
-	entries, err := os.ReadDir(workflowDir)
-	if err != nil {
-		t.Logf("Skipping Go tests: cannot read %s", workflowDir)
-		return
-	}
-
-	for _, entry := range entries {
-		if filepath.Ext(entry.Name()) == "_test.go" {
-			hasGoTests = true
-			break
-		}
-	}
-
-	if !hasGoTests {
-		t.Logf("Skipping Go tests: no *_test.go files in %s", workflowDir)
-		return
-	}
 
 	t.Logf("Running Go tests in %s", workflowDir)
 
