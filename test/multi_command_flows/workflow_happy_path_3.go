@@ -59,7 +59,7 @@ func workflowInit(t *testing.T, projectRootFlag, projectName, workflowName strin
 		"init",
 		"--project-name", projectName,
 		"--workflow-name", workflowName,
-		"--template", "kv-store-go", // Use a building-block Go template from cre-templates repo
+		"--template", "hello-world-go", // Use the built-in Go template
 	}
 
 	cmd := exec.Command(CLIPath, args...)
