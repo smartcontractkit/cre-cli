@@ -63,6 +63,7 @@ type Inputs struct {
 	EVMEventIndex  int    `validate:"-"`
 	// Experimental chains support (for chains not in official chain-selectors)
 	ExperimentalForwarders map[uint64]common.Address `validate:"-"` // forwarders keyed by chain ID
+	LimitsPath             string                    `validate:"omitempty"`
 }
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
@@ -95,6 +96,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	simulateCmd.Flags().String("http-payload", "", "HTTP trigger payload as JSON string or path to JSON file (with or without @ prefix)")
 	simulateCmd.Flags().String("evm-tx-hash", "", "EVM trigger transaction hash (0x...)")
 	simulateCmd.Flags().Int("evm-event-index", -1, "EVM trigger log index (0-based)")
+	simulateCmd.Flags().String("limits", "", "Path to JSON file with capability limit overrides")
 	return simulateCmd
 }
 
@@ -225,6 +227,7 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 		EVMTxHash:              v.GetString("evm-tx-hash"),
 		EVMEventIndex:          v.GetInt("evm-event-index"),
 		ExperimentalForwarders: experimentalForwarders,
+		LimitsPath:             resolveAbsPath(v.GetString("limits")),
 	}, nil
 }
 
@@ -568,6 +571,13 @@ func run(
 				commonsettings.Bool(true), // Allow all chains in simulation
 				map[string]bool{},
 			)
+			if inputs.LimitsPath != "" {
+				if err := applyLimitsOverrides(cfg, inputs.LimitsPath); err != nil {
+					fmt.Printf("Failed to apply limits overrides: %v\n", err)
+					os.Exit(1)
+				}
+				fmt.Printf("Applied capability limit overrides from %s\n", inputs.LimitsPath)
+			}
 		},
 	})
 
@@ -1051,4 +1061,73 @@ func getEVMTriggerLogFromValues(ctx context.Context, ethClient *ethclient.Client
 		pbLog.EventSig = log.Topics[0].Bytes()
 	}
 	return pbLog, nil
+}
+
+// resolveAbsPath converts a potentially relative path to absolute. Returns empty string for empty input.
+func resolveAbsPath(p string) string {
+	if p == "" {
+		return ""
+	}
+	abs, err := filepath.Abs(p)
+	if err != nil {
+		return p
+	}
+	return abs
+}
+
+// LimitsOverride defines the JSON schema for capability limit overrides.
+// Pointer fields distinguish "not set" (nil) from "set to 0".
+type LimitsOverride struct {
+	ChainRead *struct {
+		CallLimit *int `json:"CallLimit"`
+	} `json:"ChainRead"`
+	Consensus *struct {
+		CallLimit *int `json:"CallLimit"`
+	} `json:"Consensus"`
+	HTTPAction *struct {
+		CallLimit *int `json:"CallLimit"`
+	} `json:"HTTPAction"`
+	ConfidentialHTTP *struct {
+		CallLimit *int `json:"CallLimit"`
+	} `json:"ConfidentialHTTP"`
+	Secrets *struct {
+		CallLimit *int `json:"CallLimit"`
+	} `json:"Secrets"`
+	LogTrigger *struct {
+		FilterAddressLimit *int `json:"FilterAddressLimit"`
+	} `json:"LogTrigger"`
+}
+
+// applyLimitsOverrides reads a JSON limits file and applies overrides to the workflow settings.
+func applyLimitsOverrides(cfg *cresettings.Workflows, limitsPath string) error {
+	data, err := os.ReadFile(limitsPath)
+	if err != nil {
+		return fmt.Errorf("failed to read limits file %s: %w", limitsPath, err)
+	}
+
+	var overrides LimitsOverride
+	if err := json.Unmarshal(data, &overrides); err != nil {
+		return fmt.Errorf("failed to parse limits file %s: %w", limitsPath, err)
+	}
+
+	if overrides.ChainRead != nil && overrides.ChainRead.CallLimit != nil {
+		cfg.ChainRead.CallLimit.DefaultValue = *overrides.ChainRead.CallLimit
+	}
+	if overrides.Consensus != nil && overrides.Consensus.CallLimit != nil {
+		cfg.Consensus.CallLimit.DefaultValue = *overrides.Consensus.CallLimit
+	}
+	if overrides.HTTPAction != nil && overrides.HTTPAction.CallLimit != nil {
+		cfg.HTTPAction.CallLimit.DefaultValue = *overrides.HTTPAction.CallLimit
+	}
+	if overrides.ConfidentialHTTP != nil && overrides.ConfidentialHTTP.CallLimit != nil {
+		cfg.ConfidentialHTTP.CallLimit.DefaultValue = *overrides.ConfidentialHTTP.CallLimit
+	}
+	if overrides.Secrets != nil && overrides.Secrets.CallLimit != nil {
+		cfg.Secrets.CallLimit.DefaultValue = *overrides.Secrets.CallLimit
+	}
+	if overrides.LogTrigger != nil && overrides.LogTrigger.FilterAddressLimit != nil {
+		cfg.LogTrigger.FilterAddressLimit.DefaultValue = *overrides.LogTrigger.FilterAddressLimit
+	}
+
+	return nil
 }
