@@ -131,10 +131,23 @@ func (r *Registry) ScaffoldTemplate(tmpl *TemplateSummary, destDir, workflowName
 	return r.maybeRenameWorkflowDir(tmpl, destDir, workflowName)
 }
 
-// maybeRenameWorkflowDir skips renaming for templates with projectDir set (copy-as-is),
-// otherwise delegates to renameWorkflowDir for built-in template handling.
+// maybeRenameWorkflowDir handles workflow directory renaming after extraction.
+// For templates with projectDir set, only single-workflow templates get their
+// workflow directory renamed to match the user's chosen name.
 func (r *Registry) maybeRenameWorkflowDir(tmpl *TemplateSummary, destDir, workflowName string) error {
 	if tmpl.ProjectDir != "" {
+		// projectDir templates are extracted as-is, but we still rename the
+		// workflow directory when there's exactly one workflow and the user
+		// specified a different name.
+		if len(tmpl.Workflows) == 1 && workflowName != "" && tmpl.Workflows[0].Dir != workflowName {
+			src := filepath.Join(destDir, tmpl.Workflows[0].Dir)
+			dst := filepath.Join(destDir, workflowName)
+			if _, err := os.Stat(src); err != nil {
+				return nil // source dir doesn't exist, nothing to rename
+			}
+			r.logger.Debug().Msgf("Renaming workflow dir %s -> %s", tmpl.Workflows[0].Dir, workflowName)
+			return os.Rename(src, dst)
+		}
 		return nil
 	}
 	return r.renameWorkflowDir(tmpl, destDir, workflowName)
