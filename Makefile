@@ -62,3 +62,12 @@ run-op:
 gendoc:
 	rm -f docs/*
 	$(GORUN) gendoc/main.go
+
+setup-submodules:
+	@./scripts/setup-submodules.sh
+
+update-submodules:
+	@./scripts/setup-submodules.sh --update
+
+clean-submodules:
+	@./scripts/setup-submodules.sh --clean

@@ -41,3 +41,6 @@ encrypted.secrets.json
 
 # Output produced by e2e Anvil tests
 test/test.yaml
+
+# Cloned submodule repos (managed by setup-submodules.sh)
+/cre-templates/

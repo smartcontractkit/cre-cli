@@ -1,0 +1,32 @@
+# Submodule configuration with sparse checkout support
+# Usage: make setup-submodules
+#
+# Submodules with sparse checkout only include specified paths/files.
+# Submodules without sparse config clone the entire repo.
+#
+# Sparse checkout options:
+#   paths: Array of paths (can be strings or objects)
+#     - Simple string: includes entire directory and all contents recursively
+#     - Object with 'path' and 'files': includes only specified files from that directory
+#   mode: 'cone' (includes root files) or 'no-cone' (strict)
+#
+# Example:
+#   sparse:
+#     mode: no-cone
+#     paths:
+#       - charts/rules                    # entire directory
+#       - charts/dashboards/grafana       # another entire directory
+#       - path: config/workspaces         # specific files only
+#         files:
+#           - staging.tfvars.json
+#           - prod.tfvars.json
+#
+# Notes:
+#   - Individual file checkout requires mode: no-cone
+#   - A directory entry includes all files within it, so file entries
+#     under the same directory are redundant (but harmless)
+
+submodules:
+  cre-templates:
+    url: https://github.com/smartcontractkit/cre-templates.git
+    branch: main
