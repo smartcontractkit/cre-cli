@@ -62,7 +62,7 @@ func TestE2EInit_ConvertToCustomBuild_Go(t *testing.T) {
 	require.DirExists(t, filepath.Join(workflowDirectory, "wasm"))
 
 	// Now make test-specific changes: FlagProof, constA/constB, Makefile FLAG
-	mainPath := filepath.Join(workflowDirectory, "main.go")
+	mainPath := filepath.Join(workflowDirectory, "workflow.go")
 	mainBytes, err := os.ReadFile(mainPath)
 	require.NoError(t, err)
 	mainStr := string(mainBytes)

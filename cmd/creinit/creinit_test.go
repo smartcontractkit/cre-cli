@@ -18,7 +18,9 @@ func GetTemplateFileListGo() []string {
 	return []string{
 		"README.md",
 		"main.go",
+		"workflow.go",
 		"workflow.yaml",
+		"workflow_test.go",
 	}
 }
 
@@ -96,10 +98,8 @@ func runLanguageSpecificTests(t *testing.T, workflowDir, language string) {
 // Follows the cre init instructions: bun install --cwd <dir> then bun test in that directory.
 func runTypescriptTests(t *testing.T, workflowDir string) {
 	t.Helper()
-	
-	t.Logf("Running TypeScript tests in %s", workflowDir)
 
-	// Install dependencies using bun install --cwd (as instructed by cre init)
+	t.Logf("Running TypeScript tests in %s", workflowDir)
 	installCmd := exec.Command("bun", "install", "--cwd", workflowDir, "--ignore-scripts")
 	installOutput, err := installCmd.CombinedOutput()
 	require.NoError(t, err, "bun install failed in %s:\n%s", workflowDir, string(installOutput))
