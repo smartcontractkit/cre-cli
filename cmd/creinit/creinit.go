@@ -104,10 +104,10 @@ func newHandlerWithRegistry(ctx *runtime.Context, registry RegistryInterface) *h
 func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 	templateName := v.GetString("template")
 
-	// Handle deprecated --template-id: 1 = hello-world-go, 3 = hello-world-ts, any other = hello-world-ts
+	// Handle deprecated --template-id: 1,2 = hello-world-go, 3+ = hello-world-ts
 	if templateID := v.GetUint32("template-id"); templateID != 0 && templateName == "" {
 		h.log.Warn().Msg("--template-id is deprecated, use --template instead")
-		if templateID == 1 {
+		if templateID <= 2 {
 			templateName = "hello-world-go"
 		} else {
 			templateName = "hello-world-ts"
