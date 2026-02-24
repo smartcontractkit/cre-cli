@@ -122,6 +122,38 @@ PR opened
 
 The template compatibility job runs after (or in parallel with) the existing E2E tests. It should NOT be a dependency of E2E tests -- they are independent validation layers.
 
+### 2.4 Gate Policy Defaults
+
+Default policy for this framework:
+
+- **Required merge gates:** deterministic checks only (template compatibility, deterministic smoke/negative-path checks).
+- **Advisory checks by default:** AI-driven and nightly exploratory coverage (`ai-validation`, expanded diagnostics).
+- **Manual/browser checks:** non-gating and tracked as manual-signoff evidence.
+
+This keeps merge decisions objective while preserving deeper diagnostic coverage outside the critical path.
+
+### 2.5 Reporting Status and Reason Taxonomy
+
+Use this status vocabulary across CI summaries and reports:
+
+- `PASS`
+- `FAIL`
+- `SKIP`
+- `BLOCKED`
+
+Use these first-level reason codes for consistency:
+
+| Status Class | Reason Code | Meaning |
+|---|---|---|
+| `BLOCKED` | `BLOCKED_ENV` | Missing toolchain/dependency/runner prerequisite |
+| `BLOCKED` | `BLOCKED_AUTH` | Missing/invalid credentials or auth context |
+| `FAIL` | `FAIL_COMPAT` | Template compatibility suite failure |
+| `FAIL` | `FAIL_TUI` | PTY/interactive flow regression |
+| `FAIL` | `FAIL_NEGATIVE_PATH` | Expected error-path contract not met |
+| `FAIL` | `FAIL_CONTRACT` | Source-mode/policy contract violation |
+| `SKIP` | `SKIP_MANUAL` | Intentionally human-only validation |
+| `SKIP` | `SKIP_PLATFORM` | Platform-scoped skip with explicit rationale |
+
 ---
 
 ## 3. Template Compatibility Job
@@ -647,6 +679,12 @@ When the SDK matrix job fails:
 - Private keys are for dedicated test wallets with small testnet ETH balances
 - All secrets are stored in GitHub Secrets (encrypted at rest)
 - No credentials are logged or included in test artifacts
+
+### 7.4 Playwright Credential Bootstrap (Proposal-Only)
+
+- Playwright-based browser credential bootstrap is an **optional local proposal** for unblocking diagnostic runs.
+- It is **not** a baseline requirement and **not** a CI-default merge gate in this framework.
+- If bootstrap is unavailable, credential-dependent tests should be reported as `BLOCKED_AUTH` rather than treated as deterministic failures.
 
 ---
 

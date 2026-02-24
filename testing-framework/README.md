@@ -16,6 +16,13 @@ The CRE CLI currently ships embedded templates that are the primary entry point 
 
 This documentation package designs a three-tier testing framework that combines deterministic scripts, AI-driven validation, and targeted manual checks.
 
+## Policy Snapshot
+
+- **Merge-gating checks (required by default):** deterministic compatibility/smoke/negative-path checks.
+- **Diagnostic checks (advisory by default):** broader AI/nightly exploratory runs unless explicitly promoted.
+- **Manual/browser checks (non-gating by default):** subjective UX and browser-only flows.
+- **Playwright credential bootstrap:** proposal-only local primitive; optional and non-baseline for this framework.
+
 ---
 
 ## Documents

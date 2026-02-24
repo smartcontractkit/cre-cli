@@ -70,6 +70,27 @@ The E2E test infrastructure is solid. The existing test at `test/init_and_simula
 - Run dynamic-source checks as advisory first.
 - Promote to required CI gate only after branch-level flake rate and stability are acceptable.
 
+### Merge Gate Policy and Operational Reporting Contract
+
+Default enforcement model for this plan:
+
+- **Required merge gates:** deterministic checks only (template compatibility plus deterministic smoke/negative-path checks).
+- **Advisory by default:** large exploratory AI/nightly runs unless explicitly promoted to required by team policy.
+- **Manual/browser checks:** non-gating and tracked as manual-signoff evidence.
+
+Operational report status vocabulary:
+
+- `PASS`
+- `FAIL`
+- `SKIP`
+- `BLOCKED`
+
+Standard reason codes:
+
+- `BLOCKED_ENV`, `BLOCKED_AUTH`
+- `FAIL_COMPAT`, `FAIL_TUI`, `FAIL_NEGATIVE_PATH`, `FAIL_CONTRACT`
+- `SKIP_MANUAL`, `SKIP_PLATFORM`
+
 ### Deliverable 1: Template Compatibility Test
 
 **What**: A single Go test file that exercises init + build + simulate for all 5 templates. Data-driven, so adding template 6 is a one-line table entry.

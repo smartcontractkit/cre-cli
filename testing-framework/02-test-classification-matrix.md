@@ -409,3 +409,35 @@ The most complex requirement is PTY interaction for the Bubbletea wizard. This i
 2. The exact output changes with terminal size, Bubbletea version, and content
 3. An AI agent can "read" the rendered screen the way a human would, without needing exact byte-level parsing
 4. When the wizard layout changes, the AI adapts without requiring test maintenance
+
+---
+
+## Appendix: S/AI/M to Operational Reporting Mapping
+
+The S/AI/M classification defines **how** a test is executed. Reporting status/reason codes define **what happened** during a run.
+
+### Status Vocabulary
+
+- `PASS`
+- `FAIL`
+- `SKIP`
+- `BLOCKED`
+
+### Reason Code Examples
+
+| Status | Typical Reason Code | When to Use |
+|---|---|---|
+| `BLOCKED` | `BLOCKED_ENV` | Tool/runtime missing (`go`, `bun`, `expect`, PATH, runner dependency) |
+| `BLOCKED` | `BLOCKED_AUTH` | Missing/invalid auth state, token, API key, or secure credential context |
+| `FAIL` | `FAIL_COMPAT` | Deterministic compatibility check failed |
+| `FAIL` | `FAIL_TUI` | PTY/interactivity regression in wizard/prompt flows |
+| `FAIL` | `FAIL_NEGATIVE_PATH` | Expected error-path contract not produced |
+| `FAIL` | `FAIL_CONTRACT` | Source-mode or policy contract violated |
+| `SKIP` | `SKIP_MANUAL` | Intentionally manual-only check |
+| `SKIP` | `SKIP_PLATFORM` | Platform-specific skip with documented rationale |
+
+### Practical Mapping by Tier
+
+- **S (Script-Automated):** typically reports `PASS`/`FAIL`; can be `BLOCKED_ENV` when prerequisites are absent.
+- **AI (AI-Augmented):** can report all four statuses depending on environment/auth/manual boundaries.
+- **M (Manual):** usually reported as `SKIP_MANUAL` in automated runs and completed in manual signoff.
