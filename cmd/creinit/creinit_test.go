@@ -326,6 +326,7 @@ func TestInitExecuteFlows(t *testing.T) {
 		expectProjectDirRel string
 		expectWorkflowName  string
 		expectTemplateFiles []string
+		language            string // "go" or "typescript"
 	}{
 		{
 			name:                "Go template with all flags",
@@ -336,6 +337,7 @@ func TestInitExecuteFlows(t *testing.T) {
 			expectProjectDirRel: "myproj",
 			expectWorkflowName:  "myworkflow",
 			expectTemplateFiles: GetTemplateFileListGo(),
+			language:            "go",
 		},
 		{
 			name:                "TypeScript template with all flags",
@@ -345,6 +347,7 @@ func TestInitExecuteFlows(t *testing.T) {
 			expectProjectDirRel: "tsProj",
 			expectWorkflowName:  "ts-workflow",
 			expectTemplateFiles: GetTemplateFileListTS(),
+			language:            "typescript",
 		},
 		{
 			name:                "Starter template with all flags",

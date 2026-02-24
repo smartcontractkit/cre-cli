@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/rs/zerolog"
 )
@@ -95,6 +96,13 @@ func ScaffoldBuiltIn(logger *zerolog.Logger, templateName, destDir, workflowName
 		// Handle nested paths under workflow/
 		if len(relPath) > len("workflow/") && relPath[:len("workflow/")] == "workflow/" {
 			targetRel = filepath.Join(workflowName, relPath[len("workflow/"):])
+		}
+
+		// Strip leading "_" from filenames (used to prevent Go compiler from
+		// building embedded source files as part of this module).
+		base := filepath.Base(targetRel)
+		if strings.HasPrefix(base, "_") {
+			targetRel = filepath.Join(filepath.Dir(targetRel), strings.TrimPrefix(base, "_"))
 		}
 
 		targetPath := filepath.Join(destDir, targetRel)

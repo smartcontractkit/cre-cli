@@ -47,8 +47,13 @@ jobs:
       contents: read
       actions: read
     steps:
+      - name: Install Bun
+        run: |
+          curl -fsSL https://bun.sh/install | bash
+          echo "$HOME/.bun/bin" >> "$GITHUB_PATH"
+
       - name: ci-test
-        uses: smartcontractkit/.github/actions/ci-test-go@ci-test-go/0.3.5
+        uses: smartcontractkit/.github/actions/ci-test-go@15802873c514b7335c8d0ef06dd7935b9c5b9ded # ci-test-go/0.3.5
         with:
           go-test-cmd: go test -v $(go list ./... | grep -v -e usbwallet -e test)
           use-go-cache: "true"
