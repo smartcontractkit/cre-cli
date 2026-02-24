@@ -41,17 +41,24 @@ build, test, and deploy workflows quickly.
 Templates are fetched dynamically from GitHub repositories.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			handler := newHandler(runtimeContext)
+			h := newHandler(runtimeContext)
 
-			inputs, err := handler.ResolveInputs(runtimeContext.Viper)
+			inputs, err := h.ResolveInputs(runtimeContext.Viper)
 			if err != nil {
 				return err
 			}
-			err = handler.ValidateInputs(inputs)
-			if err != nil {
+			if err = h.ValidateInputs(inputs); err != nil {
 				return err
 			}
-			return handler.Execute(inputs)
+			execErr := h.Execute(inputs)
+
+			// Ensure --template is marked as set for telemetry, even when
+			// the user picked a template interactively via the wizard.
+			if h.selectedTemplateName != "" {
+				_ = cmd.Flags().Set("template", h.selectedTemplateName)
+			}
+
+			return execErr
 		},
 	}
 
@@ -70,10 +77,11 @@ Templates are fetched dynamically from GitHub repositories.`,
 }
 
 type handler struct {
-	log            *zerolog.Logger
-	runtimeContext *runtime.Context
-	registry       RegistryInterface
-	validated      bool
+	log                  *zerolog.Logger
+	runtimeContext       *runtime.Context
+	registry             RegistryInterface
+	validated            bool
+	selectedTemplateName string // set after Execute for telemetry
 }
 
 // RegistryInterface abstracts the registry for testing.
@@ -234,6 +242,9 @@ func (h *handler) Execute(inputs Inputs) error {
 	if selectedTemplate == nil {
 		return fmt.Errorf("no template selected")
 	}
+
+	// Store for telemetry (flag will be set in RunE)
+	h.selectedTemplateName = selectedTemplate.Name
 
 	// Determine project root
 	var projectRoot string

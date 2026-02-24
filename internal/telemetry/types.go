@@ -9,7 +9,7 @@ type UserEventInput struct {
 	Machine      MachineInfo    `json:"machine"`
 	Workflow     *WorkflowInfo  `json:"workflow,omitempty"`
 	Actor        *ActorInfo     `json:"actor,omitempty"`
-	Attributes   []KeyValuePair `json:"attributes,omitempty"`
+	Attributes []KeyValuePair `json:"attributes,omitempty"`
 }
 
 // KeyValuePair represents a key-value pair for flags and attributes
