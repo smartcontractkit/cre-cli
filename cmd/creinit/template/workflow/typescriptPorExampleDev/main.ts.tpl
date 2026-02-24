@@ -7,19 +7,19 @@ import {
 	EVMClient,
 	HTTPClient,
 	type EVMLog,
-	encodeCallMsg,
 	getNetwork,
 	type HTTPSendRequester,
-	hexToBase64,
-	LAST_FINALIZED_BLOCK_NUMBER,
 	median,
 	Runner,
 	type Runtime,
 	TxStatus,
 } from '@chainlink/cre-sdk'
-import { type Address, decodeFunctionResult, encodeFunctionData, zeroAddress } from 'viem'
+import type { Address } from 'viem'
 import { z } from 'zod'
-import { BalanceReader, IERC20, MessageEmitter, ReserveManager } from '../contracts/abi'
+import { BalanceReader } from './generated/BalanceReader'
+import { IERC20 } from './generated/IERC20'
+import { MessageEmitter } from './generated/MessageEmitter'
+import { ReserveManager } from './generated/ReserveManager'
 
 const configSchema = z.object({
 	schedule: z.string(),
@@ -52,7 +52,6 @@ interface ReserveInfo {
 	totalReserve: number
 }
 
-// Utility function to safely stringify objects with bigints
 const safeJsonStringify = (obj: any): string =>
 	JSON.stringify(obj, (_, value) => (typeof value === 'bigint' ? value.toString() : value), 2)
 
@@ -92,31 +91,9 @@ const fetchNativeTokenBalance = (
 	}
 
 	const evmClient = new EVMClient(network.chainSelector.selector)
+	const balanceReader = new BalanceReader(evmClient, evmConfig.balanceReaderAddress as Address)
 
-	// Encode the contract call data for getNativeBalances
-	const callData = encodeFunctionData({
-		abi: BalanceReader,
-		functionName: 'getNativeBalances',
-		args: [[tokenHolderAddress as Address]],
-	})
-
-	const contractCall = evmClient
-		.callContract(runtime, {
-			call: encodeCallMsg({
-				from: zeroAddress,
-				to: evmConfig.balanceReaderAddress as Address,
-				data: callData,
-			}),
-			blockNumber: LAST_FINALIZED_BLOCK_NUMBER,
-		})
-		.result()
-
-	// Decode the result
-	const balances = decodeFunctionResult({
-		abi: BalanceReader,
-		functionName: 'getNativeBalances',
-		data: bytesToHex(contractCall.data),
-	})
+	const balances = balanceReader.getNativeBalances(runtime, [tokenHolderAddress as Address])
 
 	if (!balances || balances.length === 0) {
 		throw new Error('No balances returned from contract')
@@ -141,31 +118,9 @@ const getTotalSupply = (runtime: Runtime<Config>): bigint => {
 		}
 
 		const evmClient = new EVMClient(network.chainSelector.selector)
+		const ierc20 = new IERC20(evmClient, evmConfig.tokenAddress as Address)
 
-		// Encode the contract call data for totalSupply
-		const callData = encodeFunctionData({
-			abi: IERC20,
-			functionName: 'totalSupply',
-		})
-
-		const contractCall = evmClient
-			.callContract(runtime, {
-				call: encodeCallMsg({
-					from: zeroAddress,
-					to: evmConfig.tokenAddress as Address,
-					data: callData,
-				}),
-				blockNumber: LAST_FINALIZED_BLOCK_NUMBER,
-			})
-			.result()
-
-		// Decode the result
-		const supply = decodeFunctionResult({
-			abi: IERC20,
-			functionName: 'totalSupply',
-			data: bytesToHex(contractCall.data),
-		})
-
+		const supply = ierc20.totalSupply(runtime)
 		totalSupply += supply
 	}
 
@@ -189,42 +144,17 @@ const updateReserves = (
 	}
 
 	const evmClient = new EVMClient(network.chainSelector.selector)
+	const proxy = new ReserveManager(evmClient, evmConfig.proxyAddress as Address)
 
 	runtime.log(
 		`Updating reserves totalSupply ${totalSupply.toString()} totalReserveScaled ${totalReserveScaled.toString()}`,
 	)
 
-	// Encode the contract call data for updateReserves
-	const callData = encodeFunctionData({
-		abi: ReserveManager,
-		functionName: 'updateReserves',
-		args: [
-			{
-				totalMinted: totalSupply,
-				totalReserve: totalReserveScaled,
-			},
-		],
-	})
-
-	// Step 1: Generate report using consensus capability
-	const reportResponse = runtime
-		.report({
-			encodedPayload: hexToBase64(callData),
-			encoderName: 'evm',
-			signingAlgo: 'ecdsa',
-			hashingAlgo: 'keccak256',
-		})
-		.result()
-
-	const resp = evmClient
-		.writeReport(runtime, {
-			receiver: evmConfig.proxyAddress,
-			report: reportResponse,
-			gasConfig: {
-				gasLimit: evmConfig.gasLimit,
-			},
-		})
-		.result()
+	const resp = proxy.writeReportFromUpdateReserves(
+		runtime,
+		{ totalMinted: totalSupply, totalReserve: totalReserveScaled },
+		{ gasLimit: evmConfig.gasLimit },
+	)
 
 	const txStatus = resp.txStatus
 
@@ -290,33 +220,9 @@ const getLastMessage = (
 	}
 
 	const evmClient = new EVMClient(network.chainSelector.selector)
+	const messageEmitter = new MessageEmitter(evmClient, evmConfig.messageEmitterAddress as Address)
 
-	// Encode the contract call data for getLastMessage
-	const callData = encodeFunctionData({
-		abi: MessageEmitter,
-		functionName: 'getLastMessage',
-		args: [emitter as Address],
-	})
-
-	const contractCall = evmClient
-		.callContract(runtime, {
-			call: encodeCallMsg({
-				from: zeroAddress,
-				to: evmConfig.messageEmitterAddress as Address,
-				data: callData,
-			}),
-			blockNumber: LAST_FINALIZED_BLOCK_NUMBER,
-		})
-		.result()
-
-	// Decode the result
-	const message = decodeFunctionResult({
-		abi: MessageEmitter,
-		functionName: 'getLastMessage',
-		data: bytesToHex(contractCall.data),
-	})
-
-	return message
+	return messageEmitter.getLastMessage(runtime, emitter as Address)
 }
 
 export const onCronTrigger = (runtime: Runtime<Config>, payload: CronPayload): string => {
@@ -339,7 +245,6 @@ export const onLogTrigger = (runtime: Runtime<Config>, payload: EVMLog): string 
 		throw new Error(`log payload does not contain enough topics ${topics.length}`)
 	}
 
-	// topics[1] is a 32-byte topic, but the address is the last 20 bytes
 	const emitter = bytesToHex(topics[1].slice(12))
 	runtime.log(`Emitter ${emitter}`)
 

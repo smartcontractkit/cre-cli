@@ -8,8 +8,11 @@ import {
 } from "@chainlink/cre-sdk/test";
 import { initWorkflow, onCronTrigger, onLogTrigger, fetchReserveInfo } from "./main";
 import type { Config } from "./main";
-import { type Address, decodeFunctionData, encodeFunctionData, encodeFunctionResult } from "viem";
-import { BalanceReader, IERC20, MessageEmitter } from "../contracts/abi";
+import type { Address } from "viem";
+import { newBalanceReaderMock } from "./generated/BalanceReader_mock";
+import { newIERC20Mock } from "./generated/IERC20_mock";
+import { newMessageEmitterMock } from "./generated/MessageEmitter_mock";
+import { newReserveManagerMock } from "./generated/ReserveManager_mock";
 
 const mockConfig: Config = {
   schedule: "0 0 * * *",
@@ -48,95 +51,28 @@ const setupEVMMocks = (config: Config) => {
 
   const evmMock = EvmMock.testInstance(network.chainSelector.selector);
 
-  // Mock contract calls - route based on target address and function signature
-  evmMock.callContract = (req) => {
-    const toAddress = Buffer.from(req.call?.to || new Uint8Array()).toString("hex").toLowerCase();
-    const callData = Buffer.from(req.call?.data || new Uint8Array());
-
-    // BalanceReader.getNativeBalances
-    if (toAddress === config.evms[0].balanceReaderAddress.slice(2).toLowerCase()) {
-      const decoded = decodeFunctionData({
-        abi: BalanceReader,
-        data: `0x${callData.toString("hex")}` as Address,
-      });
-
-      if (decoded.functionName === "getNativeBalances") {
-        const addresses = decoded.args[0] as Address[];
-        expect(addresses.length).toBeGreaterThan(0);
-        
-        // Return mock balance for each address (0.5 ETH in wei)
-        const mockBalances = addresses.map(() => 500000000000000000n);
-        const resultData = encodeFunctionResult({
-          abi: BalanceReader,
-          functionName: "getNativeBalances",
-          result: mockBalances,
-        });
-
-        return {
-          data: Buffer.from(resultData.slice(2), "hex"),
-        };
-      }
-    }
-
-    // IERC20.totalSupply
-    if (toAddress === config.evms[0].tokenAddress.slice(2).toLowerCase()) {
-      const decoded = decodeFunctionData({
-        abi: IERC20,
-        data: `0x${callData.toString("hex")}` as Address,
-      });
-
-      if (decoded.functionName === "totalSupply") {
-        // Return mock total supply (1 token with 18 decimals)
-        const mockSupply = 1000000000000000000n;
-        const resultData = encodeFunctionResult({
-          abi: IERC20,
-          functionName: "totalSupply",
-          result: mockSupply,
-        });
-
-        return {
-          data: Buffer.from(resultData.slice(2), "hex"),
-        };
-      }
-    }
-
-    // MessageEmitter.getLastMessage
-    if (toAddress === config.evms[0].messageEmitterAddress.slice(2).toLowerCase()) {
-      const decoded = decodeFunctionData({
-        abi: MessageEmitter,
-        data: `0x${callData.toString("hex")}` as Address,
-      });
-
-      if (decoded.functionName === "getLastMessage") {
-        // Verify the emitter address parameter is passed correctly
-        const emitterArg = decoded.args[0] as string;
-        expect(emitterArg).toBeDefined();
-        
-        const mockMessage = "Test message from contract";
-        const resultData = encodeFunctionResult({
-          abi: MessageEmitter,
-          functionName: "getLastMessage",
-          result: mockMessage,
-        });
-
-        return {
-          data: Buffer.from(resultData.slice(2), "hex"),
-        };
-      }
-    }
-
-    throw new Error(`Unmocked contract call to ${toAddress} with data ${callData.toString("hex")}`);
+  // BalanceReader.getNativeBalances - returns mock native token balances (0.5 ETH in wei)
+  const balanceMock = newBalanceReaderMock(config.evms[0].balanceReaderAddress as Address, evmMock);
+  balanceMock.getNativeBalances = (addresses: readonly Address[]) => {
+    expect(addresses.length).toBeGreaterThan(0);
+    return addresses.map(() => 500000000000000000n);
   };
 
-  // Mock writeReport for updateReserves
-  evmMock.writeReport = (req) => {
-    // Convert Uint8Array receiver to hex string for comparison
-    const receiverHex = `0x${Buffer.from(req.receiver || new Uint8Array()).toString("hex")}`;
-    expect(receiverHex.toLowerCase()).toBe(config.evms[0].proxyAddress.toLowerCase());
-    expect(req.report).toBeDefined();
-    // gasLimit is bigint, config has string - compare the values
-    expect(req.gasConfig?.gasLimit?.toString()).toBe(config.evms[0].gasLimit);
+  // IERC20.totalSupply - returns mock total supply (1 token with 18 decimals)
+  const erc20Mock = newIERC20Mock(config.evms[0].tokenAddress as Address, evmMock);
+  erc20Mock.totalSupply = () => 1000000000000000000n;
 
+  // MessageEmitter.getLastMessage - returns mock message (for log trigger)
+  const messageMock = newMessageEmitterMock(config.evms[0].messageEmitterAddress as Address, evmMock);
+  messageMock.getLastMessage = (emitter: Address) => {
+    expect(emitter).toBeDefined();
+    return "Test message from contract";
+  };
+
+  // ReserveManager - mock writeReport for updateReserves
+  const reserveMock = newReserveManagerMock(config.evms[0].proxyAddress as Address, evmMock);
+  reserveMock.writeReport = (req) => {
+    expect(req.gasConfig.gasLimit?.toString()).toBe(config.evms[0].gasLimit);
     return {
       txStatus: TxStatus.SUCCESS,
       txHash: new Uint8Array(Buffer.from("1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef", "hex")),

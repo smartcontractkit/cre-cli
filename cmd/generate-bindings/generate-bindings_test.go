@@ -95,6 +95,45 @@ func TestResolveInputs_DefaultFallbacks(t *testing.T) {
 	assert.Equal(t, expectedOut, actualOut)
 }
 
+func TestResolveInputs_TypeScriptDefaults(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "generate-bindings-test")
+	require.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	contractsDir := filepath.Join(tempDir, "contracts")
+	err = os.MkdirAll(contractsDir, 0755)
+	require.NoError(t, err)
+
+	originalDir, err := os.Getwd()
+	require.NoError(t, err)
+	defer func() { _ = os.Chdir(originalDir) }()
+	err = os.Chdir(tempDir)
+	require.NoError(t, err)
+
+	runtimeCtx := &runtime.Context{}
+	handler := newHandler(runtimeCtx)
+
+	v := viper.New()
+	v.Set("language", "typescript")
+	v.Set("pkg", "bindings")
+
+	inputs, err := handler.ResolveInputs([]string{"evm"}, v)
+	require.NoError(t, err)
+
+	expectedRoot, _ := filepath.EvalSymlinks(tempDir)
+	actualRoot, _ := filepath.EvalSymlinks(inputs.ProjectRoot)
+	assert.Equal(t, expectedRoot, actualRoot)
+	assert.Equal(t, "typescript", inputs.Language)
+
+	expectedAbi, _ := filepath.EvalSymlinks(filepath.Join(tempDir, "contracts", "abi"))
+	actualAbi, _ := filepath.EvalSymlinks(inputs.AbiPath)
+	assert.Equal(t, expectedAbi, actualAbi)
+
+	expectedOut, _ := filepath.EvalSymlinks(filepath.Join(tempDir, "main", "generated"))
+	actualOut, _ := filepath.EvalSymlinks(inputs.OutPath)
+	assert.Equal(t, expectedOut, actualOut)
+}
+
 // command should run in projectRoot which contains contracts directory
 func TestResolveInputs_CustomProjectRoot(t *testing.T) {
 	// Create a temporary directory for testing
@@ -232,6 +271,26 @@ func TestValidateInputs_ValidInputs(t *testing.T) {
 	err = handler.ValidateInputs(inputs)
 	require.NoError(t, err)
 	assert.True(t, handler.validated)
+
+	// Test validation with directory containing .json files for TypeScript
+	jsonDir := filepath.Join(tempDir, "json_abi")
+	err = os.MkdirAll(jsonDir, 0755)
+	require.NoError(t, err)
+	err = os.WriteFile(filepath.Join(jsonDir, "Contract.json"), []byte(abiContent), 0600)
+	require.NoError(t, err)
+
+	tsInputs := Inputs{
+		ProjectRoot: tempDir,
+		ChainFamily: "evm",
+		Language:    "typescript",
+		AbiPath:     jsonDir,
+		PkgName:     "bindings",
+		OutPath:     tempDir,
+	}
+	handler2 := newHandler(runtimeCtx)
+	err = handler2.ValidateInputs(tsInputs)
+	require.NoError(t, err)
+	assert.True(t, handler2.validated)
 }
 
 func TestValidateInputs_InvalidChainFamily(t *testing.T) {
@@ -271,7 +330,7 @@ func TestValidateInputs_InvalidLanguage(t *testing.T) {
 	inputs := Inputs{
 		ProjectRoot: tempDir,
 		ChainFamily: "evm",
-		Language:    "typescript", // No longer supported
+		Language:    "rust", // Unsupported language
 		AbiPath:     tempDir,
 		PkgName:     "bindings",
 		OutPath:     tempDir,
@@ -440,7 +499,35 @@ func TestProcessAbiDirectory_NoAbiFiles(t *testing.T) {
 
 	err = handler.processAbiDirectory(inputs)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "no .abi files found")
+	assert.Contains(t, err.Error(), "no *.abi files found")
+}
+
+func TestProcessAbiDirectory_NoJsonFiles(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "generate-bindings-test")
+	require.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	abiDir := filepath.Join(tempDir, "abi")
+	outDir := filepath.Join(tempDir, "generated")
+	err = os.MkdirAll(abiDir, 0755)
+	require.NoError(t, err)
+
+	logger := zerolog.New(os.Stderr).With().Timestamp().Logger()
+	runtimeCtx := &runtime.Context{Logger: &logger}
+	handler := newHandler(runtimeCtx)
+
+	inputs := Inputs{
+		ProjectRoot: tempDir,
+		ChainFamily: "evm",
+		Language:    "typescript",
+		AbiPath:     abiDir,
+		PkgName:     "bindings",
+		OutPath:     outDir,
+	}
+
+	err = handler.processAbiDirectory(inputs)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no *.json files found")
 }
 
 func TestProcessAbiDirectory_PackageNameCollision(t *testing.T) {
@@ -502,8 +589,7 @@ func TestProcessAbiDirectory_NonExistentDirectory(t *testing.T) {
 
 	err := handler.processAbiDirectory(inputs)
 	require.Error(t, err)
-	// For non-existent directory, filepath.Glob returns empty slice, so we get the "no .abi files found" error
-	assert.Contains(t, err.Error(), "no .abi files found")
+	assert.Contains(t, err.Error(), "no *.abi files found")
 }
 
 // TestGenerateBindings_UnconventionalNaming tests binding generation for contracts
