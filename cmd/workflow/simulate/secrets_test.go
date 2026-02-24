@@ -65,10 +65,10 @@ func TestReplaceSecretNamesWithEnvVars(t *testing.T) {
 			wantErr: "environment variable MISSING_VAR for secret value not found",
 		},
 		{
-			name:    "invalid yaml",
+			name:      "invalid yaml",
 			yamlInput: `not: valid: yaml: [`,
-			envVars: map[string]string{},
-			wantErr: "yaml:",
+			envVars:   map[string]string{},
+			wantErr:   "yaml:",
 		},
 	}
 
