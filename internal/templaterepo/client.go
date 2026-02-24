@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	posixpath "path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -97,8 +98,10 @@ func (c *Client) DiscoverTemplates(source RepoSource) ([]TemplateSummary, error)
 			continue
 		}
 
-		// Derive the template directory path (grandparent of .cre/template.yaml)
-		templateDir := filepath.Dir(filepath.Dir(path))
+		// Derive the template directory path (grandparent of .cre/template.yaml).
+		// Use posixpath.Dir (not filepath.Dir) because these are URL/tar paths
+		// that always use forward slashes, even on Windows.
+		templateDir := posixpath.Dir(posixpath.Dir(path))
 		if templateDir == "." {
 			templateDir = ""
 		}
@@ -148,7 +151,9 @@ func (c *Client) DiscoverTemplatesWithSHA(source RepoSource) (*DiscoverTemplates
 			continue
 		}
 
-		templateDir := filepath.Dir(filepath.Dir(path))
+		// Use posixpath.Dir (not filepath.Dir) because these are URL/tar paths
+		// that always use forward slashes, even on Windows.
+		templateDir := posixpath.Dir(posixpath.Dir(path))
 		if templateDir == "." {
 			templateDir = ""
 		}
