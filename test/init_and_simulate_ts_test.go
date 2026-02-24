@@ -55,7 +55,7 @@ func TestE2EInit_DevPoRTemplateTS(t *testing.T) {
 	require.FileExists(t, filepath.Join(projectRoot, constants.DefaultEnvFileName))
 	require.DirExists(t, workflowDirectory)
 
-	expectedFiles := []string{"README.md", "main.ts", "package.json"}
+	expectedFiles := []string{"README.md", "main.ts", "main.test.ts", "package.json"}
 	for _, f := range expectedFiles {
 		require.FileExists(t, filepath.Join(workflowDirectory, f), "missing workflow file %q", f)
 	}

@@ -3,6 +3,7 @@ package creinit
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -315,6 +316,54 @@ func GetTemplateFileListTS() []string {
 	}
 }
 
+// runLanguageSpecificTests runs the appropriate test suite based on the language field.
+// For TypeScript: runs bun install and bun test in the workflow directory.
+// For Go: runs go test ./... in the workflow directory.
+func runLanguageSpecificTests(t *testing.T, workflowDir, language string) {
+	t.Helper()
+
+	switch language {
+	case "typescript":
+		runTypescriptTests(t, workflowDir)
+	case "go":
+		runGoTests(t, workflowDir)
+	default:
+		t.Logf("Unknown language %q, skipping tests", language)
+	}
+}
+
+// runTypescriptTests executes TypeScript tests using bun.
+// Follows the cre init instructions: bun install --cwd <dir> then bun test in that directory.
+func runTypescriptTests(t *testing.T, workflowDir string) {
+	t.Helper()
+
+	t.Logf("Running TypeScript tests in %s", workflowDir)
+	installCmd := exec.Command("bun", "install", "--cwd", workflowDir, "--ignore-scripts")
+	installOutput, err := installCmd.CombinedOutput()
+	require.NoError(t, err, "bun install failed in %s:\n%s", workflowDir, string(installOutput))
+	t.Logf("bun install succeeded")
+
+	// Run tests
+	testCmd := exec.Command("bun", "test")
+	testCmd.Dir = workflowDir
+	testOutput, err := testCmd.CombinedOutput()
+	require.NoError(t, err, "bun test failed in %s:\n%s", workflowDir, string(testOutput))
+	t.Logf("bun test passed:\n%s", string(testOutput))
+}
+
+// runGoTests executes Go tests in the workflow directory.
+func runGoTests(t *testing.T, workflowDir string) {
+	t.Helper()
+
+	t.Logf("Running Go tests in %s", workflowDir)
+
+	testCmd := exec.Command("go", "test", "./...")
+	testCmd.Dir = workflowDir
+	testOutput, err := testCmd.CombinedOutput()
+	require.NoError(t, err, "go test failed in %s:\n%s", workflowDir, string(testOutput))
+	t.Logf("go test passed:\n%s", string(testOutput))
+}
+
 func TestInitExecuteFlows(t *testing.T) {
 	// All inputs are provided via flags to avoid interactive prompts
 	cases := []struct {
@@ -326,6 +375,7 @@ func TestInitExecuteFlows(t *testing.T) {
 		expectProjectDirRel string
 		expectWorkflowName  string
 		expectTemplateFiles []string
+		language            string // "go" or "typescript"
 	}{
 		{
 			name:                "Go template with all flags",
@@ -336,6 +386,7 @@ func TestInitExecuteFlows(t *testing.T) {
 			expectProjectDirRel: "myproj",
 			expectWorkflowName:  "myworkflow",
 			expectTemplateFiles: GetTemplateFileListGo(),
+			language:            "go",
 		},
 		{
 			name:                "TypeScript template with all flags",
@@ -345,6 +396,7 @@ func TestInitExecuteFlows(t *testing.T) {
 			expectProjectDirRel: "tsProj",
 			expectWorkflowName:  "ts-workflow",
 			expectTemplateFiles: GetTemplateFileListTS(),
+			language:            "typescript",
 		},
 		{
 			name:                "Starter template with all flags",
