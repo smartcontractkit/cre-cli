@@ -64,10 +64,12 @@ var SupportedEVM = []ChainConfig{
 
 	// Jovay
 	{Selector: chainselectors.JOVAY_TESTNET.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
+	{Selector: chainselectors.JOVAY_MAINNET.Selector, Forwarder: "0x2B3068C4B288A2CD1f8B3613b8f33ef7cEecadC4"},
 
 	// Pharos
 	// Integration not ready yet
 	// {Selector: chainselectors.PHAROS_ATLANTIC_TESTNET.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
+	{Selector: chainselectors.PHAROS_MAINNET.Selector, Forwarder: "0x2B3068C4B288A2CD1f8B3613b8f33ef7cEecadC4"},
 
 	// Worldchain
 	{Selector: chainselectors.ETHEREUM_TESTNET_SEPOLIA_WORLDCHAIN_1.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
@@ -90,6 +92,9 @@ var SupportedEVM = []ChainConfig{
 
 	// Arc
 	{Selector: chainselectors.ARC_TESTNET.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
+
+	// Xlayer
+	{Selector: chainselectors.ETHEREUM_MAINNET_XLAYER_1.Selector, Forwarder: "0x2B3068C4B288A2CD1f8B3613b8f33ef7cEecadC4"},
 }
 
 // parse "ChainSelector:<digits>" from trigger id, e.g. "evm:ChainSelector:5009297550715157269@1.0.0 LogTrigger"
