@@ -29,6 +29,14 @@ func TestBlankWorkflowSimulation(t *testing.T) {
 	absWorkflowPath, err := filepath.Abs(workflowPath)
 	require.NoError(t, err)
 
+	// Run test from workflow dir so short relative paths (max 97 chars) work
+	prevWd, err := os.Getwd()
+	require.NoError(t, err)
+	require.NoError(t, os.Chdir(absWorkflowPath))
+	t.Cleanup(func() {
+		_ = os.Chdir(prevWd)
+	})
+
 	// Clean up common artifacts produced by the compile/simulate flow
 	outB64 := filepath.Join(absWorkflowPath, "binary.wasm.br.b64")
 	t.Cleanup(func() {
@@ -47,10 +55,11 @@ func TestBlankWorkflowSimulation(t *testing.T) {
 	rpc.Url = "https://sepolia.infura.io/v3"
 	v.Set(fmt.Sprintf("%s.%s", "staging-settings", settings.RpcsSettingName), []settings.RpcEndpoint{rpc})
 
+	// Use relative paths so validation (max 97 chars) passes; cwd is workflow dir
 	var workflowSettings settings.WorkflowSettings
 	workflowSettings.UserWorkflowSettings.WorkflowName = "blank-workflow"
-	workflowSettings.WorkflowArtifactSettings.WorkflowPath = filepath.Join(absWorkflowPath, "main.go")
-	workflowSettings.WorkflowArtifactSettings.ConfigPath = filepath.Join(absWorkflowPath, "config.json")
+	workflowSettings.WorkflowArtifactSettings.WorkflowPath = "main.go"
+	workflowSettings.WorkflowArtifactSettings.ConfigPath = "config.json"
 
 	// Mock `runtime.Context` with a test logger.
 	runtimeCtx := &runtime.Context{

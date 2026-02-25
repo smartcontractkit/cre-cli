@@ -1,10 +1,10 @@
 ## cre account
 
-Manages account
+Manage account and request deploy access
 
 ### Synopsis
 
-Manage your linked public key addresses for workflow operations.
+Manage your linked public key addresses for workflow operations and request deployment access.
 
 ```
 cre account [optional flags]
@@ -28,6 +28,7 @@ cre account [optional flags]
 ### SEE ALSO
 
 * [cre](cre.md)	 - CRE CLI tool
+* [cre account access](cre_account_access.md)	 - Check or request deployment access
 * [cre account link-key](cre_account_link-key.md)	 - Link a public key address to your account
 * [cre account list-key](cre_account_list-key.md)	 - List workflow owners
 * [cre account unlink-key](cre_account_unlink-key.md)	 - Unlink a public key address from your account

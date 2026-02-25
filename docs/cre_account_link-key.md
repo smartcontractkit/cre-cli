@@ -30,5 +30,5 @@ cre account link-key [optional flags]
 
 ### SEE ALSO
 
-* [cre account](cre_account.md)	 - Manages account
+* [cre account](cre_account.md)	 - Manage account and request deploy access
 

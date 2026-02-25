@@ -4,13 +4,11 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math"
 	"math/big"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -39,7 +37,7 @@ import (
 	v2 "github.com/smartcontractkit/chainlink/v2/core/services/workflows/v2"
 
 	cmdcommon "github.com/smartcontractkit/cre-cli/cmd/common"
-	"github.com/smartcontractkit/cre-cli/internal/constants"
+	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
@@ -47,7 +45,7 @@ import (
 )
 
 type Inputs struct {
-	WorkflowPath  string                       `validate:"required,path_read"`
+	WorkflowPath  string                       `validate:"required,workflow_path_read"`
 	ConfigPath    string                       `validate:"omitempty,file,ascii,max=97"`
 	SecretsPath   string                       `validate:"omitempty,file,ascii,max=97"`
 	EngineLogs    bool                         `validate:"omitempty" cli:"--engine-logs"`
@@ -101,6 +99,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 type handler struct {
 	log            *zerolog.Logger
 	runtimeContext *runtime.Context
+	credentials    *credentials.Credentials
 	validated      bool
 }
 
@@ -108,6 +107,7 @@ func newHandler(ctx *runtime.Context) *handler {
 	return &handler{
 		log:            ctx.Logger,
 		runtimeContext: ctx,
+		credentials:    ctx.Credentials,
 		validated:      false,
 	}
 }
@@ -258,57 +258,32 @@ func (h *handler) ValidateInputs(inputs Inputs) error {
 }
 
 func (h *handler) Execute(inputs Inputs) error {
-	// Compile the workflow
-	// terminal command: GOOS=wasip1 GOARCH=wasm go build -trimpath -ldflags="-buildid= -w -s" -o <output_path> <workflow_path>
-	workflowRootFolder := filepath.Dir(inputs.WorkflowPath)
-	tmpWasmFileName := "tmp.wasm"
-	workflowMainFile := filepath.Base(inputs.WorkflowPath)
-
-	// Set language in runtime context based on workflow file extension
+	workflowDir, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("workflow directory: %w", err)
+	}
+	resolvedWorkflowPath, err := cmdcommon.ResolveWorkflowPath(workflowDir, inputs.WorkflowPath)
+	if err != nil {
+		return fmt.Errorf("workflow path: %w", err)
+	}
+	_, workflowMainFile, err := cmdcommon.WorkflowPathRootAndMain(resolvedWorkflowPath)
+	if err != nil {
+		return fmt.Errorf("workflow path: %w", err)
+	}
 	if h.runtimeContext != nil {
 		h.runtimeContext.Workflow.Language = cmdcommon.GetWorkflowLanguage(workflowMainFile)
-
-		switch h.runtimeContext.Workflow.Language {
-		case constants.WorkflowLanguageTypeScript:
-			if err := cmdcommon.EnsureTool("bun"); err != nil {
-				return errors.New("bun is required for TypeScript workflows but was not found in PATH; install from https://bun.com/docs/installation")
-			}
-		case constants.WorkflowLanguageGolang:
-			if err := cmdcommon.EnsureTool("go"); err != nil {
-				return errors.New("go toolchain is required for Go workflows but was not found in PATH; install from https://go.dev/dl")
-			}
-		default:
-			return fmt.Errorf("unsupported workflow language for file %s", workflowMainFile)
-		}
 	}
 
-	buildCmd := cmdcommon.GetBuildCmd(workflowMainFile, tmpWasmFileName, workflowRootFolder)
-
-	h.log.Debug().
-		Str("Workflow directory", buildCmd.Dir).
-		Str("Command", buildCmd.String()).
-		Msg("Executing go build command")
-
-	// Execute the build command with spinner
 	spinner := ui.NewSpinner()
 	spinner.Start("Compiling workflow...")
-	buildOutput, err := buildCmd.CombinedOutput()
+	wasmFileBinary, err := cmdcommon.CompileWorkflowToWasm(resolvedWorkflowPath)
 	spinner.Stop()
-
 	if err != nil {
-		out := strings.TrimSpace(string(buildOutput))
-		h.log.Info().Msg(out)
-		return fmt.Errorf("failed to compile workflow: %w\nbuild output:\n%s", err, out)
+		ui.Error("Build failed:")
+		return fmt.Errorf("failed to compile workflow: %w", err)
 	}
-	h.log.Debug().Msgf("Build output: %s", buildOutput)
+	h.log.Debug().Msg("Workflow compiled")
 	ui.Success("Workflow compiled")
-
-	// Read the compiled workflow binary
-	tmpWasmLocation := filepath.Join(workflowRootFolder, tmpWasmFileName)
-	wasmFileBinary, err := os.ReadFile(tmpWasmLocation)
-	if err != nil {
-		return fmt.Errorf("failed to read workflow binary: %w", err)
-	}
 
 	// Read the config file
 	var config []byte
@@ -340,7 +315,32 @@ func (h *handler) Execute(inputs Inputs) error {
 	// if logger instance is set to DEBUG, that means verbosity flag is set by the user
 	verbosity := h.log.GetLevel() == zerolog.DebugLevel
 
-	return run(ctx, wasmFileBinary, config, secrets, inputs, verbosity)
+	err = run(ctx, wasmFileBinary, config, secrets, inputs, verbosity)
+	if err != nil {
+		return err
+	}
+
+	h.showDeployAccessHint()
+
+	return nil
+}
+
+func (h *handler) showDeployAccessHint() {
+	if h.credentials == nil {
+		return
+	}
+
+	deployAccess, err := h.credentials.GetDeploymentAccessStatus()
+	if err != nil {
+		return
+	}
+
+	if !deployAccess.HasAccess {
+		ui.Line()
+		message := ui.RenderSuccess("Simulation complete!") + " Ready to deploy your workflow?\n\n" +
+			"Run " + ui.RenderCommand("cre account access") + " to request deployment access."
+		ui.Box(message)
+	}
 }
 
 // run instantiates the engine, starts it and blocks until the context is canceled.

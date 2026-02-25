@@ -37,7 +37,7 @@ const configSchema = z.object({
 	),
 })
 
-type Config = z.infer<typeof configSchema>
+export type Config = z.infer<typeof configSchema>
 
 interface PORResponse {
 	accountName: string
@@ -56,7 +56,7 @@ interface ReserveInfo {
 const safeJsonStringify = (obj: any): string =>
 	JSON.stringify(obj, (_, value) => (typeof value === 'bigint' ? value.toString() : value), 2)
 
-const fetchReserveInfo = (sendRequester: HTTPSendRequester, config: Config): ReserveInfo => {
+export const fetchReserveInfo = (sendRequester: HTTPSendRequester, config: Config): ReserveInfo => {
 	const response = sendRequester.sendRequest({ method: 'GET', url: config.url }).result()
 
 	if (response.statusCode !== 200) {
@@ -319,7 +319,7 @@ const getLastMessage = (
 	return message
 }
 
-const onCronTrigger = (runtime: Runtime<Config>, payload: CronPayload): string => {
+export const onCronTrigger = (runtime: Runtime<Config>, payload: CronPayload): string => {
 	if (!payload.scheduledExecutionTime) {
 		throw new Error('Scheduled execution time is required')
 	}
@@ -329,7 +329,7 @@ const onCronTrigger = (runtime: Runtime<Config>, payload: CronPayload): string =
 	return doPOR(runtime)
 }
 
-const onLogTrigger = (runtime: Runtime<Config>, payload: EVMLog): string => {
+export const onLogTrigger = (runtime: Runtime<Config>, payload: EVMLog): string => {
 	runtime.log('Running LogTrigger')
 
 	const topics = payload.topics
@@ -350,7 +350,7 @@ const onLogTrigger = (runtime: Runtime<Config>, payload: EVMLog): string => {
 	return message
 }
 
-const initWorkflow = (config: Config) => {
+export const initWorkflow = (config: Config) => {
 	const cronTrigger = new CronCapability()
 	const network = getNetwork({
 		chainFamily: 'evm',
