@@ -448,7 +448,8 @@ func isLoadDeploymentRPC(cmd *cobra.Command) bool {
 
 func shouldSkipValidation(cmd *cobra.Command) bool {
 	var excludedCommands = map[string]struct{}{
-		"cre logout": {},
+		"cre logout":            {},
+		"cre workflow simulate": {},
 	}
 
 	_, exists := excludedCommands[cmd.CommandPath()]
