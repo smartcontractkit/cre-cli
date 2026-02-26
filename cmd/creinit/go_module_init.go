@@ -82,3 +82,7 @@ func runCommand(logger *zerolog.Logger, dir, command string, args ...string) err
 	logger.Debug().Msgf("Command succeeded: %s %v", command, args)
 	return nil
 }
+
+func runBunInstall(logger *zerolog.Logger, dir string) error {
+	return runCommand(logger, dir, "bun", "install", "--ignore-scripts")
+}

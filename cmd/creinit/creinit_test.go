@@ -109,16 +109,14 @@ func hashDirectoryFiles(t *testing.T, dir string) map[string]string {
 func validateGeneratedBindingsStable(t *testing.T, projectRoot, workflowName, language string) {
 	t.Helper()
 
-	var generatedDir, abiDir, abiExt string
+	abiDir := filepath.Join(projectRoot, "contracts", "evm", "src", "abi")
+
+	var generatedDir string
 	switch language {
 	case "go":
 		generatedDir = filepath.Join(projectRoot, "contracts", "evm", "src", "generated")
-		abiDir = filepath.Join(projectRoot, "contracts", "evm", "src", "abi")
-		abiExt = "*.abi"
 	case "typescript":
-		generatedDir = filepath.Join(projectRoot, workflowName, "generated")
-		abiDir = filepath.Join(projectRoot, "contracts", "abi")
-		abiExt = "*.json"
+		generatedDir = filepath.Join(projectRoot, "contracts", "evm", "ts", "generated")
 	default:
 		return
 	}
@@ -130,9 +128,9 @@ func validateGeneratedBindingsStable(t *testing.T, projectRoot, workflowName, la
 	beforeHashes := hashDirectoryFiles(t, generatedDir)
 	require.NotEmpty(t, beforeHashes, "generated directory should not be empty")
 
-	abiFiles, err := filepath.Glob(filepath.Join(abiDir, abiExt))
+	abiFiles, err := filepath.Glob(filepath.Join(abiDir, "*.abi"))
 	require.NoError(t, err)
-	require.NotEmpty(t, abiFiles, "abi directory should contain %s files", abiExt)
+	require.NotEmpty(t, abiFiles, "abi directory should contain *.abi files")
 
 	switch language {
 	case "go":
@@ -206,6 +204,8 @@ func runLanguageSpecificTests(t *testing.T, workflowDir, language string) {
 
 // runTypescriptTests executes TypeScript tests using bun.
 // Follows the cre init instructions: bun install --cwd <dir> then bun test in that directory.
+// For projects with contracts (e.g. TS PoR), also installs contracts dependencies so generated
+// bindings can resolve @chainlink/cre-sdk.
 func runTypescriptTests(t *testing.T, workflowDir string) {
 	t.Helper()
 
@@ -214,6 +214,17 @@ func runTypescriptTests(t *testing.T, workflowDir string) {
 	installOutput, err := installCmd.CombinedOutput()
 	require.NoError(t, err, "bun install failed in %s:\n%s", workflowDir, string(installOutput))
 	t.Logf("bun install succeeded")
+
+	// Install contracts dependencies when contracts/package.json exists (TS PoR template)
+	projectRoot := filepath.Dir(workflowDir)
+	contractsPkg := filepath.Join(projectRoot, "contracts", "package.json")
+	if _, err := os.Stat(contractsPkg); err == nil {
+		contractsDir := filepath.Join(projectRoot, "contracts")
+		installCmd := exec.Command("bun", "install", "--cwd", contractsDir, "--ignore-scripts")
+		installOutput, err := installCmd.CombinedOutput()
+		require.NoError(t, err, "bun install failed in %s:\n%s", contractsDir, string(installOutput))
+		t.Logf("bun install in contracts succeeded")
+	}
 
 	testCmd := exec.Command("bun", "test")
 	testCmd.Dir = workflowDir

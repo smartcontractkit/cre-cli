@@ -302,6 +302,19 @@ func (h *handler) Execute(inputs Inputs) error {
 		}
 	}
 
+	// Install contracts dependencies for TypeScript projects with contracts
+	if selectedLanguageTemplate.Lang == TemplateLangTS && contractsGenerated {
+		contractsDir := filepath.Join(projectRoot, "contracts")
+		contractsPkg := filepath.Join(contractsDir, "package.json")
+		if h.pathExists(contractsPkg) {
+			spinner.Update("Installing contracts dependencies...")
+			if err := runBunInstall(h.log, contractsDir); err != nil {
+				spinner.Stop()
+				return fmt.Errorf("failed to install contracts dependencies: %w", err)
+			}
+		}
+	}
+
 	// Generate workflow settings
 	spinner.Update("Generating workflow settings...")
 	_, err = settings.GenerateWorkflowSettingsFile(workflowDirectory, workflowName, selectedLanguageTemplate.EntryPoint)
@@ -484,6 +497,11 @@ func (h *handler) generateWorkflowTemplate(workingDirectory string, template Wor
 
 		// Skip contracts directory - it will be handled separately
 		if strings.HasPrefix(relPath, "contracts") {
+			return nil
+		}
+
+		// Skip generated directory - TS bindings live in contracts/evm/src/generated/
+		if strings.HasPrefix(relPath, "generated") {
 			return nil
 		}
 

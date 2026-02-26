@@ -16,10 +16,10 @@ import {
 } from '@chainlink/cre-sdk'
 import type { Address } from 'viem'
 import { z } from 'zod'
-import { BalanceReader } from './generated/BalanceReader'
-import { IERC20 } from './generated/IERC20'
-import { MessageEmitter } from './generated/MessageEmitter'
-import { ReserveManager } from './generated/ReserveManager'
+import { BalanceReader } from '../contracts/evm/ts/generated/BalanceReader'
+import { IERC20 } from '../contracts/evm/ts/generated/IERC20'
+import { MessageEmitter } from '../contracts/evm/ts/generated/MessageEmitter'
+import { ReserveManager } from '../contracts/evm/ts/generated/ReserveManager'
 
 const configSchema = z.object({
 	schedule: z.string(),

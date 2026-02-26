@@ -9,10 +9,10 @@ import {
 import { initWorkflow, onCronTrigger, onLogTrigger, fetchReserveInfo } from "./main";
 import type { Config } from "./main";
 import type { Address } from "viem";
-import { newBalanceReaderMock } from "./generated/BalanceReader_mock";
-import { newIERC20Mock } from "./generated/IERC20_mock";
-import { newMessageEmitterMock } from "./generated/MessageEmitter_mock";
-import { newReserveManagerMock } from "./generated/ReserveManager_mock";
+import { newBalanceReaderMock } from "../contracts/evm/ts/generated/BalanceReader_mock";
+import { newIERC20Mock } from "../contracts/evm/ts/generated/IERC20_mock";
+import { newMessageEmitterMock } from "../contracts/evm/ts/generated/MessageEmitter_mock";
+import { newReserveManagerMock } from "../contracts/evm/ts/generated/ReserveManager_mock";
 
 const mockConfig: Config = {
   schedule: "0 0 * * *",
