@@ -7,7 +7,7 @@ CRE CLI source repository for command implementation, docs, and test flows acros
 ## Key Paths
 
 - CLI docs: `docs/*.md`
-- Testing framework docs: `docs/testing-framework/*.md`
+- Testing framework docs: `testing-framework/*.md`
 - CLI commands: `cmd/`
 - Core internals: `internal/`
 - E2E/integration tests: `test/`

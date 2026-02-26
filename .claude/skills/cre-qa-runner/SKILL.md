@@ -19,6 +19,7 @@ description: Runs the CRE CLI pre-release QA runbook end-to-end and produces a s
 
 - Never print secret values; report only set/unset status for sensitive env vars.
 - Do not edit `.qa-test-report-template.md`; always copy it to a dated report file.
+- Preserve every checklist item, table row, and section from the report template. Never remove items — mark untested items unchecked with a reason (e.g., `- [ ] item — not verified: [reason]`). If an item was verified, check it and include evidence.
 - For each failure, record expected vs actual behavior and continue to remaining phases unless blocked by a hard dependency.
 - Mark truly unexecutable cases as `BLOCKED` with a concrete reason.
 
