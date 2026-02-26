@@ -250,23 +250,7 @@ func (c *Codec) EncodeRequestReserveUpdateTopics(
 		return nil, err
 	}
 
-	topics := make([]*evm.TopicValues, len(rawTopics)+1)
-	topics[0] = &evm.TopicValues{
-		Values: [][]byte{evt.ID.Bytes()},
-	}
-	for i, hashList := range rawTopics {
-		bs := make([][]byte, len(hashList))
-		for j, h := range hashList {
-			// don't include empty bytes if hashed value is 0x0
-			if reflect.ValueOf(h).IsZero() {
-				bs[j] = []byte{}
-			} else {
-				bs[j] = h.Bytes()
-			}
-		}
-		topics[i+1] = &evm.TopicValues{Values: bs}
-	}
-	return topics, nil
+	return bindings.PrepareTopics(rawTopics, evt.ID.Bytes()), nil
 }
 
 // DecodeRequestReserveUpdate decodes a log into a RequestReserveUpdate struct.
@@ -455,11 +439,9 @@ func (c *ReserveManager) LogTriggerRequestReserveUpdateLog(chainSelector uint64,
 	}, nil
 }
 
-func (c *ReserveManager) FilterLogsRequestReserveUpdate(runtime cre.Runtime, options *bindings.FilterOptions) cre.Promise[*evm.FilterLogsReply] {
+func (c *ReserveManager) FilterLogsRequestReserveUpdate(runtime cre.Runtime, options *bindings.FilterOptions) (cre.Promise[*evm.FilterLogsReply], error) {
 	if options == nil {
-		options = &bindings.FilterOptions{
-			ToBlock: options.ToBlock,
-		}
+		return nil, errors.New("FilterLogs options are required.")
 	}
 	return c.client.FilterLogs(runtime, &evm.FilterLogsRequest{
 		FilterQuery: &evm.FilterQuery{
@@ -471,5 +453,5 @@ func (c *ReserveManager) FilterLogsRequestReserveUpdate(runtime cre.Runtime, opt
 			FromBlock: pb.NewBigIntFromInt(options.FromBlock),
 			ToBlock:   pb.NewBigIntFromInt(options.ToBlock),
 		},
-	})
+	}), nil
 }

@@ -27,6 +27,7 @@ import (
 	"regexp"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"text/template"
 	"unicode"
@@ -405,4 +406,143 @@ func isDynTopicType(t abi.Type) bool {
 	default:
 		return false
 	}
+}
+
+func tsBindBasicType(kind abi.Type) string {
+	switch kind.T {
+	case abi.AddressTy:
+		return "`0x${string}`"
+	case abi.IntTy, abi.UintTy:
+		parts := regexp.MustCompile(`(u)?int([0-9]*)`).FindStringSubmatch(kind.String())
+		bits := 256
+		if len(parts) >= 3 && parts[2] != "" {
+			bits, _ = strconv.Atoi(parts[2])
+		}
+		if bits <= 48 {
+			return "number"
+		}
+		return "bigint"
+	case abi.BoolTy:
+		return "boolean"
+	case abi.StringTy:
+		return "string"
+	case abi.FixedBytesTy, abi.BytesTy, abi.HashTy, abi.FunctionTy:
+		return "`0x${string}`"
+	default:
+		return "unknown"
+	}
+}
+
+func tsReturnType(outputs abi.Arguments, structs map[string]*tmplStruct) string {
+	if len(outputs) == 0 {
+		return "void"
+	}
+	if len(outputs) == 1 {
+		return tsBindType(outputs[0].Type, structs)
+	}
+	var types []string
+	for _, output := range outputs {
+		types = append(types, tsBindType(output.Type, structs))
+	}
+	return "readonly [" + strings.Join(types, ", ") + "]"
+}
+
+func tsBindType(kind abi.Type, structs map[string]*tmplStruct) string {
+	switch kind.T {
+	case abi.TupleTy:
+		s := structs[kind.TupleRawName+kind.String()]
+		if s == nil {
+			return "unknown"
+		}
+		var fields []string
+		for _, f := range s.Fields {
+			fields = append(fields, fmt.Sprintf("%s: %s", decapitalise(f.Name), tsBindType(f.SolKind, structs)))
+		}
+		return "{ " + strings.Join(fields, "; ") + " }"
+	case abi.ArrayTy:
+		return "readonly " + tsBindType(*kind.Elem, structs) + "[]"
+	case abi.SliceTy:
+		return "readonly " + tsBindType(*kind.Elem, structs) + "[]"
+	default:
+		return tsBindBasicType(kind)
+	}
+}
+
+// BindV2TS generates TypeScript bindings using the same ABI parsing as BindV2
+// but with TypeScript-specific template functions and no Go formatting.
+func BindV2TS(types []string, abis []string, bytecodes []string, pkg string, libs map[string]string, aliases map[string]string, templateContent string) (string, error) {
+	b := binder{
+		contracts: make(map[string]*tmplContractV2),
+		structs:   make(map[string]*tmplStruct),
+		aliases:   aliases,
+	}
+	for i := 0; i < len(types); i++ {
+		evmABI, err := abi.JSON(strings.NewReader(abis[i]))
+		if err != nil {
+			return "", err
+		}
+
+		for _, input := range evmABI.Constructor.Inputs {
+			if hasStruct(input.Type) {
+				bindStructType(input.Type, b.structs)
+			}
+		}
+
+		cb := newContractBinder(&b)
+		err = iterSorted(evmABI.Methods, func(_ string, original abi.Method) error {
+			return cb.bindMethod(original)
+		})
+		if err != nil {
+			return "", err
+		}
+		err = iterSorted(evmABI.Events, func(_ string, original abi.Event) error {
+			return cb.bindEvent(original)
+		})
+		if err != nil {
+			return "", err
+		}
+		err = iterSorted(evmABI.Errors, func(_ string, original abi.Error) error {
+			return cb.bindError(original)
+		})
+		if err != nil {
+			return "", err
+		}
+		b.contracts[types[i]] = newTmplContractV2(types[i], abis[i], bytecodes[i], evmABI.Constructor, cb)
+	}
+
+	invertedLibs := make(map[string]string)
+	for pattern, name := range libs {
+		invertedLibs[name] = pattern
+	}
+
+	sanitizeStructNames(b.structs, b.contracts)
+
+	data := tmplDataV2{
+		Package:   pkg,
+		Contracts: b.contracts,
+		Libraries: invertedLibs,
+		Structs:   b.structs,
+	}
+
+	for typ, contract := range data.Contracts {
+		for _, depPattern := range parseLibraryDeps(contract.InputBin) {
+			data.Contracts[typ].Libraries[libs[depPattern]] = depPattern
+		}
+	}
+	buffer := new(bytes.Buffer)
+	funcs := map[string]interface{}{
+		"bindtype":      tsBindType,
+		"bindtopictype": tsBindType,
+		"returntype":    tsReturnType,
+		"capitalise":    abi.ToCamelCase,
+		"decapitalise":  decapitalise,
+		"unescapeabi": func(s string) string {
+			return strings.ReplaceAll(s, "\\\"", "\"")
+		},
+	}
+	tmpl := template.Must(template.New("").Funcs(funcs).Parse(templateContent))
+	if err := tmpl.Execute(buffer, data); err != nil {
+		return "", err
+	}
+	return buffer.String(), nil
 }

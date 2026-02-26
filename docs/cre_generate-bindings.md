@@ -24,7 +24,7 @@ cre generate-bindings <chain-family> [optional flags]
 ```
   -a, --abi string            Path to ABI directory (defaults to contracts/{chain-family}/src/abi/)
   -h, --help                  help for generate-bindings
-  -l, --language string       Target language (go) (default "go")
+  -l, --language string       Target language (go, typescript) (default "go")
   -k, --pkg string            Base package name (each contract gets its own subdirectory) (default "bindings")
   -p, --project-root string   Path to project root directory (defaults to current directory)
 ```

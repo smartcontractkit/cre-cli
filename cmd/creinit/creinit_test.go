@@ -1,14 +1,19 @@
 package creinit
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/smartcontractkit/cre-cli/cmd/generate-bindings/bindings"
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/testutil"
 	"github.com/smartcontractkit/cre-cli/internal/testutil/chainsim"
@@ -78,6 +83,111 @@ func requireNoDirExists(t *testing.T, dirPath string) {
 	require.Falsef(t, fi.IsDir(), "directory %s should NOT exist", dirPath)
 }
 
+func hashDirectoryFiles(t *testing.T, dir string) map[string]string {
+	t.Helper()
+	hashes := make(map[string]string)
+	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		rel, _ := filepath.Rel(dir, path)
+		sum := sha256.Sum256(data)
+		hashes[rel] = hex.EncodeToString(sum[:])
+		return nil
+	})
+	require.NoError(t, err)
+	return hashes
+}
+
+func validateGeneratedBindingsStable(t *testing.T, projectRoot, workflowName, language string) {
+	t.Helper()
+
+	var generatedDir, abiDir, abiExt string
+	switch language {
+	case "go":
+		generatedDir = filepath.Join(projectRoot, "contracts", "evm", "src", "generated")
+		abiDir = filepath.Join(projectRoot, "contracts", "evm", "src", "abi")
+		abiExt = "*.abi"
+	case "typescript":
+		generatedDir = filepath.Join(projectRoot, workflowName, "generated")
+		abiDir = filepath.Join(projectRoot, "contracts", "abi")
+		abiExt = "*.json"
+	default:
+		return
+	}
+
+	if _, err := os.Stat(generatedDir); os.IsNotExist(err) {
+		return
+	}
+
+	beforeHashes := hashDirectoryFiles(t, generatedDir)
+	require.NotEmpty(t, beforeHashes, "generated directory should not be empty")
+
+	abiFiles, err := filepath.Glob(filepath.Join(abiDir, abiExt))
+	require.NoError(t, err)
+	require.NotEmpty(t, abiFiles, "abi directory should contain %s files", abiExt)
+
+	switch language {
+	case "go":
+		for _, abiFile := range abiFiles {
+			contractName := strings.TrimSuffix(filepath.Base(abiFile), ".abi")
+			entries, readErr := os.ReadDir(generatedDir)
+			require.NoError(t, readErr)
+
+			found := false
+			for _, entry := range entries {
+				if !entry.IsDir() {
+					continue
+				}
+				goFile := filepath.Join(generatedDir, entry.Name(), contractName+".go")
+				if _, statErr := os.Stat(goFile); statErr == nil {
+					err = bindings.GenerateBindings("", abiFile, entry.Name(), contractName, goFile)
+					require.NoError(t, err, "failed to regenerate Go bindings for %s", contractName)
+					found = true
+					break
+				}
+			}
+			require.True(t, found, "no matching generated directory found for contract %s", contractName)
+		}
+
+	case "typescript":
+		var generatedContracts []string
+		for _, abiFile := range abiFiles {
+			ext := filepath.Ext(abiFile)
+			contractName := strings.TrimSuffix(filepath.Base(abiFile), ext)
+			outFile := filepath.Join(generatedDir, contractName+".ts")
+			err = bindings.GenerateBindingsTS(abiFile, contractName, outFile)
+			require.NoError(t, err, "failed to regenerate TS bindings for %s", contractName)
+			generatedContracts = append(generatedContracts, contractName)
+		}
+		// Regenerate barrel index.ts
+		var indexContent string
+		indexContent += "// Code generated — DO NOT EDIT.\n"
+		for _, name := range generatedContracts {
+			indexContent += fmt.Sprintf("export * from './%s'\n", name)
+			indexContent += fmt.Sprintf("export * from './%s_mock'\n", name)
+		}
+		indexPath := filepath.Join(generatedDir, "index.ts")
+		require.NoError(t, os.WriteFile(indexPath, []byte(indexContent), 0o600))
+	}
+
+	afterHashes := hashDirectoryFiles(t, generatedDir)
+
+	require.Equal(t, len(beforeHashes), len(afterHashes), "number of generated files changed after regeneration")
+	for file, beforeHash := range beforeHashes {
+		afterHash, exists := afterHashes[file]
+		require.True(t, exists, "generated file %s disappeared after regeneration", file)
+		require.Equal(t, beforeHash, afterHash, "generated file %s changed after regeneration — template is stale", file)
+	}
+}
+
 // runLanguageSpecificTests runs the appropriate test suite based on the language field.
 // For TypeScript: runs bun install and bun test in the workflow directory.
 // For Go: runs go test ./... in the workflow directory.
@@ -105,7 +215,6 @@ func runTypescriptTests(t *testing.T, workflowDir string) {
 	require.NoError(t, err, "bun install failed in %s:\n%s", workflowDir, string(installOutput))
 	t.Logf("bun install succeeded")
 
-	// Run tests
 	testCmd := exec.Command("bun", "test")
 	testCmd.Dir = workflowDir
 	testOutput, err := testCmd.CombinedOutput()
@@ -256,6 +365,7 @@ func TestInitExecuteFlows(t *testing.T) {
 			validateInitProjectStructure(t, projectRoot, tc.expectWorkflowName, tc.expectTemplateFiles)
 
 			runLanguageSpecificTests(t, filepath.Join(projectRoot, tc.expectWorkflowName), tc.language)
+			validateGeneratedBindingsStable(t, projectRoot, tc.expectWorkflowName, tc.language)
 		})
 	}
 }
