@@ -457,7 +457,47 @@ expect: /usr/bin/expect
 | Wave 3: Gap Register + Report | 1–2 hr | ~5 min | Compiled from agent outputs |
 | **Total** | **~3 hr (parallel)** | **~15 min** | 12x faster than estimated |
 
-### D. Patches Applied (this session)
+### D. Manual Operator Validation (2026-02-26)
+
+Independent manual validation performed by Wilson Chen in the Cursor IDE terminal, following the validation plan step by step.
+
+**Commands run manually by the operator:**
+
+| # | Command | Result | Notes |
+|---|---------|--------|-------|
+| 1 | `make build` | PASS | Binary built successfully |
+| 2 | `./cre version && ./cre --help` | PASS | Version and help output confirmed |
+| 3 | `make setup-submodules` | PASS | `cre-templates/` cloned from GitHub |
+| 4 | `go version && bun --version && node -v && forge --version && anvil --version` | PASS | All tools present at expected versions |
+| 5 | `go test -v -timeout 20m -run TestTemplateCompatibility ./test/` | PASS | 5/5 templates + drift canary (ran twice) |
+| 6 | `make test-e2e` | PASS | All E2E pass, 2 skipped (anvil state gen), ~73s (ran twice) |
+| 7 | `.claude/skills/cre-qa-runner/scripts/env_status.sh` | PASS | Reports set/unset, no secrets leaked (ran 3x) |
+| 8 | `.claude/skills/cre-qa-runner/scripts/collect_versions.sh` | PASS | All versions captured (ran twice) |
+| 9 | `.claude/skills/cre-qa-runner/scripts/init_report.sh` | PASS | Created `.qa-test-report-2026-02-25.md` |
+| 10 | `.claude/skills/cre-add-template/scripts/template_gap_check.sh` | PASS (exit 1 expected) | No template changes staged — correct behavior (ran twice) |
+| 11 | `.claude/skills/cre-add-template/scripts/print_next_steps.sh` | PASS | 9-item checklist printed (ran twice) |
+| 12 | `ls -la .claude/skills/using-cre-cli/references/` | PASS | `@docs` symlink resolves to `../../../../docs` (ran twice) |
+| 13 | `./cre login` | PASS | Browser opened, OAuth completed, `✓ Login completed successfully!` |
+| 14 | `expect .claude/skills/cre-cli-tui-testing/tui_test/pty-smoke.expect` | PASS | Wizard completed, "Project created successfully!" (ran twice) |
+| 15 | `expect .claude/skills/cre-cli-tui-testing/tui_test/pty-overwrite.expect` | PASS | Decline + accept overwrite both correct (ran twice) |
+| 16 | `make clean-submodules` | PASS | `cre-templates/` removed |
+| 17 | `make setup-submodules` | PASS | Re-cloned successfully |
+| 18 | `make update-submodules` | PASS | "Already up to date" |
+
+**Observations from manual run:**
+- Terminal escape sequence leakage (`^[]11;rgb:...`) after expect scripts — cosmetic, does not affect test results
+- First `pty-smoke.expect` run showed escape sequences in output; second run was clean
+- `collect_versions.sh` correctly detected terminal as `vscode` when run from Cursor IDE terminal (vs `unknown` when run by agent)
+- All scripts ran without requiring `rg` (ripgrep), confirming the `rg` → `grep` patch works
+
+**End-to-end skill test (cre-qa-runner):**
+
+After the manual checks, the `cre-qa-runner` skill was executed end-to-end from its SKILL.md, producing `.qa-test-report-2026-02-26.md` with:
+- 38 PASS / 1 FAIL (pre-existing logger test) / 27 SKIP / 19 BLOCKED
+- All BLOCKED items due to missing `ETH_PRIVATE_KEY`/`CRE_API_KEY` (covered by E2E mocks)
+- Skill instruction improvement identified: added rule to preserve all template checklist items
+
+### E. Patches Applied (this session)
 
 | Patch | Files Changed |
 |-------|---------------|
