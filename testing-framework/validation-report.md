@@ -307,12 +307,15 @@ Installed (v4.52.4). When missing, `setup-submodules.sh` exits with: `"yq is req
 
 | # | Gap | Severity | Impact | Suggested Fix |
 |---|-----|----------|--------|---------------|
-| 1 | `validation-and-report-plan.md` Stream 4 says playwright-cli "Does not exist" | **P3** | Outdated — playwright-cli is now implemented | Update Stream 4 text |
-| 2 | `collect_versions.sh` Terminal field | **P3** | Reports "unknown" for Terminal | Detect terminal emulator or document as expected |
-| 3 | Design doc taxonomy codes differ from reporting-rules | **P3** | Design doc §2.5 uses FAIL_TUI, FAIL_NEGATIVE_PATH; reporting-rules uses FAIL_BUILD, FAIL_RUNTIME etc. | Align or document the mapping |
-| 4 | QA report template lacks taxonomy Code column | **P3** | FAIL/BLOCKED rows have no Code column for taxonomy codes | Add Code column to `.qa-test-report-template.md` |
+| (all resolved) | — | — | — | — |
 
-**Previously resolved (this session):**
+**Resolved (2026-02-26):**
+- ~~`validation-and-report-plan.md` Stream 4 says playwright-cli "Does not exist"~~ — updated to reflect skill exists with 8 reference docs
+- ~~`collect_versions.sh` Terminal field reports "unknown"~~ — added Cursor, VS Code, and TERM fallback detection
+- ~~Design doc taxonomy codes differ from reporting-rules~~ — merged both sets into `reporting-rules.md` (16 codes); design doc references it as canonical
+- ~~QA report template lacks taxonomy Code column~~ — added Code column to lint, unit, E2E, deploy, account, secrets, and issues tables
+
+**Previously resolved:
 - ~~Drift canary only detects additions~~ — hardcoded map requires manual update when adding/removing templates (acceptable trade-off to avoid modifying production code)
 - ~~Branch protection required-check status unknown~~ — recommendation added
 - ~~Failure taxonomy codes not formalized~~ — 12 codes defined in `reporting-rules.md`

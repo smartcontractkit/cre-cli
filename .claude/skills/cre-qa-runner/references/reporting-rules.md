@@ -23,7 +23,11 @@ Append a taxonomy code to every `FAIL` and `BLOCKED` status to enable filtering,
 | `FAIL_AUTH` | Authentication failure | `cre login`, `cre whoami`, or credential loading fails |
 | `FAIL_NETWORK` | Network or API failure | GraphQL, RPC, or external service unreachable |
 | `FAIL_SCRIPT` | Script execution failure | Shell/expect script exits non-zero unexpectedly |
+| `FAIL_TUI` | PTY/TUI traversal failure | Interactive wizard prompt mismatch or expect script regression |
+| `FAIL_NEGATIVE_PATH` | Negative-path assertion failure | Expected error not raised or wrong error surfaced |
+| `FAIL_CONTRACT` | Mode contract violation | Embedded vs dynamic template semantics broken |
 | `BLOCKED_ENV` | Environment not available | Required tool, credential, or service missing |
+| `BLOCKED_AUTH` | Auth credentials not available | Missing or invalid auth tokens, API keys, or OAuth state |
 | `BLOCKED_INFRA` | Infrastructure not available | CI runner, VPN, or staging environment unavailable |
 | `BLOCKED_DEP` | Upstream dependency blocked | Blocked by another failing test or unmerged PR |
 | `SKIP_MANUAL` | Requires manual verification | Cannot be automated; documented for manual tester |

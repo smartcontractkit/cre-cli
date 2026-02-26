@@ -90,17 +90,18 @@ Before validation, be explicit about what exists as running code vs. documentati
 
 ### Stream 4: Playwright / Browser Automation
 
-**Objective:** Precisely classify the current state -- this is preparation, not shipped automation.
+**Objective:** Validate the playwright-cli skill and classify its integration status.
 
 | Check | Finding |
 |-------|---------|
-| Skill file at `.claude/skills/playwright-cli/` | **Does not exist** |
-| Playwright scripts or test files | **None in repo** |
-| Referenced in AGENTS.md? | Yes (lines 107, 122) |
-| Referenced in setup.md? | Yes (as a required tool) |
+| Skill file at `.claude/skills/playwright-cli/` | **Exists** — `SKILL.md` + 8 reference docs (setup, tracing, video-recording, test-generation, storage-state, session-management, running-code, request-mocking) |
+| Playwright scripts or test files | **Skill-driven** — no standalone scripts; automation is invoked via the `playwright-cli` skill |
+| `@playwright/cli` installed | Yes (v0.1.1) |
+| Referenced in AGENTS.md? | Yes — Skill Map and CLI Navigation sections |
+| Referenced in setup.md? | Yes (as a required tool for TUI test credential bootstrap) |
 | Referenced in the brief? | Yes (Section "Playwright Primitive") |
 
-**Report framing:** Playwright is a documented design direction with structural hooks (AGENTS.md references, setup.md prerequisite, brief section) but no executable automation was delivered. This aligns with the "Advanced (later)" adoption tier. The AGENTS.md reference to a non-existent skill should be flagged.
+**Report framing:** The `playwright-cli` skill is implemented and operational for agent-driven browser automation (credential bootstrap, OAuth login). It is intentionally not a CI gate — it serves as a local automation primitive for developers and agents. This aligns with the "Minimum" adoption tier for local use and "Advanced" for CI integration.
 
 ### Stream 5: Output & Evidence Contract
 
