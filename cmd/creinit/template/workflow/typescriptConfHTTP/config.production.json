@@ -1,5 +1,0 @@
-{
-  "schedule": "*/30 * * * * *",
-  "url": "https://postman-echo.com/headers",
-  "owner": ""
-}
