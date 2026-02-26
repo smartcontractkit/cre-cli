@@ -6,12 +6,14 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/charmbracelet/huh"
 	"github.com/joho/godotenv"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
 	"github.com/smartcontractkit/cre-cli/internal/constants"
+	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
 // sensitive information (not in configuration file)
@@ -67,6 +69,15 @@ func New(logger *zerolog.Logger, v *viper.Viper, cmd *cobra.Command, registryCha
 	target, err := GetTarget(v)
 	if err != nil {
 		return nil, err
+	}
+
+	if target == "" {
+		target, err = promptForTarget(logger)
+		if err != nil {
+			return nil, err
+		}
+		// Store the selected target so subsequent GetTarget() calls find it
+		v.Set(Flags.Target.Name, target)
 	}
 
 	logger.Debug().Msgf("Target:  %s", target)
@@ -168,4 +179,45 @@ func NormalizeHexKey(k string) string {
 		return k[2:]
 	}
 	return k
+}
+
+// promptForTarget discovers available targets from project.yaml and prompts the user to select one.
+func promptForTarget(logger *zerolog.Logger) (string, error) {
+	targets, err := GetAvailableTargets()
+	if err != nil {
+		return "", fmt.Errorf("target not set and unable to discover targets: %w\nSpecify --%s or set %s env var",
+			err, Flags.Target.Name, CreTargetEnvVar)
+	}
+
+	if len(targets) == 0 {
+		return "", fmt.Errorf("no targets found in project.yaml; specify --%s or set %s env var",
+			Flags.Target.Name, CreTargetEnvVar)
+	}
+
+	if len(targets) == 1 {
+		logger.Debug().Msgf("Auto-selecting target: %s", targets[0])
+		return targets[0], nil
+	}
+
+	var selected string
+	options := make([]huh.Option[string], len(targets))
+	for i, t := range targets {
+		options[i] = huh.NewOption(t, t)
+	}
+
+	form := huh.NewForm(
+		huh.NewGroup(
+			huh.NewSelect[string]().
+				Title("Select a target").
+				Description("No --target flag or CRE_TARGET env var set.").
+				Options(options...).
+				Value(&selected),
+		),
+	).WithTheme(ui.ChainlinkTheme())
+
+	if err := form.Run(); err != nil {
+		return "", fmt.Errorf("target selection cancelled: %w", err)
+	}
+
+	return selected, nil
 }

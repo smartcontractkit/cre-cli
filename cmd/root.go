@@ -219,12 +219,20 @@ func newRootCommand() *cobra.Command {
 					return err
 				}
 
+				// Stop spinner before AttachSettings — it may prompt for target selection
+				if showSpinner {
+					spinner.Stop()
+				}
+
 				err := runtimeContext.AttachSettings(cmd, isLoadDeploymentRPC(cmd))
 				if err != nil {
-					if showSpinner {
-						spinner.Stop()
-					}
 					return fmt.Errorf("%w", err)
+				}
+
+				// Restart spinner for remaining initialization
+				if showSpinner {
+					spinner = ui.NewSpinner()
+					spinner.Start("Loading settings...")
 				}
 			}
 
