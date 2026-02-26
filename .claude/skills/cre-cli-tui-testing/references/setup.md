@@ -9,7 +9,7 @@
 - `node` (or `nvm` + selected node version)
 - `forge`
 - `anvil`
-- `playwright-cli` (for browser automation flows)
+- `playwright-cli` (for browser automation flows — provided by `@playwright/cli`)
 
 ## Optional tools
 
@@ -40,6 +40,7 @@ sudo apt-get install -y expect curl build-essential
 curl -fsSL https://bun.sh/install | bash
 curl -L https://foundry.paradigm.xyz | bash
 foundryup
+npm install -g @playwright/cli@latest
 ```
 
 Install Node via nvm as needed.

@@ -36,7 +36,7 @@ jobs:
           head_sha="${{ github.event.pull_request.head.sha }}"
           changed_files="$(git diff --name-only "${base_sha}" "${head_sha}")"
 
-          if echo "${changed_files}" | grep -E '^(cmd/creinit/|cmd/creinit/template/|test/)' >/dev/null; then
+          if echo "${changed_files}" | grep -E '^(cmd/creinit/|cmd/creinit/template/|test/|internal/)' >/dev/null; then
             echo "run_template_compat=true" >> "$GITHUB_OUTPUT"
           else
             echo "run_template_compat=false" >> "$GITHUB_OUTPUT"

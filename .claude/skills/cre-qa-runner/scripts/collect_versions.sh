@@ -14,7 +14,17 @@ run_cmd() {
 
 echo "Date: $(date +%Y-%m-%d)"
 echo "OS: $(uname -srm)"
-echo "Terminal: ${TERM_PROGRAM:-unknown}"
+if [[ -n "${TERM_PROGRAM:-}" ]]; then
+  echo "Terminal: ${TERM_PROGRAM}"
+elif [[ -n "${CURSOR_CHANNEL:-}" ]]; then
+  echo "Terminal: cursor"
+elif [[ -n "${VSCODE_PID:-}" ]]; then
+  echo "Terminal: vscode"
+elif [[ -n "${TERM:-}" ]]; then
+  echo "Terminal: ${TERM}"
+else
+  echo "Terminal: unknown"
+fi
 run_cmd "Go" go version
 run_cmd "Node" node --version
 run_cmd "Bun" bun --version

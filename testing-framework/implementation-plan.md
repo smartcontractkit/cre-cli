@@ -783,7 +783,7 @@ With exact pins, TS templates behave like Go templates: the version is controlle
 | macOS runner | Add to CI matrix | No maintenance needed |
 | QA runner skill | Write `.cursor/skills/cre-qa-runner/SKILL.md` | Update when runbook or template list changes |
 | Add-template skill | Write `.cursor/skills/cre-add-template/SKILL.md` | Update when the template creation process changes |
-| Documentation | This document + analysis docs in `docs/testing-framework/` | Keep current as architecture evolves |
+| Documentation | This document + analysis docs in `testing-framework/` | Keep current as architecture evolves |
 
 **Maintenance effort estimates**:
 - New template added: ~1 hour (create files, update registry, add test entry, run tests)
@@ -821,7 +821,7 @@ With exact pins, TS templates behave like Go templates: the version is controlle
 
 ### Detailed Analysis Documents
 
-These documents in `docs/testing-framework/` contain the deep-dive analysis that informed this plan:
+These documents in `testing-framework/` contain the deep-dive analysis that informed this plan:
 
 | Document | Contents |
 |----------|----------|

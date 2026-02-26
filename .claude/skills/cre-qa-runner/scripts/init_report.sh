@@ -14,7 +14,7 @@ cp "${template}" "${out}"
 
 required_headers=("## Run Metadata" "## 2. Build & Smoke Test" "## Summary")
 for h in "${required_headers[@]}"; do
-  if ! rg -q "^${h}$" "${out}"; then
+  if ! grep -qE "^${h}$" "${out}"; then
     echo "ERROR: Report is missing required heading: ${h}" >&2
     exit 1
   fi

@@ -269,6 +269,7 @@ playwright-cli close
 
 ## Specific tasks
 
+* **Installation & CRE login automation** [references/setup.md](references/setup.md)
 * **Request mocking** [references/request-mocking.md](references/request-mocking.md)
 * **Running Playwright code** [references/running-code.md](references/running-code.md)
 * **Browser session management** [references/session-management.md](references/session-management.md)
