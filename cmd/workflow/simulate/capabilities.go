@@ -39,6 +39,7 @@ func NewManualTriggerCapabilities(
 	registry *capabilities.Registry,
 	cfg ManualTriggerCapabilitiesConfig,
 	dryRunChainWrite bool,
+	limits *SimulationLimits,
 ) (*ManualTriggers, error) {
 	// Cron
 	manualCronTrigger := fakes.NewManualCronTriggerService(lggr)
@@ -72,7 +73,13 @@ func NewManualTriggerCapabilities(
 			dryRunChainWrite,
 		)
 
-		evmServer := evmserver.NewClientServer(evm)
+		// Wrap with limits enforcement if limits are enabled
+		var evmCap evmserver.ClientCapability = evm
+		if limits != nil {
+			evmCap = NewLimitedEVMChain(evm, limits)
+		}
+
+		evmServer := evmserver.NewClientServer(evmCap)
 		if err := registry.Add(ctx, evmServer); err != nil {
 			return nil, err
 		}
@@ -129,7 +136,7 @@ func (m *ManualTriggers) Close() error {
 }
 
 // NewFakeCapabilities builds faked capabilities, then registers them with the capability registry.
-func NewFakeActionCapabilities(ctx context.Context, lggr logger.Logger, registry *capabilities.Registry, secretsPath string) ([]services.Service, error) {
+func NewFakeActionCapabilities(ctx context.Context, lggr logger.Logger, registry *capabilities.Registry, secretsPath string, limits *SimulationLimits) ([]services.Service, error) {
 	caps := make([]services.Service, 0)
 
 	// Consensus
@@ -142,7 +149,11 @@ func NewFakeActionCapabilities(ctx context.Context, lggr logger.Logger, registry
 		signers = append(signers, signer)
 	}
 	fakeConsensusNoDAG := fakes.NewFakeConsensusNoDAG(signers, lggr)
-	fakeConsensusServer := consensusserver.NewConsensusServer(fakeConsensusNoDAG)
+	var consensusCap consensusserver.ConsensusCapability = fakeConsensusNoDAG
+	if limits != nil {
+		consensusCap = NewLimitedConsensusNoDAG(fakeConsensusNoDAG, limits)
+	}
+	fakeConsensusServer := consensusserver.NewConsensusServer(consensusCap)
 	if err := registry.Add(ctx, fakeConsensusServer); err != nil {
 		return nil, err
 	}
@@ -150,7 +161,11 @@ func NewFakeActionCapabilities(ctx context.Context, lggr logger.Logger, registry
 
 	// HTTP Action
 	httpAction := fakes.NewDirectHTTPAction(lggr)
-	httpActionServer := httpserver.NewClientServer(httpAction)
+	var httpCap httpserver.ClientCapability = httpAction
+	if limits != nil {
+		httpCap = NewLimitedHTTPAction(httpAction, limits)
+	}
+	httpActionServer := httpserver.NewClientServer(httpCap)
 	if err := registry.Add(ctx, httpActionServer); err != nil {
 		return nil, err
 	}
@@ -158,7 +173,11 @@ func NewFakeActionCapabilities(ctx context.Context, lggr logger.Logger, registry
 
 	// Conf HTTP Action
 	confHTTPAction := fakes.NewDirectConfidentialHTTPAction(lggr, secretsPath)
-	confHTTPActionServer := confhttpserver.NewClientServer(confHTTPAction)
+	var confHTTPCap confhttpserver.ClientCapability = confHTTPAction
+	if limits != nil {
+		confHTTPCap = NewLimitedConfidentialHTTPAction(confHTTPAction, limits)
+	}
+	confHTTPActionServer := confhttpserver.NewClientServer(confHTTPCap)
 	if err := registry.Add(ctx, confHTTPActionServer); err != nil {
 		return nil, err
 	}
