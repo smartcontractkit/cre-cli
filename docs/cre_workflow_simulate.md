@@ -25,6 +25,7 @@ cre workflow simulate ./my-workflow
       --evm-tx-hash string    EVM trigger transaction hash (0x...)
   -h, --help                  help for simulate
       --http-payload string   HTTP trigger payload as JSON string or path to JSON file (with or without @ prefix)
+      --limits string         Production limits to enforce during simulation. Use 'default' for prod defaults, path to custom limits.json, or 'none' to disable (default "default")
       --non-interactive       Run without prompts; requires --trigger-index and inputs for the selected trigger type
       --trigger-index int     Index of the trigger to run (0-based) (default -1)
 ```
