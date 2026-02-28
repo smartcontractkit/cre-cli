@@ -435,8 +435,10 @@ func isLoadSettings(cmd *cobra.Command) bool {
 		"cre completion zsh":        {},
 		"cre help":                  {},
 		"cre update":                {},
-		"cre workflow":              {},
-		"cre workflow custom-build": {},
+		"cre workflow":                {},
+		"cre workflow custom-build":  {},
+		"cre workflow limits":        {},
+		"cre workflow limits export": {},
 		"cre workflow build":        {},
 		"cre account":               {},
 		"cre secrets":               {},
@@ -464,11 +466,13 @@ func isLoadCredentials(cmd *cobra.Command) bool {
 		"cre help":                  {},
 		"cre generate-bindings":     {},
 		"cre update":                {},
-		"cre workflow":              {},
+		"cre workflow":                {},
+		"cre workflow limits":        {},
+		"cre workflow limits export": {},
+		"cre account":                {},
+		"cre secrets":                {},
 		"cre workflow build":        {},
 		"cre workflow hash":         {},
-		"cre account":               {},
-		"cre secrets":               {},
 		"cre templates":             {},
 		"cre templates list":        {},
 		"cre templates add":         {},
@@ -535,10 +539,12 @@ func shouldShowSpinner(cmd *cobra.Command) bool {
 		"cre login":                 {}, // Has its own interactive flow
 		"cre logout":                {},
 		"cre update":                {},
-		"cre workflow":              {}, // Just shows help
+		"cre workflow":                {}, // Just shows help
+		"cre workflow limits":        {}, // Just shows help
+		"cre workflow limits export": {}, // Static data, no project needed
+		"cre account":                {}, // Just shows help
 		"cre workflow build":        {}, // Offline command, no async init
 		"cre workflow hash":         {}, // Offline command, has own spinner
-		"cre account":               {}, // Just shows help
 		"cre secrets":               {}, // Just shows help
 		"cre templates":             {}, // Just shows help
 		"cre templates list":        {},

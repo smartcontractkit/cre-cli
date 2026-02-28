@@ -1,6 +1,8 @@
 package simulate
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"crypto/ecdsa"
 	"encoding/json"
@@ -63,6 +65,8 @@ type Inputs struct {
 	EVMEventIndex  int    `validate:"-"`
 	// Experimental chains support (for chains not in official chain-selectors)
 	ExperimentalForwarders map[uint64]common.Address `validate:"-"` // forwarders keyed by chain ID
+	// Limits enforcement
+	LimitsPath string `validate:"-"` // "default" or path to custom limits JSON
 }
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
@@ -100,6 +104,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	simulateCmd.Flags().String("http-payload", "", "HTTP trigger payload as JSON string or path to JSON file (with or without @ prefix)")
 	simulateCmd.Flags().String("evm-tx-hash", "", "EVM trigger transaction hash (0x...)")
 	simulateCmd.Flags().Int("evm-event-index", -1, "EVM trigger log index (0-based)")
+	simulateCmd.Flags().String("limits", "default", "Production limits to enforce during simulation. Use 'default' for prod defaults, path to custom limits.json, or 'none' to disable")
 	return simulateCmd
 }
 
@@ -236,6 +241,7 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 		EVMTxHash:              v.GetString("evm-tx-hash"),
 		EVMEventIndex:          v.GetInt("evm-event-index"),
 		ExperimentalForwarders: experimentalForwarders,
+		LimitsPath:             v.GetString("limits"),
 	}, nil
 }
 
@@ -336,6 +342,40 @@ func (h *handler) Execute(inputs Inputs) error {
 		ui.Success("Workflow compiled")
 	}
 
+	// Resolve simulation limits
+	simLimits, err := ResolveLimits(inputs.LimitsPath)
+	if err != nil {
+		return fmt.Errorf("failed to resolve simulation limits: %w", err)
+	}
+
+	// WASM binary size pre-flight check
+	if simLimits != nil {
+		binaryLimit := simLimits.WASMBinarySize()
+		if binaryLimit > 0 && len(wasmFileBinary) > binaryLimit {
+			return fmt.Errorf("WASM binary size %d bytes exceeds limit of %d bytes", len(wasmFileBinary), binaryLimit)
+		}
+
+		compressedLimit := simLimits.WASMCompressedBinarySize()
+		if compressedLimit > 0 {
+			var buf bytes.Buffer
+			gz := gzip.NewWriter(&buf)
+			if _, err := gz.Write(wasmFileBinary); err != nil {
+				return fmt.Errorf("failed to compress WASM binary for size check: %w", err)
+			}
+			if err := gz.Close(); err != nil {
+				return fmt.Errorf("failed to finalize WASM compression: %w", err)
+			}
+			compressedSize := buf.Len()
+			if compressedSize > compressedLimit {
+				return fmt.Errorf("WASM compressed binary size %d bytes exceeds limit of %d bytes", compressedSize, compressedLimit)
+			}
+		}
+
+		ui.Success("Simulation limits enabled")
+		ui.Dim(simLimits.LimitsSummary())
+	}
+
+	// Read the config file
 	var config []byte
 	if cmdcommon.IsURL(inputs.ConfigPath) {
 		ui.Dim("Fetching config from URL...")
@@ -375,7 +415,7 @@ func (h *handler) Execute(inputs Inputs) error {
 	// if logger instance is set to DEBUG, that means verbosity flag is set by the user
 	verbosity := h.log.GetLevel() == zerolog.DebugLevel
 
-	err = run(ctx, wasmFileBinary, config, secrets, inputs, verbosity)
+	err = run(ctx, wasmFileBinary, config, secrets, inputs, verbosity, simLimits)
 	if err != nil {
 		return err
 	}
@@ -409,6 +449,7 @@ func run(
 	binary, config, secrets []byte,
 	inputs Inputs,
 	verbosity bool,
+	simLimits *SimulationLimits,
 ) error {
 	logCfg := logger.Config{Level: getLevel(verbosity, zapcore.InfoLevel)}
 	simLogger := NewSimulationLogger(verbosity)
@@ -479,14 +520,14 @@ func run(
 
 		triggerLggr := lggr.Named("TriggerCapabilities")
 		var err error
-		triggerCaps, err = NewManualTriggerCapabilities(ctx, triggerLggr, registry, manualTriggerCapConfig, !inputs.Broadcast)
+		triggerCaps, err = NewManualTriggerCapabilities(ctx, triggerLggr, registry, manualTriggerCapConfig, !inputs.Broadcast, simLimits)
 		if err != nil {
 			ui.Error(fmt.Sprintf("Failed to create trigger capabilities: %v", err))
 			os.Exit(1)
 		}
 
 		computeLggr := lggr.Named("ActionsCapabilities")
-		computeCaps, err := NewFakeActionCapabilities(ctx, computeLggr, registry, inputs.SecretsPath)
+		computeCaps, err := NewFakeActionCapabilities(ctx, computeLggr, registry, inputs.SecretsPath, simLimits)
 		if err != nil {
 			ui.Error(fmt.Sprintf("Failed to create compute capabilities: %v", err))
 			os.Exit(1)
@@ -638,6 +679,11 @@ func run(
 				commonsettings.Bool(true), // Allow all chains in simulation
 				map[string]bool{},
 			)
+			// Apply simulation limits to engine-level settings when --limits is set
+			if simLimits != nil {
+				applyEngineLimits(cfg, simLimits)
+				// Re-apply allow-all chains since applyEngineLimits does not touch ChainAllowed
+			}
 		},
 	})
 
