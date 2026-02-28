@@ -16,9 +16,9 @@ import (
 	evmcappb "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/chain-capabilities/evm"
 	evmserver "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/chain-capabilities/evm/server"
 	consensusserver "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/consensus/server"
+	"github.com/smartcontractkit/chainlink-common/pkg/types/core"
 	sdkpb "github.com/smartcontractkit/chainlink-protos/cre/go/sdk"
 	valuespb "github.com/smartcontractkit/chainlink-protos/cre/go/values/pb"
-	"github.com/smartcontractkit/chainlink-common/pkg/types/core"
 )
 
 // --- LimitedHTTPAction ---
@@ -72,12 +72,12 @@ func (l *LimitedHTTPAction) SendRequest(ctx context.Context, metadata commonCap.
 	return resp, nil
 }
 
-func (l *LimitedHTTPAction) Start(ctx context.Context) error                           { return l.inner.Start(ctx) }
-func (l *LimitedHTTPAction) Close() error                                              { return l.inner.Close() }
-func (l *LimitedHTTPAction) HealthReport() map[string]error                            { return l.inner.HealthReport() }
-func (l *LimitedHTTPAction) Name() string                                              { return l.inner.Name() }
-func (l *LimitedHTTPAction) Description() string                                       { return l.inner.Description() }
-func (l *LimitedHTTPAction) Ready() error                                              { return l.inner.Ready() }
+func (l *LimitedHTTPAction) Start(ctx context.Context) error { return l.inner.Start(ctx) }
+func (l *LimitedHTTPAction) Close() error                    { return l.inner.Close() }
+func (l *LimitedHTTPAction) HealthReport() map[string]error  { return l.inner.HealthReport() }
+func (l *LimitedHTTPAction) Name() string                    { return l.inner.Name() }
+func (l *LimitedHTTPAction) Description() string             { return l.inner.Description() }
+func (l *LimitedHTTPAction) Ready() error                    { return l.inner.Ready() }
 func (l *LimitedHTTPAction) Initialise(ctx context.Context, deps core.StandardCapabilitiesDependencies) error {
 	return l.inner.Initialise(ctx, deps)
 }
@@ -136,12 +136,14 @@ func (l *LimitedConfidentialHTTPAction) SendRequest(ctx context.Context, metadat
 	return resp, nil
 }
 
-func (l *LimitedConfidentialHTTPAction) Start(ctx context.Context) error        { return l.inner.Start(ctx) }
-func (l *LimitedConfidentialHTTPAction) Close() error                           { return l.inner.Close() }
-func (l *LimitedConfidentialHTTPAction) HealthReport() map[string]error         { return l.inner.HealthReport() }
-func (l *LimitedConfidentialHTTPAction) Name() string                           { return l.inner.Name() }
-func (l *LimitedConfidentialHTTPAction) Description() string                    { return l.inner.Description() }
-func (l *LimitedConfidentialHTTPAction) Ready() error                           { return l.inner.Ready() }
+func (l *LimitedConfidentialHTTPAction) Start(ctx context.Context) error { return l.inner.Start(ctx) }
+func (l *LimitedConfidentialHTTPAction) Close() error                    { return l.inner.Close() }
+func (l *LimitedConfidentialHTTPAction) HealthReport() map[string]error {
+	return l.inner.HealthReport()
+}
+func (l *LimitedConfidentialHTTPAction) Name() string        { return l.inner.Name() }
+func (l *LimitedConfidentialHTTPAction) Description() string { return l.inner.Description() }
+func (l *LimitedConfidentialHTTPAction) Ready() error        { return l.inner.Ready() }
 func (l *LimitedConfidentialHTTPAction) Initialise(ctx context.Context, deps core.StandardCapabilitiesDependencies) error {
 	return l.inner.Initialise(ctx, deps)
 }
@@ -182,12 +184,12 @@ func (l *LimitedConsensusNoDAG) Report(ctx context.Context, metadata commonCap.R
 	return l.inner.Report(ctx, metadata, input)
 }
 
-func (l *LimitedConsensusNoDAG) Start(ctx context.Context) error        { return l.inner.Start(ctx) }
-func (l *LimitedConsensusNoDAG) Close() error                           { return l.inner.Close() }
-func (l *LimitedConsensusNoDAG) HealthReport() map[string]error         { return l.inner.HealthReport() }
-func (l *LimitedConsensusNoDAG) Name() string                           { return l.inner.Name() }
-func (l *LimitedConsensusNoDAG) Description() string                    { return l.inner.Description() }
-func (l *LimitedConsensusNoDAG) Ready() error                           { return l.inner.Ready() }
+func (l *LimitedConsensusNoDAG) Start(ctx context.Context) error { return l.inner.Start(ctx) }
+func (l *LimitedConsensusNoDAG) Close() error                    { return l.inner.Close() }
+func (l *LimitedConsensusNoDAG) HealthReport() map[string]error  { return l.inner.HealthReport() }
+func (l *LimitedConsensusNoDAG) Name() string                    { return l.inner.Name() }
+func (l *LimitedConsensusNoDAG) Description() string             { return l.inner.Description() }
+func (l *LimitedConsensusNoDAG) Ready() error                    { return l.inner.Ready() }
 func (l *LimitedConsensusNoDAG) Initialise(ctx context.Context, deps core.StandardCapabilitiesDependencies) error {
 	return l.inner.Initialise(ctx, deps)
 }
@@ -266,13 +268,13 @@ func (l *LimitedEVMChain) UnregisterLogTrigger(ctx context.Context, triggerID st
 	return l.inner.UnregisterLogTrigger(ctx, triggerID, metadata, input)
 }
 
-func (l *LimitedEVMChain) ChainSelector() uint64      { return l.inner.ChainSelector() }
+func (l *LimitedEVMChain) ChainSelector() uint64           { return l.inner.ChainSelector() }
 func (l *LimitedEVMChain) Start(ctx context.Context) error { return l.inner.Start(ctx) }
-func (l *LimitedEVMChain) Close() error                { return l.inner.Close() }
-func (l *LimitedEVMChain) HealthReport() map[string]error { return l.inner.HealthReport() }
-func (l *LimitedEVMChain) Name() string                { return l.inner.Name() }
-func (l *LimitedEVMChain) Description() string         { return l.inner.Description() }
-func (l *LimitedEVMChain) Ready() error                { return l.inner.Ready() }
+func (l *LimitedEVMChain) Close() error                    { return l.inner.Close() }
+func (l *LimitedEVMChain) HealthReport() map[string]error  { return l.inner.HealthReport() }
+func (l *LimitedEVMChain) Name() string                    { return l.inner.Name() }
+func (l *LimitedEVMChain) Description() string             { return l.inner.Description() }
+func (l *LimitedEVMChain) Ready() error                    { return l.inner.Ready() }
 func (l *LimitedEVMChain) Initialise(ctx context.Context, deps core.StandardCapabilitiesDependencies) error {
 	return l.inner.Initialise(ctx, deps)
 }
