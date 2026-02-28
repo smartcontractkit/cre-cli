@@ -1,0 +1,69 @@
+{
+	"TriggerRegistrationsTimeout": "10s",
+	"TriggerSubscriptionTimeout": "15s",
+	"TriggerSubscriptionLimit": "10",
+	"TriggerEventQueueLimit": "50",
+	"TriggerEventQueueTimeout": "10m0s",
+	"CapabilityConcurrencyLimit": "30",
+	"CapabilityCallTimeout": "3m0s",
+	"SecretsConcurrencyLimit": "5",
+	"ExecutionConcurrencyLimit": "5",
+	"ExecutionTimeout": "5m0s",
+	"ExecutionResponseLimit": "100kb",
+	"ExecutionTimestampsEnabled": "false",
+	"WASMMemoryLimit": "100mb",
+	"WASMBinarySizeLimit": "100mb",
+	"WASMCompressedBinarySizeLimit": "20mb",
+	"WASMConfigSizeLimit": "1mb",
+	"WASMSecretsSizeLimit": "1mb",
+	"LogLineLimit": "1kb",
+	"LogEventLimit": "1000",
+	"CRONTrigger": {
+		"FastestScheduleInterval": "30s"
+	},
+	"HTTPTrigger": {
+		"RateLimit": "every30s:3"
+	},
+	"LogTrigger": {
+		"EventRateLimit": "every6s:10",
+		"EventSizeLimit": "5kb",
+		"FilterAddressLimit": "5",
+		"FilterTopicsPerSlotLimit": "10"
+	},
+	"ChainWrite": {
+		"TargetsLimit": "10",
+		"ReportSizeLimit": "5kb",
+		"EVM": {
+			"TransactionGasLimit": "5000000",
+			"GasLimit": {
+				"Default": "5000000",
+				"Values": {}
+			}
+		}
+	},
+	"ChainRead": {
+		"CallLimit": "15",
+		"LogQueryBlockLimit": "100",
+		"PayloadSizeLimit": "5kb"
+	},
+	"Consensus": {
+		"ObservationSizeLimit": "100kb",
+		"CallLimit": "20"
+	},
+	"HTTPAction": {
+		"CallLimit": "5",
+		"CacheAgeLimit": "10m0s",
+		"ConnectionTimeout": "10s",
+		"RequestSizeLimit": "10kb",
+		"ResponseSizeLimit": "100kb"
+	},
+	"ConfidentialHTTP": {
+		"CallLimit": "5",
+		"ConnectionTimeout": "10s",
+		"RequestSizeLimit": "10kb",
+		"ResponseSizeLimit": "100kb"
+	},
+	"Secrets": {
+		"CallLimit": "5"
+	}
+}
