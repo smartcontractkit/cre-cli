@@ -39,7 +39,7 @@ type RegisterWorkflowV2Parameters struct {
 
 	BinaryURL  string // required: URL location for the workflow binary WASM file
 	ConfigURL  string // optional: URL location for the workflow configuration file (default empty string)
-	Attributes []byte // optional: 1 to pause workflow after registration, 0 to activate it (default is 0)
+	Attributes []byte // optional: JSON-encoded workflow attributes (e.g. confidential flag, vault secrets)
 	KeepAlive  bool   // optional: whether to keep the other workflows of the same name and owner active after the new deploy (default is false)
 }
 

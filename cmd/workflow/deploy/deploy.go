@@ -187,6 +187,13 @@ func (h *handler) ValidateInputs() error {
 		return fmt.Errorf("--secret requires --confidential flag")
 	}
 
+	for _, s := range h.inputs.Secrets {
+		key, _, _ := strings.Cut(s, ":")
+		if strings.TrimSpace(key) == "" {
+			return fmt.Errorf("--secret value %q has empty key", s)
+		}
+	}
+
 	validate, err := validation.NewValidator()
 	if err != nil {
 		return fmt.Errorf("failed to initialize validator: %w", err)

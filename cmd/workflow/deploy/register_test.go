@@ -179,14 +179,16 @@ func TestBuildAttributes(t *testing.T) {
 	t.Run("non-confidential workflow returns empty attributes", func(t *testing.T) {
 		t.Parallel()
 		h := &handler{inputs: Inputs{Confidential: false}}
-		attrs := h.buildAttributes()
+		attrs, err := h.buildAttributes()
+		require.NoError(t, err)
 		assert.Equal(t, []byte{}, attrs)
 	})
 
 	t.Run("confidential workflow with no secrets", func(t *testing.T) {
 		t.Parallel()
 		h := &handler{inputs: Inputs{Confidential: true}}
-		attrs := h.buildAttributes()
+		attrs, err := h.buildAttributes()
+		require.NoError(t, err)
 
 		var parsed workflowAttributes
 		require.NoError(t, json.Unmarshal(attrs, &parsed))
@@ -200,7 +202,8 @@ func TestBuildAttributes(t *testing.T) {
 			Confidential: true,
 			Secrets:      []string{"API_KEY", "DB_PASS"},
 		}}
-		attrs := h.buildAttributes()
+		attrs, err := h.buildAttributes()
+		require.NoError(t, err)
 
 		var parsed workflowAttributes
 		require.NoError(t, json.Unmarshal(attrs, &parsed))
@@ -218,7 +221,8 @@ func TestBuildAttributes(t *testing.T) {
 			Confidential: true,
 			Secrets:      []string{"API_KEY:prod", "DB_PASS"},
 		}}
-		attrs := h.buildAttributes()
+		attrs, err := h.buildAttributes()
+		require.NoError(t, err)
 
 		var parsed workflowAttributes
 		require.NoError(t, json.Unmarshal(attrs, &parsed))

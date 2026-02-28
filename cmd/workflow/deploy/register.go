@@ -45,6 +45,11 @@ func (h *handler) prepareUpsertParams() (client.RegisterWorkflowV2Parameters, er
 		status = *h.existingWorkflowStatus
 	}
 
+	attrs, err := h.buildAttributes()
+	if err != nil {
+		return client.RegisterWorkflowV2Parameters{}, err
+	}
+
 	ui.Dim(fmt.Sprintf("Preparing transaction for workflowID: %s", workflowID))
 	return client.RegisterWorkflowV2Parameters{
 		WorkflowName: workflowName,
@@ -54,7 +59,7 @@ func (h *handler) prepareUpsertParams() (client.RegisterWorkflowV2Parameters, er
 		DonFamily:    h.inputs.DonFamily,
 		BinaryURL:    binaryURL,
 		ConfigURL:    configURL,
-		Attributes:   h.buildAttributes(),
+		Attributes:   attrs,
 		KeepAlive:    h.inputs.KeepAlive,
 	}, nil
 }
@@ -148,9 +153,9 @@ func (h *handler) handleUpsert(params client.RegisterWorkflowV2Parameters) error
 	return nil
 }
 
-func (h *handler) buildAttributes() []byte {
+func (h *handler) buildAttributes() ([]byte, error) {
 	if !h.inputs.Confidential {
-		return []byte{}
+		return []byte{}, nil
 	}
 
 	secrets := make([]secretIdentifier, 0, len(h.inputs.Secrets))
@@ -167,8 +172,11 @@ func (h *handler) buildAttributes() []byte {
 		VaultDonSecrets: secrets,
 	}
 
-	data, _ := json.Marshal(attrs)
-	return data
+	data, err := json.Marshal(attrs)
+	if err != nil {
+		return nil, fmt.Errorf("marshalling workflow attributes: %w", err)
+	}
+	return data, nil
 }
 
 type workflowAttributes struct {
