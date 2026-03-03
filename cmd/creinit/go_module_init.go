@@ -7,13 +7,8 @@ import (
 	"path/filepath"
 
 	"github.com/rs/zerolog"
-)
 
-const (
-	SdkVersion              = "v1.2.0"
-	EVMCapabilitiesVersion  = "v1.0.0-beta.5"
-	HTTPCapabilitiesVersion = "v1.0.0-beta.0"
-	CronCapabilitiesVersion = "v1.0.0-beta.0"
+	"github.com/smartcontractkit/cre-cli/internal/constants"
 )
 
 // InstalledDependencies contains info about installed Go dependencies
@@ -26,10 +21,10 @@ func initializeGoModule(logger *zerolog.Logger, workingDirectory, moduleName str
 	result := &InstalledDependencies{
 		ModuleName: moduleName,
 		Deps: []string{
-			"cre-sdk-go@" + SdkVersion,
-			"capabilities/blockchain/evm@" + EVMCapabilitiesVersion,
-			"capabilities/networking/http@" + HTTPCapabilitiesVersion,
-			"capabilities/scheduler/cron@" + CronCapabilitiesVersion,
+			"cre-sdk-go@" + constants.SdkVersion,
+			"capabilities/blockchain/evm@" + constants.EVMCapabilitiesVersion,
+			"capabilities/networking/http@" + constants.HTTPCapabilitiesVersion,
+			"capabilities/scheduler/cron@" + constants.CronCapabilitiesVersion,
 		},
 	}
 
@@ -40,16 +35,16 @@ func initializeGoModule(logger *zerolog.Logger, workingDirectory, moduleName str
 		}
 	}
 
-	if err := runCommand(logger, workingDirectory, "go", "get", "github.com/smartcontractkit/cre-sdk-go@"+SdkVersion); err != nil {
+	if err := runCommand(logger, workingDirectory, "go", "get", "github.com/smartcontractkit/cre-sdk-go@"+constants.SdkVersion); err != nil {
 		return nil, err
 	}
-	if err := runCommand(logger, workingDirectory, "go", "get", "github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm@"+EVMCapabilitiesVersion); err != nil {
+	if err := runCommand(logger, workingDirectory, "go", "get", "github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm@"+constants.EVMCapabilitiesVersion); err != nil {
 		return nil, err
 	}
-	if err := runCommand(logger, workingDirectory, "go", "get", "github.com/smartcontractkit/cre-sdk-go/capabilities/networking/http@"+HTTPCapabilitiesVersion); err != nil {
+	if err := runCommand(logger, workingDirectory, "go", "get", "github.com/smartcontractkit/cre-sdk-go/capabilities/networking/http@"+constants.HTTPCapabilitiesVersion); err != nil {
 		return nil, err
 	}
-	if err := runCommand(logger, workingDirectory, "go", "get", "github.com/smartcontractkit/cre-sdk-go/capabilities/scheduler/cron@"+CronCapabilitiesVersion); err != nil {
+	if err := runCommand(logger, workingDirectory, "go", "get", "github.com/smartcontractkit/cre-sdk-go/capabilities/scheduler/cron@"+constants.CronCapabilitiesVersion); err != nil {
 		return nil, err
 	}
 
@@ -75,7 +70,7 @@ func runCommand(logger *zerolog.Logger, dir, command string, args ...string) err
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		logger.Error().Err(err).Msgf("Command failed: %s %v\nOutput:\n%s", command, args, output)
+		logger.Info().Msgf("%s", string(output))
 		return err
 	}
 

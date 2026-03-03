@@ -17,7 +17,7 @@ func TestE2EInit_DevPoRTemplateTS(t *testing.T) {
 	tempDir := t.TempDir()
 	projectName := "e2e-init-test"
 	workflowName := "devPoRWorkflow"
-	templateID := "4"
+	templateName := "hello-world-ts" // Built-in TS template
 	projectRoot := filepath.Join(tempDir, projectName)
 	workflowDirectory := filepath.Join(projectRoot, workflowName)
 
@@ -34,9 +34,8 @@ func TestE2EInit_DevPoRTemplateTS(t *testing.T) {
 		"init",
 		"--project-root", tempDir,
 		"--project-name", projectName,
-		"--template-id", templateID,
+		"--template", templateName,
 		"--workflow-name", workflowName,
-		"--rpc-url", constants.DefaultEthSepoliaRpcUrl,
 	}
 	var stdout, stderr bytes.Buffer
 	initCmd := exec.Command(CLIPath, initArgs...)
@@ -56,7 +55,7 @@ func TestE2EInit_DevPoRTemplateTS(t *testing.T) {
 	require.FileExists(t, filepath.Join(projectRoot, constants.DefaultEnvFileName))
 	require.DirExists(t, workflowDirectory)
 
-	expectedFiles := []string{"README.md", "main.ts", "workflow.yaml", "package.json"}
+	expectedFiles := []string{"README.md", "main.ts", "main.test.ts", "package.json"}
 	for _, f := range expectedFiles {
 		require.FileExists(t, filepath.Join(workflowDirectory, f), "missing workflow file %q", f)
 	}

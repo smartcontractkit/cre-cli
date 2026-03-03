@@ -25,12 +25,7 @@
 
 # ==========================================================================
 staging-settings:
-  rpcs:
-    - chain-name: {{EthSepoliaChainName}}
-      url: {{EthSepoliaRpcUrl}}
-
+{{RPCsList}}
 # ==========================================================================
 production-settings:
-  rpcs:
-    - chain-name: {{EthSepoliaChainName}}
-      url: {{EthSepoliaRpcUrl}}
+{{RPCsList}}

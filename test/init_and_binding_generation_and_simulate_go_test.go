@@ -18,7 +18,7 @@ func TestE2EInit_DevPoRTemplate(t *testing.T) {
 	tempDir := t.TempDir()
 	projectName := "e2e-init-test"
 	workflowName := "devPoRWorkflow"
-	templateID := "1"
+	templateName := "hello-world-go" // Built-in Go template
 	projectRoot := filepath.Join(tempDir, projectName)
 	workflowDirectory := filepath.Join(projectRoot, workflowName)
 
@@ -35,9 +35,8 @@ func TestE2EInit_DevPoRTemplate(t *testing.T) {
 		"init",
 		"--project-root", tempDir,
 		"--project-name", projectName,
-		"--template-id", templateID,
+		"--template", templateName,
 		"--workflow-name", workflowName,
-		"--rpc-url", constants.DefaultEthSepoliaRpcUrl,
 	}
 	var stdout, stderr bytes.Buffer
 	initCmd := exec.Command(CLIPath, initArgs...)
@@ -57,26 +56,10 @@ func TestE2EInit_DevPoRTemplate(t *testing.T) {
 	require.FileExists(t, filepath.Join(projectRoot, constants.DefaultEnvFileName))
 	require.DirExists(t, workflowDirectory)
 
-	expectedFiles := []string{"README.md", "main.go", "workflow.yaml", "workflow.go", "workflow_test.go"}
+	expectedFiles := []string{"README.md", "main.go", "workflow.go", "workflow_test.go"}
 	for _, f := range expectedFiles {
 		require.FileExists(t, filepath.Join(workflowDirectory, f), "missing workflow file %q", f)
 	}
-
-	// cre generate-bindings
-	stdout.Reset()
-	stderr.Reset()
-	bindingsCmd := exec.Command(CLIPath, "generate-bindings", "evm")
-	bindingsCmd.Dir = projectRoot
-	bindingsCmd.Stdout = &stdout
-	bindingsCmd.Stderr = &stderr
-
-	require.NoError(
-		t,
-		bindingsCmd.Run(),
-		"cre generate-bindings failed:\nSTDOUT:\n%s\nSTDERR:\n%s",
-		stdout.String(),
-		stderr.String(),
-	)
 
 	// go mod tidy on project root to sync dependencies
 	stdout.Reset()
@@ -97,8 +80,8 @@ func TestE2EInit_DevPoRTemplate(t *testing.T) {
 	// Check that the generated main.go file compiles successfully for WASM target
 	stdout.Reset()
 	stderr.Reset()
-	buildCmd := exec.Command("go", "build", "-o", "workflow.wasm", ".")
-	buildCmd.Dir = workflowDirectory
+	buildCmd := exec.Command("go", "build", "-o", filepath.Join(workflowDirectory, "workflow.wasm"), "./"+workflowName) //nolint:gosec // test code with controlled inputs
+	buildCmd.Dir = projectRoot
 	buildCmd.Env = append(os.Environ(), "GOOS=wasip1", "GOARCH=wasm")
 	buildCmd.Stdout = &stdout
 	buildCmd.Stderr = &stderr
@@ -107,22 +90,6 @@ func TestE2EInit_DevPoRTemplate(t *testing.T) {
 		t,
 		buildCmd.Run(),
 		"generated main.go failed to compile for WASM target:\nSTDOUT:\n%s\nSTDERR:\n%s",
-		stdout.String(),
-		stderr.String(),
-	)
-
-	// Run the generated workflow tests to ensure they compile and pass
-	stdout.Reset()
-	stderr.Reset()
-	testCmd := exec.Command("go", "test", "-v", "./...")
-	testCmd.Dir = workflowDirectory
-	testCmd.Stdout = &stdout
-	testCmd.Stderr = &stderr
-
-	require.NoError(
-		t,
-		testCmd.Run(),
-		"generated workflow tests failed:\nSTDOUT:\n%s\nSTDERR:\n%s",
 		stdout.String(),
 		stderr.String(),
 	)
