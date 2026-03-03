@@ -17,7 +17,7 @@ func TestBuildRPCsListYAML(t *testing.T) {
 			[]string{"ethereum-testnet-sepolia", "ethereum-mainnet"},
 			map[string]string{
 				"ethereum-testnet-sepolia": "https://sepolia.example.com",
-				"ethereum-mainnet":        "https://mainnet.example.com",
+				"ethereum-mainnet":         "https://mainnet.example.com",
 			},
 		)
 		assert.Contains(t, yaml, "chain-name: ethereum-testnet-sepolia")

@@ -54,13 +54,13 @@ tags: ["aws", "s3"]
 	mux := http.NewServeMux()
 	mux.HandleFunc("/repos/test/templates/git/trees/main", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(treeResp)
+		_ = json.NewEncoder(w).Encode(treeResp)
 	})
 	mux.HandleFunc("/test/templates/main/building-blocks/kv-store/kv-store-go/.cre/template.yaml", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(templateYAML))
+		_, _ = w.Write([]byte(templateYAML))
 	})
 	mux.HandleFunc("/test/templates/main/building-blocks/kv-store/kv-store-ts/.cre/template.yaml", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(templateYAML2))
+		_, _ = w.Write([]byte(templateYAML2))
 	})
 
 	server := httptest.NewServer(mux)

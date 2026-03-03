@@ -1,15 +1,15 @@
 import { CronCapability, handler, Runner, type Runtime } from "@chainlink/cre-sdk";
 
-type Config = {
+export type Config = {
   schedule: string;
 };
 
-const onCronTrigger = (runtime: Runtime<Config>): string => {
+export const onCronTrigger = (runtime: Runtime<Config>): string => {
   runtime.log("Hello world! Workflow triggered.");
   return "Hello world!";
 };
 
-const initWorkflow = (config: Config) => {
+export const initWorkflow = (config: Config) => {
   const cron = new CronCapability();
 
   return [

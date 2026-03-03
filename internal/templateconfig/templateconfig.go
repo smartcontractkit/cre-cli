@@ -22,7 +22,7 @@ var DefaultSources = []templaterepo.RepoSource{
 	{
 		Owner: "smartcontractkit",
 		Repo:  "cre-templates",
-		Ref:   "feature/template-standard",
+		Ref:   "main",
 	},
 	{
 		Owner: "smartcontractkit",

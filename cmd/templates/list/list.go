@@ -96,7 +96,7 @@ func (h *handler) Execute(refresh bool) error {
 	}
 
 	ui.Dim("Install a template with:")
-	ui.Command(fmt.Sprintf("  cre init --template=<id>"))
+	ui.Command("  cre init --template=<id>")
 	ui.Line()
 
 	return nil

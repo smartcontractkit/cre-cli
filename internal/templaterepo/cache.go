@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -124,7 +125,8 @@ func (c *Cache) SaveTemplateList(source RepoSource, templates []TemplateSummary,
 
 // TarballPath returns the path where a tarball should be cached.
 func (c *Cache) TarballPath(source RepoSource, sha string) string {
-	return filepath.Join(c.cacheDir, "tarballs", fmt.Sprintf("%s-%s-%s.tar.gz", source.Owner, source.Repo, sha))
+	return filepath.Join(c.cacheDir, "tarballs", fmt.Sprintf("%s-%s-%s.tar.gz",
+		sanitizePathComponent(source.Owner), sanitizePathComponent(source.Repo), sanitizePathComponent(sha)))
 }
 
 // IsTarballCached checks if a tarball is cached and not expired.
@@ -149,5 +151,18 @@ func (c *Cache) InvalidateTemplateList(source RepoSource) {
 }
 
 func (c *Cache) templateListPath(source RepoSource) string {
-	return filepath.Join(c.cacheDir, fmt.Sprintf("%s-%s-%s-templates.json", source.Owner, source.Repo, source.Ref))
+	return filepath.Join(c.cacheDir, fmt.Sprintf("%s-%s-%s-templates.json",
+		sanitizePathComponent(source.Owner), sanitizePathComponent(source.Repo), sanitizePathComponent(source.Ref)))
+}
+
+// sanitizePathComponent strips directory separators and path traversal sequences
+// from external values to prevent escaping the cache directory.
+func sanitizePathComponent(s string) string {
+	s = strings.ReplaceAll(s, "/", "_")
+	s = strings.ReplaceAll(s, "\\", "_")
+	s = strings.ReplaceAll(s, "..", "_")
+	if s == "" {
+		s = "_"
+	}
+	return s
 }

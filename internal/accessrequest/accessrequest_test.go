@@ -47,7 +47,7 @@ func TestSubmitAccessRequest(t *testing.T) {
 					},
 				}
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(resp)
+				_ = json.NewEncoder(w).Encode(resp)
 			},
 			wantErr: false,
 		},
@@ -64,7 +64,7 @@ func TestSubmitAccessRequest(t *testing.T) {
 					},
 				}
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(resp)
+				_ = json.NewEncoder(w).Encode(resp)
 			},
 			wantErr:    true,
 			wantErrMsg: "organization is not eligible",
@@ -82,7 +82,7 @@ func TestSubmitAccessRequest(t *testing.T) {
 					},
 				}
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(resp)
+				_ = json.NewEncoder(w).Encode(resp)
 			},
 			wantErr:    true,
 			wantErrMsg: "access request was not successful",
@@ -106,7 +106,7 @@ func TestSubmitAccessRequest(t *testing.T) {
 					},
 				}
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(resp)
+				_ = json.NewEncoder(w).Encode(resp)
 			},
 			wantErr:    true,
 			wantErrMsg: "graphql request failed",

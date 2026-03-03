@@ -3,6 +3,7 @@ package accessrequest
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/charmbracelet/huh"
 	"github.com/machinebox/graphql"
@@ -66,9 +67,10 @@ func (r *Requester) PromptAndSubmitRequest(ctx context.Context) error {
 			huh.NewText().
 				Title("Briefly describe your use case").
 				Description("What are you building with CRE?").
+				CharLimit(1500).
 				Value(&useCase).
 				Validate(func(s string) error {
-					if s == "" {
+					if strings.TrimSpace(s) == "" {
 						return fmt.Errorf("use case description is required")
 					}
 					return nil
@@ -104,7 +106,7 @@ func (r *Requester) SubmitAccessRequest(ctx context.Context, useCase string) err
 
 	req := graphql.NewRequest(requestDeploymentAccessMutation)
 	req.Var("input", map[string]any{
-		"description": useCase,
+		"description": useCase + " (Request from CLI)",
 	})
 
 	var resp struct {

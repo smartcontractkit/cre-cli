@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	posixpath "path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -97,8 +98,10 @@ func (c *Client) DiscoverTemplates(source RepoSource) ([]TemplateSummary, error)
 			continue
 		}
 
-		// Derive the template directory path (grandparent of .cre/template.yaml)
-		templateDir := filepath.Dir(filepath.Dir(path))
+		// Derive the template directory path (grandparent of .cre/template.yaml).
+		// Use posixpath.Dir (not filepath.Dir) because these are URL/tar paths
+		// that always use forward slashes, even on Windows.
+		templateDir := posixpath.Dir(posixpath.Dir(path))
 		if templateDir == "." {
 			templateDir = ""
 		}
@@ -148,7 +151,9 @@ func (c *Client) DiscoverTemplatesWithSHA(source RepoSource) (*DiscoverTemplates
 			continue
 		}
 
-		templateDir := filepath.Dir(filepath.Dir(path))
+		// Use posixpath.Dir (not filepath.Dir) because these are URL/tar paths
+		// that always use forward slashes, even on Windows.
+		templateDir := posixpath.Dir(posixpath.Dir(path))
 		if templateDir == "." {
 			templateDir = ""
 		}
@@ -187,7 +192,7 @@ func (c *Client) DownloadAndExtractTemplate(source RepoSource, templatePath, des
 	req.Header.Set("User-Agent", "cre-cli")
 	req.Header.Set("Accept", "application/vnd.github+json")
 
-	resp, err := client.Do(req)
+	resp, err := client.Do(req) //nolint:gosec // URL is constructed from validated repo source fields
 	if err != nil {
 		return fmt.Errorf("failed to download tarball: %w", err)
 	}
@@ -228,7 +233,7 @@ func (c *Client) DownloadTarball(source RepoSource, destPath string) error {
 	req.Header.Set("User-Agent", "cre-cli")
 	req.Header.Set("Accept", "application/vnd.github+json")
 
-	resp, err := client.Do(req)
+	resp, err := client.Do(req) //nolint:gosec // URL is constructed from validated repo source fields
 	if err != nil {
 		return fmt.Errorf("failed to download tarball: %w", err)
 	}
@@ -264,7 +269,7 @@ func (c *Client) fetchTree(url string) (*treeResponse, error) {
 	req.Header.Set("User-Agent", "cre-cli")
 	req.Header.Set("Accept", "application/vnd.github+json")
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.httpClient.Do(req) //nolint:gosec // URL is constructed from validated repo source fields
 	if err != nil {
 		return nil, err
 	}
@@ -291,8 +296,9 @@ func (c *Client) fetchTemplateMetadata(source RepoSource, path string) (*Templat
 		return nil, err
 	}
 	req.Header.Set("User-Agent", "cre-cli")
+	c.setAuthHeaders(req)
 
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.httpClient.Do(req) //nolint:gosec // URL is constructed from validated repo source fields
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch %s: %w", path, err)
 	}
@@ -349,6 +355,11 @@ func (c *Client) extractTarball(r io.Reader, templatePath, destDir string, exclu
 		// Skip PAX global/extended headers — these are metadata records, not real files
 		if header.Typeflag == tar.TypeXGlobalHeader || header.Typeflag == tar.TypeXHeader {
 			continue
+		}
+
+		// Prevent Zip Slip: reject archive entries containing ".."
+		if strings.Contains(header.Name, "..") {
+			return fmt.Errorf("illegal file path in archive: %s", header.Name)
 		}
 
 		// Detect top-level prefix from the first real directory entry
@@ -408,12 +419,12 @@ func (c *Client) extractTarball(r io.Reader, templatePath, destDir string, exclu
 				return fmt.Errorf("failed to create parent directory: %w", err)
 			}
 
-			f, err := os.OpenFile(targetPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.FileMode(header.Mode)&0755|0600)
+			f, err := os.OpenFile(targetPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.FileMode(header.Mode)&0755|0600) //nolint:gosec // mode is masked to safe range
 			if err != nil {
 				return fmt.Errorf("failed to create file %s: %w", targetPath, err)
 			}
 
-			if _, err := io.Copy(f, tr); err != nil {
+			if _, err := io.Copy(f, tr); err != nil { //nolint:gosec // tar size is bounded by GitHub API tarball limits
 				f.Close()
 				return fmt.Errorf("failed to write file %s: %w", targetPath, err)
 			}

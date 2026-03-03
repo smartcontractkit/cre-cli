@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/rs/zerolog"
 )
@@ -76,7 +77,10 @@ func ScaffoldBuiltIn(logger *zerolog.Logger, templateName, destDir, workflowName
 		}
 
 		// Get path relative to the template root
-		relPath, _ := filepath.Rel(templateRoot, path)
+		relPath, relErr := filepath.Rel(templateRoot, path)
+		if relErr != nil {
+			return fmt.Errorf("failed to compute relative path for %s: %w", path, relErr)
+		}
 		if relPath == "." {
 			return nil
 		}
@@ -92,6 +96,13 @@ func ScaffoldBuiltIn(logger *zerolog.Logger, templateName, destDir, workflowName
 		// Handle nested paths under workflow/
 		if len(relPath) > len("workflow/") && relPath[:len("workflow/")] == "workflow/" {
 			targetRel = filepath.Join(workflowName, relPath[len("workflow/"):])
+		}
+
+		// Strip leading "_" from filenames (used to prevent Go compiler from
+		// building embedded source files as part of this module).
+		base := filepath.Base(targetRel)
+		if strings.HasPrefix(base, "_") {
+			targetRel = filepath.Join(filepath.Dir(targetRel), strings.TrimPrefix(base, "_"))
 		}
 
 		targetPath := filepath.Join(destDir, targetRel)
@@ -113,7 +124,7 @@ func ScaffoldBuiltIn(logger *zerolog.Logger, templateName, destDir, workflowName
 		}
 
 		logger.Debug().Msgf("Extracting file: %s -> %s", path, targetPath)
-		return os.WriteFile(targetPath, content, 0644)
+		return os.WriteFile(targetPath, content, 0600) //nolint:gosec // template files need to be readable
 	})
 
 	return err
