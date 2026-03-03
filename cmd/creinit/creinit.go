@@ -507,4 +507,3 @@ func (h *handler) pathExists(filePath string) bool {
 	}
 	return false
 }
-
