@@ -307,7 +307,7 @@ func (h *handler) Execute(inputs Inputs) error {
 		}
 
 		// Initialize Go module if needed
-		if selectedTemplate.Language == "go" && !h.pathExists(filepath.Join(projectRoot, "go.mod")) {
+		if selectedTemplate.Language == constants.WorkflowLanguageGolang && !h.pathExists(filepath.Join(projectRoot, "go.mod")) {
 			projectName := filepath.Base(projectRoot)
 			if _, err := initializeGoModule(h.log, projectRoot, projectName); err != nil {
 				return fmt.Errorf("failed to initialize Go module: %w", err)
@@ -316,7 +316,7 @@ func (h *handler) Execute(inputs Inputs) error {
 
 		// Generate workflow settings
 		entryPoint := "."
-		if selectedTemplate.Language == "typescript" {
+		if selectedTemplate.Language == constants.WorkflowLanguageTypeScript {
 			entryPoint = "./main.ts"
 		}
 
@@ -353,9 +353,21 @@ func (h *handler) Execute(inputs Inputs) error {
 
 	// For templates that ship their own go.mod (projectDir set), run go mod tidy
 	// to ensure go.sum is populated after extraction.
-	if selectedTemplate.Language == "go" && h.pathExists(filepath.Join(projectRoot, "go.mod")) {
+	if selectedTemplate.Language == constants.WorkflowLanguageGolang && h.pathExists(filepath.Join(projectRoot, "go.mod")) {
 		if err := runCommand(h.log, projectRoot, "go", "mod", "tidy"); err != nil {
 			h.log.Warn().Err(err).Msg("go mod tidy failed; you may need to run it manually")
+		}
+	}
+
+	// Install contracts dependencies for TypeScript projects when a contracts/package.json exists
+	if selectedTemplate.Language == constants.WorkflowLanguageTypeScript {
+		contractsPkg := filepath.Join(projectRoot, "contracts", "package.json")
+		if h.pathExists(contractsPkg) {
+			spinner.Update("Installing contracts dependencies...")
+			if err := runBunInstall(h.log, filepath.Join(projectRoot, "contracts")); err != nil {
+				spinner.Stop()
+				return fmt.Errorf("failed to install contracts dependencies: %w", err)
+			}
 		}
 	}
 
@@ -364,12 +376,7 @@ func (h *handler) Execute(inputs Inputs) error {
 	ui.Dim("Files created in " + projectRoot)
 
 	if h.runtimeContext != nil {
-		switch selectedTemplate.Language {
-		case "go":
-			h.runtimeContext.Workflow.Language = constants.WorkflowLanguageGolang
-		case "typescript":
-			h.runtimeContext.Workflow.Language = constants.WorkflowLanguageTypeScript
-		}
+		h.runtimeContext.Workflow.Language = selectedTemplate.Language
 	}
 
 	h.printSuccessMessage(projectRoot, selectedTemplate, workflowName)
@@ -382,9 +389,9 @@ func (h *handler) findExistingProject(dir string) (projectRoot string, language 
 	for {
 		if h.pathExists(filepath.Join(dir, constants.DefaultProjectSettingsFileName)) {
 			if h.pathExists(filepath.Join(dir, constants.DefaultIsGoFileName)) {
-				return dir, "go", nil
+				return dir, constants.WorkflowLanguageGolang, nil
 			}
-			return dir, "typescript", nil
+			return dir, constants.WorkflowLanguageTypeScript, nil
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {
@@ -423,7 +430,7 @@ func (h *handler) printSuccessMessage(projectRoot string, tmpl *templaterepo.Tem
 	}
 
 	var sb strings.Builder
-	if language == "go" {
+	if language == constants.WorkflowLanguageGolang {
 		sb.WriteString(ui.RenderStep("1. Navigate to your project:") + "\n")
 		sb.WriteString("     " + ui.RenderDim("cd "+filepath.Base(projectRoot)) + "\n\n")
 

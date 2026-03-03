@@ -37,7 +37,7 @@ func (m *mockRegistry) GetTemplate(name string, refresh bool) (*templaterepo.Tem
 
 func (m *mockRegistry) ScaffoldTemplate(tmpl *templaterepo.TemplateSummary, destDir, workflowName string, onProgress func(string)) error {
 	var files map[string]string
-	if tmpl.Language == "go" {
+	if tmpl.Language == constants.WorkflowLanguageGolang {
 		files = map[string]string{
 			"main.go":   "package main\n",
 			"README.md": "# Test\n",

@@ -5,7 +5,9 @@ Generate bindings from contract ABI
 ### Synopsis
 
 This command generates bindings from contract ABI files.
-Supports EVM chain family and Go language.
+Supports EVM chain family with Go and TypeScript languages.
+The target language is auto-detected from project files, or can be
+specified explicitly with --language.
 Each contract gets its own package subdirectory to avoid naming conflicts.
 For example, IERC20.abi generates bindings in generated/ierc20/ package.
 
@@ -17,17 +19,17 @@ cre generate-bindings <chain-family> [optional flags]
 
 ```
   cre generate-bindings evm
+  cre generate-bindings evm --language typescript
 ```
 
 ### Options
 
 ```
   -a, --abi string            Path to ABI directory (defaults to contracts/{chain-family}/src/abi/)
-      --go                    Generate Go bindings
   -h, --help                  help for generate-bindings
+  -l, --language string       Target language: go, typescript (auto-detected from project files when omitted)
   -k, --pkg string            Base package name (each contract gets its own subdirectory) (default "bindings")
   -p, --project-root string   Path to project root directory (defaults to current directory)
-      --typescript            Generate TypeScript bindings
 ```
 
 ### Options inherited from parent commands

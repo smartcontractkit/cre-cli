@@ -21,8 +21,8 @@ import (
 type Inputs struct {
 	ProjectRoot string `validate:"required,dir" cli:"--project-root"`
 	ChainFamily string `validate:"required,oneof=evm" cli:"--chain-family"`
-	GoLang      bool   `cli:"--go"`
-	TypeScript  bool   `cli:"--typescript"`
+	GoLang      bool
+	TypeScript  bool
 	AbiPath     string `validate:"required,path_read" cli:"--abi"`
 	PkgName     string `validate:"required" cli:"--pkg"`
 	GoOutPath   string // contracts/{chain}/src/generated — set when GoLang is true
@@ -34,7 +34,9 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 		Use:   "generate-bindings <chain-family>",
 		Short: "Generate bindings from contract ABI",
 		Long: `This command generates bindings from contract ABI files.
-Supports EVM chain family and Go language.
+Supports EVM chain family with Go and TypeScript languages.
+The target language is auto-detected from project files, or can be
+specified explicitly with --language.
 Each contract gets its own package subdirectory to avoid naming conflicts.
 For example, IERC20.abi generates bindings in generated/ierc20/ package.`,
 		Example: "  cre generate-bindings evm",
@@ -55,8 +57,7 @@ For example, IERC20.abi generates bindings in generated/ierc20/ package.`,
 	}
 
 	generateBindingsCmd.Flags().StringP("project-root", "p", "", "Path to project root directory (defaults to current directory)")
-	generateBindingsCmd.Flags().Bool("go", false, "Generate Go bindings")
-	generateBindingsCmd.Flags().Bool("typescript", false, "Generate TypeScript bindings")
+	generateBindingsCmd.Flags().StringP("language", "l", "", "Target language: go, typescript (auto-detected from project files when omitted)")
 	generateBindingsCmd.Flags().StringP("abi", "a", "", "Path to ABI directory (defaults to contracts/{chain-family}/src/abi/)")
 	generateBindingsCmd.Flags().StringP("pkg", "k", "bindings", "Base package name (each contract gets its own subdirectory)")
 
@@ -120,14 +121,21 @@ func (h *handler) ResolveInputs(args []string, v *viper.Viper) (Inputs, error) {
 	// Chain family is now a positional argument
 	chainFamily := args[0]
 
-	// Resolve languages: flags take precedence, else auto-detect
-	goLang := v.GetBool("go")
-	typescript := v.GetBool("typescript")
-	if !goLang && !typescript {
+	// Resolve languages: --language flag takes precedence, else auto-detect
+	var goLang, typescript bool
+	langFlag := strings.ToLower(strings.TrimSpace(v.GetString("language")))
+	switch {
+	case langFlag == "":
 		goLang, typescript = detectLanguages(projectRoot)
-	}
-	if !goLang && !typescript {
-		return Inputs{}, fmt.Errorf("no target language specified and none detected (use --go and/or --typescript, or ensure project contains .go or .ts files)")
+		if !goLang && !typescript {
+			return Inputs{}, fmt.Errorf("no target language detected (use --language go or --language typescript, or ensure project contains .go or .ts files)")
+		}
+	case langFlag == constants.WorkflowLanguageGolang:
+		goLang = true
+	case langFlag == constants.WorkflowLanguageTypeScript:
+		typescript = true
+	default:
+		return Inputs{}, fmt.Errorf("unsupported language %q (supported: go, typescript)", langFlag)
 	}
 
 	// Unified ABI path for both languages: contracts/{chain}/src/abi
@@ -192,10 +200,10 @@ func (h *handler) ValidateInputs(inputs Inputs) error {
 
 	// Ensure at least one output path is set for the active language(s)
 	if inputs.GoLang && inputs.GoOutPath == "" {
-		return fmt.Errorf("Go output path is required when --go is set")
+		return fmt.Errorf("Go output path is required when language is go")
 	}
 	if inputs.TypeScript && inputs.TSOutPath == "" {
-		return fmt.Errorf("TypeScript output path is required when --typescript is set")
+		return fmt.Errorf("TypeScript output path is required when language is typescript")
 	}
 
 	h.validated = true

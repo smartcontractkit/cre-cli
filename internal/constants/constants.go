@@ -51,7 +51,7 @@ const (
 
 	WorkflowRegistryV2TypeAndVersion = "WorkflowRegistry 2.0.0"
 
-	WorkflowLanguageGolang     = "golang"
+	WorkflowLanguageGolang     = "go"
 	WorkflowLanguageTypeScript = "typescript"
 	WorkflowLanguageWasm       = "wasm"
 

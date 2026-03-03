@@ -72,9 +72,8 @@ func TestResolveInputs_DefaultFallbacks(t *testing.T) {
 	runtimeCtx := &runtime.Context{}
 	handler := newHandler(runtimeCtx)
 
-	// Create a .go file for auto-detection (or use --go flag)
 	v := viper.New()
-	v.Set("go", true)
+	v.Set("language", "go")
 	v.Set("pkg", "bindings")
 
 	inputs, err := handler.ResolveInputs([]string{"evm"}, v)
@@ -115,7 +114,7 @@ func TestResolveInputs_TypeScriptDefaults(t *testing.T) {
 	handler := newHandler(runtimeCtx)
 
 	v := viper.New()
-	v.Set("typescript", true)
+	v.Set("language", "typescript")
 	v.Set("pkg", "bindings")
 
 	inputs, err := handler.ResolveInputs([]string{"evm"}, v)
@@ -247,7 +246,7 @@ func TestExplicitGoFlag(t *testing.T) {
 	handler := newHandler(runtimeCtx)
 
 	v := viper.New()
-	v.Set("go", true)
+	v.Set("language", "go")
 	inputs, err := handler.ResolveInputs([]string{"evm"}, v)
 	require.NoError(t, err)
 
@@ -277,7 +276,7 @@ func TestExplicitTypeScriptFlag(t *testing.T) {
 	handler := newHandler(runtimeCtx)
 
 	v := viper.New()
-	v.Set("typescript", true)
+	v.Set("language", "typescript")
 	inputs, err := handler.ResolveInputs([]string{"evm"}, v)
 	require.NoError(t, err)
 
@@ -290,7 +289,7 @@ func TestExplicitTypeScriptFlag(t *testing.T) {
 	assert.Equal(t, expectedTSOut, actualTSOut)
 }
 
-func TestBothFlagsExplicit(t *testing.T) {
+func TestAutoDetectBothLanguages(t *testing.T) {
 	tempDir, err := os.MkdirTemp("", "generate-bindings-test")
 	require.NoError(t, err)
 	defer os.RemoveAll(tempDir)
@@ -298,6 +297,9 @@ func TestBothFlagsExplicit(t *testing.T) {
 	contractsDir := filepath.Join(tempDir, "contracts")
 	err = os.MkdirAll(contractsDir, 0755)
 	require.NoError(t, err)
+
+	require.NoError(t, os.WriteFile(filepath.Join(tempDir, "main.go"), []byte("package main\n"), 0600))
+	require.NoError(t, os.WriteFile(filepath.Join(tempDir, "main.ts"), []byte("console.log('hi')\n"), 0600))
 
 	originalDir, err := os.Getwd()
 	require.NoError(t, err)
@@ -308,8 +310,6 @@ func TestBothFlagsExplicit(t *testing.T) {
 	handler := newHandler(runtimeCtx)
 
 	v := viper.New()
-	v.Set("go", true)
-	v.Set("typescript", true)
 	inputs, err := handler.ResolveInputs([]string{"evm"}, v)
 	require.NoError(t, err)
 
@@ -328,6 +328,9 @@ func TestOutputPathsSeparation(t *testing.T) {
 	err = os.MkdirAll(contractsDir, 0755)
 	require.NoError(t, err)
 
+	require.NoError(t, os.WriteFile(filepath.Join(tempDir, "main.go"), []byte("package main\n"), 0600))
+	require.NoError(t, os.WriteFile(filepath.Join(tempDir, "main.ts"), []byte("console.log('hi')\n"), 0600))
+
 	originalDir, err := os.Getwd()
 	require.NoError(t, err)
 	defer func() { _ = os.Chdir(originalDir) }()
@@ -337,8 +340,6 @@ func TestOutputPathsSeparation(t *testing.T) {
 	handler := newHandler(runtimeCtx)
 
 	v := viper.New()
-	v.Set("go", true)
-	v.Set("typescript", true)
 	inputs, err := handler.ResolveInputs([]string{"evm"}, v)
 	require.NoError(t, err)
 
@@ -377,7 +378,7 @@ func TestEndToEnd_TypeScriptGeneration(t *testing.T) {
 	handler := newHandler(runtimeCtx)
 
 	v := viper.New()
-	v.Set("typescript", true)
+	v.Set("language", "typescript")
 	v.Set("pkg", "bindings")
 	inputs, err := handler.ResolveInputs([]string{"evm"}, v)
 	require.NoError(t, err)
@@ -403,7 +404,7 @@ func TestResolveInputs_CustomProjectRoot(t *testing.T) {
 	// Test with custom project root
 	v := viper.New()
 	v.Set("project-root", tempDir)
-	v.Set("go", true)
+	v.Set("language", "go")
 	v.Set("pkg", "bindings")
 
 	_, err = handler.ResolveInputs([]string{"evm"}, v)
@@ -447,7 +448,7 @@ func TestResolveInputs_EmptyProjectRoot(t *testing.T) {
 	// Test with empty project root (should use current directory)
 	v := viper.New()
 	v.Set("project-root", "")
-	v.Set("go", true)
+	v.Set("language", "go")
 	v.Set("pkg", "bindings")
 
 	inputs, err := handler.ResolveInputs([]string{"evm"}, v)
@@ -591,7 +592,7 @@ func TestValidateInputs_NoLanguageSpecified(t *testing.T) {
 	runtimeCtx := &runtime.Context{}
 	handler := newHandler(runtimeCtx)
 
-	// ResolveInputs should error when neither --go nor --typescript and nothing detected
+	// ResolveInputs should error when no --language and nothing detected
 	v := viper.New()
 	_, err = handler.ResolveInputs([]string{"evm"}, v)
 	require.Error(t, err)
