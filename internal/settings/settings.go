@@ -72,7 +72,11 @@ func New(logger *zerolog.Logger, v *viper.Viper, cmd *cobra.Command, registryCha
 	}
 
 	if target == "" {
-		target, err = promptForTarget(logger)
+		if v.GetBool(Flags.NonInteractive.Name) {
+			target, err = autoSelectTarget(logger)
+		} else {
+			target, err = promptForTarget(logger)
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -179,6 +183,28 @@ func NormalizeHexKey(k string) string {
 		return k[2:]
 	}
 	return k
+}
+
+// autoSelectTarget discovers available targets and auto-selects when possible (non-interactive mode).
+func autoSelectTarget(logger *zerolog.Logger) (string, error) {
+	targets, err := GetAvailableTargets()
+	if err != nil {
+		return "", fmt.Errorf("target not set and unable to discover targets: %w\nSpecify --%s or set %s env var",
+			err, Flags.Target.Name, CreTargetEnvVar)
+	}
+
+	if len(targets) == 0 {
+		return "", fmt.Errorf("no targets found in project.yaml; specify --%s or set %s env var",
+			Flags.Target.Name, CreTargetEnvVar)
+	}
+
+	if len(targets) == 1 {
+		logger.Debug().Msgf("Auto-selecting target: %s", targets[0])
+		return targets[0], nil
+	}
+
+	return "", fmt.Errorf("multiple targets found in project.yaml and --non-interactive is set; specify --%s or set %s env var",
+		Flags.Target.Name, CreTargetEnvVar)
 }
 
 // promptForTarget discovers available targets from project.yaml and prompts the user to select one.

@@ -14,6 +14,7 @@ func convertSimulateCaptureOutput(t *testing.T, projectRoot, workflowName string
 	cmd := exec.Command(CLIPath, "workflow", "simulate", workflowName,
 		"--project-root", projectRoot,
 		"--non-interactive", "--trigger-index=0",
+		"--target=staging-settings",
 	)
 	cmd.Dir = projectRoot
 	cmd.Stdout = &stdout
@@ -30,6 +31,7 @@ func convertSimulateRequireOutputContains(t *testing.T, projectRoot, workflowNam
 	cmd := exec.Command(CLIPath, "workflow", "simulate", workflowName,
 		"--project-root", projectRoot,
 		"--non-interactive", "--trigger-index=0",
+		"--target=staging-settings",
 	)
 	cmd.Dir = projectRoot
 	cmd.Stdout = &stdout
