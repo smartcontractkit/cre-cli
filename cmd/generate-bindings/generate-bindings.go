@@ -124,15 +124,15 @@ func (h *handler) ResolveInputs(args []string, v *viper.Viper) (Inputs, error) {
 	// Resolve languages: --language flag takes precedence, else auto-detect
 	var goLang, typescript bool
 	langFlag := strings.ToLower(strings.TrimSpace(v.GetString("language")))
-	switch {
-	case langFlag == "":
+	switch langFlag {
+	case "":
 		goLang, typescript = detectLanguages(projectRoot)
 		if !goLang && !typescript {
 			return Inputs{}, fmt.Errorf("no target language detected (use --language go or --language typescript, or ensure project contains .go or .ts files)")
 		}
-	case langFlag == constants.WorkflowLanguageGolang:
+	case constants.WorkflowLanguageGolang:
 		goLang = true
-	case langFlag == constants.WorkflowLanguageTypeScript:
+	case constants.WorkflowLanguageTypeScript:
 		typescript = true
 	default:
 		return Inputs{}, fmt.Errorf("unsupported language %q (supported: go, typescript)", langFlag)
@@ -200,10 +200,10 @@ func (h *handler) ValidateInputs(inputs Inputs) error {
 
 	// Ensure at least one output path is set for the active language(s)
 	if inputs.GoLang && inputs.GoOutPath == "" {
-		return fmt.Errorf("Go output path is required when language is go")
+		return fmt.Errorf("go output path is required when language is go")
 	}
 	if inputs.TypeScript && inputs.TSOutPath == "" {
-		return fmt.Errorf("TypeScript output path is required when language is typescript")
+		return fmt.Errorf("typescript output path is required when language is typescript")
 	}
 
 	h.validated = true

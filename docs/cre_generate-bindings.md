@@ -19,7 +19,6 @@ cre generate-bindings <chain-family> [optional flags]
 
 ```
   cre generate-bindings evm
-  cre generate-bindings evm --language typescript
 ```
 
 ### Options
