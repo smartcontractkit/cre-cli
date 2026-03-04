@@ -165,9 +165,27 @@ func newRootCommand() *cobra.Command {
 						spinner.Stop()
 					}
 
-					// Prompt user to login
+					if errors.Is(err, runtime.ErrValidationFailed) {
+						// Credentials exist but validation failed (likely network).
+						// Do NOT prompt for re-login -- that causes an infinite loop.
+						ui.Line()
+						if runtimeContext.EnvironmentSet != nil && runtimeContext.EnvironmentSet.RequiresVPN() {
+							ui.ErrorWithSuggestions("Credential validation failed", []string{
+								fmt.Sprintf("The %s environment requires Tailscale VPN.", runtimeContext.EnvironmentSet.EnvName),
+								"Ensure Tailscale is connected to the smartcontract.com network, then retry.",
+							})
+						} else {
+							ui.Error("Credential validation failed")
+						}
+						ui.EnvContext(runtimeContext.EnvironmentSet.EnvLabel())
+						ui.Line()
+						return fmt.Errorf("authentication required: %w", err)
+					}
+
+					// No credentials on disk -- prompt user to login
 					ui.Line()
 					ui.Warning("You are not logged in")
+					ui.EnvContext(runtimeContext.EnvironmentSet.EnvLabel())
 					ui.Line()
 
 					runLogin, formErr := ui.Confirm("Would you like to login now?",
