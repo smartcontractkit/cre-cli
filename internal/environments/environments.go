@@ -4,6 +4,7 @@ import (
 	"embed"
 	"fmt"
 	"os"
+	"strings"
 
 	"gopkg.in/yaml.v2"
 )
@@ -29,6 +30,8 @@ const (
 var envFileContent embed.FS
 
 type EnvironmentSet struct {
+	EnvName string `yaml:"-"`
+
 	AuthBase   string `yaml:"CRE_CLI_AUTH_BASE"`
 	ClientID   string `yaml:"CRE_CLI_CLIENT_ID"`
 	GraphQLURL string `yaml:"CRE_CLI_GRAPHQL_URL"`
@@ -39,6 +42,22 @@ type EnvironmentSet struct {
 	WorkflowRegistryChainName        string `yaml:"CRE_CLI_WORKFLOW_REGISTRY_CHAIN_NAME"`
 	WorkflowRegistryChainExplorerURL string `yaml:"CRE_CLI_WORKFLOW_REGISTRY_CHAIN_EXPLORER_URL"`
 	DonFamily                        string `yaml:"CRE_CLI_DON_FAMILY"`
+}
+
+// RequiresVPN returns true if the GraphQL endpoint is on a private network
+// (e.g. Tailscale) that requires VPN connectivity.
+func (e *EnvironmentSet) RequiresVPN() bool {
+	return strings.Contains(e.GraphQLURL, ".ts.net")
+}
+
+// EnvLabel returns the environment name for display purposes.
+// Returns "" for the default (PRODUCTION) environment so callers can
+// skip environment labeling when the user is in the standard context.
+func (e *EnvironmentSet) EnvLabel() string {
+	if e.EnvName == "" || e.EnvName == DefaultEnv {
+		return ""
+	}
+	return e.EnvName
 }
 
 type fileFormat struct {
@@ -62,6 +81,7 @@ func NewEnvironmentSet(ff *fileFormat, envName string) *EnvironmentSet {
 	if !ok {
 		set = ff.Envs[DefaultEnv]
 	}
+	set.EnvName = envName
 	if v := os.Getenv(EnvVarAuthBase); v != "" {
 		set.AuthBase = v
 	}

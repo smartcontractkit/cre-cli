@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/rs/zerolog"
@@ -13,6 +14,11 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
+)
+
+var (
+	ErrNoCredentials    = errors.New("no credentials found")
+	ErrValidationFailed = errors.New("credential validation failed")
 )
 
 type Context struct {
@@ -61,18 +67,17 @@ func (ctx *Context) AttachCredentials(validationCtx context.Context, skipValidat
 
 	ctx.Credentials, err = credentials.New(ctx.Logger)
 	if err != nil {
-		return fmt.Errorf("%w", err)
+		return fmt.Errorf("%w: %w", ErrNoCredentials, err)
 	}
 
-	// Validate credentials immediately after loading (unless skipped)
 	if !skipValidation {
 		if ctx.EnvironmentSet == nil {
-			return fmt.Errorf("failed to load environment")
+			return fmt.Errorf("%w: failed to load environment", ErrValidationFailed)
 		}
 
 		validator := authvalidation.NewValidator(ctx.Credentials, ctx.EnvironmentSet, ctx.Logger)
 		if err := validator.ValidateCredentials(validationCtx, ctx.Credentials); err != nil {
-			return fmt.Errorf("authentication validation failed: %w", err)
+			return fmt.Errorf("%w: %w", ErrValidationFailed, err)
 		}
 	}
 
