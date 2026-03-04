@@ -19,7 +19,7 @@ import (
 
 const (
 	wasmWorkflowPath = "./wasm/workflow.wasm"
-	convertWarning   = "This will convert your workflow to a custom (self-compiled) build. This cannot be undone by the CLI. Continue?"
+	convertWarning   = "This will convert your workflow to a custom build that uses a Makefile. This cannot be undone by the CLI. Continue?"
 )
 
 type Inputs struct {

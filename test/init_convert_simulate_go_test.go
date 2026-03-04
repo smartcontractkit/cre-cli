@@ -110,6 +110,7 @@ func convertGoBuildWithFlagAndAssert(t *testing.T, projectRoot, workflowDir, wor
 	cmd := exec.Command(CLIPath, "workflow", "simulate", workflowName,
 		"--project-root", projectRoot,
 		"--non-interactive", "--trigger-index=0",
+		"--target=staging-settings",
 	)
 	cmd.Dir = projectRoot
 	cmd.Stdout = &stdout

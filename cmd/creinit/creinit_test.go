@@ -358,6 +358,15 @@ func TestInitExecuteFlows(t *testing.T) {
 			expectWorkflowName:  "starter-wf",
 			expectTemplateFiles: GetTemplateFileListGo(),
 		},
+		{
+			name:                "Starter template with all flags",
+			projectNameFlag:     "starterProj",
+			templateNameFlag:    "starter-go",
+			workflowNameFlag:    "starter-wf",
+			expectProjectDirRel: "starterProj",
+			expectWorkflowName:  "starter-wf",
+			expectTemplateFiles: GetTemplateFileListGo(),
+		},
 	}
 
 	for _, tc := range cases {

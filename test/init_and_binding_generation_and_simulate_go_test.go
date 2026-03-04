@@ -103,6 +103,7 @@ func TestE2EInit_DevPoRTemplate(t *testing.T) {
 		"--project-root", projectRoot,
 		"--non-interactive",
 		"--trigger-index=0",
+		"--target=staging-settings",
 	}
 	simulateCmd := exec.Command(CLIPath, simulateArgs...)
 	simulateCmd.Dir = projectRoot
