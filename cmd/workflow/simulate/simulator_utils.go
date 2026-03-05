@@ -95,7 +95,36 @@ var SupportedEVM = []ChainConfig{
 	{Selector: chainselectors.ARC_TESTNET.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
 
 	// Xlayer
+	{Selector: chainselectors.XLAYER_TESTNET.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
 	{Selector: chainselectors.ETHEREUM_MAINNET_XLAYER_1.Selector, Forwarder: "0x2B3068C4B288A2CD1f8B3613b8f33ef7cEecadC4"},
+
+	// MegaETH
+	{Selector: chainselectors.MEGAETH_TESTNET_2.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
+
+	// Celo
+	{Selector: chainselectors.CELO_SEPOLIA.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
+
+	// Gnosis
+	// Integration not ready yet
+	// {Selector: chainselectors.GNOSIS_CHAIN_TESTNET_CHIADO.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
+
+	// Cronos
+	{Selector: chainselectors.CRONOS_TESTNET.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
+	
+	// Mantle
+	{Selector: chainselectors.ETHEREUM_TESTNET_SEPOLIA_MANTLE_1.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
+
+	// TAC
+	{Selector: chainselectors.TAC_TESTNET.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
+
+	// Unichain
+	{Selector: chainselectors.ETHEREUM_TESTNET_SEPOLIA_UNICHAIN_1.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
+
+	// Scroll
+	{Selector: chainselectors.ETHEREUM_TESTNET_SEPOLIA_SCROLL_1.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
+
+	// Sonic
+	{Selector: chainselectors.SONIC_TESTNET.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
 }
 
 // parse "ChainSelector:<digits>" from trigger id, e.g. "evm:ChainSelector:5009297550715157269@1.0.0 LogTrigger"
