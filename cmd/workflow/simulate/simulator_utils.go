@@ -109,7 +109,7 @@ var SupportedEVM = []ChainConfig{
 
 	// Cronos
 	{Selector: chainselectors.CRONOS_TESTNET.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
-	
+
 	// Mantle
 	{Selector: chainselectors.ETHEREUM_TESTNET_SEPOLIA_MANTLE_1.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
 
