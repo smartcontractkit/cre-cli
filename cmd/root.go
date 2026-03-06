@@ -427,6 +427,7 @@ func isLoadSettings(cmd *cobra.Command) bool {
 		"cre update":                {},
 		"cre workflow":              {},
 		"cre workflow custom-build": {},
+		"cre workflow build":        {},
 		"cre account":               {},
 		"cre secrets":               {},
 		"cre templates":             {},
@@ -454,6 +455,7 @@ func isLoadCredentials(cmd *cobra.Command) bool {
 		"cre generate-bindings":     {},
 		"cre update":                {},
 		"cre workflow":              {},
+		"cre workflow build":        {},
 		"cre account":               {},
 		"cre secrets":               {},
 		"cre templates":             {},
@@ -523,6 +525,7 @@ func shouldShowSpinner(cmd *cobra.Command) bool {
 		"cre logout":                {},
 		"cre update":                {},
 		"cre workflow":              {}, // Just shows help
+		"cre workflow build":        {}, // Offline command, no async init
 		"cre account":               {}, // Just shows help
 		"cre secrets":               {}, // Just shows help
 		"cre templates":             {}, // Just shows help

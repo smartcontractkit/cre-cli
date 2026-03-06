@@ -1,15 +1,11 @@
 package deploy
 
 import (
-	"bytes"
-	"encoding/base64"
 	"fmt"
 	"os"
-	"strings"
-
-	"github.com/andybalholm/brotli"
 
 	cmdcommon "github.com/smartcontractkit/cre-cli/cmd/common"
+	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
@@ -17,86 +13,78 @@ func (h *handler) Compile() error {
 	if !h.validated {
 		return fmt.Errorf("handler h.inputs not validated")
 	}
-	ui.Dim("Compiling workflow...")
+
+	// URL wasm is handled directly in Execute(); nothing to compile or write locally.
+	if cmdcommon.IsURL(h.inputs.WasmPath) {
+		return nil
+	}
 
 	if h.inputs.OutputPath == "" {
 		h.inputs.OutputPath = defaultOutputPath
 	}
-	if !strings.HasSuffix(h.inputs.OutputPath, ".b64") {
-		if !strings.HasSuffix(h.inputs.OutputPath, ".br") {
-			if !strings.HasSuffix(h.inputs.OutputPath, ".wasm") {
-				h.inputs.OutputPath += ".wasm" // Append ".wasm" if it doesn't already end with ".wasm"
-			}
-			h.inputs.OutputPath += ".br" // Append ".br" if it doesn't already end with ".br"
+	h.inputs.OutputPath = cmdcommon.EnsureOutputExtension(h.inputs.OutputPath)
+
+	var wasmFile []byte
+	var err error
+
+	if h.inputs.WasmPath != "" {
+		ui.Dim("Reading pre-built WASM binary...")
+		wasmFile, err = os.ReadFile(h.inputs.WasmPath)
+		if err != nil {
+			return fmt.Errorf("failed to read WASM binary from %s: %w", h.inputs.WasmPath, err)
 		}
-		h.inputs.OutputPath += ".b64" // Append ".b64" if it doesn't already end with ".b64"
+		if h.runtimeContext != nil {
+			h.runtimeContext.Workflow.Language = constants.WorkflowLanguageWasm
+		}
+		h.log.Debug().Str("path", h.inputs.WasmPath).Msg("Loaded pre-built WASM binary")
+
+		br64Data, err := cmdcommon.EnsureBrotliBase64(wasmFile)
+		if err != nil {
+			return fmt.Errorf("failed to process WASM binary: %w", err)
+		}
+		if err = os.WriteFile(h.inputs.OutputPath, br64Data, 0666); err != nil { //nolint:gosec
+			return fmt.Errorf("failed to write output: %w", err)
+		}
+		ui.Success(fmt.Sprintf("Loaded pre-built WASM binary from %s", h.inputs.WasmPath))
+		return nil
+	} else {
+		ui.Dim("Compiling workflow...")
+
+		workflowDir, dirErr := os.Getwd()
+		if dirErr != nil {
+			return fmt.Errorf("workflow directory: %w", dirErr)
+		}
+		resolvedWorkflowPath, resolveErr := cmdcommon.ResolveWorkflowPath(workflowDir, h.inputs.WorkflowPath)
+		if resolveErr != nil {
+			return fmt.Errorf("workflow path: %w", resolveErr)
+		}
+		_, workflowMainFile, mainErr := cmdcommon.WorkflowPathRootAndMain(resolvedWorkflowPath)
+		if mainErr != nil {
+			return fmt.Errorf("workflow path: %w", mainErr)
+		}
+		if h.runtimeContext != nil {
+			h.runtimeContext.Workflow.Language = cmdcommon.GetWorkflowLanguage(workflowMainFile)
+		}
+
+		wasmFile, err = cmdcommon.CompileWorkflowToWasm(resolvedWorkflowPath)
+		if err != nil {
+			ui.Error("Build failed:")
+			return fmt.Errorf("failed to compile workflow: %w", err)
+		}
+		h.log.Debug().Msg("Workflow compiled successfully")
+		ui.Success("Workflow compiled successfully")
 	}
 
-	workflowDir, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("workflow directory: %w", err)
-	}
-	resolvedWorkflowPath, err := cmdcommon.ResolveWorkflowPath(workflowDir, h.inputs.WorkflowPath)
-	if err != nil {
-		return fmt.Errorf("workflow path: %w", err)
-	}
-	_, workflowMainFile, err := cmdcommon.WorkflowPathRootAndMain(resolvedWorkflowPath)
-	if err != nil {
-		return fmt.Errorf("workflow path: %w", err)
-	}
-	if h.runtimeContext != nil {
-		h.runtimeContext.Workflow.Language = cmdcommon.GetWorkflowLanguage(workflowMainFile)
-	}
-
-	wasmFile, err := cmdcommon.CompileWorkflowToWasm(resolvedWorkflowPath)
-	if err != nil {
-		ui.Error("Build failed:")
-		return fmt.Errorf("failed to compile workflow: %w", err)
-	}
-	h.log.Debug().Msg("Workflow compiled successfully")
-	ui.Success("Workflow compiled successfully")
-
-	compressedFile, err := applyBrotliCompressionV2(&wasmFile)
+	compressedFile, err := cmdcommon.CompressBrotli(wasmFile)
 	if err != nil {
 		return fmt.Errorf("failed to compress WASM binary: %w", err)
 	}
 	h.log.Debug().Msg("WASM binary compressed")
 
-	if err = encodeToBase64AndSaveToFile(&compressedFile, h.inputs.OutputPath); err != nil {
+	if err = cmdcommon.EncodeBase64ToFile(compressedFile, h.inputs.OutputPath); err != nil {
 		return fmt.Errorf("failed to base64 encode the WASM binary: %w", err)
 	}
 	h.log.Debug().Msg("WASM binary encoded")
-
-	return nil
-}
-
-func applyBrotliCompressionV2(wasmContent *[]byte) ([]byte, error) {
-	var buffer bytes.Buffer
-
-	// Compress using Brotli with default options
-	writer := brotli.NewWriter(&buffer)
-
-	_, err := writer.Write(*wasmContent)
-	if err != nil {
-		return nil, err
-	}
-
-	// must close it to flush the writer and ensure all data is stored to the buffer
-	err = writer.Close()
-	if err != nil {
-		return nil, err
-	}
-
-	return buffer.Bytes(), nil
-}
-
-func encodeToBase64AndSaveToFile(input *[]byte, outputFile string) error {
-	encoded := base64.StdEncoding.EncodeToString(*input)
-
-	err := os.WriteFile(outputFile, []byte(encoded), 0666) //nolint:gosec
-	if err != nil {
-		return err
-	}
 
 	return nil
 }
