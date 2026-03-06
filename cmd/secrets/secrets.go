@@ -6,9 +6,11 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/smartcontractkit/cre-cli/cmd/secrets/create"
+	"github.com/smartcontractkit/cre-cli/cmd/secrets/decrypt_output"
 	"github.com/smartcontractkit/cre-cli/cmd/secrets/delete"
 	"github.com/smartcontractkit/cre-cli/cmd/secrets/execute"
 	"github.com/smartcontractkit/cre-cli/cmd/secrets/list"
+	"github.com/smartcontractkit/cre-cli/cmd/secrets/store_encryption_key"
 	"github.com/smartcontractkit/cre-cli/cmd/secrets/update"
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
@@ -37,6 +39,8 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	secretsCmd.AddCommand(delete.New(runtimeContext))
 	secretsCmd.AddCommand(list.New(runtimeContext))
 	secretsCmd.AddCommand(execute.New(runtimeContext))
+	secretsCmd.AddCommand(store_encryption_key.New(runtimeContext))
+	secretsCmd.AddCommand(decrypt_output.New(runtimeContext))
 
 	return secretsCmd
 }
