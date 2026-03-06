@@ -68,23 +68,19 @@ func TestBuildCommandDefaultFlag(t *testing.T) {
 	cmd := New(nil)
 	f := cmd.Flags().Lookup("output")
 	require.NotNil(t, f)
-	assert.Equal(t, defaultOutputPath, f.DefValue)
+	assert.Equal(t, "", f.DefValue)
 	assert.Equal(t, "o", f.Shorthand)
 }
 
 func TestBuildMissingWorkflowYAML(t *testing.T) {
+	t.Parallel()
 	tmpDir := t.TempDir()
-
-	prevWd, err := os.Getwd()
-	require.NoError(t, err)
-	require.NoError(t, os.Chdir(tmpDir))
-	t.Cleanup(func() { _ = os.Chdir(prevWd) })
 
 	cmd := New(nil)
 	cmd.SetArgs([]string{tmpDir})
 	cmd.SetOut(io.Discard)
 	cmd.SetErr(io.Discard)
-	err = cmd.Execute()
+	err := cmd.Execute()
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "workflow.yaml")
 }
@@ -123,16 +119,11 @@ func TestBuildHappyPath(t *testing.T) {
 	workflowDir := setupWorkflowDir(t)
 	outputPath := filepath.Join(t.TempDir(), "output.wasm")
 
-	prevWd, err := os.Getwd()
-	require.NoError(t, err)
-	require.NoError(t, os.Chdir(workflowDir))
-	t.Cleanup(func() { _ = os.Chdir(prevWd) })
-
 	cmd := New(nil)
 	cmd.SetArgs([]string{workflowDir, "-o", outputPath})
 	cmd.SetOut(io.Discard)
 	cmd.SetErr(io.Discard)
-	err = cmd.Execute()
+	err := cmd.Execute()
 	require.NoError(t, err)
 
 	data, err := os.ReadFile(outputPath)
@@ -144,19 +135,15 @@ func TestBuildHappyPath(t *testing.T) {
 func TestBuildHappyPathDefaultOutput(t *testing.T) {
 	workflowDir := setupWorkflowDir(t)
 
-	prevWd, err := os.Getwd()
-	require.NoError(t, err)
-	require.NoError(t, os.Chdir(workflowDir))
-	t.Cleanup(func() { _ = os.Chdir(prevWd) })
-
 	cmd := New(nil)
 	cmd.SetArgs([]string{workflowDir})
 	cmd.SetOut(io.Discard)
 	cmd.SetErr(io.Discard)
-	err = cmd.Execute()
+	err := cmd.Execute()
 	require.NoError(t, err)
 
 	expectedFile := filepath.Join(workflowDir, "binary.wasm")
+
 	data, err := os.ReadFile(expectedFile)
 	require.NoError(t, err)
 	require.NotEmpty(t, data)
@@ -167,16 +154,11 @@ func TestBuildCustomOutputPath(t *testing.T) {
 	workflowDir := setupWorkflowDir(t)
 	outputPath := filepath.Join(t.TempDir(), "custom")
 
-	prevWd, err := os.Getwd()
-	require.NoError(t, err)
-	require.NoError(t, os.Chdir(workflowDir))
-	t.Cleanup(func() { _ = os.Chdir(prevWd) })
-
 	cmd := New(nil)
 	cmd.SetArgs([]string{workflowDir, "-o", outputPath})
 	cmd.SetOut(io.Discard)
 	cmd.SetErr(io.Discard)
-	err = cmd.Execute()
+	err := cmd.Execute()
 	require.NoError(t, err)
 
 	extendedPath := outputPath + ".wasm"

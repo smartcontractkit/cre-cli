@@ -14,7 +14,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
-var defaultOutputPath = "./binary.wasm"
+var defaultOutputName = "binary.wasm"
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
 	buildCmd := &cobra.Command{
@@ -25,17 +25,17 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 		Example: `cre workflow build ./my-workflow`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			outputPath, _ := cmd.Flags().GetString("output")
-			return execute(outputPath)
+			return execute(args[0], outputPath)
 		},
 	}
-	buildCmd.Flags().StringP("output", "o", defaultOutputPath, "Output file path for the compiled WASM binary")
+	buildCmd.Flags().StringP("output", "o", "", "Output file path for the compiled WASM binary (default: <workflow-folder>/binary.wasm)")
 	return buildCmd
 }
 
-func execute(outputPath string) error {
-	workflowDir, err := os.Getwd()
+func execute(workflowFolder, outputPath string) error {
+	workflowDir, err := filepath.Abs(workflowFolder)
 	if err != nil {
-		return fmt.Errorf("workflow directory: %w", err)
+		return fmt.Errorf("resolve workflow folder: %w", err)
 	}
 
 	workflowYAML := filepath.Join(workflowDir, constants.DefaultWorkflowSettingsFileName)
@@ -52,6 +52,9 @@ func execute(outputPath string) error {
 		return fmt.Errorf("resolve workflow path: %w", err)
 	}
 
+	if outputPath == "" {
+		outputPath = filepath.Join(workflowDir, defaultOutputName)
+	}
 	outputPath = cmdcommon.EnsureWasmExtension(outputPath)
 
 	ui.Dim("Compiling workflow...")

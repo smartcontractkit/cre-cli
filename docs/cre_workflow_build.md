@@ -20,7 +20,7 @@ cre workflow build ./my-workflow
 
 ```
   -h, --help            help for build
-  -o, --output string   Output file path for the compiled WASM binary (default "./binary.wasm")
+  -o, --output string   Output file path for the compiled WASM binary (default: <workflow-folder>/binary.wasm)
 ```
 
 ### Options inherited from parent commands
