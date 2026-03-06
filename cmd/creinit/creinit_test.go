@@ -261,6 +261,28 @@ var testSingleWorkflowWithPostInit = templaterepo.TemplateSummary{
 	},
 }
 
+var testProjectDirTemplate = templaterepo.TemplateSummary{
+	TemplateMetadata: templaterepo.TemplateMetadata{
+		Kind:        "starter-template",
+		Name:        "projdir-multichain",
+		Title:       "ProjectDir Multi-Chain Template",
+		Description: "A template with projectDir and multiple networks",
+		Language:    "go",
+		Category:    "test",
+		Author:      "Test",
+		License:     "MIT",
+		Networks:    []string{"ethereum-testnet-sepolia", "base-sepolia"},
+		Workflows:   []templaterepo.WorkflowDirEntry{{Dir: "my-workflow"}},
+		ProjectDir:  ".",
+	},
+	Path: "starter-templates/test/projdir-multichain",
+	Source: templaterepo.RepoSource{
+		Owner: "test",
+		Repo:  "templates",
+		Ref:   "main",
+	},
+}
+
 func newMockRegistry() *mockRegistry {
 	return &mockRegistry{
 		templates: []templaterepo.TemplateSummary{
@@ -271,6 +293,7 @@ func newMockRegistry() *mockRegistry {
 			testBuiltInGoTemplate,
 			testMultiWorkflowTemplate,
 			testSingleWorkflowWithPostInit,
+			testProjectDirTemplate,
 		},
 	}
 }
@@ -739,6 +762,165 @@ func TestSingleWorkflowRenameWithFlag(t *testing.T) {
 	// Original dir should NOT exist
 	_, err = os.Stat(filepath.Join(projectRoot, "my-workflow"))
 	require.True(t, os.IsNotExist(err), "original dir should be renamed")
+}
+
+func TestInitWithUseTenderlyFlag(t *testing.T) {
+	sim := chainsim.NewSimulatedEnvironment(t)
+	defer sim.Close()
+
+	tempDir := t.TempDir()
+	restoreCwd, err := testutil.ChangeWorkingDirectory(tempDir)
+	require.NoError(t, err)
+	defer restoreCwd()
+
+	t.Setenv("CRE_TENDERLY_VNET_URL", "https://rpc.tenderly.co/vnet/test123")
+
+	inputs := Inputs{
+		ProjectName:  "tenderlyProj",
+		TemplateName: "test-multichain",
+		WorkflowName: "tenderly-wf",
+		UseTenderly:  true,
+	}
+
+	h := newHandlerWithRegistry(sim.NewRuntimeContext(), newMockRegistry())
+	require.NoError(t, h.ValidateInputs(inputs))
+	require.NoError(t, h.Execute(inputs))
+
+	projectRoot := filepath.Join(tempDir, "tenderlyProj")
+	projectYAML, err := os.ReadFile(filepath.Join(projectRoot, constants.DefaultProjectSettingsFileName))
+	require.NoError(t, err)
+	content := string(projectYAML)
+
+	// Vnet URLs should be applied to project.yaml
+	require.Contains(t, content, "https://rpc.tenderly.co/vnet/test123")
+	require.Contains(t, content, "ethereum-testnet-sepolia")
+	require.Contains(t, content, "ethereum-mainnet")
+}
+
+func TestInitWithUseTenderlyNoEnvVar(t *testing.T) {
+	sim := chainsim.NewSimulatedEnvironment(t)
+	defer sim.Close()
+
+	tempDir := t.TempDir()
+	restoreCwd, err := testutil.ChangeWorkingDirectory(tempDir)
+	require.NoError(t, err)
+	defer restoreCwd()
+
+	t.Setenv("CRE_TENDERLY_VNET_URL", "")
+
+	inputs := Inputs{
+		ProjectName:  "tenderlyNoEnv",
+		TemplateName: "test-multichain",
+		WorkflowName: "tenderly-wf",
+		UseTenderly:  true,
+	}
+
+	h := newHandlerWithRegistry(sim.NewRuntimeContext(), newMockRegistry())
+	require.NoError(t, h.ValidateInputs(inputs))
+	err = h.Execute(inputs)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "CRE_TENDERLY_VNET_URL")
+}
+
+func TestInitTenderlyRpcUrlPrecedence(t *testing.T) {
+	sim := chainsim.NewSimulatedEnvironment(t)
+	defer sim.Close()
+
+	tempDir := t.TempDir()
+	restoreCwd, err := testutil.ChangeWorkingDirectory(tempDir)
+	require.NoError(t, err)
+	defer restoreCwd()
+
+	t.Setenv("CRE_TENDERLY_VNET_URL", "https://rpc.tenderly.co/vnet/base")
+
+	// Explicit --rpc-url for sepolia should override the vnet URL
+	inputs := Inputs{
+		ProjectName:  "precedenceProj",
+		TemplateName: "test-multichain",
+		WorkflowName: "prec-wf",
+		UseTenderly:  true,
+		RpcURLs: map[string]string{
+			"ethereum-testnet-sepolia": "https://my-custom-rpc.example.com",
+		},
+	}
+
+	h := newHandlerWithRegistry(sim.NewRuntimeContext(), newMockRegistry())
+	require.NoError(t, h.ValidateInputs(inputs))
+	require.NoError(t, h.Execute(inputs))
+
+	projectRoot := filepath.Join(tempDir, "precedenceProj")
+	projectYAML, err := os.ReadFile(filepath.Join(projectRoot, constants.DefaultProjectSettingsFileName))
+	require.NoError(t, err)
+	content := string(projectYAML)
+
+	// Sepolia should use the explicit --rpc-url, not the vnet URL
+	require.Contains(t, content, "https://my-custom-rpc.example.com")
+	// Mainnet should use the vnet URL
+	require.Contains(t, content, "https://rpc.tenderly.co/vnet/base")
+}
+
+func TestInitTenderlyWithProjectDir(t *testing.T) {
+	sim := chainsim.NewSimulatedEnvironment(t)
+	defer sim.Close()
+
+	tempDir := t.TempDir()
+	restoreCwd, err := testutil.ChangeWorkingDirectory(tempDir)
+	require.NoError(t, err)
+	defer restoreCwd()
+
+	t.Setenv("CRE_TENDERLY_VNET_URL", "https://virtual.tenderly.co/vnet/abc")
+
+	inputs := Inputs{
+		ProjectName:  "projdirTenderly",
+		TemplateName: "projdir-multichain",
+		WorkflowName: "my-workflow",
+		UseTenderly:  true,
+	}
+
+	h := newHandlerWithRegistry(sim.NewRuntimeContext(), newMockRegistry())
+	require.NoError(t, h.ValidateInputs(inputs))
+	require.NoError(t, h.Execute(inputs))
+
+	projectRoot := filepath.Join(tempDir, "projdirTenderly")
+	projectYAML, err := os.ReadFile(filepath.Join(projectRoot, constants.DefaultProjectSettingsFileName))
+	require.NoError(t, err)
+	content := string(projectYAML)
+
+	// Vnet URLs should be patched into project.yaml even with ProjectDir templates
+	require.Contains(t, content, "https://virtual.tenderly.co/vnet/abc")
+	require.NotContains(t, content, "https://default-rpc.example.com",
+		"default RPC URLs should be replaced by vnet URLs")
+}
+
+func TestInitTenderlySkippedNoNetworks(t *testing.T) {
+	sim := chainsim.NewSimulatedEnvironment(t)
+	defer sim.Close()
+
+	tempDir := t.TempDir()
+	restoreCwd, err := testutil.ChangeWorkingDirectory(tempDir)
+	require.NoError(t, err)
+	defer restoreCwd()
+
+	t.Setenv("CRE_TENDERLY_VNET_URL", "https://rpc.tenderly.co/vnet/unused")
+
+	// hello-world-go has no Networks — Tenderly should be a no-op
+	inputs := Inputs{
+		ProjectName:  "noNetProj",
+		TemplateName: "hello-world-go",
+		WorkflowName: "no-net-wf",
+		UseTenderly:  true,
+	}
+
+	h := newHandlerWithRegistry(sim.NewRuntimeContext(), newMockRegistry())
+	require.NoError(t, h.ValidateInputs(inputs))
+	require.NoError(t, h.Execute(inputs))
+
+	projectRoot := filepath.Join(tempDir, "noNetProj")
+	require.FileExists(t, filepath.Join(projectRoot, constants.DefaultProjectSettingsFileName))
+	// Vnet URL should NOT appear since template has no networks
+	projectYAML, err := os.ReadFile(filepath.Join(projectRoot, constants.DefaultProjectSettingsFileName))
+	require.NoError(t, err)
+	require.NotContains(t, string(projectYAML), "tenderly")
 }
 
 func TestBuiltInTemplateBackwardsCompat(t *testing.T) {

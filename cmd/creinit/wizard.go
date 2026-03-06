@@ -229,6 +229,7 @@ type wizardStep int
 const (
 	stepProjectName wizardStep = iota
 	stepTemplate
+	stepTenderlyChoice
 	stepNetworkRPCs
 	stepWorkflowName
 	stepDone
@@ -263,6 +264,11 @@ type wizardModel struct {
 
 	// Pre-provided RPC URLs from flags
 	flagRpcURLs map[string]string
+
+	// Tenderly choice
+	useTenderly        bool // user chose Tenderly vnets
+	tenderlyYes        bool // toggle cursor: true=Tenderly, false=Own RPCs
+	skipTenderlyChoice bool // skip when no networks or --use-tenderly flag
 
 	// Flags to skip steps
 	skipProjectName  bool
@@ -301,6 +307,7 @@ type WizardResult struct {
 	WorkflowName     string
 	SelectedTemplate *templaterepo.TemplateSummary
 	NetworkRPCs      map[string]string // chain-name -> rpc-url
+	UseTenderly      bool              // user chose Tenderly Virtual Networks
 	OverwriteDir     bool              // user confirmed directory overwrite in wizard
 	Completed        bool
 	Cancelled        bool
@@ -376,6 +383,12 @@ func newWizardModel(inputs Inputs, isNewProject bool, startDir string, templates
 		m.initNetworkRPCInputs()
 	}
 
+	if inputs.UseTenderly {
+		m.useTenderly = true
+		m.skipTenderlyChoice = true
+		m.skipNetworkRPCs = true
+	}
+
 	if inputs.WorkflowName != "" {
 		m.workflowName = inputs.WorkflowName
 		m.skipWorkflowName = true
@@ -403,6 +416,7 @@ func (m *wizardModel) initNetworkRPCInputs() {
 
 	networks := m.selectedTemplate.Networks
 	if len(networks) == 0 {
+		m.skipTenderlyChoice = true
 		m.skipNetworkRPCs = true
 		return
 	}
@@ -429,6 +443,12 @@ func (m *wizardModel) initNetworkRPCInputs() {
 
 	if allProvided {
 		m.skipNetworkRPCs = true
+		m.skipTenderlyChoice = true
+	}
+
+	// Default tenderlyYes to true (Tenderly option selected by default)
+	if !m.skipTenderlyChoice {
+		m.tenderlyYes = true
 	}
 }
 
@@ -444,6 +464,12 @@ func (m *wizardModel) advanceToNextStep() {
 			return
 		case stepTemplate:
 			if m.skipTemplate {
+				m.step++
+				continue
+			}
+			return
+		case stepTenderlyChoice:
+			if m.skipTenderlyChoice {
 				m.step++
 				continue
 			}
@@ -507,6 +533,21 @@ func (m wizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		m.err = ""
+
+		// Tenderly choice step
+		if m.step == stepTenderlyChoice {
+			switch msg.String() {
+			case "ctrl+c", "esc":
+				m.cancelled = true
+				return m, tea.Quit
+			case "left", "right", "tab":
+				m.tenderlyYes = !m.tenderlyYes
+				return m, nil
+			case "enter":
+				return m.handleEnter()
+			}
+			return m, nil
+		}
 
 		// Template step: delegate most keys to the list
 		if m.step == stepTemplate {
@@ -658,6 +699,14 @@ func (m wizardModel) handleEnter(msgs ...tea.Msg) (tea.Model, tea.Cmd) {
 		m.step++
 		m.advanceToNextStep()
 
+	case stepTenderlyChoice:
+		if m.tenderlyYes {
+			m.useTenderly = true
+			m.skipNetworkRPCs = true
+		}
+		m.step++
+		m.advanceToNextStep()
+
 	case stepNetworkRPCs:
 		value := strings.TrimSpace(m.rpcInputs[m.rpcCursor].Value())
 		network := m.networks[m.rpcCursor]
@@ -730,6 +779,10 @@ func (m wizardModel) View() string {
 	}
 	if m.selectedTemplate != nil && m.step > stepTemplate {
 		b.WriteString(m.dimStyle.Render("  Template: " + m.selectedTemplate.Title + " [" + m.selectedTemplate.Language + "]"))
+		b.WriteString("\n")
+	}
+	if m.step > stepTenderlyChoice && m.useTenderly {
+		b.WriteString(m.dimStyle.Render("  RPCs: Tenderly Virtual Networks"))
 		b.WriteString("\n")
 	}
 
@@ -815,6 +868,23 @@ func (m wizardModel) View() string {
 		// Render the list
 		b.WriteString(m.templateList.View())
 
+	case stepTenderlyChoice:
+		b.WriteString(m.promptStyle.Render("  How would you like to connect to networks?"))
+		b.WriteString("\n")
+		b.WriteString(m.dimStyle.Render(fmt.Sprintf("  This template requires: %s", strings.Join(m.networks, ", "))))
+		b.WriteString("\n\n")
+
+		var tenderlyLabel, ownLabel string
+		if m.tenderlyYes {
+			tenderlyLabel = m.selectedStyle.Render("[Tenderly Virtual Networks]")
+			ownLabel = m.dimStyle.Render(" I have my own RPCs ")
+		} else {
+			tenderlyLabel = m.dimStyle.Render(" Tenderly Virtual Networks ")
+			ownLabel = m.selectedStyle.Render("[I have my own RPCs]")
+		}
+		fmt.Fprintf(&b, "      %s  %s", tenderlyLabel, ownLabel)
+		b.WriteString("\n")
+
 	case stepNetworkRPCs:
 		b.WriteString(m.promptStyle.Render("  RPC URL overrides (optional)"))
 		b.WriteString("\n")
@@ -899,6 +969,7 @@ func (m wizardModel) Result() WizardResult {
 		WorkflowName:     m.workflowName,
 		SelectedTemplate: m.selectedTemplate,
 		NetworkRPCs:      m.networkRPCs,
+		UseTenderly:      m.useTenderly,
 		OverwriteDir:     m.overwriteDir,
 		Completed:        m.completed,
 		Cancelled:        m.cancelled,

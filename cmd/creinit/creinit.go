@@ -17,6 +17,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/templateconfig"
 	"github.com/smartcontractkit/cre-cli/internal/templaterepo"
+	"github.com/smartcontractkit/cre-cli/internal/tenderly"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 	"github.com/smartcontractkit/cre-cli/internal/validation"
 )
@@ -26,6 +27,7 @@ type Inputs struct {
 	TemplateName string            `validate:"omitempty" cli:"template"`
 	WorkflowName string            `validate:"omitempty,workflow_name" cli:"workflow-name"`
 	RpcURLs      map[string]string // chain-name -> url, from --rpc-url flags
+	UseTenderly  bool              // use Tenderly Virtual Networks for RPCs
 }
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
@@ -67,6 +69,7 @@ Templates are fetched dynamically from GitHub repositories.`,
 	initCmd.Flags().StringP("template", "t", "", "Name of the template to use (e.g., kv-store-go)")
 	initCmd.Flags().Bool("refresh", false, "Bypass template cache and fetch fresh data")
 	initCmd.Flags().StringArray("rpc-url", nil, "RPC URL for a network (format: chain-name=url, repeatable)")
+	initCmd.Flags().Bool("use-tenderly", false, "Use Tenderly Virtual Networks for RPC URLs")
 
 	// Deprecated: --template-id is kept for backwards compatibility, maps to hello-world-go
 	initCmd.Flags().Uint32("template-id", 0, "")
@@ -137,6 +140,7 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 		TemplateName: templateName,
 		WorkflowName: v.GetString("workflow-name"),
 		RpcURLs:      rpcURLs,
+		UseTenderly:  v.GetBool("use-tenderly"),
 	}, nil
 }
 
@@ -261,10 +265,29 @@ func (h *handler) Execute(inputs Inputs) error {
 		}
 	}
 
+	// Tenderly Virtual Networks: provision RPC URLs if requested
+	var vnetResult *tenderly.VnetResult
+	if result.UseTenderly || inputs.UseTenderly {
+		if len(selectedTemplate.Networks) > 0 {
+			provider := tenderly.NewEnvProvider()
+			var vnetErr error
+			vnetResult, vnetErr = provider.CreateVnets(selectedTemplate.Networks)
+			if vnetErr != nil {
+				return fmt.Errorf("failed to create Tenderly vnets: %w", vnetErr)
+			}
+		}
+	}
+
 	// Merge RPC URLs from wizard + flags (flags take precedence)
 	networkRPCs := result.NetworkRPCs
 	if networkRPCs == nil {
 		networkRPCs = make(map[string]string)
+	}
+	// Apply Tenderly vnet URLs as base (before wizard and flag RPCs)
+	if vnetResult != nil {
+		for chain, rpcURL := range vnetResult.NetworkRPCs {
+			networkRPCs[chain] = rpcURL
+		}
 	}
 	maps.Copy(networkRPCs, inputs.RpcURLs)
 	// Validate any provided RPC URLs
@@ -343,6 +366,17 @@ func (h *handler) Execute(inputs Inputs) error {
 		}
 	}
 
+	// For templates with projectDir, patch project.yaml with user-provided or vnet RPC URLs.
+	// The config generation block above only handles templates without projectDir.
+	if selectedTemplate.ProjectDir != "" && len(networkRPCs) > 0 {
+		projectYAMLPath := filepath.Join(projectRoot, constants.DefaultProjectSettingsFileName)
+		if h.pathExists(projectYAMLPath) {
+			if err := settings.PatchProjectRPCs(projectYAMLPath, networkRPCs); err != nil {
+				return fmt.Errorf("failed to update RPC URLs in project.yaml: %w", err)
+			}
+		}
+	}
+
 	// Ensure .env exists — dynamic templates with projectDir may not ship one
 	envPath := filepath.Join(projectRoot, constants.DefaultEnvFileName)
 	if !h.pathExists(envPath) {
@@ -379,7 +413,7 @@ func (h *handler) Execute(inputs Inputs) error {
 		h.runtimeContext.Workflow.Language = selectedTemplate.Language
 	}
 
-	h.printSuccessMessage(projectRoot, selectedTemplate, workflowName)
+	h.printSuccessMessage(projectRoot, selectedTemplate, workflowName, vnetResult)
 
 	return nil
 }
@@ -401,7 +435,7 @@ func (h *handler) findExistingProject(dir string) (projectRoot string, language 
 	}
 }
 
-func (h *handler) printSuccessMessage(projectRoot string, tmpl *templaterepo.TemplateSummary, workflowName string) {
+func (h *handler) printSuccessMessage(projectRoot string, tmpl *templaterepo.TemplateSummary, workflowName string, vnetResult *tenderly.VnetResult) {
 	language := tmpl.Language
 	workflows := tmpl.Workflows
 	isMultiWorkflow := len(workflows) > 1
@@ -470,6 +504,16 @@ func (h *handler) printSuccessMessage(projectRoot string, tmpl *templaterepo.Tem
 	// postInit: template-specific prerequisites (OUTSIDE the box)
 	if tmpl.PostInit != "" {
 		fmt.Println("  " + strings.TrimSpace(tmpl.PostInit))
+		ui.Line()
+	}
+
+	// Tenderly Virtual Networks info
+	if vnetResult != nil && len(vnetResult.VnetURLs) > 0 {
+		fmt.Println("  Tenderly Virtual Networks")
+		for chain, vnetURL := range vnetResult.VnetURLs {
+			fmt.Printf("    %s: %s\n", chain, vnetURL)
+		}
+		fmt.Println("  Use these URLs to inspect transactions and debug chain readers/writers.")
 		ui.Line()
 	}
 }
