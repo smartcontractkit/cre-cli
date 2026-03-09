@@ -74,11 +74,13 @@ func (c *Client) SetHTTPTimeout(timeout time.Duration) {
 }
 
 func (c *Client) CreateServiceContextWithTimeout() (context.Context, context.CancelFunc) {
-	return context.WithTimeout(context.Background(), c.serviceTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), c.serviceTimeout)
+	return ctx, cancel
 }
 
 func (c *Client) CreateHttpContextWithTimeout() (context.Context, context.CancelFunc) {
-	return context.WithTimeout(context.Background(), c.httpTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), c.httpTimeout)
+	return ctx, cancel
 }
 
 func (c *Client) GeneratePostUrlForArtifact(workflowId string, artifactType ArtifactType, content []byte) (GeneratePresignedPostUrlForArtifactResponse, error) {

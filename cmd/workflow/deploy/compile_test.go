@@ -319,7 +319,7 @@ func TestCompileWithWasmPath(t *testing.T) {
 		// Simulate a raw WASM binary (starts with \0asm magic number)
 		wasmContent := append([]byte{0x00, 0x61, 0x73, 0x6d}, []byte("fake wasm payload")...)
 		wasmFile := "./test_prebuilt.wasm"
-		require.NoError(t, os.WriteFile(wasmFile, wasmContent, 0644))
+		require.NoError(t, os.WriteFile(wasmFile, wasmContent, 0600))
 		t.Cleanup(func() { _ = os.Remove(wasmFile) })
 
 		outputPath := "./test_wasm_out.wasm.br.b64"
@@ -363,7 +363,7 @@ func TestCompileWithWasmPath(t *testing.T) {
 		br64Content := base64.StdEncoding.EncodeToString(compressed)
 
 		wasmFile := "./test_prebuilt_br64.wasm.br.b64"
-		require.NoError(t, os.WriteFile(wasmFile, []byte(br64Content), 0644))
+		require.NoError(t, os.WriteFile(wasmFile, []byte(br64Content), 0600))
 		t.Cleanup(func() { _ = os.Remove(wasmFile) })
 
 		outputPath := "./test_br64_out.wasm.br.b64"
@@ -492,7 +492,7 @@ func TestCompileWithWasmPath(t *testing.T) {
 		require.NoError(t, err)
 		b64Data := base64.StdEncoding.EncodeToString(compressed)
 		outPath := "./test_config_url.wasm.br.b64"
-		require.NoError(t, os.WriteFile(outPath, []byte(b64Data), 0644))
+		require.NoError(t, os.WriteFile(outPath, []byte(b64Data), 0600))
 		t.Cleanup(func() { _ = os.Remove(outPath) })
 
 		ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()

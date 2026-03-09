@@ -47,33 +47,33 @@ func (h *handler) Compile() error {
 		}
 		ui.Success(fmt.Sprintf("Loaded pre-built WASM binary from %s", h.inputs.WasmPath))
 		return nil
-	} else {
-		ui.Dim("Compiling workflow...")
-
-		workflowDir, dirErr := os.Getwd()
-		if dirErr != nil {
-			return fmt.Errorf("workflow directory: %w", dirErr)
-		}
-		resolvedWorkflowPath, resolveErr := cmdcommon.ResolveWorkflowPath(workflowDir, h.inputs.WorkflowPath)
-		if resolveErr != nil {
-			return fmt.Errorf("workflow path: %w", resolveErr)
-		}
-		_, workflowMainFile, mainErr := cmdcommon.WorkflowPathRootAndMain(resolvedWorkflowPath)
-		if mainErr != nil {
-			return fmt.Errorf("workflow path: %w", mainErr)
-		}
-		if h.runtimeContext != nil {
-			h.runtimeContext.Workflow.Language = cmdcommon.GetWorkflowLanguage(workflowMainFile)
-		}
-
-		wasmFile, err = cmdcommon.CompileWorkflowToWasm(resolvedWorkflowPath)
-		if err != nil {
-			ui.Error("Build failed:")
-			return fmt.Errorf("failed to compile workflow: %w", err)
-		}
-		h.log.Debug().Msg("Workflow compiled successfully")
-		ui.Success("Workflow compiled successfully")
 	}
+
+	ui.Dim("Compiling workflow...")
+
+	workflowDir, dirErr := os.Getwd()
+	if dirErr != nil {
+		return fmt.Errorf("workflow directory: %w", dirErr)
+	}
+	resolvedWorkflowPath, resolveErr := cmdcommon.ResolveWorkflowPath(workflowDir, h.inputs.WorkflowPath)
+	if resolveErr != nil {
+		return fmt.Errorf("workflow path: %w", resolveErr)
+	}
+	_, workflowMainFile, mainErr := cmdcommon.WorkflowPathRootAndMain(resolvedWorkflowPath)
+	if mainErr != nil {
+		return fmt.Errorf("workflow path: %w", mainErr)
+	}
+	if h.runtimeContext != nil {
+		h.runtimeContext.Workflow.Language = cmdcommon.GetWorkflowLanguage(workflowMainFile)
+	}
+
+	wasmFile, err = cmdcommon.CompileWorkflowToWasm(resolvedWorkflowPath)
+	if err != nil {
+		ui.Error("Build failed:")
+		return fmt.Errorf("failed to compile workflow: %w", err)
+	}
+	h.log.Debug().Msg("Workflow compiled successfully")
+	ui.Success("Workflow compiled successfully")
 
 	compressedFile, err := cmdcommon.CompressBrotli(wasmFile)
 	if err != nil {

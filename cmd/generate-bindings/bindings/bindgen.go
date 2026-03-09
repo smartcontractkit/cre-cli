@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common/compiler"
@@ -40,6 +41,8 @@ func GenerateBindings(
 		libs    = make(map[string]string)
 		aliases = make(map[string]string)
 	)
+
+	outPath = filepath.Clean(outPath)
 
 	switch {
 	case combinedJSONPath != "":
@@ -125,6 +128,7 @@ func GenerateBindingsTS(
 		return errors.New("must provide abiPath")
 	}
 
+	outPath = filepath.Clean(outPath)
 	abiBytes, err := os.ReadFile(abiPath)
 	if err != nil {
 		return fmt.Errorf("read ABI %q: %w", abiPath, err)
