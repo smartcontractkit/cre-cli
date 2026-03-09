@@ -72,29 +72,26 @@ func TestIsTelemetryDisabled(t *testing.T) {
 		}
 	}()
 
-	// Clear both env vars for a clean baseline
+	// Test when not set (enabled)
 	os.Unsetenv(TelemetryDisabledEnvVar)
 	os.Unsetenv("CI")
-
-	// Test when neither is set (enabled)
 	assert.False(t, isTelemetryDisabled())
 
-	// Test CRE_TELEMETRY_DISABLED=true (disabled)
+	// Test when set to "true" (disabled)
 	os.Setenv(TelemetryDisabledEnvVar, "true")
 	assert.True(t, isTelemetryDisabled())
 
-	// Test CRE_TELEMETRY_DISABLED=false (enabled)
+	// Test when set to "false" (enabled)
 	os.Setenv(TelemetryDisabledEnvVar, "false")
 	assert.False(t, isTelemetryDisabled())
 
-	// Test other values for CRE_TELEMETRY_DISABLED (enabled)
+	// Test when set to other values (enabled)
 	os.Setenv(TelemetryDisabledEnvVar, "1")
 	assert.False(t, isTelemetryDisabled())
 
 	os.Setenv(TelemetryDisabledEnvVar, "")
 	assert.False(t, isTelemetryDisabled())
 
-	// Test CI env var detection
 	os.Unsetenv(TelemetryDisabledEnvVar)
 
 	os.Setenv("CI", "true")
