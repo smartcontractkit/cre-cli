@@ -12,8 +12,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	cmdcommon "github.com/smartcontractkit/cre-cli/cmd/common"
 	"github.com/smartcontractkit/cre-cli/cmd/client"
+	cmdcommon "github.com/smartcontractkit/cre-cli/cmd/common"
 	"github.com/smartcontractkit/cre-cli/internal/accessrequest"
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
@@ -35,9 +35,9 @@ type Inputs struct {
 
 	KeepAlive    bool
 	WorkflowPath string `validate:"required,workflow_path_read"`
-	ConfigPath   string `validate:"omitempty,file,ascii,max=97" cli:"--config"`
+	ConfigPath   string `validate:"omitempty,file,ascii,max=2048" cli:"--config"`
 	OutputPath   string `validate:"omitempty,filepath,ascii,max=97" cli:"--output"`
-	WasmPath     string `validate:"omitempty,file,ascii,max=97" cli:"--wasm"`
+	WasmPath     string `validate:"omitempty,file,ascii,max=2048" cli:"--wasm"`
 
 	WorkflowRegistryContractAddress   string `validate:"required"`
 	WorkflowRegistryContractChainName string `validate:"required"`
