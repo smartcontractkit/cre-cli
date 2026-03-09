@@ -90,8 +90,9 @@ func copyDir(t *testing.T, src, dst string) {
 	entries, err := os.ReadDir(src)
 	require.NoError(t, err)
 	for _, entry := range entries {
-		srcPath := filepath.Join(src, entry.Name())
-		dstPath := filepath.Join(dst, entry.Name())
+		name := filepath.Base(entry.Name())
+		srcPath := filepath.Join(src, name)
+		dstPath := filepath.Join(dst, name)
 		if entry.IsDir() {
 			require.NoError(t, os.MkdirAll(dstPath, 0755))
 			copyDir(t, srcPath, dstPath)
@@ -111,7 +112,7 @@ func setupWorkflowDir(t *testing.T) string {
   workflow-artifacts:
     workflow-path: main.go
 `
-	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "workflow.yaml"), []byte(workflowYAML), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "workflow.yaml"), []byte(workflowYAML), 0600))
 	return tmpDir
 }
 
