@@ -4,9 +4,10 @@ import (
 	"encoding/base64"
 	"errors"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/jarcoal/httpmock"
@@ -287,16 +288,7 @@ func outputPathWithExtensions(path string) string {
 	if path == "" {
 		path = defaultOutputPath
 	}
-	if !strings.HasSuffix(path, ".b64") {
-		if !strings.HasSuffix(path, ".br") {
-			if !strings.HasSuffix(path, ".wasm") {
-				path += ".wasm"
-			}
-			path += ".br"
-		}
-		path += ".b64"
-	}
-	return path
+	return cmdcommon.EnsureOutputExtension(path)
 }
 
 // assertCompileOutputMatchesUnderlying compiles via handler.Compile(), then verifies the output
@@ -305,7 +297,7 @@ func assertCompileOutputMatchesUnderlying(t *testing.T, simulatedEnvironment *ch
 	t.Helper()
 	wasm, err := cmdcommon.CompileWorkflowToWasm(inputs.WorkflowPath)
 	require.NoError(t, err)
-	compressed, err := applyBrotliCompressionV2(&wasm)
+	compressed, err := cmdcommon.CompressBrotli(wasm)
 	require.NoError(t, err)
 	expected := base64.StdEncoding.EncodeToString(compressed)
 
@@ -317,6 +309,207 @@ func assertCompileOutputMatchesUnderlying(t *testing.T, simulatedEnvironment *ch
 	actual, err := os.ReadFile(actualPath)
 	require.NoError(t, err)
 	assert.Equal(t, expected, string(actual), "handler.Compile() output should match CompileWorkflowToWasm + brotli + base64")
+}
+
+func TestCompileWithWasmPath(t *testing.T) {
+	t.Run("raw WASM input gets compressed and encoded", func(t *testing.T) {
+		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
+		defer simulatedEnvironment.Close()
+
+		// Simulate a raw WASM binary (starts with \0asm magic number)
+		wasmContent := append([]byte{0x00, 0x61, 0x73, 0x6d}, []byte("fake wasm payload")...)
+		wasmFile := "./test_prebuilt.wasm"
+		require.NoError(t, os.WriteFile(wasmFile, wasmContent, 0600))
+		t.Cleanup(func() { _ = os.Remove(wasmFile) })
+
+		outputPath := "./test_wasm_out.wasm.br.b64"
+		t.Cleanup(func() { _ = os.Remove(outputPath) })
+
+		inputs := Inputs{
+			WorkflowName:                      "test_workflow",
+			WorkflowOwner:                     chainsim.TestAddress,
+			DonFamily:                         "test_label",
+			WorkflowPath:                      filepath.Join("testdata", "basic_workflow", "main.go"),
+			WasmPath:                          wasmFile,
+			OutputPath:                        outputPath,
+			WorkflowRegistryContractAddress:   "0x1234567890123456789012345678901234567890",
+			WorkflowRegistryContractChainName: "ethereum-testnet-sepolia",
+		}
+
+		err := runCompile(simulatedEnvironment, inputs, constants.WorkflowOwnerTypeEOA)
+		require.NoError(t, err)
+
+		data, err := os.ReadFile(outputPath)
+		require.NoError(t, err)
+		require.NotEmpty(t, data)
+
+		decoded, err := base64.StdEncoding.DecodeString(string(data))
+		require.NoError(t, err)
+		require.NotEmpty(t, decoded, "output should be valid base64-encoded brotli-compressed data")
+
+		expected, err := cmdcommon.CompressBrotli(wasmContent)
+		require.NoError(t, err)
+		expectedB64 := base64.StdEncoding.EncodeToString(expected)
+		assert.Equal(t, expectedB64, string(data), "output should match brotli(rawWasm)+base64")
+	})
+
+	t.Run("br64 input is written as-is", func(t *testing.T) {
+		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
+		defer simulatedEnvironment.Close()
+
+		rawWasm := append([]byte{0x00, 0x61, 0x73, 0x6d}, []byte("another fake wasm")...)
+		compressed, err := cmdcommon.CompressBrotli(rawWasm)
+		require.NoError(t, err)
+		br64Content := base64.StdEncoding.EncodeToString(compressed)
+
+		wasmFile := "./test_prebuilt_br64.wasm.br.b64"
+		require.NoError(t, os.WriteFile(wasmFile, []byte(br64Content), 0600))
+		t.Cleanup(func() { _ = os.Remove(wasmFile) })
+
+		outputPath := "./test_br64_out.wasm.br.b64"
+		t.Cleanup(func() { _ = os.Remove(outputPath) })
+
+		inputs := Inputs{
+			WorkflowName:                      "test_workflow",
+			WorkflowOwner:                     chainsim.TestAddress,
+			DonFamily:                         "test_label",
+			WorkflowPath:                      filepath.Join("testdata", "basic_workflow", "main.go"),
+			WasmPath:                          wasmFile,
+			OutputPath:                        outputPath,
+			WorkflowRegistryContractAddress:   "0x1234567890123456789012345678901234567890",
+			WorkflowRegistryContractChainName: "ethereum-testnet-sepolia",
+		}
+
+		err = runCompile(simulatedEnvironment, inputs, constants.WorkflowOwnerTypeEOA)
+		require.NoError(t, err)
+
+		data, err := os.ReadFile(outputPath)
+		require.NoError(t, err)
+		assert.Equal(t, br64Content, string(data), "br64 input should be written through unchanged")
+	})
+
+	t.Run("invalid wasm path fails validation", func(t *testing.T) {
+		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
+		defer simulatedEnvironment.Close()
+
+		ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
+		ctx.Credentials = &credentials.Credentials{
+			APIKey:      "test-api-key",
+			AuthType:    credentials.AuthTypeApiKey,
+			IsValidated: true,
+		}
+		handler := newHandler(ctx, buf)
+
+		ctx.Settings = createTestSettings(
+			chainsim.TestAddress,
+			constants.WorkflowOwnerTypeEOA,
+			"test_workflow",
+			filepath.Join("testdata", "basic_workflow", "main.go"),
+			"",
+		)
+		handler.settings = ctx.Settings
+		handler.inputs = Inputs{
+			WorkflowName:                      "test_workflow",
+			WorkflowOwner:                     chainsim.TestAddress,
+			DonFamily:                         "test_label",
+			WorkflowPath:                      filepath.Join("testdata", "basic_workflow", "main.go"),
+			WasmPath:                          "/nonexistent/path/to/file.wasm",
+			WorkflowRegistryContractAddress:   "0x1234567890123456789012345678901234567890",
+			WorkflowRegistryContractChainName: "ethereum-testnet-sepolia",
+		}
+
+		err := handler.ValidateInputs()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "--wasm")
+	})
+
+	t.Run("URL wasm skips compile in Compile()", func(t *testing.T) {
+		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
+		defer simulatedEnvironment.Close()
+
+		ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
+		handler := newHandler(ctx, buf)
+		ctx.Settings = createTestSettings(
+			chainsim.TestAddress,
+			constants.WorkflowOwnerTypeEOA,
+			"test_workflow",
+			filepath.Join("testdata", "basic_workflow", "main.go"),
+			"",
+		)
+		handler.settings = ctx.Settings
+		handler.inputs = Inputs{
+			WorkflowName:                      "test_workflow",
+			WorkflowOwner:                     chainsim.TestAddress,
+			DonFamily:                         "test_label",
+			WorkflowPath:                      filepath.Join("testdata", "basic_workflow", "main.go"),
+			WasmPath:                          "https://example.com/binary.wasm",
+			WorkflowRegistryContractAddress:   "0x1234567890123456789012345678901234567890",
+			WorkflowRegistryContractChainName: "ethereum-testnet-sepolia",
+		}
+		handler.validated = true
+
+		// Compile() with URL wasm should return nil (skips compile entirely).
+		err := handler.Compile()
+		require.NoError(t, err)
+	})
+
+	t.Run("PrepareWorkflowArtifact with URL binary", func(t *testing.T) {
+		wasmContent := []byte("fake wasm binary from url")
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write(wasmContent)
+		}))
+		defer srv.Close()
+
+		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
+		defer simulatedEnvironment.Close()
+
+		ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
+		handler := newHandler(ctx, buf)
+		handler.inputs = Inputs{
+			WorkflowName:  "test_workflow",
+			WorkflowOwner: chainsim.TestAddress,
+			BinaryURL:     srv.URL + "/binary.wasm",
+			WasmPath:      srv.URL + "/binary.wasm",
+		}
+		handler.urlBinaryData = wasmContent
+		handler.workflowArtifact = &workflowArtifact{}
+
+		err := handler.PrepareWorkflowArtifact()
+		require.NoError(t, err)
+		assert.NotEmpty(t, handler.workflowArtifact.WorkflowID)
+		assert.Nil(t, handler.workflowArtifact.BinaryData, "BinaryData should be nil for URL case")
+	})
+
+	t.Run("PrepareWorkflowArtifact with URL config", func(t *testing.T) {
+		configContent := []byte(`{"key": "value"}`)
+
+		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
+		defer simulatedEnvironment.Close()
+
+		// Create a local binary for the non-URL binary path
+		wasmContent := []byte("fake wasm for config url test")
+		compressed, err := cmdcommon.CompressBrotli(wasmContent)
+		require.NoError(t, err)
+		b64Data := base64.StdEncoding.EncodeToString(compressed)
+		outPath := "./test_config_url.wasm.br.b64"
+		require.NoError(t, os.WriteFile(outPath, []byte(b64Data), 0600))
+		t.Cleanup(func() { _ = os.Remove(outPath) })
+
+		ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
+		handler := newHandler(ctx, buf)
+		handler.inputs = Inputs{
+			WorkflowName:  "test_workflow",
+			WorkflowOwner: chainsim.TestAddress,
+			OutputPath:    outPath,
+		}
+		handler.urlConfigData = configContent
+		handler.workflowArtifact = &workflowArtifact{}
+
+		err = handler.PrepareWorkflowArtifact()
+		require.NoError(t, err)
+		assert.NotEmpty(t, handler.workflowArtifact.WorkflowID)
+		assert.Nil(t, handler.workflowArtifact.ConfigData, "ConfigData should be nil for URL case")
+	})
 }
 
 // TestCustomWasmWorkflowRunsMakeBuild ensures that simulate/deploy run "make build" for a custom

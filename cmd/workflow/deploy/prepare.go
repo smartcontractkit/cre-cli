@@ -41,31 +41,44 @@ func (h *handler) prepareWorkflowConfig() ([]byte, error) {
 }
 
 func (h *handler) PrepareWorkflowArtifact() error {
-	var err error
-	binaryData, err := h.prepareWorkflowBinary()
-	if err != nil {
-		return err
+	var binaryForID []byte
+
+	if h.urlBinaryData != nil {
+		// URL case: binary fetched from URL, used directly for WorkflowID.
+		binaryForID = h.urlBinaryData
+	} else {
+		binaryData, err := h.prepareWorkflowBinary()
+		if err != nil {
+			return err
+		}
+		h.workflowArtifact.BinaryData = binaryData
+
+		// The binary data read from file is base64 encoded, so we decode before generating the workflow ID.
+		// Ref https://github.com/smartcontractkit/chainlink/blob/a4adc900d98d4e6eec0a6f80fcf86d883a8f1e3c/core/services/workflows/artifacts/v2/store.go#L211-L213
+		binaryDataDecoded, err := base64.StdEncoding.DecodeString(string(binaryData))
+		if err != nil {
+			return fmt.Errorf("failed to decode base64 binary data: %w", err)
+		}
+		binaryForID = binaryDataDecoded
 	}
 
-	configData, err := h.prepareWorkflowConfig()
-	if err != nil {
-		return err
+	var configData []byte
+	if h.urlConfigData != nil {
+		configData = h.urlConfigData
+	} else {
+		var err error
+		configData, err = h.prepareWorkflowConfig()
+		if err != nil {
+			return err
+		}
+		h.workflowArtifact.ConfigData = configData
 	}
 
-	// Note: the binary data read from file is base64 encoded, so we need to decode it before generating the workflow ID.
-	// This matches the behavior in the Chainlink node. Ref https://github.com/smartcontractkit/chainlink/blob/a4adc900d98d4e6eec0a6f80fcf86d883a8f1e3c/core/services/workflows/artifacts/v2/store.go#L211-L213
-	binaryDataDecoded, err := base64.StdEncoding.DecodeString(string(binaryData))
-	if err != nil {
-		return fmt.Errorf("failed to decode base64 binary data: %w", err)
-	}
-
-	workflowID, err := workflowUtils.GenerateWorkflowIDFromStrings(h.inputs.WorkflowOwner, h.inputs.WorkflowName, binaryDataDecoded, configData, "")
+	workflowID, err := workflowUtils.GenerateWorkflowIDFromStrings(h.inputs.WorkflowOwner, h.inputs.WorkflowName, binaryForID, configData, "")
 	if err != nil {
 		return fmt.Errorf("failed to generate workflow ID: %w", err)
 	}
 
-	h.workflowArtifact.BinaryData = binaryData
-	h.workflowArtifact.ConfigData = configData
 	h.workflowArtifact.WorkflowID = workflowID
 
 	return nil
