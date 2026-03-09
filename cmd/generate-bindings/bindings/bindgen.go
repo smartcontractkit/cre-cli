@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common/compiler"
@@ -42,12 +41,10 @@ func GenerateBindings(
 		aliases = make(map[string]string)
 	)
 
-	outPath = filepath.Clean(outPath)
-
 	switch {
 	case combinedJSONPath != "":
 		// Combined-JSON mode
-		data, err := os.ReadFile(combinedJSONPath)
+		data, err := os.ReadFile(combinedJSONPath) //nolint:gosec // G703 -- path from trusted CLI flags
 		if err != nil {
 			return fmt.Errorf("read combined-json %q: %w", combinedJSONPath, err)
 		}
@@ -73,7 +70,7 @@ func GenerateBindings(
 
 	case abiPath != "":
 		// Single-ABI mode
-		abiBytes, err := os.ReadFile(abiPath)
+		abiBytes, err := os.ReadFile(abiPath) //nolint:gosec // G703 -- path from trusted CLI flags
 		if err != nil {
 			return fmt.Errorf("read ABI %q: %w", abiPath, err)
 		}
@@ -100,7 +97,7 @@ func GenerateBindings(
 	}
 
 	// Write regular bindings file
-	if err := os.WriteFile(outPath, []byte(outSrc), 0o600); err != nil {
+	if err := os.WriteFile(outPath, []byte(outSrc), 0o600); err != nil { //nolint:gosec // G703 -- path from trusted CLI flags
 		return fmt.Errorf("write %q: %w", outPath, err)
 	}
 
@@ -112,7 +109,7 @@ func GenerateBindings(
 
 	// Write mock file with "_mock.go" suffix
 	mockPath := strings.TrimSuffix(outPath, ".go") + "_mock.go"
-	if err := os.WriteFile(mockPath, []byte(mockSrc), 0o600); err != nil {
+	if err := os.WriteFile(mockPath, []byte(mockSrc), 0o600); err != nil { //nolint:gosec // G703 -- derived from trusted CLI path
 		return fmt.Errorf("write mock %q: %w", mockPath, err)
 	}
 
@@ -128,8 +125,7 @@ func GenerateBindingsTS(
 		return errors.New("must provide abiPath")
 	}
 
-	outPath = filepath.Clean(outPath)
-	abiBytes, err := os.ReadFile(abiPath)
+	abiBytes, err := os.ReadFile(abiPath) //nolint:gosec // G703 -- path from trusted CLI flags
 	if err != nil {
 		return fmt.Errorf("read ABI %q: %w", abiPath, err)
 	}
@@ -149,7 +145,7 @@ func GenerateBindingsTS(
 		return fmt.Errorf("BindV2TS: %w", err)
 	}
 
-	if err := os.WriteFile(outPath, []byte(outSrc), 0o600); err != nil {
+	if err := os.WriteFile(outPath, []byte(outSrc), 0o600); err != nil { //nolint:gosec // G703 -- path from trusted CLI flags
 		return fmt.Errorf("write %q: %w", outPath, err)
 	}
 
@@ -159,7 +155,7 @@ func GenerateBindingsTS(
 	}
 
 	mockPath := strings.TrimSuffix(outPath, ".ts") + "_mock.ts"
-	if err := os.WriteFile(mockPath, []byte(mockSrc), 0o600); err != nil {
+	if err := os.WriteFile(mockPath, []byte(mockSrc), 0o600); err != nil { //nolint:gosec // G703 -- derived from trusted CLI path
 		return fmt.Errorf("write mock %q: %w", mockPath, err)
 	}
 

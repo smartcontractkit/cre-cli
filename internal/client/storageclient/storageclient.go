@@ -74,13 +74,11 @@ func (c *Client) SetHTTPTimeout(timeout time.Duration) {
 }
 
 func (c *Client) CreateServiceContextWithTimeout() (context.Context, context.CancelFunc) {
-	ctx, cancel := context.WithTimeout(context.Background(), c.serviceTimeout)
-	return ctx, cancel
+	return context.WithTimeout(context.Background(), c.serviceTimeout) //nolint:gosec // G118 -- cancel is deferred by all callers
 }
 
 func (c *Client) CreateHttpContextWithTimeout() (context.Context, context.CancelFunc) {
-	ctx, cancel := context.WithTimeout(context.Background(), c.httpTimeout)
-	return ctx, cancel
+	return context.WithTimeout(context.Background(), c.httpTimeout) //nolint:gosec // G118 -- cancel is deferred by all callers
 }
 
 func (c *Client) GeneratePostUrlForArtifact(workflowId string, artifactType ArtifactType, content []byte) (GeneratePresignedPostUrlForArtifactResponse, error) {

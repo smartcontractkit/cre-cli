@@ -90,7 +90,7 @@ func SaveCredentials(tokenSet *CreLoginTokenSet) error {
 	}
 
 	path := filepath.Join(dir, ConfigFile)
-	data, err := yaml.Marshal(tokenSet)
+	data, err := yaml.Marshal(tokenSet) //nolint:gosec // G117 -- intentionally persisting tokens to secure config file
 	if err != nil {
 		return fmt.Errorf("marshal token set: %w", err)
 	}
