@@ -181,7 +181,7 @@ func copyDir(src, dst string) error {
 				return err
 			}
 			_ = os.RemoveAll(target)
-			return os.Symlink(linkTarget, target)
+			return os.Symlink(linkTarget, target) //nolint:gosec // G122 -- test helper copying known directory trees
 
 		default:
 			return copyFile(path, target)

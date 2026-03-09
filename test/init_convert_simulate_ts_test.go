@@ -74,7 +74,7 @@ func TestE2EInit_ConvertToCustomBuild_TS(t *testing.T) {
 	for _, name := range []string{"compile-to-js.ts", "workflow-wrapper.ts"} {
 		b, err := os.ReadFile(filepath.Join(srcDir, name))
 		require.NoError(t, err)
-		require.NoError(t, os.WriteFile(filepath.Join(scriptsDir, name), b, 0600))
+		require.NoError(t, os.WriteFile(filepath.Join(scriptsDir, name), b, 0600)) //nolint:gosec // G703 -- test paths in temp dir
 	}
 	compileToJSPath := filepath.Join(scriptsDir, "compile-to-js.ts")
 	compileToJS, err := os.ReadFile(compileToJSPath)
@@ -98,7 +98,7 @@ import { wrapWorkflowCode } from "./workflow-wrapper";`, 1)
 	if !strings.Contains(src, "main().catch") && !strings.Contains(src, "await main()") {
 		src = src + "\nmain().catch((err: unknown) => { console.error(err); process.exit(1); });\n"
 	}
-	require.NoError(t, os.WriteFile(compileToJSPath, []byte(src), 0600))
+	require.NoError(t, os.WriteFile(compileToJSPath, []byte(src), 0600)) //nolint:gosec // G703
 
 	mainStr := string(mainBefore)
 	mainStr = "declare const BUILD_FLAG: string;\n" + mainStr
@@ -110,7 +110,7 @@ import { wrapWorkflowCode } from "./workflow-wrapper";`, 1)
 		}
 	}
 	require.Contains(t, mainStr, "Hello World (custom)", "main.ts return patch must apply")
-	require.NoError(t, os.WriteFile(mainPath, []byte(mainStr), 0600))
+	require.NoError(t, os.WriteFile(mainPath, []byte(mainStr), 0600)) //nolint:gosec // G703
 
 	makefilePath := filepath.Join(workflowDirectory, "Makefile")
 	makefileContent := `.PHONY: build
@@ -119,7 +119,7 @@ build:
 	FLAG=$(FLAG) bun scripts/compile-to-js.ts main.ts wasm/workflow.js
 	bunx cre-compile-workflow wasm/workflow.js wasm/workflow.wasm
 `
-	require.NoError(t, os.WriteFile(makefilePath, []byte(makefileContent), 0600))
+	require.NoError(t, os.WriteFile(makefilePath, []byte(makefileContent), 0600)) //nolint:gosec // G703
 
 	convertTSBuildWithFlagAndAssert(t, projectRoot, workflowDirectory, workflowName, "FLAG=customFlag", "Hello World (custom)")
 	convertTSBuildWithFlagAndAssert(t, projectRoot, workflowDirectory, workflowName, "FLAG=differentFlag", "Hello World (default)")
