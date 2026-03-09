@@ -2,7 +2,9 @@ package deploy
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -43,6 +45,11 @@ func (h *handler) prepareUpsertParams() (client.RegisterWorkflowV2Parameters, er
 		status = *h.existingWorkflowStatus
 	}
 
+	attrs, err := h.buildAttributes()
+	if err != nil {
+		return client.RegisterWorkflowV2Parameters{}, err
+	}
+
 	ui.Dim(fmt.Sprintf("Preparing transaction for workflowID: %s", workflowID))
 	return client.RegisterWorkflowV2Parameters{
 		WorkflowName: workflowName,
@@ -52,7 +59,7 @@ func (h *handler) prepareUpsertParams() (client.RegisterWorkflowV2Parameters, er
 		DonFamily:    h.inputs.DonFamily,
 		BinaryURL:    binaryURL,
 		ConfigURL:    configURL,
-		Attributes:   []byte{}, // optional
+		Attributes:   attrs,
 		KeepAlive:    h.inputs.KeepAlive,
 	}, nil
 }
@@ -144,4 +151,40 @@ func (h *handler) handleUpsert(params client.RegisterWorkflowV2Parameters) error
 		h.log.Warn().Msgf("Unsupported transaction type: %s", txOut.Type)
 	}
 	return nil
+}
+
+func (h *handler) buildAttributes() ([]byte, error) {
+	if !h.inputs.Confidential {
+		return []byte{}, nil
+	}
+
+	secrets := make([]secretIdentifier, 0, len(h.inputs.Secrets))
+	for _, s := range h.inputs.Secrets {
+		key, ns, _ := strings.Cut(s, ":")
+		secrets = append(secrets, secretIdentifier{
+			Key:       key,
+			Namespace: ns,
+		})
+	}
+
+	attrs := workflowAttributes{
+		Confidential:    true,
+		VaultDonSecrets: secrets,
+	}
+
+	data, err := json.Marshal(attrs)
+	if err != nil {
+		return nil, fmt.Errorf("marshalling workflow attributes: %w", err)
+	}
+	return data, nil
+}
+
+type workflowAttributes struct {
+	Confidential    bool               `json:"confidential"`
+	VaultDonSecrets []secretIdentifier `json:"vault_don_secrets,omitempty"`
+}
+
+type secretIdentifier struct {
+	Key       string `json:"key"`
+	Namespace string `json:"namespace,omitempty"`
 }

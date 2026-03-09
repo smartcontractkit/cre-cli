@@ -228,6 +228,31 @@ func TestResolveInputs_TagTruncation(t *testing.T) {
 	}
 }
 
+func TestValidateInputs_SecretRequiresConfidential(t *testing.T) {
+	t.Parallel()
+	simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
+	defer simulatedEnvironment.Close()
+
+	ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
+	h := newHandler(ctx, buf)
+
+	h.inputs = Inputs{
+		WorkflowName:                      "test_workflow",
+		WorkflowOwner:                     chainsim.TestAddress,
+		WorkflowPath:                      "testdata/basic_workflow/main.go",
+		DonFamily:                         "zone-a",
+		WorkflowRegistryContractChainName: "ethereum-testnet-sepolia",
+		WorkflowRegistryContractAddress:   simulatedEnvironment.Contracts.WorkflowRegistry.Contract.Hex(),
+		Secrets:                           []string{"API_KEY"},
+		Confidential:                      false,
+	}
+
+	err := h.ValidateInputs()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "--secret requires --confidential flag")
+	assert.False(t, h.validated)
+}
+
 func stringPtr(s string) *string {
 	return &s
 }

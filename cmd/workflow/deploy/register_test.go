@@ -1,6 +1,7 @@
 package deploy
 
 import (
+	"encoding/json"
 	"path/filepath"
 	"testing"
 
@@ -169,5 +170,66 @@ func TestPrepareUpsertParams_StatusPreservation(t *testing.T) {
 		params, err := handler.prepareUpsertParams()
 		require.NoError(t, err)
 		assert.Equal(t, uint8(0), params.Status, "updating active workflow should preserve active status (0)")
+	})
+}
+
+func TestBuildAttributes(t *testing.T) {
+	t.Parallel()
+
+	t.Run("non-confidential workflow returns empty attributes", func(t *testing.T) {
+		t.Parallel()
+		h := &handler{inputs: Inputs{Confidential: false}}
+		attrs, err := h.buildAttributes()
+		require.NoError(t, err)
+		assert.Equal(t, []byte{}, attrs)
+	})
+
+	t.Run("confidential workflow with no secrets", func(t *testing.T) {
+		t.Parallel()
+		h := &handler{inputs: Inputs{Confidential: true}}
+		attrs, err := h.buildAttributes()
+		require.NoError(t, err)
+
+		var parsed workflowAttributes
+		require.NoError(t, json.Unmarshal(attrs, &parsed))
+		assert.True(t, parsed.Confidential)
+		assert.Empty(t, parsed.VaultDonSecrets)
+	})
+
+	t.Run("confidential workflow with secrets", func(t *testing.T) {
+		t.Parallel()
+		h := &handler{inputs: Inputs{
+			Confidential: true,
+			Secrets:      []string{"API_KEY", "DB_PASS"},
+		}}
+		attrs, err := h.buildAttributes()
+		require.NoError(t, err)
+
+		var parsed workflowAttributes
+		require.NoError(t, json.Unmarshal(attrs, &parsed))
+		assert.True(t, parsed.Confidential)
+		require.Len(t, parsed.VaultDonSecrets, 2)
+		assert.Equal(t, "API_KEY", parsed.VaultDonSecrets[0].Key)
+		assert.Empty(t, parsed.VaultDonSecrets[0].Namespace)
+		assert.Equal(t, "DB_PASS", parsed.VaultDonSecrets[1].Key)
+		assert.Empty(t, parsed.VaultDonSecrets[1].Namespace)
+	})
+
+	t.Run("secret with namespace parsed correctly", func(t *testing.T) {
+		t.Parallel()
+		h := &handler{inputs: Inputs{
+			Confidential: true,
+			Secrets:      []string{"API_KEY:prod", "DB_PASS"},
+		}}
+		attrs, err := h.buildAttributes()
+		require.NoError(t, err)
+
+		var parsed workflowAttributes
+		require.NoError(t, json.Unmarshal(attrs, &parsed))
+		require.Len(t, parsed.VaultDonSecrets, 2)
+		assert.Equal(t, "API_KEY", parsed.VaultDonSecrets[0].Key)
+		assert.Equal(t, "prod", parsed.VaultDonSecrets[0].Namespace)
+		assert.Equal(t, "DB_PASS", parsed.VaultDonSecrets[1].Key)
+		assert.Empty(t, parsed.VaultDonSecrets[1].Namespace)
 	})
 }
