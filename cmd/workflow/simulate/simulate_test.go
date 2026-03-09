@@ -233,7 +233,7 @@ func TestSimulateValidateInputs_URLBypass(t *testing.T) {
 	t.Parallel()
 
 	tmpFile := filepath.Join(t.TempDir(), "main.go")
-	require.NoError(t, os.WriteFile(tmpFile, []byte("package main"), 0644))
+	require.NoError(t, os.WriteFile(tmpFile, []byte("package main"), 0600))
 
 	runtimeCtx := &runtime.Context{
 		Logger: testutil.NewTestLogger(),

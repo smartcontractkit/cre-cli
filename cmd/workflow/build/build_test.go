@@ -98,7 +98,7 @@ func copyDir(t *testing.T, src, dst string) {
 		} else {
 			data, err := os.ReadFile(srcPath)
 			require.NoError(t, err)
-			require.NoError(t, os.WriteFile(dstPath, data, 0644))
+			require.NoError(t, os.WriteFile(dstPath, data, 0600))
 		}
 	}
 }
