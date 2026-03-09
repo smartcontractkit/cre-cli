@@ -16,7 +16,8 @@ const makefileName = "Makefile"
 var defaultWasmOutput = filepath.Join("wasm", "workflow.wasm")
 
 // getBuildCmd returns a single step that builds the workflow and returns the WASM bytes.
-func getBuildCmd(workflowRootFolder, mainFile, language string) (func() ([]byte, error), error) {
+// If stripSymbols is true, debug symbols are stripped from the binary to reduce size.
+func getBuildCmd(workflowRootFolder, mainFile, language string, stripSymbols bool) (func() ([]byte, error), error) {
 	tmpPath := filepath.Join(workflowRootFolder, ".cre_build_tmp.wasm")
 	switch language {
 	case constants.WorkflowLanguageTypeScript:
@@ -33,11 +34,15 @@ func getBuildCmd(workflowRootFolder, mainFile, language string) (func() ([]byte,
 		}, nil
 	case constants.WorkflowLanguageGolang:
 		// Build the package (.) so all .go files (main.go, workflow.go, etc.) are compiled together
+		ldflags := "-buildid="
+		if stripSymbols {
+			ldflags = "-buildid= -w -s"
+		}
 		cmd := exec.Command(
 			"go", "build",
 			"-o", tmpPath,
 			"-trimpath",
-			"-ldflags=-buildid= -w -s",
+			"-ldflags="+ldflags,
 			".",
 		)
 		cmd.Dir = workflowRootFolder
@@ -68,11 +73,15 @@ func getBuildCmd(workflowRootFolder, mainFile, language string) (func() ([]byte,
 		}, nil
 	default:
 		// Build the package (.) so all .go files are compiled together
+		ldflags := "-buildid="
+		if stripSymbols {
+			ldflags = "-buildid= -w -s"
+		}
 		cmd := exec.Command(
 			"go", "build",
 			"-o", tmpPath,
 			"-trimpath",
-			"-ldflags=-buildid= -w -s",
+			"-ldflags="+ldflags,
 			".",
 		)
 		cmd.Dir = workflowRootFolder
@@ -90,8 +99,10 @@ func getBuildCmd(workflowRootFolder, mainFile, language string) (func() ([]byte,
 }
 
 // CompileWorkflowToWasm compiles the workflow at workflowPath and returns the WASM binary.
-// It runs the sequence of commands from getBuildCmds (make build + copy for WASM, or single build for Go/TS), then reads the temp WASM file.
-func CompileWorkflowToWasm(workflowPath string) ([]byte, error) {
+// If stripSymbols is true, debug symbols are stripped to reduce binary size (used for deploy).
+// If false, debug symbols are kept for better error messages (used for simulate).
+// For custom builds (WASM language with Makefile), stripSymbols has no effect.
+func CompileWorkflowToWasm(workflowPath string, stripSymbols bool) ([]byte, error) {
 	workflowRootFolder, workflowMainFile, err := WorkflowPathRootAndMain(workflowPath)
 	if err != nil {
 		return nil, fmt.Errorf("workflow path: %w", err)
@@ -122,7 +133,7 @@ func CompileWorkflowToWasm(workflowPath string) ([]byte, error) {
 		return nil, fmt.Errorf("unsupported workflow language for file %s", workflowMainFile)
 	}
 
-	buildStep, err := getBuildCmd(workflowRootFolder, workflowMainFile, language)
+	buildStep, err := getBuildCmd(workflowRootFolder, workflowMainFile, language, stripSymbols)
 	if err != nil {
 		return nil, err
 	}

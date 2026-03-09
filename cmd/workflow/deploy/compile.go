@@ -48,7 +48,7 @@ func (h *handler) Compile() error {
 		h.runtimeContext.Workflow.Language = cmdcommon.GetWorkflowLanguage(workflowMainFile)
 	}
 
-	wasmFile, err := cmdcommon.CompileWorkflowToWasm(resolvedWorkflowPath)
+	wasmFile, err := cmdcommon.CompileWorkflowToWasm(resolvedWorkflowPath, true)
 	if err != nil {
 		ui.Error("Build failed:")
 		return fmt.Errorf("failed to compile workflow: %w", err)
