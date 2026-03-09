@@ -57,32 +57,53 @@ func TestCollectCommandInfo(t *testing.T) {
 
 func TestIsTelemetryDisabled(t *testing.T) {
 	// Save original state
-	originalValue, wasSet := os.LookupEnv(TelemetryDisabledEnvVar)
+	originalDisabled, disabledWasSet := os.LookupEnv(TelemetryDisabledEnvVar)
+	originalCI, ciWasSet := os.LookupEnv("CI")
 	defer func() {
-		if wasSet {
-			os.Setenv(TelemetryDisabledEnvVar, originalValue)
+		if disabledWasSet {
+			os.Setenv(TelemetryDisabledEnvVar, originalDisabled)
 		} else {
 			os.Unsetenv(TelemetryDisabledEnvVar)
 		}
+		if ciWasSet {
+			os.Setenv("CI", originalCI)
+		} else {
+			os.Unsetenv("CI")
+		}
 	}()
 
-	// Test when not set (enabled)
+	// Clear both env vars for a clean baseline
 	os.Unsetenv(TelemetryDisabledEnvVar)
+	os.Unsetenv("CI")
+
+	// Test when neither is set (enabled)
 	assert.False(t, isTelemetryDisabled())
 
-	// Test when set to "true" (disabled)
+	// Test CRE_TELEMETRY_DISABLED=true (disabled)
 	os.Setenv(TelemetryDisabledEnvVar, "true")
 	assert.True(t, isTelemetryDisabled())
 
-	// Test when set to "false" (enabled)
+	// Test CRE_TELEMETRY_DISABLED=false (enabled)
 	os.Setenv(TelemetryDisabledEnvVar, "false")
 	assert.False(t, isTelemetryDisabled())
 
-	// Test when set to other values (enabled)
+	// Test other values for CRE_TELEMETRY_DISABLED (enabled)
 	os.Setenv(TelemetryDisabledEnvVar, "1")
 	assert.False(t, isTelemetryDisabled())
 
 	os.Setenv(TelemetryDisabledEnvVar, "")
+	assert.False(t, isTelemetryDisabled())
+
+	// Test CI env var detection
+	os.Unsetenv(TelemetryDisabledEnvVar)
+
+	os.Setenv("CI", "true")
+	assert.True(t, isTelemetryDisabled())
+
+	os.Setenv("CI", "1")
+	assert.True(t, isTelemetryDisabled())
+
+	os.Unsetenv("CI")
 	assert.False(t, isTelemetryDisabled())
 }
 

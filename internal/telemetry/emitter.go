@@ -62,9 +62,15 @@ func EmitCommandEvent(cmd *cobra.Command, args []string, exitCode int, runtimeCt
 }
 
 // isTelemetryDisabled checks if telemetry is disabled via environment variable
+// or when running in a CI environment.
 func isTelemetryDisabled() bool {
-	value := os.Getenv(TelemetryDisabledEnvVar)
-	return value == "true"
+	if os.Getenv(TelemetryDisabledEnvVar) == "true" {
+		return true
+	}
+	if os.Getenv("CI") != "" {
+		return true
+	}
+	return false
 }
 
 // isTelemetryDebugEnabled checks if telemetry debug logging is enabled
