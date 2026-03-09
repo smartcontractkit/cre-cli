@@ -4,6 +4,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -91,15 +92,17 @@ func copyDir(t *testing.T, src, dst string) {
 	require.NoError(t, err)
 	for _, entry := range entries {
 		name := filepath.Base(entry.Name())
-		srcPath := filepath.Join(src, name)
-		dstPath := filepath.Join(dst, name)
+		srcPath := filepath.Clean(filepath.Join(src, name))
+		dstPath := filepath.Clean(filepath.Join(dst, name))
+		require.True(t, strings.HasPrefix(srcPath, filepath.Clean(src)), "path traversal detected: %s", srcPath)
+		require.True(t, strings.HasPrefix(dstPath, filepath.Clean(dst)), "path traversal detected: %s", dstPath)
 		if entry.IsDir() {
 			require.NoError(t, os.MkdirAll(dstPath, 0755))
 			copyDir(t, srcPath, dstPath)
 		} else {
 			data, err := os.ReadFile(srcPath)
 			require.NoError(t, err)
-			require.NoError(t, os.WriteFile(dstPath, data, 0600))
+			require.NoError(t, os.WriteFile(dstPath, data, 0600)) //nolint:gosec // path validated above
 		}
 	}
 }
