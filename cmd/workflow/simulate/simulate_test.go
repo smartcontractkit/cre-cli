@@ -8,12 +8,43 @@ import (
 	"testing"
 
 	"github.com/spf13/viper"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/testutil"
 )
+
+func TestValidateInputs_SecretRequiresConfidential(t *testing.T) {
+	h := newHandler(&runtime.Context{Logger: testutil.NewTestLogger()})
+	err := h.ValidateInputs(Inputs{
+		Secrets: []string{"API_KEY"},
+		Confidential: false,
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "--secret requires --confidential flag")
+}
+
+func TestValidateInputs_ConfidentialRequiresSecret(t *testing.T) {
+	h := newHandler(&runtime.Context{Logger: testutil.NewTestLogger()})
+	err := h.ValidateInputs(Inputs{
+		Confidential: true,
+		Secrets:      nil,
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "--confidential requires at least one --secret flag")
+}
+
+func TestValidateInputs_EmptySecretKey(t *testing.T) {
+	h := newHandler(&runtime.Context{Logger: testutil.NewTestLogger()})
+	err := h.ValidateInputs(Inputs{
+		Confidential: true,
+		Secrets:      []string{":namespace"},
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "has empty key")
+}
 
 // TestBlankWorkflowSimulation validates that the simulator can successfully
 // run a blank workflow from end to end in a non-interactive mode.

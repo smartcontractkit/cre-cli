@@ -61,6 +61,9 @@ type Inputs struct {
 	EVMEventIndex  int    `validate:"-"`
 	// Experimental chains support (for chains not in official chain-selectors)
 	ExperimentalForwarders map[uint64]common.Address `validate:"-"` // forwarders keyed by chain ID
+	// Confidential workflow simulation
+	Confidential bool     `validate:"-"`
+	Secrets      []string `validate:"-"`
 }
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
@@ -93,6 +96,9 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	simulateCmd.Flags().String("http-payload", "", "HTTP trigger payload as JSON string or path to JSON file (with or without @ prefix)")
 	simulateCmd.Flags().String("evm-tx-hash", "", "EVM trigger transaction hash (0x...)")
 	simulateCmd.Flags().Int("evm-event-index", -1, "EVM trigger log index (0-based)")
+	// Confidential workflow flags
+	simulateCmd.Flags().Bool("confidential", false, "Simulate as a confidential workflow (restricts secret access to declared keys)")
+	simulateCmd.Flags().StringSlice("secret", nil, "Allowed VaultDON secret (repeatable, format: KEY or KEY:namespace)")
 	return simulateCmd
 }
 
@@ -226,10 +232,25 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 		EVMTxHash:              v.GetString("evm-tx-hash"),
 		EVMEventIndex:          v.GetInt("evm-event-index"),
 		ExperimentalForwarders: experimentalForwarders,
+		Confidential:           v.GetBool("confidential"),
+		Secrets:                v.GetStringSlice("secret"),
 	}, nil
 }
 
 func (h *handler) ValidateInputs(inputs Inputs) error {
+	if len(inputs.Secrets) > 0 && !inputs.Confidential {
+		return fmt.Errorf("--secret requires --confidential flag")
+	}
+	if inputs.Confidential && len(inputs.Secrets) == 0 {
+		return fmt.Errorf("--confidential requires at least one --secret flag")
+	}
+	for _, s := range inputs.Secrets {
+		key, _, _ := strings.Cut(s, ":")
+		if strings.TrimSpace(key) == "" {
+			return fmt.Errorf("--secret value %q has empty key", s)
+		}
+	}
+
 	validate, err := validation.NewValidator()
 	if err != nil {
 		return fmt.Errorf("failed to initialize validator: %w", err)
@@ -306,6 +327,17 @@ func (h *handler) Execute(inputs Inputs) error {
 		if err != nil {
 			return fmt.Errorf("failed to replace secret names with environment variables: %w", err)
 		}
+	}
+
+	if inputs.Confidential {
+		if inputs.SecretsPath == "" {
+			return fmt.Errorf("--confidential requires a secrets.yaml file in the workflow directory")
+		}
+		secrets, err = FilterSecretsByAllowedKeys(secrets, inputs.Secrets)
+		if err != nil {
+			return fmt.Errorf("confidential mode secret filtering: %w", err)
+		}
+		ui.Dim(fmt.Sprintf("Confidential mode: secrets restricted to %v", secretKeys(inputs.Secrets)))
 	}
 
 	// Set up context for signal handling

@@ -8,6 +8,91 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+func TestFilterSecretsByAllowedKeys(t *testing.T) {
+	tests := []struct {
+		name           string
+		yamlInput      string
+		allowedSecrets []string
+		wantSecrets    map[string][]string
+		wantErr        string
+	}{
+		{
+			name: "filters to declared keys only",
+			yamlInput: `secretsNames:
+  API_KEY:
+    - val1
+  DB_PASS:
+    - val2
+  OTHER:
+    - val3`,
+			allowedSecrets: []string{"API_KEY", "DB_PASS"},
+			wantSecrets: map[string][]string{
+				"API_KEY": {"val1"},
+				"DB_PASS": {"val2"},
+			},
+		},
+		{
+			name: "KEY:namespace format extracts key correctly",
+			yamlInput: `secretsNames:
+  API_KEY:
+    - val1
+  OTHER:
+    - val2`,
+			allowedSecrets: []string{"API_KEY:my-namespace"},
+			wantSecrets:    map[string][]string{"API_KEY": {"val1"}},
+		},
+		{
+			name: "declared secret not in file returns error",
+			yamlInput: `secretsNames:
+  API_KEY:
+    - val1`,
+			allowedSecrets: []string{"MISSING"},
+			wantErr:        `declared secret "MISSING" not found in secrets.yaml`,
+		},
+		{
+			name:           "invalid yaml returns error",
+			yamlInput:      `not: valid: yaml: [`,
+			allowedSecrets: []string{"KEY"},
+			wantErr:        "yaml:",
+		},
+		{
+			name: "single key allowed from many",
+			yamlInput: `secretsNames:
+  A:
+    - a1
+  B:
+    - b1
+  C:
+    - c1`,
+			allowedSecrets: []string{"B"},
+			wantSecrets:    map[string][]string{"B": {"b1"}},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := FilterSecretsByAllowedKeys([]byte(tt.yamlInput), tt.allowedSecrets)
+
+			if tt.wantErr != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
+
+			var parsed secretsYamlConfig
+			require.NoError(t, yaml.Unmarshal(got, &parsed))
+			assert.Equal(t, tt.wantSecrets, parsed.SecretsNames)
+		})
+	}
+}
+
+func TestSecretKeys(t *testing.T) {
+	assert.Equal(t, []string{"A", "B", "C"}, secretKeys([]string{"A", "B:ns", "C"}))
+	assert.Equal(t, []string{}, secretKeys([]string{}))
+}
+
 func TestReplaceSecretNamesWithEnvVars(t *testing.T) {
 	tests := []struct {
 		name        string
