@@ -5,9 +5,9 @@ go 1.25.3
 require (
 	github.com/ethereum/go-ethereum v1.17.0
 	github.com/shopspring/decimal v1.4.0
-	github.com/smartcontractkit/chainlink-protos/cre/go v0.0.0-20260227170625-e0e1c4094174
-	github.com/smartcontractkit/cre-sdk-go v1.4.0
-	github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm v1.0.0-beta.6
+	github.com/smartcontractkit/chainlink-protos/cre/go v0.0.0-20260304171818-4962d40dc235
+	github.com/smartcontractkit/cre-sdk-go v1.5.0
+	github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm v1.0.0-beta.7
 	github.com/smartcontractkit/cre-sdk-go/capabilities/networking/confidentialhttp v0.0.0-20260211203328-1f3721436119
 	github.com/smartcontractkit/cre-sdk-go/capabilities/networking/http v1.3.0
 	github.com/smartcontractkit/cre-sdk-go/capabilities/scheduler/cron v1.3.0
