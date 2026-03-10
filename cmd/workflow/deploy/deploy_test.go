@@ -2,6 +2,7 @@ package deploy
 
 import (
 	"errors"
+	"io"
 	"math/big"
 	"testing"
 
@@ -226,6 +227,203 @@ func TestResolveInputs_TagTruncation(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestResolveInputs_ConfigFlags(t *testing.T) {
+	t.Parallel()
+
+	settingsConfigPath := "testdata/basic_workflow/config.yml"
+	overrideConfigPath := "testdata/basic_workflow/config.yml"
+
+	tests := []struct {
+		name               string
+		viperOverrides     map[string]interface{}
+		expectedConfigPath string
+	}{
+		{
+			name:               "default uses settings config path",
+			viperOverrides:     nil,
+			expectedConfigPath: settingsConfigPath,
+		},
+		{
+			name:               "no-config clears config path",
+			viperOverrides:     map[string]interface{}{"no-config": true},
+			expectedConfigPath: "",
+		},
+		{
+			name:               "config flag overrides settings",
+			viperOverrides:     map[string]interface{}{"config": overrideConfigPath},
+			expectedConfigPath: overrideConfigPath,
+		},
+		{
+			name:               "default-config uses settings config path",
+			viperOverrides:     map[string]interface{}{"default-config": true},
+			expectedConfigPath: settingsConfigPath,
+		},
+		{
+			name:               "config flag with URL value",
+			viperOverrides:     map[string]interface{}{"config": "https://example.com/config.yaml"},
+			expectedConfigPath: "https://example.com/config.yaml",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
+			defer simulatedEnvironment.Close()
+
+			ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
+			h := newHandler(ctx, buf)
+
+			ctx.Settings = createTestSettings(
+				chainsim.TestAddress,
+				"eoa",
+				"test_workflow",
+				"testdata/basic_workflow/main.go",
+				settingsConfigPath,
+			)
+			h.settings = ctx.Settings
+
+			for k, v := range tt.viperOverrides {
+				ctx.Viper.Set(k, v)
+			}
+
+			inputs, err := h.ResolveInputs(ctx.Viper)
+			require.NoError(t, err)
+			assert.Equal(t, tt.expectedConfigPath, inputs.ConfigPath)
+		})
+	}
+}
+
+func TestResolveInputs_WasmFlag(t *testing.T) {
+	t.Parallel()
+
+	t.Run("local path", func(t *testing.T) {
+		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
+		defer simulatedEnvironment.Close()
+
+		ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
+		h := newHandler(ctx, buf)
+
+		ctx.Settings = createTestSettings(
+			chainsim.TestAddress,
+			"eoa",
+			"test_workflow",
+			"testdata/basic_workflow/main.go",
+			"",
+		)
+		h.settings = ctx.Settings
+
+		wasmPath := "/tmp/test.wasm"
+		ctx.Viper.Set("wasm", wasmPath)
+
+		inputs, err := h.ResolveInputs(ctx.Viper)
+		require.NoError(t, err)
+		assert.Equal(t, wasmPath, inputs.WasmPath)
+	})
+
+	t.Run("URL", func(t *testing.T) {
+		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
+		defer simulatedEnvironment.Close()
+
+		ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
+		h := newHandler(ctx, buf)
+
+		ctx.Settings = createTestSettings(
+			chainsim.TestAddress,
+			"eoa",
+			"test_workflow",
+			"testdata/basic_workflow/main.go",
+			"",
+		)
+		h.settings = ctx.Settings
+
+		wasmURL := "https://example.com/binary.wasm"
+		ctx.Viper.Set("wasm", wasmURL)
+
+		inputs, err := h.ResolveInputs(ctx.Viper)
+		require.NoError(t, err)
+		assert.Equal(t, wasmURL, inputs.WasmPath)
+	})
+}
+
+func TestValidateInputs_URLBypass(t *testing.T) {
+	t.Parallel()
+
+	t.Run("URL wasm bypasses file validation", func(t *testing.T) {
+		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
+		defer simulatedEnvironment.Close()
+
+		ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
+		handler := newHandler(ctx, buf)
+		ctx.Settings = createTestSettings(
+			chainsim.TestAddress,
+			"eoa",
+			"test_workflow",
+			"testdata/basic_workflow/main.go",
+			"",
+		)
+		handler.settings = ctx.Settings
+		handler.inputs = Inputs{
+			WorkflowName:                      "test_workflow",
+			WorkflowOwner:                     chainsim.TestAddress,
+			DonFamily:                         "test_label",
+			WorkflowPath:                      "testdata/basic_workflow/main.go",
+			WasmPath:                          "https://example.com/binary.wasm",
+			WorkflowRegistryContractAddress:   "0x1234567890123456789012345678901234567890",
+			WorkflowRegistryContractChainName: "ethereum-testnet-sepolia",
+		}
+
+		err := handler.ValidateInputs()
+		require.NoError(t, err, "URL wasm path should bypass file validator")
+		assert.True(t, handler.validated)
+	})
+
+	t.Run("URL config bypasses file validation", func(t *testing.T) {
+		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
+		defer simulatedEnvironment.Close()
+
+		ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
+		handler := newHandler(ctx, buf)
+		ctx.Settings = createTestSettings(
+			chainsim.TestAddress,
+			"eoa",
+			"test_workflow",
+			"testdata/basic_workflow/main.go",
+			"",
+		)
+		handler.settings = ctx.Settings
+		handler.inputs = Inputs{
+			WorkflowName:                      "test_workflow",
+			WorkflowOwner:                     chainsim.TestAddress,
+			DonFamily:                         "test_label",
+			WorkflowPath:                      "testdata/basic_workflow/main.go",
+			ConfigPath:                        "https://example.com/config.yaml",
+			WorkflowRegistryContractAddress:   "0x1234567890123456789012345678901234567890",
+			WorkflowRegistryContractChainName: "ethereum-testnet-sepolia",
+		}
+
+		err := handler.ValidateInputs()
+		require.NoError(t, err, "URL config path should bypass file validator")
+		assert.True(t, handler.validated)
+	})
+}
+
+func TestConfigFlagsMutuallyExclusive(t *testing.T) {
+	t.Parallel()
+
+	simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
+	defer simulatedEnvironment.Close()
+
+	cmd := New(simulatedEnvironment.NewRuntimeContext())
+	cmd.SetArgs([]string{"./testdata/basic_workflow", "--no-config", "--config", "foo.yml"})
+	cmd.SetOut(io.Discard)
+	cmd.SetErr(io.Discard)
+	err := cmd.Execute()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "if any flags in the group [config no-config default-config] are set none of the others can be")
 }
 
 func stringPtr(s string) *string {

@@ -37,6 +37,7 @@ import (
 	v2 "github.com/smartcontractkit/chainlink/v2/core/services/workflows/v2"
 
 	cmdcommon "github.com/smartcontractkit/cre-cli/cmd/common"
+	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
@@ -45,6 +46,7 @@ import (
 )
 
 type Inputs struct {
+	WasmPath      string                       `validate:"omitempty,file,ascii,max=97" cli:"--wasm"`
 	WorkflowPath  string                       `validate:"required,workflow_path_read"`
 	ConfigPath    string                       `validate:"omitempty,file,ascii,max=97"`
 	SecretsPath   string                       `validate:"omitempty,file,ascii,max=97"`
@@ -87,6 +89,11 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 
 	simulateCmd.Flags().BoolP("engine-logs", "g", false, "Enable non-fatal engine logging")
 	simulateCmd.Flags().Bool("broadcast", false, "Broadcast transactions to the EVM (default: false)")
+	simulateCmd.Flags().String("wasm", "", "Path or URL to a pre-built WASM binary (skips compilation)")
+	simulateCmd.Flags().String("config", "", "Override the config file path from workflow.yaml")
+	simulateCmd.Flags().Bool("no-config", false, "Simulate without a config file")
+	simulateCmd.Flags().Bool("default-config", false, "Use the config path from workflow.yaml settings (default behavior)")
+	simulateCmd.MarkFlagsMutuallyExclusive("config", "no-config", "default-config")
 	// Non-interactive flags
 	simulateCmd.Flags().Bool(settings.Flags.NonInteractive.Name, false, "Run without prompts; requires --trigger-index and inputs for the selected trigger type")
 	simulateCmd.Flags().Int("trigger-index", -1, "Index of the trigger to run (0-based)")
@@ -212,8 +219,9 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 	}
 
 	return Inputs{
+		WasmPath:               v.GetString("wasm"),
 		WorkflowPath:           creSettings.Workflow.WorkflowArtifactSettings.WorkflowPath,
-		ConfigPath:             creSettings.Workflow.WorkflowArtifactSettings.ConfigPath,
+		ConfigPath:             cmdcommon.ResolveConfigPath(v, creSettings.Workflow.WorkflowArtifactSettings.ConfigPath),
 		SecretsPath:            creSettings.Workflow.WorkflowArtifactSettings.SecretsPath,
 		EngineLogs:             v.GetBool("engine-logs"),
 		Broadcast:              v.GetBool("broadcast"),
@@ -230,6 +238,16 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 }
 
 func (h *handler) ValidateInputs(inputs Inputs) error {
+	// URLs bypass the struct-level file/ascii/max validators.
+	savedWasm := inputs.WasmPath
+	savedConfig := inputs.ConfigPath
+	if cmdcommon.IsURL(inputs.WasmPath) {
+		inputs.WasmPath = ""
+	}
+	if cmdcommon.IsURL(inputs.ConfigPath) {
+		inputs.ConfigPath = ""
+	}
+
 	validate, err := validation.NewValidator()
 	if err != nil {
 		return fmt.Errorf("failed to initialize validator: %w", err)
@@ -238,6 +256,9 @@ func (h *handler) ValidateInputs(inputs Inputs) error {
 	if err = validate.Struct(inputs); err != nil {
 		return validate.ParseValidationErrors(err)
 	}
+
+	inputs.WasmPath = savedWasm
+	inputs.ConfigPath = savedConfig
 
 	// forbid the default 0x...01 key when broadcasting
 	if inputs.Broadcast && inputs.EthPrivateKey != nil && inputs.EthPrivateKey.D.Cmp(big.NewInt(1)) == 0 {
@@ -258,36 +279,70 @@ func (h *handler) ValidateInputs(inputs Inputs) error {
 }
 
 func (h *handler) Execute(inputs Inputs) error {
-	workflowDir, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("workflow directory: %w", err)
-	}
-	resolvedWorkflowPath, err := cmdcommon.ResolveWorkflowPath(workflowDir, inputs.WorkflowPath)
-	if err != nil {
-		return fmt.Errorf("workflow path: %w", err)
-	}
-	_, workflowMainFile, err := cmdcommon.WorkflowPathRootAndMain(resolvedWorkflowPath)
-	if err != nil {
-		return fmt.Errorf("workflow path: %w", err)
-	}
-	if h.runtimeContext != nil {
-		h.runtimeContext.Workflow.Language = cmdcommon.GetWorkflowLanguage(workflowMainFile)
+	var wasmFileBinary []byte
+	var err error
+
+	if inputs.WasmPath != "" {
+		if cmdcommon.IsURL(inputs.WasmPath) {
+			ui.Dim("Fetching WASM binary from URL...")
+			wasmFileBinary, err = cmdcommon.FetchURL(inputs.WasmPath)
+			if err != nil {
+				return fmt.Errorf("failed to fetch WASM from URL: %w", err)
+			}
+			ui.Success("Fetched WASM binary from URL")
+		} else {
+			ui.Dim("Reading pre-built WASM binary...")
+			wasmFileBinary, err = os.ReadFile(inputs.WasmPath)
+			if err != nil {
+				return fmt.Errorf("failed to read WASM binary: %w", err)
+			}
+			ui.Success(fmt.Sprintf("Loaded WASM binary from %s", inputs.WasmPath))
+		}
+		wasmFileBinary, err = cmdcommon.EnsureRawWasm(wasmFileBinary)
+		if err != nil {
+			return fmt.Errorf("failed to decode WASM binary: %w", err)
+		}
+		if h.runtimeContext != nil {
+			h.runtimeContext.Workflow.Language = constants.WorkflowLanguageWasm
+		}
+	} else {
+		workflowDir, err := os.Getwd()
+		if err != nil {
+			return fmt.Errorf("workflow directory: %w", err)
+		}
+		resolvedWorkflowPath, err := cmdcommon.ResolveWorkflowPath(workflowDir, inputs.WorkflowPath)
+		if err != nil {
+			return fmt.Errorf("workflow path: %w", err)
+		}
+		_, workflowMainFile, err := cmdcommon.WorkflowPathRootAndMain(resolvedWorkflowPath)
+		if err != nil {
+			return fmt.Errorf("workflow path: %w", err)
+		}
+		if h.runtimeContext != nil {
+			h.runtimeContext.Workflow.Language = cmdcommon.GetWorkflowLanguage(workflowMainFile)
+		}
+
+		spinner := ui.NewSpinner()
+		spinner.Start("Compiling workflow...")
+		wasmFileBinary, err = cmdcommon.CompileWorkflowToWasm(resolvedWorkflowPath, false)
+		spinner.Stop()
+		if err != nil {
+			ui.Error("Build failed:")
+			return fmt.Errorf("failed to compile workflow: %w", err)
+		}
+		h.log.Debug().Msg("Workflow compiled")
+		ui.Success("Workflow compiled")
 	}
 
-	spinner := ui.NewSpinner()
-	spinner.Start("Compiling workflow...")
-	wasmFileBinary, err := cmdcommon.CompileWorkflowToWasm(resolvedWorkflowPath, false)
-	spinner.Stop()
-	if err != nil {
-		ui.Error("Build failed:")
-		return fmt.Errorf("failed to compile workflow: %w", err)
-	}
-	h.log.Debug().Msg("Workflow compiled")
-	ui.Success("Workflow compiled")
-
-	// Read the config file
 	var config []byte
-	if inputs.ConfigPath != "" {
+	if cmdcommon.IsURL(inputs.ConfigPath) {
+		ui.Dim("Fetching config from URL...")
+		config, err = cmdcommon.FetchURL(inputs.ConfigPath)
+		if err != nil {
+			return fmt.Errorf("failed to fetch config from URL: %w", err)
+		}
+		ui.Success("Fetched config from URL")
+	} else if inputs.ConfigPath != "" {
 		config, err = os.ReadFile(inputs.ConfigPath)
 		if err != nil {
 			return fmt.Errorf("failed to read config file: %w", err)
@@ -981,16 +1036,6 @@ func getHTTPTriggerPayloadFromInput(input string) (*httptypedapi.Payload, error)
 			raw = []byte(trimmed)
 		}
 	}
-
-	//var jsonData map[string]interface{}
-	//if err := json.Unmarshal(raw, &jsonData); err != nil {
-	//	return nil, fmt.Errorf("failed to parse JSON: %w", err)
-	//}
-
-	//structPB, err := structpb.NewStruct(jsonData)
-	//if err != nil {
-	//	return nil, fmt.Errorf("failed to convert to protobuf struct: %w", err)
-	//}
 
 	return &httptypedapi.Payload{Input: raw}, nil
 }
