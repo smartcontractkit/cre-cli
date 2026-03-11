@@ -1,0 +1,13 @@
+{
+  "name": "cre-cli",
+  "private": true,
+  "version": "1.3.0",
+  "scripts": {
+    "ci:changeset:publish": "sh ./scripts/tag-and-push.sh",
+    "ci:changeset:version": "pnpm changeset version"
+  },
+  "devDependencies": {
+    "@changesets/changelog-github": "0.5.1",
+    "@changesets/cli": "2.29.7"
+  }
+}
