@@ -457,7 +457,14 @@ func (h *handler) printSuccessMessage(projectRoot string, tmpl *templaterepo.Tem
 		sb.WriteString(ui.RenderStep("2. Install Bun (if needed):") + "\n")
 		sb.WriteString("     " + ui.RenderDim("npm install -g bun") + "\n\n")
 		sb.WriteString(ui.RenderStep("3. Install dependencies:") + "\n")
-		sb.WriteString("     " + ui.RenderDim("bun install --cwd ./"+primaryWorkflow) + "\n\n")
+		if isMultiWorkflow {
+			for _, wf := range workflows {
+				sb.WriteString("     " + ui.RenderDim("bun install --cwd ./"+wf.Dir) + "\n")
+			}
+		} else {
+			sb.WriteString("     " + ui.RenderDim("bun install --cwd ./"+primaryWorkflow) + "\n")
+		}
+		sb.WriteString("\n")
 
 		if isMultiWorkflow {
 			sb.WriteString(ui.RenderStep("4. Run a workflow:") + "\n")
