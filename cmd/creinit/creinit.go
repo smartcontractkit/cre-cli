@@ -196,12 +196,20 @@ func (h *handler) Execute(inputs Inputs) error {
 		return fmt.Errorf("failed to fetch templates: %w", err)
 	}
 
+	// Filter to only workflow templates (category == "workflow")
+	var workflowTemplates []templaterepo.TemplateSummary
+	for _, t := range templates {
+		if t.Category == templaterepo.CategoryWorkflow {
+			workflowTemplates = append(workflowTemplates, t)
+		}
+	}
+
 	// Resolve template from flag if provided
 	var selectedTemplate *templaterepo.TemplateSummary
 	if inputs.TemplateName != "" {
-		for i := range templates {
-			if templates[i].Name == inputs.TemplateName {
-				selectedTemplate = &templates[i]
+		for i := range workflowTemplates {
+			if workflowTemplates[i].Name == inputs.TemplateName || workflowTemplates[i].ID == inputs.TemplateName {
+				selectedTemplate = &workflowTemplates[i]
 				break
 			}
 		}
@@ -211,7 +219,7 @@ func (h *handler) Execute(inputs Inputs) error {
 	}
 
 	// Run the interactive wizard
-	result, err := RunWizard(inputs, isNewProject, startDir, templates, selectedTemplate)
+	result, err := RunWizard(inputs, isNewProject, startDir, workflowTemplates, selectedTemplate)
 	if err != nil {
 		return fmt.Errorf("wizard error: %w", err)
 	}
