@@ -10,5 +10,5 @@ if git rev-parse "$tag" >/dev/null 2>&1; then
 fi
 
 echo "Creating and pushing tag: $tag"
-git tag "$tag"
+git tag -a "$tag" -m "CRE CLI $tag"
 git push origin "$tag"
