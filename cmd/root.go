@@ -165,9 +165,27 @@ func newRootCommand() *cobra.Command {
 						spinner.Stop()
 					}
 
-					// Prompt user to login
+					if errors.Is(err, runtime.ErrValidationFailed) {
+						// Credentials exist but validation failed (likely network).
+						// Do NOT prompt for re-login -- that causes an infinite loop.
+						ui.Line()
+						if runtimeContext.EnvironmentSet != nil && runtimeContext.EnvironmentSet.RequiresVPN() {
+							ui.ErrorWithSuggestions("Credential validation failed", []string{
+								fmt.Sprintf("The %s environment requires Tailscale VPN.", runtimeContext.EnvironmentSet.EnvName),
+								"Ensure Tailscale is connected to the smartcontract.com network, then retry.",
+							})
+						} else {
+							ui.Error("Credential validation failed")
+						}
+						ui.EnvContext(runtimeContext.EnvironmentSet.EnvLabel())
+						ui.Line()
+						return fmt.Errorf("authentication required: %w", err)
+					}
+
+					// No credentials on disk -- prompt user to login
 					ui.Line()
 					ui.Warning("You are not logged in")
+					ui.EnvContext(runtimeContext.EnvironmentSet.EnvLabel())
 					ui.Line()
 
 					runLogin, formErr := ui.Confirm("Would you like to login now?",
@@ -219,12 +237,20 @@ func newRootCommand() *cobra.Command {
 					return err
 				}
 
+				// Stop spinner before AttachSettings — it may prompt for target selection
+				if showSpinner {
+					spinner.Stop()
+				}
+
 				err := runtimeContext.AttachSettings(cmd, isLoadDeploymentRPC(cmd))
 				if err != nil {
-					if showSpinner {
-						spinner.Stop()
-					}
 					return fmt.Errorf("%w", err)
+				}
+
+				// Restart spinner for remaining initialization
+				if showSpinner {
+					spinner = ui.NewSpinner()
+					spinner.Start("Loading settings...")
 				}
 			}
 
@@ -401,6 +427,7 @@ func isLoadSettings(cmd *cobra.Command) bool {
 		"cre update":                {},
 		"cre workflow":              {},
 		"cre workflow custom-build": {},
+		"cre workflow build":        {},
 		"cre account":               {},
 		"cre secrets":               {},
 		"cre templates":             {},
@@ -428,6 +455,7 @@ func isLoadCredentials(cmd *cobra.Command) bool {
 		"cre generate-bindings":     {},
 		"cre update":                {},
 		"cre workflow":              {},
+		"cre workflow build":        {},
 		"cre account":               {},
 		"cre secrets":               {},
 		"cre templates":             {},
@@ -497,6 +525,7 @@ func shouldShowSpinner(cmd *cobra.Command) bool {
 		"cre logout":                {},
 		"cre update":                {},
 		"cre workflow":              {}, // Just shows help
+		"cre workflow build":        {}, // Offline command, no async init
 		"cre account":               {}, // Just shows help
 		"cre secrets":               {}, // Just shows help
 		"cre templates":             {}, // Just shows help

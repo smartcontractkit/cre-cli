@@ -119,6 +119,7 @@ func (h *handler) execute() error {
 
 	ui.Line()
 	ui.Success("Login completed successfully!")
+	ui.EnvContext(h.environmentSet.EnvLabel())
 	ui.Line()
 
 	// Show next steps in a styled box

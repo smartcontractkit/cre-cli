@@ -24,6 +24,7 @@ jobs:
         uses: smartcontractkit/.github/actions/ci-lint-go@31f7a923a25f7672641b5099cbb85ce4a984fc05 # ci-lint-go@3.1.0
         with:
           only-new-issues: false
+          golangci-lint-version: v2.11.2
           aws-region: ${{ secrets.AWS_REGION }}
           use-gati: "true"
           aws-role-arn-gati: ${{ secrets.AWS_OIDC_DEV_PLATFORM_READ_REPOS_EXTERNAL_TOKEN_ISSUER_ROLE_ARN }}

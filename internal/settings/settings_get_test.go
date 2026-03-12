@@ -56,9 +56,10 @@ func TestGetTarget_EnvWhenNoFlag(t *testing.T) {
 	assert.Equal(t, "envOnly", got)
 }
 
-func TestGetTarget_ErrorWhenNeither(t *testing.T) {
+func TestGetTarget_EmptyWhenNeither(t *testing.T) {
 	v := viper.New()
 
-	_, err := settings.GetTarget(v)
-	assert.Error(t, err)
+	got, err := settings.GetTarget(v)
+	assert.NoError(t, err)
+	assert.Equal(t, "", got)
 }

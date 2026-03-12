@@ -13,6 +13,16 @@ func (h *handler) uploadArtifacts() error {
 	if h.workflowArtifact == nil {
 		return fmt.Errorf("workflowArtifact is nil")
 	}
+
+	// User-provided URLs (via --wasm URL / --config URL) skip the corresponding uploads.
+	binaryFromURL := h.urlBinaryData != nil && h.inputs.BinaryURL != ""
+	configFromURL := h.urlConfigData != nil && h.inputs.ConfigURL != nil && *h.inputs.ConfigURL != ""
+
+	// When both artifacts come from user-provided URLs, no uploads needed at all.
+	if binaryFromURL && (configFromURL || len(h.workflowArtifact.ConfigData) == 0) {
+		return nil
+	}
+
 	binaryData := h.workflowArtifact.BinaryData
 	configData := h.workflowArtifact.ConfigData
 	workflowID := h.workflowArtifact.WorkflowID
@@ -36,15 +46,19 @@ func (h *handler) uploadArtifacts() error {
 		storageClient.SetHTTPTimeout(h.settings.StorageSettings.CREStorage.HTTPTimeout)
 	}
 
-	ui.Success(fmt.Sprintf("Loaded binary from: %s", h.inputs.OutputPath))
-	binaryURL, err := storageClient.UploadArtifactWithRetriesAndGetURL(
-		workflowID, storageclient.ArtifactTypeBinary, binaryData, "application/octet-stream")
-	if err != nil {
-		return fmt.Errorf("uploading binary artifact: %w", err)
+	if !binaryFromURL {
+		ui.Success(fmt.Sprintf("Loaded binary from: %s", h.inputs.OutputPath))
+		binaryResp, err := storageClient.UploadArtifactWithRetriesAndGetURL(
+			workflowID, storageclient.ArtifactTypeBinary, binaryData, "application/octet-stream")
+		if err != nil {
+			return fmt.Errorf("uploading binary artifact: %w", err)
+		}
+		ui.Success(fmt.Sprintf("Uploaded binary to: %s", binaryResp.UnsignedGetUrl))
+		h.log.Debug().Str("URL", binaryResp.UnsignedGetUrl).Msg("Successfully uploaded workflow binary to CRE Storage Service")
+		h.inputs.BinaryURL = binaryResp.UnsignedGetUrl
 	}
-	ui.Success(fmt.Sprintf("Uploaded binary to: %s", binaryURL.UnsignedGetUrl))
-	h.log.Debug().Str("URL", binaryURL.UnsignedGetUrl).Msg("Successfully uploaded workflow binary to CRE Storage Service")
-	if len(configData) > 0 {
+
+	if !configFromURL && len(configData) > 0 {
 		ui.Success(fmt.Sprintf("Loaded config from: %s", h.inputs.ConfigPath))
 		configURL, err = storageClient.UploadArtifactWithRetriesAndGetURL(
 			workflowID, storageclient.ArtifactTypeConfig, configData, "text/plain")
@@ -55,7 +69,8 @@ func (h *handler) uploadArtifacts() error {
 		h.log.Debug().Str("URL", configURL.UnsignedGetUrl).Msg("Successfully uploaded workflow config to CRE Storage Service")
 	}
 
-	h.inputs.BinaryURL = binaryURL.UnsignedGetUrl
-	h.inputs.ConfigURL = &configURL.UnsignedGetUrl
+	if !configFromURL {
+		h.inputs.ConfigURL = &configURL.UnsignedGetUrl
+	}
 	return nil
 }

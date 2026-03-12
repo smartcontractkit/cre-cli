@@ -51,13 +51,13 @@ const (
 
 	WorkflowRegistryV2TypeAndVersion = "WorkflowRegistry 2.0.0"
 
-	WorkflowLanguageGolang     = "golang"
+	WorkflowLanguageGolang     = "go"
 	WorkflowLanguageTypeScript = "typescript"
 	WorkflowLanguageWasm       = "wasm"
 
 	// SDK dependency versions (used by generate-bindings and go module init)
-	SdkVersion              = "v1.2.0"
-	EVMCapabilitiesVersion  = "v1.0.0-beta.5"
+	SdkVersion              = "v1.5.0"
+	EVMCapabilitiesVersion  = "v1.0.0-beta.7"
 	HTTPCapabilitiesVersion = "v1.0.0-beta.0"
 	CronCapabilitiesVersion = "v1.0.0-beta.0"
 
