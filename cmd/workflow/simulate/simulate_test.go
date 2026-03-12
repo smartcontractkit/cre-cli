@@ -1,15 +1,19 @@
 package simulate
 
 import (
+	"encoding/base64"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	rt "runtime"
 	"testing"
 
 	"github.com/spf13/viper"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	cmdcommon "github.com/smartcontractkit/cre-cli/cmd/common"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/testutil"
@@ -87,4 +91,209 @@ func TestBlankWorkflowSimulation(t *testing.T) {
 	// Execute the simulation. We expect this to compile the workflow and run the simulator successfully.
 	err = handler.Execute(inputs)
 	require.NoError(t, err, "Execute should not return an error")
+}
+
+func createSimulateTestViper(t *testing.T) *viper.Viper {
+	t.Helper()
+	v := viper.New()
+	v.Set("target", "staging-settings")
+	var rpc settings.RpcEndpoint
+	rpc.ChainName = "ethereum-testnet-sepolia"
+	rpc.Url = "https://example.com/rpc"
+	v.Set(fmt.Sprintf("%s.%s", "staging-settings", settings.RpcsSettingName), []settings.RpcEndpoint{rpc})
+	return v
+}
+
+func createSimulateTestSettings(workflowName, workflowPath, configPath string) *settings.Settings {
+	return &settings.Settings{
+		Workflow: settings.WorkflowSettings{
+			UserWorkflowSettings: struct {
+				WorkflowOwnerAddress string `mapstructure:"workflow-owner-address" yaml:"workflow-owner-address"`
+				WorkflowOwnerType    string `mapstructure:"workflow-owner-type" yaml:"workflow-owner-type"`
+				WorkflowName         string `mapstructure:"workflow-name" yaml:"workflow-name"`
+			}{
+				WorkflowName: workflowName,
+			},
+			WorkflowArtifactSettings: struct {
+				WorkflowPath string `mapstructure:"workflow-path" yaml:"workflow-path"`
+				ConfigPath   string `mapstructure:"config-path" yaml:"config-path"`
+				SecretsPath  string `mapstructure:"secrets-path" yaml:"secrets-path"`
+			}{
+				WorkflowPath: workflowPath,
+				ConfigPath:   configPath,
+			},
+		},
+		User: settings.UserSettings{
+			EthPrivateKey: "88888845d8761ca4a8cefb324c89702f12114ffbd0c47222f12aac0ad6538888",
+		},
+	}
+}
+
+func TestSimulateResolveInputs_ConfigFlags(t *testing.T) {
+	t.Parallel()
+
+	settingsConfigPath := "config.json"
+
+	tests := []struct {
+		name               string
+		viperOverrides     map[string]interface{}
+		expectedConfigPath string
+	}{
+		{
+			name:               "default uses settings config path",
+			viperOverrides:     nil,
+			expectedConfigPath: settingsConfigPath,
+		},
+		{
+			name:               "no-config clears config path",
+			viperOverrides:     map[string]interface{}{"no-config": true},
+			expectedConfigPath: "",
+		},
+		{
+			name:               "config flag overrides settings",
+			viperOverrides:     map[string]interface{}{"config": "override.json"},
+			expectedConfigPath: "override.json",
+		},
+		{
+			name:               "default-config uses settings config path",
+			viperOverrides:     map[string]interface{}{"default-config": true},
+			expectedConfigPath: settingsConfigPath,
+		},
+		{
+			name:               "config flag with URL value",
+			viperOverrides:     map[string]interface{}{"config": "https://example.com/config.yaml"},
+			expectedConfigPath: "https://example.com/config.yaml",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			v := createSimulateTestViper(t)
+			creSettings := createSimulateTestSettings("test-workflow", "main.go", settingsConfigPath)
+
+			for k, val := range tt.viperOverrides {
+				v.Set(k, val)
+			}
+
+			runtimeCtx := &runtime.Context{
+				Logger:   testutil.NewTestLogger(),
+				Viper:    v,
+				Settings: creSettings,
+			}
+			h := newHandler(runtimeCtx)
+
+			inputs, err := h.ResolveInputs(v, creSettings)
+			require.NoError(t, err)
+			assert.Equal(t, tt.expectedConfigPath, inputs.ConfigPath)
+		})
+	}
+}
+
+func TestSimulateResolveInputs_WasmFlag(t *testing.T) {
+	t.Parallel()
+
+	t.Run("local path", func(t *testing.T) {
+		v := createSimulateTestViper(t)
+		v.Set("wasm", "/tmp/test.wasm")
+		creSettings := createSimulateTestSettings("test-workflow", "main.go", "")
+
+		runtimeCtx := &runtime.Context{
+			Logger:   testutil.NewTestLogger(),
+			Viper:    v,
+			Settings: creSettings,
+		}
+		h := newHandler(runtimeCtx)
+
+		inputs, err := h.ResolveInputs(v, creSettings)
+		require.NoError(t, err)
+		assert.Equal(t, "/tmp/test.wasm", inputs.WasmPath)
+	})
+
+	t.Run("URL", func(t *testing.T) {
+		v := createSimulateTestViper(t)
+		v.Set("wasm", "https://example.com/binary.wasm")
+		creSettings := createSimulateTestSettings("test-workflow", "main.go", "")
+
+		runtimeCtx := &runtime.Context{
+			Logger:   testutil.NewTestLogger(),
+			Viper:    v,
+			Settings: creSettings,
+		}
+		h := newHandler(runtimeCtx)
+
+		inputs, err := h.ResolveInputs(v, creSettings)
+		require.NoError(t, err)
+		assert.Equal(t, "https://example.com/binary.wasm", inputs.WasmPath)
+	})
+}
+
+func TestSimulateValidateInputs_URLBypass(t *testing.T) {
+	t.Parallel()
+
+	tmpFile := filepath.Join(t.TempDir(), "main.go")
+	require.NoError(t, os.WriteFile(tmpFile, []byte("package main"), 0600))
+
+	runtimeCtx := &runtime.Context{
+		Logger: testutil.NewTestLogger(),
+	}
+	h := newHandler(runtimeCtx)
+
+	inputs := Inputs{
+		WorkflowPath: tmpFile,
+		ConfigPath:   "https://example.com/config.yaml",
+		WasmPath:     "https://example.com/binary.wasm",
+		WorkflowName: "test-workflow",
+	}
+
+	err := h.ValidateInputs(inputs)
+	require.NoError(t, err, "URL values should bypass file/ascii/max validators")
+	assert.True(t, h.validated)
+}
+
+func TestSimulateWasmFormatHandling(t *testing.T) {
+	t.Parallel()
+
+	t.Run("EnsureRawWasm with raw wasm", func(t *testing.T) {
+		t.Parallel()
+		raw := append([]byte{0x00, 0x61, 0x73, 0x6d}, []byte("test wasm")...)
+		result, err := cmdcommon.EnsureRawWasm(raw)
+		require.NoError(t, err)
+		assert.Equal(t, raw, result)
+	})
+
+	t.Run("EnsureRawWasm with br64 data", func(t *testing.T) {
+		t.Parallel()
+		raw := append([]byte{0x00, 0x61, 0x73, 0x6d}, []byte("test wasm")...)
+		compressed, err := cmdcommon.CompressBrotli(raw)
+		require.NoError(t, err)
+		br64 := []byte(base64.StdEncoding.EncodeToString(compressed))
+
+		result, err := cmdcommon.EnsureRawWasm(br64)
+		require.NoError(t, err)
+		assert.Equal(t, raw, result)
+	})
+}
+
+func TestSimulateConfigFlagsMutuallyExclusive(t *testing.T) {
+	t.Parallel()
+
+	runtimeCtx := &runtime.Context{
+		Logger: testutil.NewTestLogger(),
+		Viper:  viper.New(),
+		Settings: &settings.Settings{
+			User: settings.UserSettings{
+				EthPrivateKey: "88888845d8761ca4a8cefb324c89702f12114ffbd0c47222f12aac0ad6538888",
+			},
+		},
+	}
+
+	cmd := New(runtimeCtx)
+	cmd.SetArgs([]string{"./some-workflow", "--no-config", "--config", "foo.yml"})
+	cmd.SetOut(io.Discard)
+	cmd.SetErr(io.Discard)
+	err := cmd.Execute()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "if any flags in the group [config no-config default-config] are set none of the others can be")
 }
