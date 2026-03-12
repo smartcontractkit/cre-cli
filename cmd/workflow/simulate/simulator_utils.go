@@ -125,6 +125,9 @@ var SupportedEVM = []ChainConfig{
 
 	// Sonic
 	{Selector: chainselectors.SONIC_TESTNET.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
+
+	// DTCC
+	{Selector: chainselectors.DTCC_TESTNET_ANDESITE.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
 }
 
 // parse "ChainSelector:<digits>" from trigger id, e.g. "evm:ChainSelector:5009297550715157269@1.0.0 LogTrigger"
