@@ -254,6 +254,7 @@ type wizardStep int
 const (
 	stepProjectName wizardStep = iota
 	stepTemplate
+	stepTemplateConfirm
 	stepNetworkRPCs
 	stepWorkflowName
 	stepDone
@@ -473,6 +474,17 @@ func (m *wizardModel) advanceToNextStep() {
 				continue
 			}
 			return
+		case stepTemplateConfirm:
+			// Show only when the template was pre-selected via --template flag
+			// (skipTemplate is true) and the wizard is interactive (at least
+			// one other step needs user input). If the user picked from the
+			// list they already know what they selected.
+			isFullyNonInteractive := m.skipProjectName && m.skipTemplate && m.skipNetworkRPCs && m.skipWorkflowName
+			if !m.skipTemplate || isFullyNonInteractive {
+				m.step++
+				continue
+			}
+			return
 		case stepNetworkRPCs:
 			if m.skipNetworkRPCs {
 				m.step++
@@ -683,6 +695,11 @@ func (m wizardModel) handleEnter(msgs ...tea.Msg) (tea.Model, tea.Cmd) {
 		m.step++
 		m.advanceToNextStep()
 
+	case stepTemplateConfirm:
+		// User pressed enter to confirm the selected template
+		m.step++
+		m.advanceToNextStep()
+
 	case stepNetworkRPCs:
 		value := strings.TrimSpace(m.rpcInputs[m.rpcCursor].Value())
 		network := m.networks[m.rpcCursor]
@@ -753,7 +770,7 @@ func (m wizardModel) View() string {
 		b.WriteString(m.dimStyle.Render("  Project: " + m.projectName))
 		b.WriteString("\n")
 	}
-	if m.selectedTemplate != nil && m.step > stepTemplate {
+	if m.selectedTemplate != nil && m.step > stepTemplateConfirm {
 		b.WriteString(m.dimStyle.Render("  Template: " + m.selectedTemplate.Title + " [" + m.selectedTemplate.Language + "]"))
 		b.WriteString("\n")
 	}
@@ -839,6 +856,30 @@ func (m wizardModel) View() string {
 
 		// Render the list
 		b.WriteString(m.templateList.View())
+
+	case stepTemplateConfirm:
+		tmpl := m.selectedTemplate
+		title := stripLangSuffix(tmpl.Title)
+		lang := shortLang(tmpl.Language)
+
+		boxTitle := m.titleStyle.Render(title) + "  " + m.tagStyle.Render(lang)
+		var boxContent strings.Builder
+		boxContent.WriteString(boxTitle)
+		if tmpl.Description != "" {
+			boxContent.WriteString("\n")
+			boxContent.WriteString(m.dimStyle.Render(tmpl.Description))
+		}
+
+		boxStyle := lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color(ui.ColorBlue500)).
+			Padding(0, 1).
+			MarginLeft(2)
+
+		b.WriteString(m.promptStyle.Render("  Template selected"))
+		b.WriteString("\n\n")
+		b.WriteString(boxStyle.Render(boxContent.String()))
+		b.WriteString("\n")
 
 	case stepNetworkRPCs:
 		b.WriteString(m.promptStyle.Render("  RPC URL overrides (optional)"))
