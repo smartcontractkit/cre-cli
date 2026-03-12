@@ -106,7 +106,8 @@ var SupportedEVM = []ChainConfig{
 	// {Selector: chainselectors.CELO_SEPOLIA.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
 
 	// Gnosis
-	{Selector: chainselectors.GNOSIS_CHAIN_TESTNET_CHIADO.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
+	// Integration not ready yet
+	// {Selector: chainselectors.GNOSIS_CHAIN_TESTNET_CHIADO.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
 
 	// Cronos
 	{Selector: chainselectors.CRONOS_TESTNET.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
