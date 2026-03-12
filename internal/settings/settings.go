@@ -135,7 +135,7 @@ func BindEnv(v *viper.Viper) error {
 func LoadEnv(envPath string) error {
 	if envPath != "" {
 		if _, err := os.Stat(envPath); err == nil {
-			if err := godotenv.Load(envPath); err != nil {
+			if err := godotenv.Overload(envPath); err != nil {
 				return fmt.Errorf("error loading file from %s: %w", envPath, err)
 			}
 			return nil
@@ -152,7 +152,7 @@ func LoadEnv(envPath string) error {
 		return fmt.Errorf("error loading environment: %w", err)
 	}
 
-	if err := godotenv.Load(foundEnvPath); err != nil {
+	if err := godotenv.Overload(foundEnvPath); err != nil {
 		return fmt.Errorf("error loading file from %s: %w", foundEnvPath, err)
 	}
 	return nil

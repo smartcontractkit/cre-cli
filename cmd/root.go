@@ -125,6 +125,13 @@ func newRootCommand() *cobra.Command {
 				return fmt.Errorf("failed to bind flags: %w", err)
 			}
 
+			// Load .env into process environment early so every command sees the
+			// variables regardless of whether full settings are loaded later.
+			envPath := v.GetString(settings.Flags.CliEnvFile.Name)
+			if err := settings.LoadEnv(envPath); err != nil {
+				log.Debug().Msg("optional .env not loaded: " + err.Error())
+			}
+
 			// Update log level if verbose flag is set — must happen before spinner starts
 			if verbose := v.GetBool(settings.Flags.Verbose.Name); verbose {
 				ui.SetVerbose(true)
