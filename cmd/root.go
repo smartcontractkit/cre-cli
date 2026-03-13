@@ -466,6 +466,7 @@ func isLoadCredentials(cmd *cobra.Command) bool {
 		"cre update":                {},
 		"cre workflow":              {},
 		"cre workflow build":        {},
+		"cre workflow hash":         {},
 		"cre account":               {},
 		"cre secrets":               {},
 		"cre templates":             {},
@@ -536,6 +537,7 @@ func shouldShowSpinner(cmd *cobra.Command) bool {
 		"cre update":                {},
 		"cre workflow":              {}, // Just shows help
 		"cre workflow build":        {}, // Offline command, no async init
+		"cre workflow hash":         {}, // Offline command, has own spinner
 		"cre account":               {}, // Just shows help
 		"cre secrets":               {}, // Just shows help
 		"cre templates":             {}, // Just shows help

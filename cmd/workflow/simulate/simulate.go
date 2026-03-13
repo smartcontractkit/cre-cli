@@ -349,6 +349,9 @@ func (h *handler) Execute(inputs Inputs) error {
 		}
 	}
 
+	ui.Dim(fmt.Sprintf("Binary hash: %s", cmdcommon.HashBytes(wasmFileBinary)))
+	ui.Dim(fmt.Sprintf("Config hash: %s", cmdcommon.HashBytes(config)))
+
 	// Read the secrets file
 	var secrets []byte
 	if inputs.SecretsPath != "" {
