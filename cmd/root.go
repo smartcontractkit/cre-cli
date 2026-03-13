@@ -125,12 +125,15 @@ func newRootCommand() *cobra.Command {
 				return fmt.Errorf("failed to bind flags: %w", err)
 			}
 
-			// Load .env into process environment early so every command sees the
-			// variables regardless of whether full settings are loaded later.
+			// Resolve the .env file path: use --env flag if set, otherwise
+			// auto-detect .env in the current or parent directories.
 			envPath := v.GetString(settings.Flags.CliEnvFile.Name)
-			if err := settings.LoadEnv(envPath); err != nil {
-				log.Debug().Msg("optional .env not loaded: " + err.Error())
+			if envPath == "" {
+				if found, err := settings.FindEnvFile(".", constants.DefaultEnvFileName); err == nil {
+					envPath = found
+				}
 			}
+			settings.LoadEnv(log, v, envPath)
 
 			// Update log level if verbose flag is set — must happen before spinner starts
 			if verbose := v.GetBool(settings.Flags.Verbose.Name); verbose {
@@ -338,8 +341,8 @@ func newRootCommand() *cobra.Command {
 	rootCmd.PersistentFlags().StringP(
 		settings.Flags.CliEnvFile.Name,
 		settings.Flags.CliEnvFile.Short,
-		constants.DefaultEnvFileName,
-		fmt.Sprintf("Path to %s file which contains sensitive info", constants.DefaultEnvFileName),
+		"",
+		"Path to .env file (defaults to .env in the current or parent directories if present)",
 	)
 	// project root path flag is present for every subcommand
 	rootCmd.PersistentFlags().StringP(

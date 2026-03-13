@@ -1,14 +1,21 @@
 package common
 
 import (
+	"bytes"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"testing"
 
+	"github.com/joho/godotenv"
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/smartcontractkit/cre-cli/internal/settings"
+	"github.com/smartcontractkit/cre-cli/internal/testutil"
 )
 
 func deployTestdataPath(elem ...string) string {
@@ -125,4 +132,91 @@ func TestCompileWorkflowToWasm_TS_Success(t *testing.T) {
 		t.Skipf("TS compile failed (published cre-sdk may lack full layout): %v", err)
 	}
 	assert.NotEmpty(t, wasm)
+}
+
+// captureStderr redirects os.Stderr to a pipe, runs fn, and returns whatever
+// was written to stderr during that call.
+func captureStderr(t *testing.T, fn func()) string {
+	t.Helper()
+	old := os.Stderr
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
+	os.Stderr = w
+
+	fn()
+
+	w.Close()
+	os.Stderr = old
+
+	var buf bytes.Buffer
+	_, _ = io.Copy(&buf, r)
+	return buf.String()
+}
+
+func TestWarnGOTOOLCHAIN(t *testing.T) {
+	tests := []struct {
+		name           string
+		gotoolchain    string
+		envFileContent map[string]string
+		wantWarning    bool
+	}{
+		{
+			name:        "GOTOOLCHAIN unset emits warning",
+			gotoolchain: "",
+			wantWarning: true,
+		},
+		{
+			name:        "GOTOOLCHAIN set but no env file loaded emits warning",
+			gotoolchain: "go1.25.3",
+			wantWarning: true,
+		},
+		{
+			name:           "GOTOOLCHAIN set but missing from env file emits warning",
+			gotoolchain:    "go1.25.3",
+			envFileContent: map[string]string{"CRE_TARGET": "staging"},
+			wantWarning:    true,
+		},
+		{
+			name:           "GOTOOLCHAIN set and present in env file emits no warning",
+			gotoolchain:    "go1.25.3",
+			envFileContent: map[string]string{"GOTOOLCHAIN": "go1.25.3"},
+			wantWarning:    false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.gotoolchain != "" {
+				t.Setenv("GOTOOLCHAIN", tc.gotoolchain)
+			} else {
+				t.Setenv("GOTOOLCHAIN", "")
+				os.Unsetenv("GOTOOLCHAIN")
+			}
+
+			logger := testutil.NewTestLogger()
+			v := viper.New()
+			if tc.envFileContent != nil {
+				dir := t.TempDir()
+				envPath := filepath.Join(dir, ".env")
+				require.NoError(t, godotenv.Write(tc.envFileContent, envPath))
+				settings.LoadEnv(logger, v, envPath)
+				for k := range tc.envFileContent {
+					t.Cleanup(func() { os.Unsetenv(k) })
+				}
+			} else {
+				settings.LoadEnv(logger, v, "")
+			}
+
+			output := captureStderr(t, func() {
+				warnGOTOOLCHAIN()
+			})
+
+			if tc.wantWarning {
+				assert.NotEmpty(t, output, "expected a warning on stderr")
+				assert.Contains(t, output, "!", "output should be at warning level (ui.Warning prefix)")
+			} else {
+				assert.Empty(t, output, "expected no warning on stderr")
+			}
+		})
+	}
 }

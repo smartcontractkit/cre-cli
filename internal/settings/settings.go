@@ -12,7 +12,6 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
@@ -22,16 +21,19 @@ const (
 	CreTargetEnvVar     = "CRE_TARGET"
 )
 
-const loadEnvErrorMessage = "Not able to load configuration from .env file, skipping this optional step.\n" +
-	"CLI tool will read and verify individual environment variables (they MUST be exported).\n" +
-	"If you want to use .env file, please check that you are fetching the .env file from the correct location.\n" +
-	"Note that if .env location is not provided via CLI flag, default is .env file located in the current working directory where the CLI tool runs.\n" +
-	"If .env file doesn't exist, it has to be created first (check example.env for more information).\n" +
-	"If the .env file is present, please check that it follows the correct format: https://dotenvx.com/docs/env-file"
+// State tracked by LoadEnv so downstream code (e.g. build warnings) can
+// inspect what happened without re-discovering or re-parsing the file.
+var (
+	loadedEnvFilePath string
+	loadedEnvVars     map[string]string
+)
 
-const bindEnvErrorMessage = "Not able to bind environment variables that represent sensitive data.\n" +
-	"They are required for the CLI tool to function properly, without them some commands may not work.\n" +
-	"Please export them manually or set via .env file (check example.env for more information)."
+// LoadedEnvFilePath returns the path that was successfully loaded, or "".
+func LoadedEnvFilePath() string { return loadedEnvFilePath }
+
+// LoadedEnvVars returns the key-value pairs parsed from the loaded .env file.
+// Returns nil if no file was loaded.
+func LoadedEnvVars() map[string]string { return loadedEnvVars }
 
 // Settings holds user, project, and workflow configurations.
 type Settings struct {
@@ -48,24 +50,10 @@ type UserSettings struct {
 	EthUrl        string
 }
 
-// New initializes and loads settings from the `.env` file or system environment.
+// New initializes and loads settings from YAML config files and the environment.
+// Environment loading (.env + BindEnv) is handled earlier in PersistentPreRunE
+// so that all commands see the variables consistently.
 func New(logger *zerolog.Logger, v *viper.Viper, cmd *cobra.Command, registryChainName string) (*Settings, error) {
-	// Retrieve the flag value (user-provided or default)
-	envPath := v.GetString(Flags.CliEnvFile.Name)
-
-	// try to load the .env file (fetch sensitive info)
-	if err := LoadEnv(envPath); err != nil {
-		// .env file is optional, so we log it as a debug message
-		logger.Debug().Msg(loadEnvErrorMessage)
-	}
-
-	// try to bind sensitive environment variables (loaded from .env file or manually exported to
-	// shell environment)
-	if err := BindEnv(v); err != nil {
-		// not necessarily an issue, more like a warning
-		logger.Debug().Err(err).Msg(bindEnvErrorMessage)
-	}
-
 	target, err := GetTarget(v)
 	if err != nil {
 		return nil, err
@@ -116,7 +104,42 @@ func New(logger *zerolog.Logger, v *viper.Viper, cmd *cobra.Command, registryCha
 	}, nil
 }
 
-func BindEnv(v *viper.Viper) error {
+// LoadEnv loads environment variables from envPath into the process
+// environment, binds sensitive variables into Viper, and logs outcomes.
+// If envPath is empty no file is loaded and a debug message is emitted.
+// Errors are logged but do not halt execution — the CLI continues so
+// that commands which don't need the env file can still run.
+func LoadEnv(logger *zerolog.Logger, v *viper.Viper, envPath string) {
+	loadedEnvFilePath = ""
+	loadedEnvVars = nil
+
+	if envPath == "" {
+		logger.Debug().Msg(
+			"No environment file specified and .env was not found in the current or parent directories. " +
+				"CLI tool will read individual environment variables (they MUST be exported).")
+		return
+	}
+
+	if err := godotenv.Overload(envPath); err != nil {
+		logger.Error().Str("path", envPath).Err(err).Msg(
+			"Not able to load configuration from .env file. " +
+				"CLI tool will read and verify individual environment variables (they MUST be exported). " +
+				"If the .env file is present, please check that it follows the correct format: https://dotenvx.com/docs/env-file")
+		return
+	}
+
+	loadedEnvFilePath = envPath
+	loadedEnvVars, _ = godotenv.Read(envPath)
+
+	if err := bindEnv(v); err != nil {
+		logger.Error().Err(err).Msg(
+			"Not able to bind environment variables that represent sensitive data. " +
+				"They are required for the CLI tool to function properly, without them some commands may not work. " +
+				"Please export them manually or set via .env file (check example.env for more information).")
+	}
+}
+
+func bindEnv(v *viper.Viper) error {
 	envVars := []string{
 		EthPrivateKeyEnvVar,
 		CreTargetEnvVar,
@@ -128,37 +151,12 @@ func BindEnv(v *viper.Viper) error {
 		}
 	}
 
-	v.AutomaticEnv() // Ensure variables are picked up
+	v.AutomaticEnv()
 	return nil
 }
 
-func LoadEnv(envPath string) error {
-	if envPath != "" {
-		if _, err := os.Stat(envPath); err == nil {
-			if err := godotenv.Overload(envPath); err != nil {
-				return fmt.Errorf("error loading file from %s: %w", envPath, err)
-			}
-			return nil
-		}
-	}
-
-	cwd, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("error getting working directory: %w", err)
-	}
-
-	foundEnvPath, err := findEnvFile(cwd, constants.DefaultEnvFileName)
-	if err != nil {
-		return fmt.Errorf("error loading environment: %w", err)
-	}
-
-	if err := godotenv.Overload(foundEnvPath); err != nil {
-		return fmt.Errorf("error loading file from %s: %w", foundEnvPath, err)
-	}
-	return nil
-}
-
-func findEnvFile(startDir, fileName string) (string, error) {
+// FindEnvFile walks up from startDir looking for a file named fileName.
+func FindEnvFile(startDir, fileName string) (string, error) {
 	dir := startDir
 
 	for {

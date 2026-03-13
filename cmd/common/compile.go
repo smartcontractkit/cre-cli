@@ -9,6 +9,8 @@ import (
 	"strings"
 
 	"github.com/smartcontractkit/cre-cli/internal/constants"
+	"github.com/smartcontractkit/cre-cli/internal/settings"
+	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
 const makefileName = "Makefile"
@@ -22,28 +24,6 @@ func getBuildCmd(workflowRootFolder, mainFile, language string) (func() ([]byte,
 	case constants.WorkflowLanguageTypeScript:
 		cmd := exec.Command("bun", "cre-compile", mainFile, tmpPath)
 		cmd.Dir = workflowRootFolder
-		return func() ([]byte, error) {
-			out, err := cmd.CombinedOutput()
-			if err != nil {
-				return nil, fmt.Errorf("%w\nbuild output:\n%s", err, strings.TrimSpace(string(out)))
-			}
-			b, err := os.ReadFile(tmpPath)
-			_ = os.Remove(tmpPath)
-			return b, err
-		}, nil
-	case constants.WorkflowLanguageGolang:
-		// Build the package (.) so all .go files (main.go, workflow.go, etc.) are compiled together
-		cmd := exec.Command(
-			"go", "build",
-			"-o", tmpPath,
-			"-trimpath",
-			"-buildvcs=false",
-			"-mod=readonly",
-			"-ldflags=-buildid= -w -s",
-			".",
-		)
-		cmd.Dir = workflowRootFolder
-		cmd.Env = append(os.Environ(), "GOOS=wasip1", "GOARCH=wasm", "CGO_ENABLED=0")
 		return func() ([]byte, error) {
 			out, err := cmd.CombinedOutput()
 			if err != nil {
@@ -69,7 +49,6 @@ func getBuildCmd(workflowRootFolder, mainFile, language string) (func() ([]byte,
 			return os.ReadFile(builtPath)
 		}, nil
 	default:
-		// Build the package (.) so all .go files are compiled together
 		cmd := exec.Command(
 			"go", "build",
 			"-o", tmpPath,
@@ -94,7 +73,6 @@ func getBuildCmd(workflowRootFolder, mainFile, language string) (func() ([]byte,
 }
 
 // CompileWorkflowToWasm compiles the workflow at workflowPath and returns the WASM binary.
-// It runs the sequence of commands from getBuildCmds (make build + copy for WASM, or single build for Go/TS), then reads the temp WASM file.
 func CompileWorkflowToWasm(workflowPath string) ([]byte, error) {
 	workflowRootFolder, workflowMainFile, err := WorkflowPathRootAndMain(workflowPath)
 	if err != nil {
@@ -118,6 +96,7 @@ func CompileWorkflowToWasm(workflowPath string) ([]byte, error) {
 		if err := EnsureTool("go"); err != nil {
 			return nil, errors.New("go toolchain is required for Go workflows but was not found in PATH; install from https://go.dev/dl")
 		}
+		warnGOTOOLCHAIN()
 	case constants.WorkflowLanguageWasm:
 		if err := EnsureTool("make"); err != nil {
 			return nil, errors.New("make is required for WASM workflows but was not found in PATH")
@@ -135,6 +114,25 @@ func CompileWorkflowToWasm(workflowPath string) ([]byte, error) {
 		return nil, fmt.Errorf("failed to compile workflow: %w", err)
 	}
 	return wasm, nil
+}
+
+func warnGOTOOLCHAIN() {
+	tc := os.Getenv("GOTOOLCHAIN")
+	if tc == "" {
+		ui.Warning("GOTOOLCHAIN is not set; the build may not be reproducible across environments. Set it in your .env file (e.g. GOTOOLCHAIN=go1.25.3).")
+		return
+	}
+
+	envFile := settings.LoadedEnvFilePath()
+	if envFile == "" {
+		ui.Warning(fmt.Sprintf("GOTOOLCHAIN=%s is set, but no .env file was loaded. The build will not be reproducible for others without the same environment variable.", tc))
+		return
+	}
+
+	envVars := settings.LoadedEnvVars()
+	if _, ok := envVars["GOTOOLCHAIN"]; !ok {
+		ui.Warning(fmt.Sprintf("GOTOOLCHAIN=%s is set, but is not in %s. The build will not be reproducible for others without the same environment variable.", tc, envFile))
+	}
 }
 
 // findMakefileRoot walks up from dir and returns the first directory that contains a Makefile.
