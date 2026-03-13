@@ -9,7 +9,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/smartcontractkit/cre-cli/internal/constants"
+	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/templaterepo"
+	"github.com/smartcontractkit/cre-cli/internal/tenderly"
 	"github.com/smartcontractkit/cre-cli/internal/testutil"
 	"github.com/smartcontractkit/cre-cli/internal/testutil/chainsim"
 )
@@ -115,6 +117,31 @@ func (m *mockRegistry) ScaffoldTemplate(tmpl *templaterepo.TemplateSummary, dest
 	}
 
 	return nil
+}
+
+// mockTenderlyProvider implements tenderly.Provider for testing.
+type mockTenderlyProvider struct {
+	rpcBase string // base URL returned for all networks
+}
+
+func (m *mockTenderlyProvider) CreateVnets(networks []string) (*tenderly.VnetResult, error) {
+	result := &tenderly.VnetResult{
+		NetworkRPCs: make(map[string]string, len(networks)),
+		PublicRPCs:  make(map[string]string, len(networks)),
+		VnetURLs:    make(map[string]string, len(networks)),
+	}
+	for _, n := range networks {
+		result.NetworkRPCs[n] = m.rpcBase
+		result.PublicRPCs[n] = m.rpcBase + "/public"
+		result.VnetURLs[n] = "https://dashboard.tenderly.co/test/" + n
+	}
+	return result, nil
+}
+
+func newHandlerWithTenderly(ctx *runtime.Context, reg RegistryInterface, rpcBase string) *handler {
+	h := newHandlerWithRegistry(ctx, reg)
+	h.tenderlyProvider = &mockTenderlyProvider{rpcBase: rpcBase}
+	return h
 }
 
 // Test fixtures
@@ -773,8 +800,6 @@ func TestInitWithUseTenderlyFlag(t *testing.T) {
 	require.NoError(t, err)
 	defer restoreCwd()
 
-	t.Setenv("CRE_TENDERLY_VNET_URL", "https://rpc.tenderly.co/vnet/test123")
-
 	inputs := Inputs{
 		ProjectName:  "tenderlyProj",
 		TemplateName: "test-multichain",
@@ -782,7 +807,7 @@ func TestInitWithUseTenderlyFlag(t *testing.T) {
 		UseTenderly:  true,
 	}
 
-	h := newHandlerWithRegistry(sim.NewRuntimeContext(), newMockRegistry())
+	h := newHandlerWithTenderly(sim.NewRuntimeContext(), newMockRegistry(), "https://rpc.tenderly.co/vnet/test123")
 	require.NoError(t, h.ValidateInputs(inputs))
 	require.NoError(t, h.Execute(inputs))
 
@@ -806,7 +831,10 @@ func TestInitWithUseTenderlyNoEnvVar(t *testing.T) {
 	require.NoError(t, err)
 	defer restoreCwd()
 
-	t.Setenv("CRE_TENDERLY_VNET_URL", "")
+	// Clear all Tenderly env vars so NewAPIProvider fails
+	t.Setenv("TENDERLY_ACCESS_KEY", "")
+	t.Setenv("TENDERLY_ACCOUNT_SLUG", "")
+	t.Setenv("TENDERLY_PROJECT_SLUG", "")
 
 	inputs := Inputs{
 		ProjectName:  "tenderlyNoEnv",
@@ -815,11 +843,12 @@ func TestInitWithUseTenderlyNoEnvVar(t *testing.T) {
 		UseTenderly:  true,
 	}
 
+	// Use a handler WITHOUT the mock provider so it falls through to NewAPIProvider
 	h := newHandlerWithRegistry(sim.NewRuntimeContext(), newMockRegistry())
 	require.NoError(t, h.ValidateInputs(inputs))
 	err = h.Execute(inputs)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "CRE_TENDERLY_VNET_URL")
+	require.Contains(t, err.Error(), "TENDERLY_ACCESS_KEY")
 }
 
 func TestInitTenderlyRpcUrlPrecedence(t *testing.T) {
@@ -830,8 +859,6 @@ func TestInitTenderlyRpcUrlPrecedence(t *testing.T) {
 	restoreCwd, err := testutil.ChangeWorkingDirectory(tempDir)
 	require.NoError(t, err)
 	defer restoreCwd()
-
-	t.Setenv("CRE_TENDERLY_VNET_URL", "https://rpc.tenderly.co/vnet/base")
 
 	// Explicit --rpc-url for sepolia should override the vnet URL
 	inputs := Inputs{
@@ -844,7 +871,7 @@ func TestInitTenderlyRpcUrlPrecedence(t *testing.T) {
 		},
 	}
 
-	h := newHandlerWithRegistry(sim.NewRuntimeContext(), newMockRegistry())
+	h := newHandlerWithTenderly(sim.NewRuntimeContext(), newMockRegistry(), "https://rpc.tenderly.co/vnet/base")
 	require.NoError(t, h.ValidateInputs(inputs))
 	require.NoError(t, h.Execute(inputs))
 
@@ -868,8 +895,6 @@ func TestInitTenderlyWithProjectDir(t *testing.T) {
 	require.NoError(t, err)
 	defer restoreCwd()
 
-	t.Setenv("CRE_TENDERLY_VNET_URL", "https://virtual.tenderly.co/vnet/abc")
-
 	inputs := Inputs{
 		ProjectName:  "projdirTenderly",
 		TemplateName: "projdir-multichain",
@@ -877,7 +902,7 @@ func TestInitTenderlyWithProjectDir(t *testing.T) {
 		UseTenderly:  true,
 	}
 
-	h := newHandlerWithRegistry(sim.NewRuntimeContext(), newMockRegistry())
+	h := newHandlerWithTenderly(sim.NewRuntimeContext(), newMockRegistry(), "https://virtual.tenderly.co/vnet/abc")
 	require.NoError(t, h.ValidateInputs(inputs))
 	require.NoError(t, h.Execute(inputs))
 
@@ -901,8 +926,6 @@ func TestInitTenderlySkippedNoNetworks(t *testing.T) {
 	require.NoError(t, err)
 	defer restoreCwd()
 
-	t.Setenv("CRE_TENDERLY_VNET_URL", "https://rpc.tenderly.co/vnet/unused")
-
 	// hello-world-go has no Networks — Tenderly should be a no-op
 	inputs := Inputs{
 		ProjectName:  "noNetProj",
@@ -911,7 +934,7 @@ func TestInitTenderlySkippedNoNetworks(t *testing.T) {
 		UseTenderly:  true,
 	}
 
-	h := newHandlerWithRegistry(sim.NewRuntimeContext(), newMockRegistry())
+	h := newHandlerWithTenderly(sim.NewRuntimeContext(), newMockRegistry(), "https://rpc.tenderly.co/vnet/unused")
 	require.NoError(t, h.ValidateInputs(inputs))
 	require.NoError(t, h.Execute(inputs))
 

@@ -166,6 +166,35 @@ func (c *Credentials) GetDeploymentAccessStatus() (*DeploymentAccess, error) {
 	}, nil
 }
 
+// GetUserID extracts the Auth0 user ID (sub claim) from the JWT access token.
+func (c *Credentials) GetUserID() (string, error) {
+	if c.Tokens == nil || c.Tokens.AccessToken == "" {
+		return "", fmt.Errorf("no access token available")
+	}
+
+	parts := strings.Split(c.Tokens.AccessToken, ".")
+	if len(parts) < 2 {
+		return "", fmt.Errorf("invalid JWT token format")
+	}
+
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return "", fmt.Errorf("failed to decode JWT payload: %w", err)
+	}
+
+	var claims map[string]interface{}
+	if err := json.Unmarshal(payload, &claims); err != nil {
+		return "", fmt.Errorf("failed to unmarshal JWT claims: %w", err)
+	}
+
+	sub, ok := claims["sub"].(string)
+	if !ok || sub == "" {
+		return "", fmt.Errorf("no sub claim in JWT token")
+	}
+
+	return sub, nil
+}
+
 // CheckIsUngatedOrganization verifies that the organization associated with the credentials
 // has FULL_ACCESS status (is not gated). This check is required for certain operations like
 // workflow key linking.

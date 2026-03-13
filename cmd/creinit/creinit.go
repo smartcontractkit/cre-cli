@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/smartcontractkit/cre-cli/internal/constants"
+	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/templateconfig"
@@ -83,6 +84,7 @@ type handler struct {
 	log                  *zerolog.Logger
 	runtimeContext       *runtime.Context
 	registry             RegistryInterface
+	tenderlyProvider     tenderly.Provider // nil = create from env at runtime
 	validated            bool
 	selectedTemplateName string // set after Execute for telemetry
 }
@@ -269,7 +271,22 @@ func (h *handler) Execute(inputs Inputs) error {
 	var vnetResult *tenderly.VnetResult
 	if result.UseTenderly || inputs.UseTenderly {
 		if len(selectedTemplate.Networks) > 0 {
-			provider := tenderly.NewEnvProvider()
+			provider := h.tenderlyProvider
+			if provider == nil {
+				creds, credErr := credentials.New(h.log)
+				if credErr != nil {
+					return fmt.Errorf("failed to load credentials for Tenderly (run cre login first): %w", credErr)
+				}
+				userID, uidErr := creds.GetUserID()
+				if uidErr != nil {
+					return fmt.Errorf("failed to get user ID for Tenderly: %w", uidErr)
+				}
+				var providerErr error
+				provider, providerErr = tenderly.NewAPIProvider(userID)
+				if providerErr != nil {
+					return fmt.Errorf("failed to initialize Tenderly provider: %w", providerErr)
+				}
+			}
 			var vnetErr error
 			vnetResult, vnetErr = provider.CreateVnets(selectedTemplate.Networks)
 			if vnetErr != nil {
@@ -509,11 +526,16 @@ func (h *handler) printSuccessMessage(projectRoot string, tmpl *templaterepo.Tem
 
 	// Tenderly Virtual Networks info
 	if vnetResult != nil && len(vnetResult.VnetURLs) > 0 {
-		fmt.Println("  Tenderly Virtual Networks")
+		fmt.Println("  Tenderly Virtual TestNets")
 		for chain, vnetURL := range vnetResult.VnetURLs {
-			fmt.Printf("    %s: %s\n", chain, vnetURL)
+			fmt.Printf("    %s:\n", chain)
+			fmt.Printf("      Dashboard: %s\n", vnetURL)
+			if publicRPC, ok := vnetResult.PublicRPCs[chain]; ok && publicRPC != "" {
+				fmt.Printf("      Public RPC: %s\n", publicRPC)
+			}
 		}
-		fmt.Println("  Use these URLs to inspect transactions and debug chain readers/writers.")
+		fmt.Println("  Public RPCs can be shared with anyone — no Tenderly account needed.")
+		fmt.Println("  Use the dashboard to inspect transactions and debug chain readers/writers.")
 		ui.Line()
 	}
 }
