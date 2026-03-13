@@ -342,7 +342,7 @@ func newRootCommand() *cobra.Command {
 		settings.Flags.CliEnvFile.Name,
 		settings.Flags.CliEnvFile.Short,
 		"",
-		"Path to .env file (defaults to .env in the current or parent directories if present)",
+		fmt.Sprintf("Path to %s file which contains sensitive info (default \".env\")", constants.DefaultEnvFileName),
 	)
 	// project root path flag is present for every subcommand
 	rootCmd.PersistentFlags().StringP(
