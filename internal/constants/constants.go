@@ -35,6 +35,7 @@ const (
 	DefaultProjectSettingsFileName  = "project.yaml"
 	DefaultWorkflowSettingsFileName = "workflow.yaml"
 	DefaultEnvFileName              = ".env"
+	DefaultPublicEnvFileName        = ".env.public"
 	DefaultIsGoFileName             = "go.mod"
 
 	AuthAuthorizePath = "/authorize"
