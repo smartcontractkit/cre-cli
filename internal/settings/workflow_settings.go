@@ -48,7 +48,7 @@ func SetWorkflowPathInFile(workflowYAMLPath, newPath string) error {
 }
 
 func workflowPathFromRaw(raw map[string]interface{}) (string, error) {
-	for _, key := range []string{"staging-settings", "production-settings"} {
+	for key := range raw {
 		target, _ := raw[key].(map[string]interface{})
 		if target == nil {
 			continue
@@ -57,7 +57,8 @@ func workflowPathFromRaw(raw map[string]interface{}) (string, error) {
 		if artifacts == nil {
 			continue
 		}
-		if p, ok := artifacts["workflow-path"].(string); ok && p != "" {
+		p, ok := artifacts["workflow-path"].(string)
+		if ok && p != "" {
 			return p, nil
 		}
 	}
