@@ -26,6 +26,31 @@ var tsTpl string
 //go:embed mockcontract.ts.tpl
 var tsMockTpl string
 
+// extractABI normalises ABI content. If the bytes are a JSON object with an
+// "abi" field (e.g. a Solidity compiler artifact), we extract just the array.
+// Otherwise the content is returned unchanged (assumed to be a raw ABI array).
+func extractABI(data []byte) ([]byte, error) {
+	data = []byte(strings.TrimSpace(string(data)))
+	if len(data) == 0 {
+		return nil, errors.New("empty ABI content")
+	}
+	// Fast path: if the top-level value is an array, it's already a raw ABI.
+	if data[0] == '[' {
+		return data, nil
+	}
+	// Try parsing as an artifact object with an "abi" key.
+	var artifact struct {
+		ABI json.RawMessage `json:"abi"`
+	}
+	if err := json.Unmarshal(data, &artifact); err != nil {
+		return nil, fmt.Errorf("content is neither a JSON array nor a valid JSON object: %w", err)
+	}
+	if artifact.ABI == nil {
+		return nil, errors.New("JSON object does not contain an \"abi\" field")
+	}
+	return artifact.ABI, nil
+}
+
 func GenerateBindings(
 	combinedJSONPath string, // path to combined-json, or ""
 	abiPath string, // path to a single ABI JSON, or ""
@@ -70,11 +95,15 @@ func GenerateBindings(
 
 	case abiPath != "":
 		// Single-ABI mode
-		abiBytes, err := os.ReadFile(abiPath) //nolint:gosec // G703 -- path from trusted CLI flags
+		raw, err := os.ReadFile(abiPath) //nolint:gosec // G703 -- path from trusted CLI flags
 		if err != nil {
 			return fmt.Errorf("read ABI %q: %w", abiPath, err)
 		}
-		// validate JSON
+		abiBytes, err := extractABI(raw)
+		if err != nil {
+			return fmt.Errorf("invalid ABI in %q: %w", abiPath, err)
+		}
+		// validate that the extracted content is valid JSON
 		if err := json.Unmarshal(abiBytes, new(interface{})); err != nil {
 			return fmt.Errorf("invalid ABI JSON %q: %w", abiPath, err)
 		}
@@ -125,9 +154,13 @@ func GenerateBindingsTS(
 		return errors.New("must provide abiPath")
 	}
 
-	abiBytes, err := os.ReadFile(abiPath) //nolint:gosec // G703 -- path from trusted CLI flags
+	raw, err := os.ReadFile(abiPath) //nolint:gosec // G703 -- path from trusted CLI flags
 	if err != nil {
 		return fmt.Errorf("read ABI %q: %w", abiPath, err)
+	}
+	abiBytes, err := extractABI(raw)
+	if err != nil {
+		return fmt.Errorf("invalid ABI in %q: %w", abiPath, err)
 	}
 	if err := json.Unmarshal(abiBytes, new(interface{})); err != nil {
 		return fmt.Errorf("invalid ABI JSON %q: %w", abiPath, err)
