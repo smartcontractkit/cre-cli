@@ -154,7 +154,7 @@ func TestLoadEnvEmptyPath(t *testing.T) {
 
 	logOutput := buf.String()
 	assert.Contains(t, logOutput, "No environment file specified")
-	assert.Contains(t, logOutput, ".env was not found")
+	assert.Contains(t, logOutput, "was not found")
 	assert.Contains(t, logOutput, "MUST be exported")
 
 	assert.Empty(t, settings.LoadedEnvFilePath(), "no file should be recorded when path is empty")
@@ -168,7 +168,7 @@ func TestLoadEnvInvalidFile(t *testing.T) {
 	settings.LoadEnv(logger, v, "/nonexistent/path/.env")
 
 	logOutput := buf.String()
-	assert.Contains(t, logOutput, "Not able to load configuration from .env file")
+	assert.Contains(t, logOutput, "Not able to load configuration from environment file")
 	assert.Contains(t, logOutput, "MUST be exported")
 	assert.Contains(t, logOutput, "dotenvx.com/docs/env-file")
 

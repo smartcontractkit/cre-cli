@@ -119,17 +119,17 @@ func CompileWorkflowToWasm(workflowPath string) ([]byte, error) {
 func warnGOTOOLCHAIN() {
 	tc := os.Getenv("GOTOOLCHAIN")
 	if tc == "" {
-		ui.Warning("GOTOOLCHAIN is not set; the build may not be reproducible across environments. Set it in your .env file (e.g. GOTOOLCHAIN=go1.25.3).")
+		ui.Warning("GOTOOLCHAIN is not set; the build may not be reproducible across environments. Set it in your .env.public file (e.g. GOTOOLCHAIN=go1.25.3).")
 		return
 	}
 
-	envFile := settings.LoadedEnvFilePath()
+	envFile := settings.LoadedPublicEnvFilePath()
 	if envFile == "" {
-		ui.Warning(fmt.Sprintf("GOTOOLCHAIN=%s is set, but no .env file was loaded. The build will not be reproducible for others without the same environment variable.", tc))
+		ui.Warning(fmt.Sprintf("GOTOOLCHAIN=%s is set, but no .env.public file was loaded. The build will not be reproducible for others without the same environment variable.", tc))
 		return
 	}
 
-	envVars := settings.LoadedEnvVars()
+	envVars := settings.LoadedPublicEnvVars()
 	if _, ok := envVars["GOTOOLCHAIN"]; !ok {
 		ui.Warning(fmt.Sprintf("GOTOOLCHAIN=%s is set, but is not in %s. The build will not be reproducible for others without the same environment variable.", tc, envFile))
 	}

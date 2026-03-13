@@ -21,19 +21,30 @@ const (
 	CreTargetEnvVar     = "CRE_TARGET"
 )
 
-// State tracked by LoadEnv so downstream code (e.g. build warnings) can
-// inspect what happened without re-discovering or re-parsing the file.
+// State tracked by LoadEnv / LoadPublicEnv so downstream code (e.g. build
+// warnings) can inspect what happened without re-discovering or re-parsing
+// the files.
 var (
 	loadedEnvFilePath string
 	loadedEnvVars     map[string]string
+
+	loadedPublicEnvFilePath string
+	loadedPublicEnvVars     map[string]string
 )
 
-// LoadedEnvFilePath returns the path that was successfully loaded, or "".
+// LoadedEnvFilePath returns the .env path that was successfully loaded, or "".
 func LoadedEnvFilePath() string { return loadedEnvFilePath }
 
 // LoadedEnvVars returns the key-value pairs parsed from the loaded .env file.
 // Returns nil if no file was loaded.
 func LoadedEnvVars() map[string]string { return loadedEnvVars }
+
+// LoadedPublicEnvFilePath returns the .env.public path that was successfully loaded, or "".
+func LoadedPublicEnvFilePath() string { return loadedPublicEnvFilePath }
+
+// LoadedPublicEnvVars returns the key-value pairs parsed from the loaded .env.public file.
+// Returns nil if no file was loaded.
+func LoadedPublicEnvVars() map[string]string { return loadedPublicEnvVars }
 
 // Settings holds user, project, and workflow configurations.
 type Settings struct {
@@ -104,6 +115,42 @@ func New(logger *zerolog.Logger, v *viper.Viper, cmd *cobra.Command, registryCha
 	}, nil
 }
 
+// loadEnvFile loads the file at envPath into the process environment via
+// godotenv.Overload and returns the path + parsed vars on success.
+// If envPath is empty or loading fails, appropriate messages are logged
+// and ("", nil) is returned.
+func loadEnvFile(logger *zerolog.Logger, envPath string) (string, map[string]string) {
+	if envPath == "" {
+		logger.Debug().Msg(
+			"No environment file specified and it was not found in the current or parent directories. " +
+				"CLI tool will read individual environment variables (they MUST be exported).")
+		return "", nil
+	}
+
+	if err := godotenv.Overload(envPath); err != nil {
+		logger.Error().Str("path", envPath).Err(err).Msg(
+			"Not able to load configuration from environment file. " +
+				"CLI tool will read and verify individual environment variables (they MUST be exported). " +
+				"If the file is present, please check that it follows the correct format: https://dotenvx.com/docs/env-file")
+		return "", nil
+	}
+
+	vars, _ := godotenv.Read(envPath)
+	return envPath, vars
+}
+
+// resolveEnvPath checks the Viper flag; if empty, auto-discovers the file by
+// walking up the directory tree from the current working directory.
+func resolveEnvPath(v *viper.Viper, flagName, defaultFileName string) string {
+	p := v.GetString(flagName)
+	if p == "" {
+		if found, err := FindEnvFile(".", defaultFileName); err == nil {
+			p = found
+		}
+	}
+	return p
+}
+
 // LoadEnv loads environment variables from envPath into the process
 // environment, binds sensitive variables into Viper, and logs outcomes.
 // If envPath is empty no file is loaded and a debug message is emitted.
@@ -112,31 +159,39 @@ func New(logger *zerolog.Logger, v *viper.Viper, cmd *cobra.Command, registryCha
 func LoadEnv(logger *zerolog.Logger, v *viper.Viper, envPath string) {
 	loadedEnvFilePath = ""
 	loadedEnvVars = nil
+	loadedEnvFilePath, loadedEnvVars = loadEnvFile(logger, envPath)
 
-	if envPath == "" {
-		logger.Debug().Msg(
-			"No environment file specified and .env was not found in the current or parent directories. " +
-				"CLI tool will read individual environment variables (they MUST be exported).")
-		return
+	if loadedEnvFilePath != "" {
+		if err := bindEnv(v); err != nil {
+			logger.Error().Err(err).Msg(
+				"Not able to bind environment variables that represent sensitive data. " +
+					"They are required for the CLI tool to function properly, without them some commands may not work. " +
+					"Please export them manually or set via .env file (check example.env for more information).")
+		}
 	}
+}
 
-	if err := godotenv.Overload(envPath); err != nil {
-		logger.Error().Str("path", envPath).Err(err).Msg(
-			"Not able to load configuration from .env file. " +
-				"CLI tool will read and verify individual environment variables (they MUST be exported). " +
-				"If the .env file is present, please check that it follows the correct format: https://dotenvx.com/docs/env-file")
-		return
-	}
+// LoadPublicEnv loads variables from envPath into the process environment.
+// Unlike LoadEnv it does not bind sensitive variables into Viper — it is
+// intended for non-sensitive, shared build configuration (e.g. GOTOOLCHAIN).
+func LoadPublicEnv(logger *zerolog.Logger, envPath string) {
+	loadedPublicEnvFilePath = ""
+	loadedPublicEnvVars = nil
+	loadedPublicEnvFilePath, loadedPublicEnvVars = loadEnvFile(logger, envPath)
+}
 
-	loadedEnvFilePath = envPath
-	loadedEnvVars, _ = godotenv.Read(envPath)
+// ResolveAndLoadEnv resolves the .env file path from the given CLI flag
+// (auto-detecting defaultFileName in parent dirs if the flag is empty),
+// then loads it and binds sensitive variables into Viper.
+func ResolveAndLoadEnv(logger *zerolog.Logger, v *viper.Viper, flagName, defaultFileName string) {
+	LoadEnv(logger, v, resolveEnvPath(v, flagName, defaultFileName))
+}
 
-	if err := bindEnv(v); err != nil {
-		logger.Error().Err(err).Msg(
-			"Not able to bind environment variables that represent sensitive data. " +
-				"They are required for the CLI tool to function properly, without them some commands may not work. " +
-				"Please export them manually or set via .env file (check example.env for more information).")
-	}
+// ResolveAndLoadPublicEnv resolves the public env file path from the given
+// CLI flag (auto-detecting defaultFileName in parent dirs if the flag is
+// empty), then loads it into the process environment.
+func ResolveAndLoadPublicEnv(logger *zerolog.Logger, v *viper.Viper, flagName, defaultFileName string) {
+	LoadPublicEnv(logger, resolveEnvPath(v, flagName, defaultFileName))
 }
 
 func bindEnv(v *viper.Viper) error {

@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/joho/godotenv"
-	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -166,18 +165,18 @@ func TestWarnGOTOOLCHAIN(t *testing.T) {
 			wantWarning: true,
 		},
 		{
-			name:        "GOTOOLCHAIN set but no env file loaded emits warning",
+			name:        "GOTOOLCHAIN set but no public env file loaded emits warning",
 			gotoolchain: "go1.25.3",
 			wantWarning: true,
 		},
 		{
-			name:           "GOTOOLCHAIN set but missing from env file emits warning",
+			name:           "GOTOOLCHAIN set but missing from public env file emits warning",
 			gotoolchain:    "go1.25.3",
 			envFileContent: map[string]string{"CRE_TARGET": "staging"},
 			wantWarning:    true,
 		},
 		{
-			name:           "GOTOOLCHAIN set and present in env file emits no warning",
+			name:           "GOTOOLCHAIN set and present in public env file emits no warning",
 			gotoolchain:    "go1.25.3",
 			envFileContent: map[string]string{"GOTOOLCHAIN": "go1.25.3"},
 			wantWarning:    false,
@@ -194,17 +193,16 @@ func TestWarnGOTOOLCHAIN(t *testing.T) {
 			}
 
 			logger := testutil.NewTestLogger()
-			v := viper.New()
 			if tc.envFileContent != nil {
 				dir := t.TempDir()
-				envPath := filepath.Join(dir, ".env")
+				envPath := filepath.Join(dir, ".env.public")
 				require.NoError(t, godotenv.Write(tc.envFileContent, envPath))
-				settings.LoadEnv(logger, v, envPath)
+				settings.LoadPublicEnv(logger, envPath)
 				for k := range tc.envFileContent {
 					t.Cleanup(func() { os.Unsetenv(k) })
 				}
 			} else {
-				settings.LoadEnv(logger, v, "")
+				settings.LoadPublicEnv(logger, "")
 			}
 
 			output := captureStderr(t, func() {
