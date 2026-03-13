@@ -11,6 +11,9 @@ specified explicitly with --language.
 Each contract gets its own package subdirectory to avoid naming conflicts.
 For example, IERC20.abi generates bindings in generated/ierc20/ package.
 
+Both raw ABI files (*.abi) and JSON artifact files (*.json) are supported.
+For JSON files the ABI is read from the top-level "abi" field.
+
 ```
 cre generate-bindings <chain-family> [optional flags]
 ```
@@ -24,7 +27,7 @@ cre generate-bindings <chain-family> [optional flags]
 ### Options
 
 ```
-  -a, --abi string            Path to ABI directory (defaults to contracts/{chain-family}/src/abi/)
+  -a, --abi string            Path to ABI directory (defaults to contracts/{chain-family}/src/abi/). Supports *.abi and *.json files
   -h, --help                  help for generate-bindings
   -l, --language string       Target language: go, typescript (auto-detected from project files when omitted)
   -k, --pkg string            Base package name (each contract gets its own subdirectory) (default "bindings")
