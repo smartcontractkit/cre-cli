@@ -125,6 +125,9 @@ func newRootCommand() *cobra.Command {
 				return fmt.Errorf("failed to bind flags: %w", err)
 			}
 
+			settings.ResolveAndLoadEnv(log, v, settings.Flags.CliEnvFile.Name, constants.DefaultEnvFileName)
+			settings.ResolveAndLoadPublicEnv(log, v, settings.Flags.CliPublicEnvFile.Name, constants.DefaultPublicEnvFileName)
+
 			// Update log level if verbose flag is set — must happen before spinner starts
 			if verbose := v.GetBool(settings.Flags.Verbose.Name); verbose {
 				ui.SetVerbose(true)
@@ -331,8 +334,15 @@ func newRootCommand() *cobra.Command {
 	rootCmd.PersistentFlags().StringP(
 		settings.Flags.CliEnvFile.Name,
 		settings.Flags.CliEnvFile.Short,
-		constants.DefaultEnvFileName,
+		"",
 		fmt.Sprintf("Path to %s file which contains sensitive info", constants.DefaultEnvFileName),
+	)
+	// public env file flag is present for every subcommand
+	rootCmd.PersistentFlags().StringP(
+		settings.Flags.CliPublicEnvFile.Name,
+		settings.Flags.CliPublicEnvFile.Short,
+		"",
+		fmt.Sprintf("Path to %s file which contains shared, non-sensitive build config", constants.DefaultPublicEnvFileName),
 	)
 	// project root path flag is present for every subcommand
 	rootCmd.PersistentFlags().StringP(
