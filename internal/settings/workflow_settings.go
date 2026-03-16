@@ -253,6 +253,8 @@ func ShouldSkipGetOwner(cmd *cobra.Command) bool {
 	switch cmd.Name() {
 	case "help":
 		return true
+	case "hash":
+		return true
 	case "simulate":
 		// Treat missing/invalid flag as false (i.e., skip).
 		// If broadcast is explicitly true, don't skip.
