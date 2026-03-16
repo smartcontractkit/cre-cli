@@ -368,6 +368,10 @@ func TestEndToEnd_TypeScriptGeneration(t *testing.T) {
 	err = os.WriteFile(filepath.Join(abiDir, "SimpleContract.abi"), []byte(abiContent), 0600)
 	require.NoError(t, err)
 
+	jsonContent := `{"abi":[{"type":"function","name":"getBalance","inputs":[],"outputs":[{"name":"","type":"uint256"}],"stateMutability":"view"}]}`
+	err = os.WriteFile(filepath.Join(abiDir, "JsonContract.json"), []byte(jsonContent), 0600)
+	require.NoError(t, err)
+
 	originalDir, err := os.Getwd()
 	require.NoError(t, err)
 	defer func() { _ = os.Chdir(originalDir) }()
@@ -388,6 +392,8 @@ func TestEndToEnd_TypeScriptGeneration(t *testing.T) {
 	tsOutDir := filepath.Join(tempDir, "contracts", "evm", "ts", "generated")
 	require.FileExists(t, filepath.Join(tsOutDir, "SimpleContract.ts"))
 	require.FileExists(t, filepath.Join(tsOutDir, "SimpleContract_mock.ts"))
+	require.FileExists(t, filepath.Join(tsOutDir, "JsonContract.ts"))
+	require.FileExists(t, filepath.Join(tsOutDir, "JsonContract_mock.ts"))
 	require.FileExists(t, filepath.Join(tsOutDir, "index.ts"))
 }
 
@@ -548,6 +554,27 @@ func TestValidateInputs_ValidInputs(t *testing.T) {
 	err = handler2.ValidateInputs(tsInputs)
 	require.NoError(t, err)
 	assert.True(t, handler2.validated)
+
+	// Test validation with directory containing only .json files
+	abiDir3 := filepath.Join(tempDir, "abi_json")
+	err = os.MkdirAll(abiDir3, 0755)
+	require.NoError(t, err)
+	jsonContent := `{"abi":[{"type":"function","name":"test","inputs":[],"outputs":[]}]}`
+	err = os.WriteFile(filepath.Join(abiDir3, "Contract.json"), []byte(jsonContent), 0600)
+	require.NoError(t, err)
+
+	jsonInputs := Inputs{
+		ProjectRoot: tempDir,
+		ChainFamily: "evm",
+		GoLang:      true,
+		AbiPath:     abiDir3,
+		PkgName:     "bindings",
+		GoOutPath:   filepath.Join(tempDir, "out"),
+	}
+	handler3 := newHandler(runtimeCtx)
+	err = handler3.ValidateInputs(jsonInputs)
+	require.NoError(t, err)
+	assert.True(t, handler3.validated)
 }
 
 func TestValidateInputs_InvalidChainFamily(t *testing.T) {
@@ -630,11 +657,14 @@ func TestProcessAbiDirectory_MultipleFiles(t *testing.T) {
 	err = os.MkdirAll(abiDir, 0755)
 	require.NoError(t, err)
 
-	// Create mock ABI files
+	// Create mock ABI files (both .abi and .json formats)
 	abiContent := `[{"type":"function","name":"test","inputs":[],"outputs":[]}]`
+	jsonContent := `{"abi":[{"type":"function","name":"test","inputs":[],"outputs":[]}]}`
 	err = os.WriteFile(filepath.Join(abiDir, "Contract1.abi"), []byte(abiContent), 0600)
 	require.NoError(t, err)
 	err = os.WriteFile(filepath.Join(abiDir, "Contract2.abi"), []byte(abiContent), 0600)
+	require.NoError(t, err)
+	err = os.WriteFile(filepath.Join(abiDir, "Contract3.json"), []byte(jsonContent), 0600)
 	require.NoError(t, err)
 
 	// Create a mock logger to prevent nil pointer dereference
@@ -667,8 +697,10 @@ func TestProcessAbiDirectory_MultipleFiles(t *testing.T) {
 	// Verify that per-contract directories were created
 	contract1Dir := filepath.Join(outDir, "contract1")
 	contract2Dir := filepath.Join(outDir, "contract2")
+	contract3Dir := filepath.Join(outDir, "contract3")
 	assert.DirExists(t, contract1Dir)
 	assert.DirExists(t, contract2Dir)
+	assert.DirExists(t, contract3Dir)
 }
 
 func TestProcessAbiDirectory_CreatesPerContractDirectories(t *testing.T) {
@@ -683,8 +715,9 @@ func TestProcessAbiDirectory_CreatesPerContractDirectories(t *testing.T) {
 	err = os.MkdirAll(abiDir, 0755)
 	require.NoError(t, err)
 
-	// Create mock ABI files with different naming patterns
+	// Create mock ABI files with different naming patterns (both .abi and .json)
 	abiContent := `[{"type":"function","name":"test","inputs":[],"outputs":[]}]`
+	jsonContent := `{"abi":[{"type":"function","name":"test","inputs":[],"outputs":[]}]}`
 	testCases := []struct {
 		filename        string
 		expectedPackage string
@@ -692,10 +725,15 @@ func TestProcessAbiDirectory_CreatesPerContractDirectories(t *testing.T) {
 		{"IERC20.abi", "ierc20"},
 		{"ReserveManager.abi", "reserve_manager"},
 		{"SimpleERC20.abi", "simple_erc20"},
+		{"MyToken.json", "my_token"},
 	}
 
 	for _, tc := range testCases {
-		err = os.WriteFile(filepath.Join(abiDir, tc.filename), []byte(abiContent), 0600)
+		content := abiContent
+		if filepath.Ext(tc.filename) == ".json" {
+			content = jsonContent
+		}
+		err = os.WriteFile(filepath.Join(abiDir, tc.filename), []byte(content), 0600)
 		require.NoError(t, err)
 	}
 
@@ -829,6 +867,42 @@ func TestProcessAbiDirectory_PackageNameCollision(t *testing.T) {
 	require.Equal(t, err.Error(), "package name collision: multiple contracts would generate the same package name 'test_contract' (contracts are converted to snake_case for package names). Please rename one of your contract files to avoid this conflict")
 }
 
+func TestProcessAbiDirectory_DuplicateContractNameAcrossExtensions(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "generate-bindings-test")
+	require.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	abiDir := filepath.Join(tempDir, "abi")
+	outDir := filepath.Join(tempDir, "generated")
+	err = os.MkdirAll(abiDir, 0755)
+	require.NoError(t, err)
+
+	abiContent := `[{"type":"function","name":"test","inputs":[],"outputs":[]}]`
+	jsonContent := `{"abi":[{"type":"function","name":"test","inputs":[],"outputs":[]}]}`
+	err = os.WriteFile(filepath.Join(abiDir, "Token.abi"), []byte(abiContent), 0600)
+	require.NoError(t, err)
+	err = os.WriteFile(filepath.Join(abiDir, "Token.json"), []byte(jsonContent), 0600)
+	require.NoError(t, err)
+
+	logger := zerolog.New(os.Stderr).With().Timestamp().Logger()
+	runtimeCtx := &runtime.Context{Logger: &logger}
+	handler := newHandler(runtimeCtx)
+
+	inputs := Inputs{
+		ProjectRoot: tempDir,
+		ChainFamily: "evm",
+		GoLang:      true,
+		AbiPath:     abiDir,
+		PkgName:     "bindings",
+		GoOutPath:   outDir,
+	}
+
+	err = handler.processAbiDirectory(inputs)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "duplicate contract name")
+	assert.Contains(t, err.Error(), "Token")
+}
+
 func TestProcessAbiDirectory_NonExistentDirectory(t *testing.T) {
 	logger := zerolog.New(os.Stderr).With().Timestamp().Logger()
 	runtimeCtx := &runtime.Context{
@@ -852,10 +926,11 @@ func TestProcessAbiDirectory_NonExistentDirectory(t *testing.T) {
 
 // TestGenerateBindings_UnconventionalNaming tests binding generation for contracts
 // with unconventional naming patterns to verify correct handling or appropriate errors.
+// Each case is run for both .abi (raw array) and .json (artifact with "abi" field) formats.
 func TestGenerateBindings_UnconventionalNaming(t *testing.T) {
 	tests := []struct {
 		name           string
-		contractABI    string
+		contractABI    string // raw ABI JSON array
 		pkgName        string
 		typeName       string
 		shouldFail     bool
@@ -951,213 +1026,42 @@ func TestGenerateBindings_UnconventionalNaming(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			tempDir, err := os.MkdirTemp("", "bindings-unconventional-test")
-			require.NoError(t, err)
-			defer os.RemoveAll(tempDir)
+			for _, ext := range []string{".abi", ".json"} {
+				t.Run(ext, func(t *testing.T) {
+					tempDir, err := os.MkdirTemp("", "bindings-unconventional-test")
+					require.NoError(t, err)
+					defer os.RemoveAll(tempDir)
 
-			abiFile := filepath.Join(tempDir, tc.typeName+".abi")
-			err = os.WriteFile(abiFile, []byte(tc.contractABI), 0600)
-			require.NoError(t, err)
+					var fileContent string
+					if ext == ".json" {
+						fileContent = fmt.Sprintf(`{"abi":%s}`, tc.contractABI)
+					} else {
+						fileContent = tc.contractABI
+					}
 
-			outFile := filepath.Join(tempDir, "bindings.go")
-			err = bindings.GenerateBindings("", abiFile, tc.pkgName, tc.typeName, outFile)
+					abiFile := filepath.Join(tempDir, tc.typeName+ext)
+					err = os.WriteFile(abiFile, []byte(fileContent), 0600)
+					require.NoError(t, err)
 
-			if tc.shouldFail {
-				require.Error(t, err, "Expected binding generation to fail for %s", tc.name)
-				if tc.expectedErrMsg != "" {
-					assert.Contains(t, err.Error(), tc.expectedErrMsg, "Error message should contain expected text")
-				}
-			} else {
-				require.NoError(t, err, "Binding generation should succeed for %s", tc.name)
+					outFile := filepath.Join(tempDir, "bindings.go")
+					err = bindings.GenerateBindings("", abiFile, tc.pkgName, tc.typeName, outFile)
 
-				content, err := os.ReadFile(outFile)
-				require.NoError(t, err)
-				assert.NotEmpty(t, content, "Generated bindings should not be empty")
+					if tc.shouldFail {
+						require.Error(t, err, "Expected binding generation to fail for %s", tc.name)
+						if tc.expectedErrMsg != "" {
+							assert.Contains(t, err.Error(), tc.expectedErrMsg, "Error message should contain expected text")
+						}
+					} else {
+						require.NoError(t, err, "Binding generation should succeed for %s", tc.name)
 
-				assert.Contains(t, string(content), fmt.Sprintf("package %s", tc.pkgName))
+						content, err := os.ReadFile(outFile)
+						require.NoError(t, err)
+						assert.NotEmpty(t, content, "Generated bindings should not be empty")
+
+						assert.Contains(t, string(content), fmt.Sprintf("package %s", tc.pkgName))
+					}
+				})
 			}
 		})
 	}
-}
-
-func TestProcessAbiDirectory_JsonArtifactFiles(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "generate-bindings-test")
-	require.NoError(t, err)
-	defer os.RemoveAll(tempDir)
-
-	abiDir := filepath.Join(tempDir, "abi")
-	outDir := filepath.Join(tempDir, "generated")
-	err = os.MkdirAll(abiDir, 0755)
-	require.NoError(t, err)
-
-	// JSON artifact format with ABI nested under .abi field
-	jsonContent := `{"abi":[{"type":"function","name":"test","inputs":[],"outputs":[]}],"bytecode":"0x"}`
-	err = os.WriteFile(filepath.Join(abiDir, "MyToken.json"), []byte(jsonContent), 0600)
-	require.NoError(t, err)
-
-	logger := zerolog.New(os.Stderr).With().Timestamp().Logger()
-	runtimeCtx := &runtime.Context{Logger: &logger}
-	handler := newHandler(runtimeCtx)
-
-	inputs := Inputs{
-		ProjectRoot: tempDir,
-		ChainFamily: "evm",
-		GoLang:      true,
-		AbiPath:     abiDir,
-		PkgName:     "bindings",
-		GoOutPath:   outDir,
-	}
-
-	err = handler.processAbiDirectory(inputs)
-	if err != nil {
-		t.Logf("Error (may be expected from template): %v", err)
-	}
-
-	// Verify per-contract directory was created
-	assert.DirExists(t, filepath.Join(outDir, "my_token"))
-}
-
-func TestProcessAbiDirectory_MixedAbiAndJson(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "generate-bindings-test")
-	require.NoError(t, err)
-	defer os.RemoveAll(tempDir)
-
-	abiDir := filepath.Join(tempDir, "abi")
-	outDir := filepath.Join(tempDir, "generated")
-	err = os.MkdirAll(abiDir, 0755)
-	require.NoError(t, err)
-
-	abiContent := `[{"type":"function","name":"test","inputs":[],"outputs":[]}]`
-	jsonContent := `{"abi":[{"type":"function","name":"getValue","inputs":[],"outputs":[{"name":"","type":"uint256"}]}]}`
-
-	err = os.WriteFile(filepath.Join(abiDir, "Contract1.abi"), []byte(abiContent), 0600)
-	require.NoError(t, err)
-	err = os.WriteFile(filepath.Join(abiDir, "Contract2.json"), []byte(jsonContent), 0600)
-	require.NoError(t, err)
-
-	logger := zerolog.New(os.Stderr).With().Timestamp().Logger()
-	runtimeCtx := &runtime.Context{Logger: &logger}
-	handler := newHandler(runtimeCtx)
-
-	inputs := Inputs{
-		ProjectRoot: tempDir,
-		ChainFamily: "evm",
-		GoLang:      true,
-		AbiPath:     abiDir,
-		PkgName:     "bindings",
-		GoOutPath:   outDir,
-	}
-
-	err = handler.processAbiDirectory(inputs)
-	if err != nil {
-		t.Logf("Error (may be expected from template): %v", err)
-	}
-
-	// Both contract directories should be created
-	assert.DirExists(t, filepath.Join(outDir, "contract1"))
-	assert.DirExists(t, filepath.Join(outDir, "contract2"))
-}
-
-func TestProcessAbiDirectory_DuplicateContractName(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "generate-bindings-test")
-	require.NoError(t, err)
-	defer os.RemoveAll(tempDir)
-
-	abiDir := filepath.Join(tempDir, "abi")
-	outDir := filepath.Join(tempDir, "generated")
-	err = os.MkdirAll(abiDir, 0755)
-	require.NoError(t, err)
-
-	abiContent := `[{"type":"function","name":"test","inputs":[],"outputs":[]}]`
-	jsonContent := `{"abi":[{"type":"function","name":"test","inputs":[],"outputs":[]}]}`
-
-	// Same contract name with different extensions should be rejected
-	err = os.WriteFile(filepath.Join(abiDir, "Token.abi"), []byte(abiContent), 0600)
-	require.NoError(t, err)
-	err = os.WriteFile(filepath.Join(abiDir, "Token.json"), []byte(jsonContent), 0600)
-	require.NoError(t, err)
-
-	logger := zerolog.New(os.Stderr).With().Timestamp().Logger()
-	runtimeCtx := &runtime.Context{Logger: &logger}
-	handler := newHandler(runtimeCtx)
-
-	inputs := Inputs{
-		ProjectRoot: tempDir,
-		ChainFamily: "evm",
-		GoLang:      true,
-		AbiPath:     abiDir,
-		PkgName:     "bindings",
-		GoOutPath:   outDir,
-	}
-
-	err = handler.processAbiDirectory(inputs)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "duplicate contract name")
-	assert.Contains(t, err.Error(), "Token")
-}
-
-func TestValidateInputs_JsonFilesInDirectory(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "generate-bindings-test")
-	require.NoError(t, err)
-	defer os.RemoveAll(tempDir)
-
-	abiDir := filepath.Join(tempDir, "abi")
-	err = os.MkdirAll(abiDir, 0755)
-	require.NoError(t, err)
-
-	// Directory with only .json files should pass validation
-	jsonContent := `{"abi":[{"type":"function","name":"test","inputs":[],"outputs":[]}]}`
-	err = os.WriteFile(filepath.Join(abiDir, "Contract.json"), []byte(jsonContent), 0600)
-	require.NoError(t, err)
-
-	runtimeCtx := &runtime.Context{}
-	handler := newHandler(runtimeCtx)
-
-	inputs := Inputs{
-		ProjectRoot: tempDir,
-		ChainFamily: "evm",
-		GoLang:      true,
-		AbiPath:     abiDir,
-		PkgName:     "bindings",
-		GoOutPath:   filepath.Join(tempDir, "out"),
-	}
-
-	err = handler.ValidateInputs(inputs)
-	require.NoError(t, err)
-}
-
-func TestEndToEnd_TypeScriptGeneration_JsonArtifact(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "generate-bindings-test")
-	require.NoError(t, err)
-	defer os.RemoveAll(tempDir)
-
-	abiDir := filepath.Join(tempDir, "contracts", "evm", "src", "abi")
-	err = os.MkdirAll(abiDir, 0755)
-	require.NoError(t, err)
-
-	jsonContent := `{"abi":[{"type":"function","name":"getValue","inputs":[],"outputs":[{"name":"","type":"uint256"}],"stateMutability":"view"}]}`
-	err = os.WriteFile(filepath.Join(abiDir, "SimpleContract.json"), []byte(jsonContent), 0600)
-	require.NoError(t, err)
-
-	originalDir, err := os.Getwd()
-	require.NoError(t, err)
-	defer func() { _ = os.Chdir(originalDir) }()
-	_ = os.Chdir(tempDir)
-
-	logger := zerolog.New(os.Stderr).With().Timestamp().Logger()
-	runtimeCtx := &runtime.Context{Logger: &logger}
-	handler := newHandler(runtimeCtx)
-
-	v := viper.New()
-	v.Set("language", "typescript")
-	v.Set("pkg", "bindings")
-	inputs, err := handler.ResolveInputs([]string{"evm"}, v)
-	require.NoError(t, err)
-	require.NoError(t, handler.ValidateInputs(inputs))
-	require.NoError(t, handler.Execute(inputs))
-
-	tsOutDir := filepath.Join(tempDir, "contracts", "evm", "ts", "generated")
-	require.FileExists(t, filepath.Join(tsOutDir, "SimpleContract.ts"))
-	require.FileExists(t, filepath.Join(tsOutDir, "SimpleContract_mock.ts"))
-	require.FileExists(t, filepath.Join(tsOutDir, "index.ts"))
 }
