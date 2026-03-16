@@ -124,6 +124,7 @@ func redactURL(rawURL string) string {
 		return "***"
 	}
 	// Mask the last path segment (most common location for API keys)
+	u.Path = strings.TrimRight(u.Path, "/")
 	if u.Path != "" && u.Path != "/" {
 		parts := strings.Split(u.Path, "/")
 		if len(parts) > 1 {
