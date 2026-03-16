@@ -27,10 +27,10 @@ type Inputs struct {
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
 	hashCmd := &cobra.Command{
-		Use:     "hash <workflow-folder-path>",
-		Short:   "Computes and displays workflow hashes",
-		Long:    `Computes the binary hash, config hash, and workflow hash for a workflow. The workflow hash uses the same algorithm as the on-chain workflow ID.`,
-		Args:    cobra.ExactArgs(1),
+		Use:   "hash <workflow-folder-path>",
+		Short: "Computes and displays workflow hashes",
+		Long:  `Computes the binary hash, config hash, and workflow hash for a workflow. The workflow hash uses the same algorithm as the on-chain workflow ID.`,
+		Args:  cobra.ExactArgs(1),
 		Example: `  cre workflow hash ./my-workflow
   cre workflow hash ./my-workflow --public_key 0x1234...abcd`,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -69,9 +69,14 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 }
 
 func Execute(inputs Inputs) error {
-	binary, err := loadBinary(inputs.WasmPath, inputs.WorkflowPath)
+	rawBinary, err := loadBinary(inputs.WasmPath, inputs.WorkflowPath)
 	if err != nil {
 		return err
+	}
+
+	binary, err := cmdcommon.CompressBrotli(rawBinary)
+	if err != nil {
+		return fmt.Errorf("failed to compress binary: %w", err)
 	}
 
 	config, err := loadConfig(inputs.ConfigPath)
