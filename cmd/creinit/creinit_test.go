@@ -125,7 +125,7 @@ var testGoTemplate = templaterepo.TemplateSummary{
 		Title:       "Test Go Template",
 		Description: "A test Go template",
 		Language:    "go",
-		Category:    "test",
+		Category:    "workflow",
 		Author:      "Test",
 		License:     "MIT",
 		Networks:    []string{"ethereum-testnet-sepolia"},
@@ -146,7 +146,7 @@ var testTSTemplate = templaterepo.TemplateSummary{
 		Title:       "Test TypeScript Template",
 		Description: "A test TypeScript template",
 		Language:    "typescript",
-		Category:    "test",
+		Category:    "workflow",
 		Author:      "Test",
 		License:     "MIT",
 		Workflows:   []templaterepo.WorkflowDirEntry{{Dir: "my-workflow"}},
@@ -166,7 +166,7 @@ var testStarterTemplate = templaterepo.TemplateSummary{
 		Title:       "Starter Go Template",
 		Description: "A starter Go template",
 		Language:    "go",
-		Category:    "test",
+		Category:    "workflow",
 		Author:      "Test",
 		License:     "MIT",
 		Workflows:   []templaterepo.WorkflowDirEntry{{Dir: "my-workflow"}},
@@ -186,7 +186,7 @@ var testMultiNetworkTemplate = templaterepo.TemplateSummary{
 		Title:       "Test Multi-Chain Template",
 		Description: "A template requiring multiple chains",
 		Language:    "go",
-		Category:    "test",
+		Category:    "workflow",
 		Author:      "Test",
 		License:     "MIT",
 		Networks:    []string{"ethereum-testnet-sepolia", "ethereum-mainnet"},
@@ -207,7 +207,7 @@ var testBuiltInGoTemplate = templaterepo.TemplateSummary{
 		Title:       "Hello World (Go)",
 		Description: "A built-in Go template",
 		Language:    "go",
-		Category:    "getting-started",
+		Category:    "workflow",
 		Author:      "Test",
 		License:     "MIT",
 	},
@@ -222,7 +222,7 @@ var testMultiWorkflowTemplate = templaterepo.TemplateSummary{
 		Title:       "Bring Your Own Data (Go)",
 		Description: "Bring your own off-chain data on-chain with PoR and NAV publishing.",
 		Language:    "go",
-		Category:    "data-feeds",
+		Category:    "workflow",
 		Author:      "Test",
 		License:     "MIT",
 		Networks:    []string{"ethereum-testnet-sepolia"},
@@ -247,13 +247,37 @@ var testSingleWorkflowWithPostInit = templaterepo.TemplateSummary{
 		Title:       "KV Store (Go)",
 		Description: "Read, increment, and write a counter in AWS S3.",
 		Language:    "go",
-		Category:    "off-chain-storage",
+		Category:    "workflow",
 		Author:      "Test",
 		License:     "MIT",
 		Workflows:   []templaterepo.WorkflowDirEntry{{Dir: "my-workflow"}},
 		PostInit:    "Update secrets.yaml with your AWS credentials before running.",
 	},
 	Path: "building-blocks/kv-store/kv-store-go",
+	Source: templaterepo.RepoSource{
+		Owner: "test",
+		Repo:  "templates",
+		Ref:   "main",
+	},
+}
+
+var testProjectDirWithNetworks = templaterepo.TemplateSummary{
+	TemplateMetadata: templaterepo.TemplateMetadata{
+		Kind:        "starter-template",
+		Name:        "starter-with-projectdir",
+		Title:       "Starter With ProjectDir",
+		Description: "A starter template that ships its own project structure",
+		Language:    "typescript",
+		Category:    "workflow",
+		Author:      "Test",
+		License:     "MIT",
+		ProjectDir:  ".",
+		Networks:    []string{"ethereum-testnet-sepolia", "ethereum-mainnet"},
+		Workflows: []templaterepo.WorkflowDirEntry{
+			{Dir: "my-workflow", Description: "Test workflow"},
+		},
+	},
+	Path: "starter-templates/test/starter-with-projectdir",
 	Source: templaterepo.RepoSource{
 		Owner: "test",
 		Repo:  "templates",
@@ -271,6 +295,7 @@ func newMockRegistry() *mockRegistry {
 			testBuiltInGoTemplate,
 			testMultiWorkflowTemplate,
 			testSingleWorkflowWithPostInit,
+			testProjectDirWithNetworks,
 		},
 	}
 }
@@ -568,6 +593,45 @@ func TestInitRemoteTemplateKeepsProjectYAML(t *testing.T) {
 	envContent, err := os.ReadFile(filepath.Join(projectRoot, constants.DefaultEnvFileName))
 	require.NoError(t, err)
 	require.Contains(t, string(envContent), "GITHUB_API_TOKEN=test-token")
+}
+
+func TestInitProjectDirTemplateRpcPatching(t *testing.T) {
+	sim := chainsim.NewSimulatedEnvironment(t)
+	defer sim.Close()
+
+	tempDir := t.TempDir()
+	restoreCwd, err := testutil.ChangeWorkingDirectory(tempDir)
+	require.NoError(t, err)
+	defer restoreCwd()
+
+	// Template with ProjectDir set AND Networks — the bug was that RPC URLs
+	// were silently dropped because the patching was inside the ProjectDir=="" block.
+	inputs := Inputs{
+		ProjectName:  "projectDirProj",
+		TemplateName: "starter-with-projectdir",
+		WorkflowName: "my-workflow",
+		RpcURLs: map[string]string{
+			"ethereum-testnet-sepolia": "https://sepolia.custom.com",
+			"ethereum-mainnet":         "https://mainnet.custom.com",
+		},
+	}
+
+	h := newHandlerWithRegistry(sim.NewRuntimeContext(), newMockRegistry())
+	require.NoError(t, h.ValidateInputs(inputs))
+	require.NoError(t, h.Execute(inputs))
+
+	projectRoot := filepath.Join(tempDir, "projectDirProj")
+	projectYAML, err := os.ReadFile(filepath.Join(projectRoot, constants.DefaultProjectSettingsFileName))
+	require.NoError(t, err)
+	content := string(projectYAML)
+
+	// User-provided RPCs must be patched even though ProjectDir is set
+	require.Contains(t, content, "https://sepolia.custom.com",
+		"user RPC URL for sepolia should be patched into project.yaml for templates with ProjectDir")
+	require.Contains(t, content, "https://mainnet.custom.com",
+		"user RPC URL for mainnet should be patched into project.yaml for templates with ProjectDir")
+	require.NotContains(t, content, "https://default-rpc.example.com",
+		"mock default URLs should be replaced by user-provided URLs")
 }
 
 func TestTemplateNotFound(t *testing.T) {

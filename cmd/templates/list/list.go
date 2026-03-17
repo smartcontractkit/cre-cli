@@ -2,6 +2,7 @@ package list
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
@@ -75,6 +76,11 @@ func (h *handler) Execute(refresh bool) error {
 	ui.Line()
 
 	for _, t := range templates {
+		// Only show workflow templates
+		if t.Category != templaterepo.CategoryWorkflow {
+			continue
+		}
+
 		title := t.Title
 		if title == "" {
 			title = t.Name
@@ -90,6 +96,16 @@ func (h *handler) Execute(refresh bool) error {
 
 		if t.Description != "" {
 			ui.Dim(fmt.Sprintf("    %s", t.Description))
+		}
+
+		if len(t.Solutions) > 0 {
+			ui.Dim(fmt.Sprintf("    Solutions: %s", strings.Join(t.Solutions, ", ")))
+		}
+		if len(t.Capabilities) > 0 {
+			ui.Dim(fmt.Sprintf("    Capabilities: %s", strings.Join(t.Capabilities, ", ")))
+		}
+		if len(t.Tags) > 0 {
+			ui.Dim(fmt.Sprintf("    Tags: %s", strings.Join(t.Tags, ", ")))
 		}
 
 		ui.Line()
