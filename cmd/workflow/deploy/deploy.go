@@ -265,6 +265,10 @@ func (h *handler) Execute(ctx context.Context) error {
 		return fmt.Errorf("failed to prepare workflow artifact: %w", err)
 	}
 
+	ui.Dim(fmt.Sprintf("Binary hash:   %s", cmdcommon.HashBytes(h.workflowArtifact.RawBinaryForID)))
+	ui.Dim(fmt.Sprintf("Config hash:   %s", cmdcommon.HashBytes(h.workflowArtifact.RawConfigForID)))
+	ui.Dim(fmt.Sprintf("Workflow hash: %s", h.workflowArtifact.WorkflowID))
+
 	h.runtimeContext.Workflow.ID = h.workflowArtifact.WorkflowID
 
 	h.wg.Wait()

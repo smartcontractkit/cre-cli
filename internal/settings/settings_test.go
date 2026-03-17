@@ -23,11 +23,14 @@ func createTestContext(t *testing.T, envVars map[string]string, targetDir string
 	require.NoError(t, godotenv.Write(envVars, envFilePath))
 
 	v := viper.New()
-	v.SetConfigFile(envFilePath)
-	require.NoError(t, v.ReadInConfig())
-
-	v.Set(settings.Flags.CliEnvFile.Name, envFilePath)
 	logger := testutil.NewTestLogger()
+	settings.LoadEnv(logger, v, envFilePath)
+
+	t.Cleanup(func() {
+		for k := range envVars {
+			os.Unsetenv(k)
+		}
+	})
 
 	return v, logger
 }

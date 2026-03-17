@@ -5,3 +5,8 @@
 ###############################################################################
 # Ethereum private key or 1Password reference (e.g. op://vault/item/field)
 CRE_ETH_PRIVATE_KEY={{EthPrivateKey}}
+
+# RPC secret keys — referenced in project.yaml via ${VAR_NAME} syntax.
+# Example:
+# CRE_SECRET_RPC_SEPOLIA=my-secret-api-key
+# CRE_SECRET_RPC_MAINNET=my-other-api-key
