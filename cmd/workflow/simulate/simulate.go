@@ -133,6 +133,7 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 			h.log.Debug().Msgf("RPC not provided for %s; skipping", chainName)
 			continue
 		}
+		h.log.Debug().Msgf("Using RPC for %s: %s", chainName, redactURL(rpcURL))
 
 		c, err := ethclient.Dial(rpcURL)
 		if err != nil {
@@ -190,6 +191,7 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 		}
 
 		// Dial the RPC
+		h.log.Debug().Msgf("Using RPC for experimental chain %d: %s", ec.ChainSelector, redactURL(ec.RPCURL))
 		c, err := ethclient.Dial(ec.RPCURL)
 		if err != nil {
 			return Inputs{}, fmt.Errorf("failed to create eth client for experimental chain %d: %w", ec.ChainSelector, err)
@@ -348,6 +350,9 @@ func (h *handler) Execute(inputs Inputs) error {
 			return fmt.Errorf("failed to read config file: %w", err)
 		}
 	}
+
+	ui.Dim(fmt.Sprintf("Binary hash: %s", cmdcommon.HashBytes(wasmFileBinary)))
+	ui.Dim(fmt.Sprintf("Config hash: %s", cmdcommon.HashBytes(config)))
 
 	// Read the secrets file
 	var secrets []byte
