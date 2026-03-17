@@ -214,7 +214,7 @@ func (h *handler) Execute(inputs Inputs) error {
 			}
 		}
 		if selectedTemplate == nil {
-			return fmt.Errorf("template %q not found", inputs.TemplateName)
+			return fmt.Errorf("template %q not found. Run 'cre templates list' to see all available templates", inputs.TemplateName)
 		}
 	}
 
