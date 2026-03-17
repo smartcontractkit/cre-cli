@@ -20,10 +20,12 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 
+	"github.com/smartcontractkit/cre-cli/internal/client/graphqlclient"
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
+	"github.com/smartcontractkit/cre-cli/internal/tenantctx"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
@@ -112,6 +114,11 @@ func (h *handler) execute() error {
 		h.spinner.StopAll()
 		h.log.Error().Err(err).Msg("failed to save credentials")
 		return err
+	}
+
+	h.spinner.Update("Fetching tenant configuration...")
+	if err := h.fetchTenantConfig(tokenSet); err != nil {
+		h.log.Warn().Err(err).Msg("failed to fetch tenant config — context.yaml not written")
 	}
 
 	// Stop spinner before final output
@@ -381,6 +388,21 @@ func (h *handler) exchangeCodeForTokens(ctx context.Context, code string) (*cred
 		return nil, fmt.Errorf("unmarshal token set: %w", err)
 	}
 	return &tokenSet, nil
+}
+
+func (h *handler) fetchTenantConfig(tokenSet *credentials.CreLoginTokenSet) error {
+	creds := &credentials.Credentials{
+		Tokens:   tokenSet,
+		AuthType: credentials.AuthTypeBearer,
+	}
+	gqlClient := graphqlclient.New(creds, h.environmentSet, h.log)
+
+	envName := h.environmentSet.EnvName
+	if envName == "" {
+		envName = environments.DefaultEnv
+	}
+
+	return tenantctx.FetchAndWriteContext(context.Background(), gqlClient, envName, h.log)
 }
 
 func openBrowser(urlStr string, goos string) error {
