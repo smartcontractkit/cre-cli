@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/joho/godotenv"
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -193,16 +194,17 @@ func TestWarnGOTOOLCHAIN(t *testing.T) {
 			}
 
 			logger := testutil.NewTestLogger()
+			v := viper.New()
 			if tc.envFileContent != nil {
 				dir := t.TempDir()
 				envPath := filepath.Join(dir, ".env.public")
 				require.NoError(t, godotenv.Write(tc.envFileContent, envPath))
-				settings.LoadPublicEnv(logger, envPath)
+				settings.LoadPublicEnv(logger, v, envPath)
 				for k := range tc.envFileContent {
 					t.Cleanup(func() { os.Unsetenv(k) })
 				}
 			} else {
-				settings.LoadPublicEnv(logger, "")
+				settings.LoadPublicEnv(logger, v, "")
 			}
 
 			output := captureStderr(t, func() {

@@ -141,73 +141,111 @@ func loadEnvFile(logger *zerolog.Logger, envPath string) (string, map[string]str
 
 // resolveEnvPath checks the Viper flag; if empty, auto-discovers the file by
 // walking up the directory tree from the current working directory.
-func resolveEnvPath(v *viper.Viper, flagName, defaultFileName string) string {
+// Returns the resolved path and whether it was explicitly set via the CLI flag.
+func resolveEnvPath(v *viper.Viper, flagName, defaultFileName string) (string, bool) {
 	p := v.GetString(flagName)
-	if p == "" {
-		if found, err := FindEnvFile(".", defaultFileName); err == nil {
-			p = found
-		}
+	if p != "" {
+		return p, true
 	}
-	return p
+	if found, err := FindEnvFile(".", defaultFileName); err == nil {
+		return found, false
+	}
+	return "", false
 }
 
 // LoadEnv loads environment variables from envPath into the process
-// environment, binds sensitive variables into Viper, and logs outcomes.
-// If envPath is empty no file is loaded and a debug message is emitted.
+// environment, then binds all loaded variables plus the sensitive defaults
+// into Viper. AutomaticEnv is always activated so every OS env var is
+// reachable via Viper regardless of whether a file was loaded.
 // Errors are logged but do not halt execution — the CLI continues so
 // that commands which don't need the env file can still run.
 func LoadEnv(logger *zerolog.Logger, v *viper.Viper, envPath string) {
 	loadedEnvFilePath = ""
 	loadedEnvVars = nil
 	loadedEnvFilePath, loadedEnvVars = loadEnvFile(logger, envPath)
-
-	if loadedEnvFilePath != "" {
-		if err := bindEnv(v); err != nil {
-			logger.Error().Err(err).Msg(
-				"Not able to bind environment variables that represent sensitive data. " +
-					"They are required for the CLI tool to function properly, without them some commands may not work. " +
-					"Please export them manually or set via .env file (check example.env for more information).")
-		}
-	}
+	bindAllVars(v, loadedEnvVars, EthPrivateKeyEnvVar, CreTargetEnvVar)
 }
 
-// LoadPublicEnv loads variables from envPath into the process environment.
-// Unlike LoadEnv it does not bind sensitive variables into Viper — it is
-// intended for non-sensitive, shared build configuration (e.g. GOTOOLCHAIN).
-func LoadPublicEnv(logger *zerolog.Logger, envPath string) {
+// LoadPublicEnv loads variables from envPath into the process environment
+// and binds all loaded variables into Viper. It is intended for non-sensitive,
+// shared build configuration (e.g. GOTOOLCHAIN).
+func LoadPublicEnv(logger *zerolog.Logger, v *viper.Viper, envPath string) {
 	loadedPublicEnvFilePath = ""
 	loadedPublicEnvVars = nil
 	loadedPublicEnvFilePath, loadedPublicEnvVars = loadEnvFile(logger, envPath)
+	bindAllVars(v, loadedPublicEnvVars)
 }
 
 // ResolveAndLoadEnv resolves the .env file path from the given CLI flag
 // (auto-detecting defaultFileName in parent dirs if the flag is empty),
-// then loads it and binds sensitive variables into Viper.
+// logs a debug message when the flag was not explicitly set, then loads
+// the file and binds all variables into Viper.
 func ResolveAndLoadEnv(logger *zerolog.Logger, v *viper.Viper, flagName, defaultFileName string) {
-	LoadEnv(logger, v, resolveEnvPath(v, flagName, defaultFileName))
+	path, explicit := resolveEnvPath(v, flagName, defaultFileName)
+	if !explicit && path != "" {
+		logger.Debug().
+			Str("default", defaultFileName).
+			Str("path", path).
+			Msg("--env not specified; using auto-discovered file")
+	}
+	LoadEnv(logger, v, path)
 }
 
 // ResolveAndLoadPublicEnv resolves the public env file path from the given
 // CLI flag (auto-detecting defaultFileName in parent dirs if the flag is
-// empty), then loads it into the process environment.
+// empty), logs a debug message when the flag was not explicitly set, then
+// loads the file and binds all variables into Viper.
 func ResolveAndLoadPublicEnv(logger *zerolog.Logger, v *viper.Viper, flagName, defaultFileName string) {
-	LoadPublicEnv(logger, resolveEnvPath(v, flagName, defaultFileName))
+	path, explicit := resolveEnvPath(v, flagName, defaultFileName)
+	if !explicit && path != "" {
+		logger.Debug().
+			Str("default", defaultFileName).
+			Str("path", path).
+			Msg("--public-env not specified; using auto-discovered file")
+	}
+	LoadPublicEnv(logger, v, path)
 }
 
-func bindEnv(v *viper.Viper) error {
-	envVars := []string{
-		EthPrivateKeyEnvVar,
-		CreTargetEnvVar,
-	}
+// ResolveAndLoadBothEnvFiles resolves, loads, and binds variables from both
+// the .env and .env.public files, applying the following rules:
+//
+//  1. If a flag is not explicitly set, a debug message is emitted; if the
+//     default file is found it is loaded automatically.
+//  2. Variables are prioritized: public-env > env file > other OS vars.
+//     A warning is emitted for any key present in both files.
+//  3. All loaded variables from both files are bound into Viper.
+func ResolveAndLoadBothEnvFiles(
+	logger *zerolog.Logger,
+	v *viper.Viper,
+	envFlagName, envDefaultFile string,
+	publicEnvFlagName, publicEnvDefaultFile string,
+) {
+	// Load .env first (lower priority); public env loaded second overrides it.
+	ResolveAndLoadEnv(logger, v, envFlagName, envDefaultFile)
+	ResolveAndLoadPublicEnv(logger, v, publicEnvFlagName, publicEnvDefaultFile)
 
-	for _, variable := range envVars {
-		if err := v.BindEnv(variable); err != nil {
-			return fmt.Errorf("failed to bind environment variable: %s", variable)
+	// Rule 2: warn for keys present in both files.
+	for key := range loadedPublicEnvVars {
+		if _, inEnv := loadedEnvVars[key]; inEnv {
+			logger.Warn().
+				Str("key", key).
+				Str("env", envDefaultFile).
+				Str("public-env", publicEnvDefaultFile).
+				Msgf("%s is defined in both env files; %s takes precedence", key, publicEnvDefaultFile)
 		}
 	}
+}
 
+// bindAllVars activates AutomaticEnv on v, explicitly binds every key in
+// vars, and also binds any additional named keys supplied via extra.
+func bindAllVars(v *viper.Viper, vars map[string]string, extra ...string) {
 	v.AutomaticEnv()
-	return nil
+	for key := range vars {
+		_ = v.BindEnv(key)
+	}
+	for _, key := range extra {
+		_ = v.BindEnv(key)
+	}
 }
 
 // FindEnvFile walks up from startDir looking for a file named fileName.
