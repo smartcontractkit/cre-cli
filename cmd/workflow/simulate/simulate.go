@@ -332,7 +332,7 @@ func (h *handler) Execute(inputs Inputs) error {
 
 		spinner := ui.NewSpinner()
 		spinner.Start("Compiling workflow...")
-		wasmFileBinary, err = cmdcommon.CompileWorkflowToWasm(resolvedWorkflowPath)
+		wasmFileBinary, err = cmdcommon.CompileWorkflowToWasm(resolvedWorkflowPath, false)
 		spinner.Stop()
 		if err != nil {
 			ui.Error("Build failed:")
