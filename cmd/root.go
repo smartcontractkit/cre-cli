@@ -439,7 +439,7 @@ func isLoadSettings(cmd *cobra.Command) bool {
 		"cre workflow custom-build":  {},
 		"cre workflow limits":        {},
 		"cre workflow limits export": {},
-		"cre workflow build":        {},
+		"cre workflow build":         {},
 		"cre account":                {},
 		"cre secrets":                {},
 		"cre templates":              {},
@@ -471,8 +471,8 @@ func isLoadCredentials(cmd *cobra.Command) bool {
 		"cre workflow limits export": {},
 		"cre account":                {},
 		"cre secrets":                {},
-		"cre workflow build":        {},
-		"cre workflow hash":         {},
+		"cre workflow build":         {},
+		"cre workflow hash":          {},
 		"cre templates":              {},
 		"cre templates list":         {},
 		"cre templates add":          {},
@@ -543,8 +543,8 @@ func shouldShowSpinner(cmd *cobra.Command) bool {
 		"cre workflow limits":        {}, // Just shows help
 		"cre workflow limits export": {}, // Static data, no project needed
 		"cre account":                {}, // Just shows help
-		"cre workflow build":        {}, // Offline command, no async init
-		"cre workflow hash":         {}, // Offline command, has own spinner
+		"cre workflow build":         {}, // Offline command, no async init
+		"cre workflow hash":          {}, // Offline command, has own spinner
 		"cre secrets":                {}, // Just shows help
 		"cre templates":              {}, // Just shows help
 		"cre templates list":         {},
