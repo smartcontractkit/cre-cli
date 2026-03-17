@@ -278,3 +278,7 @@ func (l *LimitedEVMChain) Ready() error                    { return l.inner.Read
 func (l *LimitedEVMChain) Initialise(ctx context.Context, deps core.StandardCapabilitiesDependencies) error {
 	return l.inner.Initialise(ctx, deps)
 }
+
+func (l *LimitedEVMChain) AckEvent(ctx context.Context, triggerId string, eventId string, method string) caperrors.Error {
+	return l.inner.AckEvent(ctx, triggerId, eventId, method)
+}
