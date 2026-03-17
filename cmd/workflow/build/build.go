@@ -58,7 +58,7 @@ func execute(workflowFolder, outputPath string) error {
 	outputPath = cmdcommon.EnsureWasmExtension(outputPath)
 
 	ui.Dim("Compiling workflow...")
-	wasmBytes, err := cmdcommon.CompileWorkflowToWasm(resolvedPath)
+	wasmBytes, err := cmdcommon.CompileWorkflowToWasm(resolvedPath, true)
 	if err != nil {
 		ui.Error("Build failed:")
 		return fmt.Errorf("failed to compile workflow: %w", err)
