@@ -152,7 +152,7 @@ export GOARCH := wasm
 export CGO_ENABLED := 0
 
 build:
-	go build -o wasm/workflow.wasm -trimpath -ldflags="-buildid= -w -s" .
+	go build -o wasm/workflow.wasm -trimpath -buildvcs=false -mod=readonly -ldflags="-buildid= -w -s" .
 `
 }
 

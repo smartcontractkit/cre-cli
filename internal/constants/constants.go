@@ -35,6 +35,7 @@ const (
 	DefaultProjectSettingsFileName  = "project.yaml"
 	DefaultWorkflowSettingsFileName = "workflow.yaml"
 	DefaultEnvFileName              = ".env"
+	DefaultPublicEnvFileName        = ".env.public"
 	DefaultIsGoFileName             = "go.mod"
 
 	AuthAuthorizePath = "/authorize"
@@ -56,10 +57,10 @@ const (
 	WorkflowLanguageWasm       = "wasm"
 
 	// SDK dependency versions (used by generate-bindings and go module init)
-	SdkVersion              = "v1.5.0"
-	EVMCapabilitiesVersion  = "v1.0.0-beta.7"
-	HTTPCapabilitiesVersion = "v1.0.0-beta.0"
-	CronCapabilitiesVersion = "v1.0.0-beta.0"
+	SdkVersion              = "v1.6.0"
+	EVMCapabilitiesVersion  = "v1.0.0-beta.8"
+	HTTPCapabilitiesVersion = "v1.3.0"
+	CronCapabilitiesVersion = "v1.3.0"
 
 	TestAddress      = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
 	TestAddress2     = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"

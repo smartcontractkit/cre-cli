@@ -9,6 +9,8 @@ import (
 	"strings"
 
 	"github.com/smartcontractkit/cre-cli/internal/constants"
+	"github.com/smartcontractkit/cre-cli/internal/settings"
+	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
 const makefileName = "Makefile"
@@ -42,6 +44,8 @@ func getBuildCmd(workflowRootFolder, mainFile, language string, stripSymbols boo
 			"go", "build",
 			"-o", tmpPath,
 			"-trimpath",
+			"-buildvcs=false",
+			"-mod=readonly",
 			"-ldflags="+ldflags,
 			".",
 		)
@@ -81,6 +85,8 @@ func getBuildCmd(workflowRootFolder, mainFile, language string, stripSymbols boo
 			"go", "build",
 			"-o", tmpPath,
 			"-trimpath",
+			"-buildvcs=false",
+			"-mod=readonly",
 			"-ldflags="+ldflags,
 			".",
 		)
@@ -125,6 +131,7 @@ func CompileWorkflowToWasm(workflowPath string, stripSymbols bool) ([]byte, erro
 		if err := EnsureTool("go"); err != nil {
 			return nil, errors.New("go toolchain is required for Go workflows but was not found in PATH; install from https://go.dev/dl")
 		}
+		warnGOTOOLCHAIN()
 	case constants.WorkflowLanguageWasm:
 		if err := EnsureTool("make"); err != nil {
 			return nil, errors.New("make is required for WASM workflows but was not found in PATH")
@@ -142,6 +149,25 @@ func CompileWorkflowToWasm(workflowPath string, stripSymbols bool) ([]byte, erro
 		return nil, fmt.Errorf("failed to compile workflow: %w", err)
 	}
 	return wasm, nil
+}
+
+func warnGOTOOLCHAIN() {
+	tc := os.Getenv("GOTOOLCHAIN")
+	if tc == "" {
+		ui.Warning("GOTOOLCHAIN is not set; the build may not be reproducible across environments. Set it in your .env.public file (e.g. GOTOOLCHAIN=go1.25.3).")
+		return
+	}
+
+	envFile := settings.LoadedPublicEnvFilePath()
+	if envFile == "" {
+		ui.Warning(fmt.Sprintf("GOTOOLCHAIN=%s is set, but no .env.public file was loaded. The build will not be reproducible for others without the same environment variable.", tc))
+		return
+	}
+
+	envVars := settings.LoadedPublicEnvVars()
+	if _, ok := envVars["GOTOOLCHAIN"]; !ok {
+		ui.Warning(fmt.Sprintf("GOTOOLCHAIN=%s is set, but is not in %s. The build will not be reproducible for others without the same environment variable.", tc, envFile))
+	}
 }
 
 // findMakefileRoot walks up from dir and returns the first directory that contains a Makefile.

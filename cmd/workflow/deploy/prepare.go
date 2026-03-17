@@ -9,9 +9,11 @@ import (
 )
 
 type workflowArtifact struct {
-	BinaryData []byte
-	ConfigData []byte
-	WorkflowID string
+	BinaryData     []byte
+	ConfigData     []byte
+	WorkflowID     string
+	RawBinaryForID []byte
+	RawConfigForID []byte
 }
 
 func (h *handler) prepareWorkflowBinary() ([]byte, error) {
@@ -80,6 +82,8 @@ func (h *handler) PrepareWorkflowArtifact() error {
 	}
 
 	h.workflowArtifact.WorkflowID = workflowID
+	h.workflowArtifact.RawBinaryForID = binaryForID
+	h.workflowArtifact.RawConfigForID = configData
 
 	return nil
 }

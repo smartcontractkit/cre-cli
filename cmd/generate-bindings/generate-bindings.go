@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/rs/zerolog"
@@ -38,7 +39,10 @@ Supports EVM chain family with Go and TypeScript languages.
 The target language is auto-detected from project files, or can be
 specified explicitly with --language.
 Each contract gets its own package subdirectory to avoid naming conflicts.
-For example, IERC20.abi generates bindings in generated/ierc20/ package.`,
+For example, IERC20.abi generates bindings in generated/ierc20/ package.
+
+Both raw ABI files (*.abi) and JSON artifact files (*.json) are supported.
+For JSON files the ABI is read from the top-level "abi" field.`,
 		Example: "  cre generate-bindings evm",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -58,7 +62,7 @@ For example, IERC20.abi generates bindings in generated/ierc20/ package.`,
 
 	generateBindingsCmd.Flags().StringP("project-root", "p", "", "Path to project root directory (defaults to current directory)")
 	generateBindingsCmd.Flags().StringP("language", "l", "", "Target language: go, typescript (auto-detected from project files when omitted)")
-	generateBindingsCmd.Flags().StringP("abi", "a", "", "Path to ABI directory (defaults to contracts/{chain-family}/src/abi/)")
+	generateBindingsCmd.Flags().StringP("abi", "a", "", "Path to ABI directory (defaults to contracts/{chain-family}/src/abi/). Supports *.abi and *.json files")
 	generateBindingsCmd.Flags().StringP("pkg", "k", "bindings", "Base package name (each contract gets its own subdirectory)")
 
 	return generateBindingsCmd
@@ -168,6 +172,32 @@ func (h *handler) ResolveInputs(args []string, v *viper.Viper) (Inputs, error) {
 	}, nil
 }
 
+// findAbiFiles returns all supported ABI files (*.abi and *.json) found in dir.
+func findAbiFiles(dir string) ([]string, error) {
+	abiFiles, err := filepath.Glob(filepath.Join(dir, "*.abi"))
+	if err != nil {
+		return nil, err
+	}
+	jsonFiles, err := filepath.Glob(filepath.Join(dir, "*.json"))
+	if err != nil {
+		return nil, err
+	}
+	all := append(abiFiles, jsonFiles...)
+	sort.Strings(all)
+	return all, nil
+}
+
+// contractNameFromFile returns the contract name by stripping the .abi or .json
+// extension from the base filename.
+func contractNameFromFile(path string) string {
+	name := filepath.Base(path)
+	ext := filepath.Ext(name)
+	if ext != "" {
+		name = name[:len(name)-len(ext)]
+	}
+	return name
+}
+
 func (h *handler) ValidateInputs(inputs Inputs) error {
 	validate, err := validation.NewValidator()
 	if err != nil {
@@ -186,15 +216,14 @@ func (h *handler) ValidateInputs(inputs Inputs) error {
 		return fmt.Errorf("failed to access ABI path: %w", err)
 	}
 
-	// Validate that if AbiPath is a directory, it contains ABI files (*.abi for both languages)
+	// Validate that if AbiPath is a directory, it contains ABI files (*.abi or *.json)
 	if info, err := os.Stat(inputs.AbiPath); err == nil && info.IsDir() {
-		abiExt := "*.abi"
-		files, err := filepath.Glob(filepath.Join(inputs.AbiPath, abiExt))
+		files, err := findAbiFiles(inputs.AbiPath)
 		if err != nil {
 			return fmt.Errorf("failed to check for ABI files in directory: %w", err)
 		}
 		if len(files) == 0 {
-			return fmt.Errorf("no %s files found in directory: %s", abiExt, inputs.AbiPath)
+			return fmt.Errorf("no *.abi or *.json files found in directory: %s", inputs.AbiPath)
 		}
 	}
 
@@ -251,21 +280,29 @@ func contractNameToPackage(contractName string) string {
 }
 
 func (h *handler) processAbiDirectory(inputs Inputs) error {
-	abiExt := "*.abi"
-	files, err := filepath.Glob(filepath.Join(inputs.AbiPath, abiExt))
+	files, err := findAbiFiles(inputs.AbiPath)
 	if err != nil {
 		return fmt.Errorf("failed to find ABI files: %w", err)
 	}
 
 	if len(files) == 0 {
-		return fmt.Errorf("no %s files found in directory: %s", abiExt, inputs.AbiPath)
+		return fmt.Errorf("no *.abi or *.json files found in directory: %s", inputs.AbiPath)
+	}
+
+	// Detect duplicate contract names across extensions (e.g. Foo.abi and Foo.json)
+	contractNames := make(map[string]string) // contract name -> originating file
+	for _, f := range files {
+		name := contractNameFromFile(f)
+		if prev, exists := contractNames[name]; exists {
+			return fmt.Errorf("duplicate contract name %q: found in both %s and %s", name, filepath.Base(prev), filepath.Base(f))
+		}
+		contractNames[name] = f
 	}
 
 	if inputs.GoLang {
 		packageNames := make(map[string]bool)
 		for _, abiFile := range files {
-			contractName := filepath.Base(abiFile)
-			contractName = contractName[:len(contractName)-4]
+			contractName := contractNameFromFile(abiFile)
 			packageName := contractNameToPackage(contractName)
 			if _, exists := packageNames[packageName]; exists {
 				return fmt.Errorf("package name collision: multiple contracts would generate the same package name '%s' (contracts are converted to snake_case for package names). Please rename one of your contract files to avoid this conflict", packageName)
@@ -279,9 +316,7 @@ func (h *handler) processAbiDirectory(inputs Inputs) error {
 
 	// Process each ABI file
 	for _, abiFile := range files {
-		contractName := filepath.Base(abiFile)
-		ext := filepath.Ext(contractName)
-		contractName = contractName[:len(contractName)-len(ext)]
+		contractName := contractNameFromFile(abiFile)
 
 		if inputs.TypeScript {
 			outputFile := filepath.Join(inputs.TSOutPath, contractName+".ts")
@@ -340,11 +375,7 @@ func (h *handler) processAbiDirectory(inputs Inputs) error {
 }
 
 func (h *handler) processSingleAbi(inputs Inputs) error {
-	contractName := filepath.Base(inputs.AbiPath)
-	ext := filepath.Ext(contractName)
-	if ext != "" {
-		contractName = contractName[:len(contractName)-len(ext)]
-	}
+	contractName := contractNameFromFile(inputs.AbiPath)
 
 	if inputs.TypeScript {
 		outputFile := filepath.Join(inputs.TSOutPath, contractName+".ts")

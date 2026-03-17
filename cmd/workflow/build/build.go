@@ -64,6 +64,7 @@ func execute(workflowFolder, outputPath string) error {
 		return fmt.Errorf("failed to compile workflow: %w", err)
 	}
 	ui.Success("Workflow compiled successfully")
+	ui.Dim(fmt.Sprintf("Binary hash: %s", cmdcommon.HashBytes(wasmBytes)))
 
 	if err := os.WriteFile(outputPath, wasmBytes, 0666); err != nil { //nolint:gosec
 		return fmt.Errorf("failed to write WASM binary: %w", err)
