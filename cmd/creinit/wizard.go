@@ -641,6 +641,8 @@ func (m wizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case stepTemplate:
 		// Forward non-key messages (e.g. FilterMatchesMsg) to the list
 		m.templateList, cmd = m.templateList.Update(msg)
+	case stepTemplateConfirm:
+		// Nothing to update
 	case stepDone:
 		// Nothing to update
 	}

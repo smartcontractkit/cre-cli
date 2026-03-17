@@ -20,11 +20,11 @@ var builtinTSFS embed.FS
 // BuiltInGoTemplate is the embedded hello-world Go template that is always available.
 var BuiltInGoTemplate = TemplateSummary{
 	TemplateMetadata: TemplateMetadata{
-		Kind:        "building-block",
-		Name:        "hello-world-go",
-		Title:       "Hello World (Go)",
-		Description: "A minimal cron-triggered workflow to get started from scratch",
-		Language:    "go",
+		Kind:         "building-block",
+		Name:         "hello-world-go",
+		Title:        "Hello World (Go)",
+		Description:  "A minimal cron-triggered workflow to get started from scratch",
+		Language:     "go",
 		Category:     "workflow",
 		Capabilities: []string{"cron"},
 		Author:       "Chainlink",
