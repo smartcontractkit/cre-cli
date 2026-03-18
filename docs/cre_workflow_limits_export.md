@@ -5,16 +5,16 @@ Export default simulation limits as JSON
 ### Synopsis
 
 Exports the default production simulation limits as JSON.
-
-The output can be redirected to a file and customized for use with
-the --limits flag of the simulate command.
-
-Example:
-  cre workflow limits export > my-limits.json
-  cre workflow simulate ./my-workflow --limits ./my-limits.json
+The output can be redirected to a file and customized.
 
 ```
 cre workflow limits export [optional flags]
+```
+
+### Examples
+
+```
+cre workflow limits export > my-limits.json
 ```
 
 ### Options

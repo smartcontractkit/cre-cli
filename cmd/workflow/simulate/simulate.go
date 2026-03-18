@@ -104,7 +104,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	simulateCmd.Flags().String("http-payload", "", "HTTP trigger payload as JSON string or path to JSON file (with or without @ prefix)")
 	simulateCmd.Flags().String("evm-tx-hash", "", "EVM trigger transaction hash (0x...)")
 	simulateCmd.Flags().Int("evm-event-index", -1, "EVM trigger log index (0-based)")
-	simulateCmd.Flags().String("limits", "default", "Production limits to enforce during simulation. Use 'default' for prod defaults, path to custom limits.json, or 'none' to disable")
+	simulateCmd.Flags().String("limits", "default", "Production limits to enforce during simulation: 'default' for prod defaults, path to a limits JSON file (e.g. from 'cre workflow limits export'), or 'none' to disable")
 	return simulateCmd
 }
 
