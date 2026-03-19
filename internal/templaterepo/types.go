@@ -1,5 +1,8 @@
 package templaterepo
 
+// CategoryWorkflow is the category value for installable workflow templates.
+const CategoryWorkflow = "workflow"
+
 // WorkflowDirEntry describes a workflow directory inside a template.
 type WorkflowDirEntry struct {
 	Dir         string `yaml:"dir"`
@@ -8,21 +11,23 @@ type WorkflowDirEntry struct {
 
 // TemplateMetadata represents the contents of a template.yaml file.
 type TemplateMetadata struct {
-	Kind        string             `yaml:"kind"`        // "building-block" or "starter-template"
-	ID          string             `yaml:"id"`          // Unique slug identifier (preferred over name)
-	Name        string             `yaml:"name"`        // Unique slug identifier (deprecated, use id)
-	Title       string             `yaml:"title"`       // Human-readable display name
-	Description string             `yaml:"description"` // Short description
-	Language    string             `yaml:"language"`    // "go" or "typescript"
-	Category    string             `yaml:"category"`    // Topic category (e.g., "web3")
-	Author      string             `yaml:"author"`
-	License     string             `yaml:"license"`
-	Tags        []string           `yaml:"tags"`       // Searchable tags
-	Exclude     []string           `yaml:"exclude"`    // Files/dirs to exclude when copying
-	Networks    []string           `yaml:"networks"`   // Required chain names (e.g., "ethereum-testnet-sepolia")
-	Workflows   []WorkflowDirEntry `yaml:"workflows"`  // Workflow directories inside the template
-	PostInit    string             `yaml:"postInit"`   // Template-specific post-init instructions
-	ProjectDir  string             `yaml:"projectDir"` // CRE project directory within the template (e.g., "." or "cre-workflow")
+	Kind         string             `yaml:"kind"`         // "building-block" or "starter-template"
+	ID           string             `yaml:"id"`           // Unique slug identifier (preferred over name)
+	Name         string             `yaml:"name"`         // Unique slug identifier (deprecated, use id)
+	Title        string             `yaml:"title"`        // Human-readable display name
+	Description  string             `yaml:"description"`  // Short description
+	Language     string             `yaml:"language"`     // "go" or "typescript"
+	Category     string             `yaml:"category"`     // Template type: "workflow" or "demo-app"
+	Solutions    []string           `yaml:"solutions"`    // Solution categories (e.g., "defi-vault-operations")
+	Capabilities []string           `yaml:"capabilities"` // CRE capabilities used (e.g., "cron", "http", "chain-read")
+	Author       string             `yaml:"author"`
+	License      string             `yaml:"license"`
+	Tags         []string           `yaml:"tags"`       // Searchable tags
+	Exclude      []string           `yaml:"exclude"`    // Files/dirs to exclude when copying
+	Networks     []string           `yaml:"networks"`   // Required chain names (e.g., "ethereum-testnet-sepolia")
+	Workflows    []WorkflowDirEntry `yaml:"workflows"`  // Workflow directories inside the template
+	PostInit     string             `yaml:"postInit"`   // Template-specific post-init instructions
+	ProjectDir   string             `yaml:"projectDir"` // CRE project directory within the template (e.g., "." or "cre-workflow")
 }
 
 // GetName returns the template identifier, preferring ID over Name for backward compatibility.

@@ -257,3 +257,195 @@ func TestLoadEnvStateResetsBetweenCalls(t *testing.T) {
 	assert.Empty(t, settings.LoadedEnvFilePath(), "state should be reset on subsequent call")
 	assert.Nil(t, settings.LoadedEnvVars(), "state should be reset on subsequent call")
 }
+
+func TestResolveAndLoadBothEnvFiles(t *testing.T) {
+	callBoth := func(logger *zerolog.Logger, v *viper.Viper) {
+		settings.ResolveAndLoadBothEnvFiles(
+			logger, v,
+			settings.Flags.CliEnvFile.Name, constants.DefaultEnvFileName,
+			settings.Flags.CliPublicEnvFile.Name, constants.DefaultPublicEnvFileName,
+		)
+	}
+
+	writeFile := func(t *testing.T, path string, vars map[string]string) {
+		t.Helper()
+		require.NoError(t, godotenv.Write(vars, path))
+	}
+
+	t.Run("flag unspecified file auto discovered debug log emitted", func(t *testing.T) {
+		tempDir := t.TempDir()
+		writeFile(t, filepath.Join(tempDir, constants.DefaultEnvFileName), map[string]string{"ENV_AD": "env-val"})
+		writeFile(t, filepath.Join(tempDir, constants.DefaultPublicEnvFileName), map[string]string{"PUB_AD": "pub-val"})
+		t.Cleanup(func() { os.Unsetenv("ENV_AD"); os.Unsetenv("PUB_AD") })
+
+		restoreWD, err := testutil.ChangeWorkingDirectory(tempDir)
+		require.NoError(t, err)
+		defer restoreWD()
+
+		logger, buf := newBufferLogger()
+		v := viper.New()
+		callBoth(logger, v)
+
+		logOutput := buf.String()
+		assert.Contains(t, logOutput, "--env not specified")
+		assert.Contains(t, logOutput, "--public-env not specified")
+		assert.Contains(t, logOutput, "auto-discovered")
+
+		assert.Equal(t, "env-val", os.Getenv("ENV_AD"))
+		assert.Equal(t, "pub-val", os.Getenv("PUB_AD"))
+		assert.Equal(t, "env-val", v.GetString("ENV_AD"))
+		assert.Equal(t, "pub-val", v.GetString("PUB_AD"))
+	})
+
+	t.Run("flag unspecified file not found debug log emitted", func(t *testing.T) {
+		tempDir := t.TempDir()
+		restoreWD, err := testutil.ChangeWorkingDirectory(tempDir)
+		require.NoError(t, err)
+		defer restoreWD()
+
+		logger, buf := newBufferLogger()
+		v := viper.New()
+		callBoth(logger, v)
+
+		logOutput := buf.String()
+		assert.Contains(t, logOutput, "No environment file specified")
+		assert.Contains(t, logOutput, "MUST be exported")
+		assert.Empty(t, settings.LoadedEnvFilePath())
+		assert.Empty(t, settings.LoadedPublicEnvFilePath())
+	})
+
+	t.Run("explicit flags no unspecified debug log", func(t *testing.T) {
+		tempDir := t.TempDir()
+		envPath := filepath.Join(tempDir, "my.env")
+		pubPath := filepath.Join(tempDir, "my.env.public")
+		writeFile(t, envPath, map[string]string{"E_EXPL": "1"})
+		writeFile(t, pubPath, map[string]string{"P_EXPL": "2"})
+		t.Cleanup(func() { os.Unsetenv("E_EXPL"); os.Unsetenv("P_EXPL") })
+
+		logger, buf := newBufferLogger()
+		v := viper.New()
+		v.Set(settings.Flags.CliEnvFile.Name, envPath)
+		v.Set(settings.Flags.CliPublicEnvFile.Name, pubPath)
+		callBoth(logger, v)
+
+		logOutput := buf.String()
+		assert.NotContains(t, logOutput, "not specified")
+		assert.NotContains(t, logOutput, "auto-discovered")
+
+		assert.Equal(t, "1", os.Getenv("E_EXPL"))
+		assert.Equal(t, "2", os.Getenv("P_EXPL"))
+		assert.Equal(t, "1", v.GetString("E_EXPL"))
+		assert.Equal(t, "2", v.GetString("P_EXPL"))
+	})
+
+	t.Run("invalid file path error logged", func(t *testing.T) {
+		logger, buf := newBufferLogger()
+		v := viper.New()
+		v.Set(settings.Flags.CliEnvFile.Name, "/nonexistent/.env")
+		callBoth(logger, v)
+
+		logOutput := buf.String()
+		assert.Contains(t, logOutput, "Not able to load configuration from environment file")
+		assert.Contains(t, logOutput, "dotenvx.com/docs/env-file")
+		assert.Empty(t, settings.LoadedEnvFilePath())
+		assert.Nil(t, settings.LoadedEnvVars())
+	})
+
+	t.Run("public env overrides env file for same key and warns", func(t *testing.T) {
+		tempDir := t.TempDir()
+		writeFile(t, filepath.Join(tempDir, constants.DefaultEnvFileName), map[string]string{"PRIO_VAR": "from-env"})
+		writeFile(t, filepath.Join(tempDir, constants.DefaultPublicEnvFileName), map[string]string{"PRIO_VAR": "from-public"})
+		t.Cleanup(func() { os.Unsetenv("PRIO_VAR") })
+
+		restoreWD, err := testutil.ChangeWorkingDirectory(tempDir)
+		require.NoError(t, err)
+		defer restoreWD()
+
+		logger, buf := newBufferLogger()
+		v := viper.New()
+		callBoth(logger, v)
+
+		assert.Equal(t, "from-public", os.Getenv("PRIO_VAR"))
+		assert.Equal(t, "from-public", v.GetString("PRIO_VAR"))
+
+		logOutput := buf.String()
+		assert.Contains(t, logOutput, "PRIO_VAR")
+		assert.Contains(t, logOutput, "defined in both")
+		assert.Contains(t, logOutput, constants.DefaultPublicEnvFileName)
+	})
+
+	t.Run("env file overrides pre existing os vars", func(t *testing.T) {
+		t.Setenv("OS_VAR", "from-shell")
+
+		tempDir := t.TempDir()
+		writeFile(t, filepath.Join(tempDir, constants.DefaultEnvFileName), map[string]string{"OS_VAR": "from-env-file"})
+		t.Cleanup(func() { os.Unsetenv("OS_VAR") })
+
+		restoreWD, err := testutil.ChangeWorkingDirectory(tempDir)
+		require.NoError(t, err)
+		defer restoreWD()
+
+		logger, buf := newBufferLogger()
+		v := viper.New()
+		callBoth(logger, v)
+
+		assert.Equal(t, "from-env-file", os.Getenv("OS_VAR"))
+		assert.Equal(t, "from-env-file", v.GetString("OS_VAR"))
+		assert.NotContains(t, buf.String(), "level\":\"error\"")
+	})
+
+	t.Run("no warning when keys are distinct", func(t *testing.T) {
+		tempDir := t.TempDir()
+		writeFile(t, filepath.Join(tempDir, constants.DefaultEnvFileName), map[string]string{"ONLY_ENV": "e"})
+		writeFile(t, filepath.Join(tempDir, constants.DefaultPublicEnvFileName), map[string]string{"ONLY_PUB": "p"})
+		t.Cleanup(func() { os.Unsetenv("ONLY_ENV"); os.Unsetenv("ONLY_PUB") })
+
+		restoreWD, err := testutil.ChangeWorkingDirectory(tempDir)
+		require.NoError(t, err)
+		defer restoreWD()
+
+		logger, buf := newBufferLogger()
+		v := viper.New()
+		callBoth(logger, v)
+
+		assert.NotContains(t, buf.String(), "defined in both")
+		assert.Equal(t, "e", os.Getenv("ONLY_ENV"))
+		assert.Equal(t, "p", os.Getenv("ONLY_PUB"))
+	})
+
+	t.Run("all vars from both files accessible via viper", func(t *testing.T) {
+		tempDir := t.TempDir()
+		writeFile(t, filepath.Join(tempDir, constants.DefaultEnvFileName), map[string]string{
+			"CUSTOM_ENV_VAR":             "env-value",
+			settings.EthPrivateKeyEnvVar: "abc123",
+			settings.CreTargetEnvVar:     "staging",
+		})
+		writeFile(t, filepath.Join(tempDir, constants.DefaultPublicEnvFileName), map[string]string{
+			"CUSTOM_PUB_VAR": "pub-value",
+			"GOTOOLCHAIN":    "go1.25.3",
+		})
+		t.Cleanup(func() {
+			for _, k := range []string{
+				"CUSTOM_ENV_VAR", "CUSTOM_PUB_VAR", "GOTOOLCHAIN",
+				settings.EthPrivateKeyEnvVar, settings.CreTargetEnvVar,
+			} {
+				os.Unsetenv(k)
+			}
+		})
+
+		restoreWD, err := testutil.ChangeWorkingDirectory(tempDir)
+		require.NoError(t, err)
+		defer restoreWD()
+
+		logger, buf := newBufferLogger()
+		v := viper.New()
+		callBoth(logger, v)
+
+		assert.Equal(t, "env-value", v.GetString("CUSTOM_ENV_VAR"))
+		assert.Equal(t, "abc123", v.GetString(settings.EthPrivateKeyEnvVar))
+		assert.Equal(t, "staging", v.GetString(settings.CreTargetEnvVar))
+		assert.Equal(t, "pub-value", v.GetString("CUSTOM_PUB_VAR"))
+		assert.Equal(t, "go1.25.3", v.GetString("GOTOOLCHAIN"))
+		assert.NotContains(t, buf.String(), "\"level\":\"error\"")
+	})
+}
