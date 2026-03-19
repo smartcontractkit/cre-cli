@@ -32,10 +32,10 @@ type Registry struct {
 
 // EnvironmentContext represents the tenant config for a single environment block in context.yaml.
 type EnvironmentContext struct {
-	TenantID        string      `yaml:"tenant_id"`
-	DefaultDonFamily string     `yaml:"default_don_family"`
-	VaultGatewayURL string      `yaml:"vault_gateway_url"`
-	Registries      []*Registry `yaml:"registries"`
+	TenantID         string      `yaml:"tenant_id"`
+	DefaultDonFamily string      `yaml:"default_don_family"`
+	VaultGatewayURL  string      `yaml:"vault_gateway_url"`
+	Registries       []*Registry `yaml:"registries"`
 }
 
 // getTenantConfigResponse mirrors the GQL response shape.
