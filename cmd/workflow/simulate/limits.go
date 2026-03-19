@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/settings/cresettings"
 )
@@ -164,11 +165,11 @@ func ExportDefaultLimitsJSON() []byte {
 // ResolveLimits resolves a --limits flag value to SimulationLimits.
 // Returns nil if limitsFlag is "none" (no limits enforcement).
 func ResolveLimits(limitsFlag string) (*SimulationLimits, error) {
-	if limitsFlag == "" || limitsFlag == "none" {
+	if limitsFlag == "none" {
 		return nil, nil
 	}
 
-	if limitsFlag == "default" {
+	if strings.TrimSpace(limitsFlag) == "" || limitsFlag == "default" {
 		return DefaultLimits()
 	}
 

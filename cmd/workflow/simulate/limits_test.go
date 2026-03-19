@@ -85,11 +85,10 @@ func TestLoadLimitsReturnsHelpfulErrors(t *testing.T) {
 func TestResolveLimitsHandlesAllSupportedModes(t *testing.T) {
 	t.Parallel()
 
-	for _, flag := range []string{"", "none"} {
-		limits, err := ResolveLimits(flag)
-		require.NoError(t, err)
-		assert.Nil(t, limits)
-	}
+	flag := "none"
+	limits, err := ResolveLimits(flag)
+	require.NoError(t, err)
+	assert.Nil(t, limits)
 
 	defaultLimits, err := ResolveLimits("default")
 	require.NoError(t, err)
