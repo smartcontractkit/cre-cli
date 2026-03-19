@@ -33,7 +33,7 @@ type Registry struct {
 // EnvironmentContext represents the tenant config for a single environment block in context.yaml.
 type EnvironmentContext struct {
 	TenantID        string      `yaml:"tenant_id"`
-	DonFamily       string      `yaml:"don_family"`
+	DefaultDonFamily string     `yaml:"default_don_family"`
 	VaultGatewayURL string      `yaml:"vault_gateway_url"`
 	Registries      []*Registry `yaml:"registries"`
 }
@@ -41,11 +41,10 @@ type EnvironmentContext struct {
 // getTenantConfigResponse mirrors the GQL response shape.
 type getTenantConfigResponse struct {
 	GetTenantConfig struct {
-		TenantID        int    `json:"tenantId"`
-		TenantName      string `json:"tenantName"`
-		DonFamily       string `json:"donFamily"`
-		VaultGatewayURL string `json:"vaultGatewayUrl"`
-		Registries      []struct {
+		TenantID         int    `json:"tenantId"`
+		DefaultDonFamily string `json:"defaultDonFamily"`
+		VaultGatewayURL  string `json:"vaultGatewayUrl"`
+		Registries       []struct {
 			ID               string   `json:"id"`
 			Label            string   `json:"label"`
 			Type             string   `json:"type"`
@@ -59,8 +58,7 @@ type getTenantConfigResponse struct {
 const getTenantConfigQuery = `query GetTenantConfig {
   getTenantConfig {
     tenantId
-    tenantName
-    donFamily
+    defaultDonFamily
     vaultGatewayUrl
     registries {
       id
@@ -104,10 +102,10 @@ func FetchAndWriteContext(ctx context.Context, gqlClient *graphqlclient.Client, 
 	}
 
 	envCtx := &EnvironmentContext{
-		TenantID:        tc.TenantName,
-		DonFamily:       tc.DonFamily,
-		VaultGatewayURL: tc.VaultGatewayURL,
-		Registries:      registries,
+		TenantID:         fmt.Sprintf("%d", tc.TenantID),
+		DefaultDonFamily: tc.DefaultDonFamily,
+		VaultGatewayURL:  tc.VaultGatewayURL,
+		Registries:       registries,
 	}
 
 	contextMap := map[string]*EnvironmentContext{
