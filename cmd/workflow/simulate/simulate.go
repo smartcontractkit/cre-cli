@@ -1,8 +1,6 @@
 package simulate
 
 import (
-	"bytes"
-	"compress/gzip"
 	"context"
 	"crypto/ecdsa"
 	"encoding/json"
@@ -357,17 +355,12 @@ func (h *handler) Execute(inputs Inputs) error {
 
 		compressedLimit := simLimits.WASMCompressedBinarySize()
 		if compressedLimit > 0 {
-			var buf bytes.Buffer
-			gz := gzip.NewWriter(&buf)
-			if _, err := gz.Write(wasmFileBinary); err != nil {
-				return fmt.Errorf("failed to compress WASM binary for size check: %w", err)
+			compressed, err := cmdcommon.CompressBrotli(wasmFileBinary)
+			if err != nil {
+				return fmt.Errorf("failed to compress brotli: %w", err)
 			}
-			if err := gz.Close(); err != nil {
-				return fmt.Errorf("failed to finalize WASM compression: %w", err)
-			}
-			compressedSize := buf.Len()
-			if compressedSize > compressedLimit {
-				return fmt.Errorf("WASM compressed binary size %d bytes exceeds limit of %d bytes", compressedSize, compressedLimit)
+			if len(compressed) > compressedLimit {
+				return fmt.Errorf("WASM compressed binary size %d bytes exceeds limit of %d bytes", len(compressed), compressedLimit)
 			}
 		}
 
