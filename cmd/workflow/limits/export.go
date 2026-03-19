@@ -6,10 +6,9 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/simulate"
-	"github.com/smartcontractkit/cre-cli/internal/runtime"
 )
 
-func New(runtimeContext *runtime.Context) *cobra.Command {
+func New() *cobra.Command {
 	limitsCmd := &cobra.Command{
 		Use:   "limits",
 		Short: "Manage simulation limits",

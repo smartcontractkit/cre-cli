@@ -32,7 +32,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	workflowCmd.AddCommand(deploy.New(runtimeContext))
 	workflowCmd.AddCommand(hash.New(runtimeContext))
 	workflowCmd.AddCommand(simulate.New(runtimeContext))
-	workflowCmd.AddCommand(limits.New(runtimeContext))
+	workflowCmd.AddCommand(limits.New())
 
 	return workflowCmd
 }
