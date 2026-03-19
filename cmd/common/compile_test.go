@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/joho/godotenv"
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -46,21 +47,21 @@ func TestFindMakefileRoot(t *testing.T) {
 func TestCompileWorkflowToWasm_Go_Success(t *testing.T) {
 	t.Run("basic_workflow", func(t *testing.T) {
 		path := deployTestdataPath("basic_workflow", "main.go")
-		wasm, err := CompileWorkflowToWasm(path)
+		wasm, err := CompileWorkflowToWasm(path, true)
 		require.NoError(t, err)
 		assert.NotEmpty(t, wasm)
 	})
 
 	t.Run("configless_workflow", func(t *testing.T) {
 		path := deployTestdataPath("configless_workflow", "main.go")
-		wasm, err := CompileWorkflowToWasm(path)
+		wasm, err := CompileWorkflowToWasm(path, true)
 		require.NoError(t, err)
 		assert.NotEmpty(t, wasm)
 	})
 
 	t.Run("missing_go_mod", func(t *testing.T) {
 		path := deployTestdataPath("missing_go_mod", "main.go")
-		wasm, err := CompileWorkflowToWasm(path)
+		wasm, err := CompileWorkflowToWasm(path, true)
 		require.NoError(t, err)
 		assert.NotEmpty(t, wasm)
 	})
@@ -68,7 +69,7 @@ func TestCompileWorkflowToWasm_Go_Success(t *testing.T) {
 
 func TestCompileWorkflowToWasm_Go_Malformed_Fails(t *testing.T) {
 	path := deployTestdataPath("malformed_workflow", "main.go")
-	_, err := CompileWorkflowToWasm(path)
+	_, err := CompileWorkflowToWasm(path, true)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to compile workflow")
 	assert.Contains(t, err.Error(), "undefined: sdk.RemovedFunctionThatFailsCompilation")
@@ -79,7 +80,7 @@ func TestCompileWorkflowToWasm_Wasm_Success(t *testing.T) {
 	_ = os.Remove(wasmPath)
 	t.Cleanup(func() { _ = os.Remove(wasmPath) })
 
-	wasm, err := CompileWorkflowToWasm(wasmPath)
+	wasm, err := CompileWorkflowToWasm(wasmPath, true)
 	require.NoError(t, err)
 	assert.NotEmpty(t, wasm)
 
@@ -95,14 +96,14 @@ func TestCompileWorkflowToWasm_Wasm_Fails(t *testing.T) {
 		wasmPath := filepath.Join(wasmDir, "workflow.wasm")
 		require.NoError(t, os.WriteFile(wasmPath, []byte("not really wasm"), 0600))
 
-		_, err := CompileWorkflowToWasm(wasmPath)
+		_, err := CompileWorkflowToWasm(wasmPath, true)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "no Makefile found")
 	})
 
 	t.Run("make_build_fails", func(t *testing.T) {
 		path := deployTestdataPath("wasm_make_fails", "wasm", "workflow.wasm")
-		_, err := CompileWorkflowToWasm(path)
+		_, err := CompileWorkflowToWasm(path, true)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to compile workflow")
 		assert.Contains(t, err.Error(), "build output:")
@@ -126,7 +127,7 @@ func TestCompileWorkflowToWasm_TS_Success(t *testing.T) {
 	if err := install.Run(); err != nil {
 		t.Skipf("bun install failed (network or cre-sdk): %v", err)
 	}
-	wasm, err := CompileWorkflowToWasm(mainPath)
+	wasm, err := CompileWorkflowToWasm(mainPath, true)
 	if err != nil {
 		t.Skipf("TS compile failed (published cre-sdk may lack full layout): %v", err)
 	}
@@ -193,16 +194,17 @@ func TestWarnGOTOOLCHAIN(t *testing.T) {
 			}
 
 			logger := testutil.NewTestLogger()
+			v := viper.New()
 			if tc.envFileContent != nil {
 				dir := t.TempDir()
 				envPath := filepath.Join(dir, ".env.public")
 				require.NoError(t, godotenv.Write(tc.envFileContent, envPath))
-				settings.LoadPublicEnv(logger, envPath)
+				settings.LoadPublicEnv(logger, v, envPath)
 				for k := range tc.envFileContent {
 					t.Cleanup(func() { os.Unsetenv(k) })
 				}
 			} else {
-				settings.LoadPublicEnv(logger, "")
+				settings.LoadPublicEnv(logger, v, "")
 			}
 
 			output := captureStderr(t, func() {

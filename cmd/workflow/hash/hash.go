@@ -155,7 +155,7 @@ func loadBinary(wasmFlag, workflowPathFromSettings string) ([]byte, error) {
 
 	spinner := ui.NewSpinner()
 	spinner.Start("Compiling workflow...")
-	wasmBytes, err := cmdcommon.CompileWorkflowToWasm(resolvedWorkflowPath)
+	wasmBytes, err := cmdcommon.CompileWorkflowToWasm(resolvedWorkflowPath, true)
 	spinner.Stop()
 	if err != nil {
 		ui.Error("Build failed:")

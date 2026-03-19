@@ -125,8 +125,11 @@ func newRootCommand() *cobra.Command {
 				return fmt.Errorf("failed to bind flags: %w", err)
 			}
 
-			settings.ResolveAndLoadEnv(log, v, settings.Flags.CliEnvFile.Name, constants.DefaultEnvFileName)
-			settings.ResolveAndLoadPublicEnv(log, v, settings.Flags.CliPublicEnvFile.Name, constants.DefaultPublicEnvFileName)
+			settings.ResolveAndLoadBothEnvFiles(
+				log, v,
+				settings.Flags.CliEnvFile.Name, constants.DefaultEnvFileName,
+				settings.Flags.CliPublicEnvFile.Name, constants.DefaultPublicEnvFileName,
+			)
 
 			// Update log level if verbose flag is set — must happen before spinner starts
 			if verbose := v.GetBool(settings.Flags.Verbose.Name); verbose {
