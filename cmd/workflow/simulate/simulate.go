@@ -675,15 +675,15 @@ func run(
 			},
 		},
 		WorkflowSettingsCfgFn: func(cfg *cresettings.Workflows) {
-			cfg.ChainAllowed = commonsettings.PerChainSelector(
-				commonsettings.Bool(true), // Allow all chains in simulation
-				map[string]bool{},
-			)
 			// Apply simulation limits to engine-level settings when --limits is set
 			if simLimits != nil {
 				applyEngineLimits(cfg, simLimits)
-				// Re-apply allow-all chains since applyEngineLimits does not touch ChainAllowed
 			}
+			// Always allow all chains in simulation, overriding any chain restrictions from limits
+			cfg.ChainAllowed = commonsettings.PerChainSelector(
+				commonsettings.Bool(true),
+				map[string]bool{},
+			)
 		},
 	})
 
