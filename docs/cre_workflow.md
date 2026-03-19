@@ -35,6 +35,7 @@ cre workflow [optional flags]
 * [cre workflow delete](cre_workflow_delete.md)	 - Deletes all versions of a workflow from the Workflow Registry
 * [cre workflow deploy](cre_workflow_deploy.md)	 - Deploys a workflow to the Workflow Registry contract
 * [cre workflow hash](cre_workflow_hash.md)	 - Computes and displays workflow hashes
+* [cre workflow limits](cre_workflow_limits.md)	 - Manage simulation limits
 * [cre workflow pause](cre_workflow_pause.md)	 - Pauses workflow on the Workflow Registry contract
 * [cre workflow simulate](cre_workflow_simulate.md)	 - Simulates a workflow
 
