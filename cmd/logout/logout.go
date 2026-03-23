@@ -14,6 +14,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
+	"github.com/smartcontractkit/cre-cli/internal/tenantctx"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
@@ -90,6 +91,11 @@ func (h *handler) execute() error {
 	if err := os.Remove(credPath); err != nil && !os.IsNotExist(err) {
 		spinner.Stop()
 		return fmt.Errorf("failed to delete credentials file: %w", err)
+	}
+
+	contextPath := filepath.Join(home, credentials.ConfigDir, tenantctx.ContextFile)
+	if err := os.Remove(contextPath); err != nil && !os.IsNotExist(err) {
+		h.log.Warn().Err(err).Msg("failed to delete context.yaml")
 	}
 
 	spinner.Stop()

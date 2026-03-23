@@ -217,6 +217,14 @@ func newRootCommand() *cobra.Command {
 					return errLoginCompleted
 				}
 
+				// Ensure tenant context exists (fetches via GQL if missing, supports API key and bearer)
+				if showSpinner {
+					spinner.Update("Loading tenant context...")
+				}
+				if err := runtimeContext.AttachTenantContext(cmd.Context()); err != nil {
+					runtimeContext.Logger.Warn().Err(err).Msg("failed to load tenant context — context.yaml not available")
+				}
+
 				// Check if organization is ungated for commands that require it
 				cmdPath := cmd.CommandPath()
 				if cmdPath == "cre account link-key" {

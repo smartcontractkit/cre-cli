@@ -13,6 +13,7 @@ import (
 
 	"github.com/smartcontractkit/cre-cli/internal/client/graphqlclient"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
+	"github.com/smartcontractkit/cre-cli/internal/environments"
 )
 
 const (
@@ -157,6 +158,60 @@ func abbreviateAddress(addr string) string {
 		return addr
 	}
 	return addr[:6] + "..." + addr[len(addr)-4:]
+}
+
+// LoadContext reads ~/.cre/context.yaml and returns the EnvironmentContext for the given envName.
+func LoadContext(envName string) (*EnvironmentContext, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, fmt.Errorf("get home dir: %w", err)
+	}
+	return LoadContextFromPath(filepath.Join(home, credentials.ConfigDir, ContextFile), envName)
+}
+
+// LoadContextFromPath reads a context.yaml at the given path and returns the EnvironmentContext for envName.
+func LoadContextFromPath(path string, envName string) (*EnvironmentContext, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read context file: %w", err)
+	}
+
+	var contextMap map[string]*EnvironmentContext
+	if err := yaml.Unmarshal(data, &contextMap); err != nil {
+		return nil, fmt.Errorf("parse context file: %w", err)
+	}
+
+	envCtx, ok := contextMap[strings.ToUpper(envName)]
+	if !ok {
+		return nil, fmt.Errorf("no context found for environment %q", envName)
+	}
+	return envCtx, nil
+}
+
+// contextFileHasEnv checks whether context.yaml exists and contains a block for envName.
+func contextFileHasEnv(envName string) bool {
+	_, err := LoadContext(envName)
+	return err == nil
+}
+
+// EnsureContext checks if context.yaml exists for the given environment.
+// For API key users, always fetches fresh (no login session to invalidate cache).
+// For bearer token users, uses cached file written at login and fetches only if missing.
+func EnsureContext(ctx context.Context, creds *credentials.Credentials, envSet *environments.EnvironmentSet, log *zerolog.Logger) error {
+	envName := envSet.EnvName
+	if envName == "" {
+		envName = environments.DefaultEnv
+	}
+
+	alwaysFetch := creds.AuthType == credentials.AuthTypeApiKey
+
+	if !alwaysFetch && contextFileHasEnv(envName) {
+		return nil
+	}
+
+	log.Debug().Str("env", envName).Bool("api_key", alwaysFetch).Msg("fetching tenant config")
+	gqlClient := graphqlclient.New(creds, envSet, log)
+	return FetchAndWriteContext(ctx, gqlClient, envName, log)
 }
 
 func writeContextFile(data map[string]*EnvironmentContext, log *zerolog.Logger) error {
