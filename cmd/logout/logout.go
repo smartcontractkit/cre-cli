@@ -95,7 +95,7 @@ func (h *handler) execute() error {
 
 	contextPath := filepath.Join(home, credentials.ConfigDir, tenantctx.ContextFile)
 	if err := os.Remove(contextPath); err != nil && !os.IsNotExist(err) {
-		h.log.Warn().Err(err).Msg("failed to delete context.yaml")
+		h.log.Warn().Err(err).Msgf("failed to delete %s", tenantctx.ContextFile)
 	}
 
 	spinner.Stop()

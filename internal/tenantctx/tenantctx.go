@@ -16,11 +16,10 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 )
 
-const (
-	ContextFile = "context.yaml"
-)
+// ContextFile is the filename for the local registry manifest.
+const ContextFile = "context.yaml"
 
-// Registry represents a single workflow registry from the GQL response.
+// Registry represents a single available workflow registry.
 type Registry struct {
 	ID               string   `yaml:"id" json:"id"`
 	Label            string   `yaml:"label" json:"label"`
@@ -28,10 +27,9 @@ type Registry struct {
 	ChainSelector    *string  `yaml:"chain_selector,omitempty" json:"chainSelector,omitempty"`
 	Address          *string  `yaml:"address,omitempty" json:"address,omitempty"`
 	SecretsAuthFlows []string `yaml:"secrets_auth_flows" json:"secretsAuthFlows"`
-	Active           bool     `yaml:"active" json:"-"`
 }
 
-// EnvironmentContext represents the tenant config for a single environment block in context.yaml.
+// EnvironmentContext holds tenant configuration for a single CLI environment.
 type EnvironmentContext struct {
 	TenantID         string      `yaml:"tenant_id"`
 	DefaultDonFamily string      `yaml:"default_don_family"`
@@ -39,7 +37,6 @@ type EnvironmentContext struct {
 	Registries       []*Registry `yaml:"registries"`
 }
 
-// getTenantConfigResponse mirrors the GQL response shape.
 type getTenantConfigResponse struct {
 	GetTenantConfig struct {
 		TenantID         string `json:"tenantId"`
@@ -72,8 +69,8 @@ const getTenantConfigQuery = `query GetTenantConfig {
   }
 }`
 
-// FetchAndWriteContext calls getTenantConfig and writes ~/.cre/context.yaml.
-// envName is the CRE_CLI_ENV value (e.g. "PRODUCTION", "STAGING").
+// FetchAndWriteContext fetches the tenant configuration from the service
+// and writes the registry manifest to ~/.cre/<ContextFile>.
 func FetchAndWriteContext(ctx context.Context, gqlClient *graphqlclient.Client, envName string, log *zerolog.Logger) error {
 	req := graphql.NewRequest(getTenantConfigQuery)
 
@@ -104,13 +101,7 @@ func FetchAndWriteContext(ctx context.Context, gqlClient *graphqlclient.Client, 
 			ChainSelector:    r.ChainSelector,
 			Address:          r.Address,
 			SecretsAuthFlows: mapSecretsAuthFlows(r.SecretsAuthFlows),
-			Active:           false,
 		})
-	}
-
-	// Default the first registry to active
-	if len(registries) > 0 {
-		registries[0].Active = true
 	}
 
 	envCtx := &EnvironmentContext{
@@ -160,7 +151,8 @@ func abbreviateAddress(addr string) string {
 	return addr[:6] + "..." + addr[len(addr)-4:]
 }
 
-// LoadContext reads ~/.cre/context.yaml and returns the EnvironmentContext for the given envName.
+// LoadContext reads the registry manifest from ~/.cre/<ContextFile>
+// and returns the EnvironmentContext for the given environment name.
 func LoadContext(envName string) (*EnvironmentContext, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -169,34 +161,33 @@ func LoadContext(envName string) (*EnvironmentContext, error) {
 	return LoadContextFromPath(filepath.Join(home, credentials.ConfigDir, ContextFile), envName)
 }
 
-// LoadContextFromPath reads a context.yaml at the given path and returns the EnvironmentContext for envName.
+// LoadContextFromPath reads the registry manifest at the given path
+// and returns the EnvironmentContext for the given environment name.
 func LoadContextFromPath(path string, envName string) (*EnvironmentContext, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("read context file: %w", err)
+		return nil, fmt.Errorf("read %s: %w", ContextFile, err)
 	}
 
 	var contextMap map[string]*EnvironmentContext
 	if err := yaml.Unmarshal(data, &contextMap); err != nil {
-		return nil, fmt.Errorf("parse context file: %w", err)
+		return nil, fmt.Errorf("parse %s: %w", ContextFile, err)
 	}
 
 	envCtx, ok := contextMap[strings.ToUpper(envName)]
 	if !ok {
-		return nil, fmt.Errorf("no context found for environment %q", envName)
+		return nil, fmt.Errorf("no context found for environment %q in %s", envName, ContextFile)
 	}
 	return envCtx, nil
 }
 
-// contextFileHasEnv checks whether context.yaml exists and contains a block for envName.
 func contextFileHasEnv(envName string) bool {
 	_, err := LoadContext(envName)
 	return err == nil
 }
 
-// EnsureContext checks if context.yaml exists for the given environment.
-// For API key users, always fetches fresh (no login session to invalidate cache).
-// For bearer token users, uses cached file written at login and fetches only if missing.
+// EnsureContext guarantees the registry manifest exists for the current environment.
+// API key users always fetch fresh; bearer token users use the cached file from login.
 func EnsureContext(ctx context.Context, creds *credentials.Credentials, envSet *environments.EnvironmentSet, log *zerolog.Logger) error {
 	envName := envSet.EnvName
 	if envName == "" {
@@ -239,6 +230,6 @@ func writeContextFile(data map[string]*EnvironmentContext, log *zerolog.Logger) 
 		return fmt.Errorf("rename temp file: %w", err)
 	}
 
-	log.Debug().Str("path", path).Msg("wrote context.yaml")
+	log.Debug().Str("path", path).Msg("wrote " + ContextFile)
 	return nil
 }

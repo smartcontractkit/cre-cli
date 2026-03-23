@@ -118,7 +118,7 @@ func (h *handler) execute() error {
 
 	h.spinner.Update("Fetching tenant configuration...")
 	if err := h.fetchTenantConfig(tokenSet); err != nil {
-		h.log.Warn().Err(err).Msg("failed to fetch tenant config — context.yaml not written")
+		h.log.Warn().Err(err).Msgf("failed to fetch tenant config — %s not written", tenantctx.ContextFile)
 	}
 
 	// Stop spinner before final output

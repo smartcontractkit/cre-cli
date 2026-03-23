@@ -86,9 +86,8 @@ func (ctx *Context) AttachCredentials(validationCtx context.Context, skipValidat
 	return nil
 }
 
-// AttachTenantContext ensures context.yaml exists (fetching if needed) and loads
-// the tenant context for the current environment into the runtime context.
-// This does not modify EnvironmentSet — that will happen in a future phase.
+// AttachTenantContext loads the registry manifest for the current environment.
+// If the manifest is missing, it is fetched from the service first.
 func (ctx *Context) AttachTenantContext(validationCtx context.Context) error {
 	if ctx.Credentials == nil || ctx.EnvironmentSet == nil {
 		return fmt.Errorf("credentials and environment must be loaded before tenant context")
