@@ -41,7 +41,7 @@ type EnvironmentContext struct {
 // getTenantConfigResponse mirrors the GQL response shape.
 type getTenantConfigResponse struct {
 	GetTenantConfig struct {
-		TenantID         int    `json:"tenantId"`
+		TenantID         string `json:"tenantId"`
 		DefaultDonFamily string `json:"defaultDonFamily"`
 		VaultGatewayURL  string `json:"vaultGatewayUrl"`
 		Registries       []struct {
@@ -85,13 +85,24 @@ func FetchAndWriteContext(ctx context.Context, gqlClient *graphqlclient.Client, 
 
 	registries := make([]*Registry, 0, len(tc.Registries))
 	for _, r := range tc.Registries {
+		regType := mapRegistryType(r.Type)
+		id := r.ID
+		label := r.Label
+
+		if regType == "on-chain" {
+			id = "onchain:" + r.ID
+			if r.Address != nil {
+				label = fmt.Sprintf("%s (%s)", r.ID, abbreviateAddress(*r.Address))
+			}
+		}
+
 		registries = append(registries, &Registry{
-			ID:               r.ID,
-			Label:            r.Label,
-			Type:             mapRegistryType(r.Type),
+			ID:               id,
+			Label:            label,
+			Type:             regType,
 			ChainSelector:    r.ChainSelector,
 			Address:          r.Address,
-			SecretsAuthFlows: r.SecretsAuthFlows,
+			SecretsAuthFlows: mapSecretsAuthFlows(r.SecretsAuthFlows),
 			Active:           false,
 		})
 	}
@@ -102,7 +113,7 @@ func FetchAndWriteContext(ctx context.Context, gqlClient *graphqlclient.Client, 
 	}
 
 	envCtx := &EnvironmentContext{
-		TenantID:         fmt.Sprintf("%d", tc.TenantID),
+		TenantID:         tc.TenantID,
 		DefaultDonFamily: tc.DefaultDonFamily,
 		VaultGatewayURL:  tc.VaultGatewayURL,
 		Registries:       registries,
@@ -124,6 +135,28 @@ func mapRegistryType(gqlType string) string {
 	default:
 		return strings.ToLower(gqlType)
 	}
+}
+
+func mapSecretsAuthFlows(gqlFlows []string) []string {
+	flows := make([]string, 0, len(gqlFlows))
+	for _, f := range gqlFlows {
+		switch f {
+		case "BROWSER":
+			flows = append(flows, "browser")
+		case "OWNER_KEY_SIGNING":
+			flows = append(flows, "owner-key-signing")
+		default:
+			flows = append(flows, strings.ToLower(f))
+		}
+	}
+	return flows
+}
+
+func abbreviateAddress(addr string) string {
+	if len(addr) <= 10 {
+		return addr
+	}
+	return addr[:6] + "..." + addr[len(addr)-4:]
 }
 
 func writeContextFile(data map[string]*EnvironmentContext, log *zerolog.Logger) error {
