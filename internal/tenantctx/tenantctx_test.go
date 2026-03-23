@@ -393,8 +393,9 @@ func TestMapRegistryType(t *testing.T) {
 }
 
 func TestMapSecretsAuthFlows(t *testing.T) {
-	got := mapSecretsAuthFlows([]string{"BROWSER", "OWNER_KEY_SIGNING", "FUTURE_FLOW"})
-	want := []string{"browser", "owner-key-signing", "future_flow"}
+	log := testutil.NewTestLogger()
+	got := mapSecretsAuthFlows([]string{"BROWSER", "OWNER_KEY_SIGNING", "FUTURE_FLOW"}, log)
+	want := []string{"browser", "owner-key-signing"}
 	if len(got) != len(want) {
 		t.Fatalf("length mismatch: got %v, want %v", got, want)
 	}

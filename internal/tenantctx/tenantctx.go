@@ -100,7 +100,7 @@ func FetchAndWriteContext(ctx context.Context, gqlClient *graphqlclient.Client, 
 			Type:             regType,
 			ChainSelector:    r.ChainSelector,
 			Address:          r.Address,
-			SecretsAuthFlows: mapSecretsAuthFlows(r.SecretsAuthFlows),
+			SecretsAuthFlows: mapSecretsAuthFlows(r.SecretsAuthFlows, log),
 		})
 	}
 
@@ -129,7 +129,7 @@ func mapRegistryType(gqlType string) string {
 	}
 }
 
-func mapSecretsAuthFlows(gqlFlows []string) []string {
+func mapSecretsAuthFlows(gqlFlows []string, log *zerolog.Logger) []string {
 	flows := make([]string, 0, len(gqlFlows))
 	for _, f := range gqlFlows {
 		switch f {
@@ -138,7 +138,7 @@ func mapSecretsAuthFlows(gqlFlows []string) []string {
 		case "OWNER_KEY_SIGNING":
 			flows = append(flows, "owner-key-signing")
 		default:
-			flows = append(flows, strings.ToLower(f))
+			log.Debug().Str("flow", f).Msg("unknown secrets auth flow, skipping")
 		}
 	}
 	return flows
