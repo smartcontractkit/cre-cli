@@ -51,7 +51,7 @@ func (t templateItem) Title() string {
 func (t templateItem) Description() string { return t.TemplateSummary.Description }
 func (t templateItem) FilterValue() string {
 	s := t.TemplateSummary
-	return s.Title + " " + s.Name + " " + s.Description + " " + s.Language + " " + s.Category + " " + strings.Join(s.Tags, " ")
+	return s.Title + " " + s.Name + " " + s.Description + " " + s.Language + " " + s.Category + " " + strings.Join(s.Tags, " ") + " " + strings.Join(s.Solutions, " ") + " " + strings.Join(s.Capabilities, " ")
 }
 
 // languageFilter controls template list filtering by language.
@@ -110,7 +110,7 @@ func sortTemplates(templates []templaterepo.TemplateSummary) []templaterepo.Temp
 //
 //	Title  Go
 //	Description line 1
-//	Description line 2
+//	Solutions: ... | Capabilities: ...
 type templateDelegate struct{}
 
 func (d templateDelegate) Height() int                             { return 3 }
@@ -138,6 +138,7 @@ func (d templateDelegate) Render(w io.Writer, m list.Model, index int, item list
 		titleStyle lipgloss.Style
 		descStyle  lipgloss.Style
 		langStyle  lipgloss.Style
+		tagStyle   lipgloss.Style
 		prefix     string
 	)
 
@@ -149,32 +150,47 @@ func (d templateDelegate) Render(w io.Writer, m list.Model, index int, item list
 		titleStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(ui.ColorBlue500)).Bold(true)
 		descStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(ui.ColorBlue300))
 		langStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(ui.ColorTeal400)).Bold(true)
+		tagStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(ui.ColorGray400))
 	case isDimmed:
 		prefix = "  "
 		titleStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(ui.ColorGray600))
 		descStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(ui.ColorGray700))
 		langStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(ui.ColorGray700))
+		tagStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(ui.ColorGray700))
 	default:
 		prefix = "  "
 		titleStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(ui.ColorGray50))
 		descStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(ui.ColorGray500))
 		langStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(ui.ColorGray400))
+		tagStyle = lipgloss.NewStyle().Foreground(lipgloss.Color(ui.ColorGray500))
 	}
 
 	// Line 1: title + language tag
 	fmt.Fprintf(w, "%s%s %s", prefix, titleStyle.Render(title), langStyle.Render(lang))
 
-	// Lines 2-3: description (word-wrapped, up to 2 lines)
+	// Line 2: description (truncated to single line)
+	fmt.Fprint(w, "\n")
 	descLines := wrapText(desc, contentWidth)
-	for i := 0; i < 2; i++ {
-		fmt.Fprint(w, "\n")
-		if i < len(descLines) {
-			line := descLines[i]
-			if i == 1 && len(descLines) > 2 {
-				line += "..."
-			}
-			fmt.Fprintf(w, "%s%s", prefix, descStyle.Render(line))
+	if len(descLines) > 0 {
+		line := descLines[0]
+		if len(descLines) > 1 {
+			line += "..."
 		}
+		fmt.Fprintf(w, "%s%s", prefix, descStyle.Render(line))
+	}
+
+	// Line 3: solutions and capabilities metadata
+	fmt.Fprint(w, "\n")
+	var meta []string
+	if len(tmplItem.Solutions) > 0 {
+		meta = append(meta, formatSlugList(tmplItem.Solutions))
+	}
+	if len(tmplItem.Capabilities) > 0 {
+		meta = append(meta, strings.Join(tmplItem.Capabilities, ", "))
+	}
+	if len(meta) > 0 {
+		metaLine := strings.Join(meta, " | ")
+		fmt.Fprintf(w, "%s%s", prefix, tagStyle.Render(metaLine))
 	}
 }
 
@@ -224,11 +240,21 @@ func wrapText(text string, maxWidth int) []string {
 	return lines
 }
 
+// formatSlugList converts slug-case values to human-readable labels (e.g., "defi-vault-operations" -> "Defi Vault Operations").
+func formatSlugList(slugs []string) string {
+	labels := make([]string, len(slugs))
+	for i, s := range slugs {
+		labels[i] = strings.ReplaceAll(s, "-", " ")
+	}
+	return strings.Join(labels, ", ")
+}
+
 type wizardStep int
 
 const (
 	stepProjectName wizardStep = iota
 	stepTemplate
+	stepTemplateConfirm
 	stepNetworkRPCs
 	stepWorkflowName
 	stepDone
@@ -448,6 +474,17 @@ func (m *wizardModel) advanceToNextStep() {
 				continue
 			}
 			return
+		case stepTemplateConfirm:
+			// Show only when the template was pre-selected via --template flag
+			// (skipTemplate is true) and the wizard is interactive (at least
+			// one other step needs user input). If the user picked from the
+			// list they already know what they selected.
+			isFullyNonInteractive := m.skipProjectName && m.skipTemplate && m.skipNetworkRPCs && m.skipWorkflowName
+			if !m.skipTemplate || isFullyNonInteractive {
+				m.step++
+				continue
+			}
+			return
 		case stepNetworkRPCs:
 			if m.skipNetworkRPCs {
 				m.step++
@@ -604,6 +641,8 @@ func (m wizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case stepTemplate:
 		// Forward non-key messages (e.g. FilterMatchesMsg) to the list
 		m.templateList, cmd = m.templateList.Update(msg)
+	case stepTemplateConfirm:
+		// Nothing to update
 	case stepDone:
 		// Nothing to update
 	}
@@ -655,6 +694,11 @@ func (m wizardModel) handleEnter(msgs ...tea.Msg) (tea.Model, tea.Cmd) {
 		tmpl := selected.TemplateSummary
 		m.selectedTemplate = &tmpl
 		m.initNetworkRPCInputs()
+		m.step++
+		m.advanceToNextStep()
+
+	case stepTemplateConfirm:
+		// User pressed enter to confirm the selected template
 		m.step++
 		m.advanceToNextStep()
 
@@ -728,7 +772,7 @@ func (m wizardModel) View() string {
 		b.WriteString(m.dimStyle.Render("  Project: " + m.projectName))
 		b.WriteString("\n")
 	}
-	if m.selectedTemplate != nil && m.step > stepTemplate {
+	if m.selectedTemplate != nil && m.step > stepTemplateConfirm {
 		b.WriteString(m.dimStyle.Render("  Template: " + m.selectedTemplate.Title + " [" + m.selectedTemplate.Language + "]"))
 		b.WriteString("\n")
 	}
@@ -814,6 +858,30 @@ func (m wizardModel) View() string {
 
 		// Render the list
 		b.WriteString(m.templateList.View())
+
+	case stepTemplateConfirm:
+		tmpl := m.selectedTemplate
+		title := stripLangSuffix(tmpl.Title)
+		lang := shortLang(tmpl.Language)
+
+		boxTitle := m.titleStyle.Render(title) + "  " + m.tagStyle.Render(lang)
+		var boxContent strings.Builder
+		boxContent.WriteString(boxTitle)
+		if tmpl.Description != "" {
+			boxContent.WriteString("\n")
+			boxContent.WriteString(m.dimStyle.Render(tmpl.Description))
+		}
+
+		boxStyle := lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color(ui.ColorBlue500)).
+			Padding(0, 1).
+			MarginLeft(2)
+
+		b.WriteString(m.promptStyle.Render("  Template selected"))
+		b.WriteString("\n\n")
+		b.WriteString(boxStyle.Render(boxContent.String()))
+		b.WriteString("\n")
 
 	case stepNetworkRPCs:
 		b.WriteString(m.promptStyle.Render("  RPC URL overrides (optional)"))

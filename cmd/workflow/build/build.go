@@ -58,12 +58,13 @@ func execute(workflowFolder, outputPath string) error {
 	outputPath = cmdcommon.EnsureWasmExtension(outputPath)
 
 	ui.Dim("Compiling workflow...")
-	wasmBytes, err := cmdcommon.CompileWorkflowToWasm(resolvedPath)
+	wasmBytes, err := cmdcommon.CompileWorkflowToWasm(resolvedPath, true)
 	if err != nil {
 		ui.Error("Build failed:")
 		return fmt.Errorf("failed to compile workflow: %w", err)
 	}
 	ui.Success("Workflow compiled successfully")
+	ui.Dim(fmt.Sprintf("Binary hash: %s", cmdcommon.HashBytes(wasmBytes)))
 
 	if err := os.WriteFile(outputPath, wasmBytes, 0666); err != nil { //nolint:gosec
 		return fmt.Errorf("failed to write WASM binary: %w", err)

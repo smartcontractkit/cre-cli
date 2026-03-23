@@ -125,6 +125,12 @@ func newRootCommand() *cobra.Command {
 				return fmt.Errorf("failed to bind flags: %w", err)
 			}
 
+			settings.ResolveAndLoadBothEnvFiles(
+				log, v,
+				settings.Flags.CliEnvFile.Name, constants.DefaultEnvFileName,
+				settings.Flags.CliPublicEnvFile.Name, constants.DefaultPublicEnvFileName,
+			)
+
 			// Update log level if verbose flag is set — must happen before spinner starts
 			if verbose := v.GetBool(settings.Flags.Verbose.Name); verbose {
 				ui.SetVerbose(true)
@@ -331,8 +337,15 @@ func newRootCommand() *cobra.Command {
 	rootCmd.PersistentFlags().StringP(
 		settings.Flags.CliEnvFile.Name,
 		settings.Flags.CliEnvFile.Short,
-		constants.DefaultEnvFileName,
+		"",
 		fmt.Sprintf("Path to %s file which contains sensitive info", constants.DefaultEnvFileName),
+	)
+	// public env file flag is present for every subcommand
+	rootCmd.PersistentFlags().StringP(
+		settings.Flags.CliPublicEnvFile.Name,
+		settings.Flags.CliPublicEnvFile.Short,
+		"",
+		fmt.Sprintf("Path to %s file which contains shared, non-sensitive build config", constants.DefaultPublicEnvFileName),
 	)
 	// project root path flag is present for every subcommand
 	rootCmd.PersistentFlags().StringP(
@@ -411,30 +424,32 @@ func newRootCommand() *cobra.Command {
 func isLoadSettings(cmd *cobra.Command) bool {
 	// It is not expected to have the settings file when running the following commands
 	var excludedCommands = map[string]struct{}{
-		"cre version":               {},
-		"cre login":                 {},
-		"cre logout":                {},
-		"cre whoami":                {},
-		"cre account access":        {},
-		"cre account list-key":      {},
-		"cre init":                  {},
-		"cre generate-bindings":     {},
-		"cre completion bash":       {},
-		"cre completion fish":       {},
-		"cre completion powershell": {},
-		"cre completion zsh":        {},
-		"cre help":                  {},
-		"cre update":                {},
-		"cre workflow":              {},
-		"cre workflow custom-build": {},
-		"cre workflow build":        {},
-		"cre account":               {},
-		"cre secrets":               {},
-		"cre templates":             {},
-		"cre templates list":        {},
-		"cre templates add":         {},
-		"cre templates remove":      {},
-		"cre":                       {},
+		"cre version":                {},
+		"cre login":                  {},
+		"cre logout":                 {},
+		"cre whoami":                 {},
+		"cre account access":         {},
+		"cre account list-key":       {},
+		"cre init":                   {},
+		"cre generate-bindings":      {},
+		"cre completion bash":        {},
+		"cre completion fish":        {},
+		"cre completion powershell":  {},
+		"cre completion zsh":         {},
+		"cre help":                   {},
+		"cre update":                 {},
+		"cre workflow":               {},
+		"cre workflow custom-build":  {},
+		"cre workflow limits":        {},
+		"cre workflow limits export": {},
+		"cre workflow build":         {},
+		"cre account":                {},
+		"cre secrets":                {},
+		"cre templates":              {},
+		"cre templates list":         {},
+		"cre templates add":          {},
+		"cre templates remove":       {},
+		"cre":                        {},
 	}
 
 	_, exists := excludedCommands[cmd.CommandPath()]
@@ -444,25 +459,28 @@ func isLoadSettings(cmd *cobra.Command) bool {
 func isLoadCredentials(cmd *cobra.Command) bool {
 	// It is not expected to have the credentials loaded when running the following commands
 	var excludedCommands = map[string]struct{}{
-		"cre version":               {},
-		"cre login":                 {},
-		"cre logout":                {},
-		"cre completion bash":       {},
-		"cre completion fish":       {},
-		"cre completion powershell": {},
-		"cre completion zsh":        {},
-		"cre help":                  {},
-		"cre generate-bindings":     {},
-		"cre update":                {},
-		"cre workflow":              {},
-		"cre workflow build":        {},
-		"cre account":               {},
-		"cre secrets":               {},
-		"cre templates":             {},
-		"cre templates list":        {},
-		"cre templates add":         {},
-		"cre templates remove":      {},
-		"cre":                       {},
+		"cre version":                {},
+		"cre login":                  {},
+		"cre logout":                 {},
+		"cre completion bash":        {},
+		"cre completion fish":        {},
+		"cre completion powershell":  {},
+		"cre completion zsh":         {},
+		"cre help":                   {},
+		"cre generate-bindings":      {},
+		"cre update":                 {},
+		"cre workflow":               {},
+		"cre workflow limits":        {},
+		"cre workflow limits export": {},
+		"cre account":                {},
+		"cre secrets":                {},
+		"cre workflow build":         {},
+		"cre workflow hash":          {},
+		"cre templates":              {},
+		"cre templates list":         {},
+		"cre templates add":          {},
+		"cre templates remove":       {},
+		"cre":                        {},
 	}
 
 	_, exists := excludedCommands[cmd.CommandPath()]
@@ -513,25 +531,28 @@ func shouldShowSpinner(cmd *cobra.Command) bool {
 	// Don't show spinner for commands that don't do async work
 	// or commands that have their own interactive UI (like init)
 	var excludedCommands = map[string]struct{}{
-		"cre":                       {},
-		"cre version":               {},
-		"cre help":                  {},
-		"cre completion bash":       {},
-		"cre completion fish":       {},
-		"cre completion powershell": {},
-		"cre completion zsh":        {},
-		"cre init":                  {}, // Has its own Huh forms UI
-		"cre login":                 {}, // Has its own interactive flow
-		"cre logout":                {},
-		"cre update":                {},
-		"cre workflow":              {}, // Just shows help
-		"cre workflow build":        {}, // Offline command, no async init
-		"cre account":               {}, // Just shows help
-		"cre secrets":               {}, // Just shows help
-		"cre templates":             {}, // Just shows help
-		"cre templates list":        {},
-		"cre templates add":         {},
-		"cre templates remove":      {},
+		"cre":                        {},
+		"cre version":                {},
+		"cre help":                   {},
+		"cre completion bash":        {},
+		"cre completion fish":        {},
+		"cre completion powershell":  {},
+		"cre completion zsh":         {},
+		"cre init":                   {}, // Has its own Huh forms UI
+		"cre login":                  {}, // Has its own interactive flow
+		"cre logout":                 {},
+		"cre update":                 {},
+		"cre workflow":               {}, // Just shows help
+		"cre workflow limits":        {}, // Just shows help
+		"cre workflow limits export": {}, // Static data, no project needed
+		"cre account":                {}, // Just shows help
+		"cre workflow build":         {}, // Offline command, no async init
+		"cre workflow hash":          {}, // Offline command, has own spinner
+		"cre secrets":                {}, // Just shows help
+		"cre templates":              {}, // Just shows help
+		"cre templates list":         {},
+		"cre templates add":          {},
+		"cre templates remove":       {},
 	}
 
 	_, exists := excludedCommands[cmd.CommandPath()]

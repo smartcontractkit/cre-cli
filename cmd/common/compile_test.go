@@ -1,14 +1,21 @@
 package common
 
 import (
+	"bytes"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"testing"
 
+	"github.com/joho/godotenv"
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/smartcontractkit/cre-cli/internal/settings"
+	"github.com/smartcontractkit/cre-cli/internal/testutil"
 )
 
 func deployTestdataPath(elem ...string) string {
@@ -40,21 +47,21 @@ func TestFindMakefileRoot(t *testing.T) {
 func TestCompileWorkflowToWasm_Go_Success(t *testing.T) {
 	t.Run("basic_workflow", func(t *testing.T) {
 		path := deployTestdataPath("basic_workflow", "main.go")
-		wasm, err := CompileWorkflowToWasm(path)
+		wasm, err := CompileWorkflowToWasm(path, true)
 		require.NoError(t, err)
 		assert.NotEmpty(t, wasm)
 	})
 
 	t.Run("configless_workflow", func(t *testing.T) {
 		path := deployTestdataPath("configless_workflow", "main.go")
-		wasm, err := CompileWorkflowToWasm(path)
+		wasm, err := CompileWorkflowToWasm(path, true)
 		require.NoError(t, err)
 		assert.NotEmpty(t, wasm)
 	})
 
 	t.Run("missing_go_mod", func(t *testing.T) {
 		path := deployTestdataPath("missing_go_mod", "main.go")
-		wasm, err := CompileWorkflowToWasm(path)
+		wasm, err := CompileWorkflowToWasm(path, true)
 		require.NoError(t, err)
 		assert.NotEmpty(t, wasm)
 	})
@@ -62,7 +69,7 @@ func TestCompileWorkflowToWasm_Go_Success(t *testing.T) {
 
 func TestCompileWorkflowToWasm_Go_Malformed_Fails(t *testing.T) {
 	path := deployTestdataPath("malformed_workflow", "main.go")
-	_, err := CompileWorkflowToWasm(path)
+	_, err := CompileWorkflowToWasm(path, true)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to compile workflow")
 	assert.Contains(t, err.Error(), "undefined: sdk.RemovedFunctionThatFailsCompilation")
@@ -73,7 +80,7 @@ func TestCompileWorkflowToWasm_Wasm_Success(t *testing.T) {
 	_ = os.Remove(wasmPath)
 	t.Cleanup(func() { _ = os.Remove(wasmPath) })
 
-	wasm, err := CompileWorkflowToWasm(wasmPath)
+	wasm, err := CompileWorkflowToWasm(wasmPath, true)
 	require.NoError(t, err)
 	assert.NotEmpty(t, wasm)
 
@@ -89,14 +96,14 @@ func TestCompileWorkflowToWasm_Wasm_Fails(t *testing.T) {
 		wasmPath := filepath.Join(wasmDir, "workflow.wasm")
 		require.NoError(t, os.WriteFile(wasmPath, []byte("not really wasm"), 0600))
 
-		_, err := CompileWorkflowToWasm(wasmPath)
+		_, err := CompileWorkflowToWasm(wasmPath, true)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "no Makefile found")
 	})
 
 	t.Run("make_build_fails", func(t *testing.T) {
 		path := deployTestdataPath("wasm_make_fails", "wasm", "workflow.wasm")
-		_, err := CompileWorkflowToWasm(path)
+		_, err := CompileWorkflowToWasm(path, true)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to compile workflow")
 		assert.Contains(t, err.Error(), "build output:")
@@ -120,9 +127,96 @@ func TestCompileWorkflowToWasm_TS_Success(t *testing.T) {
 	if err := install.Run(); err != nil {
 		t.Skipf("bun install failed (network or cre-sdk): %v", err)
 	}
-	wasm, err := CompileWorkflowToWasm(mainPath)
+	wasm, err := CompileWorkflowToWasm(mainPath, true)
 	if err != nil {
 		t.Skipf("TS compile failed (published cre-sdk may lack full layout): %v", err)
 	}
 	assert.NotEmpty(t, wasm)
+}
+
+// captureStderr redirects os.Stderr to a pipe, runs fn, and returns whatever
+// was written to stderr during that call.
+func captureStderr(t *testing.T, fn func()) string {
+	t.Helper()
+	old := os.Stderr
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
+	os.Stderr = w
+
+	fn()
+
+	w.Close()
+	os.Stderr = old
+
+	var buf bytes.Buffer
+	_, _ = io.Copy(&buf, r)
+	return buf.String()
+}
+
+func TestWarnGOTOOLCHAIN(t *testing.T) {
+	tests := []struct {
+		name           string
+		gotoolchain    string
+		envFileContent map[string]string
+		wantWarning    bool
+	}{
+		{
+			name:        "GOTOOLCHAIN unset emits warning",
+			gotoolchain: "",
+			wantWarning: true,
+		},
+		{
+			name:        "GOTOOLCHAIN set but no public env file loaded emits warning",
+			gotoolchain: "go1.25.3",
+			wantWarning: true,
+		},
+		{
+			name:           "GOTOOLCHAIN set but missing from public env file emits warning",
+			gotoolchain:    "go1.25.3",
+			envFileContent: map[string]string{"CRE_TARGET": "staging"},
+			wantWarning:    true,
+		},
+		{
+			name:           "GOTOOLCHAIN set and present in public env file emits no warning",
+			gotoolchain:    "go1.25.3",
+			envFileContent: map[string]string{"GOTOOLCHAIN": "go1.25.3"},
+			wantWarning:    false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.gotoolchain != "" {
+				t.Setenv("GOTOOLCHAIN", tc.gotoolchain)
+			} else {
+				t.Setenv("GOTOOLCHAIN", "")
+				os.Unsetenv("GOTOOLCHAIN")
+			}
+
+			logger := testutil.NewTestLogger()
+			v := viper.New()
+			if tc.envFileContent != nil {
+				dir := t.TempDir()
+				envPath := filepath.Join(dir, ".env.public")
+				require.NoError(t, godotenv.Write(tc.envFileContent, envPath))
+				settings.LoadPublicEnv(logger, v, envPath)
+				for k := range tc.envFileContent {
+					t.Cleanup(func() { os.Unsetenv(k) })
+				}
+			} else {
+				settings.LoadPublicEnv(logger, v, "")
+			}
+
+			output := captureStderr(t, func() {
+				warnGOTOOLCHAIN()
+			})
+
+			if tc.wantWarning {
+				assert.NotEmpty(t, output, "expected a warning on stderr")
+				assert.Contains(t, output, "!", "output should be at warning level (ui.Warning prefix)")
+			} else {
+				assert.Empty(t, output, "expected no warning on stderr")
+			}
+		})
+	}
 }

@@ -141,6 +141,15 @@ func loadWorkflowSettings(logger *zerolog.Logger, v *viper.Viper, cmd *cobra.Com
 		logger.Debug().Msgf("rpcs settings not found in target %q", target)
 	}
 
+	for i := range workflowSettings.RPCs {
+		resolved, err := ResolveEnvVars(workflowSettings.RPCs[i].Url)
+		if err != nil {
+			return WorkflowSettings{}, fmt.Errorf("rpc url for chain %q: %w",
+				workflowSettings.RPCs[i].ChainName, err)
+		}
+		workflowSettings.RPCs[i].Url = resolved
+	}
+
 	if registryChainName != "" {
 		if err := validateDeploymentRPC(&workflowSettings, registryChainName); err != nil {
 			return WorkflowSettings{}, errors.Wrap(err, "for target "+target)
@@ -252,6 +261,8 @@ func IsValidChainName(name string) error {
 func ShouldSkipGetOwner(cmd *cobra.Command) bool {
 	switch cmd.Name() {
 	case "help":
+		return true
+	case "hash":
 		return true
 	case "simulate":
 		// Treat missing/invalid flag as false (i.e., skip).
