@@ -32,6 +32,9 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 		"Timeout for secrets operations (e.g. 30m, 2h, 48h).",
 	)
 
+	secretsCmd.PersistentFlags().String("secrets-auth", "owner-key-signing", "Auth flow for secrets operations (owner-key-signing, browser).")
+	_ = secretsCmd.PersistentFlags().MarkHidden("secrets-auth")
+
 	secretsCmd.AddCommand(create.New(runtimeContext))
 	secretsCmd.AddCommand(update.New(runtimeContext))
 	secretsCmd.AddCommand(delete.New(runtimeContext))

@@ -351,7 +351,7 @@ func (h *Handler) Execute(
 	inputs UpsertSecretsInputs,
 	method string,
 	duration time.Duration,
-	ownerType string,
+	secretsAuth string,
 ) error {
 	ui.Dim("Verifying ownership...")
 	if err := h.EnsureOwnerLinkedOrFail(); err != nil {

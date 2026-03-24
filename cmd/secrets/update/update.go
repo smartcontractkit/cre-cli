@@ -24,6 +24,14 @@ func New(ctx *runtime.Context) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			secretsFilePath := args[0]
 
+			secretsAuth, err := cmd.Flags().GetString("secrets-auth")
+			if err != nil {
+				return err
+			}
+			if err := common.ValidateSecretsAuthFlow(secretsAuth, ctx.EnvironmentSet.EnvName); err != nil {
+				return err
+			}
+
 			h, err := common.NewHandler(ctx, secretsFilePath)
 			if err != nil {
 				return err
@@ -55,12 +63,7 @@ func New(ctx *runtime.Context) *cobra.Command {
 				return err
 			}
 
-			return h.Execute(
-				inputs,
-				vaulttypes.MethodSecretsUpdate,
-				duration,
-				ctx.Settings.Workflow.UserWorkflowSettings.WorkflowOwnerType,
-			)
+			return h.Execute(inputs, vaulttypes.MethodSecretsUpdate, duration, secretsAuth)
 		},
 	}
 

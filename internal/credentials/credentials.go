@@ -105,6 +105,50 @@ func SaveCredentials(tokenSet *CreLoginTokenSet) error {
 	return nil
 }
 
+// decodeJWTClaims extracts the claims map from the access token JWT payload.
+func (c *Credentials) decodeJWTClaims() (map[string]interface{}, error) {
+	if c.Tokens == nil || c.Tokens.AccessToken == "" {
+		return nil, fmt.Errorf("no access token available")
+	}
+
+	parts := strings.Split(c.Tokens.AccessToken, ".")
+	if len(parts) < 2 {
+		return nil, fmt.Errorf("invalid JWT token format")
+	}
+
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode JWT payload: %w", err)
+	}
+
+	var claims map[string]interface{}
+	if err := json.Unmarshal(payload, &claims); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal JWT claims: %w", err)
+	}
+
+	c.log.Debug().Interface("claims", claims).Msg("JWT claims decoded")
+	return claims, nil
+}
+
+// GetOrgID returns the organization ID from the access token.
+func (c *Credentials) GetOrgID() (string, error) {
+	if c.AuthType == AuthTypeApiKey {
+		return "", fmt.Errorf("org_id is not available for API key authentication")
+	}
+
+	claims, err := c.decodeJWTClaims()
+	if err != nil {
+		return "", err
+	}
+
+	orgID, ok := claims["org_id"].(string)
+	if !ok || orgID == "" {
+		return "", fmt.Errorf("org_id claim not found in access token")
+	}
+
+	return orgID, nil
+}
+
 // GetDeploymentAccessStatus returns the deployment access status for the organization.
 // This can be used to check and display whether the user has deployment access.
 func (c *Credentials) GetDeploymentAccessStatus() (*DeploymentAccess, error) {
@@ -117,30 +161,10 @@ func (c *Credentials) GetDeploymentAccessStatus() (*DeploymentAccess, error) {
 	}
 
 	// For JWT bearer tokens, we need to parse the token and check the organization_status claim
-	if c.Tokens == nil || c.Tokens.AccessToken == "" {
-		return nil, fmt.Errorf("no access token available")
-	}
-
-	// Parse the JWT to extract claims
-	parts := strings.Split(c.Tokens.AccessToken, ".")
-	if len(parts) < 2 {
-		return nil, fmt.Errorf("invalid JWT token format")
-	}
-
-	// Decode the payload (second part of the JWT)
-	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	claims, err := c.decodeJWTClaims()
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode JWT payload: %w", err)
+		return nil, err
 	}
-
-	// Parse claims into a map
-	var claims map[string]interface{}
-	if err := json.Unmarshal(payload, &claims); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal JWT claims: %w", err)
-	}
-
-	// Log all claims for debugging
-	c.log.Debug().Interface("claims", claims).Msg("JWT claims decoded")
 
 	// Dynamically find the organization_status claim by looking for any key ending with "organization_status"
 	var orgStatus string
