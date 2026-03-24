@@ -2,6 +2,9 @@ package common
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestValidateSecretsAuthFlow(t *testing.T) {
@@ -28,40 +31,19 @@ func TestValidateSecretsAuthFlow(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := ValidateSecretsAuthFlow(tt.flow, tt.env)
 			if tt.wantErr {
-				if err == nil {
-					t.Fatal("expected error, got nil")
+				require.Error(t, err)
+				if tt.errMsg != "" {
+					require.Contains(t, err.Error(), tt.errMsg)
 				}
-				if tt.errMsg != "" && !contains(err.Error(), tt.errMsg) {
-					t.Errorf("error %q should contain %q", err.Error(), tt.errMsg)
-				}
-			} else if err != nil {
-				t.Fatalf("unexpected error: %v", err)
+			} else {
+				require.NoError(t, err)
 			}
 		})
 	}
 }
 
 func TestIsBrowserFlow(t *testing.T) {
-	if IsBrowserFlow(SecretsAuthOwnerKeySigning) {
-		t.Error("owner-key-signing should not be browser flow")
-	}
-	if !IsBrowserFlow(SecretsAuthBrowser) {
-		t.Error("browser should be browser flow")
-	}
-	if IsBrowserFlow("unknown") {
-		t.Error("unknown should not be browser flow")
-	}
-}
-
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && searchSubstring(s, substr)
-}
-
-func searchSubstring(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
+	assert.False(t, IsBrowserFlow(SecretsAuthOwnerKeySigning), "owner-key-signing should not be browser flow")
+	assert.True(t, IsBrowserFlow(SecretsAuthBrowser), "browser should be browser flow")
+	assert.False(t, IsBrowserFlow("unknown"), "unknown should not be browser flow")
 }
