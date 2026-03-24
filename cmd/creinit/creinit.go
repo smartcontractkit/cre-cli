@@ -22,10 +22,11 @@ import (
 )
 
 type Inputs struct {
-	ProjectName  string            `validate:"omitempty,project_name" cli:"project-name"`
-	TemplateName string            `validate:"omitempty" cli:"template"`
-	WorkflowName string            `validate:"omitempty,workflow_name" cli:"workflow-name"`
-	RpcURLs      map[string]string // chain-name -> url, from --rpc-url flags
+	ProjectName    string            `validate:"omitempty,project_name" cli:"project-name"`
+	TemplateName   string            `validate:"omitempty" cli:"template"`
+	WorkflowName   string            `validate:"omitempty,workflow_name" cli:"workflow-name"`
+	RpcURLs        map[string]string // chain-name -> url, from --rpc-url flags
+	NonInteractive bool
 }
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
@@ -67,6 +68,7 @@ Templates are fetched dynamically from GitHub repositories.`,
 	initCmd.Flags().StringP("template", "t", "", "Name of the template to use (e.g., kv-store-go)")
 	initCmd.Flags().Bool("refresh", false, "Bypass template cache and fetch fresh data")
 	initCmd.Flags().StringArray("rpc-url", nil, "RPC URL for a network (format: chain-name=url, repeatable)")
+	initCmd.Flags().Bool("non-interactive", false, "Fail instead of prompting; requires all inputs via flags")
 
 	// Deprecated: --template-id is kept for backwards compatibility, maps to hello-world-go
 	initCmd.Flags().Uint32("template-id", 0, "")
@@ -133,10 +135,11 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 	}
 
 	return Inputs{
-		ProjectName:  v.GetString("project-name"),
-		TemplateName: templateName,
-		WorkflowName: v.GetString("workflow-name"),
-		RpcURLs:      rpcURLs,
+		ProjectName:    v.GetString("project-name"),
+		TemplateName:   templateName,
+		WorkflowName:   v.GetString("workflow-name"),
+		RpcURLs:        rpcURLs,
+		NonInteractive: v.GetBool("non-interactive"),
 	}, nil
 }
 
@@ -169,6 +172,19 @@ func (h *handler) Execute(inputs Inputs) error {
 		return fmt.Errorf("unable to get working directory: %w", err)
 	}
 	startDir := cwd
+
+	// Respect -R / --project-root flag if provided and pointing to a directory.
+	// When -R points to a file (e.g. a project.yaml), it is used by other commands
+	// for settings loading and is not intended as a directory override for init.
+	if projectRootFlag := h.runtimeContext.Viper.GetString(settings.Flags.ProjectRoot.Name); projectRootFlag != "" {
+		absRoot, err := filepath.Abs(projectRootFlag)
+		if err != nil {
+			return fmt.Errorf("invalid --project-root path: %w", err)
+		}
+		if info, err := os.Stat(absRoot); err == nil && info.IsDir() {
+			startDir = absRoot
+		}
+	}
 
 	// Detect if we're in an existing project
 	existingProjectRoot, _, existingErr := h.findExistingProject(startDir)
@@ -218,9 +234,58 @@ func (h *handler) Execute(inputs Inputs) error {
 		}
 	}
 
+	// Non-interactive mode: validate all required inputs are present
+	if inputs.NonInteractive {
+		var missingFlags []string
+		if isNewProject && inputs.ProjectName == "" {
+			missingFlags = append(missingFlags, "--project-name")
+		}
+		if inputs.TemplateName == "" {
+			missingFlags = append(missingFlags, "--template")
+		}
+		if selectedTemplate != nil {
+			missing := MissingNetworks(selectedTemplate, inputs.RpcURLs)
+			for _, network := range missing {
+				missingFlags = append(missingFlags, fmt.Sprintf("--rpc-url=\"%s=<url>\"", network))
+			}
+			if inputs.WorkflowName == "" && selectedTemplate.ProjectDir == "" && len(selectedTemplate.Workflows) <= 1 {
+				missingFlags = append(missingFlags, "--workflow-name")
+			}
+		}
+		if len(missingFlags) > 0 {
+			ui.ErrorWithSuggestions(
+				"Non-interactive mode requires all inputs via flags",
+				missingFlags,
+			)
+			return fmt.Errorf("missing required flags for --non-interactive mode")
+		}
+	}
+
 	// Run the interactive wizard
 	result, err := RunWizard(inputs, isNewProject, startDir, workflowTemplates, selectedTemplate)
 	if err != nil {
+		// Check if this is a TTY error and we can provide better guidance
+		if strings.Contains(err.Error(), "could not open a new TTY") && selectedTemplate != nil {
+			missing := MissingNetworks(selectedTemplate, inputs.RpcURLs)
+			if len(missing) > 0 {
+				suggestions := []string{
+					"Provide the missing RPC URLs to run non-interactively:",
+				}
+				for _, network := range missing {
+					suggestions = append(suggestions, fmt.Sprintf("  --rpc-url=\"%s=<url>\"", network))
+				}
+				ui.ErrorWithSuggestions(
+					fmt.Sprintf("Template %q requires %d network RPC URL(s) not provided via flags", selectedTemplate.Name, len(missing)),
+					suggestions,
+				)
+				return fmt.Errorf("missing required --rpc-url flags for non-interactive mode")
+			}
+			ui.ErrorWithHelp(
+				"Interactive mode requires a terminal (TTY)",
+				"Provide all flags to run non-interactively: --project-name, --workflow-name, --rpc-url",
+			)
+			return fmt.Errorf("wizard error: %w", err)
+		}
 		return fmt.Errorf("wizard error: %w", err)
 	}
 	if result.Cancelled {

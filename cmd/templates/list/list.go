@@ -1,6 +1,7 @@
 package list
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -20,6 +21,8 @@ type handler struct {
 func New(runtimeContext *runtime.Context) *cobra.Command {
 	var refresh bool
 
+	var jsonOutput bool
+
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "Lists available templates",
@@ -27,16 +30,17 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			h := &handler{log: runtimeContext.Logger}
-			return h.Execute(refresh)
+			return h.Execute(refresh, jsonOutput)
 		},
 	}
 
 	cmd.Flags().BoolVar(&refresh, "refresh", false, "Bypass cache and fetch fresh data")
+	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output template list as JSON")
 
 	return cmd
 }
 
-func (h *handler) Execute(refresh bool) error {
+func (h *handler) Execute(refresh bool, jsonOutput bool) error {
 	if err := templateconfig.EnsureDefaultConfig(h.log); err != nil {
 		return fmt.Errorf("failed to initialize template config: %w", err)
 	}
@@ -68,6 +72,21 @@ func (h *handler) Execute(refresh bool) error {
 		ui.Line()
 		ui.Warning("No templates found in configured repositories")
 		ui.Line()
+		return nil
+	}
+
+	if jsonOutput {
+		var filtered []templaterepo.TemplateSummary
+		for _, t := range templates {
+			if t.Category == templaterepo.CategoryWorkflow {
+				filtered = append(filtered, t)
+			}
+		}
+		data, err := json.MarshalIndent(filtered, "", "  ")
+		if err != nil {
+			return fmt.Errorf("failed to marshal templates: %w", err)
+		}
+		fmt.Println(string(data))
 		return nil
 	}
 
@@ -107,12 +126,18 @@ func (h *handler) Execute(refresh bool) error {
 		if len(t.Tags) > 0 {
 			ui.Dim(fmt.Sprintf("    Tags: %s", strings.Join(t.Tags, ", ")))
 		}
+		if len(t.Networks) > 0 {
+			ui.Dim(fmt.Sprintf("    Networks: %s", strings.Join(t.Networks, ", ")))
+		}
 
 		ui.Line()
 	}
 
 	ui.Dim("Install a template with:")
 	ui.Command("  cre init --template=<id>")
+	ui.Line()
+	ui.Dim("If a template requires Networks, provide them with:")
+	ui.Command("  cre init --template=<id> --rpc-url=\"<chain-name>=<url>\"")
 	ui.Line()
 
 	return nil
