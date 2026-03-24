@@ -14,6 +14,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
+	"github.com/smartcontractkit/cre-cli/internal/tenantctx"
 )
 
 var (
@@ -28,6 +29,7 @@ type Context struct {
 	Settings       *settings.Settings
 	Credentials    *credentials.Credentials
 	EnvironmentSet *environments.EnvironmentSet
+	TenantContext  *tenantctx.EnvironmentContext
 	Workflow       WorkflowRuntime
 }
 
@@ -81,6 +83,31 @@ func (ctx *Context) AttachCredentials(validationCtx context.Context, skipValidat
 		}
 	}
 
+	return nil
+}
+
+// AttachTenantContext loads the user context for the current environment.
+// If the manifest is missing, it is fetched from the service first.
+func (ctx *Context) AttachTenantContext(validationCtx context.Context) error {
+	if ctx.Credentials == nil || ctx.EnvironmentSet == nil {
+		return fmt.Errorf("credentials and environment must be loaded before user context")
+	}
+
+	if err := tenantctx.EnsureContext(validationCtx, ctx.Credentials, ctx.EnvironmentSet, ctx.Logger); err != nil {
+		return fmt.Errorf("failed to ensure user context: %w", err)
+	}
+
+	envName := ctx.EnvironmentSet.EnvName
+	if envName == "" {
+		envName = environments.DefaultEnv
+	}
+
+	envCtx, err := tenantctx.LoadContext(envName)
+	if err != nil {
+		return fmt.Errorf("failed to load user context: %w", err)
+	}
+
+	ctx.TenantContext = envCtx
 	return nil
 }
 
