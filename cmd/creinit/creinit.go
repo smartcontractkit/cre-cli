@@ -27,6 +27,7 @@ type Inputs struct {
 	WorkflowName   string            `validate:"omitempty,workflow_name" cli:"workflow-name"`
 	RpcURLs        map[string]string // chain-name -> url, from --rpc-url flags
 	NonInteractive bool
+	ProjectRoot    string // from -R / --project-root flag
 }
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
@@ -47,6 +48,11 @@ Templates are fetched dynamically from GitHub repositories.`,
 			inputs, err := h.ResolveInputs(runtimeContext.Viper)
 			if err != nil {
 				return err
+			}
+
+			// Only use -R if the user explicitly passed it on the command line
+			if cmd.Flags().Changed(settings.Flags.ProjectRoot.Name) {
+				inputs.ProjectRoot = runtimeContext.Viper.GetString(settings.Flags.ProjectRoot.Name)
 			}
 			if err = h.ValidateInputs(inputs); err != nil {
 				return err
@@ -176,8 +182,8 @@ func (h *handler) Execute(inputs Inputs) error {
 	// Respect -R / --project-root flag if provided.
 	// For init, treat -R as the base directory for project creation.
 	// The directory does not need to exist yet — it will be created during scaffolding.
-	if projectRootFlag := h.runtimeContext.Viper.GetString(settings.Flags.ProjectRoot.Name); projectRootFlag != "" {
-		absRoot, err := filepath.Abs(projectRootFlag)
+	if inputs.ProjectRoot != "" {
+		absRoot, err := filepath.Abs(inputs.ProjectRoot)
 		if err != nil {
 			return fmt.Errorf("invalid --project-root path: %w", err)
 		}

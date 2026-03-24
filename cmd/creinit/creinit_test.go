@@ -9,7 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/smartcontractkit/cre-cli/internal/constants"
-	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/templaterepo"
 	"github.com/smartcontractkit/cre-cli/internal/testutil"
 	"github.com/smartcontractkit/cre-cli/internal/testutil/chainsim"
@@ -952,10 +951,10 @@ func TestInitRespectsProjectRootFlag(t *testing.T) {
 		TemplateName: "test-go",
 		WorkflowName: "mywf",
 		RpcURLs:      map[string]string{"ethereum-testnet-sepolia": "https://rpc.example.com"},
+		ProjectRoot:  targetDir,
 	}
 
 	ctx := sim.NewRuntimeContext()
-	ctx.Viper.Set(settings.Flags.ProjectRoot.Name, targetDir)
 
 	h := newHandlerWithRegistry(ctx, newMockRegistry())
 	require.NoError(t, h.ValidateInputs(inputs))
@@ -997,10 +996,10 @@ func TestInitProjectRootFlagFindsExistingProject(t *testing.T) {
 		TemplateName: "test-go",
 		WorkflowName: "new-workflow",
 		RpcURLs:      map[string]string{"ethereum-testnet-sepolia": "https://rpc.example.com"},
+		ProjectRoot:  existingProject,
 	}
 
 	ctx := sim.NewRuntimeContext()
-	ctx.Viper.Set(settings.Flags.ProjectRoot.Name, existingProject)
 
 	h := newHandlerWithRegistry(ctx, newMockRegistry())
 	require.NoError(t, h.ValidateInputs(inputs))
