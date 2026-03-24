@@ -116,9 +116,9 @@ func (h *handler) execute() error {
 		return err
 	}
 
-	h.spinner.Update("Fetching environment configuration...")
+	h.spinner.Update("Fetching user context...")
 	if err := h.fetchTenantConfig(tokenSet); err != nil {
-		h.log.Debug().Err(err).Msgf("failed to fetch tenant config — %s not written", tenantctx.ContextFile)
+		h.log.Debug().Err(err).Msgf("failed to fetch user context — %s not written", tenantctx.ContextFile)
 	}
 
 	// Stop spinner before final output

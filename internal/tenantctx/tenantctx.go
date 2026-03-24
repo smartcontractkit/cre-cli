@@ -29,7 +29,7 @@ type Registry struct {
 	SecretsAuthFlows []string `yaml:"secrets_auth_flows" json:"secretsAuthFlows"`
 }
 
-// EnvironmentContext holds tenant configuration for a single CLI environment.
+// EnvironmentContext holds user context for a single CLI environment.
 type EnvironmentContext struct {
 	TenantID         string      `yaml:"tenant_id"`
 	DefaultDonFamily string      `yaml:"default_don_family"`
@@ -69,14 +69,14 @@ const getTenantConfigQuery = `query GetTenantConfig {
   }
 }`
 
-// FetchAndWriteContext fetches the tenant configuration from the service
+// FetchAndWriteContext fetches the user context from the service
 // and writes the registry manifest to ~/.cre/<ContextFile>.
 func FetchAndWriteContext(ctx context.Context, gqlClient *graphqlclient.Client, envName string, log *zerolog.Logger) error {
 	req := graphql.NewRequest(getTenantConfigQuery)
 
 	var resp getTenantConfigResponse
 	if err := gqlClient.Execute(ctx, req, &resp); err != nil {
-		return fmt.Errorf("fetch tenant config: %w", err)
+		return fmt.Errorf("fetch user context: %w", err)
 	}
 
 	tc := resp.GetTenantConfig
@@ -200,7 +200,7 @@ func EnsureContext(ctx context.Context, creds *credentials.Credentials, envSet *
 		return nil
 	}
 
-	log.Debug().Str("env", envName).Bool("api_key", alwaysFetch).Msg("fetching tenant config")
+	log.Debug().Str("env", envName).Bool("api_key", alwaysFetch).Msg("fetching user context")
 	gqlClient := graphqlclient.New(creds, envSet, log)
 	return FetchAndWriteContext(ctx, gqlClient, envName, log)
 }
