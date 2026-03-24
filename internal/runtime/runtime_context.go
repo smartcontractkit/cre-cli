@@ -86,15 +86,15 @@ func (ctx *Context) AttachCredentials(validationCtx context.Context, skipValidat
 	return nil
 }
 
-// AttachTenantContext loads the registry manifest for the current environment.
+// AttachTenantContext loads the user context for the current environment.
 // If the manifest is missing, it is fetched from the service first.
 func (ctx *Context) AttachTenantContext(validationCtx context.Context) error {
 	if ctx.Credentials == nil || ctx.EnvironmentSet == nil {
-		return fmt.Errorf("credentials and environment must be loaded before tenant context")
+		return fmt.Errorf("credentials and environment must be loaded before user context")
 	}
 
 	if err := tenantctx.EnsureContext(validationCtx, ctx.Credentials, ctx.EnvironmentSet, ctx.Logger); err != nil {
-		return fmt.Errorf("failed to ensure tenant context: %w", err)
+		return fmt.Errorf("failed to ensure user context: %w", err)
 	}
 
 	envName := ctx.EnvironmentSet.EnvName
@@ -104,7 +104,7 @@ func (ctx *Context) AttachTenantContext(validationCtx context.Context) error {
 
 	envCtx, err := tenantctx.LoadContext(envName)
 	if err != nil {
-		return fmt.Errorf("failed to load tenant context: %w", err)
+		return fmt.Errorf("failed to load user context: %w", err)
 	}
 
 	ctx.TenantContext = envCtx

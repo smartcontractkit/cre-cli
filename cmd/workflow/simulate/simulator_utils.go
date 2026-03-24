@@ -90,6 +90,7 @@ var SupportedEVM = []ChainConfig{
 
 	// Hyperliquid
 	{Selector: chainselectors.HYPERLIQUID_TESTNET.Selector, Forwarder: "0xB27fA1c28288c50542527F64BCda22C9FbAc24CB"},
+	{Selector: chainselectors.HYPERLIQUID_MAINNET.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
 
 	// Apechain
 	{Selector: chainselectors.APECHAIN_TESTNET_CURTIS.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
@@ -110,7 +111,7 @@ var SupportedEVM = []ChainConfig{
 	{Selector: chainselectors.CELO_MAINNET.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
 
 	// Gnosis
-	// {Selector: chainselectors.GNOSIS_CHAIN_TESTNET_CHIADO.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
+	{Selector: chainselectors.GNOSIS_CHAIN_TESTNET_CHIADO.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
 	{Selector: chainselectors.GNOSIS_CHAIN_MAINNET.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
 
 	// Cronos
