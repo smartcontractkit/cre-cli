@@ -173,17 +173,19 @@ func (h *handler) Execute(inputs Inputs) error {
 	}
 	startDir := cwd
 
-	// Respect -R / --project-root flag if provided and pointing to a directory.
-	// When -R points to a file (e.g. a project.yaml), it is used by other commands
-	// for settings loading and is not intended as a directory override for init.
+	// Respect -R / --project-root flag if provided.
+	// For init, treat -R as the base directory for project creation.
+	// The directory does not need to exist yet — it will be created during scaffolding.
 	if projectRootFlag := h.runtimeContext.Viper.GetString(settings.Flags.ProjectRoot.Name); projectRootFlag != "" {
 		absRoot, err := filepath.Abs(projectRootFlag)
 		if err != nil {
 			return fmt.Errorf("invalid --project-root path: %w", err)
 		}
-		if info, err := os.Stat(absRoot); err == nil && info.IsDir() {
-			startDir = absRoot
+		// If -R points to a file, use its parent directory
+		if info, err := os.Stat(absRoot); err == nil && !info.IsDir() {
+			absRoot = filepath.Dir(absRoot)
 		}
+		startDir = absRoot
 	}
 
 	// Detect if we're in an existing project
