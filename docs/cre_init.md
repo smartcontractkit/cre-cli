@@ -19,6 +19,7 @@ cre init [optional flags]
 
 ```
   -h, --help                   help for init
+      --non-interactive        Fail instead of prompting; requires all inputs via flags
   -p, --project-name string    Name for the new project
       --refresh                Bypass template cache and fetch fresh data
       --rpc-url stringArray    RPC URL for a network (format: chain-name=url, repeatable)
