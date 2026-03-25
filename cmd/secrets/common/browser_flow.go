@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/machinebox/graphql"
@@ -111,12 +112,17 @@ func (h *Handler) executeBrowserUpsert(ctx context.Context, inputs UpsertSecrets
 
 	gqlClient := graphqlclient.New(h.Credentials, h.EnvironmentSet, h.Log)
 	gqlReq := graphql.NewRequest(createVaultAuthURLMutation)
-	gqlReq.Var("request", map[string]any{
+	reqVars := map[string]any{
 		"codeChallenge": challenge,
 		"redirectUri":   constants.AuthRedirectURI,
 		"requestDigest": digestHexString(digest),
 		"permission":    perm,
-	})
+	}
+	// Optional: bind authorization to workflow owner when configured (omit if unset).
+	if w := strings.TrimSpace(h.OwnerAddress); w != "" {
+		reqVars["workflowOwnerAddress"] = w
+	}
+	gqlReq.Var("request", reqVars)
 
 	var gqlResp struct {
 		CreateVaultAuthorizationURL struct {
