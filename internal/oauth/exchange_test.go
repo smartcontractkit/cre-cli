@@ -21,6 +21,7 @@ func TestExchangeAuthorizationCode(t *testing.T) {
 			http.Error(w, "method", http.StatusMethodNotAllowed)
 			return
 		}
+		r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 		if err := r.ParseForm(); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -32,7 +33,7 @@ func TestExchangeAuthorizationCode(t *testing.T) {
 		assert.Equal(t, "verifier", r.Form.Get("code_verifier"))
 
 		_ = json.NewEncoder(w).Encode(credentials.CreLoginTokenSet{
-			AccessToken: "a",
+			AccessToken: "a", // #nosec G101 G117 -- test fixture, not a real credential
 			TokenType:   "Bearer",
 		})
 	}))
