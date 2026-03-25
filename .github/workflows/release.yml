@@ -15,8 +15,8 @@ jobs:
       - name: release
         uses: smartcontractkit/.github/actions/cicd-changesets@82c8124faff1a1ce572b957ed63f612129b16a40 # 1.1.2
         with:
-          git-user: app-token-issuer-payments[bot]
-          git-email: app-token-issuer-payments[bot]@users.noreply.github.com
+          git-user: app-token-issuer-dev-services[bot]
+          git-email: app-token-issuer-dev-services[bot]@users.noreply.github.com
           aws-region: ${{ secrets.AWS_REGION }}
           aws-role-arn: ${{ secrets.AWS_OIDC_CRE_CLI_CI_RELEASE_TOKEN_ISSUER_ROLE_ARN }}
           aws-lambda-url: ${{ secrets.AWS_DEV_SERVICES_TOKEN_ISSUER_LAMBDA_URL }}
