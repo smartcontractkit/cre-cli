@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strings"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -44,8 +43,7 @@ type Inputs struct {
 	OwnerLabel       string `validate:"omitempty"`
 	SkipConfirmation bool
 
-	Confidential bool
-	Secrets      []string
+	Enclave string // enclave type (e.g. "nitro"); empty means non-confidential
 }
 
 func (i *Inputs) ResolveConfigURL(fallbackURL string) string {
@@ -108,8 +106,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	settings.AddSkipConfirmation(deployCmd)
 	deployCmd.Flags().StringP("output", "o", defaultOutputPath, "The output file for the compiled WASM binary encoded in base64")
 	deployCmd.Flags().StringP("owner-label", "l", "", "Label for the workflow owner (used during auto-link if owner is not already linked)")
-	deployCmd.Flags().Bool("confidential", false, "Deploy as a confidential workflow (runs in enclave)")
-	deployCmd.Flags().StringSlice("secret", nil, "VaultDON secret to request (repeatable, format: KEY or KEY:namespace)")
+	deployCmd.Flags().String("enclave", "", "Enclave type for confidential execution (e.g. \"nitro\"); prefer setting confidential.enclave in workflow.yaml")
 
 	return deployCmd
 }
@@ -177,22 +174,19 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 		WorkflowRegistryContractAddress:   h.environmentSet.WorkflowRegistryAddress,
 		OwnerLabel:                        v.GetString("owner-label"),
 		SkipConfirmation:                  v.GetBool(settings.Flags.SkipConfirmation.Name),
-		Confidential:                      v.GetBool("confidential"),
-		Secrets:                           v.GetStringSlice("secret"),
+		Enclave:                           h.resolveEnclave(v),
 	}, nil
 }
 
-func (h *handler) ValidateInputs() error {
-	if len(h.inputs.Secrets) > 0 && !h.inputs.Confidential {
-		return fmt.Errorf("--secret requires --confidential flag")
+// resolveEnclave returns the enclave type from workflow.yaml, overridden by CLI flag.
+func (h *handler) resolveEnclave(v *viper.Viper) string {
+	if cli := v.GetString("enclave"); cli != "" {
+		return cli
 	}
+	return h.settings.Workflow.ConfidentialSettings.Enclave
+}
 
-	for _, s := range h.inputs.Secrets {
-		key, _, _ := strings.Cut(s, ":")
-		if strings.TrimSpace(key) == "" {
-			return fmt.Errorf("--secret value %q has empty key", s)
-		}
-	}
+func (h *handler) ValidateInputs() error {
 
 	validate, err := validation.NewValidator()
 	if err != nil {
@@ -318,11 +312,8 @@ func (h *handler) displayWorkflowDetails() {
 	ui.Title(fmt.Sprintf("Deploying Workflow: %s", h.inputs.WorkflowName))
 	ui.Dim(fmt.Sprintf("Target:        %s", h.settings.User.TargetName))
 	ui.Dim(fmt.Sprintf("Owner Address: %s", h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress))
-	if h.inputs.Confidential {
-		ui.Dim("Confidential:  yes")
-		if len(h.inputs.Secrets) > 0 {
-			ui.Dim(fmt.Sprintf("Secrets:       %s", strings.Join(h.inputs.Secrets, ", ")))
-		}
+	if h.inputs.Enclave != "" {
+		ui.Dim(fmt.Sprintf("Enclave:       %s", h.inputs.Enclave))
 	}
 	ui.Line()
 }

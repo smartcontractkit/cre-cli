@@ -4,7 +4,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -154,22 +153,13 @@ func (h *handler) handleUpsert(params client.RegisterWorkflowV2Parameters) error
 }
 
 func (h *handler) buildAttributes() ([]byte, error) {
-	if !h.inputs.Confidential {
+	if h.inputs.Enclave == "" {
 		return []byte{}, nil
 	}
 
-	secrets := make([]secretIdentifier, 0, len(h.inputs.Secrets))
-	for _, s := range h.inputs.Secrets {
-		key, ns, _ := strings.Cut(s, ":")
-		secrets = append(secrets, secretIdentifier{
-			Key:       key,
-			Namespace: ns,
-		})
-	}
-
 	attrs := workflowAttributes{
-		Confidential:    true,
-		VaultDonSecrets: secrets,
+		Confidential: true,
+		Enclave:      h.inputs.Enclave,
 	}
 
 	data, err := json.Marshal(attrs)
@@ -180,11 +170,6 @@ func (h *handler) buildAttributes() ([]byte, error) {
 }
 
 type workflowAttributes struct {
-	Confidential    bool               `json:"confidential"`
-	VaultDonSecrets []secretIdentifier `json:"vault_don_secrets,omitempty"`
-}
-
-type secretIdentifier struct {
-	Key       string `json:"key"`
-	Namespace string `json:"namespace,omitempty"`
+	Confidential bool   `json:"confidential"`
+	Enclave      string `json:"enclave,omitempty"`
 }

@@ -89,10 +89,18 @@ type WorkflowSettings struct {
 		ConfigPath   string `mapstructure:"config-path" yaml:"config-path"`
 		SecretsPath  string `mapstructure:"secrets-path" yaml:"secrets-path"`
 	} `mapstructure:"workflow-artifacts" yaml:"workflow-artifacts"`
+	ConfidentialSettings struct {
+		Enclave string `mapstructure:"enclave" yaml:"enclave"`
+	} `mapstructure:"confidential" yaml:"confidential"`
 	LoggingSettings struct {
 		SethConfigPath string `mapstructure:"seth-config-path" yaml:"seth-config-path"`
 	} `mapstructure:"logging" yaml:"logging"`
 	RPCs []RpcEndpoint `mapstructure:"rpcs" yaml:"rpcs"`
+}
+
+// IsConfidential returns true if the workflow has a non-empty enclave setting.
+func (w *WorkflowSettings) IsConfidential() bool {
+	return w.ConfidentialSettings.Enclave != ""
 }
 
 func loadWorkflowSettings(logger *zerolog.Logger, v *viper.Viper, cmd *cobra.Command, registryChainName string) (WorkflowSettings, error) {
@@ -131,6 +139,7 @@ func loadWorkflowSettings(logger *zerolog.Logger, v *viper.Viper, cmd *cobra.Com
 	workflowSettings.WorkflowArtifactSettings.ConfigPath = getSetting(ConfigPathSettingName)
 	workflowSettings.WorkflowArtifactSettings.SecretsPath = getSetting(SecretsPathSettingName)
 	workflowSettings.LoggingSettings.SethConfigPath = getSetting(SethConfigPathSettingName)
+	workflowSettings.ConfidentialSettings.Enclave = getSetting(ConfidentialEnclaveSettingName)
 	fullRPCsKey := fmt.Sprintf("%s.%s", target, RpcsSettingName)
 	if v.IsSet(fullRPCsKey) {
 		if err := v.UnmarshalKey(fullRPCsKey, &workflowSettings.RPCs); err != nil {

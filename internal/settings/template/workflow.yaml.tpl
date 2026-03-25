@@ -13,6 +13,8 @@
 #     workflow-path: "./main.ts"            # Path to workflow entry point
 #     config-path: "./config.yaml"          # Path to config file
 #     secrets-path: "../secrets.yaml"       # Path to secrets file (project root by default)
+#   confidential:                           # Optional: run workflow in a TEE
+#     enclave: "nitro"                      # Enclave type (e.g. "nitro")
 
 # ==========================================================================
 staging-settings:

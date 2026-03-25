@@ -19,6 +19,7 @@ const (
 	ConfigPathSettingName         = "workflow-artifacts.config-path"
 	SecretsPathSettingName        = "workflow-artifacts.secrets-path"
 	SethConfigPathSettingName     = "logging.seth-config-path"
+	ConfidentialEnclaveSettingName = "confidential.enclave"
 	RegistriesSettingName         = "contracts.registries"
 	KeystoneSettingName           = "contracts.keystone"
 	RpcsSettingName               = "rpcs"
