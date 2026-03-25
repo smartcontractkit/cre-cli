@@ -226,8 +226,8 @@ func (h *Handler) LogMSIGNextSteps(txData string, digest [32]byte, bundlePath st
 	return nil
 }
 
-// EncryptSecrets takes the raw secrets and encrypts them, returning pointers.
-func (h *Handler) EncryptSecrets(rawSecrets UpsertSecretsInputs) ([]*vault.EncryptedSecret, error) {
+// fetchVaultMasterPublicKeyHex loads the vault master public key from the gateway (publicKey/get).
+func (h *Handler) fetchVaultMasterPublicKeyHex() (string, error) {
 	requestID := uuid.New().String()
 	getPublicKeyRequest := jsonrpc2.Request[vault.GetPublicKeyRequest]{
 		Version: jsonrpc2.JsonRpcVersion,
@@ -238,38 +238,47 @@ func (h *Handler) EncryptSecrets(rawSecrets UpsertSecretsInputs) ([]*vault.Encry
 
 	reqBody, err := json.Marshal(getPublicKeyRequest)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal public key request: %w", err)
+		return "", fmt.Errorf("failed to marshal public key request: %w", err)
 	}
 
 	respBody, status, err := h.Gw.Post(reqBody)
 	if err != nil {
-		return nil, fmt.Errorf("gateway POST failed: %w", err)
+		return "", fmt.Errorf("gateway POST failed: %w", err)
 	}
 	if status != http.StatusOK {
-		return nil, fmt.Errorf("gateway returned non-200: %d body=%s", status, string(respBody))
+		return "", fmt.Errorf("gateway returned non-200: %d body=%s", status, string(respBody))
 	}
 
 	var rpcResp jsonrpc2.Response[vault.GetPublicKeyResponse]
 	if err := json.Unmarshal(respBody, &rpcResp); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal public key response: %w", err)
+		return "", fmt.Errorf("failed to unmarshal public key response: %w", err)
 	}
 	if rpcResp.Error != nil {
-		return nil, fmt.Errorf("vault public key fetch error: %s", rpcResp.Error.Error())
+		return "", fmt.Errorf("vault public key fetch error: %s", rpcResp.Error.Error())
 	}
 	if rpcResp.Version != jsonrpc2.JsonRpcVersion {
-		return nil, fmt.Errorf("jsonrpc version mismatch: got %q", rpcResp.Version)
+		return "", fmt.Errorf("jsonrpc version mismatch: got %q", rpcResp.Version)
 	}
 	if rpcResp.ID != requestID {
-		return nil, fmt.Errorf("jsonrpc id mismatch: got %q want %q", rpcResp.ID, requestID)
+		return "", fmt.Errorf("jsonrpc id mismatch: got %q want %q", rpcResp.ID, requestID)
 	}
 	if rpcResp.Method != vaulttypes.MethodPublicKeyGet {
-		return nil, fmt.Errorf("jsonrpc method mismatch: got %q", rpcResp.Method)
+		return "", fmt.Errorf("jsonrpc method mismatch: got %q", rpcResp.Method)
 	}
 	if rpcResp.Result == nil || rpcResp.Result.PublicKey == "" {
-		return nil, fmt.Errorf("empty result in public key response")
+		return "", fmt.Errorf("empty result in public key response")
 	}
 
-	pubKeyHex := rpcResp.Result.PublicKey
+	return rpcResp.Result.PublicKey, nil
+}
+
+// EncryptSecrets takes the raw secrets and encrypts them, returning pointers.
+// Owner-key flow: TDH2 label is the workflow owner address left-padded to 32 bytes; SecretIdentifier.Owner is the same hex address string.
+func (h *Handler) EncryptSecrets(rawSecrets UpsertSecretsInputs) ([]*vault.EncryptedSecret, error) {
+	pubKeyHex, err := h.fetchVaultMasterPublicKeyHex()
+	if err != nil {
+		return nil, err
+	}
 
 	encryptedSecrets := make([]*vault.EncryptedSecret, 0, len(rawSecrets))
 	for _, item := range rawSecrets {
@@ -291,49 +300,14 @@ func (h *Handler) EncryptSecrets(rawSecrets UpsertSecretsInputs) ([]*vault.Encry
 }
 
 // EncryptSecretsForBrowserOrg encrypts secrets scoped to the signed-in organization (interactive sign-in flow).
+// TDH2 label is SHA256(orgID); SecretIdentifier.Owner is the org id string. This is a separate binding from the
+// owner-key path (EOA left-padded label + workflow owner address); both remain supported via their respective entrypoints.
 func (h *Handler) EncryptSecretsForBrowserOrg(rawSecrets UpsertSecretsInputs, orgID string) ([]*vault.EncryptedSecret, error) {
-	requestID := uuid.New().String()
-	getPublicKeyRequest := jsonrpc2.Request[vault.GetPublicKeyRequest]{
-		Version: jsonrpc2.JsonRpcVersion,
-		ID:      requestID,
-		Method:  vaulttypes.MethodPublicKeyGet,
-		Params:  &vault.GetPublicKeyRequest{},
-	}
-
-	reqBody, err := json.Marshal(getPublicKeyRequest)
+	pubKeyHex, err := h.fetchVaultMasterPublicKeyHex()
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal public key request: %w", err)
+		return nil, err
 	}
 
-	respBody, status, err := h.Gw.Post(reqBody)
-	if err != nil {
-		return nil, fmt.Errorf("gateway POST failed: %w", err)
-	}
-	if status != http.StatusOK {
-		return nil, fmt.Errorf("gateway returned non-200: %d body=%s", status, string(respBody))
-	}
-
-	var rpcResp jsonrpc2.Response[vault.GetPublicKeyResponse]
-	if err := json.Unmarshal(respBody, &rpcResp); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal public key response: %w", err)
-	}
-	if rpcResp.Error != nil {
-		return nil, fmt.Errorf("vault public key fetch error: %s", rpcResp.Error.Error())
-	}
-	if rpcResp.Version != jsonrpc2.JsonRpcVersion {
-		return nil, fmt.Errorf("jsonrpc version mismatch: got %q", rpcResp.Version)
-	}
-	if rpcResp.ID != requestID {
-		return nil, fmt.Errorf("jsonrpc id mismatch: got %q want %q", rpcResp.ID, requestID)
-	}
-	if rpcResp.Method != vaulttypes.MethodPublicKeyGet {
-		return nil, fmt.Errorf("jsonrpc method mismatch: got %q", rpcResp.Method)
-	}
-	if rpcResp.Result == nil || rpcResp.Result.PublicKey == "" {
-		return nil, fmt.Errorf("empty result in public key response")
-	}
-
-	pubKeyHex := rpcResp.Result.PublicKey
 	label := sha256.Sum256([]byte(orgID))
 
 	encryptedSecrets := make([]*vault.EncryptedSecret, 0, len(rawSecrets))
@@ -377,6 +351,7 @@ func encryptSecretWithLabel(secret, masterPublicKeyHex string, label [32]byte) (
 	return hex.EncodeToString(cipherBytes), nil
 }
 
+// EncryptSecret encrypts for the owner-key / web3 flow using a 32-byte label derived from the EOA (12 zero bytes + 20-byte address).
 func EncryptSecret(secret, masterPublicKeyHex string, ownerAddress string) (string, error) {
 	addr := common.HexToAddress(ownerAddress) // canonical 20-byte address
 	var label [32]byte
