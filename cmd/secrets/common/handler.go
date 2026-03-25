@@ -106,7 +106,7 @@ func NewHandler(ctx *runtime.Context, secretsFilePath string) (*Handler, error) 
 
 // EnsureDeploymentRPCForOwnerKeySecrets checks project settings for an RPC URL on the workflow registry chain (owner-key / allowlist flows only).
 func (h *Handler) EnsureDeploymentRPCForOwnerKeySecrets() error {
-	return settings.ValidateDeploymentRPCForChain(&h.Settings.Workflow, h.EnvironmentSet.WorkflowRegistryChainName)
+	return settings.ValidateDeploymentRPC(&h.Settings.Workflow, h.EnvironmentSet.WorkflowRegistryChainName)
 }
 
 // ResolveInputs loads secrets from a YAML file.
