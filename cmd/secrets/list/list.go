@@ -79,6 +79,12 @@ func New(ctx *runtime.Context) *cobra.Command {
 
 // Execute performs: build request → (MSIG step 1 bundle OR EOA allowlist+post) → parse.
 func Execute(h *common.Handler, namespace string, duration time.Duration, secretsAuth string) error {
+	if !common.IsBrowserFlow(secretsAuth) {
+		if err := h.EnsureDeploymentRPCForOwnerKeySecrets(); err != nil {
+			return err
+		}
+	}
+
 	spinner := ui.NewSpinner()
 	spinner.Start("Verifying ownership...")
 	if err := h.EnsureOwnerLinkedOrFail(); err != nil {

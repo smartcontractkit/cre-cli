@@ -151,7 +151,7 @@ func loadWorkflowSettings(logger *zerolog.Logger, v *viper.Viper, cmd *cobra.Com
 	}
 
 	if registryChainName != "" {
-		if err := validateDeploymentRPC(&workflowSettings, registryChainName); err != nil {
+		if err := ValidateDeploymentRPCForChain(&workflowSettings, registryChainName); err != nil {
 			return WorkflowSettings{}, errors.Wrap(err, "for target "+target)
 		}
 	}
@@ -272,6 +272,15 @@ func ShouldSkipGetOwner(cmd *cobra.Command) bool {
 	default:
 		return false
 	}
+}
+
+// ValidateDeploymentRPCForChain ensures project settings define a valid RPC URL for the given chain
+// (for example the workflow registry chain used for on-chain allowlisting).
+func ValidateDeploymentRPCForChain(config *WorkflowSettings, chainName string) error {
+	if chainName == "" {
+		return nil
+	}
+	return validateDeploymentRPC(config, chainName)
 }
 
 func validateDeploymentRPC(config *WorkflowSettings, chainName string) error {
