@@ -72,9 +72,22 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 		Use:     "simulate <workflow-folder-path>",
 		Short:   "Simulates a workflow",
 		Long:    `This command simulates a workflow.`,
-		Args:    cobra.ExactArgs(1),
+		Args:    cobra.RangeArgs(0, 1),
 		Example: `cre workflow simulate ./my-workflow`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if showChains, _ := cmd.Flags().GetBool("supported-chains"); showChains {
+				names := SupportedChainNames()
+				fmt.Println("Supported chain names:")
+				for _, name := range names {
+					fmt.Printf("  %s\n", name)
+				}
+				return nil
+			}
+
+			if len(args) == 0 {
+				return fmt.Errorf("accepts 1 arg(s), received 0")
+			}
+
 			handler := newHandler(runtimeContext)
 
 			inputs, err := handler.ResolveInputs(runtimeContext.Viper, runtimeContext.Settings)
@@ -103,6 +116,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	simulateCmd.Flags().String("evm-tx-hash", "", "EVM trigger transaction hash (0x...)")
 	simulateCmd.Flags().Int("evm-event-index", -1, "EVM trigger log index (0-based)")
 	simulateCmd.Flags().String("limits", "default", "Production limits to enforce during simulation: 'default' for prod defaults, path to a limits JSON file (e.g. from 'cre workflow limits export'), or 'none' to disable")
+	simulateCmd.Flags().Bool("supported-chains", false, "List all supported chain names and exit")
 	return simulateCmd
 }
 
@@ -207,14 +221,28 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 	}
 
 	if len(clients) == 0 {
-		return Inputs{}, fmt.Errorf("no RPC URLs found for supported or experimental chains")
+		target, _ := settings.GetTarget(v)
+		if target == "" {
+			target = "(none)"
+		}
+		return Inputs{}, fmt.Errorf(
+			"no RPC URLs found for target %q\n\n"+
+				"To fix:\n"+
+				"  • Check that your workflow.yaml has an 'rpcs' section under the target %q\n"+
+				"  • Ensure chain names are valid (run 'cre workflow simulate --supported-chains' to see all supported names)\n"+
+				"  • Verify the correct target is selected via --target or CRE_TARGET",
+			target, target,
+		)
 	}
 
 	pk, err := crypto.HexToECDSA(creSettings.User.EthPrivateKey)
 	if err != nil {
 		if v.GetBool("broadcast") {
 			return Inputs{}, fmt.Errorf(
-				"failed to parse private key, required to broadcast. Please check CRE_ETH_PRIVATE_KEY in your .env file or system environment: %w", err)
+				"invalid private key (required for --broadcast): expected 64 hex characters, got %d.\n"+
+					"Please check CRE_ETH_PRIVATE_KEY in your .env file or system environment.\n"+
+					"The 0x prefix is supported and stripped automatically",
+				len(creSettings.User.EthPrivateKey))
 		}
 		pk, err = crypto.HexToECDSA("0000000000000000000000000000000000000000000000000000000000000001")
 		if err != nil {
