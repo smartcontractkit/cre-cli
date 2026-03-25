@@ -48,7 +48,7 @@ func SetWorkflowPathInFile(workflowYAMLPath, newPath string) error {
 }
 
 func workflowPathFromRaw(raw map[string]interface{}) (string, error) {
-	for _, key := range []string{"staging-settings", "production-settings"} {
+	for key := range raw {
 		target, _ := raw[key].(map[string]interface{})
 		if target == nil {
 			continue
@@ -57,7 +57,8 @@ func workflowPathFromRaw(raw map[string]interface{}) (string, error) {
 		if artifacts == nil {
 			continue
 		}
-		if p, ok := artifacts["workflow-path"].(string); ok && p != "" {
+		p, ok := artifacts["workflow-path"].(string)
+		if ok && p != "" {
 			return p, nil
 		}
 	}
@@ -138,6 +139,15 @@ func loadWorkflowSettings(logger *zerolog.Logger, v *viper.Viper, cmd *cobra.Com
 		}
 	} else {
 		logger.Debug().Msgf("rpcs settings not found in target %q", target)
+	}
+
+	for i := range workflowSettings.RPCs {
+		resolved, err := ResolveEnvVars(workflowSettings.RPCs[i].Url)
+		if err != nil {
+			return WorkflowSettings{}, fmt.Errorf("rpc url for chain %q: %w",
+				workflowSettings.RPCs[i].ChainName, err)
+		}
+		workflowSettings.RPCs[i].Url = resolved
 	}
 
 	if registryChainName != "" {
@@ -251,6 +261,8 @@ func IsValidChainName(name string) error {
 func ShouldSkipGetOwner(cmd *cobra.Command) bool {
 	switch cmd.Name() {
 	case "help":
+		return true
+	case "hash":
 		return true
 	case "simulate":
 		// Treat missing/invalid flag as false (i.e., skip).

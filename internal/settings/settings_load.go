@@ -34,6 +34,7 @@ type flagNames struct {
 	Owner                Flag
 	ProjectRoot          Flag
 	CliEnvFile           Flag
+	CliPublicEnvFile     Flag
 	Verbose              Flag
 	Target               Flag
 	OverridePreviousRoot Flag
@@ -51,6 +52,7 @@ var Flags = flagNames{
 	Owner:                Flag{"owner", "o"},
 	ProjectRoot:          Flag{"project-root", "R"},
 	CliEnvFile:           Flag{"env", "e"},
+	CliPublicEnvFile:     Flag{"public-env", "E"},
 	Verbose:              Flag{"verbose", "v"},
 	Target:               Flag{"target", "T"},
 	OverridePreviousRoot: Flag{"override-previous-root", "O"},

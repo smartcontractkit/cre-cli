@@ -9,6 +9,8 @@ import (
 	"strings"
 
 	"github.com/smartcontractkit/cre-cli/internal/constants"
+	"github.com/smartcontractkit/cre-cli/internal/settings"
+	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
 const makefileName = "Makefile"
@@ -16,7 +18,8 @@ const makefileName = "Makefile"
 var defaultWasmOutput = filepath.Join("wasm", "workflow.wasm")
 
 // getBuildCmd returns a single step that builds the workflow and returns the WASM bytes.
-func getBuildCmd(workflowRootFolder, mainFile, language string) (func() ([]byte, error), error) {
+// If stripSymbols is true, debug symbols are stripped from the binary to reduce size.
+func getBuildCmd(workflowRootFolder, mainFile, language string, stripSymbols bool) (func() ([]byte, error), error) {
 	tmpPath := filepath.Join(workflowRootFolder, ".cre_build_tmp.wasm")
 	switch language {
 	case constants.WorkflowLanguageTypeScript:
@@ -33,11 +36,17 @@ func getBuildCmd(workflowRootFolder, mainFile, language string) (func() ([]byte,
 		}, nil
 	case constants.WorkflowLanguageGolang:
 		// Build the package (.) so all .go files (main.go, workflow.go, etc.) are compiled together
+		ldflags := "-buildid="
+		if stripSymbols {
+			ldflags = "-buildid= -w -s"
+		}
 		cmd := exec.Command(
 			"go", "build",
 			"-o", tmpPath,
 			"-trimpath",
-			"-ldflags=-buildid= -w -s",
+			"-buildvcs=false",
+			"-mod=readonly",
+			"-ldflags="+ldflags,
 			".",
 		)
 		cmd.Dir = workflowRootFolder
@@ -68,11 +77,17 @@ func getBuildCmd(workflowRootFolder, mainFile, language string) (func() ([]byte,
 		}, nil
 	default:
 		// Build the package (.) so all .go files are compiled together
+		ldflags := "-buildid="
+		if stripSymbols {
+			ldflags = "-buildid= -w -s"
+		}
 		cmd := exec.Command(
 			"go", "build",
 			"-o", tmpPath,
 			"-trimpath",
-			"-ldflags=-buildid= -w -s",
+			"-buildvcs=false",
+			"-mod=readonly",
+			"-ldflags="+ldflags,
 			".",
 		)
 		cmd.Dir = workflowRootFolder
@@ -90,8 +105,10 @@ func getBuildCmd(workflowRootFolder, mainFile, language string) (func() ([]byte,
 }
 
 // CompileWorkflowToWasm compiles the workflow at workflowPath and returns the WASM binary.
-// It runs the sequence of commands from getBuildCmds (make build + copy for WASM, or single build for Go/TS), then reads the temp WASM file.
-func CompileWorkflowToWasm(workflowPath string) ([]byte, error) {
+// If stripSymbols is true, debug symbols are stripped to reduce binary size (used for deploy).
+// If false, debug symbols are kept for better error messages (used for simulate).
+// For custom builds (WASM language with Makefile), stripSymbols has no effect.
+func CompileWorkflowToWasm(workflowPath string, stripSymbols bool) ([]byte, error) {
 	workflowRootFolder, workflowMainFile, err := WorkflowPathRootAndMain(workflowPath)
 	if err != nil {
 		return nil, fmt.Errorf("workflow path: %w", err)
@@ -114,6 +131,7 @@ func CompileWorkflowToWasm(workflowPath string) ([]byte, error) {
 		if err := EnsureTool("go"); err != nil {
 			return nil, errors.New("go toolchain is required for Go workflows but was not found in PATH; install from https://go.dev/dl")
 		}
+		warnGOTOOLCHAIN()
 	case constants.WorkflowLanguageWasm:
 		if err := EnsureTool("make"); err != nil {
 			return nil, errors.New("make is required for WASM workflows but was not found in PATH")
@@ -122,7 +140,7 @@ func CompileWorkflowToWasm(workflowPath string) ([]byte, error) {
 		return nil, fmt.Errorf("unsupported workflow language for file %s", workflowMainFile)
 	}
 
-	buildStep, err := getBuildCmd(workflowRootFolder, workflowMainFile, language)
+	buildStep, err := getBuildCmd(workflowRootFolder, workflowMainFile, language, stripSymbols)
 	if err != nil {
 		return nil, err
 	}
@@ -131,6 +149,25 @@ func CompileWorkflowToWasm(workflowPath string) ([]byte, error) {
 		return nil, fmt.Errorf("failed to compile workflow: %w", err)
 	}
 	return wasm, nil
+}
+
+func warnGOTOOLCHAIN() {
+	tc := os.Getenv("GOTOOLCHAIN")
+	if tc == "" {
+		ui.Warning("GOTOOLCHAIN is not set; the build may not be reproducible across environments. Set it in your .env.public file (e.g. GOTOOLCHAIN=go1.25.3).")
+		return
+	}
+
+	envFile := settings.LoadedPublicEnvFilePath()
+	if envFile == "" {
+		ui.Warning(fmt.Sprintf("GOTOOLCHAIN=%s is set, but no .env.public file was loaded. The build will not be reproducible for others without the same environment variable.", tc))
+		return
+	}
+
+	envVars := settings.LoadedPublicEnvVars()
+	if _, ok := envVars["GOTOOLCHAIN"]; !ok {
+		ui.Warning(fmt.Sprintf("GOTOOLCHAIN=%s is set, but is not in %s. The build will not be reproducible for others without the same environment variable.", tc, envFile))
+	}
 }
 
 // findMakefileRoot walks up from dir and returns the first directory that contains a Makefile.
