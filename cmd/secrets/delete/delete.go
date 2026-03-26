@@ -108,6 +108,12 @@ func New(ctx *runtime.Context) *cobra.Command {
 //   - MSIG step 1: build request, compute digest, write bundle, print steps
 //   - EOA: allowlist if needed, then POST to gateway
 func Execute(h *common.Handler, inputs DeleteSecretsInputs, duration time.Duration, secretsAuth string) error {
+	if !common.IsBrowserFlow(secretsAuth) {
+		if err := h.EnsureDeploymentRPCForOwnerKeySecrets(); err != nil {
+			return err
+		}
+	}
+
 	spinner := ui.NewSpinner()
 	spinner.Start("Verifying ownership...")
 	if err := h.EnsureOwnerLinkedOrFail(); err != nil {
