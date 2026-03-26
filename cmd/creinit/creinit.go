@@ -11,6 +11,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"golang.org/x/term"
 
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
@@ -187,9 +188,9 @@ func (h *handler) Execute(inputs Inputs) error {
 		if err != nil {
 			return fmt.Errorf("invalid --project-root path: %w", err)
 		}
-		// If -R points to a file, use its parent directory
+		// If -R points to a file, that's a user error — it must be a directory
 		if info, err := os.Stat(absRoot); err == nil && !info.IsDir() {
-			absRoot = filepath.Dir(absRoot)
+			return fmt.Errorf("--project-root %q is a file, not a directory", inputs.ProjectRoot)
 		}
 		startDir = absRoot
 	}
@@ -272,27 +273,25 @@ func (h *handler) Execute(inputs Inputs) error {
 	// Run the interactive wizard
 	result, err := RunWizard(inputs, isNewProject, startDir, workflowTemplates, selectedTemplate)
 	if err != nil {
-		// Check if this is a TTY error and we can provide better guidance
-		if strings.Contains(err.Error(), "could not open a new TTY") && selectedTemplate != nil {
-			missing := MissingNetworks(selectedTemplate, inputs.RpcURLs)
-			if len(missing) > 0 {
-				suggestions := []string{
-					"Provide the missing RPC URLs to run non-interactively:",
-				}
+		// If stdin is not a terminal, the wizard will fail trying to open a TTY.
+		// Detect this via term.IsTerminal rather than matching third-party error strings.
+		if !term.IsTerminal(int(os.Stdin.Fd())) { // #nosec G115 -- stdin fd is always 0
+			var suggestions []string
+			if selectedTemplate != nil {
+				missing := MissingNetworks(selectedTemplate, inputs.RpcURLs)
 				for _, network := range missing {
-					suggestions = append(suggestions, fmt.Sprintf("  --rpc-url=\"%s=<url>\"", network))
+					suggestions = append(suggestions, fmt.Sprintf("--rpc-url=\"%s=<url>\"", network))
 				}
+			}
+			if len(suggestions) > 0 {
 				ui.ErrorWithSuggestions(
-					fmt.Sprintf("Template %q requires %d network RPC URL(s) not provided via flags", selectedTemplate.Name, len(missing)),
+					"Interactive mode requires a terminal (TTY). Provide the missing flags to run non-interactively",
 					suggestions,
 				)
-				return fmt.Errorf("missing required --rpc-url flags for non-interactive mode")
+			} else {
+				ui.Error("Interactive mode requires a terminal (TTY). Use --non-interactive with all required flags, or run in a terminal")
 			}
-			ui.ErrorWithHelp(
-				"Interactive mode requires a terminal (TTY)",
-				"Provide all flags to run non-interactively: --project-name, --workflow-name, --rpc-url",
-			)
-			return fmt.Errorf("wizard error: %w", err)
+			return fmt.Errorf("interactive mode requires a terminal (TTY)")
 		}
 		return fmt.Errorf("wizard error: %w", err)
 	}

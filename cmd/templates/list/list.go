@@ -7,22 +7,26 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/templateconfig"
 	"github.com/smartcontractkit/cre-cli/internal/templaterepo"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
+	"github.com/smartcontractkit/cre-cli/internal/validation"
 )
 
+type Inputs struct {
+	Refresh    bool
+	JSONOutput bool
+}
+
 type handler struct {
-	log *zerolog.Logger
+	log       *zerolog.Logger
+	validated bool
 }
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
-	var refresh bool
-
-	var jsonOutput bool
-
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "Lists available templates",
@@ -30,17 +34,52 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			h := &handler{log: runtimeContext.Logger}
-			return h.Execute(refresh, jsonOutput)
+
+			inputs, err := h.ResolveInputs(runtimeContext.Viper)
+			if err != nil {
+				return err
+			}
+
+			if err := h.ValidateInputs(inputs); err != nil {
+				return err
+			}
+
+			return h.Execute(inputs)
 		},
 	}
 
-	cmd.Flags().BoolVar(&refresh, "refresh", false, "Bypass cache and fetch fresh data")
-	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output template list as JSON")
+	cmd.Flags().Bool("refresh", false, "Bypass cache and fetch fresh data")
+	cmd.Flags().Bool("json", false, "Output template list as JSON")
 
 	return cmd
 }
 
-func (h *handler) Execute(refresh bool, jsonOutput bool) error {
+func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
+	return Inputs{
+		Refresh:    v.GetBool("refresh"),
+		JSONOutput: v.GetBool("json"),
+	}, nil
+}
+
+func (h *handler) ValidateInputs(inputs Inputs) error {
+	validator, err := validation.NewValidator()
+	if err != nil {
+		return fmt.Errorf("failed to create validator: %w", err)
+	}
+
+	if err := validator.Struct(inputs); err != nil {
+		return fmt.Errorf("validation failed: %w", err)
+	}
+
+	h.validated = true
+	return nil
+}
+
+func (h *handler) Execute(inputs Inputs) error {
+	if !h.validated {
+		return fmt.Errorf("handler inputs not validated")
+	}
+
 	if err := templateconfig.EnsureDefaultConfig(h.log); err != nil {
 		return fmt.Errorf("failed to initialize template config: %w", err)
 	}
@@ -62,7 +101,7 @@ func (h *handler) Execute(refresh bool, jsonOutput bool) error {
 
 	spinner := ui.NewSpinner()
 	spinner.Start("Fetching templates...")
-	templates, err := registry.ListTemplates(refresh)
+	templates, err := registry.ListTemplates(inputs.Refresh)
 	spinner.Stop()
 	if err != nil {
 		return fmt.Errorf("failed to list templates: %w", err)
@@ -75,7 +114,7 @@ func (h *handler) Execute(refresh bool, jsonOutput bool) error {
 		return nil
 	}
 
-	if jsonOutput {
+	if inputs.JSONOutput {
 		var filtered []templaterepo.TemplateSummary
 		for _, t := range templates {
 			if t.Category == templaterepo.CategoryWorkflow {
