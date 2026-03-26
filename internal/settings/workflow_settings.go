@@ -150,10 +150,8 @@ func loadWorkflowSettings(logger *zerolog.Logger, v *viper.Viper, cmd *cobra.Com
 		workflowSettings.RPCs[i].Url = resolved
 	}
 
-	if registryChainName != "" {
-		if err := validateDeploymentRPC(&workflowSettings, registryChainName); err != nil {
-			return WorkflowSettings{}, errors.Wrap(err, "for target "+target)
-		}
+	if err := ValidateDeploymentRPC(&workflowSettings, registryChainName); err != nil {
+		return WorkflowSettings{}, errors.Wrap(err, "for target "+target)
 	}
 
 	if err := validateSettings(&workflowSettings); err != nil {
@@ -274,7 +272,12 @@ func ShouldSkipGetOwner(cmd *cobra.Command) bool {
 	}
 }
 
-func validateDeploymentRPC(config *WorkflowSettings, chainName string) error {
+// ValidateDeploymentRPC ensures project settings define a valid RPC URL for chainName (e.g. the workflow
+// registry chain). It is a no-op when chainName is empty. Used during settings load and from secrets owner-key flows.
+func ValidateDeploymentRPC(config *WorkflowSettings, chainName string) error {
+	if chainName == "" {
+		return nil
+	}
 	deploymentRPCFound := false
 	deploymentRPCURL := ""
 	commonError := " - required to deploy CRE workflows"
