@@ -29,6 +29,13 @@ const createVaultAuthURLMutation = `mutation CreateVaultAuthorizationUrl($reques
   }
 }`
 
+const exchangeAuthCodeToTokenMutation = `mutation ExchangeAuthCodeToToken($request: AuthCodeTokenExchangeRequest!) {
+  exchangeAuthCodeToToken(request: $request) {
+    accessToken
+    expiresIn
+  }
+}`
+
 // vaultPermissionForMethod returns the API permission name for the given vault operation.
 func vaultPermissionForMethod(method string) (string, error) {
 	switch method {
@@ -47,7 +54,8 @@ func digestHexString(digest [32]byte) string {
 
 // executeBrowserUpsert handles secrets create/update when the user signs in with their organization account.
 // It encrypts the payload, binds a digest, requests a platform authorization URL, completes OAuth in the browser,
-// exchanges the code for tokens, and saves credentials.
+// and exchanges the code via the platform for a short-lived vault JWT (for future DON gateway submission).
+// Login tokens in ~/.cre/cre.yaml are not modified; that session stays separate from this vault-only token.
 func (h *Handler) executeBrowserUpsert(ctx context.Context, inputs UpsertSecretsInputs, method string) error {
 	if h.Credentials.AuthType == credentials.AuthTypeApiKey {
 		return fmt.Errorf("this sign-in flow requires an interactive login; API keys are not supported")
@@ -139,13 +147,7 @@ func (h *Handler) executeBrowserUpsert(ctx context.Context, inputs UpsertSecrets
 		return fmt.Errorf("could not complete the authorization request")
 	}
 
-	oauthIssuerBase, err := oauth.OAuthServerBaseFromAuthorizeURL(authURL)
-	if err != nil {
-		return fmt.Errorf("invalid authorization URL from server: %w", err)
-	}
 	platformState, _ := oauth.StateFromAuthorizeURL(authURL)
-	oauthClientIDFromURL, _ := oauth.ClientIDFromAuthorizeURL(authURL)
-	oauthClientIDForExchange := strings.TrimSpace(oauthClientIDFromURL)
 
 	codeCh := make(chan string, 1)
 	server, listener, err := oauth.NewCallbackHTTPServer(constants.AuthListenAddr, oauth.SecretsCallbackHandler(codeCh, platformState, h.Log))
@@ -182,15 +184,30 @@ func (h *Handler) executeBrowserUpsert(ctx context.Context, inputs UpsertSecrets
 		return ctx.Err()
 	}
 
-	ui.Dim("Saving credentials...")
-	tokenSet, err := oauth.ExchangeAuthorizationCode(ctx, nil, h.EnvironmentSet, code, verifier, oauthClientIDForExchange, oauthIssuerBase)
-	if err != nil {
+	ui.Dim("Completing vault authorization...")
+	exchangeReq := graphql.NewRequest(exchangeAuthCodeToTokenMutation)
+	exchangeReq.Var("request", map[string]any{
+		"code":         code,
+		"codeVerifier": verifier,
+		"redirectUri":  constants.AuthRedirectURI,
+	})
+	var exchangeResp struct {
+		ExchangeAuthCodeToToken struct {
+			AccessToken string `json:"accessToken"`
+			ExpiresIn   int    `json:"expiresIn"`
+		} `json:"exchangeAuthCodeToToken"`
+	}
+	if err := gqlClient.Execute(ctx, exchangeReq, &exchangeResp); err != nil {
 		return fmt.Errorf("token exchange failed: %w", err)
 	}
-	if err := credentials.SaveCredentials(tokenSet); err != nil {
-		return fmt.Errorf("failed to save credentials: %w", err)
+	tok := exchangeResp.ExchangeAuthCodeToToken
+	if tok.AccessToken == "" {
+		return fmt.Errorf("token exchange failed: empty access token")
 	}
+	// Short-lived vault JWT for future DON secret submission; do not persist or replace cre login tokens.
+	_ = tok.AccessToken
+	_ = tok.ExpiresIn
 
-	ui.Success("Authorization completed successfully.")
+	ui.Success("Vault authorization completed.")
 	return nil
 }
