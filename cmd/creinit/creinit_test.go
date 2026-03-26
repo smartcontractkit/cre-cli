@@ -830,3 +830,186 @@ func TestBuiltInTemplateBackwardsCompat(t *testing.T) {
 		"built-in template should use user's workflow name")
 	require.FileExists(t, filepath.Join(projectRoot, "hello-wf", constants.DefaultWorkflowSettingsFileName))
 }
+
+func TestMissingNetworks(t *testing.T) {
+	cases := []struct {
+		name     string
+		template *templaterepo.TemplateSummary
+		flags    map[string]string
+		expected []string
+	}{
+		{
+			name:     "nil template",
+			template: nil,
+			flags:    nil,
+			expected: nil,
+		},
+		{
+			name: "no networks required",
+			template: &templaterepo.TemplateSummary{
+				TemplateMetadata: templaterepo.TemplateMetadata{},
+			},
+			flags:    nil,
+			expected: nil,
+		},
+		{
+			name:     "all provided",
+			template: &testMultiNetworkTemplate,
+			flags: map[string]string{
+				"ethereum-testnet-sepolia": "https://rpc1.example.com",
+				"ethereum-mainnet":         "https://rpc2.example.com",
+			},
+			expected: nil,
+		},
+		{
+			name:     "some missing",
+			template: &testMultiNetworkTemplate,
+			flags: map[string]string{
+				"ethereum-testnet-sepolia": "https://rpc1.example.com",
+			},
+			expected: []string{"ethereum-mainnet"},
+		},
+		{
+			name:     "all missing",
+			template: &testMultiNetworkTemplate,
+			flags:    map[string]string{},
+			expected: []string{"ethereum-testnet-sepolia", "ethereum-mainnet"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := MissingNetworks(tc.template, tc.flags)
+			require.Equal(t, tc.expected, result)
+		})
+	}
+}
+
+func TestNonInteractiveMissingFlags(t *testing.T) {
+	sim := chainsim.NewSimulatedEnvironment(t)
+	defer sim.Close()
+
+	tempDir := t.TempDir()
+	restoreCwd, err := testutil.ChangeWorkingDirectory(tempDir)
+	require.NoError(t, err)
+	defer restoreCwd()
+
+	inputs := Inputs{
+		ProjectName:    "proj",
+		TemplateName:   "test-multichain",
+		WorkflowName:   "",
+		NonInteractive: true,
+		RpcURLs:        map[string]string{},
+	}
+
+	h := newHandlerWithRegistry(sim.NewRuntimeContext(), newMockRegistry())
+	require.NoError(t, h.ValidateInputs(inputs))
+	err = h.Execute(inputs)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "missing required flags for --non-interactive mode")
+}
+
+func TestNonInteractiveAllFlagsProvided(t *testing.T) {
+	sim := chainsim.NewSimulatedEnvironment(t)
+	defer sim.Close()
+
+	tempDir := t.TempDir()
+	restoreCwd, err := testutil.ChangeWorkingDirectory(tempDir)
+	require.NoError(t, err)
+	defer restoreCwd()
+
+	inputs := Inputs{
+		ProjectName:    "niProj",
+		TemplateName:   "hello-world-go",
+		WorkflowName:   "my-wf",
+		NonInteractive: true,
+	}
+
+	h := newHandlerWithRegistry(sim.NewRuntimeContext(), newMockRegistry())
+	require.NoError(t, h.ValidateInputs(inputs))
+	require.NoError(t, h.Execute(inputs))
+
+	projectRoot := filepath.Join(tempDir, "niProj")
+	require.DirExists(t, filepath.Join(projectRoot, "my-wf"))
+}
+
+func TestInitRespectsProjectRootFlag(t *testing.T) {
+	sim := chainsim.NewSimulatedEnvironment(t)
+	defer sim.Close()
+
+	// CWD is a temp dir (simulating being "somewhere else")
+	cwdDir := t.TempDir()
+	restoreCwd, err := testutil.ChangeWorkingDirectory(cwdDir)
+	require.NoError(t, err)
+	defer restoreCwd()
+
+	// Target directory is a separate temp dir (simulating -R flag)
+	targetDir := t.TempDir()
+
+	inputs := Inputs{
+		ProjectName:  "myproj",
+		TemplateName: "test-go",
+		WorkflowName: "mywf",
+		RpcURLs:      map[string]string{"ethereum-testnet-sepolia": "https://rpc.example.com"},
+		ProjectRoot:  targetDir,
+	}
+
+	ctx := sim.NewRuntimeContext()
+
+	h := newHandlerWithRegistry(ctx, newMockRegistry())
+	require.NoError(t, h.ValidateInputs(inputs))
+	require.NoError(t, h.Execute(inputs))
+
+	// Project should be created under targetDir, NOT cwdDir
+	projectRoot := filepath.Join(targetDir, "myproj")
+	validateInitProjectStructure(t, projectRoot, "mywf", GetTemplateFileListGo())
+
+	// Verify nothing was created in CWD
+	entries, err := os.ReadDir(cwdDir)
+	require.NoError(t, err)
+	require.Empty(t, entries, "CWD should be untouched when -R is provided")
+}
+
+func TestInitProjectRootFlagFindsExistingProject(t *testing.T) {
+	sim := chainsim.NewSimulatedEnvironment(t)
+	defer sim.Close()
+
+	// CWD is a clean temp dir with no project
+	cwdDir := t.TempDir()
+	restoreCwd, err := testutil.ChangeWorkingDirectory(cwdDir)
+	require.NoError(t, err)
+	defer restoreCwd()
+
+	// Create an "existing project" in a separate directory
+	existingProject := t.TempDir()
+	require.NoError(t, os.WriteFile(
+		filepath.Join(existingProject, constants.DefaultProjectSettingsFileName),
+		[]byte("name: existing"), 0600,
+	))
+	require.NoError(t, os.WriteFile(
+		filepath.Join(existingProject, constants.DefaultEnvFileName),
+		[]byte(""), 0600,
+	))
+
+	inputs := Inputs{
+		ProjectName:  "",
+		TemplateName: "test-go",
+		WorkflowName: "new-workflow",
+		RpcURLs:      map[string]string{"ethereum-testnet-sepolia": "https://rpc.example.com"},
+		ProjectRoot:  existingProject,
+	}
+
+	ctx := sim.NewRuntimeContext()
+
+	h := newHandlerWithRegistry(ctx, newMockRegistry())
+	require.NoError(t, h.ValidateInputs(inputs))
+	require.NoError(t, h.Execute(inputs))
+
+	// Workflow should be scaffolded into the existing project
+	validateInitProjectStructure(
+		t,
+		existingProject,
+		"new-workflow",
+		GetTemplateFileListGo(),
+	)
+}
