@@ -34,7 +34,7 @@ func getBuildCmd(workflowRootFolder, mainFile, language string, stripSymbols boo
 						"The 'cre-compile' tool is provided by the @chainlink/cre-sdk package.\n\n"+
 						"To fix:\n"+
 						"  • Run 'bun install' in your project to install dependencies\n"+
-						"  • Ensure @chainlink/cre-sdk is listed in your package.json dependencies\n"+
+						"  • Update your project dependencies with 'cre update <workflow-folder>'\n"+
 						"  • If starting fresh, use 'cre workflow init' to scaffold a properly configured workflow")
 				}
 				return nil, fmt.Errorf("%w\nbuild output:\n%s", err, outStr)
