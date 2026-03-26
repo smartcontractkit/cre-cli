@@ -44,8 +44,33 @@ func TestExchangeAuthorizationCode(t *testing.T) {
 		ClientID: "cid",
 	}
 
-	tok, err := ExchangeAuthorizationCode(context.Background(), ts.Client(), env, "auth-code", "verifier")
+	tok, err := ExchangeAuthorizationCode(context.Background(), ts.Client(), env, "auth-code", "verifier", "", "")
 	require.NoError(t, err)
 	require.NotNil(t, tok)
 	assert.Equal(t, "a", tok.AccessToken)
+}
+
+func TestExchangeAuthorizationCode_OAuthOverrides(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		assert.Equal(t, "override-cid", r.Form.Get("client_id"))
+		_ = json.NewEncoder(w).Encode(credentials.CreLoginTokenSet{
+			AccessToken: "b", // #nosec G101 G117 -- test fixture
+			TokenType:   "Bearer",
+		})
+	}))
+	defer ts.Close()
+
+	env := &environments.EnvironmentSet{
+		AuthBase: "https://wrong.example",
+		ClientID: "wrong",
+	}
+
+	tok, err := ExchangeAuthorizationCode(context.Background(), ts.Client(), env, "c", "v", "override-cid", ts.URL)
+	require.NoError(t, err)
+	assert.Equal(t, "b", tok.AccessToken)
 }

@@ -82,10 +82,10 @@ func TestNewEnvironmentSet_FallbackAndOverrides(t *testing.T) {
 			WorkflowRegistryChainName: "ethereum-testnet-sepolia",
 		},
 		"STAGING": {
-			AuthBase:   "g",
-			ClientID:   "h",
-			GraphQLURL: "i",
-			Audience:   "bb",
+			AuthBase:        "g",
+			ClientID:        "h",
+			GraphQLURL:      "i",
+			Audience:        "bb",
 
 			WorkflowRegistryAddress:   "0xstaging_wr",
 			WorkflowRegistryChainName: "polygon-mainnet",

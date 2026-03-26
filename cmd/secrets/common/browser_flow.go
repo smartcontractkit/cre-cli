@@ -2,12 +2,12 @@ package common
 
 import (
 	"context"
-	"crypto/rand"
-	"crypto/sha256"
-	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"net/http"
+	rt "runtime"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/machinebox/graphql"
@@ -19,6 +19,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/client/graphqlclient"
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
+	"github.com/smartcontractkit/cre-cli/internal/oauth"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
@@ -45,7 +46,8 @@ func digestHexString(digest [32]byte) string {
 }
 
 // executeBrowserUpsert handles secrets create/update when the user signs in with their organization account.
-// It encrypts the payload, binds a digest, and completes the platform authorization request for this step.
+// It encrypts the payload, binds a digest, requests a platform authorization URL, completes OAuth in the browser,
+// exchanges the code for tokens, and saves credentials.
 func (h *Handler) executeBrowserUpsert(ctx context.Context, inputs UpsertSecretsInputs, method string) error {
 	if h.Credentials.AuthType == credentials.AuthTypeApiKey {
 		return fmt.Errorf("this sign-in flow requires an interactive login; API keys are not supported")
@@ -105,7 +107,7 @@ func (h *Handler) executeBrowserUpsert(ctx context.Context, inputs UpsertSecrets
 		return err
 	}
 
-	_, challenge, err := generatePKCES256()
+	verifier, challenge, err := oauth.GeneratePKCE()
 	if err != nil {
 		return err
 	}
@@ -132,22 +134,63 @@ func (h *Handler) executeBrowserUpsert(ctx context.Context, inputs UpsertSecrets
 	if err := gqlClient.Execute(ctx, gqlReq, &gqlResp); err != nil {
 		return fmt.Errorf("could not complete the authorization request")
 	}
-	if gqlResp.CreateVaultAuthorizationURL.URL == "" {
+	authURL := gqlResp.CreateVaultAuthorizationURL.URL
+	if authURL == "" {
 		return fmt.Errorf("could not complete the authorization request")
+	}
+
+	oauthIssuerBase, err := oauth.OAuthServerBaseFromAuthorizeURL(authURL)
+	if err != nil {
+		return fmt.Errorf("invalid authorization URL from server: %w", err)
+	}
+	platformState, _ := oauth.StateFromAuthorizeURL(authURL)
+	oauthClientIDFromURL, _ := oauth.ClientIDFromAuthorizeURL(authURL)
+	oauthClientIDForExchange := strings.TrimSpace(oauthClientIDFromURL)
+
+	codeCh := make(chan string, 1)
+	server, listener, err := oauth.NewCallbackHTTPServer(constants.AuthListenAddr, oauth.SecretsCallbackHandler(codeCh, platformState, h.Log))
+	if err != nil {
+		return fmt.Errorf("could not start local callback server: %w", err)
+	}
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = server.Shutdown(shutdownCtx)
+	}()
+
+	go func() {
+		if err := server.Serve(listener); err != nil && err != http.ErrServerClosed {
+			h.Log.Error().Err(err).Msg("secrets oauth callback server error")
+		}
+	}()
+
+	ui.Dim("Opening your browser to complete sign-in...")
+	if err := oauth.OpenBrowser(authURL, rt.GOOS); err != nil {
+		ui.Warning("Could not open browser automatically")
+		ui.Dim("Open this URL in your browser:")
+	}
+	ui.URL(authURL)
+	ui.Line()
+	ui.Dim("Waiting for authorization... (Press Ctrl+C to cancel)")
+
+	var code string
+	select {
+	case code = <-codeCh:
+	case <-time.After(500 * time.Second):
+		return fmt.Errorf("timeout waiting for authorization")
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+
+	ui.Dim("Saving credentials...")
+	tokenSet, err := oauth.ExchangeAuthorizationCode(ctx, nil, h.EnvironmentSet, code, verifier, oauthClientIDForExchange, oauthIssuerBase)
+	if err != nil {
+		return fmt.Errorf("token exchange failed: %w", err)
+	}
+	if err := credentials.SaveCredentials(tokenSet); err != nil {
+		return fmt.Errorf("failed to save credentials: %w", err)
 	}
 
 	ui.Success("Authorization completed successfully.")
 	return nil
-}
-
-// generatePKCES256 builds the PKCE verifier and challenge used for secure authorization.
-func generatePKCES256() (verifier string, challenge string, err error) {
-	b := make([]byte, 32)
-	if _, err := rand.Read(b); err != nil {
-		return "", "", fmt.Errorf("pkce random: %w", err)
-	}
-	verifier = base64.RawURLEncoding.EncodeToString(b)
-	sum := sha256.Sum256([]byte(verifier))
-	challenge = base64.RawURLEncoding.EncodeToString(sum[:])
-	return verifier, challenge, nil
 }
