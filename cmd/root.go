@@ -238,7 +238,8 @@ func newRootCommand() *cobra.Command {
 			}
 
 			// load settings from yaml files
-			if isLoadSettings(cmd) {
+			supportedChains, _ := cmd.Flags().GetBool("supported-chains")
+			if isLoadSettings(cmd) && !supportedChains {
 				if showSpinner {
 					spinner.Update("Loading settings...")
 				}

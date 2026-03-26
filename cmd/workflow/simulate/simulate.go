@@ -237,12 +237,23 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 
 	pk, err := crypto.HexToECDSA(creSettings.User.EthPrivateKey)
 	if err != nil {
+		// If the user explicitly set a key but it's malformed, always error
+		if creSettings.User.EthPrivateKey != "" {
+			return Inputs{}, fmt.Errorf(
+				"invalid private key: expected 64 hex characters (256 bits), got %d characters.\n\n"+
+					"The CLI reads CRE_ETH_PRIVATE_KEY from your .env file or system environment.\n"+
+					"The 0x prefix is supported and stripped automatically.\n\n"+
+					"Common issues:\n"+
+					"  • Pasted an Ethereum address (40 chars) instead of a private key (64 chars)\n"+
+					"  • Value has extra quotes — use CRE_ETH_PRIVATE_KEY=abc123... without wrapping quotes\n"+
+					"  • Key was truncated during copy-paste",
+				len(creSettings.User.EthPrivateKey))
+		}
+		// Key not set — require it for broadcast, otherwise use default for simulation
 		if v.GetBool("broadcast") {
 			return Inputs{}, fmt.Errorf(
-				"invalid private key (required for --broadcast): expected 64 hex characters, got %d.\n"+
-					"Please check CRE_ETH_PRIVATE_KEY in your .env file or system environment.\n"+
-					"The 0x prefix is supported and stripped automatically",
-				len(creSettings.User.EthPrivateKey))
+				"a private key is required for --broadcast mode.\n"+
+					"Set CRE_ETH_PRIVATE_KEY in your .env file or system environment")
 		}
 		pk, err = crypto.HexToECDSA("0000000000000000000000000000000000000000000000000000000000000001")
 		if err != nil {
