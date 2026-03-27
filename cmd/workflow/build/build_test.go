@@ -73,6 +73,14 @@ func TestBuildCommandDefaultFlag(t *testing.T) {
 	assert.Equal(t, "o", f.Shorthand)
 }
 
+func TestBuildCommandSkipTypeChecksFlag(t *testing.T) {
+	t.Parallel()
+	cmd := New(nil)
+	f := cmd.Flags().Lookup(cmdcommon.SkipTypeChecksCLIFlag)
+	require.NotNil(t, f)
+	assert.Equal(t, "false", f.DefValue)
+}
+
 func TestBuildMissingWorkflowYAML(t *testing.T) {
 	t.Parallel()
 	tmpDir := t.TempDir()
