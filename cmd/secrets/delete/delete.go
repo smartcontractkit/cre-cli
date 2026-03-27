@@ -1,6 +1,7 @@
 package delete
 
 import (
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -162,6 +163,11 @@ func Execute(h *common.Handler, inputs DeleteSecretsInputs, duration time.Durati
 	digest, err := common.CalculateDigest(deleteSecretsRequest)
 	if err != nil {
 		return fmt.Errorf("failed to calculate request digest: %w", err)
+	}
+
+	if common.IsBrowserFlow(secretsAuth) {
+		ui.Dim("Using your account to authorize vault access for this delete request...")
+		return h.ExecuteBrowserVaultAuthorization(context.Background(), vaulttypes.MethodSecretsDelete, digest)
 	}
 
 	gatewayPost := func() error {
