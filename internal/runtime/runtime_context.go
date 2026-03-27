@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/rs/zerolog"
@@ -13,6 +14,12 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
+	"github.com/smartcontractkit/cre-cli/internal/tenantctx"
+)
+
+var (
+	ErrNoCredentials    = errors.New("no credentials found")
+	ErrValidationFailed = errors.New("credential validation failed")
 )
 
 type Context struct {
@@ -22,6 +29,7 @@ type Context struct {
 	Settings       *settings.Settings
 	Credentials    *credentials.Credentials
 	EnvironmentSet *environments.EnvironmentSet
+	TenantContext  *tenantctx.EnvironmentContext
 	Workflow       WorkflowRuntime
 }
 
@@ -61,21 +69,45 @@ func (ctx *Context) AttachCredentials(validationCtx context.Context, skipValidat
 
 	ctx.Credentials, err = credentials.New(ctx.Logger)
 	if err != nil {
-		return fmt.Errorf("%w", err)
+		return fmt.Errorf("%w: %w", ErrNoCredentials, err)
 	}
 
-	// Validate credentials immediately after loading (unless skipped)
 	if !skipValidation {
 		if ctx.EnvironmentSet == nil {
-			return fmt.Errorf("failed to load environment")
+			return fmt.Errorf("%w: failed to load environment", ErrValidationFailed)
 		}
 
 		validator := authvalidation.NewValidator(ctx.Credentials, ctx.EnvironmentSet, ctx.Logger)
 		if err := validator.ValidateCredentials(validationCtx, ctx.Credentials); err != nil {
-			return fmt.Errorf("authentication validation failed: %w", err)
+			return fmt.Errorf("%w: %w", ErrValidationFailed, err)
 		}
 	}
 
+	return nil
+}
+
+// AttachTenantContext loads the user context for the current environment.
+// If the manifest is missing, it is fetched from the service first.
+func (ctx *Context) AttachTenantContext(validationCtx context.Context) error {
+	if ctx.Credentials == nil || ctx.EnvironmentSet == nil {
+		return fmt.Errorf("credentials and environment must be loaded before user context")
+	}
+
+	if err := tenantctx.EnsureContext(validationCtx, ctx.Credentials, ctx.EnvironmentSet, ctx.Logger); err != nil {
+		return fmt.Errorf("failed to ensure user context: %w", err)
+	}
+
+	envName := ctx.EnvironmentSet.EnvName
+	if envName == "" {
+		envName = environments.DefaultEnv
+	}
+
+	envCtx, err := tenantctx.LoadContext(envName)
+	if err != nil {
+		return fmt.Errorf("failed to load user context: %w", err)
+	}
+
+	ctx.TenantContext = envCtx
 	return nil
 }
 

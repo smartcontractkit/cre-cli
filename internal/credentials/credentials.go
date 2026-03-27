@@ -14,16 +14,16 @@ import (
 )
 
 type CreLoginTokenSet struct {
-	AccessToken  string `json:"access_token"  yaml:"AccessToken"`
+	AccessToken  string `json:"access_token"  yaml:"AccessToken"` // #nosec G117 -- matches OAuth token response field
 	IDToken      string `json:"id_token"      yaml:"IDToken"`
-	RefreshToken string `json:"refresh_token" yaml:"RefreshToken"`
+	RefreshToken string `json:"refresh_token" yaml:"RefreshToken"` // #nosec G117 -- matches OAuth token response field
 	ExpiresIn    int    `json:"expires_in"    yaml:"ExpiresIn"`
 	TokenType    string `json:"token_type"    yaml:"TokenType"`
 }
 
 type Credentials struct {
 	Tokens      *CreLoginTokenSet `yaml:"tokens"`
-	APIKey      string            `yaml:"api_key"`
+	APIKey      string            `yaml:"api_key"` // #nosec G117 -- credential stored in secure config file
 	AuthType    string            `yaml:"auth_type"`
 	IsValidated bool              `yaml:"-"`
 	log         *zerolog.Logger
@@ -35,10 +35,19 @@ const (
 	AuthTypeBearer = "bearer"
 	ConfigDir      = ".cre"
 	ConfigFile     = "cre.yaml"
+
+	// DeploymentAccessStatusFullAccess indicates the organization has full deployment access
+	DeploymentAccessStatusFullAccess = "FULL_ACCESS"
 )
 
+// DeploymentAccess holds information about an organization's deployment access status
+type DeploymentAccess struct {
+	HasAccess bool   // Whether the organization has deployment access
+	Status    string // The raw status value (e.g., "FULL_ACCESS", "PENDING", etc.)
+}
+
 // UngatedOrgRequiredMsg is the error message shown when an organization does not have ungated access.
-var UngatedOrgRequiredMsg = "\n✖ Workflow deployment is currently in early access. We're onboarding organizations gradually.\n\nWant to deploy?\n→ Request access here: https://cre.chain.link/request-access\n"
+var UngatedOrgRequiredMsg = "\n✖ Workflow deployment is currently in early access. We're onboarding organizations gradually.\n\nWant to deploy?\n→ Run 'cre account access' to request access\n"
 
 func New(logger *zerolog.Logger) (*Credentials, error) {
 	cfg := &Credentials{
@@ -81,7 +90,7 @@ func SaveCredentials(tokenSet *CreLoginTokenSet) error {
 	}
 
 	path := filepath.Join(dir, ConfigFile)
-	data, err := yaml.Marshal(tokenSet)
+	data, err := yaml.Marshal(tokenSet) //nolint:gosec // G117 -- intentionally persisting tokens to secure config file
 	if err != nil {
 		return fmt.Errorf("marshal token set: %w", err)
 	}
@@ -96,40 +105,66 @@ func SaveCredentials(tokenSet *CreLoginTokenSet) error {
 	return nil
 }
 
-// CheckIsUngatedOrganization verifies that the organization associated with the credentials
-// has FULL_ACCESS status (is not gated). This check is required for certain operations like
-// workflow key linking.
-func (c *Credentials) CheckIsUngatedOrganization() error {
-	// API keys can only be generated on ungated organizations, so they always pass
+// decodeJWTClaims extracts the claims map from the access token JWT payload.
+func (c *Credentials) decodeJWTClaims() (map[string]interface{}, error) {
+	if c.Tokens == nil || c.Tokens.AccessToken == "" {
+		return nil, fmt.Errorf("no access token available")
+	}
+
+	parts := strings.Split(c.Tokens.AccessToken, ".")
+	if len(parts) < 2 {
+		return nil, fmt.Errorf("invalid JWT token format")
+	}
+
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode JWT payload: %w", err)
+	}
+
+	var claims map[string]interface{}
+	if err := json.Unmarshal(payload, &claims); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal JWT claims: %w", err)
+	}
+
+	c.log.Debug().Interface("claims", claims).Msg("JWT claims decoded")
+	return claims, nil
+}
+
+// GetOrgID returns the organization ID from the access token.
+func (c *Credentials) GetOrgID() (string, error) {
 	if c.AuthType == AuthTypeApiKey {
-		return nil
+		return "", fmt.Errorf("org_id is not available for API key authentication")
+	}
+
+	claims, err := c.decodeJWTClaims()
+	if err != nil {
+		return "", err
+	}
+
+	orgID, ok := claims["org_id"].(string)
+	if !ok || orgID == "" {
+		return "", fmt.Errorf("org_id claim not found in access token")
+	}
+
+	return orgID, nil
+}
+
+// GetDeploymentAccessStatus returns the deployment access status for the organization.
+// This can be used to check and display whether the user has deployment access.
+func (c *Credentials) GetDeploymentAccessStatus() (*DeploymentAccess, error) {
+	// API keys can only be generated on ungated organizations, so they always have access
+	if c.AuthType == AuthTypeApiKey {
+		return &DeploymentAccess{
+			HasAccess: true,
+			Status:    DeploymentAccessStatusFullAccess,
+		}, nil
 	}
 
 	// For JWT bearer tokens, we need to parse the token and check the organization_status claim
-	if c.Tokens == nil || c.Tokens.AccessToken == "" {
-		return fmt.Errorf("no access token available")
-	}
-
-	// Parse the JWT to extract claims
-	parts := strings.Split(c.Tokens.AccessToken, ".")
-	if len(parts) < 2 {
-		return fmt.Errorf("invalid JWT token format")
-	}
-
-	// Decode the payload (second part of the JWT)
-	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	claims, err := c.decodeJWTClaims()
 	if err != nil {
-		return fmt.Errorf("failed to decode JWT payload: %w", err)
+		return nil, err
 	}
-
-	// Parse claims into a map
-	var claims map[string]interface{}
-	if err := json.Unmarshal(payload, &claims); err != nil {
-		return fmt.Errorf("failed to unmarshal JWT claims: %w", err)
-	}
-
-	// Log all claims for debugging
-	c.log.Debug().Interface("claims", claims).Msg("JWT claims decoded")
 
 	// Dynamically find the organization_status claim by looking for any key ending with "organization_status"
 	var orgStatus string
@@ -146,17 +181,27 @@ func (c *Credentials) CheckIsUngatedOrganization() error {
 
 	c.log.Debug().Str("claim_key", orgStatusKey).Str("organization_status", orgStatus).Msg("checking organization status claim")
 
-	if orgStatus == "" {
-		// If the claim is missing or empty, the organization is considered gated
-		return errors.New(UngatedOrgRequiredMsg)
+	hasAccess := orgStatus == DeploymentAccessStatusFullAccess
+	c.log.Debug().Str("organization_status", orgStatus).Bool("has_access", hasAccess).Msg("deployment access status retrieved")
+
+	return &DeploymentAccess{
+		HasAccess: hasAccess,
+		Status:    orgStatus,
+	}, nil
+}
+
+// CheckIsUngatedOrganization verifies that the organization associated with the credentials
+// has FULL_ACCESS status (is not gated). This check is required for certain operations like
+// workflow key linking.
+func (c *Credentials) CheckIsUngatedOrganization() error {
+	access, err := c.GetDeploymentAccessStatus()
+	if err != nil {
+		return err
 	}
 
-	// Check if the organization has full access
-	if orgStatus != "FULL_ACCESS" {
-		c.log.Debug().Str("organization_status", orgStatus).Msg("organization does not have FULL_ACCESS - organization is gated")
+	if !access.HasAccess {
 		return errors.New(UngatedOrgRequiredMsg)
 	}
-	c.log.Debug().Str("organization_status", orgStatus).Msg("organization has FULL_ACCESS - organization is ungated")
 
 	return nil
 }

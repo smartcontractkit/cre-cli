@@ -74,11 +74,11 @@ func (c *Client) SetHTTPTimeout(timeout time.Duration) {
 }
 
 func (c *Client) CreateServiceContextWithTimeout() (context.Context, context.CancelFunc) {
-	return context.WithTimeout(context.Background(), c.serviceTimeout)
+	return context.WithTimeout(context.Background(), c.serviceTimeout) //nolint:gosec // G118 -- cancel is deferred by all callers
 }
 
 func (c *Client) CreateHttpContextWithTimeout() (context.Context, context.CancelFunc) {
-	return context.WithTimeout(context.Background(), c.httpTimeout)
+	return context.WithTimeout(context.Background(), c.httpTimeout) //nolint:gosec // G118 -- cancel is deferred by all callers
 }
 
 func (c *Client) GeneratePostUrlForArtifact(workflowId string, artifactType ArtifactType, content []byte) (GeneratePresignedPostUrlForArtifactResponse, error) {
@@ -216,7 +216,7 @@ func (c *Client) UploadToOrigin(g GeneratePresignedPostUrlForArtifactResponse, c
 	httpReq.Header.Set("Content-Type", w.FormDataContentType())
 
 	httpClient := &http.Client{Timeout: c.httpTimeout}
-	httpResp, err := httpClient.Do(httpReq)
+	httpResp, err := httpClient.Do(httpReq) // #nosec G704 -- URL is from trusted CLI configuration
 	if err != nil {
 		c.log.Error().Err(err).Msg("HTTP request to origin failed")
 		return err

@@ -4,13 +4,11 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math"
 	"math/big"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -40,6 +38,7 @@ import (
 
 	cmdcommon "github.com/smartcontractkit/cre-cli/cmd/common"
 	"github.com/smartcontractkit/cre-cli/internal/constants"
+	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
@@ -47,7 +46,8 @@ import (
 )
 
 type Inputs struct {
-	WorkflowPath  string                       `validate:"required,path_read"`
+	WasmPath      string                       `validate:"omitempty,file,ascii,max=97" cli:"--wasm"`
+	WorkflowPath  string                       `validate:"required,workflow_path_read"`
 	ConfigPath    string                       `validate:"omitempty,file,ascii,max=97"`
 	SecretsPath   string                       `validate:"omitempty,file,ascii,max=97"`
 	EngineLogs    bool                         `validate:"omitempty" cli:"--engine-logs"`
@@ -63,6 +63,8 @@ type Inputs struct {
 	EVMEventIndex  int    `validate:"-"`
 	// Experimental chains support (for chains not in official chain-selectors)
 	ExperimentalForwarders map[uint64]common.Address `validate:"-"` // forwarders keyed by chain ID
+	// Limits enforcement
+	LimitsPath string `validate:"-"` // "default" or path to custom limits JSON
 }
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
@@ -89,18 +91,25 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 
 	simulateCmd.Flags().BoolP("engine-logs", "g", false, "Enable non-fatal engine logging")
 	simulateCmd.Flags().Bool("broadcast", false, "Broadcast transactions to the EVM (default: false)")
+	simulateCmd.Flags().String("wasm", "", "Path or URL to a pre-built WASM binary (skips compilation)")
+	simulateCmd.Flags().String("config", "", "Override the config file path from workflow.yaml")
+	simulateCmd.Flags().Bool("no-config", false, "Simulate without a config file")
+	simulateCmd.Flags().Bool("default-config", false, "Use the config path from workflow.yaml settings (default behavior)")
+	simulateCmd.MarkFlagsMutuallyExclusive("config", "no-config", "default-config")
 	// Non-interactive flags
 	simulateCmd.Flags().Bool(settings.Flags.NonInteractive.Name, false, "Run without prompts; requires --trigger-index and inputs for the selected trigger type")
 	simulateCmd.Flags().Int("trigger-index", -1, "Index of the trigger to run (0-based)")
 	simulateCmd.Flags().String("http-payload", "", "HTTP trigger payload as JSON string or path to JSON file (with or without @ prefix)")
 	simulateCmd.Flags().String("evm-tx-hash", "", "EVM trigger transaction hash (0x...)")
 	simulateCmd.Flags().Int("evm-event-index", -1, "EVM trigger log index (0-based)")
+	simulateCmd.Flags().String("limits", "default", "Production limits to enforce during simulation: 'default' for prod defaults, path to a limits JSON file (e.g. from 'cre workflow limits export'), or 'none' to disable")
 	return simulateCmd
 }
 
 type handler struct {
 	log            *zerolog.Logger
 	runtimeContext *runtime.Context
+	credentials    *credentials.Credentials
 	validated      bool
 }
 
@@ -108,6 +117,7 @@ func newHandler(ctx *runtime.Context) *handler {
 	return &handler{
 		log:            ctx.Logger,
 		runtimeContext: ctx,
+		credentials:    ctx.Credentials,
 		validated:      false,
 	}
 }
@@ -126,6 +136,7 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 			h.log.Debug().Msgf("RPC not provided for %s; skipping", chainName)
 			continue
 		}
+		h.log.Debug().Msgf("Using RPC for %s: %s", chainName, redactURL(rpcURL))
 
 		c, err := ethclient.Dial(rpcURL)
 		if err != nil {
@@ -183,6 +194,7 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 		}
 
 		// Dial the RPC
+		h.log.Debug().Msgf("Using RPC for experimental chain %d: %s", ec.ChainSelector, redactURL(ec.RPCURL))
 		c, err := ethclient.Dial(ec.RPCURL)
 		if err != nil {
 			return Inputs{}, fmt.Errorf("failed to create eth client for experimental chain %d: %w", ec.ChainSelector, err)
@@ -212,8 +224,9 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 	}
 
 	return Inputs{
+		WasmPath:               v.GetString("wasm"),
 		WorkflowPath:           creSettings.Workflow.WorkflowArtifactSettings.WorkflowPath,
-		ConfigPath:             creSettings.Workflow.WorkflowArtifactSettings.ConfigPath,
+		ConfigPath:             cmdcommon.ResolveConfigPath(v, creSettings.Workflow.WorkflowArtifactSettings.ConfigPath),
 		SecretsPath:            creSettings.Workflow.WorkflowArtifactSettings.SecretsPath,
 		EngineLogs:             v.GetBool("engine-logs"),
 		Broadcast:              v.GetBool("broadcast"),
@@ -226,10 +239,21 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 		EVMTxHash:              v.GetString("evm-tx-hash"),
 		EVMEventIndex:          v.GetInt("evm-event-index"),
 		ExperimentalForwarders: experimentalForwarders,
+		LimitsPath:             v.GetString("limits"),
 	}, nil
 }
 
 func (h *handler) ValidateInputs(inputs Inputs) error {
+	// URLs bypass the struct-level file/ascii/max validators.
+	savedWasm := inputs.WasmPath
+	savedConfig := inputs.ConfigPath
+	if cmdcommon.IsURL(inputs.WasmPath) {
+		inputs.WasmPath = ""
+	}
+	if cmdcommon.IsURL(inputs.ConfigPath) {
+		inputs.ConfigPath = ""
+	}
+
 	validate, err := validation.NewValidator()
 	if err != nil {
 		return fmt.Errorf("failed to initialize validator: %w", err)
@@ -238,6 +262,9 @@ func (h *handler) ValidateInputs(inputs Inputs) error {
 	if err = validate.Struct(inputs); err != nil {
 		return validate.ParseValidationErrors(err)
 	}
+
+	inputs.WasmPath = savedWasm
+	inputs.ConfigPath = savedConfig
 
 	// forbid the default 0x...01 key when broadcasting
 	if inputs.Broadcast && inputs.EthPrivateKey != nil && inputs.EthPrivateKey.D.Cmp(big.NewInt(1)) == 0 {
@@ -258,66 +285,107 @@ func (h *handler) ValidateInputs(inputs Inputs) error {
 }
 
 func (h *handler) Execute(inputs Inputs) error {
-	// Compile the workflow
-	// terminal command: GOOS=wasip1 GOARCH=wasm go build -trimpath -ldflags="-buildid= -w -s" -o <output_path> <workflow_path>
-	workflowRootFolder := filepath.Dir(inputs.WorkflowPath)
-	tmpWasmFileName := "tmp.wasm"
-	workflowMainFile := filepath.Base(inputs.WorkflowPath)
+	var wasmFileBinary []byte
+	var err error
 
-	// Set language in runtime context based on workflow file extension
-	if h.runtimeContext != nil {
-		h.runtimeContext.Workflow.Language = cmdcommon.GetWorkflowLanguage(workflowMainFile)
-
-		switch h.runtimeContext.Workflow.Language {
-		case constants.WorkflowLanguageTypeScript:
-			if err := cmdcommon.EnsureTool("bun"); err != nil {
-				return errors.New("bun is required for TypeScript workflows but was not found in PATH; install from https://bun.com/docs/installation")
+	if inputs.WasmPath != "" {
+		if cmdcommon.IsURL(inputs.WasmPath) {
+			ui.Dim("Fetching WASM binary from URL...")
+			wasmFileBinary, err = cmdcommon.FetchURL(inputs.WasmPath)
+			if err != nil {
+				return fmt.Errorf("failed to fetch WASM from URL: %w", err)
 			}
-		case constants.WorkflowLanguageGolang:
-			if err := cmdcommon.EnsureTool("go"); err != nil {
-				return errors.New("go toolchain is required for Go workflows but was not found in PATH; install from https://go.dev/dl")
+			ui.Success("Fetched WASM binary from URL")
+		} else {
+			ui.Dim("Reading pre-built WASM binary...")
+			wasmFileBinary, err = os.ReadFile(inputs.WasmPath)
+			if err != nil {
+				return fmt.Errorf("failed to read WASM binary: %w", err)
 			}
-		default:
-			return fmt.Errorf("unsupported workflow language for file %s", workflowMainFile)
+			ui.Success(fmt.Sprintf("Loaded WASM binary from %s", inputs.WasmPath))
 		}
+		wasmFileBinary, err = cmdcommon.EnsureRawWasm(wasmFileBinary)
+		if err != nil {
+			return fmt.Errorf("failed to decode WASM binary: %w", err)
+		}
+		if h.runtimeContext != nil {
+			h.runtimeContext.Workflow.Language = constants.WorkflowLanguageWasm
+		}
+	} else {
+		workflowDir, err := os.Getwd()
+		if err != nil {
+			return fmt.Errorf("workflow directory: %w", err)
+		}
+		resolvedWorkflowPath, err := cmdcommon.ResolveWorkflowPath(workflowDir, inputs.WorkflowPath)
+		if err != nil {
+			return fmt.Errorf("workflow path: %w", err)
+		}
+		_, workflowMainFile, err := cmdcommon.WorkflowPathRootAndMain(resolvedWorkflowPath)
+		if err != nil {
+			return fmt.Errorf("workflow path: %w", err)
+		}
+		if h.runtimeContext != nil {
+			h.runtimeContext.Workflow.Language = cmdcommon.GetWorkflowLanguage(workflowMainFile)
+		}
+
+		spinner := ui.NewSpinner()
+		spinner.Start("Compiling workflow...")
+		wasmFileBinary, err = cmdcommon.CompileWorkflowToWasm(resolvedWorkflowPath, false)
+		spinner.Stop()
+		if err != nil {
+			ui.Error("Build failed:")
+			return fmt.Errorf("failed to compile workflow: %w", err)
+		}
+		h.log.Debug().Msg("Workflow compiled")
+		ui.Success("Workflow compiled")
 	}
 
-	buildCmd := cmdcommon.GetBuildCmd(workflowMainFile, tmpWasmFileName, workflowRootFolder)
-
-	h.log.Debug().
-		Str("Workflow directory", buildCmd.Dir).
-		Str("Command", buildCmd.String()).
-		Msg("Executing go build command")
-
-	// Execute the build command with spinner
-	spinner := ui.NewSpinner()
-	spinner.Start("Compiling workflow...")
-	buildOutput, err := buildCmd.CombinedOutput()
-	spinner.Stop()
-
+	// Resolve simulation limits
+	simLimits, err := ResolveLimits(inputs.LimitsPath)
 	if err != nil {
-		out := strings.TrimSpace(string(buildOutput))
-		h.log.Info().Msg(out)
-		return fmt.Errorf("failed to compile workflow: %w\nbuild output:\n%s", err, out)
+		return fmt.Errorf("failed to resolve simulation limits: %w", err)
 	}
-	h.log.Debug().Msgf("Build output: %s", buildOutput)
-	ui.Success("Workflow compiled")
 
-	// Read the compiled workflow binary
-	tmpWasmLocation := filepath.Join(workflowRootFolder, tmpWasmFileName)
-	wasmFileBinary, err := os.ReadFile(tmpWasmLocation)
-	if err != nil {
-		return fmt.Errorf("failed to read workflow binary: %w", err)
+	// WASM binary size pre-flight check
+	if simLimits != nil {
+		binaryLimit := simLimits.WASMBinarySize()
+		if binaryLimit > 0 && len(wasmFileBinary) > binaryLimit {
+			return fmt.Errorf("WASM binary size %d bytes exceeds limit of %d bytes", len(wasmFileBinary), binaryLimit)
+		}
+
+		compressedLimit := simLimits.WASMCompressedBinarySize()
+		if compressedLimit > 0 {
+			compressed, err := cmdcommon.CompressBrotli(wasmFileBinary)
+			if err != nil {
+				return fmt.Errorf("failed to compress brotli: %w", err)
+			}
+			if len(compressed) > compressedLimit {
+				return fmt.Errorf("WASM compressed binary size %d bytes exceeds limit of %d bytes", len(compressed), compressedLimit)
+			}
+		}
+
+		ui.Success("Simulation limits enabled")
+		ui.Dim(simLimits.LimitsSummary())
 	}
 
 	// Read the config file
 	var config []byte
-	if inputs.ConfigPath != "" {
+	if cmdcommon.IsURL(inputs.ConfigPath) {
+		ui.Dim("Fetching config from URL...")
+		config, err = cmdcommon.FetchURL(inputs.ConfigPath)
+		if err != nil {
+			return fmt.Errorf("failed to fetch config from URL: %w", err)
+		}
+		ui.Success("Fetched config from URL")
+	} else if inputs.ConfigPath != "" {
 		config, err = os.ReadFile(inputs.ConfigPath)
 		if err != nil {
 			return fmt.Errorf("failed to read config file: %w", err)
 		}
 	}
+
+	ui.Dim(fmt.Sprintf("Binary hash: %s", cmdcommon.HashBytes(wasmFileBinary)))
+	ui.Dim(fmt.Sprintf("Config hash: %s", cmdcommon.HashBytes(config)))
 
 	// Read the secrets file
 	var secrets []byte
@@ -340,7 +408,32 @@ func (h *handler) Execute(inputs Inputs) error {
 	// if logger instance is set to DEBUG, that means verbosity flag is set by the user
 	verbosity := h.log.GetLevel() == zerolog.DebugLevel
 
-	return run(ctx, wasmFileBinary, config, secrets, inputs, verbosity)
+	err = run(ctx, wasmFileBinary, config, secrets, inputs, verbosity, simLimits)
+	if err != nil {
+		return err
+	}
+
+	h.showDeployAccessHint()
+
+	return nil
+}
+
+func (h *handler) showDeployAccessHint() {
+	if h.credentials == nil {
+		return
+	}
+
+	deployAccess, err := h.credentials.GetDeploymentAccessStatus()
+	if err != nil {
+		return
+	}
+
+	if !deployAccess.HasAccess {
+		ui.Line()
+		message := ui.RenderSuccess("Simulation complete!") + " Ready to deploy your workflow?\n\n" +
+			"Run " + ui.RenderCommand("cre account access") + " to request deployment access."
+		ui.Box(message)
+	}
 }
 
 // run instantiates the engine, starts it and blocks until the context is canceled.
@@ -349,6 +442,7 @@ func run(
 	binary, config, secrets []byte,
 	inputs Inputs,
 	verbosity bool,
+	simLimits *SimulationLimits,
 ) error {
 	logCfg := logger.Config{Level: getLevel(verbosity, zapcore.InfoLevel)}
 	simLogger := NewSimulationLogger(verbosity)
@@ -419,14 +513,14 @@ func run(
 
 		triggerLggr := lggr.Named("TriggerCapabilities")
 		var err error
-		triggerCaps, err = NewManualTriggerCapabilities(ctx, triggerLggr, registry, manualTriggerCapConfig, !inputs.Broadcast)
+		triggerCaps, err = NewManualTriggerCapabilities(ctx, triggerLggr, registry, manualTriggerCapConfig, !inputs.Broadcast, simLimits)
 		if err != nil {
 			ui.Error(fmt.Sprintf("Failed to create trigger capabilities: %v", err))
 			os.Exit(1)
 		}
 
 		computeLggr := lggr.Named("ActionsCapabilities")
-		computeCaps, err := NewFakeActionCapabilities(ctx, computeLggr, registry, inputs.SecretsPath)
+		computeCaps, err := NewFakeActionCapabilities(ctx, computeLggr, registry, inputs.SecretsPath, simLimits)
 		if err != nil {
 			ui.Error(fmt.Sprintf("Failed to create compute capabilities: %v", err))
 			os.Exit(1)
@@ -574,8 +668,13 @@ func run(
 			},
 		},
 		WorkflowSettingsCfgFn: func(cfg *cresettings.Workflows) {
+			// Apply simulation limits to engine-level settings when --limits is set
+			if simLimits != nil {
+				applyEngineLimits(cfg, simLimits)
+			}
+			// Always allow all chains in simulation, overriding any chain restrictions from limits
 			cfg.ChainAllowed = commonsettings.PerChainSelector(
-				commonsettings.Bool(true), // Allow all chains in simulation
+				commonsettings.Bool(true),
 				map[string]bool{},
 			)
 		},
@@ -743,7 +842,7 @@ func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inp
 				os.Exit(1)
 			}
 
-			log, err := getEVMTriggerLogFromValues(ctx, client, inputs.EVMTxHash, uint64(inputs.EVMEventIndex))
+			log, err := getEVMTriggerLogFromValues(ctx, client, inputs.EVMTxHash, uint64(inputs.EVMEventIndex)) // #nosec G115 -- EVMEventIndex validated >= 0 above
 			if err != nil {
 				ui.Error(fmt.Sprintf("Failed to build EVM trigger log: %v", err))
 				os.Exit(1)
@@ -981,16 +1080,6 @@ func getHTTPTriggerPayloadFromInput(input string) (*httptypedapi.Payload, error)
 			raw = []byte(trimmed)
 		}
 	}
-
-	//var jsonData map[string]interface{}
-	//if err := json.Unmarshal(raw, &jsonData); err != nil {
-	//	return nil, fmt.Errorf("failed to parse JSON: %w", err)
-	//}
-
-	//structPB, err := structpb.NewStruct(jsonData)
-	//if err != nil {
-	//	return nil, fmt.Errorf("failed to convert to protobuf struct: %w", err)
-	//}
 
 	return &httptypedapi.Payload{Input: raw}, nil
 }

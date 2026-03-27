@@ -88,8 +88,15 @@ func (h *Handler) Execute(ctx context.Context) error {
 		return fmt.Errorf("graphql request failed: %w", err)
 	}
 
+	// Get deployment access status
+	deployAccess, err := h.credentials.GetDeploymentAccessStatus()
+	if err != nil {
+		h.log.Debug().Err(err).Msg("failed to get deployment access status")
+	}
+
 	ui.Line()
 	ui.Title("Account Details")
+	ui.EnvContext(h.environmentSet.EnvLabel())
 
 	details := fmt.Sprintf("Organization ID:   %s\nOrganization Name: %s",
 		respEnvelope.GetOrganization.OrganizationID,
@@ -99,6 +106,13 @@ func (h *Handler) Execute(ctx context.Context) error {
 		details = fmt.Sprintf("Email:             %s\n%s",
 			respEnvelope.GetAccountDetails.EmailAddress,
 			details)
+	}
+
+	// Add deployment access status
+	if deployAccess != nil && deployAccess.HasAccess {
+		details = fmt.Sprintf("%s\nDeploy Access:     Enabled", details)
+	} else {
+		details = fmt.Sprintf("%s\nDeploy Access:     Not enabled", details)
 	}
 
 	ui.Box(details)

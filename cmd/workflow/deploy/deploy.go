@@ -1,6 +1,7 @@
 package deploy
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -12,6 +13,8 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/smartcontractkit/cre-cli/cmd/client"
+	cmdcommon "github.com/smartcontractkit/cre-cli/cmd/common"
+	"github.com/smartcontractkit/cre-cli/internal/accessrequest"
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
@@ -31,9 +34,10 @@ type Inputs struct {
 	ConfigURL *string `validate:"omitempty,http_url|eq="`
 
 	KeepAlive    bool
-	WorkflowPath string `validate:"required,path_read"`
-	ConfigPath   string `validate:"omitempty,file,ascii,max=97" cli:"--config"`
+	WorkflowPath string `validate:"required,workflow_path_read"`
+	ConfigPath   string `validate:"omitempty,file,ascii,max=2048" cli:"--config"`
 	OutputPath   string `validate:"omitempty,filepath,ascii,max=97" cli:"--output"`
+	WasmPath     string `validate:"omitempty,file,ascii,max=2048" cli:"--wasm"`
 
 	WorkflowRegistryContractAddress   string `validate:"required"`
 	WorkflowRegistryContractChainName string `validate:"required"`
@@ -61,8 +65,13 @@ type handler struct {
 	workflowArtifact *workflowArtifact
 	wrc              *client.WorkflowRegistryV2Client
 	runtimeContext   *runtime.Context
+	accessRequester  *accessrequest.Requester
 
 	validated bool
+
+	// URL-fetched data for WorkflowID computation when --wasm or --config are URLs.
+	urlBinaryData []byte
+	urlConfigData []byte
 
 	// existingWorkflowStatus stores the status of an existing workflow when updating.
 	// nil means this is a new workflow, otherwise it contains the current status (0=active, 1=paused).
@@ -93,7 +102,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 			if err := h.ValidateInputs(); err != nil {
 				return err
 			}
-			return h.Execute()
+			return h.Execute(cmd.Context())
 		},
 	}
 
@@ -101,6 +110,11 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	settings.AddSkipConfirmation(deployCmd)
 	deployCmd.Flags().StringP("output", "o", defaultOutputPath, "The output file for the compiled WASM binary encoded in base64")
 	deployCmd.Flags().StringP("owner-label", "l", "", "Label for the workflow owner (used during auto-link if owner is not already linked)")
+	deployCmd.Flags().String("wasm", "", "Path to a pre-built WASM binary (skips compilation)")
+	deployCmd.Flags().String("config", "", "Override the config file path from workflow.yaml")
+	deployCmd.Flags().Bool("no-config", false, "Deploy without a config file")
+	deployCmd.Flags().Bool("default-config", false, "Use the config path from workflow.yaml settings (default behavior)")
+	deployCmd.MarkFlagsMutuallyExclusive("config", "no-config", "default-config")
 
 	return deployCmd
 }
@@ -117,10 +131,16 @@ func newHandler(ctx *runtime.Context, stdin io.Reader) *handler {
 		workflowArtifact: &workflowArtifact{},
 		wrc:              nil,
 		runtimeContext:   ctx,
+		accessRequester:  accessrequest.NewRequester(ctx.Credentials, ctx.EnvironmentSet, ctx.Logger),
 		validated:        false,
 		wg:               sync.WaitGroup{},
 		wrcErr:           nil,
 	}
+
+	return &h
+}
+
+func (h *handler) initWorkflowRegistryClient() {
 	h.wg.Add(1)
 	go func() {
 		defer h.wg.Done()
@@ -131,8 +151,6 @@ func newHandler(ctx *runtime.Context, stdin io.Reader) *handler {
 		}
 		h.wrc = wrc
 	}()
-
-	return &h
 }
 
 func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
@@ -157,8 +175,9 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 		WorkflowPath: h.settings.Workflow.WorkflowArtifactSettings.WorkflowPath,
 		KeepAlive:    false,
 
-		ConfigPath: h.settings.Workflow.WorkflowArtifactSettings.ConfigPath,
+		ConfigPath: cmdcommon.ResolveConfigPath(v, h.settings.Workflow.WorkflowArtifactSettings.ConfigPath),
 		OutputPath: v.GetString("output"),
+		WasmPath:   v.GetString("wasm"),
 
 		WorkflowRegistryContractChainName: h.environmentSet.WorkflowRegistryChainName,
 		WorkflowRegistryContractAddress:   h.environmentSet.WorkflowRegistryAddress,
@@ -168,28 +187,87 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 }
 
 func (h *handler) ValidateInputs() error {
+	// URLs bypass the struct-level file/ascii/max validators.
+	wasmIsURL := cmdcommon.IsURL(h.inputs.WasmPath)
+	configIsURL := cmdcommon.IsURL(h.inputs.ConfigPath)
+	savedWasm := h.inputs.WasmPath
+	savedConfig := h.inputs.ConfigPath
+	if wasmIsURL {
+		h.inputs.WasmPath = ""
+	}
+	if configIsURL {
+		h.inputs.ConfigPath = ""
+	}
+
 	validate, err := validation.NewValidator()
 	if err != nil {
+		h.inputs.WasmPath = savedWasm
+		h.inputs.ConfigPath = savedConfig
 		return fmt.Errorf("failed to initialize validator: %w", err)
 	}
 
 	if err := validate.Struct(h.inputs); err != nil {
+		h.inputs.WasmPath = savedWasm
+		h.inputs.ConfigPath = savedConfig
 		return validate.ParseValidationErrors(err)
 	}
+
+	h.inputs.WasmPath = savedWasm
+	h.inputs.ConfigPath = savedConfig
 
 	h.validated = true
 	return nil
 }
 
-func (h *handler) Execute() error {
+func (h *handler) Execute(ctx context.Context) error {
+	deployAccess, err := h.credentials.GetDeploymentAccessStatus()
+	if err != nil {
+		return fmt.Errorf("failed to check deployment access: %w", err)
+	}
+
+	if !deployAccess.HasAccess {
+		return h.accessRequester.PromptAndSubmitRequest(ctx)
+	}
+
+	h.initWorkflowRegistryClient()
+
 	h.displayWorkflowDetails()
 
-	if err := h.Compile(); err != nil {
-		return fmt.Errorf("failed to compile workflow: %w", err)
+	if cmdcommon.IsURL(h.inputs.WasmPath) {
+		h.inputs.BinaryURL = h.inputs.WasmPath
+		ui.Dim("Fetching binary from URL for workflow ID computation...")
+		fetched, err := cmdcommon.FetchURL(h.inputs.WasmPath)
+		if err != nil {
+			return fmt.Errorf("failed to fetch binary from URL: %w", err)
+		}
+		h.urlBinaryData = fetched
+		ui.Success(fmt.Sprintf("Using binary URL: %s", h.inputs.WasmPath))
+	} else {
+		if err := h.Compile(); err != nil {
+			return fmt.Errorf("failed to compile workflow: %w", err)
+		}
 	}
+
+	if cmdcommon.IsURL(h.inputs.ConfigPath) {
+		url := h.inputs.ConfigPath
+		h.inputs.ConfigURL = &url
+		h.inputs.ConfigPath = ""
+		ui.Dim("Fetching config from URL for workflow ID computation...")
+		fetched, err := cmdcommon.FetchURL(url)
+		if err != nil {
+			return fmt.Errorf("failed to fetch config from URL: %w", err)
+		}
+		h.urlConfigData = fetched
+		ui.Success(fmt.Sprintf("Using config URL: %s", url))
+	}
+
 	if err := h.PrepareWorkflowArtifact(); err != nil {
 		return fmt.Errorf("failed to prepare workflow artifact: %w", err)
 	}
+
+	ui.Dim(fmt.Sprintf("Binary hash:   %s", cmdcommon.HashBytes(h.workflowArtifact.RawBinaryForID)))
+	ui.Dim(fmt.Sprintf("Config hash:   %s", cmdcommon.HashBytes(h.workflowArtifact.RawConfigForID)))
+	ui.Dim(fmt.Sprintf("Workflow hash: %s", h.workflowArtifact.WorkflowID))
 
 	h.runtimeContext.Workflow.ID = h.workflowArtifact.WorkflowID
 

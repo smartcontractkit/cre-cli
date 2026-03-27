@@ -97,6 +97,7 @@ jobs:
         uses: smartcontractkit/.github/actions/ci-lint-go@31f7a923a25f7672641b5099cbb85ce4a984fc05 # ci-lint-go@3.1.0
         with:
           only-new-issues: false
+          golangci-lint-version: v2.11.2
           aws-region: ${{ secrets.AWS_REGION }}
           use-gati: "true"
           aws-role-arn-gati: ${{ secrets.AWS_OIDC_DEV_PLATFORM_READ_REPOS_EXTERNAL_TOKEN_ISSUER_ROLE_ARN }}
@@ -105,6 +106,10 @@ jobs:
 
   ci-lint-misc:
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+      actions: read
     steps:
       - name: ci-lint-misc
         uses: smartcontractkit/.github/actions/ci-lint-misc@01d931b0455a754d12e7143cc54a5a3521a8f6f6 # ci-lint-misc@0.1.4
@@ -116,8 +121,13 @@ jobs:
       contents: read
       actions: read
     steps:
+      - name: Install Bun
+        run: |
+          curl -fsSL https://bun.sh/install | bash
+          echo "$HOME/.bun/bin" >> "$GITHUB_PATH"
+
       - name: ci-test
-        uses: smartcontractkit/.github/actions/ci-test-go@ci-test-go/0.3.5
+        uses: smartcontractkit/.github/actions/ci-test-go@15802873c514b7335c8d0ef06dd7935b9c5b9ded # ci-test-go/0.3.5
         with:
           go-test-cmd: go test -v $(go list ./... | grep -v -e usbwallet -e test)
           use-go-cache: "true"
@@ -213,23 +223,6 @@ jobs:
           BINARY_NAME="cre_linux_amd64"
           go build -ldflags "-X 'github.com/smartcontractkit/cre-cli/cmd/version.Version=version $VERSION'" -o "${BINARY_NAME}"
 
-      - name: Check if current branch exists in chainlink repo
-        id: check-branch
-        env:
-          BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
-          GITHUB_TOKEN: ${{ steps.setup-github-token.outputs.access-token }}
-        run: |
-          echo "Current branch: $BRANCH_NAME"
-
-          # Check if branch exists in the target repository
-          if gh api "repos/smartcontractkit/chainlink/branches/$BRANCH_NAME" --silent 2>/dev/null; then
-            echo "Branch $BRANCH_NAME exists in chainlink repository. Going to use it"
-            echo "target_branch=$BRANCH_NAME" >> "$GITHUB_OUTPUT"
-          else
-            echo "Branch $BRANCH_NAME does not exist in chainlink repository, will use develop"
-            echo "target_branch=develop" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Derive nightly image tag
         id: derive-nightly-image-tag
         shell: bash
@@ -242,7 +235,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # actions/checkout@v4.2.2
         with:
           repository: smartcontractkit/chainlink
-          ref: ${{ steps.check-branch.outputs.target_branch }}
+          ref: develop
           path: chainlink
 
       - name: Set up Go

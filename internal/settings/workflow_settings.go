@@ -3,13 +3,81 @@ package settings
 import (
 	"fmt"
 	"net/url"
+	"os"
 	"strings"
 
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"sigs.k8s.io/yaml"
 )
+
+// GetWorkflowPathFromFile reads workflow-path from a workflow.yaml file (same value deploy/simulate get from Settings).
+func GetWorkflowPathFromFile(workflowYAMLPath string) (string, error) {
+	data, err := os.ReadFile(workflowYAMLPath)
+	if err != nil {
+		return "", fmt.Errorf("read workflow settings: %w", err)
+	}
+	var raw map[string]interface{}
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		return "", fmt.Errorf("parse workflow settings: %w", err)
+	}
+	return workflowPathFromRaw(raw)
+}
+
+// SetWorkflowPathInFile sets workflow-path in workflow.yaml (both staging-settings and production-settings) and writes the file.
+func SetWorkflowPathInFile(workflowYAMLPath, newPath string) error {
+	data, err := os.ReadFile(workflowYAMLPath)
+	if err != nil {
+		return fmt.Errorf("read workflow settings: %w", err)
+	}
+	var raw map[string]interface{}
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		return fmt.Errorf("parse workflow settings: %w", err)
+	}
+	setWorkflowPathInRaw(raw, newPath)
+	out, err := yaml.Marshal(raw)
+	if err != nil {
+		return fmt.Errorf("marshal workflow settings: %w", err)
+	}
+	if err := os.WriteFile(workflowYAMLPath, out, 0600); err != nil {
+		return fmt.Errorf("write workflow settings: %w", err)
+	}
+	return nil
+}
+
+func workflowPathFromRaw(raw map[string]interface{}) (string, error) {
+	for key := range raw {
+		target, _ := raw[key].(map[string]interface{})
+		if target == nil {
+			continue
+		}
+		artifacts, _ := target["workflow-artifacts"].(map[string]interface{})
+		if artifacts == nil {
+			continue
+		}
+		p, ok := artifacts["workflow-path"].(string)
+		if ok && p != "" {
+			return p, nil
+		}
+	}
+	return "", fmt.Errorf("workflow-path not found in workflow settings")
+}
+
+func setWorkflowPathInRaw(raw map[string]interface{}, path string) {
+	for _, key := range []string{"staging-settings", "production-settings"} {
+		target, _ := raw[key].(map[string]interface{})
+		if target == nil {
+			continue
+		}
+		artifacts, _ := target["workflow-artifacts"].(map[string]interface{})
+		if artifacts == nil {
+			continue
+		}
+		artifacts["workflow-path"] = path
+	}
+}
 
 type WorkflowSettings struct {
 	UserWorkflowSettings struct {
@@ -73,10 +141,17 @@ func loadWorkflowSettings(logger *zerolog.Logger, v *viper.Viper, cmd *cobra.Com
 		logger.Debug().Msgf("rpcs settings not found in target %q", target)
 	}
 
-	if registryChainName != "" {
-		if err := validateDeploymentRPC(&workflowSettings, registryChainName); err != nil {
-			return WorkflowSettings{}, errors.Wrap(err, "for target "+target)
+	for i := range workflowSettings.RPCs {
+		resolved, err := ResolveEnvVars(workflowSettings.RPCs[i].Url)
+		if err != nil {
+			return WorkflowSettings{}, fmt.Errorf("rpc url for chain %q: %w",
+				workflowSettings.RPCs[i].ChainName, err)
 		}
+		workflowSettings.RPCs[i].Url = resolved
+	}
+
+	if err := ValidateDeploymentRPC(&workflowSettings, registryChainName); err != nil {
+		return WorkflowSettings{}, errors.Wrap(err, "for target "+target)
 	}
 
 	if err := validateSettings(&workflowSettings); err != nil {
@@ -185,6 +260,8 @@ func ShouldSkipGetOwner(cmd *cobra.Command) bool {
 	switch cmd.Name() {
 	case "help":
 		return true
+	case "hash":
+		return true
 	case "simulate":
 		// Treat missing/invalid flag as false (i.e., skip).
 		// If broadcast is explicitly true, don't skip.
@@ -195,7 +272,12 @@ func ShouldSkipGetOwner(cmd *cobra.Command) bool {
 	}
 }
 
-func validateDeploymentRPC(config *WorkflowSettings, chainName string) error {
+// ValidateDeploymentRPC ensures project settings define a valid RPC URL for chainName (e.g. the workflow
+// registry chain). It is a no-op when chainName is empty. Used during settings load and from secrets owner-key flows.
+func ValidateDeploymentRPC(config *WorkflowSettings, chainName string) error {
+	if chainName == "" {
+		return nil
+	}
 	deploymentRPCFound := false
 	deploymentRPCURL := ""
 	commonError := " - required to deploy CRE workflows"

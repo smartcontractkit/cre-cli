@@ -5,9 +5,14 @@ Generate bindings from contract ABI
 ### Synopsis
 
 This command generates bindings from contract ABI files.
-Supports EVM chain family and Go language.
+Supports EVM chain family with Go and TypeScript languages.
+The target language is auto-detected from project files, or can be
+specified explicitly with --language.
 Each contract gets its own package subdirectory to avoid naming conflicts.
 For example, IERC20.abi generates bindings in generated/ierc20/ package.
+
+Both raw ABI files (*.abi) and JSON artifact files (*.json) are supported.
+For JSON files the ABI is read from the top-level "abi" field.
 
 ```
 cre generate-bindings <chain-family> [optional flags]
@@ -22,9 +27,9 @@ cre generate-bindings <chain-family> [optional flags]
 ### Options
 
 ```
-  -a, --abi string            Path to ABI directory (defaults to contracts/{chain-family}/src/abi/)
+  -a, --abi string            Path to ABI directory (defaults to contracts/{chain-family}/src/abi/). Supports *.abi and *.json files
   -h, --help                  help for generate-bindings
-  -l, --language string       Target language (go) (default "go")
+  -l, --language string       Target language: go, typescript (auto-detected from project files when omitted)
   -k, --pkg string            Base package name (each contract gets its own subdirectory) (default "bindings")
   -p, --project-root string   Path to project root directory (defaults to current directory)
 ```
@@ -32,9 +37,10 @@ cre generate-bindings <chain-family> [optional flags]
 ### Options inherited from parent commands
 
 ```
-  -e, --env string      Path to .env file which contains sensitive info (default ".env")
-  -T, --target string   Use target settings from YAML config
-  -v, --verbose         Run command in VERBOSE mode
+  -e, --env string          Path to .env file which contains sensitive info
+  -E, --public-env string   Path to .env.public file which contains shared, non-sensitive build config
+  -T, --target string       Use target settings from YAML config
+  -v, --verbose             Run command in VERBOSE mode
 ```
 
 ### SEE ALSO

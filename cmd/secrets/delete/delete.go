@@ -1,6 +1,7 @@
 package delete
 
 import (
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -57,6 +58,14 @@ func New(ctx *runtime.Context) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			secretsFilePath := args[0]
 
+			secretsAuth, err := cmd.Flags().GetString("secrets-auth")
+			if err != nil {
+				return err
+			}
+			if err := common.ValidateSecretsAuthFlow(secretsAuth, ctx.EnvironmentSet.EnvName); err != nil {
+				return err
+			}
+
 			h, err := common.NewHandler(ctx, secretsFilePath)
 			if err != nil {
 				return err
@@ -78,7 +87,6 @@ func New(ctx *runtime.Context) *cobra.Command {
 				return fmt.Errorf("invalid --timeout: must be greater than 0 and less than %dh (%dd)", maxHours, maxDays)
 			}
 
-			// Parse & validate YAML input
 			inputs, err := ResolveDeleteInputs(secretsFilePath)
 			if err != nil {
 				return err
@@ -87,8 +95,7 @@ func New(ctx *runtime.Context) *cobra.Command {
 				return err
 			}
 
-			// Two-path logic: MSIG step 1 (bundle) or EOA (allowlist + post)
-			return Execute(h, inputs, duration, ctx.Settings.Workflow.UserWorkflowSettings.WorkflowOwnerType)
+			return Execute(h, inputs, duration, secretsAuth)
 		},
 	}
 
@@ -101,7 +108,13 @@ func New(ctx *runtime.Context) *cobra.Command {
 // Two paths:
 //   - MSIG step 1: build request, compute digest, write bundle, print steps
 //   - EOA: allowlist if needed, then POST to gateway
-func Execute(h *common.Handler, inputs DeleteSecretsInputs, duration time.Duration, ownerType string) error {
+func Execute(h *common.Handler, inputs DeleteSecretsInputs, duration time.Duration, secretsAuth string) error {
+	if !common.IsBrowserFlow(secretsAuth) {
+		if err := h.EnsureDeploymentRPCForOwnerKeySecrets(); err != nil {
+			return err
+		}
+	}
+
 	spinner := ui.NewSpinner()
 	spinner.Start("Verifying ownership...")
 	if err := h.EnsureOwnerLinkedOrFail(); err != nil {
@@ -150,6 +163,11 @@ func Execute(h *common.Handler, inputs DeleteSecretsInputs, duration time.Durati
 	digest, err := common.CalculateDigest(deleteSecretsRequest)
 	if err != nil {
 		return fmt.Errorf("failed to calculate request digest: %w", err)
+	}
+
+	if common.IsBrowserFlow(secretsAuth) {
+		ui.Dim("Using your account to authorize vault access for this delete request...")
+		return h.ExecuteBrowserVaultAuthorization(context.Background(), vaulttypes.MethodSecretsDelete, digest)
 	}
 
 	gatewayPost := func() error {

@@ -1,0 +1,3 @@
+workflowName: "Basic Workflow"
+workflowOwner: "0x775edE8C0718c655e5238239aC553E9657bcd8C2"
+basicTriggerInterval: 1 # in seconds

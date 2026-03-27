@@ -1,15 +1,8 @@
 package deploy
 
 import (
-	"bytes"
-	"encoding/base64"
-	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
-	"strings"
-
-	"github.com/andybalholm/brotli"
 
 	cmdcommon "github.com/smartcontractkit/cre-cli/cmd/common"
 	"github.com/smartcontractkit/cre-cli/internal/constants"
@@ -20,121 +13,78 @@ func (h *handler) Compile() error {
 	if !h.validated {
 		return fmt.Errorf("handler h.inputs not validated")
 	}
-	ui.Dim("Compiling workflow...")
+
+	// URL wasm is handled directly in Execute(); nothing to compile or write locally.
+	if cmdcommon.IsURL(h.inputs.WasmPath) {
+		return nil
+	}
 
 	if h.inputs.OutputPath == "" {
 		h.inputs.OutputPath = defaultOutputPath
 	}
-	if !strings.HasSuffix(h.inputs.OutputPath, ".b64") {
-		if !strings.HasSuffix(h.inputs.OutputPath, ".br") {
-			if !strings.HasSuffix(h.inputs.OutputPath, ".wasm") {
-				h.inputs.OutputPath += ".wasm" // Append ".wasm" if it doesn't already end with ".wasm"
-			}
-			h.inputs.OutputPath += ".br" // Append ".br" if it doesn't already end with ".br"
+	h.inputs.OutputPath = cmdcommon.EnsureOutputExtension(h.inputs.OutputPath)
+
+	var wasmFile []byte
+	var err error
+
+	if h.inputs.WasmPath != "" {
+		ui.Dim("Reading pre-built WASM binary...")
+		wasmFile, err = os.ReadFile(h.inputs.WasmPath)
+		if err != nil {
+			return fmt.Errorf("failed to read WASM binary from %s: %w", h.inputs.WasmPath, err)
 		}
-		h.inputs.OutputPath += ".b64" // Append ".b64" if it doesn't already end with ".b64"
+		if h.runtimeContext != nil {
+			h.runtimeContext.Workflow.Language = constants.WorkflowLanguageWasm
+		}
+		h.log.Debug().Str("path", h.inputs.WasmPath).Msg("Loaded pre-built WASM binary")
+
+		br64Data, err := cmdcommon.EnsureBrotliBase64(wasmFile)
+		if err != nil {
+			return fmt.Errorf("failed to process WASM binary: %w", err)
+		}
+		if err = os.WriteFile(h.inputs.OutputPath, br64Data, 0666); err != nil { //nolint:gosec
+			return fmt.Errorf("failed to write output: %w", err)
+		}
+		ui.Success(fmt.Sprintf("Loaded pre-built WASM binary from %s", h.inputs.WasmPath))
+		return nil
 	}
 
-	workflowAbsFile, err := filepath.Abs(h.inputs.WorkflowPath)
-	if err != nil {
-		return fmt.Errorf("failed to get absolute path for the workflow file: %w", err)
+	ui.Dim("Compiling workflow...")
+
+	workflowDir, dirErr := os.Getwd()
+	if dirErr != nil {
+		return fmt.Errorf("workflow directory: %w", dirErr)
 	}
-
-	if _, err := os.Stat(workflowAbsFile); os.IsNotExist(err) {
-		return fmt.Errorf("workflow file not found: %s", workflowAbsFile)
+	resolvedWorkflowPath, resolveErr := cmdcommon.ResolveWorkflowPath(workflowDir, h.inputs.WorkflowPath)
+	if resolveErr != nil {
+		return fmt.Errorf("workflow path: %w", resolveErr)
 	}
-
-	workflowRootFolder := filepath.Dir(h.inputs.WorkflowPath)
-
-	tmpWasmFileName := "tmp.wasm"
-	workflowMainFile := filepath.Base(h.inputs.WorkflowPath)
-
-	// Set language in runtime context based on workflow file extension
+	_, workflowMainFile, mainErr := cmdcommon.WorkflowPathRootAndMain(resolvedWorkflowPath)
+	if mainErr != nil {
+		return fmt.Errorf("workflow path: %w", mainErr)
+	}
 	if h.runtimeContext != nil {
 		h.runtimeContext.Workflow.Language = cmdcommon.GetWorkflowLanguage(workflowMainFile)
-
-		switch h.runtimeContext.Workflow.Language {
-		case constants.WorkflowLanguageTypeScript:
-			if err := cmdcommon.EnsureTool("bun"); err != nil {
-				return errors.New("bun is required for TypeScript workflows but was not found in PATH; install from https://bun.com/docs/installation")
-			}
-		case constants.WorkflowLanguageGolang:
-			if err := cmdcommon.EnsureTool("go"); err != nil {
-				return errors.New("go toolchain is required for Go workflows but was not found in PATH; install from https://go.dev/dl")
-			}
-		default:
-			return fmt.Errorf("unsupported workflow language for file %s", workflowMainFile)
-		}
 	}
 
-	buildCmd := cmdcommon.GetBuildCmd(workflowMainFile, tmpWasmFileName, workflowRootFolder)
-	h.log.Debug().
-		Str("Workflow directory", buildCmd.Dir).
-		Str("Command", buildCmd.String()).
-		Msg("Executing go build command")
-
-	buildOutput, err := buildCmd.CombinedOutput()
+	wasmFile, err = cmdcommon.CompileWorkflowToWasm(resolvedWorkflowPath, true)
 	if err != nil {
 		ui.Error("Build failed:")
-		ui.Print(string(buildOutput))
-
-		out := strings.TrimSpace(string(buildOutput))
-		return fmt.Errorf("failed to compile workflow: %w\nbuild output:\n%s", err, out)
+		return fmt.Errorf("failed to compile workflow: %w", err)
 	}
-	h.log.Debug().Msgf("Build output: %s", buildOutput)
+	h.log.Debug().Msg("Workflow compiled successfully")
 	ui.Success("Workflow compiled successfully")
 
-	tmpWasmLocation := filepath.Join(workflowRootFolder, tmpWasmFileName)
-	wasmFile, err := os.ReadFile(tmpWasmLocation)
-	if err != nil {
-		return fmt.Errorf("failed to read workflow binary: %w", err)
-	}
-
-	compressedFile, err := applyBrotliCompressionV2(&wasmFile)
+	compressedFile, err := cmdcommon.CompressBrotli(wasmFile)
 	if err != nil {
 		return fmt.Errorf("failed to compress WASM binary: %w", err)
 	}
 	h.log.Debug().Msg("WASM binary compressed")
 
-	if err = encodeToBase64AndSaveToFile(&compressedFile, h.inputs.OutputPath); err != nil {
+	if err = cmdcommon.EncodeBase64ToFile(compressedFile, h.inputs.OutputPath); err != nil {
 		return fmt.Errorf("failed to base64 encode the WASM binary: %w", err)
 	}
 	h.log.Debug().Msg("WASM binary encoded")
-
-	if err = os.Remove(tmpWasmLocation); err != nil {
-		return fmt.Errorf("failed to remove the temporary file:  %w", err)
-	}
-
-	return nil
-}
-
-func applyBrotliCompressionV2(wasmContent *[]byte) ([]byte, error) {
-	var buffer bytes.Buffer
-
-	// Compress using Brotli with default options
-	writer := brotli.NewWriter(&buffer)
-
-	_, err := writer.Write(*wasmContent)
-	if err != nil {
-		return nil, err
-	}
-
-	// must close it to flush the writer and ensure all data is stored to the buffer
-	err = writer.Close()
-	if err != nil {
-		return nil, err
-	}
-
-	return buffer.Bytes(), nil
-}
-
-func encodeToBase64AndSaveToFile(input *[]byte, outputFile string) error {
-	encoded := base64.StdEncoding.EncodeToString(*input)
-
-	err := os.WriteFile(outputFile, []byte(encoded), 0666) //nolint:gosec
-	if err != nil {
-		return err
-	}
 
 	return nil
 }

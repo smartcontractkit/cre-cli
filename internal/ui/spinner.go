@@ -94,7 +94,7 @@ func (m spinnerModel) View() string {
 
 // NewSpinner creates a new spinner instance
 func NewSpinner() *Spinner {
-	isTTY := term.IsTerminal(int(os.Stderr.Fd()))
+	isTTY := term.IsTerminal(int(os.Stderr.Fd())) // #nosec G115 -- stderr fd is always 2
 	return &Spinner{
 		isTTY:  isTTY,
 		quitCh: make(chan struct{}),

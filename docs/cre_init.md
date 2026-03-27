@@ -9,6 +9,8 @@ Initialize a new CRE project or add a workflow to an existing one.
 This sets up the project structure, configuration, and starter files so you can
 build, test, and deploy workflows quickly.
 
+Templates are fetched dynamically from GitHub repositories.
+
 ```
 cre init [optional flags]
 ```
@@ -17,17 +19,20 @@ cre init [optional flags]
 
 ```
   -h, --help                   help for init
+      --non-interactive        Fail instead of prompting; requires all inputs via flags
   -p, --project-name string    Name for the new project
-      --rpc-url string         Sepolia RPC URL to use with template
-  -t, --template-id uint32     ID of the workflow template to use
+      --refresh                Bypass template cache and fetch fresh data
+      --rpc-url stringArray    RPC URL for a network (format: chain-name=url, repeatable)
+  -t, --template string        Name of the template to use (e.g., kv-store-go)
   -w, --workflow-name string   Name for the new workflow
 ```
 
 ### Options inherited from parent commands
 
 ```
-  -e, --env string            Path to .env file which contains sensitive info (default ".env")
+  -e, --env string            Path to .env file which contains sensitive info
   -R, --project-root string   Path to the project root
+  -E, --public-env string     Path to .env.public file which contains shared, non-sensitive build config
   -T, --target string         Use target settings from YAML config
   -v, --verbose               Run command in VERBOSE mode
 ```

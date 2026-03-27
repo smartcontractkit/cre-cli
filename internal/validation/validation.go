@@ -22,6 +22,7 @@ var customValidators = map[string]validator.Func{
 	"wasm":               files.IsValidWASM,
 	"workflow_name":      isWorkflowName,
 	"workflow_owner":     isWorkflowOwner,
+	"workflow_path_read": files.HasReadAccessToWorkflowPath,
 	"yaml":               files.IsValidYAML,
 }
 
@@ -37,6 +38,7 @@ var customTranslations = map[string]string{
 	"http_url|eq=":       "{0} must be empty or a valid HTTP URL: {1}",
 	"json":               "{0} must be a valid JSON file: {1}",
 	"path_read":          "{0} must have read access to path: {1}",
+	"workflow_path_read": "{0} must have read access to path: {1}",
 	"project_name":       "{0} must be non-empty, no longer than 64 characters, and contain only letters (a-z, A-Z), numbers (0-9), dashes (-), and underscores (_): {1}",
 	"wasm":               "{0} must be a valid WASM file: {1}",
 	"workflow_name":      "{0} must be non-empty, no longer than 64 characters, and contain only letters (a-z, A-Z), numbers (0-9), dashes (-), and underscores (_): {1}",

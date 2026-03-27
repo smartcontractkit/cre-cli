@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -64,10 +66,11 @@ var SupportedEVM = []ChainConfig{
 
 	// Jovay
 	{Selector: chainselectors.JOVAY_TESTNET.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
+	{Selector: chainselectors.JOVAY_MAINNET.Selector, Forwarder: "0x2B3068C4B288A2CD1f8B3613b8f33ef7cEecadC4"},
 
 	// Pharos
-	// Integration not ready yet
-	// {Selector: chainselectors.PHAROS_ATLANTIC_TESTNET.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
+	{Selector: chainselectors.PHAROS_ATLANTIC_TESTNET.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
+	{Selector: chainselectors.PHAROS_MAINNET.Selector, Forwarder: "0x2B3068C4B288A2CD1f8B3613b8f33ef7cEecadC4"},
 
 	// Worldchain
 	{Selector: chainselectors.ETHEREUM_TESTNET_SEPOLIA_WORLDCHAIN_1.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
@@ -75,21 +78,65 @@ var SupportedEVM = []ChainConfig{
 
 	// Plasma
 	{Selector: chainselectors.PLASMA_TESTNET.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
+	{Selector: chainselectors.PLASMA_MAINNET.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
 
 	// Linea
 	{Selector: chainselectors.ETHEREUM_TESTNET_SEPOLIA_LINEA_1.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
+	{Selector: chainselectors.ETHEREUM_MAINNET_LINEA_1.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
 
 	// Ink
 	{Selector: chainselectors.INK_TESTNET_SEPOLIA.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
+	{Selector: chainselectors.ETHEREUM_MAINNET_INK_1.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
 
 	// Hyperliquid
 	{Selector: chainselectors.HYPERLIQUID_TESTNET.Selector, Forwarder: "0xB27fA1c28288c50542527F64BCda22C9FbAc24CB"},
+	{Selector: chainselectors.HYPERLIQUID_MAINNET.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
 
 	// Apechain
 	{Selector: chainselectors.APECHAIN_TESTNET_CURTIS.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
 
 	// Arc
 	{Selector: chainselectors.ARC_TESTNET.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
+
+	// Xlayer
+	{Selector: chainselectors.XLAYER_TESTNET.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
+	{Selector: chainselectors.ETHEREUM_MAINNET_XLAYER_1.Selector, Forwarder: "0x2B3068C4B288A2CD1f8B3613b8f33ef7cEecadC4"},
+
+	// MegaETH
+	{Selector: chainselectors.MEGAETH_TESTNET_2.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
+	{Selector: chainselectors.MEGAETH_MAINNET.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
+
+	// Celo
+	// {Selector: chainselectors.CELO_SEPOLIA.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
+	{Selector: chainselectors.CELO_MAINNET.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
+
+	// Gnosis
+	{Selector: chainselectors.GNOSIS_CHAIN_TESTNET_CHIADO.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
+	{Selector: chainselectors.GNOSIS_CHAIN_MAINNET.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
+
+	// Cronos
+	{Selector: chainselectors.CRONOS_TESTNET.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
+
+	// Mantle
+	{Selector: chainselectors.ETHEREUM_TESTNET_SEPOLIA_MANTLE_1.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
+	{Selector: chainselectors.ETHEREUM_MAINNET_MANTLE_1.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
+
+	// TAC
+	{Selector: chainselectors.TAC_TESTNET.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
+
+	// Unichain
+	{Selector: chainselectors.ETHEREUM_TESTNET_SEPOLIA_UNICHAIN_1.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
+
+	// Scroll
+	{Selector: chainselectors.ETHEREUM_TESTNET_SEPOLIA_SCROLL_1.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
+	{Selector: chainselectors.ETHEREUM_MAINNET_SCROLL_1.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
+
+	// Sonic
+	{Selector: chainselectors.SONIC_TESTNET.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
+	{Selector: chainselectors.SONIC_MAINNET.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
+
+	// DTCC
+	{Selector: chainselectors.DTCC_TESTNET_ANDESITE.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
 }
 
 // parse "ChainSelector:<digits>" from trigger id, e.g. "evm:ChainSelector:5009297550715157269@1.0.0 LogTrigger"
@@ -107,6 +154,31 @@ func parseChainSelectorFromTriggerID(id string) (uint64, bool) {
 	}
 
 	return v, true
+}
+
+// redactURL returns a version of the URL with path segments and query parameters
+// masked to avoid leaking secrets that may have been resolved from environment variables.
+// For example, "https://rpc.example.com/v1/my-secret-key" becomes "https://rpc.example.com/v1/***".
+func redactURL(rawURL string) string {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return "***"
+	}
+	// Mask the last path segment (most common location for API keys)
+	u.Path = strings.TrimRight(u.Path, "/")
+	if u.Path != "" && u.Path != "/" {
+		parts := strings.Split(u.Path, "/")
+		if len(parts) > 1 {
+			parts[len(parts)-1] = "***"
+		}
+		u.RawPath = ""
+		u.Path = strings.Join(parts, "/")
+	}
+	// Remove query params entirely
+	u.RawQuery = ""
+	u.Fragment = ""
+	// Use Opaque to avoid re-encoding the path
+	return fmt.Sprintf("%s://%s%s", u.Scheme, u.Host, u.Path)
 }
 
 // runRPCHealthCheck runs connectivity check against every configured client.

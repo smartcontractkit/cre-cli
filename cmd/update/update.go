@@ -177,7 +177,7 @@ func untar(assetPath string) (string, error) {
 			if !strings.HasPrefix(absOutPath, absOutDir+string(os.PathSeparator)) && absOutPath != absOutDir {
 				return "", fmt.Errorf("tar extraction outside of output directory: %s", absOutPath)
 			}
-			out, err := os.Create(outPath)
+			out, err := os.Create(outPath) // #nosec G703 -- path validated against traversal above
 			if err != nil {
 				return "", err
 			}

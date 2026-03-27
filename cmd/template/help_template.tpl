@@ -86,11 +86,20 @@
 {{styleDim (printf "Use \"%s [command] --help\" for more information about a command." .CommandPath)}}
 {{- end }}
 
+{{- if not .HasParent}}
+
 {{styleSuccess "Tip:"}} New here? Run:
   {{styleCode "$ cre login"}}
     to login into your cre account, then:
   {{styleCode "$ cre init"}}
     to create your first cre project.
+{{- if needsDeployAccess}}
+
+🔑 Ready to deploy? Run:
+  {{styleCode "$ cre account access"}}
+    to request deployment access.
+{{- end}}
+{{- end}}
 
 {{styleSection "Need more help?"}}
   Visit {{styleURL "https://docs.chain.link/cre"}}

@@ -11,7 +11,7 @@ func TestValidateECDSAPrivateKey(t *testing.T) {
 	assert.NoError(t, err, "Expected no error during validator initialization")
 
 	type ECDSATestStruct struct {
-		PrivateKey string `validate:"ecdsa_private_key"`
+		PrivateKey string `validate:"ecdsa_private_key"` // #nosec G117 -- test struct for validation testing
 	}
 
 	tests := []struct {

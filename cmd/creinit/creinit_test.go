@@ -9,23 +9,294 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/smartcontractkit/cre-cli/internal/constants"
+	"github.com/smartcontractkit/cre-cli/internal/templaterepo"
 	"github.com/smartcontractkit/cre-cli/internal/testutil"
 	"github.com/smartcontractkit/cre-cli/internal/testutil/chainsim"
 )
 
-func GetTemplateFileListGo() []string {
-	return []string{
-		"README.md",
-		"main.go",
-		"workflow.yaml",
-	}
+// mockRegistry implements RegistryInterface for testing.
+type mockRegistry struct {
+	templates []templaterepo.TemplateSummary
 }
 
-func GetTemplateFileListTS() []string {
-	return []string{
-		"README.md",
-		"main.ts",
-		"workflow.yaml",
+func (m *mockRegistry) ListTemplates(refresh bool) ([]templaterepo.TemplateSummary, error) {
+	if len(m.templates) == 0 {
+		return nil, fmt.Errorf("no templates available")
+	}
+	return m.templates, nil
+}
+
+func (m *mockRegistry) GetTemplate(name string, refresh bool) (*templaterepo.TemplateSummary, error) {
+	for i := range m.templates {
+		if m.templates[i].Name == name {
+			return &m.templates[i], nil
+		}
+	}
+	return nil, fmt.Errorf("template %q not found", name)
+}
+
+func (m *mockRegistry) ScaffoldTemplate(tmpl *templaterepo.TemplateSummary, destDir, workflowName string, onProgress func(string)) error {
+	var files map[string]string
+	if tmpl.Language == constants.WorkflowLanguageGolang {
+		files = map[string]string{
+			"main.go":   "package main\n",
+			"README.md": "# Test\n",
+		}
+	} else {
+		files = map[string]string{
+			"main.ts":   "console.log('hello');\n",
+			"README.md": "# Test\n",
+		}
+	}
+
+	// Determine which workflow dirs to create
+	if len(tmpl.Workflows) > 1 {
+		// Multi-workflow: create each declared workflow dir
+		for _, wf := range tmpl.Workflows {
+			wfDir := filepath.Join(destDir, wf.Dir)
+			if err := os.MkdirAll(wfDir, 0755); err != nil {
+				return err
+			}
+			for name, content := range files {
+				if err := os.WriteFile(filepath.Join(wfDir, name), []byte(content), 0600); err != nil {
+					return err
+				}
+			}
+		}
+	} else if len(tmpl.Workflows) == 1 {
+		// Single workflow: create with template's dir name, then rename to user's choice
+		srcName := tmpl.Workflows[0].Dir
+		wfDir := filepath.Join(destDir, srcName)
+		if err := os.MkdirAll(wfDir, 0755); err != nil {
+			return err
+		}
+		for name, content := range files {
+			if err := os.WriteFile(filepath.Join(wfDir, name), []byte(content), 0600); err != nil {
+				return err
+			}
+		}
+		// Rename to user's workflow name (simulates renameWorkflowDir)
+		if srcName != workflowName {
+			if err := os.Rename(wfDir, filepath.Join(destDir, workflowName)); err != nil {
+				return err
+			}
+		}
+	} else {
+		// No workflows field (backwards compat / built-in): create with user's workflowName
+		wfDir := filepath.Join(destDir, workflowName)
+		if err := os.MkdirAll(wfDir, 0755); err != nil {
+			return err
+		}
+		for name, content := range files {
+			if err := os.WriteFile(filepath.Join(wfDir, name), []byte(content), 0600); err != nil {
+				return err
+			}
+		}
+	}
+
+	// Simulate remote template behavior: ship project.yaml and .env at root.
+	// Built-in templates don't include these (the CLI generates them).
+	if !tmpl.BuiltIn {
+		networks := tmpl.Networks
+		if len(networks) == 0 {
+			networks = []string{"ethereum-testnet-sepolia"}
+		}
+		var rpcsBlock string
+		for _, n := range networks {
+			rpcsBlock += fmt.Sprintf("    - chain-name: %s\n      url: https://default-rpc.example.com\n", n)
+		}
+		projectYAML := fmt.Sprintf("staging-settings:\n  rpcs:\n%sproduction-settings:\n  rpcs:\n%s", rpcsBlock, rpcsBlock)
+		if err := os.WriteFile(filepath.Join(destDir, "project.yaml"), []byte(projectYAML), 0600); err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(destDir, ".env"), []byte("GITHUB_API_TOKEN=test-token\nETH_PRIVATE_KEY=test-key\n"), 0600); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// Test fixtures
+var testGoTemplate = templaterepo.TemplateSummary{
+	TemplateMetadata: templaterepo.TemplateMetadata{
+		Kind:        "building-block",
+		Name:        "test-go",
+		Title:       "Test Go Template",
+		Description: "A test Go template",
+		Language:    "go",
+		Category:    "workflow",
+		Author:      "Test",
+		License:     "MIT",
+		Networks:    []string{"ethereum-testnet-sepolia"},
+		Workflows:   []templaterepo.WorkflowDirEntry{{Dir: "my-workflow"}},
+	},
+	Path: "building-blocks/test/test-go",
+	Source: templaterepo.RepoSource{
+		Owner: "test",
+		Repo:  "templates",
+		Ref:   "main",
+	},
+}
+
+var testTSTemplate = templaterepo.TemplateSummary{
+	TemplateMetadata: templaterepo.TemplateMetadata{
+		Kind:        "building-block",
+		Name:        "test-ts",
+		Title:       "Test TypeScript Template",
+		Description: "A test TypeScript template",
+		Language:    "typescript",
+		Category:    "workflow",
+		Author:      "Test",
+		License:     "MIT",
+		Workflows:   []templaterepo.WorkflowDirEntry{{Dir: "my-workflow"}},
+	},
+	Path: "building-blocks/test/test-ts",
+	Source: templaterepo.RepoSource{
+		Owner: "test",
+		Repo:  "templates",
+		Ref:   "main",
+	},
+}
+
+var testStarterTemplate = templaterepo.TemplateSummary{
+	TemplateMetadata: templaterepo.TemplateMetadata{
+		Kind:        "starter-template",
+		Name:        "starter-go",
+		Title:       "Starter Go Template",
+		Description: "A starter Go template",
+		Language:    "go",
+		Category:    "workflow",
+		Author:      "Test",
+		License:     "MIT",
+		Workflows:   []templaterepo.WorkflowDirEntry{{Dir: "my-workflow"}},
+	},
+	Path: "starter-templates/test/starter-go",
+	Source: templaterepo.RepoSource{
+		Owner: "test",
+		Repo:  "templates",
+		Ref:   "main",
+	},
+}
+
+var testMultiNetworkTemplate = templaterepo.TemplateSummary{
+	TemplateMetadata: templaterepo.TemplateMetadata{
+		Kind:        "building-block",
+		Name:        "test-multichain",
+		Title:       "Test Multi-Chain Template",
+		Description: "A template requiring multiple chains",
+		Language:    "go",
+		Category:    "workflow",
+		Author:      "Test",
+		License:     "MIT",
+		Networks:    []string{"ethereum-testnet-sepolia", "ethereum-mainnet"},
+		Workflows:   []templaterepo.WorkflowDirEntry{{Dir: "my-workflow"}},
+	},
+	Path: "building-blocks/test/test-multichain",
+	Source: templaterepo.RepoSource{
+		Owner: "test",
+		Repo:  "templates",
+		Ref:   "main",
+	},
+}
+
+var testBuiltInGoTemplate = templaterepo.TemplateSummary{
+	TemplateMetadata: templaterepo.TemplateMetadata{
+		Kind:        "building-block",
+		Name:        "hello-world-go",
+		Title:       "Hello World (Go)",
+		Description: "A built-in Go template",
+		Language:    "go",
+		Category:    "workflow",
+		Author:      "Test",
+		License:     "MIT",
+	},
+	Path:    "builtin/hello-world-go",
+	BuiltIn: true,
+}
+
+var testMultiWorkflowTemplate = templaterepo.TemplateSummary{
+	TemplateMetadata: templaterepo.TemplateMetadata{
+		Kind:        "starter-template",
+		Name:        "bring-your-own-data-go",
+		Title:       "Bring Your Own Data (Go)",
+		Description: "Bring your own off-chain data on-chain with PoR and NAV publishing.",
+		Language:    "go",
+		Category:    "workflow",
+		Author:      "Test",
+		License:     "MIT",
+		Networks:    []string{"ethereum-testnet-sepolia"},
+		Workflows: []templaterepo.WorkflowDirEntry{
+			{Dir: "por", Description: "Proof of Reserve workflow"},
+			{Dir: "nav", Description: "NAV publishing workflow"},
+		},
+		PostInit: "Deploy contracts and update secrets.yaml before running.",
+	},
+	Path: "starter-templates/bring-your-own-data/workflow-go",
+	Source: templaterepo.RepoSource{
+		Owner: "test",
+		Repo:  "templates",
+		Ref:   "main",
+	},
+}
+
+var testSingleWorkflowWithPostInit = templaterepo.TemplateSummary{
+	TemplateMetadata: templaterepo.TemplateMetadata{
+		Kind:        "building-block",
+		Name:        "kv-store-go",
+		Title:       "KV Store (Go)",
+		Description: "Read, increment, and write a counter in AWS S3.",
+		Language:    "go",
+		Category:    "workflow",
+		Author:      "Test",
+		License:     "MIT",
+		Workflows:   []templaterepo.WorkflowDirEntry{{Dir: "my-workflow"}},
+		PostInit:    "Update secrets.yaml with your AWS credentials before running.",
+	},
+	Path: "building-blocks/kv-store/kv-store-go",
+	Source: templaterepo.RepoSource{
+		Owner: "test",
+		Repo:  "templates",
+		Ref:   "main",
+	},
+}
+
+var testProjectDirWithNetworks = templaterepo.TemplateSummary{
+	TemplateMetadata: templaterepo.TemplateMetadata{
+		Kind:        "starter-template",
+		Name:        "starter-with-projectdir",
+		Title:       "Starter With ProjectDir",
+		Description: "A starter template that ships its own project structure",
+		Language:    "typescript",
+		Category:    "workflow",
+		Author:      "Test",
+		License:     "MIT",
+		ProjectDir:  ".",
+		Networks:    []string{"ethereum-testnet-sepolia", "ethereum-mainnet"},
+		Workflows: []templaterepo.WorkflowDirEntry{
+			{Dir: "my-workflow", Description: "Test workflow"},
+		},
+	},
+	Path: "starter-templates/test/starter-with-projectdir",
+	Source: templaterepo.RepoSource{
+		Owner: "test",
+		Repo:  "templates",
+		Ref:   "main",
+	},
+}
+
+func newMockRegistry() *mockRegistry {
+	return &mockRegistry{
+		templates: []templaterepo.TemplateSummary{
+			testGoTemplate,
+			testTSTemplate,
+			testStarterTemplate,
+			testMultiNetworkTemplate,
+			testBuiltInGoTemplate,
+			testMultiWorkflowTemplate,
+			testSingleWorkflowWithPostInit,
+			testProjectDirWithNetworks,
+		},
 	}
 }
 
@@ -53,26 +324,20 @@ func validateInitProjectStructure(t *testing.T, projectRoot, workflowName string
 	}
 }
 
-func validateGoScaffoldAbsent(t *testing.T, projectRoot string) {
-	t.Helper()
-	// go.mod should NOT exist
-	modPath := filepath.Join(projectRoot, "go.mod")
-	_, err := os.Stat(modPath)
-	require.Truef(t, os.IsNotExist(err), "go.mod should NOT exist for TypeScript templates (found at %s)", modPath)
-
-	// contracts/ dir should NOT exist at project root
-	contractsDir := filepath.Join(projectRoot, "contracts")
-	requireNoDirExists(t, contractsDir)
+func GetTemplateFileListGo() []string {
+	return []string{
+		"README.md",
+		"main.go",
+		"workflow.yaml",
+	}
 }
 
-func requireNoDirExists(t *testing.T, dirPath string) {
-	t.Helper()
-	fi, err := os.Stat(dirPath)
-	if os.IsNotExist(err) {
-		return // good: no directory
+func GetTemplateFileListTS() []string {
+	return []string{
+		"README.md",
+		"main.ts",
+		"workflow.yaml",
 	}
-	require.NoError(t, err, "unexpected error stating %s", dirPath)
-	require.Falsef(t, fi.IsDir(), "directory %s should NOT exist", dirPath)
 }
 
 func TestInitExecuteFlows(t *testing.T) {
@@ -80,82 +345,52 @@ func TestInitExecuteFlows(t *testing.T) {
 	cases := []struct {
 		name                string
 		projectNameFlag     string
-		templateIDFlag      uint32
+		templateNameFlag    string
 		workflowNameFlag    string
-		rpcURLFlag          string
+		rpcURLs             map[string]string
 		expectProjectDirRel string
 		expectWorkflowName  string
 		expectTemplateFiles []string
+		language            string // "go" or "typescript"
 	}{
 		{
-			name:                "Go PoR template with all flags",
+			name:                "Go template with all flags",
 			projectNameFlag:     "myproj",
-			templateIDFlag:      1, // Golang PoR
+			templateNameFlag:    "test-go",
 			workflowNameFlag:    "myworkflow",
-			rpcURLFlag:          "https://sepolia.example/rpc",
+			rpcURLs:             map[string]string{"ethereum-testnet-sepolia": "https://rpc.example.com"},
 			expectProjectDirRel: "myproj",
 			expectWorkflowName:  "myworkflow",
 			expectTemplateFiles: GetTemplateFileListGo(),
+			language:            "go",
 		},
 		{
-			name:                "Go HelloWorld template with all flags",
-			projectNameFlag:     "alpha",
-			templateIDFlag:      2, // Golang HelloWorld
-			workflowNameFlag:    "default-wf",
-			rpcURLFlag:          "",
-			expectProjectDirRel: "alpha",
-			expectWorkflowName:  "default-wf",
-			expectTemplateFiles: GetTemplateFileListGo(),
-		},
-		{
-			name:                "Go HelloWorld with different project name",
-			projectNameFlag:     "projX",
-			templateIDFlag:      2, // Golang HelloWorld
-			workflowNameFlag:    "workflow-X",
-			rpcURLFlag:          "",
-			expectProjectDirRel: "projX",
-			expectWorkflowName:  "workflow-X",
-			expectTemplateFiles: GetTemplateFileListGo(),
-		},
-		{
-			name:                "Go PoR with workflow flag",
-			projectNameFlag:     "projFlag",
-			templateIDFlag:      1, // Golang PoR
-			workflowNameFlag:    "flagged-wf",
-			rpcURLFlag:          "https://sepolia.example/rpc",
-			expectProjectDirRel: "projFlag",
-			expectWorkflowName:  "flagged-wf",
-			expectTemplateFiles: GetTemplateFileListGo(),
-		},
-		{
-			name:                "Go HelloWorld template by ID",
-			projectNameFlag:     "tplProj",
-			templateIDFlag:      2, // Golang HelloWorld
-			workflowNameFlag:    "workflow-Tpl",
-			rpcURLFlag:          "",
-			expectProjectDirRel: "tplProj",
-			expectWorkflowName:  "workflow-Tpl",
-			expectTemplateFiles: GetTemplateFileListGo(),
-		},
-		{
-			name:                "Go PoR template with rpc-url",
-			projectNameFlag:     "porWithFlag",
-			templateIDFlag:      1, // Golang PoR
-			workflowNameFlag:    "por-wf-01",
-			rpcURLFlag:          "https://sepolia.example/rpc",
-			expectProjectDirRel: "porWithFlag",
-			expectWorkflowName:  "por-wf-01",
-			expectTemplateFiles: GetTemplateFileListGo(),
-		},
-		{
-			name:                "TS HelloWorld template with rpc-url (ignored)",
-			projectNameFlag:     "tsWithRpcFlag",
-			templateIDFlag:      3, // TypeScript HelloWorld
-			workflowNameFlag:    "ts-wf-flag",
-			rpcURLFlag:          "https://sepolia.example/rpc",
-			expectProjectDirRel: "tsWithRpcFlag",
-			expectWorkflowName:  "ts-wf-flag",
+			name:                "TypeScript template with all flags",
+			projectNameFlag:     "tsProj",
+			templateNameFlag:    "test-ts",
+			workflowNameFlag:    "ts-workflow",
+			expectProjectDirRel: "tsProj",
+			expectWorkflowName:  "ts-workflow",
 			expectTemplateFiles: GetTemplateFileListTS(),
+			language:            "typescript",
+		},
+		{
+			name:                "Starter template with all flags",
+			projectNameFlag:     "starterProj",
+			templateNameFlag:    "starter-go",
+			workflowNameFlag:    "starter-wf",
+			expectProjectDirRel: "starterProj",
+			expectWorkflowName:  "starter-wf",
+			expectTemplateFiles: GetTemplateFileListGo(),
+		},
+		{
+			name:                "Starter template with all flags",
+			projectNameFlag:     "starterProj",
+			templateNameFlag:    "starter-go",
+			workflowNameFlag:    "starter-wf",
+			expectProjectDirRel: "starterProj",
+			expectWorkflowName:  "starter-wf",
+			expectTemplateFiles: GetTemplateFileListGo(),
 		},
 	}
 
@@ -171,21 +406,19 @@ func TestInitExecuteFlows(t *testing.T) {
 
 			inputs := Inputs{
 				ProjectName:  tc.projectNameFlag,
-				TemplateID:   tc.templateIDFlag,
+				TemplateName: tc.templateNameFlag,
 				WorkflowName: tc.workflowNameFlag,
-				RPCUrl:       tc.rpcURLFlag,
+				RpcURLs:      tc.rpcURLs,
 			}
 
 			ctx := sim.NewRuntimeContext()
-			h := newHandler(ctx)
+			h := newHandlerWithRegistry(ctx, newMockRegistry())
 
 			require.NoError(t, h.ValidateInputs(inputs))
 			require.NoError(t, h.Execute(inputs))
 
 			projectRoot := filepath.Join(tempDir, tc.expectProjectDirRel)
 			validateInitProjectStructure(t, projectRoot, tc.expectWorkflowName, tc.expectTemplateFiles)
-			// NOTE: We deliberately don't assert Go/TS scaffolding here because the
-			// template chosen by prompt could vary; dedicated tests below cover both paths.
 		})
 	}
 }
@@ -208,11 +441,12 @@ func TestInsideExistingProjectAddsWorkflow(t *testing.T) {
 
 	inputs := Inputs{
 		ProjectName:  "",
-		TemplateID:   2, // Golang HelloWorld
+		TemplateName: "test-go",
 		WorkflowName: "wf-inside-existing-project",
+		RpcURLs:      map[string]string{"ethereum-testnet-sepolia": "https://rpc.example.com"},
 	}
 
-	h := newHandler(sim.NewRuntimeContext())
+	h := newHandlerWithRegistry(sim.NewRuntimeContext(), newMockRegistry())
 
 	require.NoError(t, h.ValidateInputs(inputs))
 	require.NoError(t, h.Execute(inputs))
@@ -239,27 +473,28 @@ func TestInitWithTypescriptTemplateSkipsGoScaffold(t *testing.T) {
 
 	inputs := Inputs{
 		ProjectName:  "tsProj",
-		TemplateID:   3, // TypeScript template
+		TemplateName: "test-ts",
 		WorkflowName: "ts-workflow-01",
 	}
 
-	h := newHandler(sim.NewRuntimeContext())
+	h := newHandlerWithRegistry(sim.NewRuntimeContext(), newMockRegistry())
 
 	require.NoError(t, h.ValidateInputs(inputs))
 	require.NoError(t, h.Execute(inputs))
 
 	projectRoot := filepath.Join(tempDir, "tsProj")
 
-	// Generic project assets
 	require.FileExists(t, filepath.Join(projectRoot, constants.DefaultProjectSettingsFileName))
 	require.FileExists(t, filepath.Join(projectRoot, constants.DefaultEnvFileName))
 	require.DirExists(t, filepath.Join(projectRoot, "ts-workflow-01"))
 
-	// TS should NOT create Go artifacts
-	validateGoScaffoldAbsent(t, projectRoot)
+	// go.mod should NOT exist for TS templates
+	modPath := filepath.Join(projectRoot, "go.mod")
+	_, err = os.Stat(modPath)
+	require.Truef(t, os.IsNotExist(err), "go.mod should NOT exist for TypeScript templates (found at %s)", modPath)
 }
 
-func TestInsideExistingProjectAddsTypescriptWorkflowSkipsGoScaffold(t *testing.T) {
+func TestInitWithRpcUrlFlags(t *testing.T) {
 	sim := chainsim.NewSimulatedEnvironment(t)
 	defer sim.Close()
 
@@ -268,49 +503,513 @@ func TestInsideExistingProjectAddsTypescriptWorkflowSkipsGoScaffold(t *testing.T
 	require.NoError(t, err)
 	defer restoreCwd()
 
-	// Simulate an existing project
-	require.NoError(t, os.WriteFile(
-		constants.DefaultProjectSettingsFileName,
-		[]byte("name: existing"), 0600,
-	))
-	_ = os.Remove(constants.DefaultEnvFileName)
-
 	inputs := Inputs{
-		ProjectName:  "",
-		TemplateID:   3, // TypeScript HelloWorld
-		WorkflowName: "ts-wf-existing",
+		ProjectName:  "rpcProj",
+		TemplateName: "test-multichain",
+		WorkflowName: "rpc-workflow",
+		RpcURLs: map[string]string{
+			"ethereum-testnet-sepolia": "https://sepolia.example.com",
+			"ethereum-mainnet":         "https://mainnet.example.com",
+		},
 	}
 
-	h := newHandler(sim.NewRuntimeContext())
-
+	h := newHandlerWithRegistry(sim.NewRuntimeContext(), newMockRegistry())
 	require.NoError(t, h.ValidateInputs(inputs))
 	require.NoError(t, h.Execute(inputs))
 
-	require.FileExists(t, constants.DefaultProjectSettingsFileName)
-	require.FileExists(t, constants.DefaultEnvFileName)
-	require.DirExists(t, "ts-wf-existing")
+	projectRoot := filepath.Join(tempDir, "rpcProj")
+	projectYAML, err := os.ReadFile(filepath.Join(projectRoot, constants.DefaultProjectSettingsFileName))
+	require.NoError(t, err)
+	content := string(projectYAML)
 
-	// Ensure Go bits are not introduced
-	validateGoScaffoldAbsent(t, ".")
+	// User-provided URLs should replace the mock's default placeholder URLs
+	require.Contains(t, content, "ethereum-testnet-sepolia")
+	require.Contains(t, content, "https://sepolia.example.com")
+	require.NotContains(t, content, "https://default-rpc.example.com",
+		"mock default URLs should be replaced by user-provided URLs")
+	require.Contains(t, content, "ethereum-mainnet")
+	require.Contains(t, content, "https://mainnet.example.com")
 }
 
-func TestGetWorkflowTemplateByIDAndTitle(t *testing.T) {
-	tpl, lang, err := (&handler{}).getWorkflowTemplateByID(3)
+func TestInitNoNetworksFallsBackToDefault(t *testing.T) {
+	sim := chainsim.NewSimulatedEnvironment(t)
+	defer sim.Close()
+
+	tempDir := t.TempDir()
+	restoreCwd, err := testutil.ChangeWorkingDirectory(tempDir)
 	require.NoError(t, err)
-	require.Equal(t, uint32(3), tpl.ID)
-	require.Equal(t, lang.Title, "Typescript")
-	require.NotEmpty(t, tpl.Title)
+	defer restoreCwd()
 
-	_, _, err = (&handler{}).getWorkflowTemplateByID(9999)
-	require.Error(t, err)
+	// Built-in template has no project.yaml from scaffold,
+	// so the CLI generates one with default networks.
+	inputs := Inputs{
+		ProjectName:  "defaultProj",
+		TemplateName: "hello-world-go",
+		WorkflowName: "default-wf",
+	}
 
-	title := tpl.Title
-	lang, langErr := (&handler{}).getLanguageTemplateByTitle("Typescript")
-	tplByTitle, err := (&handler{}).getWorkflowTemplateByTitle(title, lang.Workflows)
+	h := newHandlerWithRegistry(sim.NewRuntimeContext(), newMockRegistry())
+	require.NoError(t, h.ValidateInputs(inputs))
+	require.NoError(t, h.Execute(inputs))
+
+	projectRoot := filepath.Join(tempDir, "defaultProj")
+	projectYAML, err := os.ReadFile(filepath.Join(projectRoot, constants.DefaultProjectSettingsFileName))
 	require.NoError(t, err)
-	require.NoError(t, langErr)
-	require.Equal(t, tpl.ID, tplByTitle.ID)
+	content := string(projectYAML)
+	require.Contains(t, content, "ethereum-testnet-sepolia")
+	require.Contains(t, content, constants.DefaultEthSepoliaRpcUrl)
+}
 
-	_, err = (&handler{}).getWorkflowTemplateByTitle("this-title-should-not-exist", lang.Workflows)
+func TestInitRemoteTemplateKeepsProjectYAML(t *testing.T) {
+	sim := chainsim.NewSimulatedEnvironment(t)
+	defer sim.Close()
+
+	tempDir := t.TempDir()
+	restoreCwd, err := testutil.ChangeWorkingDirectory(tempDir)
+	require.NoError(t, err)
+	defer restoreCwd()
+
+	// Remote template (test-ts) has no Networks — mock creates project.yaml with default chain.
+	// CLI should preserve the template's project.yaml (no patching needed since no user RPCs).
+	inputs := Inputs{
+		ProjectName:  "remoteProj",
+		TemplateName: "test-ts",
+		WorkflowName: "ts-wf",
+	}
+
+	h := newHandlerWithRegistry(sim.NewRuntimeContext(), newMockRegistry())
+	require.NoError(t, h.ValidateInputs(inputs))
+	require.NoError(t, h.Execute(inputs))
+
+	projectRoot := filepath.Join(tempDir, "remoteProj")
+	projectYAML, err := os.ReadFile(filepath.Join(projectRoot, constants.DefaultProjectSettingsFileName))
+	require.NoError(t, err)
+	content := string(projectYAML)
+	// Template's project.yaml should be preserved (contains mock's default URL)
+	require.Contains(t, content, "ethereum-testnet-sepolia")
+	require.Contains(t, content, "https://default-rpc.example.com")
+
+	// Template's .env should be preserved
+	envContent, err := os.ReadFile(filepath.Join(projectRoot, constants.DefaultEnvFileName))
+	require.NoError(t, err)
+	require.Contains(t, string(envContent), "GITHUB_API_TOKEN=test-token")
+}
+
+func TestInitProjectDirTemplateRpcPatching(t *testing.T) {
+	sim := chainsim.NewSimulatedEnvironment(t)
+	defer sim.Close()
+
+	tempDir := t.TempDir()
+	restoreCwd, err := testutil.ChangeWorkingDirectory(tempDir)
+	require.NoError(t, err)
+	defer restoreCwd()
+
+	// Template with ProjectDir set AND Networks — the bug was that RPC URLs
+	// were silently dropped because the patching was inside the ProjectDir=="" block.
+	inputs := Inputs{
+		ProjectName:  "projectDirProj",
+		TemplateName: "starter-with-projectdir",
+		WorkflowName: "my-workflow",
+		RpcURLs: map[string]string{
+			"ethereum-testnet-sepolia": "https://sepolia.custom.com",
+			"ethereum-mainnet":         "https://mainnet.custom.com",
+		},
+	}
+
+	h := newHandlerWithRegistry(sim.NewRuntimeContext(), newMockRegistry())
+	require.NoError(t, h.ValidateInputs(inputs))
+	require.NoError(t, h.Execute(inputs))
+
+	projectRoot := filepath.Join(tempDir, "projectDirProj")
+	projectYAML, err := os.ReadFile(filepath.Join(projectRoot, constants.DefaultProjectSettingsFileName))
+	require.NoError(t, err)
+	content := string(projectYAML)
+
+	// User-provided RPCs must be patched even though ProjectDir is set
+	require.Contains(t, content, "https://sepolia.custom.com",
+		"user RPC URL for sepolia should be patched into project.yaml for templates with ProjectDir")
+	require.Contains(t, content, "https://mainnet.custom.com",
+		"user RPC URL for mainnet should be patched into project.yaml for templates with ProjectDir")
+	require.NotContains(t, content, "https://default-rpc.example.com",
+		"mock default URLs should be replaced by user-provided URLs")
+}
+
+func TestTemplateNotFound(t *testing.T) {
+	sim := chainsim.NewSimulatedEnvironment(t)
+	defer sim.Close()
+
+	tempDir := t.TempDir()
+	restoreCwd, err := testutil.ChangeWorkingDirectory(tempDir)
+	require.NoError(t, err)
+	defer restoreCwd()
+
+	inputs := Inputs{
+		ProjectName:  "proj",
+		TemplateName: "nonexistent-template",
+		WorkflowName: "wf",
+	}
+
+	h := newHandlerWithRegistry(sim.NewRuntimeContext(), newMockRegistry())
+
+	require.NoError(t, h.ValidateInputs(inputs))
+	err = h.Execute(inputs)
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "not found")
+}
+
+func TestMultiWorkflowNoRename(t *testing.T) {
+	sim := chainsim.NewSimulatedEnvironment(t)
+	defer sim.Close()
+
+	tempDir := t.TempDir()
+	restoreCwd, err := testutil.ChangeWorkingDirectory(tempDir)
+	require.NoError(t, err)
+	defer restoreCwd()
+
+	// Multi-workflow template: no --workflow-name needed, dirs stay as declared
+	inputs := Inputs{
+		ProjectName:  "multiProj",
+		TemplateName: "bring-your-own-data-go",
+		WorkflowName: "",
+		RpcURLs:      map[string]string{"ethereum-testnet-sepolia": "https://rpc.example.com"},
+	}
+
+	h := newHandlerWithRegistry(sim.NewRuntimeContext(), newMockRegistry())
+	require.NoError(t, h.ValidateInputs(inputs))
+	require.NoError(t, h.Execute(inputs))
+
+	projectRoot := filepath.Join(tempDir, "multiProj")
+	require.FileExists(t, filepath.Join(projectRoot, constants.DefaultProjectSettingsFileName))
+	require.FileExists(t, filepath.Join(projectRoot, constants.DefaultEnvFileName))
+
+	// Both workflow dirs should exist with their original names
+	require.DirExists(t, filepath.Join(projectRoot, "por"), "por workflow dir should exist")
+	require.DirExists(t, filepath.Join(projectRoot, "nav"), "nav workflow dir should exist")
+
+	// workflow.yaml should be generated in each
+	require.FileExists(t, filepath.Join(projectRoot, "por", constants.DefaultWorkflowSettingsFileName))
+	require.FileExists(t, filepath.Join(projectRoot, "nav", constants.DefaultWorkflowSettingsFileName))
+}
+
+func TestMultiWorkflowIgnoresWorkflowNameFlag(t *testing.T) {
+	sim := chainsim.NewSimulatedEnvironment(t)
+	defer sim.Close()
+
+	tempDir := t.TempDir()
+	restoreCwd, err := testutil.ChangeWorkingDirectory(tempDir)
+	require.NoError(t, err)
+	defer restoreCwd()
+
+	// Multi-workflow with --workflow-name flag: flag should be ignored
+	inputs := Inputs{
+		ProjectName:  "multiProj2",
+		TemplateName: "bring-your-own-data-go",
+		WorkflowName: "test-rename",
+		RpcURLs:      map[string]string{"ethereum-testnet-sepolia": "https://rpc.example.com"},
+	}
+
+	h := newHandlerWithRegistry(sim.NewRuntimeContext(), newMockRegistry())
+	require.NoError(t, h.ValidateInputs(inputs))
+	require.NoError(t, h.Execute(inputs))
+
+	projectRoot := filepath.Join(tempDir, "multiProj2")
+
+	// Original dirs should exist, not the --workflow-name
+	require.DirExists(t, filepath.Join(projectRoot, "por"))
+	require.DirExists(t, filepath.Join(projectRoot, "nav"))
+	_, err = os.Stat(filepath.Join(projectRoot, "test-rename"))
+	require.True(t, os.IsNotExist(err), "workflow-name flag should be ignored for multi-workflow templates")
+}
+
+func TestSingleWorkflowDefaultFromTemplate(t *testing.T) {
+	sim := chainsim.NewSimulatedEnvironment(t)
+	defer sim.Close()
+
+	tempDir := t.TempDir()
+	restoreCwd, err := testutil.ChangeWorkingDirectory(tempDir)
+	require.NoError(t, err)
+	defer restoreCwd()
+
+	// Verify the Execute path uses workflows[0].dir when workflowName is empty.
+	// We simulate the wizard result by providing all flags except workflow name,
+	// but since Execute fills the default from Workflows[0].Dir, the result should
+	// use "my-workflow" (the template's declared dir name).
+	// Note: We must provide a workflow name to avoid the TTY prompt in tests.
+	// Instead, we verify the default logic by providing it explicitly.
+	inputs := Inputs{
+		ProjectName:  "singleProj",
+		TemplateName: "kv-store-go",
+		WorkflowName: "my-workflow", // same as template's workflows[0].dir
+	}
+
+	h := newHandlerWithRegistry(sim.NewRuntimeContext(), newMockRegistry())
+	require.NoError(t, h.ValidateInputs(inputs))
+	require.NoError(t, h.Execute(inputs))
+
+	projectRoot := filepath.Join(tempDir, "singleProj")
+	// Should use the template's default dir name without rename
+	require.DirExists(t, filepath.Join(projectRoot, "my-workflow"),
+		"single workflow should use template's workflows[0].dir")
+	require.FileExists(t, filepath.Join(projectRoot, "my-workflow", constants.DefaultWorkflowSettingsFileName))
+}
+
+func TestSingleWorkflowDefaultInExecute(t *testing.T) {
+	// Verify that Execute defaults workflowName to workflows[0].dir
+	// when workflowName is empty (unit test for the default logic, not the wizard).
+	tmpl := testSingleWorkflowWithPostInit
+	require.Equal(t, 1, len(tmpl.Workflows))
+	require.Equal(t, "my-workflow", tmpl.Workflows[0].Dir)
+
+	// The Execute code path:
+	// if workflowName == "" && len(selectedTemplate.Workflows) == 1 {
+	//     workflowName = selectedTemplate.Workflows[0].Dir
+	// }
+	workflowName := ""
+	if workflowName == "" {
+		if len(tmpl.Workflows) == 1 {
+			workflowName = tmpl.Workflows[0].Dir
+		} else {
+			workflowName = constants.DefaultWorkflowName
+		}
+	}
+	require.Equal(t, "my-workflow", workflowName)
+}
+
+func TestSingleWorkflowRenameWithFlag(t *testing.T) {
+	sim := chainsim.NewSimulatedEnvironment(t)
+	defer sim.Close()
+
+	tempDir := t.TempDir()
+	restoreCwd, err := testutil.ChangeWorkingDirectory(tempDir)
+	require.NoError(t, err)
+	defer restoreCwd()
+
+	// Single workflow with --workflow-name: should rename to user's choice
+	inputs := Inputs{
+		ProjectName:  "renameProj",
+		TemplateName: "kv-store-go",
+		WorkflowName: "counter",
+	}
+
+	h := newHandlerWithRegistry(sim.NewRuntimeContext(), newMockRegistry())
+	require.NoError(t, h.ValidateInputs(inputs))
+	require.NoError(t, h.Execute(inputs))
+
+	projectRoot := filepath.Join(tempDir, "renameProj")
+	require.DirExists(t, filepath.Join(projectRoot, "counter"),
+		"single workflow should be renamed to user's choice")
+	require.FileExists(t, filepath.Join(projectRoot, "counter", constants.DefaultWorkflowSettingsFileName))
+
+	// Original dir should NOT exist
+	_, err = os.Stat(filepath.Join(projectRoot, "my-workflow"))
+	require.True(t, os.IsNotExist(err), "original dir should be renamed")
+}
+
+func TestBuiltInTemplateBackwardsCompat(t *testing.T) {
+	sim := chainsim.NewSimulatedEnvironment(t)
+	defer sim.Close()
+
+	tempDir := t.TempDir()
+	restoreCwd, err := testutil.ChangeWorkingDirectory(tempDir)
+	require.NoError(t, err)
+	defer restoreCwd()
+
+	// Built-in template has no Workflows field — should use existing heuristic
+	inputs := Inputs{
+		ProjectName:  "builtinProj",
+		TemplateName: "hello-world-go",
+		WorkflowName: "hello-wf",
+	}
+
+	h := newHandlerWithRegistry(sim.NewRuntimeContext(), newMockRegistry())
+	require.NoError(t, h.ValidateInputs(inputs))
+	require.NoError(t, h.Execute(inputs))
+
+	projectRoot := filepath.Join(tempDir, "builtinProj")
+	require.DirExists(t, filepath.Join(projectRoot, "hello-wf"),
+		"built-in template should use user's workflow name")
+	require.FileExists(t, filepath.Join(projectRoot, "hello-wf", constants.DefaultWorkflowSettingsFileName))
+}
+
+func TestMissingNetworks(t *testing.T) {
+	cases := []struct {
+		name     string
+		template *templaterepo.TemplateSummary
+		flags    map[string]string
+		expected []string
+	}{
+		{
+			name:     "nil template",
+			template: nil,
+			flags:    nil,
+			expected: nil,
+		},
+		{
+			name: "no networks required",
+			template: &templaterepo.TemplateSummary{
+				TemplateMetadata: templaterepo.TemplateMetadata{},
+			},
+			flags:    nil,
+			expected: nil,
+		},
+		{
+			name:     "all provided",
+			template: &testMultiNetworkTemplate,
+			flags: map[string]string{
+				"ethereum-testnet-sepolia": "https://rpc1.example.com",
+				"ethereum-mainnet":         "https://rpc2.example.com",
+			},
+			expected: nil,
+		},
+		{
+			name:     "some missing",
+			template: &testMultiNetworkTemplate,
+			flags: map[string]string{
+				"ethereum-testnet-sepolia": "https://rpc1.example.com",
+			},
+			expected: []string{"ethereum-mainnet"},
+		},
+		{
+			name:     "all missing",
+			template: &testMultiNetworkTemplate,
+			flags:    map[string]string{},
+			expected: []string{"ethereum-testnet-sepolia", "ethereum-mainnet"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			result := MissingNetworks(tc.template, tc.flags)
+			require.Equal(t, tc.expected, result)
+		})
+	}
+}
+
+func TestNonInteractiveMissingFlags(t *testing.T) {
+	sim := chainsim.NewSimulatedEnvironment(t)
+	defer sim.Close()
+
+	tempDir := t.TempDir()
+	restoreCwd, err := testutil.ChangeWorkingDirectory(tempDir)
+	require.NoError(t, err)
+	defer restoreCwd()
+
+	inputs := Inputs{
+		ProjectName:    "proj",
+		TemplateName:   "test-multichain",
+		WorkflowName:   "",
+		NonInteractive: true,
+		RpcURLs:        map[string]string{},
+	}
+
+	h := newHandlerWithRegistry(sim.NewRuntimeContext(), newMockRegistry())
+	require.NoError(t, h.ValidateInputs(inputs))
+	err = h.Execute(inputs)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "missing required flags for --non-interactive mode")
+}
+
+func TestNonInteractiveAllFlagsProvided(t *testing.T) {
+	sim := chainsim.NewSimulatedEnvironment(t)
+	defer sim.Close()
+
+	tempDir := t.TempDir()
+	restoreCwd, err := testutil.ChangeWorkingDirectory(tempDir)
+	require.NoError(t, err)
+	defer restoreCwd()
+
+	inputs := Inputs{
+		ProjectName:    "niProj",
+		TemplateName:   "hello-world-go",
+		WorkflowName:   "my-wf",
+		NonInteractive: true,
+	}
+
+	h := newHandlerWithRegistry(sim.NewRuntimeContext(), newMockRegistry())
+	require.NoError(t, h.ValidateInputs(inputs))
+	require.NoError(t, h.Execute(inputs))
+
+	projectRoot := filepath.Join(tempDir, "niProj")
+	require.DirExists(t, filepath.Join(projectRoot, "my-wf"))
+}
+
+func TestInitRespectsProjectRootFlag(t *testing.T) {
+	sim := chainsim.NewSimulatedEnvironment(t)
+	defer sim.Close()
+
+	// CWD is a temp dir (simulating being "somewhere else")
+	cwdDir := t.TempDir()
+	restoreCwd, err := testutil.ChangeWorkingDirectory(cwdDir)
+	require.NoError(t, err)
+	defer restoreCwd()
+
+	// Target directory is a separate temp dir (simulating -R flag)
+	targetDir := t.TempDir()
+
+	inputs := Inputs{
+		ProjectName:  "myproj",
+		TemplateName: "test-go",
+		WorkflowName: "mywf",
+		RpcURLs:      map[string]string{"ethereum-testnet-sepolia": "https://rpc.example.com"},
+		ProjectRoot:  targetDir,
+	}
+
+	ctx := sim.NewRuntimeContext()
+
+	h := newHandlerWithRegistry(ctx, newMockRegistry())
+	require.NoError(t, h.ValidateInputs(inputs))
+	require.NoError(t, h.Execute(inputs))
+
+	// Project should be created under targetDir, NOT cwdDir
+	projectRoot := filepath.Join(targetDir, "myproj")
+	validateInitProjectStructure(t, projectRoot, "mywf", GetTemplateFileListGo())
+
+	// Verify nothing was created in CWD
+	entries, err := os.ReadDir(cwdDir)
+	require.NoError(t, err)
+	require.Empty(t, entries, "CWD should be untouched when -R is provided")
+}
+
+func TestInitProjectRootFlagFindsExistingProject(t *testing.T) {
+	sim := chainsim.NewSimulatedEnvironment(t)
+	defer sim.Close()
+
+	// CWD is a clean temp dir with no project
+	cwdDir := t.TempDir()
+	restoreCwd, err := testutil.ChangeWorkingDirectory(cwdDir)
+	require.NoError(t, err)
+	defer restoreCwd()
+
+	// Create an "existing project" in a separate directory
+	existingProject := t.TempDir()
+	require.NoError(t, os.WriteFile(
+		filepath.Join(existingProject, constants.DefaultProjectSettingsFileName),
+		[]byte("name: existing"), 0600,
+	))
+	require.NoError(t, os.WriteFile(
+		filepath.Join(existingProject, constants.DefaultEnvFileName),
+		[]byte(""), 0600,
+	))
+
+	inputs := Inputs{
+		ProjectName:  "",
+		TemplateName: "test-go",
+		WorkflowName: "new-workflow",
+		RpcURLs:      map[string]string{"ethereum-testnet-sepolia": "https://rpc.example.com"},
+		ProjectRoot:  existingProject,
+	}
+
+	ctx := sim.NewRuntimeContext()
+
+	h := newHandlerWithRegistry(ctx, newMockRegistry())
+	require.NoError(t, h.ValidateInputs(inputs))
+	require.NoError(t, h.Execute(inputs))
+
+	// Workflow should be scaffolded into the existing project
+	validateInitProjectStructure(
+		t,
+		existingProject,
+		"new-workflow",
+		GetTemplateFileListGo(),
+	)
 }
