@@ -1,6 +1,7 @@
 package list
 
 import (
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -126,6 +127,11 @@ func Execute(h *common.Handler, namespace string, duration time.Duration, secret
 	body, err := json.Marshal(req)
 	if err != nil {
 		return fmt.Errorf("failed to marshal JSON-RPC request: %w", err)
+	}
+
+	if common.IsBrowserFlow(secretsAuth) {
+		ui.Dim("Using your account to authorize vault access for this list request...")
+		return h.ExecuteBrowserVaultAuthorization(context.Background(), vaulttypes.MethodSecretsList, digest)
 	}
 
 	ownerAddr := ethcommon.HexToAddress(owner)
