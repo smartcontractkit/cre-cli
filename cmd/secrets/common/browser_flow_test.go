@@ -22,7 +22,15 @@ func TestVaultPermissionForMethod(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "VAULT_PERMISSION_UPDATE_SECRETS", p)
 
-	_, err = vaultPermissionForMethod(vaulttypes.MethodSecretsDelete)
+	p, err = vaultPermissionForMethod(vaulttypes.MethodSecretsDelete)
+	require.NoError(t, err)
+	assert.Equal(t, "VAULT_PERMISSION_DELETE_SECRETS", p)
+
+	p, err = vaultPermissionForMethod(vaulttypes.MethodSecretsList)
+	require.NoError(t, err)
+	assert.Equal(t, "VAULT_PERMISSION_LIST_SECRETS", p)
+
+	_, err = vaultPermissionForMethod("vault/secrets/unknown")
 	require.Error(t, err)
 }
 

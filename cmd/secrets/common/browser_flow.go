@@ -37,12 +37,17 @@ const exchangeAuthCodeToTokenMutation = `mutation ExchangeAuthCodeToToken($reque
 }`
 
 // vaultPermissionForMethod returns the API permission name for the given vault operation.
+// Names match the VaultPermission enum in platform GraphQL (createVaultAuthorizationUrl).
 func vaultPermissionForMethod(method string) (string, error) {
 	switch method {
 	case vaulttypes.MethodSecretsCreate:
 		return "VAULT_PERMISSION_CREATE_SECRETS", nil
 	case vaulttypes.MethodSecretsUpdate:
 		return "VAULT_PERMISSION_UPDATE_SECRETS", nil
+	case vaulttypes.MethodSecretsDelete:
+		return "VAULT_PERMISSION_DELETE_SECRETS", nil
+	case vaulttypes.MethodSecretsList:
+		return "VAULT_PERMISSION_LIST_SECRETS", nil
 	default:
 		return "", fmt.Errorf("unsupported method: %s", method)
 	}
@@ -108,6 +113,16 @@ func (h *Handler) executeBrowserUpsert(ctx context.Context, inputs UpsertSecrets
 
 	default:
 		return fmt.Errorf("unsupported method %q (expected %q or %q)", method, vaulttypes.MethodSecretsCreate, vaulttypes.MethodSecretsUpdate)
+	}
+
+	return h.ExecuteBrowserVaultAuthorization(ctx, method, digest)
+}
+
+// ExecuteBrowserVaultAuthorization completes platform OAuth for a vault JSON-RPC digest (create/update/delete/list).
+// It does not POST to the gateway; the short-lived vault JWT is for future DON submission.
+func (h *Handler) ExecuteBrowserVaultAuthorization(ctx context.Context, method string, digest [32]byte) error {
+	if h.Credentials.AuthType == credentials.AuthTypeApiKey {
+		return fmt.Errorf("this sign-in flow requires an interactive login; API keys are not supported")
 	}
 
 	perm, err := vaultPermissionForMethod(method)
