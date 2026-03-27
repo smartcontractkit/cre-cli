@@ -25,6 +25,7 @@ cre workflow deploy ./my-workflow
       --no-config            Deploy without a config file
   -o, --output string        The output file for the compiled WASM binary encoded in base64 (default "./binary.wasm.br.b64")
   -l, --owner-label string   Label for the workflow owner (used during auto-link if owner is not already linked)
+      --skip-type-checks     Skip TypeScript project typecheck during compilation (passes --skip-type-checks to cre-compile)
       --unsigned             If set, the command will either return the raw transaction instead of sending it to the network or execute the second step of secrets operations using a previously generated raw transaction
       --wasm string          Path to a pre-built WASM binary (skips compilation)
       --yes                  If set, the command will skip the confirmation prompt and proceed with the operation even if it is potentially destructive
