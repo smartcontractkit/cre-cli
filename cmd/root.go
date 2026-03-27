@@ -217,6 +217,14 @@ func newRootCommand() *cobra.Command {
 					return errLoginCompleted
 				}
 
+				// Ensure user context exists (fetches via GQL if missing, supports API key and bearer)
+				if showSpinner {
+					spinner.Update("Loading user context...")
+				}
+				if err := runtimeContext.AttachTenantContext(cmd.Context()); err != nil {
+					runtimeContext.Logger.Warn().Err(err).Msg("failed to load user context — context.yaml not available")
+				}
+
 				// Check if organization is ungated for commands that require it
 				cmdPath := cmd.CommandPath()
 				if cmdPath == "cre account link-key" {
@@ -495,11 +503,6 @@ func isLoadDeploymentRPC(cmd *cobra.Command) bool {
 		"cre workflow delete":    {},
 		"cre account link-key":   {},
 		"cre account unlink-key": {},
-		"cre secrets create":     {},
-		"cre secrets delete":     {},
-		"cre secrets execute":    {},
-		"cre secrets list":       {},
-		"cre secrets update":     {},
 	}
 	_, exists := includedCommands[cmd.CommandPath()]
 	return exists

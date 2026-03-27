@@ -36,6 +36,14 @@ func New(ctx *runtime.Context) *cobra.Command {
 		Use:   "list",
 		Short: "Lists secret identifiers for the current owner address in the given namespace.",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			secretsAuth, err := cmd.Flags().GetString("secrets-auth")
+			if err != nil {
+				return err
+			}
+			if err := common.ValidateSecretsAuthFlow(secretsAuth, ctx.EnvironmentSet.EnvName); err != nil {
+				return err
+			}
+
 			h, err := common.NewHandler(ctx, "")
 			if err != nil {
 				return err
@@ -58,12 +66,7 @@ func New(ctx *runtime.Context) *cobra.Command {
 				return fmt.Errorf("invalid --timeout: must be greater than 0 and less than %dh (%dd)", maxHours, maxDays)
 			}
 
-			return Execute(
-				h,
-				namespace,
-				duration,
-				ctx.Settings.Workflow.UserWorkflowSettings.WorkflowOwnerType,
-			)
+			return Execute(h, namespace, duration, secretsAuth)
 		},
 	}
 
@@ -75,7 +78,13 @@ func New(ctx *runtime.Context) *cobra.Command {
 }
 
 // Execute performs: build request → (MSIG step 1 bundle OR EOA allowlist+post) → parse.
-func Execute(h *common.Handler, namespace string, duration time.Duration, ownerType string) error {
+func Execute(h *common.Handler, namespace string, duration time.Duration, secretsAuth string) error {
+	if !common.IsBrowserFlow(secretsAuth) {
+		if err := h.EnsureDeploymentRPCForOwnerKeySecrets(); err != nil {
+			return err
+		}
+	}
+
 	spinner := ui.NewSpinner()
 	spinner.Start("Verifying ownership...")
 	if err := h.EnsureOwnerLinkedOrFail(); err != nil {
