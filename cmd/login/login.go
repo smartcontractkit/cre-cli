@@ -86,7 +86,7 @@ func (h *handler) execute() error {
 
 	// Use spinner for the token exchange
 	h.spinner.Start("Exchanging authorization code...")
-	tokenSet, err := oauth.ExchangeAuthorizationCode(context.Background(), nil, h.environmentSet, code, h.lastPKCEVerifier)
+	tokenSet, err := oauth.ExchangeAuthorizationCode(context.Background(), nil, h.environmentSet, code, h.lastPKCEVerifier, "", "")
 	if err != nil {
 		h.spinner.StopAll()
 		h.log.Error().Err(err).Msg("code exchange failed")
@@ -152,7 +152,12 @@ func (h *handler) startAuthFlow() (string, error) {
 		return "", err
 	}
 	h.lastPKCEVerifier = verifier
-	h.lastState = oauth.RandomState()
+	state, err := oauth.RandomState()
+	if err != nil {
+		h.spinner.Stop()
+		return "", err
+	}
+	h.lastState = state
 
 	authURL := h.buildAuthURL(challenge, h.lastState)
 
@@ -209,7 +214,13 @@ func (h *handler) callbackHandler(codeCh chan string) http.HandlerFunc {
 					return
 				}
 				h.lastPKCEVerifier = verifier
-				h.lastState = oauth.RandomState()
+				st, err := oauth.RandomState()
+				if err != nil {
+					h.log.Error().Err(err).Msg("failed to generate OAuth state for retry")
+					oauth.ServeEmbeddedHTML(h.log, w, oauth.PageError, http.StatusInternalServerError)
+					return
+				}
+				h.lastState = st
 				h.retryCount++
 
 				// Build the new auth URL for redirect

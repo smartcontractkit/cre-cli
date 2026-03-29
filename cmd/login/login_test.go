@@ -62,8 +62,14 @@ func TestGeneratePKCE_ReturnsValidChallenge(t *testing.T) {
 }
 
 func TestRandomState_IsRandomAndNonEmpty(t *testing.T) {
-	state1 := oauth.RandomState()
-	state2 := oauth.RandomState()
+	state1, err := oauth.RandomState()
+	if err != nil {
+		t.Fatalf("RandomState: %v", err)
+	}
+	state2, err := oauth.RandomState()
+	if err != nil {
+		t.Fatalf("RandomState: %v", err)
+	}
 	if state1 == "" || state2 == "" {
 		t.Error("randomState returned empty string")
 	}

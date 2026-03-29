@@ -10,10 +10,12 @@ import (
 )
 
 const (
-	PageError   = "htmlPages/error.html"
-	PageSuccess = "htmlPages/success.html"
-	PageWaiting = "htmlPages/waiting.html"
-	StylePage   = "htmlPages/output.css"
+	PageError          = "htmlPages/error.html"
+	PageSuccess        = "htmlPages/success.html"
+	PageSecretsSuccess = "htmlPages/secrets_success.html"
+	PageSecretsError   = "htmlPages/secrets_error.html"
+	PageWaiting        = "htmlPages/waiting.html"
+	StylePage          = "htmlPages/output.css"
 )
 
 //go:embed htmlPages/*.html

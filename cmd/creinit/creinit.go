@@ -11,6 +11,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"golang.org/x/term"
 
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
@@ -22,10 +23,12 @@ import (
 )
 
 type Inputs struct {
-	ProjectName  string            `validate:"omitempty,project_name" cli:"project-name"`
-	TemplateName string            `validate:"omitempty" cli:"template"`
-	WorkflowName string            `validate:"omitempty,workflow_name" cli:"workflow-name"`
-	RpcURLs      map[string]string // chain-name -> url, from --rpc-url flags
+	ProjectName    string            `validate:"omitempty,project_name" cli:"project-name"`
+	TemplateName   string            `validate:"omitempty" cli:"template"`
+	WorkflowName   string            `validate:"omitempty,workflow_name" cli:"workflow-name"`
+	RpcURLs        map[string]string // chain-name -> url, from --rpc-url flags
+	NonInteractive bool
+	ProjectRoot    string // from -R / --project-root flag
 }
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
@@ -47,6 +50,11 @@ Templates are fetched dynamically from GitHub repositories.`,
 			if err != nil {
 				return err
 			}
+
+			// Only use -R if the user explicitly passed it on the command line
+			if cmd.Flags().Changed(settings.Flags.ProjectRoot.Name) {
+				inputs.ProjectRoot = runtimeContext.Viper.GetString(settings.Flags.ProjectRoot.Name)
+			}
 			if err = h.ValidateInputs(inputs); err != nil {
 				return err
 			}
@@ -67,6 +75,7 @@ Templates are fetched dynamically from GitHub repositories.`,
 	initCmd.Flags().StringP("template", "t", "", "Name of the template to use (e.g., kv-store-go)")
 	initCmd.Flags().Bool("refresh", false, "Bypass template cache and fetch fresh data")
 	initCmd.Flags().StringArray("rpc-url", nil, "RPC URL for a network (format: chain-name=url, repeatable)")
+	initCmd.Flags().Bool("non-interactive", false, "Fail instead of prompting; requires all inputs via flags")
 
 	// Deprecated: --template-id is kept for backwards compatibility, maps to hello-world-go
 	initCmd.Flags().Uint32("template-id", 0, "")
@@ -133,10 +142,11 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 	}
 
 	return Inputs{
-		ProjectName:  v.GetString("project-name"),
-		TemplateName: templateName,
-		WorkflowName: v.GetString("workflow-name"),
-		RpcURLs:      rpcURLs,
+		ProjectName:    v.GetString("project-name"),
+		TemplateName:   templateName,
+		WorkflowName:   v.GetString("workflow-name"),
+		RpcURLs:        rpcURLs,
+		NonInteractive: v.GetBool("non-interactive"),
 	}, nil
 }
 
@@ -169,6 +179,21 @@ func (h *handler) Execute(inputs Inputs) error {
 		return fmt.Errorf("unable to get working directory: %w", err)
 	}
 	startDir := cwd
+
+	// Respect -R / --project-root flag if provided.
+	// For init, treat -R as the base directory for project creation.
+	// The directory does not need to exist yet — it will be created during scaffolding.
+	if inputs.ProjectRoot != "" {
+		absRoot, err := filepath.Abs(inputs.ProjectRoot)
+		if err != nil {
+			return fmt.Errorf("invalid --project-root path: %w", err)
+		}
+		// If -R points to a file, that's a user error — it must be a directory
+		if info, err := os.Stat(absRoot); err == nil && !info.IsDir() {
+			return fmt.Errorf("--project-root %q is a file, not a directory", inputs.ProjectRoot)
+		}
+		startDir = absRoot
+	}
 
 	// Detect if we're in an existing project
 	existingProjectRoot, _, existingErr := h.findExistingProject(startDir)
@@ -218,9 +243,56 @@ func (h *handler) Execute(inputs Inputs) error {
 		}
 	}
 
+	// Non-interactive mode: validate all required inputs are present
+	if inputs.NonInteractive {
+		var missingFlags []string
+		if isNewProject && inputs.ProjectName == "" {
+			missingFlags = append(missingFlags, "--project-name")
+		}
+		if inputs.TemplateName == "" {
+			missingFlags = append(missingFlags, "--template")
+		}
+		if selectedTemplate != nil {
+			missing := MissingNetworks(selectedTemplate, inputs.RpcURLs)
+			for _, network := range missing {
+				missingFlags = append(missingFlags, fmt.Sprintf("--rpc-url=\"%s=<url>\"", network))
+			}
+			if inputs.WorkflowName == "" && selectedTemplate.ProjectDir == "" && len(selectedTemplate.Workflows) <= 1 {
+				missingFlags = append(missingFlags, "--workflow-name")
+			}
+		}
+		if len(missingFlags) > 0 {
+			ui.ErrorWithSuggestions(
+				"Non-interactive mode requires all inputs via flags",
+				missingFlags,
+			)
+			return fmt.Errorf("missing required flags for --non-interactive mode")
+		}
+	}
+
 	// Run the interactive wizard
 	result, err := RunWizard(inputs, isNewProject, startDir, workflowTemplates, selectedTemplate)
 	if err != nil {
+		// If stdin is not a terminal, the wizard will fail trying to open a TTY.
+		// Detect this via term.IsTerminal rather than matching third-party error strings.
+		if !term.IsTerminal(int(os.Stdin.Fd())) { // #nosec G115 -- stdin fd is always 0
+			var suggestions []string
+			if selectedTemplate != nil {
+				missing := MissingNetworks(selectedTemplate, inputs.RpcURLs)
+				for _, network := range missing {
+					suggestions = append(suggestions, fmt.Sprintf("--rpc-url=\"%s=<url>\"", network))
+				}
+			}
+			if len(suggestions) > 0 {
+				ui.ErrorWithSuggestions(
+					"Interactive mode requires a terminal (TTY). Provide the missing flags to run non-interactively",
+					suggestions,
+				)
+			} else {
+				ui.Error("Interactive mode requires a terminal (TTY). Use --non-interactive with all required flags, or run in a terminal")
+			}
+			return fmt.Errorf("interactive mode requires a terminal (TTY)")
+		}
 		return fmt.Errorf("wizard error: %w", err)
 	}
 	if result.Cancelled {
