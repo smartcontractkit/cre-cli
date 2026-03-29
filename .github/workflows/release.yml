@@ -13,7 +13,7 @@ jobs:
       contents: read
     steps:
       - name: release
-        uses: smartcontractkit/.github/actions/cicd-changesets@82c8124faff1a1ce572b957ed63f612129b16a40 # 1.1.2
+        uses: smartcontractkit/.github/actions/cicd-changesets@cicd-changesets/v1
         with:
           git-user: app-token-issuer-dev-services[bot]
           git-email: app-token-issuer-dev-services[bot]@users.noreply.github.com
