@@ -992,6 +992,22 @@ func RunWizard(inputs Inputs, isNewProject bool, startDir string, templates []te
 	return result, nil
 }
 
+// MissingNetworks returns the network names from the template that were not
+// provided via --rpc-url flags. Returns nil if all networks are covered or
+// the template has no network requirements.
+func MissingNetworks(template *templaterepo.TemplateSummary, flagRpcURLs map[string]string) []string {
+	if template == nil || len(template.Networks) == 0 {
+		return nil
+	}
+	var missing []string
+	for _, network := range template.Networks {
+		if _, ok := flagRpcURLs[network]; !ok {
+			missing = append(missing, network)
+		}
+	}
+	return missing
+}
+
 // validateRpcURL validates that a URL is a valid HTTP/HTTPS URL.
 func validateRpcURL(rawURL string) error {
 	u, err := url.Parse(rawURL)
