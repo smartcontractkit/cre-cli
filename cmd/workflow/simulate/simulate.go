@@ -238,7 +238,7 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 		// Key not set — require it for broadcast, otherwise use default for simulation
 		if v.GetBool("broadcast") {
 			return Inputs{}, fmt.Errorf(
-				"a private key is required for --broadcast mode.\n"+
+				"a private key is required for --broadcast mode.\n" +
 					"Set CRE_ETH_PRIVATE_KEY in your .env file or system environment")
 		}
 		pk, err = crypto.HexToECDSA("0000000000000000000000000000000000000000000000000000000000000001")
