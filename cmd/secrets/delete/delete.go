@@ -1,6 +1,7 @@
 package delete
 
 import (
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -108,6 +109,12 @@ func New(ctx *runtime.Context) *cobra.Command {
 //   - MSIG step 1: build request, compute digest, write bundle, print steps
 //   - EOA: allowlist if needed, then POST to gateway
 func Execute(h *common.Handler, inputs DeleteSecretsInputs, duration time.Duration, secretsAuth string) error {
+	if !common.IsBrowserFlow(secretsAuth) {
+		if err := h.EnsureDeploymentRPCForOwnerKeySecrets(); err != nil {
+			return err
+		}
+	}
+
 	spinner := ui.NewSpinner()
 	spinner.Start("Verifying ownership...")
 	if err := h.EnsureOwnerLinkedOrFail(); err != nil {
@@ -156,6 +163,11 @@ func Execute(h *common.Handler, inputs DeleteSecretsInputs, duration time.Durati
 	digest, err := common.CalculateDigest(deleteSecretsRequest)
 	if err != nil {
 		return fmt.Errorf("failed to calculate request digest: %w", err)
+	}
+
+	if common.IsBrowserFlow(secretsAuth) {
+		ui.Dim("Using your account to authorize vault access for this delete request...")
+		return h.ExecuteBrowserVaultAuthorization(context.Background(), vaulttypes.MethodSecretsDelete, digest)
 	}
 
 	gatewayPost := func() error {

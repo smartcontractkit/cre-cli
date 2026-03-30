@@ -504,11 +504,6 @@ func isLoadDeploymentRPC(cmd *cobra.Command) bool {
 		"cre workflow delete":    {},
 		"cre account link-key":   {},
 		"cre account unlink-key": {},
-		"cre secrets create":     {},
-		"cre secrets delete":     {},
-		"cre secrets execute":    {},
-		"cre secrets list":       {},
-		"cre secrets update":     {},
 	}
 	_, exists := includedCommands[cmd.CommandPath()]
 	return exists
