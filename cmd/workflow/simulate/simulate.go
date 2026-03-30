@@ -223,8 +223,10 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 
 	pk, err := crypto.HexToECDSA(creSettings.User.EthPrivateKey)
 	if err != nil {
-		// If the user explicitly set a key but it's malformed, always error
-		if creSettings.User.EthPrivateKey != "" {
+		// If the user explicitly set a key that looks like a hex string but is
+		// malformed (wrong length, invalid chars), always error with guidance.
+		// Skip placeholder values like "your-eth-private-key" from the default .env template.
+		if creSettings.User.EthPrivateKey != "" && isHexString(creSettings.User.EthPrivateKey) {
 			return Inputs{}, fmt.Errorf(
 				"invalid private key: expected 64 hex characters (256 bits), got %d characters.\n\n"+
 					"The CLI reads CRE_ETH_PRIVATE_KEY from your .env file or system environment.\n"+
@@ -235,7 +237,7 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 					"  • Key was truncated during copy-paste",
 				len(creSettings.User.EthPrivateKey))
 		}
-		// Key not set — require it for broadcast, otherwise use default for simulation
+		// Key not set or placeholder — require it for broadcast, otherwise use default for simulation
 		if v.GetBool("broadcast") {
 			return Inputs{}, fmt.Errorf(
 				"a private key is required for --broadcast mode.\n" +
@@ -1164,4 +1166,14 @@ func getEVMTriggerLogFromValues(ctx context.Context, ethClient *ethclient.Client
 		pbLog.EventSig = log.Topics[0].Bytes()
 	}
 	return pbLog, nil
+}
+
+// isHexString returns true if s contains only hexadecimal characters (0-9, a-f, A-F).
+func isHexString(s string) bool {
+	for _, c := range s {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') && (c < 'A' || c > 'F') {
+			return false
+		}
+	}
+	return len(s) > 0
 }
