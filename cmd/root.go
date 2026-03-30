@@ -238,8 +238,7 @@ func newRootCommand() *cobra.Command {
 			}
 
 			// load settings from yaml files
-			supportedChains, _ := cmd.Flags().GetBool("supported-chains")
-			if isLoadSettings(cmd) && !supportedChains {
+			if isLoadSettings(cmd) {
 				if showSpinner {
 					spinner.Update("Loading settings...")
 				}
@@ -447,8 +446,9 @@ func isLoadSettings(cmd *cobra.Command) bool {
 		"cre completion zsh":         {},
 		"cre help":                   {},
 		"cre update":                 {},
-		"cre workflow":               {},
-		"cre workflow custom-build":  {},
+		"cre workflow":                  {},
+		"cre workflow supported-chains": {},
+		"cre workflow custom-build":     {},
 		"cre workflow limits":        {},
 		"cre workflow limits export": {},
 		"cre workflow build":         {},

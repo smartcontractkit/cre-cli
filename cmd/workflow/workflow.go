@@ -1,6 +1,8 @@
 package workflow
 
 import (
+	"fmt"
+
 	"github.com/spf13/cobra"
 
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/activate"
@@ -23,6 +25,21 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 		Long:  `The workflow command allows you to register and manage existing workflows.`,
 	}
 
+	supportedChainsCmd := &cobra.Command{
+		Use:   "supported-chains",
+		Short: "List all supported chain names",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			names := simulate.SupportedChainNames()
+			fmt.Println("Supported chain names:")
+			for _, name := range names {
+				fmt.Printf("  %s\n", name)
+			}
+			return nil
+		},
+	}
+
+	workflowCmd.AddCommand(supportedChainsCmd)
 	workflowCmd.AddCommand(activate.New(runtimeContext))
 	workflowCmd.AddCommand(build.New(runtimeContext))
 	workflowCmd.AddCommand(convert.New(runtimeContext))
