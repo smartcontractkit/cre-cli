@@ -20,6 +20,12 @@ import {
 
 export interface DecodedLog<T> extends Omit<EVMLog, 'data'> { data: T }
 
+const encodeTopicValue = (t: Hex | Hex[] | null): string[] => {
+  if (t == null) return []
+  if (Array.isArray(t)) return t.map(hexToBase64)
+  return [hexToBase64(t)]
+}
+
 {{range $contract := .Contracts}}
 {{/* Event types: Topics (indexed only) and Decoded (all fields) */}}
 {{range $event := $contract.Events}}
@@ -154,7 +160,7 @@ export class {{$contract.Type}} {
         abi: {{$contract.Type}}ABI,
         eventName: '{{.Original.Name}}' as const,
       })
-      topics = encoded.map((t) => ({ values: t != null ? [hexToBase64(t)] : [] }))
+      topics = encoded.map((t) => ({ values: encodeTopicValue(t) }))
     } else if (filters.length === 1) {
       const f = filters[0]
       const args = {
@@ -169,7 +175,7 @@ export class {{$contract.Type}} {
         eventName: '{{.Original.Name}}' as const,
         args,
       })
-      topics = encoded.map((t) => ({ values: t != null ? [hexToBase64(t)] : [] }))
+      topics = encoded.map((t) => ({ values: encodeTopicValue(t) }))
     } else {
       const allEncoded = filters.map((f) => {
         const args = {
@@ -186,7 +192,7 @@ export class {{$contract.Type}} {
         })
       })
       topics = allEncoded[0].map((_, i) => ({
-        values: [...new Set(allEncoded.flatMap((row) => row[i] != null ? [hexToBase64(row[i])] : []))],
+        values: [...new Set(allEncoded.flatMap((row) => encodeTopicValue(row[i])))],
       }))
     }
     const baseTrigger = this.client.logTrigger({
