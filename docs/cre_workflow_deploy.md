@@ -23,6 +23,7 @@ cre workflow deploy ./my-workflow
       --default-config       Use the config path from workflow.yaml settings (default behavior)
   -h, --help                 help for deploy
       --no-config            Deploy without a config file
+      --non-interactive      Fail instead of prompting; requires all inputs via flags
   -o, --output string        The output file for the compiled WASM binary encoded in base64 (default "./binary.wasm.br.b64")
   -l, --owner-label string   Label for the workflow owner (used during auto-link if owner is not already linked)
       --unsigned             If set, the command will either return the raw transaction instead of sending it to the network or execute the second step of secrets operations using a previously generated raw transaction

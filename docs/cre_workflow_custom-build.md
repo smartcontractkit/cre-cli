@@ -19,8 +19,9 @@ cre workflow custom-build ./my-workflow
 ### Options
 
 ```
-  -f, --force   Skip confirmation prompt and convert immediately
-  -h, --help    help for custom-build
+  -f, --force             Skip confirmation prompt and convert immediately
+  -h, --help              help for custom-build
+      --non-interactive   Fail instead of prompting; requires all inputs via flags
 ```
 
 ### Options inherited from parent commands

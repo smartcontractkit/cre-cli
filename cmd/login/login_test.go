@@ -18,6 +18,24 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
+func TestLogin_NonInteractive_ReturnsError(t *testing.T) {
+	cmd := New(nil)
+	cmd.SetArgs([]string{"--non-interactive"})
+	cmd.SetOut(io.Discard)
+	cmd.SetErr(io.Discard)
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error when --non-interactive is set")
+	}
+	if !strings.Contains(err.Error(), "non-interactive mode") {
+		t.Errorf("expected error to mention non-interactive mode, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "CRE_API_KEY") {
+		t.Errorf("expected error to mention CRE_API_KEY, got: %v", err)
+	}
+}
+
 func TestSaveCredentials_WritesYAML(t *testing.T) {
 	tmp := t.TempDir()
 	t.Setenv("HOME", tmp)
