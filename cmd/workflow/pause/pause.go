@@ -60,6 +60,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 
 	settings.AddTxnTypeFlags(pauseCmd)
 	settings.AddSkipConfirmation(pauseCmd)
+	pauseCmd.Flags().Bool(settings.Flags.NonInteractive.Name, false, "Fail instead of prompting; requires all inputs via flags")
 	return pauseCmd
 }
 

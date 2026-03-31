@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
+	"golang.org/x/term"
 
 	"github.com/smartcontractkit/cre-cli/cmd/account"
 	"github.com/smartcontractkit/cre-cli/cmd/client"
@@ -193,6 +194,16 @@ func newRootCommand() *cobra.Command {
 					ui.Warning("You are not logged in")
 					ui.EnvContext(runtimeContext.EnvironmentSet.EnvLabel())
 					ui.Line()
+
+					// In non-TTY environments (CI/CD, piped stdin, AI agents),
+					// skip the interactive prompt and return an actionable error.
+					if !term.IsTerminal(int(os.Stdin.Fd())) {
+						ui.ErrorWithSuggestions("Authentication required: not logged in and no CRE_API_KEY set", []string{
+							"Run 'cre login' interactively, or",
+							"Set CRE_API_KEY environment variable for non-interactive use",
+						})
+						return fmt.Errorf("authentication required: %w", err)
+					}
 
 					runLogin, formErr := ui.Confirm("Would you like to login now?",
 						ui.WithLabels("Yes, login", "No, cancel"),

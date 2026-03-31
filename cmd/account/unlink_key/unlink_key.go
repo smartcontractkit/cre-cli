@@ -39,6 +39,7 @@ type Inputs struct {
 	WorkflowOwner                   string `validate:"workflow_owner"`
 	WorkflowRegistryContractAddress string `validate:"required"`
 	SkipConfirmation                bool
+	NonInteractive                  bool
 }
 
 type initiateUnlinkingResponse struct {
@@ -87,6 +88,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	}
 	settings.AddTxnTypeFlags(cmd)
 	settings.AddSkipConfirmation(cmd)
+	cmd.Flags().Bool(settings.Flags.NonInteractive.Name, false, "Fail instead of prompting; requires all inputs via flags")
 	return cmd
 }
 
@@ -120,6 +122,7 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 		WorkflowOwner:                   h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress,
 		WorkflowRegistryContractAddress: h.environmentSet.WorkflowRegistryAddress,
 		SkipConfirmation:                v.GetBool(settings.Flags.SkipConfirmation.Name),
+		NonInteractive:                  v.GetBool(settings.Flags.NonInteractive.Name),
 	}, nil
 }
 
@@ -158,6 +161,14 @@ func (h *handler) Execute(in Inputs) error {
 		return nil
 	}
 
+	// Check non-interactive mode
+	if in.NonInteractive && !in.SkipConfirmation {
+		ui.ErrorWithSuggestions(
+			"Non-interactive mode requires all inputs via flags",
+			[]string{"--yes"},
+		)
+		return fmt.Errorf("missing required flags for --non-interactive mode")
+	}
 	// Check if confirmation should be skipped
 	if !in.SkipConfirmation {
 		ui.Warning("Unlink is a destructive action that will wipe out all workflows registered under your owner address.")

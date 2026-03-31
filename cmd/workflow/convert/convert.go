@@ -25,10 +25,11 @@ const (
 type Inputs struct {
 	WorkflowFolder string
 	Force          bool
+	NonInteractive bool
 }
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
-	var force bool
+	var force, nonInteractive bool
 	convertCmd := &cobra.Command{
 		Use:     "custom-build <workflow-folder-path>",
 		Short:   "Converts an existing workflow to a custom (self-compiled) build",
@@ -40,11 +41,13 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 			inputs := Inputs{
 				WorkflowFolder: args[0],
 				Force:          force,
+				NonInteractive: nonInteractive,
 			}
 			return handler.Execute(inputs)
 		},
 	}
 	convertCmd.Flags().BoolVarP(&force, "force", "f", false, "Skip confirmation prompt and convert immediately")
+	convertCmd.Flags().BoolVar(&nonInteractive, settings.Flags.NonInteractive.Name, false, "Fail instead of prompting; requires all inputs via flags")
 	return convertCmd
 }
 
@@ -109,6 +112,13 @@ func (h *handler) Execute(inputs Inputs) error {
 		return fmt.Errorf("workflow is already a custom build (workflow-path is %s)", currentPath)
 	}
 
+	if inputs.NonInteractive && !inputs.Force {
+		ui.ErrorWithSuggestions(
+			"Non-interactive mode requires all inputs via flags",
+			[]string{"--force"},
+		)
+		return fmt.Errorf("missing required flags for --non-interactive mode")
+	}
 	if !inputs.Force {
 		confirmed, err := h.confirmFn(convertWarning, ui.WithLabels("Yes", "No"))
 		if err != nil {

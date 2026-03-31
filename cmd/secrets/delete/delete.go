@@ -101,6 +101,7 @@ func New(ctx *runtime.Context) *cobra.Command {
 
 	settings.AddTxnTypeFlags(cmd)
 	settings.AddSkipConfirmation(cmd)
+	cmd.Flags().Bool(settings.Flags.NonInteractive.Name, false, "Fail instead of prompting; requires all inputs via flags")
 	return cmd
 }
 

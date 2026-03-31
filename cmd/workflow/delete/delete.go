@@ -29,6 +29,7 @@ type Inputs struct {
 	WorkflowName     string `validate:"workflow_name"`
 	WorkflowOwner    string `validate:"workflow_owner"`
 	SkipConfirmation bool
+	NonInteractive   bool
 
 	WorkflowRegistryContractAddress   string `validate:"required"`
 	WorkflowRegistryContractChainName string `validate:"required"`
@@ -59,6 +60,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 
 	settings.AddTxnTypeFlags(deleteCmd)
 	settings.AddSkipConfirmation(deleteCmd)
+	deleteCmd.Flags().Bool(settings.Flags.NonInteractive.Name, false, "Fail instead of prompting; requires all inputs via flags")
 
 	return deleteCmd
 }
@@ -114,6 +116,7 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 		WorkflowName:                      h.settings.Workflow.UserWorkflowSettings.WorkflowName,
 		WorkflowOwner:                     h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress,
 		SkipConfirmation:                  v.GetBool(settings.Flags.SkipConfirmation.Name),
+		NonInteractive:                    v.GetBool(settings.Flags.NonInteractive.Name),
 		WorkflowRegistryContractChainName: h.environmentSet.WorkflowRegistryChainName,
 		WorkflowRegistryContractAddress:   h.environmentSet.WorkflowRegistryAddress,
 	}, nil
@@ -259,6 +262,13 @@ func (h *handler) Execute() error {
 }
 
 func (h *handler) shouldDeleteWorkflow(skipConfirmation bool, workflowName string) (bool, error) {
+	if h.inputs.NonInteractive && !skipConfirmation {
+		ui.ErrorWithSuggestions(
+			"Non-interactive mode requires all inputs via flags",
+			[]string{"--yes"},
+		)
+		return false, fmt.Errorf("missing required flags for --non-interactive mode")
+	}
 	if skipConfirmation {
 		return true, nil
 	}

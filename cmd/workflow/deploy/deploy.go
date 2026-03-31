@@ -44,6 +44,7 @@ type Inputs struct {
 
 	OwnerLabel       string `validate:"omitempty"`
 	SkipConfirmation bool
+	NonInteractive   bool
 }
 
 func (i *Inputs) ResolveConfigURL(fallbackURL string) string {
@@ -108,6 +109,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 
 	settings.AddTxnTypeFlags(deployCmd)
 	settings.AddSkipConfirmation(deployCmd)
+	deployCmd.Flags().Bool(settings.Flags.NonInteractive.Name, false, "Fail instead of prompting; requires all inputs via flags")
 	deployCmd.Flags().StringP("output", "o", defaultOutputPath, "The output file for the compiled WASM binary encoded in base64")
 	deployCmd.Flags().StringP("owner-label", "l", "", "Label for the workflow owner (used during auto-link if owner is not already linked)")
 	deployCmd.Flags().String("wasm", "", "Path to a pre-built WASM binary (skips compilation)")
@@ -183,6 +185,7 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 		WorkflowRegistryContractAddress:   h.environmentSet.WorkflowRegistryAddress,
 		OwnerLabel:                        v.GetString("owner-label"),
 		SkipConfirmation:                  v.GetBool(settings.Flags.SkipConfirmation.Name),
+		NonInteractive:                    v.GetBool(settings.Flags.NonInteractive.Name),
 	}, nil
 }
 
@@ -298,6 +301,13 @@ func (h *handler) Execute(ctx context.Context) error {
 			ui.Warning(fmt.Sprintf("Workflow %s already exists", h.inputs.WorkflowName))
 			ui.Dim("This will update the existing workflow.")
 			// Ask for user confirmation before updating existing workflow
+			if h.inputs.NonInteractive && !h.inputs.SkipConfirmation {
+				ui.ErrorWithSuggestions(
+					"Non-interactive mode requires all inputs via flags",
+					[]string{"--yes"},
+				)
+				return fmt.Errorf("missing required flags for --non-interactive mode")
+			}
 			if !h.inputs.SkipConfirmation {
 				confirm, err := ui.Confirm("Are you sure you want to overwrite the workflow?")
 				if err != nil {

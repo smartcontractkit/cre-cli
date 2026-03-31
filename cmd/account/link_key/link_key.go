@@ -43,6 +43,7 @@ type Inputs struct {
 	WorkflowOwnerLabel              string `validate:"omitempty"`
 	WorkflowOwner                   string `validate:"required,workflow_owner"`
 	WorkflowRegistryContractAddress string `validate:"required"`
+	NonInteractive                  bool
 }
 
 type initiateLinkingResponse struct {
@@ -88,6 +89,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	settings.AddTxnTypeFlags(cmd)
 	settings.AddSkipConfirmation(cmd)
 	cmd.Flags().StringP("owner-label", "l", "", "Label for the workflow owner")
+	cmd.Flags().Bool(settings.Flags.NonInteractive.Name, false, "Fail instead of prompting; requires all inputs via flags")
 
 	return cmd
 }
@@ -137,6 +139,7 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 		WorkflowOwner:                   h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress,
 		WorkflowRegistryContractAddress: h.environmentSet.WorkflowRegistryAddress,
 		WorkflowOwnerLabel:              v.GetString("owner-label"),
+		NonInteractive:                  v.GetBool(settings.Flags.NonInteractive.Name),
 	}, nil
 }
 
@@ -160,6 +163,13 @@ func (h *handler) Execute(in Inputs) error {
 	h.displayDetails()
 
 	if in.WorkflowOwnerLabel == "" {
+		if in.NonInteractive {
+			ui.ErrorWithSuggestions(
+				"Non-interactive mode requires all inputs via flags",
+				[]string{"--owner-label"},
+			)
+			return fmt.Errorf("missing required flags for --non-interactive mode")
+		}
 		label, err := ui.Input("Provide a label for your owner address")
 		if err != nil {
 			return err
