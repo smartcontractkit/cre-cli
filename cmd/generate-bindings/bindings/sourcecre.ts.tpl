@@ -154,7 +154,7 @@ export class {{$contract.Type}} {
         abi: {{$contract.Type}}ABI,
         eventName: '{{.Original.Name}}' as const,
       })
-      topics = encoded.map((t) => ({ values: [hexToBase64(t as string)] }))
+      topics = encoded.map((t) => ({ values: t != null ? [hexToBase64(t)] : [] }))
     } else if (filters.length === 1) {
       const f = filters[0]
       const args = {
@@ -169,7 +169,7 @@ export class {{$contract.Type}} {
         eventName: '{{.Original.Name}}' as const,
         args,
       })
-      topics = encoded.map((t) => ({ values: [hexToBase64(t as string)] }))
+      topics = encoded.map((t) => ({ values: t != null ? [hexToBase64(t)] : [] }))
     } else {
       const allEncoded = filters.map((f) => {
         const args = {
@@ -186,7 +186,7 @@ export class {{$contract.Type}} {
         })
       })
       topics = allEncoded[0].map((_, i) => ({
-        values: [...new Set(allEncoded.map((row) => hexToBase64(row[i] as string)))],
+        values: [...new Set(allEncoded.flatMap((row) => row[i] != null ? [hexToBase64(row[i])] : []))],
       }))
     }
     const baseTrigger = this.client.logTrigger({
