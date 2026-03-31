@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/rs/zerolog"
+	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
@@ -19,12 +20,18 @@ import (
 )
 
 func TestLogin_NonInteractive_ReturnsError(t *testing.T) {
-	cmd := New(nil)
-	cmd.SetArgs([]string{"--non-interactive"})
-	cmd.SetOut(io.Discard)
-	cmd.SetErr(io.Discard)
+	// Create a parent command with the global --non-interactive persistent flag,
+	// since in production this flag is defined on the root command.
+	root := &cobra.Command{Use: "cre"}
+	root.PersistentFlags().Bool("non-interactive", false, "")
+	loginCmd := New(nil)
+	root.AddCommand(loginCmd)
 
-	err := cmd.Execute()
+	root.SetArgs([]string{"login", "--non-interactive"})
+	root.SetOut(io.Discard)
+	root.SetErr(io.Discard)
+
+	err := root.Execute()
 	if err == nil {
 		t.Fatal("expected error when --non-interactive is set")
 	}

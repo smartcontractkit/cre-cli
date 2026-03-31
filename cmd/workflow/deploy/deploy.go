@@ -109,7 +109,6 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 
 	settings.AddTxnTypeFlags(deployCmd)
 	settings.AddSkipConfirmation(deployCmd)
-	deployCmd.Flags().Bool(settings.Flags.NonInteractive.Name, false, "Fail instead of prompting; requires all inputs via flags")
 	deployCmd.Flags().StringP("output", "o", defaultOutputPath, "The output file for the compiled WASM binary encoded in base64")
 	deployCmd.Flags().StringP("owner-label", "l", "", "Label for the workflow owner (used during auto-link if owner is not already linked)")
 	deployCmd.Flags().String("wasm", "", "Path to a pre-built WASM binary (skips compilation)")

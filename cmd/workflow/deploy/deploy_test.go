@@ -411,18 +411,6 @@ func TestValidateInputs_URLBypass(t *testing.T) {
 	})
 }
 
-func TestNonInteractiveFlagRegistered(t *testing.T) {
-	t.Parallel()
-
-	simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
-	defer simulatedEnvironment.Close()
-
-	cmd := New(simulatedEnvironment.NewRuntimeContext())
-	f := cmd.Flags().Lookup("non-interactive")
-	require.NotNil(t, f, "--non-interactive flag should be registered")
-	assert.Equal(t, "false", f.DefValue)
-}
-
 func TestNonInteractive_WorkflowExists_WithoutYes_ReturnsError(t *testing.T) {
 	// Verify the guard logic: when NonInteractive=true and SkipConfirmation=false,
 	// the overwrite confirmation path should return an error.

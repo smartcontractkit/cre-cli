@@ -60,7 +60,6 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 
 	settings.AddTxnTypeFlags(deleteCmd)
 	settings.AddSkipConfirmation(deleteCmd)
-	deleteCmd.Flags().Bool(settings.Flags.NonInteractive.Name, false, "Fail instead of prompting; requires all inputs via flags")
 
 	return deleteCmd
 }

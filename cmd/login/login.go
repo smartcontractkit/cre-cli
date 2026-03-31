@@ -67,8 +67,6 @@ it automatically — no login needed.`,
 		},
 	}
 
-	cmd.Flags().Bool(settings.Flags.NonInteractive.Name, false, "Fail instead of prompting; requires all inputs via flags")
-
 	return cmd
 }
 

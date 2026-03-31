@@ -29,7 +29,7 @@ type Inputs struct {
 }
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
-	var force, nonInteractive bool
+	var force bool
 	convertCmd := &cobra.Command{
 		Use:     "custom-build <workflow-folder-path>",
 		Short:   "Converts an existing workflow to a custom (self-compiled) build",
@@ -37,6 +37,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 		Args:    cobra.ExactArgs(1),
 		Example: `cre workflow custom-build ./my-workflow`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			nonInteractive, _ := cmd.Flags().GetBool(settings.Flags.NonInteractive.Name)
 			handler := newHandler(runtimeContext)
 			inputs := Inputs{
 				WorkflowFolder: args[0],
@@ -47,7 +48,6 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 		},
 	}
 	convertCmd.Flags().BoolVarP(&force, "force", "f", false, "Skip confirmation prompt and convert immediately")
-	convertCmd.Flags().BoolVar(&nonInteractive, settings.Flags.NonInteractive.Name, false, "Fail instead of prompting; requires all inputs via flags")
 	return convertCmd
 }
 

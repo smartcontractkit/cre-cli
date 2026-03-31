@@ -197,7 +197,7 @@ func newRootCommand() *cobra.Command {
 
 					// In non-TTY environments (CI/CD, piped stdin, AI agents),
 					// skip the interactive prompt and return an actionable error.
-					if !term.IsTerminal(int(os.Stdin.Fd())) {
+					if !term.IsTerminal(int(os.Stdin.Fd())) { //nolint:gosec // os.Stdin.Fd() is always 0; overflow is impossible
 						ui.ErrorWithSuggestions("Authentication required: not logged in and no CRE_API_KEY set", []string{
 							"Run 'cre login' interactively, or",
 							"Set CRE_API_KEY environment variable for non-interactive use",
@@ -386,6 +386,12 @@ func newRootCommand() *cobra.Command {
 		settings.Flags.Target.Short,
 		"",
 		"Use target settings from YAML config",
+	)
+	// non-interactive flag is present for every subcommand
+	rootCmd.PersistentFlags().Bool(
+		settings.Flags.NonInteractive.Name,
+		false,
+		"Fail instead of prompting; requires all inputs via flags",
 	)
 	rootCmd.CompletionOptions.HiddenDefaultCmd = true
 

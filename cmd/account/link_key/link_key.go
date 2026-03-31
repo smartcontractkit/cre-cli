@@ -89,7 +89,6 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	settings.AddTxnTypeFlags(cmd)
 	settings.AddSkipConfirmation(cmd)
 	cmd.Flags().StringP("owner-label", "l", "", "Label for the workflow owner")
-	cmd.Flags().Bool(settings.Flags.NonInteractive.Name, false, "Fail instead of prompting; requires all inputs via flags")
 
 	return cmd
 }

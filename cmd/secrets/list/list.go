@@ -74,7 +74,6 @@ func New(ctx *runtime.Context) *cobra.Command {
 	cmd.Flags().StringVar(&namespace, "namespace", "main", "Namespace to list (default: main)")
 	settings.AddTxnTypeFlags(cmd)
 	settings.AddSkipConfirmation(cmd)
-	cmd.Flags().Bool(settings.Flags.NonInteractive.Name, false, "Fail instead of prompting; requires all inputs via flags")
 
 	return cmd
 }
