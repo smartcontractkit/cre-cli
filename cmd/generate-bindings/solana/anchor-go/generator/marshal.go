@@ -7,7 +7,6 @@ import (
 	. "github.com/dave/jennifer/jen"
 	"github.com/gagliardetto/anchor-go/idl"
 	"github.com/gagliardetto/anchor-go/idl/idltype"
-	"github.com/gagliardetto/anchor-go/tools"
 )
 
 func gen_MarshalWithEncoder_struct(
@@ -45,32 +44,34 @@ func gen_MarshalWithEncoder_struct(
 				}
 				switch fields := fields.(type) {
 				case idl.IdlDefinedFieldsNamed:
+					uniqueFieldNames := generateUniqueFieldNames(fields)
 					gen_marshal_DefinedFieldsNamed(
 						body,
 						fields,
 						checkNil,
 						func(field idl.IdlField) *Statement {
-							return Id("obj").Dot(tools.ToCamelUpper(field.Name))
+							return Id("obj").Dot(uniqueFieldNames[field.Name])
 						},
 						"encoder",
 						false, // returnNilErr
 						func(field idl.IdlField) string {
-							return tools.ToCamelUpper(field.Name)
+							return uniqueFieldNames[field.Name]
 						},
 					)
 				case idl.IdlDefinedFieldsTuple:
 					convertedFields := tupleToFieldsNamed(fields)
+					uniqueFieldNames := generateUniqueFieldNames(convertedFields)
 					gen_marshal_DefinedFieldsNamed(
 						body,
 						convertedFields,
 						checkNil,
 						func(field idl.IdlField) *Statement {
-							return Id("obj").Dot(tools.ToCamelUpper(field.Name))
+							return Id("obj").Dot(uniqueFieldNames[field.Name])
 						},
 						"encoder",
 						false, // returnNilErr
 						func(field idl.IdlField) string {
-							return tools.ToCamelUpper(field.Name)
+							return uniqueFieldNames[field.Name]
 						},
 					)
 				case nil:
