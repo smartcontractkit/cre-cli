@@ -44,6 +44,7 @@ type Inputs struct {
 
 	OwnerLabel       string `validate:"omitempty"`
 	SkipConfirmation bool
+	NonInteractive   bool
 }
 
 func (i *Inputs) ResolveConfigURL(fallbackURL string) string {
@@ -183,6 +184,7 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 		WorkflowRegistryContractAddress:   h.environmentSet.WorkflowRegistryAddress,
 		OwnerLabel:                        v.GetString("owner-label"),
 		SkipConfirmation:                  v.GetBool(settings.Flags.SkipConfirmation.Name),
+		NonInteractive:                    v.GetBool(settings.Flags.NonInteractive.Name),
 	}, nil
 }
 
@@ -298,6 +300,13 @@ func (h *handler) Execute(ctx context.Context) error {
 			ui.Warning(fmt.Sprintf("Workflow %s already exists", h.inputs.WorkflowName))
 			ui.Dim("This will update the existing workflow.")
 			// Ask for user confirmation before updating existing workflow
+			if h.inputs.NonInteractive && !h.inputs.SkipConfirmation {
+				ui.ErrorWithSuggestions(
+					"Non-interactive mode requires all inputs via flags",
+					[]string{"--yes"},
+				)
+				return fmt.Errorf("missing required flags for --non-interactive mode")
+			}
 			if !h.inputs.SkipConfirmation {
 				confirm, err := ui.Confirm("Are you sure you want to overwrite the workflow?")
 				if err != nil {

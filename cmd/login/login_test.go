@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/rs/zerolog"
+	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
@@ -17,6 +18,30 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/oauth"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
+
+func TestLogin_NonInteractive_ReturnsError(t *testing.T) {
+	// Create a parent command with the global --non-interactive persistent flag,
+	// since in production this flag is defined on the root command.
+	root := &cobra.Command{Use: "cre"}
+	root.PersistentFlags().Bool("non-interactive", false, "")
+	loginCmd := New(nil)
+	root.AddCommand(loginCmd)
+
+	root.SetArgs([]string{"login", "--non-interactive"})
+	root.SetOut(io.Discard)
+	root.SetErr(io.Discard)
+
+	err := root.Execute()
+	if err == nil {
+		t.Fatal("expected error when --non-interactive is set")
+	}
+	if !strings.Contains(err.Error(), "non-interactive mode") {
+		t.Errorf("expected error to mention non-interactive mode, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "CRE_API_KEY") {
+		t.Errorf("expected error to mention CRE_API_KEY, got: %v", err)
+	}
+}
 
 func TestSaveCredentials_WritesYAML(t *testing.T) {
 	tmp := t.TempDir()

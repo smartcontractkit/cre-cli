@@ -25,6 +25,7 @@ const (
 type Inputs struct {
 	WorkflowFolder string
 	Force          bool
+	NonInteractive bool
 }
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
@@ -36,10 +37,12 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 		Args:    cobra.ExactArgs(1),
 		Example: `cre workflow custom-build ./my-workflow`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			nonInteractive, _ := cmd.Flags().GetBool(settings.Flags.NonInteractive.Name)
 			handler := newHandler(runtimeContext)
 			inputs := Inputs{
 				WorkflowFolder: args[0],
 				Force:          force,
+				NonInteractive: nonInteractive,
 			}
 			return handler.Execute(inputs)
 		},
@@ -109,6 +112,13 @@ func (h *handler) Execute(inputs Inputs) error {
 		return fmt.Errorf("workflow is already a custom build (workflow-path is %s)", currentPath)
 	}
 
+	if inputs.NonInteractive && !inputs.Force {
+		ui.ErrorWithSuggestions(
+			"Non-interactive mode requires all inputs via flags",
+			[]string{"--force"},
+		)
+		return fmt.Errorf("missing required flags for --non-interactive mode")
+	}
 	if !inputs.Force {
 		confirmed, err := h.confirmFn(convertWarning, ui.WithLabels("Yes", "No"))
 		if err != nil {

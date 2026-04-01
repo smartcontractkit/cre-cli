@@ -14,6 +14,61 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/validation"
 )
 
+func TestNonInteractive_WithoutYes_ReturnsError(t *testing.T) {
+	t.Parallel()
+	simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
+	defer simulatedEnvironment.Close()
+	ctx := simulatedEnvironment.NewRuntimeContext()
+	ctx.Settings = &settings.Settings{
+		User: settings.UserSettings{
+			EthPrivateKey: chainsim.TestPrivateKey,
+		},
+	}
+	ctx.Settings.Workflow.UserWorkflowSettings.WorkflowOwnerType = constants.WorkflowOwnerTypeEOA
+
+	handler := newHandler(ctx, testutil.EmptyMockStdinReader())
+	handler.inputs = Inputs{
+		WorkflowName:                      "test-workflow",
+		WorkflowOwner:                     chainsim.TestAddress,
+		SkipConfirmation:                  false,
+		NonInteractive:                    true,
+		WorkflowRegistryContractAddress:   "0x0000000000000000000000000000000000000000",
+		WorkflowRegistryContractChainName: "ethereum-testnet-sepolia",
+	}
+
+	ok, err := handler.shouldDeleteWorkflow(false, "test-workflow")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "missing required flags for --non-interactive mode")
+	assert.False(t, ok)
+}
+
+func TestNonInteractive_WithYes_Proceeds(t *testing.T) {
+	t.Parallel()
+	simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
+	defer simulatedEnvironment.Close()
+	ctx := simulatedEnvironment.NewRuntimeContext()
+	ctx.Settings = &settings.Settings{
+		User: settings.UserSettings{
+			EthPrivateKey: chainsim.TestPrivateKey,
+		},
+	}
+	ctx.Settings.Workflow.UserWorkflowSettings.WorkflowOwnerType = constants.WorkflowOwnerTypeEOA
+
+	handler := newHandler(ctx, testutil.EmptyMockStdinReader())
+	handler.inputs = Inputs{
+		WorkflowName:                      "test-workflow",
+		WorkflowOwner:                     chainsim.TestAddress,
+		SkipConfirmation:                  true,
+		NonInteractive:                    true,
+		WorkflowRegistryContractAddress:   "0x0000000000000000000000000000000000000000",
+		WorkflowRegistryContractChainName: "ethereum-testnet-sepolia",
+	}
+
+	ok, err := handler.shouldDeleteWorkflow(true, "test-workflow")
+	require.NoError(t, err)
+	assert.True(t, ok)
+}
+
 func TestWorkflowDeleteCommand(t *testing.T) {
 	t.Run("validation errors", func(t *testing.T) {
 		t.Parallel()
