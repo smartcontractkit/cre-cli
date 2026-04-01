@@ -3,6 +3,7 @@ package common
 import (
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	rt "runtime"
@@ -59,7 +60,7 @@ func digestHexString(digest [32]byte) string {
 
 // executeBrowserUpsert handles secrets create/update when the user signs in with their organization account.
 // It encrypts the payload, binds a digest, requests a platform authorization URL, completes OAuth in the browser,
-// and exchanges the code via the platform for a short-lived vault JWT (for future DON gateway submission).
+// exchanges the code for a short-lived vault JWT, and POSTs the same JSON-RPC body to the gateway with Bearer auth.
 // Login tokens in ~/.cre/cre.yaml are not modified; that session stays separate from this vault-only token.
 func (h *Handler) executeBrowserUpsert(ctx context.Context, inputs UpsertSecretsInputs, method string) error {
 	if h.Credentials.AuthType == credentials.AuthTypeApiKey {
@@ -78,7 +79,10 @@ func (h *Handler) executeBrowserUpsert(ctx context.Context, inputs UpsertSecrets
 	}
 	requestID := uuid.New().String()
 
-	var digest [32]byte
+	var (
+		digest      [32]byte
+		requestBody []byte
+	)
 
 	switch method {
 	case vaulttypes.MethodSecretsCreate:
@@ -95,6 +99,10 @@ func (h *Handler) executeBrowserUpsert(ctx context.Context, inputs UpsertSecrets
 		if err != nil {
 			return fmt.Errorf("failed to calculate create digest: %w", err)
 		}
+		requestBody, err = json.Marshal(req)
+		if err != nil {
+			return fmt.Errorf("failed to marshal JSON-RPC request: %w", err)
+		}
 
 	case vaulttypes.MethodSecretsUpdate:
 		req := jsonrpc2.Request[vault.UpdateSecretsRequest]{
@@ -110,19 +118,26 @@ func (h *Handler) executeBrowserUpsert(ctx context.Context, inputs UpsertSecrets
 		if err != nil {
 			return fmt.Errorf("failed to calculate update digest: %w", err)
 		}
+		requestBody, err = json.Marshal(req)
+		if err != nil {
+			return fmt.Errorf("failed to marshal JSON-RPC request: %w", err)
+		}
 
 	default:
 		return fmt.Errorf("unsupported method %q (expected %q or %q)", method, vaulttypes.MethodSecretsCreate, vaulttypes.MethodSecretsUpdate)
 	}
 
-	return h.ExecuteBrowserVaultAuthorization(ctx, method, digest)
+	return h.ExecuteBrowserVaultAuthorization(ctx, method, digest, requestBody)
 }
 
-// ExecuteBrowserVaultAuthorization completes platform OAuth for a vault JSON-RPC digest (create/update/delete/list).
-// It does not POST to the gateway; the short-lived vault JWT is for future DON submission.
-func (h *Handler) ExecuteBrowserVaultAuthorization(ctx context.Context, method string, digest [32]byte) error {
+// ExecuteBrowserVaultAuthorization completes platform OAuth for a vault JSON-RPC digest (create/update/delete/list),
+// then POSTs the same request body to the gateway with the vault JWT in the Authorization header.
+func (h *Handler) ExecuteBrowserVaultAuthorization(ctx context.Context, method string, digest [32]byte, requestBody []byte) error {
 	if h.Credentials.AuthType == credentials.AuthTypeApiKey {
 		return fmt.Errorf("this sign-in flow requires an interactive login; API keys are not supported")
+	}
+	if len(requestBody) == 0 {
+		return fmt.Errorf("empty vault request body")
 	}
 
 	perm, err := vaultPermissionForMethod(method)
@@ -219,10 +234,18 @@ func (h *Handler) ExecuteBrowserVaultAuthorization(ctx context.Context, method s
 	if tok.AccessToken == "" {
 		return fmt.Errorf("token exchange failed: empty access token")
 	}
-	// Short-lived vault JWT for future DON secret submission; do not persist or replace cre login tokens.
-	_ = tok.AccessToken
-	_ = tok.ExpiresIn
+	return h.postVaultGatewayWithBearer(method, requestBody, tok.AccessToken)
+}
 
-	ui.Success("Vault authorization completed.")
-	return nil
+// postVaultGatewayWithBearer POSTs the digest-bound JSON-RPC body with the vault JWT and parses the gateway response.
+func (h *Handler) postVaultGatewayWithBearer(method string, requestBody []byte, accessToken string) error {
+	ui.Dim("Submitting request to vault gateway...")
+	respBody, status, err := h.Gw.PostWithBearer(requestBody, accessToken)
+	if err != nil {
+		return fmt.Errorf("gateway POST failed: %w", err)
+	}
+	if status != http.StatusOK {
+		return fmt.Errorf("gateway returned a non-200 status code: status_code=%d, body=%s", status, respBody)
+	}
+	return h.ParseVaultGatewayResponse(method, respBody)
 }
