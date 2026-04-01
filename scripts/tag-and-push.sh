@@ -1,5 +1,5 @@
-#!/bin/sh
-set -eu
+#!/bin/bash
+set -euo pipefail
 
 version=$(node -p "require('./package.json').version")
 tag="v${version}"
