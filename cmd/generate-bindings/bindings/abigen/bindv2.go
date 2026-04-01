@@ -460,9 +460,17 @@ func tsBindType(kind abi.Type, structs map[string]*tmplStruct) string {
 		}
 		return "{ " + strings.Join(fields, "; ") + " }"
 	case abi.ArrayTy:
-		return "readonly " + tsBindType(*kind.Elem, structs) + "[]"
+		elem := tsBindType(*kind.Elem, structs)
+		if kind.Elem.T == abi.ArrayTy || kind.Elem.T == abi.SliceTy {
+			return "readonly (" + elem + ")[]"
+		}
+		return "readonly " + elem + "[]"
 	case abi.SliceTy:
-		return "readonly " + tsBindType(*kind.Elem, structs) + "[]"
+		elem := tsBindType(*kind.Elem, structs)
+		if kind.Elem.T == abi.ArrayTy || kind.Elem.T == abi.SliceTy {
+			return "readonly (" + elem + ")[]"
+		}
+		return "readonly " + elem + "[]"
 	default:
 		return tsBindBasicType(kind)
 	}

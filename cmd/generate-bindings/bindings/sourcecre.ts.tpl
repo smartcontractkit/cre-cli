@@ -164,9 +164,9 @@ export class {{$contract.Type}} {
     } else if (filters.length === 1) {
       const f = filters[0]
       const args = {
-        {{- range $param := .Normalized.Inputs}}
-        {{- if $param.Indexed}}
-        {{$param.Name}}: f.{{$param.Name}},
+        {{- range $i, $origParam := $event.Original.Inputs}}
+        {{- if $origParam.Indexed}}
+        {{$origParam.Name}}: f.{{(index $event.Normalized.Inputs $i).Name}},
         {{- end}}
         {{- end}}
       }
@@ -179,9 +179,9 @@ export class {{$contract.Type}} {
     } else {
       const allEncoded = filters.map((f) => {
         const args = {
-          {{- range $param := .Normalized.Inputs}}
-          {{- if $param.Indexed}}
-          {{$param.Name}}: f.{{$param.Name}},
+          {{- range $i, $origParam := $event.Original.Inputs}}
+          {{- if $origParam.Indexed}}
+          {{$origParam.Name}}: f.{{(index $event.Normalized.Inputs $i).Name}},
           {{- end}}
           {{- end}}
         }
