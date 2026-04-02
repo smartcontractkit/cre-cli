@@ -44,6 +44,8 @@ type Inputs struct {
 
 	OwnerLabel       string `validate:"omitempty"`
 	SkipConfirmation bool
+	// SkipTypeChecks passes --skip-type-checks to cre-compile for TypeScript workflows.
+	SkipTypeChecks bool
 }
 
 func (i *Inputs) ResolveConfigURL(fallbackURL string) string {
@@ -114,6 +116,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	deployCmd.Flags().String("config", "", "Override the config file path from workflow.yaml")
 	deployCmd.Flags().Bool("no-config", false, "Deploy without a config file")
 	deployCmd.Flags().Bool("default-config", false, "Use the config path from workflow.yaml settings (default behavior)")
+	deployCmd.Flags().Bool(cmdcommon.SkipTypeChecksCLIFlag, false, "Skip TypeScript project typecheck during compilation (passes "+cmdcommon.SkipTypeChecksFlag+" to cre-compile)")
 	deployCmd.MarkFlagsMutuallyExclusive("config", "no-config", "default-config")
 
 	return deployCmd
@@ -183,6 +186,7 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 		WorkflowRegistryContractAddress:   h.environmentSet.WorkflowRegistryAddress,
 		OwnerLabel:                        v.GetString("owner-label"),
 		SkipConfirmation:                  v.GetBool(settings.Flags.SkipConfirmation.Name),
+		SkipTypeChecks:                    v.GetBool(cmdcommon.SkipTypeChecksCLIFlag),
 	}, nil
 }
 
