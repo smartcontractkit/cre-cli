@@ -171,7 +171,10 @@ func (g *Generator) gen_complexEnum(name string, docs []string, typ idl.IdlTypeD
 
 					argBody.Switch(Id("tmp").Dot("Enum")).
 						BlockFunc(func(switchGroup *Group) {
-							interfaceType := g.idl.Types.ByName(enumName)
+							interfaceType := g.idl.Types.ByName(name)
+							if interfaceType == nil {
+								panic(fmt.Errorf("complex enum type %q not found in IDL types", name))
+							}
 
 							for variantIndex, variant := range interfaceType.Ty.(*idl.IdlTypeDefTyEnum).Variants {
 								variantTypeNameComplex := formatComplexEnumVariantTypeName(enumName, variant.Name)
@@ -226,8 +229,10 @@ func (g *Generator) gen_complexEnum(name string, docs []string, typ idl.IdlTypeD
 					argBody.List(Id("tmp")).Op(":=").Id(formatEnumContainerName(enumTypeName)).Block()
 					argBody.Switch(Id("realvalue").Op(":=").Id("value").Op(".").Parens(Type())).
 						BlockFunc(func(switchGroup *Group) {
-							// TODO: maybe it's from idl.Accounts ???
-							interfaceType := g.idl.Types.ByName(enumTypeName)
+							interfaceType := g.idl.Types.ByName(name)
+							if interfaceType == nil {
+								panic(fmt.Errorf("complex enum type %q not found in IDL types", name))
+							}
 							for variantIndex, variant := range interfaceType.Ty.(*idl.IdlTypeDefTyEnum).Variants {
 								variantTypeNameStruct := formatComplexEnumVariantTypeName(enumTypeName, variant.Name)
 
