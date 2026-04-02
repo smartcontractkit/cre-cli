@@ -62,6 +62,41 @@ func TestResolveSolanaInputs_DefaultFallbacks(t *testing.T) {
 	assert.Equal(t, expectedOut, actualOut)
 }
 
+func TestResolveSolanaInputs_CustomOutPath(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "generate-bindings-test")
+	require.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	contractsDir := filepath.Join(tempDir, "contracts")
+	err = os.MkdirAll(contractsDir, 0755)
+	require.NoError(t, err)
+
+	originalDir, err := os.Getwd()
+	require.NoError(t, err)
+	defer func() {
+		if err := os.Chdir(originalDir); err != nil {
+			t.Errorf("Failed to restore original directory: %v", err)
+		}
+	}()
+
+	err = os.Chdir(tempDir)
+	require.NoError(t, err)
+
+	customOut := filepath.Join(tempDir, "my-custom-output")
+
+	v := viper.New()
+	v.Set("language", "go")
+	v.Set("out", customOut)
+
+	runtimeCtx := &runtime.Context{}
+	handler := newHandler(runtimeCtx)
+
+	inputs, err := handler.ResolveInputs(v)
+	require.NoError(t, err)
+
+	assert.Equal(t, customOut, inputs.OutPath)
+}
+
 func TestProcessSolanaSingleIdl(t *testing.T) {
 	// Create a temporary directory structure
 	tempDir, err := os.MkdirTemp("", "generate-bindings-test")
