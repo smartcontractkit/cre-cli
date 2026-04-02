@@ -238,9 +238,7 @@ func gen_unmarshal_DefinedFieldsNamed(
 			body.Commentf("Deserialize `%s`:", exportedArgName)
 		}
 
-		if isComplexEnum(field.Ty) || (IsArray(field.Ty) && isComplexEnum(field.Ty.(*idltype.Array).Type)) || (IsVec(field.Ty) && isComplexEnum(field.Ty.(*idltype.Vec).Vec)) {
-			// TODO: this assumes this cannot be an option;
-			// - check whether this is an option?
+		if isComplexEnum(field.Ty) || (IsArray(field.Ty) && isComplexEnum(field.Ty.(*idltype.Array).Type)) || (IsVec(field.Ty) && isComplexEnum(field.Ty.(*idltype.Vec).Vec)) || isOptionalComplexEnum(field.Ty) {
 			switch field.Ty.(type) {
 			case *idltype.Defined:
 				enumName := field.Ty.(*idltype.Defined).Name
@@ -325,6 +323,12 @@ func gen_unmarshal_DefinedFieldsNamed(
 						)
 					})
 				})
+			case *idltype.Option:
+				enumTypeName := field.Ty.(*idltype.Option).Option.(*idltype.Defined).Name
+				gen_unmarshal_optionalComplexEnum(body, "ReadOption", enumTypeName, exportedArgName)
+			case *idltype.COption:
+				enumTypeName := field.Ty.(*idltype.COption).COption.(*idltype.Defined).Name
+				gen_unmarshal_optionalComplexEnum(body, "ReadCOption", enumTypeName, exportedArgName)
 			}
 		} else {
 			if IsOption(field.Ty) || IsCOption(field.Ty) {
@@ -375,4 +379,40 @@ func gen_unmarshal_DefinedFieldsNamed(
 			}
 		}
 	}
+}
+
+func gen_unmarshal_optionalComplexEnum(
+	body *Group,
+	optionalityReaderName string,
+	enumTypeName string,
+	exportedArgName string,
+) {
+	body.BlockFunc(func(optGroup *Group) {
+		optGroup.List(Id("ok"), Err()).Op(":=").Id("decoder").Dot(optionalityReaderName).Call()
+		optGroup.If(Err().Op("!=").Nil()).Block(
+			Return(
+				Qual(PkgAnchorGoErrors, "NewOption").Call(
+					Lit(exportedArgName),
+					Qual("fmt", "Errorf").Call(
+						Lit("error while reading optionality: %w"),
+						Err(),
+					),
+				),
+			),
+		)
+		optGroup.If(Id("ok")).Block(
+			List(
+				Id("obj").Dot(exportedArgName),
+				Err(),
+			).Op("=").Id(formatEnumParserName(enumTypeName)).Call(Id("decoder")),
+			If(Err().Op("!=").Nil()).Block(
+				Return(
+					Qual(PkgAnchorGoErrors, "NewField").Call(
+						Lit(exportedArgName),
+						Err(),
+					),
+				),
+			),
+		)
+	})
 }
