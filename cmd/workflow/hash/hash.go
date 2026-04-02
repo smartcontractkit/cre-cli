@@ -23,6 +23,7 @@ type Inputs struct {
 	WorkflowPath      string
 	OwnerFromSettings string
 	PrivateKey        string
+	SkipTypeChecks    bool
 }
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
@@ -49,6 +50,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 				WorkflowPath:      s.Workflow.WorkflowArtifactSettings.WorkflowPath,
 				OwnerFromSettings: s.Workflow.UserWorkflowSettings.WorkflowOwnerAddress,
 				PrivateKey:        settings.NormalizeHexKey(rawPrivKey),
+				SkipTypeChecks:    v.GetBool(cmdcommon.SkipTypeChecksCLIFlag),
 			}
 
 			return Execute(inputs)
@@ -64,12 +66,13 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	hashCmd.Flags().Bool("no-config", false, "Hash without a config file")
 	hashCmd.Flags().Bool("default-config", false, "Use the config path from workflow.yaml settings (default behavior)")
 	hashCmd.MarkFlagsMutuallyExclusive("config", "no-config", "default-config")
+	hashCmd.Flags().Bool(cmdcommon.SkipTypeChecksCLIFlag, false, "Skip TypeScript project typecheck during compilation (passes "+cmdcommon.SkipTypeChecksFlag+" to cre-compile)")
 
 	return hashCmd
 }
 
 func Execute(inputs Inputs) error {
-	rawBinary, err := loadBinary(inputs.WasmPath, inputs.WorkflowPath)
+	rawBinary, err := loadBinary(inputs.WasmPath, inputs.WorkflowPath, inputs.SkipTypeChecks)
 	if err != nil {
 		return err
 	}
@@ -124,7 +127,7 @@ func ResolveOwner(forUser, ownerFromSettings, privateKey string) (string, error)
 	return "", fmt.Errorf("cannot determine workflow owner: provide --public_key or ensure CRE_ETH_PRIVATE_KEY is set")
 }
 
-func loadBinary(wasmFlag, workflowPathFromSettings string) ([]byte, error) {
+func loadBinary(wasmFlag, workflowPathFromSettings string, skipTypeChecks bool) ([]byte, error) {
 	if wasmFlag != "" {
 		if cmdcommon.IsURL(wasmFlag) {
 			ui.Dim("Fetching WASM binary from URL...")
@@ -155,7 +158,10 @@ func loadBinary(wasmFlag, workflowPathFromSettings string) ([]byte, error) {
 
 	spinner := ui.NewSpinner()
 	spinner.Start("Compiling workflow...")
-	wasmBytes, err := cmdcommon.CompileWorkflowToWasm(resolvedWorkflowPath, true)
+	wasmBytes, err := cmdcommon.CompileWorkflowToWasm(resolvedWorkflowPath, cmdcommon.WorkflowCompileOptions{
+		StripSymbols:   true,
+		SkipTypeChecks: skipTypeChecks,
+	})
 	spinner.Stop()
 	if err != nil {
 		ui.Error("Build failed:")

@@ -295,7 +295,10 @@ func outputPathWithExtensions(path string) string {
 // file content equals CompileWorkflowToWasm(workflowPath) + brotli + base64.
 func assertCompileOutputMatchesUnderlying(t *testing.T, simulatedEnvironment *chainsim.SimulatedEnvironment, inputs Inputs, ownerType string) {
 	t.Helper()
-	wasm, err := cmdcommon.CompileWorkflowToWasm(inputs.WorkflowPath, true)
+	wasm, err := cmdcommon.CompileWorkflowToWasm(inputs.WorkflowPath, cmdcommon.WorkflowCompileOptions{
+		StripSymbols:   true,
+		SkipTypeChecks: inputs.SkipTypeChecks,
+	})
 	require.NoError(t, err)
 	compressed, err := cmdcommon.CompressBrotli(wasm)
 	require.NoError(t, err)
