@@ -18,6 +18,16 @@ func isComplexEnum(envel idltype.IdlType) bool {
 	return false
 }
 
+func isOptionalComplexEnum(ty idltype.IdlType) bool {
+	switch v := ty.(type) {
+	case *idltype.Option:
+		return isComplexEnum(v.Option)
+	case *idltype.COption:
+		return isComplexEnum(v.COption)
+	}
+	return false
+}
+
 func register_TypeName_as_ComplexEnum(name string) {
 	typeRegistryComplexEnum[name] = struct{}{}
 }
