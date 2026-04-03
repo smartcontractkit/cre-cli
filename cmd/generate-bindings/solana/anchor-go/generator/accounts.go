@@ -389,6 +389,10 @@ func IDLTypeKind_ToTypeDeclCode(ts idltype.IdlType) *Statement {
 		stat.Qual(PkgBinary, "Uint128")
 	case *idltype.I128:
 		stat.Qual(PkgBinary, "Int128")
+	case *idltype.U256:
+		stat.Index(Lit(32)).Byte()
+	case *idltype.I256:
+		stat.Index(Lit(32)).Byte()
 	case *idltype.Bytes:
 		stat.Index().Byte()
 	case *idltype.String:
