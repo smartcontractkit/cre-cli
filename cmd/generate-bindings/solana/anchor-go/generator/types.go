@@ -226,17 +226,33 @@ func (g *Generator) gen_complexEnum(name string, docs []string, typ idl.IdlTypeD
 					argBody.List(Id("tmp")).Op(":=").Id(formatEnumContainerName(enumTypeName)).Block()
 					argBody.Switch(Id("realvalue").Op(":=").Id("value").Op(".").Parens(Type())).
 						BlockFunc(func(switchGroup *Group) {
-							// TODO: maybe it's from idl.Accounts ???
+							switchGroup.Case(Nil()).
+								BlockFunc(func(caseGroup *Group) {
+									caseGroup.Return(
+										Qual("fmt", "Errorf").Call(Lit(enumTypeName + ": cannot encode nil value")),
+									)
+								})
+
 							interfaceType := g.idl.Types.ByName(enumTypeName)
 							for variantIndex, variant := range interfaceType.Ty.(*idl.IdlTypeDefTyEnum).Variants {
 								variantTypeNameStruct := formatComplexEnumVariantTypeName(enumTypeName, variant.Name)
 
 								switchGroup.Case(Op("*").Id(variantTypeNameStruct)).
 									BlockFunc(func(caseGroup *Group) {
+										caseGroup.If(Id("realvalue").Op("==").Nil()).Block(
+											Return(Qual("fmt", "Errorf").Call(Lit(enumTypeName+": cannot encode nil *"+variantTypeNameStruct))),
+										)
 										caseGroup.Id("tmp").Dot("Enum").Op("=").Lit(variantIndex)
 										caseGroup.Id("tmp").Dot(tools.ToCamelUpper(variant.Name)).Op("=").Op("*").Id("realvalue")
 									})
 							}
+
+							switchGroup.Default().
+								BlockFunc(func(caseGroup *Group) {
+									caseGroup.Return(
+										Qual("fmt", "Errorf").Call(Lit(enumTypeName+": unknown variant type %T"), Id("value")),
+									)
+								})
 						})
 
 					argBody.Return(Id("encoder").Dot("Encode").Call(Id("tmp")))
