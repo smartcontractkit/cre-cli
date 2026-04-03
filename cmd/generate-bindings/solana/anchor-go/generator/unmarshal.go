@@ -300,6 +300,18 @@ func gen_unmarshal_DefinedFieldsNamed(
 							),
 						),
 					)
+					argBody.If(Id("vecLen").Op(">").Id("decoder").Dot("Remaining").Call()).Block(
+						Return(
+							Qual(PkgAnchorGoErrors, "NewField").Call(
+								Lit(exportedArgName),
+								Qual("fmt", "Errorf").Call(
+									Lit("vector length %d exceeds remaining decoder bytes %d"),
+									Id("vecLen"),
+									Id("decoder").Dot("Remaining").Call(),
+								),
+							),
+						),
+					)
 					// Create the vector:
 					argBody.Id("obj").Dot(exportedArgName).Op("=").Make(Index().Id(enumTypeName), Id("vecLen"))
 					// Read the vector items:
