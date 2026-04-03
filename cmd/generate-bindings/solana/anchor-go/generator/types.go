@@ -174,28 +174,13 @@ func (g *Generator) gen_complexEnum(name string, docs []string, typ idl.IdlTypeD
 							interfaceType := g.idl.Types.ByName(enumName)
 
 							for variantIndex, variant := range interfaceType.Ty.(*idl.IdlTypeDefTyEnum).Variants {
-								variantTypeNameComplex := formatComplexEnumVariantTypeName(enumName, variant.Name)
-
-								if variant.IsSimple() {
-									// TODO: the actual value is not important;
-									//  what's important is the type.
-									switchGroup.Case(Lit(variantIndex)).
-										BlockFunc(func(caseGroup *Group) {
-											caseGroup.Return(
-												Parens(Op("*").Id(variantTypeNameComplex)).
-													Parens(Op("&").Id("tmp").Dot("Enum")),
-												Nil(),
-											)
-										})
-								} else {
-									switchGroup.Case(Lit(variantIndex)).
-										BlockFunc(func(caseGroup *Group) {
-											caseGroup.Return(
-												Op("&").Id("tmp").Dot(tools.ToCamelUpper(variant.Name)),
-												Nil(),
-											)
-										})
-								}
+							switchGroup.Case(Lit(variantIndex)).
+								BlockFunc(func(caseGroup *Group) {
+									caseGroup.Return(
+										Op("&").Id("tmp").Dot(tools.ToCamelUpper(variant.Name)),
+										Nil(),
+									)
+								})
 							}
 							switchGroup.Default().
 								BlockFunc(func(caseGroup *Group) {
@@ -249,8 +234,7 @@ func (g *Generator) gen_complexEnum(name string, docs []string, typ idl.IdlTypeD
 
 			// Declare the enum variant types:
 			if variant.IsSimple() {
-				// TODO: make the name {variantTypeName}_{interface_name} ???
-				code.Type().Id(variantTypeNameComplex).Uint8().Line().Line()
+				code.Type().Id(variantTypeNameComplex).Qual(PkgBinary, "EmptyVariant").Line().Line()
 			} else if variant.Fields.IsSome() {
 				code.Commentf("Variant %q of enum %q", variant.Name, enumTypeName).Line()
 				code.Type().Id(variantTypeNameComplex).StructFunc(
