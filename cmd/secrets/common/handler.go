@@ -272,9 +272,31 @@ func (h *Handler) fetchVaultMasterPublicKeyHex() (string, error) {
 	return rpcResp.Result.PublicKey, nil
 }
 
+// ResolveEffectiveOwner returns the owner string to use for vault secret identifiers.
+// When SecretsOrgOwned is enabled, the org ID (from auth validation) is used;
+// otherwise, the workflow owner address is used.
+func (h *Handler) ResolveEffectiveOwner() (string, error) {
+	if h.EnvironmentSet != nil && h.EnvironmentSet.SecretsOrgOwned {
+		if h.Credentials == nil || h.Credentials.OrgID == "" {
+			return "", fmt.Errorf("org ID required when CRE_CLI_SECRETS_ORG_OWNED is enabled; ensure auth validation succeeds")
+		}
+		return h.Credentials.OrgID, nil
+	}
+	return h.OwnerAddress, nil
+}
+
 // EncryptSecrets takes the raw secrets and encrypts them, returning pointers.
-// Owner-key flow: TDH2 label is the workflow owner address left-padded to 32 bytes; SecretIdentifier.Owner is the same hex address string.
+// When SecretsOrgOwned is enabled, uses SHA256(orgID) as the TDH2 label and orgID as the owner.
+// Otherwise, uses the workflow owner address left-padded to 32 bytes as the TDH2 label.
 func (h *Handler) EncryptSecrets(rawSecrets UpsertSecretsInputs) ([]*vault.EncryptedSecret, error) {
+	if h.EnvironmentSet != nil && h.EnvironmentSet.SecretsOrgOwned {
+		owner, err := h.ResolveEffectiveOwner()
+		if err != nil {
+			return nil, err
+		}
+		return h.EncryptSecretsForBrowserOrg(rawSecrets, owner)
+	}
+
 	pubKeyHex, err := h.fetchVaultMasterPublicKeyHex()
 	if err != nil {
 		return nil, err

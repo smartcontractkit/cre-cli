@@ -126,6 +126,86 @@ func TestEncryptSecrets(t *testing.T) {
 	})
 }
 
+func TestResolveEffectiveOwner(t *testing.T) {
+	t.Run("returns owner address when SecretsOrgOwned is false", func(t *testing.T) {
+		h, _, _ := newMockHandler(t)
+		h.OwnerAddress = "0xabc"
+		h.EnvironmentSet.SecretsOrgOwned = false
+
+		owner, err := h.ResolveEffectiveOwner()
+		require.NoError(t, err)
+		require.Equal(t, "0xabc", owner)
+	})
+
+	t.Run("returns org ID when SecretsOrgOwned is true and org ID is set", func(t *testing.T) {
+		h, _, _ := newMockHandler(t)
+		h.OwnerAddress = "0xabc"
+		h.EnvironmentSet.SecretsOrgOwned = true
+		h.Credentials.OrgID = "org-123"
+
+		owner, err := h.ResolveEffectiveOwner()
+		require.NoError(t, err)
+		require.Equal(t, "org-123", owner)
+	})
+
+	t.Run("errors when SecretsOrgOwned is true but org ID is empty", func(t *testing.T) {
+		h, _, _ := newMockHandler(t)
+		h.OwnerAddress = "0xabc"
+		h.EnvironmentSet.SecretsOrgOwned = true
+		h.Credentials.OrgID = ""
+
+		_, err := h.ResolveEffectiveOwner()
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "org ID required")
+	})
+}
+
+func TestEncryptSecrets_OrgOwned(t *testing.T) {
+	mockGw := &mockGatewayClient{
+		post: func(body []byte) ([]byte, int, error) {
+			var req jsonrpc2.Request[vaultcommon.GetPublicKeyRequest]
+			_ = json.Unmarshal(body, &req)
+			resp := jsonrpc2.Response[vaultcommon.GetPublicKeyResponse]{
+				Version: jsonrpc2.JsonRpcVersion,
+				ID:      req.ID,
+				Method:  vaulttypes.MethodPublicKeyGet,
+				Result:  &vaultcommon.GetPublicKeyResponse{PublicKey: vaultPublicKeyHex},
+			}
+			b, _ := json.Marshal(resp)
+			return b, http.StatusOK, nil
+		},
+	}
+
+	raw := UpsertSecretsInputs{
+		{ID: "secret-1", Value: "val1", Namespace: "main"},
+	}
+
+	t.Run("uses orgID as owner when SecretsOrgOwned is true", func(t *testing.T) {
+		h, _, _ := newMockHandler(t)
+		h.Gw = mockGw
+		h.EnvironmentSet.SecretsOrgOwned = true
+		h.Credentials.OrgID = "org-456"
+
+		enc, err := h.EncryptSecrets(raw)
+		require.NoError(t, err)
+		require.Len(t, enc, 1)
+		require.Equal(t, "org-456", enc[0].Id.Owner)
+		require.Equal(t, "secret-1", enc[0].Id.Key)
+	})
+
+	t.Run("uses address as owner when SecretsOrgOwned is false", func(t *testing.T) {
+		h, _, _ := newMockHandler(t)
+		h.Gw = mockGw
+		h.OwnerAddress = "0xabc"
+		h.EnvironmentSet.SecretsOrgOwned = false
+
+		enc, err := h.EncryptSecrets(raw)
+		require.NoError(t, err)
+		require.Len(t, enc, 1)
+		require.Equal(t, "0xabc", enc[0].Id.Owner)
+	})
+}
+
 func TestPackAllowlistRequestTxData_Success_With0x(t *testing.T) {
 	h, _, _ := newMockHandler(t)
 
