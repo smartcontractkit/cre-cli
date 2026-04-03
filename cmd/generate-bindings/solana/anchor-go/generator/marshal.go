@@ -10,7 +10,7 @@ import (
 	"github.com/gagliardetto/anchor-go/tools"
 )
 
-func gen_MarshalWithEncoder_struct(
+func (g *Generator) gen_MarshalWithEncoder_struct(
 	idl_ *idl.Idl,
 	withDiscriminator bool,
 	receiverTypeName string,
@@ -45,7 +45,7 @@ func gen_MarshalWithEncoder_struct(
 				}
 				switch fields := fields.(type) {
 				case idl.IdlDefinedFieldsNamed:
-					gen_marshal_DefinedFieldsNamed(
+					g.gen_marshal_DefinedFieldsNamed(
 						body,
 						fields,
 						checkNil,
@@ -60,7 +60,7 @@ func gen_MarshalWithEncoder_struct(
 					)
 				case idl.IdlDefinedFieldsTuple:
 					convertedFields := tupleToFieldsNamed(fields)
-					gen_marshal_DefinedFieldsNamed(
+					g.gen_marshal_DefinedFieldsNamed(
 						body,
 						convertedFields,
 						checkNil,
@@ -135,7 +135,7 @@ func gen_MarshalWithEncoder_struct(
 	return code
 }
 
-func gen_marshal_DefinedFieldsNamed(
+func (g *Generator) gen_marshal_DefinedFieldsNamed(
 	body *Group,
 	fields idl.IdlDefinedFieldsNamed,
 	checkNil bool,
@@ -152,7 +152,7 @@ func gen_marshal_DefinedFieldsNamed(
 			body.Commentf("Serialize `%s`:", exportedArgName)
 		}
 
-		if isComplexEnum(field.Ty) || (IsArray(field.Ty) && isComplexEnum(field.Ty.(*idltype.Array).Type)) || (IsVec(field.Ty) && isComplexEnum(field.Ty.(*idltype.Vec).Vec)) {
+		if g.isComplexEnum(field.Ty) || (IsArray(field.Ty) && g.isComplexEnum(field.Ty.(*idltype.Array).Type)) || (IsVec(field.Ty) && g.isComplexEnum(field.Ty.(*idltype.Vec).Vec)) {
 			switch field.Ty.(type) {
 			case *idltype.Defined:
 				enumTypeName := field.Ty.(*idltype.Defined).Name
