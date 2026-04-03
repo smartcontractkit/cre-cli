@@ -134,9 +134,9 @@ func (g *Generator) gen_instructions() (*OutputFile, error) {
 						// 	)
 						// }
 						checkNil := true
-						body.BlockFunc(func(g *Group) {
-							gen_marshal_DefinedFieldsNamed(
-								g,
+						body.BlockFunc(func(grp *Group) {
+							g.gen_marshal_DefinedFieldsNamed(
+								grp,
 								instruction.Args,
 								checkNil,
 								func(param idl.IdlField) *Statement {
