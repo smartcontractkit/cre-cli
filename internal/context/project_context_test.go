@@ -151,7 +151,7 @@ func TestSetProjectContext(t *testing.T) {
 			},
 			projectPath:   "", // Empty path should trigger search
 			expectError:   true,
-			errorContains: "no project settings file found",
+			errorContains: "no CRE project found",
 		},
 		{
 			name: "fails when project path doesn't exist",
