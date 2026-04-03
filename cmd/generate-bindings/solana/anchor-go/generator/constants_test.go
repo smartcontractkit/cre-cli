@@ -715,6 +715,108 @@ func TestGenConstantsErrorCases(t *testing.T) {
 	})
 }
 
+// TestGenConstantsLargeU64I64ArrayPrecision verifies that u64 and i64 array
+// elements above 2^53 are emitted with full 64-bit precision. json.Unmarshal
+// into []any decodes numbers as float64, which silently rounds integers larger
+// than 2^53. This test catches that: if the generator still uses float64 casts,
+// the expected exact values will not appear in the generated code.
+func TestGenConstantsLargeU64I64ArrayPrecision(t *testing.T) {
+	t.Run("u64 array with values above 2^53", func(t *testing.T) {
+		constants := []idl.IdlConst{
+			{
+				Name: "LARGE_U64_ARRAY",
+				Ty: &idltype.Array{
+					Type: &idltype.U64{},
+					Size: &idltype.IdlArrayLenValue{Value: 4},
+				},
+				// 2^53 = 9007199254740992 is the last integer float64 represents exactly.
+				// 2^53+1 and 2^53+3 are NOT representable in float64 and will be rounded
+				// to 2^53 and 2^53+4 respectively if parsed through float64.
+				Value: "[9007199254740993, 9007199254740995, 18446744073709551615, 9007199254740992]",
+			},
+		}
+
+		idlData := &idl.Idl{Constants: constants}
+		gen := &Generator{idl: idlData, options: &GeneratorOptions{Package: "test"}}
+
+		outputFile, err := gen.gen_constants()
+		require.NoError(t, err)
+
+		generatedCode := outputFile.File.GoString()
+
+		// 2^53+1 = 0x20000000000001 — NOT exactly representable in float64
+		assert.Contains(t, generatedCode, "uint64(0x20000000000001)",
+			"9007199254740993 (2^53+1) was rounded; float64 precision loss in u64 array element")
+		// 2^53+3 = 0x20000000000003 — NOT exactly representable in float64
+		assert.Contains(t, generatedCode, "uint64(0x20000000000003)",
+			"9007199254740995 (2^53+3) was rounded; float64 precision loss in u64 array element")
+		// max u64 = 0xffffffffffffffff
+		assert.Contains(t, generatedCode, "uint64(0xffffffffffffffff)",
+			"18446744073709551615 (max u64) was rounded; float64 precision loss in u64 array element")
+		// 2^53 exactly representable — should always work
+		assert.Contains(t, generatedCode, "uint64(0x20000000000000)",
+			"9007199254740992 (2^53) should be emitted correctly")
+	})
+
+	t.Run("i64 array with values above 2^53", func(t *testing.T) {
+		constants := []idl.IdlConst{
+			{
+				Name: "LARGE_I64_ARRAY",
+				Ty: &idltype.Array{
+					Type: &idltype.I64{},
+					Size: &idltype.IdlArrayLenValue{Value: 4},
+				},
+				Value: "[9007199254740993, -9007199254740993, 9223372036854775807, -9223372036854775808]",
+			},
+		}
+
+		idlData := &idl.Idl{Constants: constants}
+		gen := &Generator{idl: idlData, options: &GeneratorOptions{Package: "test"}}
+
+		outputFile, err := gen.gen_constants()
+		require.NoError(t, err)
+
+		generatedCode := outputFile.File.GoString()
+
+		// 2^53+1 positive
+		assert.Contains(t, generatedCode, "int64(9007199254740993)",
+			"9007199254740993 (2^53+1) was rounded; float64 precision loss in i64 array element")
+		// 2^53+1 negative
+		assert.Contains(t, generatedCode, "int64(-9007199254740993)",
+			"-9007199254740993 was rounded; float64 precision loss in i64 array element")
+		// max i64
+		assert.Contains(t, generatedCode, "int64(9223372036854775807)",
+			"max i64 was rounded; float64 precision loss in i64 array element")
+		// min i64
+		assert.Contains(t, generatedCode, "int64(-9223372036854775808)",
+			"min i64 was rounded; float64 precision loss in i64 array element")
+	})
+
+	t.Run("u32 array is not affected", func(t *testing.T) {
+		// u32 max = 4294967295 < 2^53, so float64 is fine
+		constants := []idl.IdlConst{
+			{
+				Name: "U32_ARRAY",
+				Ty: &idltype.Array{
+					Type: &idltype.U32{},
+					Size: &idltype.IdlArrayLenValue{Value: 2},
+				},
+				Value: "[4294967295, 0]",
+			},
+		}
+
+		idlData := &idl.Idl{Constants: constants}
+		gen := &Generator{idl: idlData, options: &GeneratorOptions{Package: "test"}}
+
+		outputFile, err := gen.gen_constants()
+		require.NoError(t, err)
+
+		generatedCode := outputFile.File.GoString()
+		assert.Contains(t, generatedCode, "uint32(0xffffffff)")
+		assert.Contains(t, generatedCode, "uint32(0x0)")
+	})
+}
+
 // TestGenConstantsRealWorldExamples 测试真实世界的例子
 func TestGenConstantsRealWorldExamples(t *testing.T) {
 	t.Run("Solana program constants", func(t *testing.T) {
