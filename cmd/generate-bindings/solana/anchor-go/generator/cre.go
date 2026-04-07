@@ -10,6 +10,7 @@ import (
 	"fmt"
 
 	. "github.com/dave/jennifer/jen"
+	"github.com/gagliardetto/anchor-go/idl"
 	"github.com/gagliardetto/anchor-go/tools"
 )
 
@@ -250,6 +251,9 @@ func (g *Generator) generateCodecAccountMethods() ([]Code, error) {
 func (g *Generator) generateCodecStructMethod() ([]Code, error) {
 	structMethods := make([]Code, 0, len(g.idl.Types))
 	for _, typ := range g.idl.Types {
+		if _, isEnum := typ.Ty.(*idl.IdlTypeDefTyEnum); isEnum {
+			continue
+		}
 		methodName := "Encode" + typ.Name + "Struct"
 		m := Id(methodName).
 			Params(
