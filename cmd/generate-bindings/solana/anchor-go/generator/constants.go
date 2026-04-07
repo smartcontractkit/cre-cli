@@ -276,32 +276,14 @@ func (g *Generator) gen_constants() (*OutputFile, error) {
 							byteGroup.Lit(uint64(val.(float64)))
 						case *idltype.I64:
 							byteGroup.Lit(int64(val.(float64)))
-						case *idltype.F32:
-							// TODO: is this correct? Are they encoded as strings?
-							v, err := strconv.ParseFloat(val.(string), 32)
-							if err != nil {
-								panic(fmt.Errorf("failed to parse f32 in constants[%d] %s: %w", coi, spew.Sdump(co), err))
-							}
-							byteGroup.Lit(float32(v))
-						case *idltype.F64:
-							// TODO: is this correct? Are they encoded as strings?
-							v, err := strconv.ParseFloat(val.(string), 64)
-							if err != nil {
-								panic(fmt.Errorf("failed to parse f64 in constants[%d] %s: %w", coi, spew.Sdump(co), err))
-							}
-							byteGroup.Lit(v)
-						case *idltype.String:
-							v, err := strconv.Unquote(val.(string))
-							if err != nil {
-								panic(fmt.Errorf("failed to unquote string in constants[%d] %s: %w", coi, spew.Sdump(co), err))
-							}
-							byteGroup.Lit(v)
-						case *idltype.Bool:
-							v, err := strconv.ParseBool(val.(string))
-							if err != nil {
-								panic(fmt.Errorf("failed to parse bool in constants[%d] %s: %w", coi, spew.Sdump(co), err))
-							}
-							byteGroup.Lit(v)
+					case *idltype.F32:
+						byteGroup.Lit(float32(val.(float64)))
+					case *idltype.F64:
+						byteGroup.Lit(val.(float64))
+					case *idltype.String:
+						byteGroup.Lit(val.(string))
+					case *idltype.Bool:
+						byteGroup.Lit(val.(bool))
 						default:
 							panic(fmt.Errorf("unsupported array type for constants[%d] %s: %T", coi, spew.Sdump(co), ty.Type))
 						}
