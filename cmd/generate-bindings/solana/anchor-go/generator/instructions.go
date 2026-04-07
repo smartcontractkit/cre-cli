@@ -99,40 +99,21 @@ func (g *Generator) gen_instructions() (*OutputFile, error) {
 						returnsCode.Qual(PkgSolanaGo, "Instruction")
 						returnsCode.Error()
 					}).BlockFunc(func(body *Group) {
+					body.Id("buf__").Op(":=").New(Qual("bytes", "Buffer"))
+					body.Id("enc__").Op(":=").Qual(PkgBinary, "NewBorshEncoder").Call(Id("buf__"))
+
+					{
+						body.Line().Comment("Encode the instruction discriminator.")
+						discriminatorName := FormatInstructionDiscriminatorName(instruction.Name)
+						body.Err().Op(":=").Id("enc__").Dot("WriteBytes").Call(Id(discriminatorName).Index(Op(":")), False())
+						body.If(Err().Op("!=").Nil()).Block(
+							Return(
+								Nil(),
+								Qual("fmt", "Errorf").Call(Lit("failed to write instruction discriminator: %w"), Err()),
+							),
+						)
+					}
 					if len(instruction.Args) > 0 {
-						body.Id("buf__").Op(":=").New(Qual("bytes", "Buffer"))
-						body.Id("enc__").Op(":=").Qual(PkgBinary, "NewBorshEncoder").Call(Id("buf__"))
-
-						{
-							// write the discriminator
-							body.Line().Comment("Encode the instruction discriminator.")
-							discriminatorName := FormatInstructionDiscriminatorName(instruction.Name)
-							body.Err().Op(":=").Id("enc__").Dot("WriteBytes").Call(Id(discriminatorName).Index(Op(":")), False())
-							body.If(Err().Op("!=").Nil()).Block(
-								Return(
-									Nil(),
-									Qual("fmt", "Errorf").Call(Lit("failed to write instruction discriminator: %w"), Err()),
-								),
-							)
-						}
-						// for _, param := range instruction.Args {
-						// 	paramName := formatParamName(param.Name)
-						// 	isComplexEnum(param.Ty)
-
-						// 	body.Line().Commentf("Encode the parameter: %s", paramName)
-						// 	body.Block(
-						// 		Err().Op(":=").Id("enc__").Dot("Encode").Call(Id(paramName)),
-						// 		If(Err().Op("!=").Nil()).Block(
-						// 			Return(
-						// 				Nil(),
-						// 				Qual(PkgAnchorGoErrors, "NewField").Call(
-						// 					Lit(paramName),
-						// 					Err(),
-						// 				),
-						// 			),
-						// 		),
-						// 	)
-						// }
 						checkNil := true
 						body.BlockFunc(func(g *Group) {
 							gen_marshal_DefinedFieldsNamed(
@@ -223,11 +204,7 @@ func (g *Generator) gen_instructions() (*OutputFile, error) {
 									ListMultiline(func(gg *Group) {
 										gg.Id("ProgramID")
 										gg.Id("accounts__")
-										if len(instruction.Args) > 0 {
-											gg.Id("buf__").Dot("Bytes").Call()
-										} else {
-											gg.Nil() // No arguments to encode.
-										}
+									gg.Id("buf__").Dot("Bytes").Call()
 									}),
 								)
 							},
