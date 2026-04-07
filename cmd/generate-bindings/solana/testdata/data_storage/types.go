@@ -79,6 +79,18 @@ func (c *Codec) EncodeAccessLoggedStruct(in AccessLogged) ([]byte, error) {
 	return in.Marshal()
 }
 
+// WriteReportFromAccessLogged encodes the input struct, hashes the provided accounts,
+// generates a signed report, and submits it via WriteReport.
+//
+// remainingAccounts must follow the keystone-forwarder account layout:
+//   - Index 0: forwarderState – the forwarder program's state account.
+//   - Index 1: forwarderAuthority – PDA derived from seeds
+//     ["forwarder", forwarderState, receiverProgram] under the forwarder program ID.
+//   - Index 2+: receiver-specific accounts required by the target program.
+//
+// The full slice is hashed (via CalculateAccountsHash) into the report and forwarded
+// as WriteCreReportRequest.RemainingAccounts. The on-chain forwarder strips indices 0 and 1
+// before CPI-ing into the receiver, so they must be present and correctly ordered.
 func (c *DataStorage) WriteReportFromAccessLogged(
 	runtime cre.Runtime,
 	input AccessLogged,
@@ -191,6 +203,18 @@ func (c *Codec) EncodeDataAccountStruct(in DataAccount) ([]byte, error) {
 	return in.Marshal()
 }
 
+// WriteReportFromDataAccount encodes the input struct, hashes the provided accounts,
+// generates a signed report, and submits it via WriteReport.
+//
+// remainingAccounts must follow the keystone-forwarder account layout:
+//   - Index 0: forwarderState – the forwarder program's state account.
+//   - Index 1: forwarderAuthority – PDA derived from seeds
+//     ["forwarder", forwarderState, receiverProgram] under the forwarder program ID.
+//   - Index 2+: receiver-specific accounts required by the target program.
+//
+// The full slice is hashed (via CalculateAccountsHash) into the report and forwarded
+// as WriteCreReportRequest.RemainingAccounts. The on-chain forwarder strips indices 0 and 1
+// before CPI-ing into the receiver, so they must be present and correctly ordered.
 func (c *DataStorage) WriteReportFromDataAccount(
 	runtime cre.Runtime,
 	input DataAccount,
@@ -325,6 +349,18 @@ func (c *Codec) EncodeDynamicEventStruct(in DynamicEvent) ([]byte, error) {
 	return in.Marshal()
 }
 
+// WriteReportFromDynamicEvent encodes the input struct, hashes the provided accounts,
+// generates a signed report, and submits it via WriteReport.
+//
+// remainingAccounts must follow the keystone-forwarder account layout:
+//   - Index 0: forwarderState – the forwarder program's state account.
+//   - Index 1: forwarderAuthority – PDA derived from seeds
+//     ["forwarder", forwarderState, receiverProgram] under the forwarder program ID.
+//   - Index 2+: receiver-specific accounts required by the target program.
+//
+// The full slice is hashed (via CalculateAccountsHash) into the report and forwarded
+// as WriteCreReportRequest.RemainingAccounts. The on-chain forwarder strips indices 0 and 1
+// before CPI-ing into the receiver, so they must be present and correctly ordered.
 func (c *DataStorage) WriteReportFromDynamicEvent(
 	runtime cre.Runtime,
 	input DynamicEvent,
@@ -403,6 +439,18 @@ func (c *Codec) EncodeNoFieldsStruct(in NoFields) ([]byte, error) {
 	return in.Marshal()
 }
 
+// WriteReportFromNoFields encodes the input struct, hashes the provided accounts,
+// generates a signed report, and submits it via WriteReport.
+//
+// remainingAccounts must follow the keystone-forwarder account layout:
+//   - Index 0: forwarderState – the forwarder program's state account.
+//   - Index 1: forwarderAuthority – PDA derived from seeds
+//     ["forwarder", forwarderState, receiverProgram] under the forwarder program ID.
+//   - Index 2+: receiver-specific accounts required by the target program.
+//
+// The full slice is hashed (via CalculateAccountsHash) into the report and forwarded
+// as WriteCreReportRequest.RemainingAccounts. The on-chain forwarder strips indices 0 and 1
+// before CPI-ing into the receiver, so they must be present and correctly ordered.
 func (c *DataStorage) WriteReportFromNoFields(
 	runtime cre.Runtime,
 	input NoFields,
@@ -504,6 +552,18 @@ func (c *Codec) EncodeUpdateReservesStruct(in UpdateReserves) ([]byte, error) {
 	return in.Marshal()
 }
 
+// WriteReportFromUpdateReserves encodes the input struct, hashes the provided accounts,
+// generates a signed report, and submits it via WriteReport.
+//
+// remainingAccounts must follow the keystone-forwarder account layout:
+//   - Index 0: forwarderState – the forwarder program's state account.
+//   - Index 1: forwarderAuthority – PDA derived from seeds
+//     ["forwarder", forwarderState, receiverProgram] under the forwarder program ID.
+//   - Index 2+: receiver-specific accounts required by the target program.
+//
+// The full slice is hashed (via CalculateAccountsHash) into the report and forwarded
+// as WriteCreReportRequest.RemainingAccounts. The on-chain forwarder strips indices 0 and 1
+// before CPI-ing into the receiver, so they must be present and correctly ordered.
 func (c *DataStorage) WriteReportFromUpdateReserves(
 	runtime cre.Runtime,
 	input UpdateReserves,
@@ -605,6 +665,18 @@ func (c *Codec) EncodeUserDataStruct(in UserData) ([]byte, error) {
 	return in.Marshal()
 }
 
+// WriteReportFromUserData encodes the input struct, hashes the provided accounts,
+// generates a signed report, and submits it via WriteReport.
+//
+// remainingAccounts must follow the keystone-forwarder account layout:
+//   - Index 0: forwarderState – the forwarder program's state account.
+//   - Index 1: forwarderAuthority – PDA derived from seeds
+//     ["forwarder", forwarderState, receiverProgram] under the forwarder program ID.
+//   - Index 2+: receiver-specific accounts required by the target program.
+//
+// The full slice is hashed (via CalculateAccountsHash) into the report and forwarded
+// as WriteCreReportRequest.RemainingAccounts. The on-chain forwarder strips indices 0 and 1
+// before CPI-ing into the receiver, so they must be present and correctly ordered.
 func (c *DataStorage) WriteReportFromUserData(
 	runtime cre.Runtime,
 	input UserData,

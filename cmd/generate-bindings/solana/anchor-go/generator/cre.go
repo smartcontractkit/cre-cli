@@ -63,10 +63,22 @@ func creWriteReportErrorBlock() Code {
 	return code
 }
 
-// func (c *DataStorage) WriteReportFrom<StructName>(runtime cre.Runtime, input <StructName>, accountList []solanago.PublicKey) cre.Promise[*solana.WriteReportReply] {
 func creWriteReportFromStructs(exportedAccountName string, g *Generator) Code {
 	code := Empty()
 	declarerName := newWriteReportFromInstructionFuncName(exportedAccountName)
+	code.Commentf("%s encodes the input struct, hashes the provided accounts,", declarerName)
+	code.Comment("generates a signed report, and submits it via WriteReport.")
+	code.Comment("")
+	code.Comment("remainingAccounts must follow the keystone-forwarder account layout:")
+	code.Comment("  - Index 0: forwarderState – the forwarder program's state account.")
+	code.Comment("  - Index 1: forwarderAuthority – PDA derived from seeds")
+	code.Comment("    [\"forwarder\", forwarderState, receiverProgram] under the forwarder program ID.")
+	code.Comment("  - Index 2+: receiver-specific accounts required by the target program.")
+	code.Comment("")
+	code.Comment("The full slice is hashed (via CalculateAccountsHash) into the report and forwarded")
+	code.Comment("as WriteCreReportRequest.RemainingAccounts. The on-chain forwarder strips indices 0 and 1")
+	code.Comment("before CPI-ing into the receiver, so they must be present and correctly ordered.")
+	code.Line()
 	code.Func().
 		Params(Id("c").Op("*").Id(tools.ToCamelUpper(g.options.Package))). // method receiver
 		Id(declarerName).
