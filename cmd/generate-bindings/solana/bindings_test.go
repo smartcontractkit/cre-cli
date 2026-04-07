@@ -123,6 +123,45 @@ func TestWriteReportMethods(t *testing.T) {
 	}, response), "Response should match expected WriteReportReply")
 }
 
+func TestZeroArgInstructionRoundTrip(t *testing.T) {
+	zeroArgInstructions := []struct {
+		name        string
+		buildFn     func() (solana.Instruction, error)
+		expectedTyp datastorage.Instruction
+	}{
+		{
+			name:        "get_multiple_reserves",
+			buildFn:     datastorage.NewGetMultipleReservesInstruction,
+			expectedTyp: &datastorage.GetMultipleReservesInstruction{},
+		},
+		{
+			name:        "get_reserves",
+			buildFn:     datastorage.NewGetReservesInstruction,
+			expectedTyp: &datastorage.GetReservesInstruction{},
+		},
+		{
+			name:        "get_tuple_reserves",
+			buildFn:     datastorage.NewGetTupleReservesInstruction,
+			expectedTyp: &datastorage.GetTupleReservesInstruction{},
+		},
+	}
+
+	for _, tc := range zeroArgInstructions {
+		t.Run(tc.name, func(t *testing.T) {
+			ix, err := tc.buildFn()
+			require.NoError(t, err, "building instruction should succeed")
+
+			data, err := ix.Data()
+			require.NoError(t, err)
+			require.Len(t, data, 8, "zero-arg instruction data must be exactly the 8-byte discriminator")
+
+			parsed, err := datastorage.ParseInstructionWithoutAccounts(data)
+			require.NoError(t, err, "ParseInstruction must accept the discriminator-only data produced by the builder")
+			require.IsType(t, tc.expectedTyp, parsed)
+		})
+	}
+}
+
 func TestEncodeStruct(t *testing.T) {
 	client := &solanasdk.Client{ChainSelector: anyChainSelector}
 	ds, err := datastorage.NewDataStorage(client)

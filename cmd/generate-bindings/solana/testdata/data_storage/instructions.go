@@ -13,37 +13,61 @@ import (
 
 // Builds a "get_multiple_reserves" instruction.
 func NewGetMultipleReservesInstruction() (solanago.Instruction, error) {
+	buf__ := new(bytes.Buffer)
+	enc__ := binary.NewBorshEncoder(buf__)
+
+	// Encode the instruction discriminator.
+	err := enc__.WriteBytes(Instruction_GetMultipleReserves[:], false)
+	if err != nil {
+		return nil, fmt.Errorf("failed to write instruction discriminator: %w", err)
+	}
 	accounts__ := solanago.AccountMetaSlice{}
 
 	// Create the instruction.
 	return solanago.NewInstruction(
 		ProgramID,
 		accounts__,
-		nil,
+		buf__.Bytes(),
 	), nil
 }
 
 // Builds a "get_reserves" instruction.
 func NewGetReservesInstruction() (solanago.Instruction, error) {
+	buf__ := new(bytes.Buffer)
+	enc__ := binary.NewBorshEncoder(buf__)
+
+	// Encode the instruction discriminator.
+	err := enc__.WriteBytes(Instruction_GetReserves[:], false)
+	if err != nil {
+		return nil, fmt.Errorf("failed to write instruction discriminator: %w", err)
+	}
 	accounts__ := solanago.AccountMetaSlice{}
 
 	// Create the instruction.
 	return solanago.NewInstruction(
 		ProgramID,
 		accounts__,
-		nil,
+		buf__.Bytes(),
 	), nil
 }
 
 // Builds a "get_tuple_reserves" instruction.
 func NewGetTupleReservesInstruction() (solanago.Instruction, error) {
+	buf__ := new(bytes.Buffer)
+	enc__ := binary.NewBorshEncoder(buf__)
+
+	// Encode the instruction discriminator.
+	err := enc__.WriteBytes(Instruction_GetTupleReserves[:], false)
+	if err != nil {
+		return nil, fmt.Errorf("failed to write instruction discriminator: %w", err)
+	}
 	accounts__ := solanago.AccountMetaSlice{}
 
 	// Create the instruction.
 	return solanago.NewInstruction(
 		ProgramID,
 		accounts__,
-		nil,
+		buf__.Bytes(),
 	), nil
 }
 
