@@ -807,3 +807,187 @@ func TestGenConstantsRealWorldExamples(t *testing.T) {
 		assert.Contains(t, generatedCode, "var SIGNATURE_SEED = [8]byte{uint8(0x73), uint8(0x69), uint8(0x67), uint8(0x6e), uint8(0x61), uint8(0x74), uint8(0x75), uint8(0x72)}")
 	})
 }
+
+func TestGenerateCodecStructMethod_SkipsEnums(t *testing.T) {
+	idlData := &idl.Idl{
+		Types: idl.IdTypeDef_slice{
+			{
+				Name: "MyStruct",
+				Ty: &idl.IdlTypeDefTyStruct{
+					Fields: idl.IdlDefinedFieldsNamed{
+						{Name: "value", Ty: &idltype.U64{}},
+					},
+				},
+			},
+			{
+				Name: "MySimpleEnum",
+				Ty: &idl.IdlTypeDefTyEnum{
+					Variants: idl.VariantSlice{
+						{Name: "VariantA"},
+						{Name: "VariantB"},
+					},
+				},
+			},
+			{
+				Name: "AnotherStruct",
+				Ty: &idl.IdlTypeDefTyStruct{
+					Fields: idl.IdlDefinedFieldsNamed{
+						{Name: "name", Ty: &idltype.String{}},
+					},
+				},
+			},
+		},
+	}
+
+	gen := &Generator{
+		idl:     idlData,
+		options: &GeneratorOptions{Package: "test"},
+	}
+
+	methods, err := gen.generateCodecStructMethod()
+	require.NoError(t, err)
+
+	require.Len(t, methods, 2, "only the two struct types should produce codec methods")
+
+	rendered := make([]string, len(methods))
+	for i, m := range methods {
+		rendered[i] = fmt.Sprintf("%#v", m)
+	}
+
+	assert.Contains(t, rendered[0], "EncodeMyStructStruct")
+	assert.Contains(t, rendered[1], "EncodeAnotherStructStruct")
+
+	for _, r := range rendered {
+		assert.NotContains(t, r, "MySimpleEnum",
+			"enum type should not appear in codec struct methods")
+	}
+}
+
+func TestGenerateCodecMethods_EnumOnlyIDL(t *testing.T) {
+	idlData := &idl.Idl{
+		Types: idl.IdTypeDef_slice{
+			{
+				Name: "Status",
+				Ty: &idl.IdlTypeDefTyEnum{
+					Variants: idl.VariantSlice{
+						{Name: "Active"},
+						{Name: "Inactive"},
+					},
+				},
+			},
+		},
+	}
+
+	gen := &Generator{
+		idl:     idlData,
+		options: &GeneratorOptions{Package: "test"},
+	}
+
+	methods, err := gen.generateCodecMethods()
+	require.NoError(t, err)
+	assert.Empty(t, methods, "codec should have no methods for an enum-only IDL")
+}
+
+func TestGenerateCodecStructMethod_CodecInterfaceMatchesImpl(t *testing.T) {
+	idlData := &idl.Idl{
+		Types: idl.IdTypeDef_slice{
+			{
+				Name: "MyStruct",
+				Ty: &idl.IdlTypeDefTyStruct{
+					Fields: idl.IdlDefinedFieldsNamed{
+						{Name: "value", Ty: &idltype.U64{}},
+					},
+				},
+			},
+			{
+				Name: "MyEnum",
+				Ty: &idl.IdlTypeDefTyEnum{
+					Variants: idl.VariantSlice{
+						{Name: "On"},
+						{Name: "Off"},
+					},
+				},
+			},
+		},
+	}
+
+	gen := &Generator{
+		idl:     idlData,
+		options: &GeneratorOptions{Package: "test"},
+	}
+
+	interfaceMethods, err := gen.generateCodecStructMethod()
+	require.NoError(t, err)
+
+	interfaceMethodNames := make(map[string]bool)
+	for _, m := range interfaceMethods {
+		s := fmt.Sprintf("%#v", m)
+		for _, typ := range idlData.Types {
+			name := "Encode" + typ.Name + "Struct"
+			if strings.Contains(s, name) {
+				interfaceMethodNames[name] = true
+			}
+		}
+	}
+
+	for _, typ := range idlData.Types {
+		name := "Encode" + typ.Name + "Struct"
+		if _, isStruct := typ.Ty.(*idl.IdlTypeDefTyStruct); isStruct {
+			assert.True(t, interfaceMethodNames[name],
+				"struct %q should have codec interface method %s", typ.Name, name)
+
+			implCode := creGenerateCodecEncoderForTypes(typ.Name)
+			implStr := fmt.Sprintf("%#v", implCode)
+			assert.Contains(t, implStr, name,
+				"struct %q should have matching implementation", typ.Name)
+		} else {
+			assert.False(t, interfaceMethodNames[name],
+				"enum %q must not have codec interface method %s", typ.Name, name)
+		}
+	}
+}
+
+func TestGenfileConstructor_WithEnumTypes(t *testing.T) {
+	idlData := &idl.Idl{
+		Metadata: idl.IdlMetadata{
+			Name:    "test_program",
+			Version: "0.1.0",
+			Spec:    "0.1.0",
+		},
+		Types: idl.IdTypeDef_slice{
+			{
+				Name: "Config",
+				Ty: &idl.IdlTypeDefTyStruct{
+					Fields: idl.IdlDefinedFieldsNamed{
+						{Name: "value", Ty: &idltype.U64{}},
+					},
+				},
+			},
+			{
+				Name: "Mode",
+				Ty: &idl.IdlTypeDefTyEnum{
+					Variants: idl.VariantSlice{
+						{Name: "Fast"},
+						{Name: "Slow"},
+					},
+				},
+			},
+		},
+	}
+
+	gen := &Generator{
+		idl:     idlData,
+		options: &GeneratorOptions{Package: "testpkg"},
+	}
+
+	outputFile, err := gen.genfile_constructor()
+	require.NoError(t, err)
+	require.NotNil(t, outputFile)
+
+	code := fmt.Sprintf("%#v", outputFile.File)
+
+	assert.Contains(t, code, "EncodeConfigStruct",
+		"struct type Config should have a codec interface method")
+	assert.NotContains(t, code, "EncodeModeStruct",
+		"enum type Mode should not produce a codec interface method")
+}
