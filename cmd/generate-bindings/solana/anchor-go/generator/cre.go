@@ -233,12 +233,13 @@ func (g *Generator) genfile_constructor() (*OutputFile, error) {
 func (g *Generator) generateCodecAccountMethods() ([]Code, error) {
 	accountMethods := make([]Code, 0, len(g.idl.Accounts))
 	for _, acc := range g.idl.Accounts {
-		methodName := "Decode" + acc.Name
+		exportedName := tools.ToCamelUpper(acc.Name)
+		methodName := "Decode" + exportedName
 		m := Id(methodName).
 			Params(Id("data").Index().Byte()). // ([]byte)
 			Params(
-				Op("*").Id(acc.Name), // (*DataAccount)
-				Error(),              // error
+				Op("*").Id(exportedName), // (*DataAccount)
+				Error(),                  // error
 			)
 
 		accountMethods = append(accountMethods, m)
@@ -250,10 +251,11 @@ func (g *Generator) generateCodecAccountMethods() ([]Code, error) {
 func (g *Generator) generateCodecStructMethod() ([]Code, error) {
 	structMethods := make([]Code, 0, len(g.idl.Types))
 	for _, typ := range g.idl.Types {
-		methodName := "Encode" + typ.Name + "Struct"
+		exportedName := tools.ToCamelUpper(typ.Name)
+		methodName := "Encode" + exportedName + "Struct"
 		m := Id(methodName).
 			Params(
-				Id("in").Id(typ.Name), // e.g., AccessLogged / DataAccount / ...
+				Id("in").Id(exportedName), // e.g., AccessLogged / DataAccount / ...
 			).
 			Params(
 				Index().Byte(), // []byte
