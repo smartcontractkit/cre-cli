@@ -380,7 +380,7 @@ func BindV2(types []string, abis []string, bytecodes []string, pkg string, libs 
 	return string(code), nil
 }
 
-// Remove contract name prefixes from struct names
+// Remove contract name prefixes from struct names and update field type references.
 func sanitizeStructNames(structs map[string]*tmplStruct, contracts map[string]*tmplContractV2) {
 	contractNames := make([]string, 0, len(contracts))
 	for name := range contracts {
@@ -388,9 +388,22 @@ func sanitizeStructNames(structs map[string]*tmplStruct, contracts map[string]*t
 	}
 	sort.Strings(contractNames)
 
-	for _, structName := range structs {
+	renames := make(map[string]string)
+	for _, s := range structs {
+		original := s.Name
 		for _, contractName := range contractNames {
-			structName.Name = strings.TrimPrefix(structName.Name, contractName)
+			s.Name = strings.TrimPrefix(s.Name, contractName)
+		}
+		if s.Name != original {
+			renames[original] = s.Name
+		}
+	}
+
+	for _, s := range structs {
+		for _, f := range s.Fields {
+			for old, renamed := range renames {
+				f.Type = strings.ReplaceAll(f.Type, old, renamed)
+			}
 		}
 	}
 }
