@@ -4,17 +4,15 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"math"
 	"math/big"
 	"os"
 	"os/signal"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/rs/zerolog"
@@ -23,7 +21,6 @@ import (
 	"go.uber.org/zap/zapcore"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/beholder"
-	"github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/chain-capabilities/evm"
 	httptypedapi "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/triggers/http"
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	"github.com/smartcontractkit/chainlink-common/pkg/services"
@@ -31,12 +28,14 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/settings/cresettings"
 	pb "github.com/smartcontractkit/chainlink-protos/cre/go/sdk"
 	"github.com/smartcontractkit/chainlink-protos/cre/go/values"
-	valuespb "github.com/smartcontractkit/chainlink-protos/cre/go/values/pb"
 	"github.com/smartcontractkit/chainlink/v2/core/capabilities"
 	simulator "github.com/smartcontractkit/chainlink/v2/core/services/workflows/cmd/cre/utils"
 	v2 "github.com/smartcontractkit/chainlink/v2/core/services/workflows/v2"
 
 	cmdcommon "github.com/smartcontractkit/cre-cli/cmd/common"
+	"github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain"
+	_ "github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain/evm"
+	evmpkg "github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain/evm"
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
@@ -46,23 +45,23 @@ import (
 )
 
 type Inputs struct {
-	WasmPath      string                       `validate:"omitempty,file,ascii,max=97" cli:"--wasm"`
-	WorkflowPath  string                       `validate:"required,workflow_path_read"`
-	ConfigPath    string                       `validate:"omitempty,file,ascii,max=97"`
-	SecretsPath   string                       `validate:"omitempty,file,ascii,max=97"`
-	EngineLogs    bool                         `validate:"omitempty" cli:"--engine-logs"`
-	Broadcast     bool                         `validate:"-"`
-	EVMClients    map[uint64]*ethclient.Client `validate:"omitempty"` // multichain clients keyed by selector (or chain ID for experimental)
-	EthPrivateKey *ecdsa.PrivateKey            `validate:"omitempty"`
-	WorkflowName  string                       `validate:"required"`
+	WasmPath     string `validate:"omitempty,file,ascii,max=97" cli:"--wasm"`
+	WorkflowPath string `validate:"required,workflow_path_read"`
+	ConfigPath   string `validate:"omitempty,file,ascii,max=97"`
+	SecretsPath  string `validate:"omitempty,file,ascii,max=97"`
+	EngineLogs   bool   `validate:"omitempty" cli:"--engine-logs"`
+	Broadcast    bool   `validate:"-"`
+	WorkflowName string `validate:"required"`
+	// Family-generic chain fields
+	FamilyClients    map[string]map[uint64]chain.ChainClient `validate:"omitempty"`
+	FamilyForwarders map[string]map[uint64]string             `validate:"-"`
+	FamilyKeys       map[string]interface{}                   `validate:"-"`
 	// Non-interactive mode options
 	NonInteractive bool   `validate:"-"`
 	TriggerIndex   int    `validate:"-"`
 	HTTPPayload    string `validate:"-"` // JSON string or @/path/to/file.json
 	EVMTxHash      string `validate:"-"` // 0x-prefixed
 	EVMEventIndex  int    `validate:"-"`
-	// Experimental chains support (for chains not in official chain-selectors)
-	ExperimentalForwarders map[uint64]common.Address `validate:"-"` // forwarders keyed by chain ID
 	// Limits enforcement
 	LimitsPath string `validate:"-"` // "default" or path to custom limits JSON
 	// SkipTypeChecks passes --skip-type-checks to cre-compile for TypeScript workflows.
@@ -126,93 +125,32 @@ func newHandler(ctx *runtime.Context) *handler {
 }
 
 func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) (Inputs, error) {
-	// build clients for each supported chain from settings, skip if rpc is empty
-	clients := make(map[uint64]*ethclient.Client)
-	for _, chain := range SupportedEVM {
-		chainName, err := settings.GetChainNameByChainSelector(chain.Selector)
-		if err != nil {
-			h.log.Error().Msgf("Invalid chain selector for supported EVM chains %d; skipping", chain.Selector)
-			continue
-		}
-		rpcURL, err := settings.GetRpcUrlSettings(v, chainName)
-		if err != nil || strings.TrimSpace(rpcURL) == "" {
-			h.log.Debug().Msgf("RPC not provided for %s; skipping", chainName)
-			continue
-		}
-		h.log.Debug().Msgf("Using RPC for %s: %s", chainName, redactURL(rpcURL))
+	familyClients := make(map[string]map[uint64]chain.ChainClient)
+	familyForwarders := make(map[string]map[uint64]string)
+	familyKeys := make(map[string]interface{})
 
-		c, err := ethclient.Dial(rpcURL)
+	for name, family := range chain.All() {
+		clients, forwarders, err := family.ResolveClients(v)
 		if err != nil {
-			ui.Warning(fmt.Sprintf("Failed to create eth client for %s: %v", chainName, err))
-			continue
+			return Inputs{}, fmt.Errorf("failed to resolve %s clients: %w", name, err)
 		}
 
-		clients[chain.Selector] = c
+		if len(clients) > 0 {
+			familyClients[name] = clients
+			familyForwarders[name] = forwarders
+		}
 	}
 
-	// Experimental chains support (automatically loaded from config if present)
-	experimentalForwarders := make(map[uint64]common.Address)
-
-	expChains, err := settings.GetExperimentalChains(v)
-	if err != nil {
-		return Inputs{}, fmt.Errorf("failed to load experimental chains config: %w", err)
+	// Check at least one family has clients
+	totalClients := 0
+	for _, fc := range familyClients {
+		totalClients += len(fc)
 	}
-
-	for _, ec := range expChains {
-		// Validate required fields
-		if ec.ChainSelector == 0 {
-			return Inputs{}, fmt.Errorf("experimental chain missing chain-selector")
-		}
-		if strings.TrimSpace(ec.RPCURL) == "" {
-			return Inputs{}, fmt.Errorf("experimental chain %d missing rpc-url", ec.ChainSelector)
-		}
-		if strings.TrimSpace(ec.Forwarder) == "" {
-			return Inputs{}, fmt.Errorf("experimental chain %d missing forwarder", ec.ChainSelector)
-		}
-
-		// Check if chain selector already exists (supported chain)
-		if _, exists := clients[ec.ChainSelector]; exists {
-			// Find the supported chain's forwarder
-			var supportedForwarder string
-			for _, supported := range SupportedEVM {
-				if supported.Selector == ec.ChainSelector {
-					supportedForwarder = supported.Forwarder
-					break
-				}
-			}
-
-			expFwd := common.HexToAddress(ec.Forwarder)
-			if supportedForwarder != "" && common.HexToAddress(supportedForwarder) == expFwd {
-				// Same forwarder, just debug log
-				h.log.Debug().Uint64("chain-selector", ec.ChainSelector).Msg("Experimental chain matches supported chain config")
-				continue
-			}
-
-			// Different forwarder - respect user's config, warn about override
-			ui.Warning(fmt.Sprintf("Warning: experimental chain %d overrides supported chain forwarder (supported: %s, experimental: %s)\n", ec.ChainSelector, supportedForwarder, ec.Forwarder))
-
-			// Use existing client but override the forwarder
-			experimentalForwarders[ec.ChainSelector] = expFwd
-			continue
-		}
-
-		// Dial the RPC
-		h.log.Debug().Msgf("Using RPC for experimental chain %d: %s", ec.ChainSelector, redactURL(ec.RPCURL))
-		c, err := ethclient.Dial(ec.RPCURL)
-		if err != nil {
-			return Inputs{}, fmt.Errorf("failed to create eth client for experimental chain %d: %w", ec.ChainSelector, err)
-		}
-
-		clients[ec.ChainSelector] = c
-		experimentalForwarders[ec.ChainSelector] = common.HexToAddress(ec.Forwarder)
-		ui.Dim(fmt.Sprintf("Added experimental chain (chain-selector: %d)\n", ec.ChainSelector))
-
-	}
-
-	if len(clients) == 0 {
+	if totalClients == 0 {
 		return Inputs{}, fmt.Errorf("no RPC URLs found for supported or experimental chains")
 	}
 
+	// Private key parsing (EVM-specific for now, stored under "evm" key)
 	pk, err := crypto.HexToECDSA(creSettings.User.EthPrivateKey)
 	if err != nil {
 		if v.GetBool("broadcast") {
@@ -225,25 +163,26 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 		}
 		ui.Warning("Using default private key for chain write simulation. To use your own key, set CRE_ETH_PRIVATE_KEY in your .env file or system environment.")
 	}
+	familyKeys["evm"] = pk
 
 	return Inputs{
-		WasmPath:               v.GetString("wasm"),
-		WorkflowPath:           creSettings.Workflow.WorkflowArtifactSettings.WorkflowPath,
-		ConfigPath:             cmdcommon.ResolveConfigPath(v, creSettings.Workflow.WorkflowArtifactSettings.ConfigPath),
-		SecretsPath:            creSettings.Workflow.WorkflowArtifactSettings.SecretsPath,
-		EngineLogs:             v.GetBool("engine-logs"),
-		Broadcast:              v.GetBool("broadcast"),
-		EVMClients:             clients,
-		EthPrivateKey:          pk,
-		WorkflowName:           creSettings.Workflow.UserWorkflowSettings.WorkflowName,
-		NonInteractive:         v.GetBool("non-interactive"),
-		TriggerIndex:           v.GetInt("trigger-index"),
-		HTTPPayload:            v.GetString("http-payload"),
-		EVMTxHash:              v.GetString("evm-tx-hash"),
-		EVMEventIndex:          v.GetInt("evm-event-index"),
-		ExperimentalForwarders: experimentalForwarders,
-		LimitsPath:             v.GetString("limits"),
-		SkipTypeChecks:         v.GetBool(cmdcommon.SkipTypeChecksCLIFlag),
+		WasmPath:         v.GetString("wasm"),
+		WorkflowPath:     creSettings.Workflow.WorkflowArtifactSettings.WorkflowPath,
+		ConfigPath:       cmdcommon.ResolveConfigPath(v, creSettings.Workflow.WorkflowArtifactSettings.ConfigPath),
+		SecretsPath:      creSettings.Workflow.WorkflowArtifactSettings.SecretsPath,
+		EngineLogs:       v.GetBool("engine-logs"),
+		Broadcast:        v.GetBool("broadcast"),
+		FamilyClients:    familyClients,
+		FamilyForwarders: familyForwarders,
+		FamilyKeys:       familyKeys,
+		WorkflowName:     creSettings.Workflow.UserWorkflowSettings.WorkflowName,
+		NonInteractive:   v.GetBool("non-interactive"),
+		TriggerIndex:     v.GetInt("trigger-index"),
+		HTTPPayload:      v.GetString("http-payload"),
+		EVMTxHash:        v.GetString("evm-tx-hash"),
+		EVMEventIndex:    v.GetInt("evm-event-index"),
+		LimitsPath:       v.GetString("limits"),
+		SkipTypeChecks:   v.GetBool(cmdcommon.SkipTypeChecksCLIFlag),
 	}, nil
 }
 
@@ -271,12 +210,27 @@ func (h *handler) ValidateInputs(inputs Inputs) error {
 	inputs.ConfigPath = savedConfig
 
 	// forbid the default 0x...01 key when broadcasting
-	if inputs.Broadcast && inputs.EthPrivateKey != nil && inputs.EthPrivateKey.D.Cmp(big.NewInt(1)) == 0 {
-		return fmt.Errorf("you must configure a valid private key to perform on-chain writes. Please set your private key in the .env file before using the -–broadcast flag")
+	if inputs.Broadcast {
+		if pkIface, ok := inputs.FamilyKeys["evm"]; ok {
+			if pk, ok2 := pkIface.(*ecdsa.PrivateKey); ok2 && pk.D.Cmp(big.NewInt(1)) == 0 {
+				return fmt.Errorf("you must configure a valid private key to perform on-chain writes. Please set your private key in the .env file before using the -–broadcast flag")
+			}
+		}
 	}
 
 	rpcErr := ui.WithSpinner("Checking RPC connectivity...", func() error {
-		return runRPCHealthCheck(inputs.EVMClients, inputs.ExperimentalForwarders)
+		var errs []error
+		for name, family := range chain.All() {
+			if clients, ok := inputs.FamilyClients[name]; ok {
+				if err := family.RunHealthCheck(clients); err != nil {
+					errs = append(errs, err)
+				}
+			}
+		}
+		if len(errs) > 0 {
+			return errors.Join(errs...)
+		}
+		return nil
 	})
 	if rpcErr != nil {
 		// we don't block execution, just show the error to the user
@@ -469,7 +423,7 @@ func run(
 	initializedCh := make(chan struct{})
 	executionFinishedCh := make(chan struct{})
 
-	var triggerCaps *ManualTriggers
+	var manualTriggers *ManualTriggers
 	simulatorInitialize := func(ctx context.Context, cfg simulator.RunnerConfig) (*capabilities.Registry, []services.Service) {
 		lggr := logger.Sugared(cfg.Lggr)
 		// Create the registry and fake capabilities with specific loggers
@@ -499,33 +453,38 @@ func run(
 			}
 		}
 
-		// Build forwarder address map based on which chains actually have RPC clients configured
-		forwarders := map[uint64]common.Address{}
-		for _, c := range SupportedEVM {
-			if _, ok := inputs.EVMClients[c.Selector]; ok && strings.TrimSpace(c.Forwarder) != "" {
-				forwarders[c.Selector] = common.HexToAddress(c.Forwarder)
-			}
-		}
-
-		// Merge experimental forwarders (keyed by chain ID)
-		for chainID, fwdAddr := range inputs.ExperimentalForwarders {
-			forwarders[chainID] = fwdAddr
-		}
-
-		manualTriggerCapConfig := ManualTriggerCapabilitiesConfig{
-			Clients:    inputs.EVMClients,
-			PrivateKey: inputs.EthPrivateKey,
-			Forwarders: forwarders,
-		}
-
+		// Register chain-agnostic cron and HTTP triggers
 		triggerLggr := lggr.Named("TriggerCapabilities")
 		var err error
-		triggerCaps, err = NewManualTriggerCapabilities(ctx, triggerLggr, registry, manualTriggerCapConfig, !inputs.Broadcast, simLimits)
+		manualTriggers, err = NewManualTriggers(ctx, triggerLggr, registry)
 		if err != nil {
-			ui.Error(fmt.Sprintf("Failed to create trigger capabilities: %v", err))
+			ui.Error(fmt.Sprintf("Failed to create cron/HTTP trigger capabilities: %v", err))
 			os.Exit(1)
 		}
 
+		// Register chain-family-specific capabilities
+		for name, family := range chain.All() {
+			clients, ok := inputs.FamilyClients[name]
+			if !ok || len(clients) == 0 {
+				continue
+			}
+
+			err := family.RegisterCapabilities(ctx, chain.CapabilityConfig{
+				Registry:   registry,
+				Clients:    clients,
+				Forwarders: inputs.FamilyForwarders[name],
+				PrivateKey: inputs.FamilyKeys[name],
+				Broadcast:  inputs.Broadcast,
+				Limits:     simLimits,
+				Logger:     triggerLggr,
+			})
+			if err != nil {
+				ui.Error(fmt.Sprintf("Failed to register %s capabilities: %v", name, err))
+				os.Exit(1)
+			}
+		}
+
+		// Register chain-agnostic action capabilities (consensus, HTTP, confidential HTTP)
 		computeLggr := lggr.Named("ActionsCapabilities")
 		computeCaps, err := NewFakeActionCapabilities(ctx, computeLggr, registry, inputs.SecretsPath, simLimits)
 		if err != nil {
@@ -534,8 +493,8 @@ func run(
 		}
 
 		// Start trigger capabilities
-		if err := triggerCaps.Start(ctx); err != nil {
-			ui.Error(fmt.Sprintf("Failed to start trigger: %v", err))
+		if err := manualTriggers.Start(ctx); err != nil {
+			ui.Error(fmt.Sprintf("Failed to start cron/HTTP triggers: %v", err))
 			os.Exit(1)
 		}
 
@@ -547,10 +506,7 @@ func run(
 			}
 		}
 
-		srvcs = append(srvcs, triggerCaps.ManualCronTrigger, triggerCaps.ManualHTTPTrigger)
-		for _, evm := range triggerCaps.ManualEVMChains {
-			srvcs = append(srvcs, evm)
-		}
+		srvcs = append(srvcs, manualTriggers.ManualCronTrigger, manualTriggers.ManualHTTPTrigger)
 		srvcs = append(srvcs, computeCaps...)
 		return registry, srvcs
 	}
@@ -558,11 +514,11 @@ func run(
 	// Create a holder for trigger info that will be populated in beforeStart
 	triggerInfoAndBeforeStart := &TriggerInfoAndBeforeStart{}
 
-	getTriggerCaps := func() *ManualTriggers { return triggerCaps }
+	getManualTriggers := func() *ManualTriggers { return manualTriggers }
 	if inputs.NonInteractive {
-		triggerInfoAndBeforeStart.BeforeStart = makeBeforeStartNonInteractive(triggerInfoAndBeforeStart, inputs, getTriggerCaps)
+		triggerInfoAndBeforeStart.BeforeStart = makeBeforeStartNonInteractive(triggerInfoAndBeforeStart, inputs, getManualTriggers)
 	} else {
-		triggerInfoAndBeforeStart.BeforeStart = makeBeforeStartInteractive(triggerInfoAndBeforeStart, inputs, getTriggerCaps)
+		triggerInfoAndBeforeStart.BeforeStart = makeBeforeStartInteractive(triggerInfoAndBeforeStart, inputs, getManualTriggers)
 	}
 
 	waitFn := func(context.Context, simulator.RunnerConfig, *capabilities.Registry, []services.Service) {
@@ -697,7 +653,7 @@ type TriggerInfoAndBeforeStart struct {
 }
 
 // makeBeforeStartInteractive builds the interactive BeforeStart closure
-func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs, triggerCapsGetter func() *ManualTriggers) func(context.Context, simulator.RunnerConfig, *capabilities.Registry, []services.Service, []*pb.TriggerSubscription) {
+func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs, manualTriggersGetter func() *ManualTriggers) func(context.Context, simulator.RunnerConfig, *capabilities.Registry, []services.Service, []*pb.TriggerSubscription) {
 	return func(
 		ctx context.Context,
 		cfg simulator.RunnerConfig,
@@ -736,12 +692,12 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 
 		triggerRegistrationID := fmt.Sprintf("trigger_reg_1111111111111111111111111111111111111111111111111111111111111111_%d", triggerIndex)
 		trigger := holder.TriggerToRun.Id
-		triggerCaps := triggerCapsGetter()
+		manualTriggerCaps := manualTriggersGetter()
 
 		switch {
 		case trigger == "cron-trigger@1.0.0":
 			holder.TriggerFunc = func() error {
-				return triggerCaps.ManualCronTrigger.ManualTrigger(ctx, triggerRegistrationID, time.Now())
+				return manualTriggerCaps.ManualCronTrigger.ManualTrigger(ctx, triggerRegistrationID, time.Now())
 			}
 		case trigger == "http-trigger@1.0.0-alpha":
 			payload, err := getHTTPTriggerPayload()
@@ -750,44 +706,40 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 				os.Exit(1)
 			}
 			holder.TriggerFunc = func() error {
-				return triggerCaps.ManualHTTPTrigger.ManualTrigger(ctx, triggerRegistrationID, payload)
-			}
-		case strings.HasPrefix(trigger, "evm") && strings.HasSuffix(trigger, "@1.0.0"):
-			// Derive the chain selector directly from the selected trigger ID.
-			sel, ok := parseChainSelectorFromTriggerID(holder.TriggerToRun.GetId())
-			if !ok {
-				ui.Error(fmt.Sprintf("Could not determine chain selector from trigger id %q", holder.TriggerToRun.GetId()))
-				os.Exit(1)
-			}
-
-			client := inputs.EVMClients[sel]
-			if client == nil {
-				ui.Error(fmt.Sprintf("No RPC configured for chain selector %d", sel))
-				os.Exit(1)
-			}
-
-			log, err := getEVMTriggerLog(ctx, client)
-			if err != nil {
-				ui.Error(fmt.Sprintf("Failed to get EVM trigger log: %v", err))
-				os.Exit(1)
-			}
-			evmChain := triggerCaps.ManualEVMChains[sel]
-			if evmChain == nil {
-				ui.Error(fmt.Sprintf("No EVM chain initialized for selector %d", sel))
-				os.Exit(1)
-			}
-			holder.TriggerFunc = func() error {
-				return evmChain.ManualTrigger(ctx, triggerRegistrationID, log)
+				return manualTriggerCaps.ManualHTTPTrigger.ManualTrigger(ctx, triggerRegistrationID, payload)
 			}
 		default:
-			ui.Error(fmt.Sprintf("Unsupported trigger type: %s", holder.TriggerToRun.Id))
-			os.Exit(1)
+			// Try each registered chain family
+			handled := false
+			for name, family := range chain.All() {
+				sel, ok := family.ParseTriggerChainSelector(holder.TriggerToRun.GetId())
+				if !ok {
+					continue
+				}
+
+				triggerData, err := getTriggerDataForFamily(ctx, name, sel, inputs, true)
+				if err != nil {
+					ui.Error(fmt.Sprintf("Failed to get trigger data: %v", err))
+					os.Exit(1)
+				}
+
+				handled = true
+				holder.TriggerFunc = func() error {
+					return family.ExecuteTrigger(ctx, sel, triggerRegistrationID, triggerData)
+				}
+				break
+			}
+
+			if !handled {
+				ui.Error(fmt.Sprintf("Unsupported trigger type: %s", holder.TriggerToRun.Id))
+				os.Exit(1)
+			}
 		}
 	}
 }
 
 // makeBeforeStartNonInteractive builds the non-interactive BeforeStart closure
-func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs, triggerCapsGetter func() *ManualTriggers) func(context.Context, simulator.RunnerConfig, *capabilities.Registry, []services.Service, []*pb.TriggerSubscription) {
+func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs, manualTriggersGetter func() *ManualTriggers) func(context.Context, simulator.RunnerConfig, *capabilities.Registry, []services.Service, []*pb.TriggerSubscription) {
 	return func(
 		ctx context.Context,
 		cfg simulator.RunnerConfig,
@@ -811,12 +763,12 @@ func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inp
 		holder.TriggerToRun = triggerSub[inputs.TriggerIndex]
 		triggerRegistrationID := fmt.Sprintf("trigger_reg_1111111111111111111111111111111111111111111111111111111111111111_%d", inputs.TriggerIndex)
 		trigger := holder.TriggerToRun.Id
-		triggerCaps := triggerCapsGetter()
+		manualTriggerCaps := manualTriggersGetter()
 
 		switch {
 		case trigger == "cron-trigger@1.0.0":
 			holder.TriggerFunc = func() error {
-				return triggerCaps.ManualCronTrigger.ManualTrigger(ctx, triggerRegistrationID, time.Now())
+				return manualTriggerCaps.ManualCronTrigger.ManualTrigger(ctx, triggerRegistrationID, time.Now())
 			}
 		case trigger == "http-trigger@1.0.0-alpha":
 			if strings.TrimSpace(inputs.HTTPPayload) == "" {
@@ -829,42 +781,34 @@ func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inp
 				os.Exit(1)
 			}
 			holder.TriggerFunc = func() error {
-				return triggerCaps.ManualHTTPTrigger.ManualTrigger(ctx, triggerRegistrationID, payload)
-			}
-		case strings.HasPrefix(trigger, "evm") && strings.HasSuffix(trigger, "@1.0.0"):
-			if strings.TrimSpace(inputs.EVMTxHash) == "" || inputs.EVMEventIndex < 0 {
-				ui.Error("--evm-tx-hash and --evm-event-index are required for EVM triggers in non-interactive mode")
-				os.Exit(1)
-			}
-
-			sel, ok := parseChainSelectorFromTriggerID(holder.TriggerToRun.GetId())
-			if !ok {
-				ui.Error(fmt.Sprintf("Could not determine chain selector from trigger id %q", holder.TriggerToRun.GetId()))
-				os.Exit(1)
-			}
-
-			client := inputs.EVMClients[sel]
-			if client == nil {
-				ui.Error(fmt.Sprintf("No RPC configured for chain selector %d", sel))
-				os.Exit(1)
-			}
-
-			log, err := getEVMTriggerLogFromValues(ctx, client, inputs.EVMTxHash, uint64(inputs.EVMEventIndex)) // #nosec G115 -- EVMEventIndex validated >= 0 above
-			if err != nil {
-				ui.Error(fmt.Sprintf("Failed to build EVM trigger log: %v", err))
-				os.Exit(1)
-			}
-			evmChain := triggerCaps.ManualEVMChains[sel]
-			if evmChain == nil {
-				ui.Error(fmt.Sprintf("No EVM chain initialized for selector %d", sel))
-				os.Exit(1)
-			}
-			holder.TriggerFunc = func() error {
-				return evmChain.ManualTrigger(ctx, triggerRegistrationID, log)
+				return manualTriggerCaps.ManualHTTPTrigger.ManualTrigger(ctx, triggerRegistrationID, payload)
 			}
 		default:
-			ui.Error(fmt.Sprintf("Unsupported trigger type: %s", holder.TriggerToRun.Id))
-			os.Exit(1)
+			// Try each registered chain family
+			handled := false
+			for name, family := range chain.All() {
+				sel, ok := family.ParseTriggerChainSelector(holder.TriggerToRun.GetId())
+				if !ok {
+					continue
+				}
+
+				triggerData, err := getTriggerDataForFamily(ctx, name, sel, inputs, false)
+				if err != nil {
+					ui.Error(fmt.Sprintf("Failed to get trigger data: %v", err))
+					os.Exit(1)
+				}
+
+				handled = true
+				holder.TriggerFunc = func() error {
+					return family.ExecuteTrigger(ctx, sel, triggerRegistrationID, triggerData)
+				}
+				break
+			}
+
+			if !handled {
+				ui.Error(fmt.Sprintf("Unsupported trigger type: %s", holder.TriggerToRun.Id))
+				os.Exit(1)
+			}
 		}
 	}
 }
@@ -951,114 +895,37 @@ func getHTTPTriggerPayload() (*httptypedapi.Payload, error) {
 	return payload, nil
 }
 
-// getEVMTriggerLog prompts user for EVM trigger data and fetches the log
-func getEVMTriggerLog(ctx context.Context, ethClient *ethclient.Client) (*evm.Log, error) {
-	var txHashInput string
-	var eventIndexInput string
+// getTriggerDataForFamily resolves trigger data for a specific chain family.
+// For EVM, this fetches transaction receipt logs. Each family has its own trigger data format.
+func getTriggerDataForFamily(ctx context.Context, familyName string, selector uint64, inputs Inputs, interactive bool) (interface{}, error) {
+	switch familyName {
+	case "evm":
+		// Get the EVM client for this selector
+		evmClients, ok := inputs.FamilyClients["evm"]
+		if !ok {
+			return nil, fmt.Errorf("no EVM clients configured")
+		}
+		clientIface, ok := evmClients[selector]
+		if !ok {
+			return nil, fmt.Errorf("no RPC configured for chain selector %d", selector)
+		}
+		client, ok := clientIface.(*ethclient.Client)
+		if !ok {
+			return nil, fmt.Errorf("invalid client type for EVM chain selector %d", selector)
+		}
 
-	ui.Line()
-	if err := ui.InputForm([]ui.InputField{
-		{
-			Title:       "EVM Trigger Configuration",
-			Description: "Transaction hash for the EVM log event",
-			Placeholder: "0x...",
-			Value:       &txHashInput,
-			Validate: func(s string) error {
-				s = strings.TrimSpace(s)
-				if s == "" {
-					return fmt.Errorf("transaction hash cannot be empty")
-				}
-				if !strings.HasPrefix(s, "0x") {
-					return fmt.Errorf("transaction hash must start with 0x")
-				}
-				if len(s) != 66 {
-					return fmt.Errorf("invalid transaction hash length: expected 66 characters, got %d", len(s))
-				}
-				return nil
-			},
-		},
-		{
-			Title:       "Event Index",
-			Description: "Log event index (0-based)",
-			Placeholder: "0",
-			Suggestions: []string{"0"},
-			Value:       &eventIndexInput,
-			Validate: func(s string) error {
-				if strings.TrimSpace(s) == "" {
-					return fmt.Errorf("event index cannot be empty")
-				}
-				if _, err := strconv.ParseUint(strings.TrimSpace(s), 10, 32); err != nil {
-					return fmt.Errorf("invalid event index: must be a number")
-				}
-				return nil
-			},
-		},
-	}); err != nil {
-		return nil, fmt.Errorf("EVM trigger input cancelled: %w", err)
+		if interactive {
+			return evmpkg.GetEVMTriggerLog(ctx, client)
+		}
+
+		// Non-interactive: use CLI flags
+		if strings.TrimSpace(inputs.EVMTxHash) == "" || inputs.EVMEventIndex < 0 {
+			return nil, fmt.Errorf("--evm-tx-hash and --evm-event-index are required for EVM triggers in non-interactive mode")
+		}
+		return evmpkg.GetEVMTriggerLogFromValues(ctx, client, inputs.EVMTxHash, uint64(inputs.EVMEventIndex)) // #nosec G115 -- EVMEventIndex validated >= 0 above
+	default:
+		return nil, fmt.Errorf("trigger data resolution not implemented for chain family %q", familyName)
 	}
-
-	txHashInput = strings.TrimSpace(txHashInput)
-	txHash := common.HexToHash(txHashInput)
-
-	eventIndexInput = strings.TrimSpace(eventIndexInput)
-	eventIndex, err := strconv.ParseUint(eventIndexInput, 10, 32)
-	if err != nil {
-		return nil, fmt.Errorf("invalid event index: %w", err)
-	}
-
-	// Fetch the transaction receipt
-	receiptSpinner := ui.NewSpinner()
-	receiptSpinner.Start(fmt.Sprintf("Fetching transaction receipt for %s...", txHash.Hex()))
-	txReceipt, err := ethClient.TransactionReceipt(ctx, txHash)
-	receiptSpinner.Stop()
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch transaction receipt: %w", err)
-	}
-
-	// Check if event index is valid
-	if eventIndex >= uint64(len(txReceipt.Logs)) {
-		return nil, fmt.Errorf("event index %d out of range, transaction has %d log events", eventIndex, len(txReceipt.Logs))
-	}
-
-	log := txReceipt.Logs[eventIndex]
-	ui.Success(fmt.Sprintf("Found log event at index %d: contract=%s, topics=%d", eventIndex, log.Address.Hex(), len(log.Topics)))
-
-	// Check for potential uint32 overflow (prevents noisy linter warnings)
-	var txIndex, logIndex uint32
-	if log.TxIndex > math.MaxUint32 {
-		return nil, fmt.Errorf("transaction index %d exceeds uint32 maximum value", log.TxIndex)
-	}
-	txIndex = uint32(log.TxIndex)
-
-	if log.Index > math.MaxUint32 {
-		return nil, fmt.Errorf("log index %d exceeds uint32 maximum value", log.Index)
-	}
-	logIndex = uint32(log.Index)
-
-	// Convert to protobuf format
-	pbLog := &evm.Log{
-		Address:     log.Address.Bytes(),
-		Data:        log.Data,
-		BlockHash:   log.BlockHash.Bytes(),
-		TxHash:      log.TxHash.Bytes(),
-		TxIndex:     txIndex,
-		Index:       logIndex,
-		Removed:     log.Removed,
-		BlockNumber: valuespb.NewBigIntFromInt(new(big.Int).SetUint64(log.BlockNumber)),
-	}
-
-	// Convert topics
-	for _, topic := range log.Topics {
-		pbLog.Topics = append(pbLog.Topics, topic.Bytes())
-	}
-
-	// Set event signature (first topic is usually the event signature)
-	if len(log.Topics) > 0 {
-		pbLog.EventSig = log.Topics[0].Bytes()
-	}
-
-	ui.Success(fmt.Sprintf("Created EVM trigger log for transaction %s, event %d", txHash.Hex(), eventIndex))
-	return pbLog, nil
 }
 
 // getHTTPTriggerPayloadFromInput builds an HTTP trigger payload from a JSON string or a file path (optionally prefixed with '@')
@@ -1089,61 +956,4 @@ func getHTTPTriggerPayloadFromInput(input string) (*httptypedapi.Payload, error)
 	}
 
 	return &httptypedapi.Payload{Input: raw}, nil
-}
-
-// getEVMTriggerLogFromValues fetches a log given tx hash and event index
-func getEVMTriggerLogFromValues(ctx context.Context, ethClient *ethclient.Client, txHashStr string, eventIndex uint64) (*evm.Log, error) {
-	txHashStr = strings.TrimSpace(txHashStr)
-	if txHashStr == "" {
-		return nil, fmt.Errorf("transaction hash cannot be empty")
-	}
-	if !strings.HasPrefix(txHashStr, "0x") {
-		return nil, fmt.Errorf("transaction hash must start with 0x")
-	}
-	if len(txHashStr) != 66 { // 0x + 64 hex chars
-		return nil, fmt.Errorf("invalid transaction hash length: expected 66 characters, got %d", len(txHashStr))
-	}
-
-	txHash := common.HexToHash(txHashStr)
-	receiptSpinner := ui.NewSpinner()
-	receiptSpinner.Start(fmt.Sprintf("Fetching transaction receipt for %s...", txHash.Hex()))
-	txReceipt, err := ethClient.TransactionReceipt(ctx, txHash)
-	receiptSpinner.Stop()
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch transaction receipt: %w", err)
-	}
-	if eventIndex >= uint64(len(txReceipt.Logs)) {
-		return nil, fmt.Errorf("event index %d out of range, transaction has %d log events", eventIndex, len(txReceipt.Logs))
-	}
-
-	log := txReceipt.Logs[eventIndex]
-
-	// Check for potential uint32 overflow
-	var txIndex, logIndex uint32
-	if log.TxIndex > math.MaxUint32 {
-		return nil, fmt.Errorf("transaction index %d exceeds uint32 maximum value", log.TxIndex)
-	}
-	txIndex = uint32(log.TxIndex)
-	if log.Index > math.MaxUint32 {
-		return nil, fmt.Errorf("log index %d exceeds uint32 maximum value", log.Index)
-	}
-	logIndex = uint32(log.Index)
-
-	pbLog := &evm.Log{
-		Address:     log.Address.Bytes(),
-		Data:        log.Data,
-		BlockHash:   log.BlockHash.Bytes(),
-		TxHash:      log.TxHash.Bytes(),
-		TxIndex:     txIndex,
-		Index:       logIndex,
-		Removed:     log.Removed,
-		BlockNumber: valuespb.NewBigIntFromInt(new(big.Int).SetUint64(log.BlockNumber)),
-	}
-	for _, topic := range log.Topics {
-		pbLog.Topics = append(pbLog.Topics, topic.Bytes())
-	}
-	if len(log.Topics) > 0 {
-		pbLog.EventSig = log.Topics[0].Bytes()
-	}
-	return pbLog, nil
 }

@@ -1,0 +1,94 @@
+package chain
+
+import (
+	"context"
+	"fmt"
+	"sort"
+	"sync"
+
+	"github.com/spf13/viper"
+)
+
+// ChainFamily defines what a chain family plugin must implement
+// to participate in workflow simulation.
+type ChainFamily interface {
+	// Name returns the family identifier (e.g., "evm", "aptos").
+	Name() string
+
+	// ResolveClients creates RPC clients for all chains this family
+	// can simulate, including both supported and experimental chains.
+	// Returns clients keyed by chain selector, and forwarder addresses
+	// for chains that have them.
+	ResolveClients(v *viper.Viper) (clients map[uint64]ChainClient, forwarders map[uint64]string, err error)
+
+	// RegisterCapabilities creates capability servers for this family's
+	// chains and adds them to the registry.
+	RegisterCapabilities(ctx context.Context, cfg CapabilityConfig) error
+
+	// ExecuteTrigger fires a chain-specific trigger for a given selector.
+	// Each family defines what triggerData looks like.
+	ExecuteTrigger(ctx context.Context, selector uint64, registrationID string, triggerData interface{}) error
+
+	// ParseTriggerChainSelector extracts a chain selector from a
+	// trigger subscription ID string (e.g., "evm:ChainSelector:123@1.0.0").
+	// Returns 0, false if the trigger doesn't belong to this family.
+	ParseTriggerChainSelector(triggerID string) (uint64, bool)
+
+	// RunHealthCheck validates RPC connectivity for all resolved clients.
+	RunHealthCheck(clients map[uint64]ChainClient) error
+
+	// SupportedChains returns the list of chains this family supports
+	// out of the box (for display/documentation purposes).
+	SupportedChains() []ChainConfig
+}
+
+var (
+	mu       sync.RWMutex
+	families = make(map[string]ChainFamily)
+)
+
+// Register adds a chain family to the registry.
+// Panics on duplicate registration (programming error).
+func Register(family ChainFamily) {
+	mu.Lock()
+	defer mu.Unlock()
+	name := family.Name()
+	if _, exists := families[name]; exists {
+		panic(fmt.Sprintf("chain family %q already registered", name))
+	}
+	families[name] = family
+}
+
+// Get returns a registered chain family by name.
+func Get(name string) (ChainFamily, error) {
+	mu.RLock()
+	defer mu.RUnlock()
+	f, ok := families[name]
+	if !ok {
+		return nil, fmt.Errorf("unknown chain family %q; registered: %v", name, Names())
+	}
+	return f, nil
+}
+
+// All returns a copy of all registered families.
+func All() map[string]ChainFamily {
+	mu.RLock()
+	defer mu.RUnlock()
+	result := make(map[string]ChainFamily, len(families))
+	for k, v := range families {
+		result[k] = v
+	}
+	return result
+}
+
+// Names returns sorted registered family names.
+func Names() []string {
+	mu.RLock()
+	defer mu.RUnlock()
+	names := make([]string, 0, len(families))
+	for k := range families {
+		names = append(names, k)
+	}
+	sort.Strings(names)
+	return names
+}
