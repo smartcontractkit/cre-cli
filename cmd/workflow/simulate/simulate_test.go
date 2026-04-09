@@ -9,11 +9,13 @@ import (
 	rt "runtime"
 	"testing"
 
+	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	cmdcommon "github.com/smartcontractkit/cre-cli/cmd/common"
+	"github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chainfamily"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/testutil"
@@ -59,6 +61,9 @@ func TestBlankWorkflowSimulation(t *testing.T) {
 	rpc.Url = "https://sepolia.infura.io/v3"
 	v.Set(fmt.Sprintf("%s.%s", "staging-settings", settings.RpcsSettingName), []settings.RpcEndpoint{rpc})
 
+	// Also make the private key available through viper for the EVM adapter
+	v.Set(settings.EthPrivateKeyEnvVar, "88888845d8761ca4a8cefb324c89702f12114ffbd0c47222f12aac0ad6538888")
+
 	// Use relative paths so validation (max 97 chars) passes; cwd is workflow dir
 	var workflowSettings settings.WorkflowSettings
 	workflowSettings.UserWorkflowSettings.WorkflowName = "blank-workflow"
@@ -72,16 +77,21 @@ func TestBlankWorkflowSimulation(t *testing.T) {
 		Settings: &settings.Settings{
 			Workflow: workflowSettings,
 			User: settings.UserSettings{
-				TargetName:    "staging-settings",
-				EthPrivateKey: "88888845d8761ca4a8cefb324c89702f12114ffbd0c47222f12aac0ad6538888",
+				TargetName: "staging-settings",
 			},
 		},
+	}
+
+	// Build a mock cobra.Command
+	cmd := &cobra.Command{}
+	for _, adapter := range chainfamily.All() {
+		adapter.AddFlags(cmd)
 	}
 
 	// Instantiate and run the simulator handler
 	handler := newHandler(runtimeCtx)
 
-	inputs, err := handler.ResolveInputs(runtimeCtx.Viper, runtimeCtx.Settings)
+	inputs, err := handler.ResolveInputs(cmd, runtimeCtx.Viper, runtimeCtx.Settings)
 	require.NoError(t, err)
 
 	// Validate the resolved inputs.
@@ -184,7 +194,12 @@ func TestSimulateResolveInputs_ConfigFlags(t *testing.T) {
 			}
 			h := newHandler(runtimeCtx)
 
-			inputs, err := h.ResolveInputs(v, creSettings)
+			cmd := &cobra.Command{}
+			for _, adapter := range chainfamily.All() {
+				adapter.AddFlags(cmd)
+			}
+
+			inputs, err := h.ResolveInputs(cmd, v, creSettings)
 			require.NoError(t, err)
 			assert.Equal(t, tt.expectedConfigPath, inputs.ConfigPath)
 		})
@@ -206,7 +221,12 @@ func TestSimulateResolveInputs_WasmFlag(t *testing.T) {
 		}
 		h := newHandler(runtimeCtx)
 
-		inputs, err := h.ResolveInputs(v, creSettings)
+		cmd := &cobra.Command{}
+		for _, adapter := range chainfamily.All() {
+			adapter.AddFlags(cmd)
+		}
+
+		inputs, err := h.ResolveInputs(cmd, v, creSettings)
 		require.NoError(t, err)
 		assert.Equal(t, "/tmp/test.wasm", inputs.WasmPath)
 	})
@@ -223,7 +243,12 @@ func TestSimulateResolveInputs_WasmFlag(t *testing.T) {
 		}
 		h := newHandler(runtimeCtx)
 
-		inputs, err := h.ResolveInputs(v, creSettings)
+		cmd := &cobra.Command{}
+		for _, adapter := range chainfamily.All() {
+			adapter.AddFlags(cmd)
+		}
+
+		inputs, err := h.ResolveInputs(cmd, v, creSettings)
 		require.NoError(t, err)
 		assert.Equal(t, "https://example.com/binary.wasm", inputs.WasmPath)
 	})

@@ -2,16 +2,13 @@ package simulate
 
 import (
 	"context"
-	"crypto/ecdsa"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethclient"
 
 	chaintype "github.com/smartcontractkit/chainlink-common/keystore/corekeys"
 	"github.com/smartcontractkit/chainlink-common/keystore/corekeys/ocr2key"
 	confhttpserver "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/actions/confidentialhttp/server"
 	httpserver "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/actions/http/server"
-	evmserver "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/chain-capabilities/evm/server"
 	consensusserver "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/consensus/server"
 	crontrigger "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/triggers/cron/server"
 	httptrigger "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/triggers/http/server"
@@ -21,25 +18,18 @@ import (
 	"github.com/smartcontractkit/chainlink/v2/core/capabilities/fakes"
 )
 
-type ManualTriggerCapabilitiesConfig struct {
-	Clients    map[uint64]*ethclient.Client
-	Forwarders map[uint64]common.Address
-	PrivateKey *ecdsa.PrivateKey
-}
-
+// ManualTriggers holds chain-agnostic trigger capabilities (cron + HTTP).
+// Chain-specific trigger capabilities are managed by their respective chain family adapters.
 type ManualTriggers struct {
 	ManualCronTrigger *fakes.ManualCronTriggerService
 	ManualHTTPTrigger *fakes.ManualHTTPTriggerService
-	ManualEVMChains   map[uint64]*fakes.FakeEVMChain
 }
 
+// NewManualTriggerCapabilities creates and registers chain-agnostic trigger capabilities.
 func NewManualTriggerCapabilities(
 	ctx context.Context,
 	lggr logger.Logger,
 	registry *capabilities.Registry,
-	cfg ManualTriggerCapabilitiesConfig,
-	dryRunChainWrite bool,
-	limits *SimulationLimits,
 ) (*ManualTriggers, error) {
 	// Cron
 	manualCronTrigger := fakes.NewManualCronTriggerService(lggr)
@@ -55,42 +45,9 @@ func NewManualTriggerCapabilities(
 		return nil, err
 	}
 
-	// EVM
-	evmChains := make(map[uint64]*fakes.FakeEVMChain)
-	for sel, client := range cfg.Clients {
-		fwd, ok := cfg.Forwarders[sel]
-		if !ok {
-			lggr.Infow("Forwarder not found for chain", "selector", sel)
-			continue
-		}
-
-		evm := fakes.NewFakeEvmChain(
-			lggr,
-			client,
-			cfg.PrivateKey,
-			fwd,
-			sel,
-			dryRunChainWrite,
-		)
-
-		// Wrap with limits enforcement if limits are enabled
-		var evmCap evmserver.ClientCapability = evm
-		if limits != nil {
-			evmCap = NewLimitedEVMChain(evm, limits)
-		}
-
-		evmServer := evmserver.NewClientServer(evmCap)
-		if err := registry.Add(ctx, evmServer); err != nil {
-			return nil, err
-		}
-
-		evmChains[sel] = evm
-	}
-
 	return &ManualTriggers{
 		ManualCronTrigger: manualCronTrigger,
 		ManualHTTPTrigger: manualHTTPTrigger,
-		ManualEVMChains:   evmChains,
 	}, nil
 }
 
@@ -103,13 +60,6 @@ func (m *ManualTriggers) Start(ctx context.Context) error {
 	err = m.ManualHTTPTrigger.Start(ctx)
 	if err != nil {
 		return err
-	}
-
-	// Start all configured EVM chains
-	for _, evm := range m.ManualEVMChains {
-		if err := evm.Start(ctx); err != nil {
-			return err
-		}
 	}
 
 	return nil
@@ -126,16 +76,10 @@ func (m *ManualTriggers) Close() error {
 		return err
 	}
 
-	// Close all EVM chains
-	for _, evm := range m.ManualEVMChains {
-		if err := evm.Close(); err != nil {
-			return err
-		}
-	}
 	return nil
 }
 
-// NewFakeCapabilities builds faked capabilities, then registers them with the capability registry.
+// NewFakeActionCapabilities builds faked capabilities, then registers them with the capability registry.
 func NewFakeActionCapabilities(ctx context.Context, lggr logger.Logger, registry *capabilities.Registry, secretsPath string, limits *SimulationLimits) ([]services.Service, error) {
 	caps := make([]services.Service, 0)
 
