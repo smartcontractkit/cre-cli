@@ -48,13 +48,11 @@ func GenerateBindings(
 	if err := parsedIdl.Validate(); err != nil {
 		return fmt.Errorf("invalid IDL: %w", err)
 	}
-	if parsedIdl.Address != nil && !parsedIdl.Address.IsZero() {
-		// If the IDL has an address, use it as the program ID:
-		slog.Info("Using IDL address as program ID", "address", parsedIdl.Address.String())
-		options.ProgramId = parsedIdl.Address
-	} else {
+	if parsedIdl.Address == nil || parsedIdl.Address.IsZero() {
 		return fmt.Errorf("address is empty in idl file: %s", pathToIdl)
 	}
+	slog.Info("Using IDL address as program ID", "address", parsedIdl.Address.String())
+
 	parsedIdl.Metadata.Name = bin.ToSnakeForSighash(parsedIdl.Metadata.Name)
 	// check that the name is not a reserved keyword:
 	if parsedIdl.Metadata.Name != "" {
@@ -84,6 +82,7 @@ func GenerateBindings(
 		OutputDir:   outputDir,
 		Package:     packageName,
 		ProgramName: programName,
+		ProgramId:   parsedIdl.Address,
 	}
 
 	slog.Info("Parsed IDL successfully",
