@@ -2,6 +2,7 @@
 package generator
 
 import (
+	"bytes"
 	"os"
 	"path"
 
@@ -22,18 +23,12 @@ const (
 )
 
 func WriteFile(outDir string, assetFileName string, file *File) error {
-	// Save Go assets:
 	assetFilepath := path.Join(outDir, assetFileName)
-
-	// Create file Golang file:
-	goFile, err := os.Create(assetFilepath)
-	if err != nil {
-		panic(err)
+	var buf bytes.Buffer
+	if err := file.Render(&buf); err != nil {
+		return err
 	}
-	defer goFile.Close()
-
-	// Write generated Golang to file:
-	return file.Render(goFile)
+	return os.WriteFile(assetFilepath, buf.Bytes(), 0o644)
 }
 
 func DoGroup(f func(*Group)) *Statement {
