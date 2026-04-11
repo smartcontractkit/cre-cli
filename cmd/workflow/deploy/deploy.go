@@ -2,7 +2,6 @@ package deploy
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"sync"
@@ -15,7 +14,6 @@ import (
 	"github.com/smartcontractkit/cre-cli/cmd/client"
 	cmdcommon "github.com/smartcontractkit/cre-cli/cmd/common"
 	"github.com/smartcontractkit/cre-cli/internal/accessrequest"
-	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
@@ -248,19 +246,18 @@ func (h *handler) Execute(ctx context.Context) error {
 		h.initWorkflowRegistryClient()
 	}
 
-	if err := h.runSharedPreparation(); err != nil {
+	if err := h.prepareArtifacts(); err != nil {
 		return err
 	}
 
-	if target.isPrivate() {
-		return h.runPrivateRegistryDeploy()
-	}
-	return h.runOnchainDeploy()
+	svc := newDeployService(target, h)
+	return svc.Deploy()
 }
 
-// runSharedPreparation handles compile/fetch, artifact preparation, hashing,
-// and artifact upload. These steps are common to all registry targets.
-func (h *handler) runSharedPreparation() error {
+// prepareArtifacts handles compile/fetch, artifact preparation, and hashing.
+// Artifact upload is deferred to the deploy service so it runs after any
+// existing-workflow update confirmation.
+func (h *handler) prepareArtifacts() error {
 	h.displayWorkflowDetails()
 
 	if cmdcommon.IsURL(h.inputs.WasmPath) {
@@ -301,75 +298,6 @@ func (h *handler) runSharedPreparation() error {
 
 	h.runtimeContext.Workflow.ID = h.workflowArtifact.WorkflowID
 
-	ui.Line()
-	ui.Dim("Uploading files...")
-	if err := h.uploadArtifacts(); err != nil {
-		return fmt.Errorf("failed to upload workflow: %w", err)
-	}
-
-	return nil
-}
-
-// runOnchainDeploy runs the onchain-specific prechecks (ownership verification,
-// workflow existence, DON limit) and upserts to the onchain workflow registry.
-func (h *handler) runOnchainDeploy() error {
-	h.wg.Wait()
-	if h.wrcErr != nil {
-		return h.wrcErr
-	}
-
-	ui.Line()
-	ui.Dim("Verifying ownership...")
-	if h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerType == constants.WorkflowOwnerTypeMSIG {
-		halt, err := h.autoLinkMSIGAndExit()
-		if err != nil {
-			return fmt.Errorf("failed to check/handle MSIG owner link status: %w", err)
-		}
-		if halt {
-			return nil
-		}
-	} else {
-		if err := h.ensureOwnerLinkedOrFail(); err != nil {
-			return err
-		}
-	}
-
-	existsErr := h.workflowExists()
-	if existsErr != nil {
-		if existsErr.Error() == "workflow with name "+h.inputs.WorkflowName+" already exists" {
-			ui.Warning(fmt.Sprintf("Workflow %s already exists", h.inputs.WorkflowName))
-			ui.Dim("This will update the existing workflow.")
-			if !h.inputs.SkipConfirmation {
-				confirm, err := ui.Confirm("Are you sure you want to overwrite the workflow?")
-				if err != nil {
-					return err
-				}
-				if !confirm {
-					return errors.New("deployment cancelled by user")
-				}
-			}
-		} else {
-			return existsErr
-		}
-	}
-
-	if err := checkUserDonLimitBeforeDeploy(
-		h.wrc,
-		h.wrc,
-		common.HexToAddress(h.inputs.WorkflowOwner),
-		h.inputs.DonFamily,
-		h.inputs.WorkflowName,
-		h.inputs.KeepAlive,
-		h.existingWorkflowStatus,
-	); err != nil {
-		return err
-	}
-
-	ui.Line()
-	ui.Dim("Preparing deployment transaction...")
-	if err := h.upsert(); err != nil {
-		return fmt.Errorf("failed to register workflow: %w", err)
-	}
 	return nil
 }
 
