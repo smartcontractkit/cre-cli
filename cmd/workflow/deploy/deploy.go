@@ -2,6 +2,7 @@ package deploy
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"sync"
@@ -10,6 +11,8 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+
+	workflowUtils "github.com/smartcontractkit/chainlink-common/pkg/workflows"
 
 	"github.com/smartcontractkit/cre-cli/cmd/client"
 	cmdcommon "github.com/smartcontractkit/cre-cli/cmd/common"
@@ -288,7 +291,12 @@ func (h *handler) prepareArtifacts() error {
 		ui.Success(fmt.Sprintf("Using config URL: %s", url))
 	}
 
-	if err := h.PrepareWorkflowArtifact(); err != nil {
+	workflowOwner, err := h.resolveWorkflowOwner()
+	if err != nil {
+		return fmt.Errorf("failed to resolve workflow owner: %w", err)
+	}
+
+	if err := h.PrepareWorkflowArtifact(workflowOwner); err != nil {
 		return fmt.Errorf("failed to prepare workflow artifact: %w", err)
 	}
 
@@ -299,6 +307,36 @@ func (h *handler) prepareArtifacts() error {
 	h.runtimeContext.Workflow.ID = h.workflowArtifact.WorkflowID
 
 	return nil
+}
+
+// resolveWorkflowOwner returns the effective owner address for workflow ID computation.
+// For private registry deploys, the owner is derived from tenantID and organizationID.
+// For onchain deploys, the configured WorkflowOwner address is used directly.
+func (h *handler) resolveWorkflowOwner() (string, error) {
+	if !h.target.isPrivate() {
+		return h.inputs.WorkflowOwner, nil
+	}
+
+	if h.runtimeContext.TenantContext == nil {
+		return "", fmt.Errorf("tenant context is required for private registry deployment")
+	}
+
+	tenantID := h.runtimeContext.TenantContext.TenantID
+	if tenantID == "" {
+		return "", fmt.Errorf("tenant ID is required for private registry deployment")
+	}
+
+	orgID, err := h.credentials.GetOrgID()
+	if err != nil {
+		return "", fmt.Errorf("failed to get organization ID for private registry deployment: %w", err)
+	}
+
+	ownerBytes, err := workflowUtils.GenerateWorkflowOwnerAddress(tenantID, orgID)
+	if err != nil {
+		return "", fmt.Errorf("failed to derive workflow owner address: %w", err)
+	}
+
+	return "0x" + hex.EncodeToString(ownerBytes), nil
 }
 
 func (h *handler) workflowExists() error {

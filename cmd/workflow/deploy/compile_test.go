@@ -477,7 +477,7 @@ func TestCompileWithWasmPath(t *testing.T) {
 		handler.urlBinaryData = wasmContent
 		handler.workflowArtifact = &workflowArtifact{}
 
-		err := handler.PrepareWorkflowArtifact()
+		err := handler.PrepareWorkflowArtifact(chainsim.TestAddress)
 		require.NoError(t, err)
 		assert.NotEmpty(t, handler.workflowArtifact.WorkflowID)
 		assert.Nil(t, handler.workflowArtifact.BinaryData, "BinaryData should be nil for URL case")
@@ -508,7 +508,7 @@ func TestCompileWithWasmPath(t *testing.T) {
 		handler.urlConfigData = configContent
 		handler.workflowArtifact = &workflowArtifact{}
 
-		err = handler.PrepareWorkflowArtifact()
+		err = handler.PrepareWorkflowArtifact(chainsim.TestAddress)
 		require.NoError(t, err)
 		assert.NotEmpty(t, handler.workflowArtifact.WorkflowID)
 		assert.Nil(t, handler.workflowArtifact.ConfigData, "ConfigData should be nil for URL case")
