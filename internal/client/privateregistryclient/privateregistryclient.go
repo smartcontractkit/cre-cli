@@ -34,17 +34,17 @@ func (c *Client) CreateServiceContextWithTimeout() (context.Context, context.Can
 }
 
 type WorkflowInRegistry struct {
-	WorkflowID     string `json:"workflowId"`
-	Owner          string `json:"owner"`
-	CreatedAt      string `json:"createdAt"`
+	WorkflowID     string                   `json:"workflowId"`
+	Owner          string                   `json:"owner"`
+	CreatedAt      string                   `json:"createdAt"`
 	Status         WorkflowInRegistryStatus `json:"status"`
-	WorkflowName   string `json:"workflowName"`
-	BinaryURL      string `json:"binaryUrl"`
-	ConfigURL      string `json:"configUrl"`
-	Tag            string `json:"tag"`
-	Attributes     string `json:"attributes"`
-	DonFamily      string `json:"donFamily"`
-	OrganizationID string `json:"organizationId"`
+	WorkflowName   string                   `json:"workflowName"`
+	BinaryURL      string                   `json:"binaryUrl"`
+	ConfigURL      string                   `json:"configUrl"`
+	Tag            string                   `json:"tag"`
+	Attributes     string                   `json:"attributes"`
+	DonFamily      string                   `json:"donFamily"`
+	OrganizationID string                   `json:"organizationId"`
 }
 
 type WorkflowInRegistryStatus string
@@ -310,9 +310,9 @@ func validateUpsertWorkflowInput(input WorkflowInRegistryInput) error {
 	return nil
 }
 
-func validateOptionalLength(name string, value *string, max int) error {
-	if value != nil && len(*value) > max {
-		return fmt.Errorf("%s exceeds max length %d", name, max)
+func validateOptionalLength(name string, value *string, maxLen int) error {
+	if value != nil && len(*value) > maxLen {
+		return fmt.Errorf("%s exceeds max length %d", name, maxLen)
 	}
 
 	return nil
