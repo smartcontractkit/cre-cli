@@ -46,6 +46,8 @@ type Inputs struct {
 	SkipConfirmation bool
 	// SkipTypeChecks passes --skip-type-checks to cre-compile for TypeScript workflows.
 	SkipTypeChecks bool
+
+	PreviewPrivateRegistry bool
 }
 
 func (i *Inputs) ResolveConfigURL(fallbackURL string) string {
@@ -69,6 +71,7 @@ type handler struct {
 	runtimeContext   *runtime.Context
 	accessRequester  *accessrequest.Requester
 
+	target   registryTarget
 	validated bool
 
 	// URL-fetched data for WorkflowID computation when --wasm or --config are URLs.
@@ -117,6 +120,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	deployCmd.Flags().Bool("no-config", false, "Deploy without a config file")
 	deployCmd.Flags().Bool("default-config", false, "Use the config path from workflow.yaml settings (default behavior)")
 	deployCmd.Flags().Bool(cmdcommon.SkipTypeChecksCLIFlag, false, "Skip TypeScript project typecheck during compilation (passes "+cmdcommon.SkipTypeChecksFlag+" to cre-compile)")
+	deployCmd.Flags().Bool("preview-private-registry", false, "Deploy to the private workflow registry (preview, STAGING only)")
 	deployCmd.MarkFlagsMutuallyExclusive("config", "no-config", "default-config")
 
 	return deployCmd
@@ -187,6 +191,7 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 		OwnerLabel:                        v.GetString("owner-label"),
 		SkipConfirmation:                  v.GetBool(settings.Flags.SkipConfirmation.Name),
 		SkipTypeChecks:                    v.GetBool(cmdcommon.SkipTypeChecksCLIFlag),
+		PreviewPrivateRegistry:            v.GetBool("preview-private-registry"),
 	}, nil
 }
 
@@ -233,8 +238,29 @@ func (h *handler) Execute(ctx context.Context) error {
 		return h.accessRequester.PromptAndSubmitRequest(ctx)
 	}
 
-	h.initWorkflowRegistryClient()
+	target, err := resolveRegistryTarget(h.inputs.PreviewPrivateRegistry, h.environmentSet, h.clientFactory)
+	if err != nil {
+		return err
+	}
+	h.target = target
 
+	if !target.isPrivate() {
+		h.initWorkflowRegistryClient()
+	}
+
+	if err := h.runSharedPreparation(); err != nil {
+		return err
+	}
+
+	if target.isPrivate() {
+		return h.runPrivateRegistryDeploy()
+	}
+	return h.runOnchainDeploy()
+}
+
+// runSharedPreparation handles compile/fetch, artifact preparation, hashing,
+// and artifact upload. These steps are common to all registry targets.
+func (h *handler) runSharedPreparation() error {
 	h.displayWorkflowDetails()
 
 	if cmdcommon.IsURL(h.inputs.WasmPath) {
@@ -275,6 +301,18 @@ func (h *handler) Execute(ctx context.Context) error {
 
 	h.runtimeContext.Workflow.ID = h.workflowArtifact.WorkflowID
 
+	ui.Line()
+	ui.Dim("Uploading files...")
+	if err := h.uploadArtifacts(); err != nil {
+		return fmt.Errorf("failed to upload workflow: %w", err)
+	}
+
+	return nil
+}
+
+// runOnchainDeploy runs the onchain-specific prechecks (ownership verification,
+// workflow existence, DON limit) and upserts to the onchain workflow registry.
+func (h *handler) runOnchainDeploy() error {
 	h.wg.Wait()
 	if h.wrcErr != nil {
 		return h.wrcErr
@@ -301,7 +339,6 @@ func (h *handler) Execute(ctx context.Context) error {
 		if existsErr.Error() == "workflow with name "+h.inputs.WorkflowName+" already exists" {
 			ui.Warning(fmt.Sprintf("Workflow %s already exists", h.inputs.WorkflowName))
 			ui.Dim("This will update the existing workflow.")
-			// Ask for user confirmation before updating existing workflow
 			if !h.inputs.SkipConfirmation {
 				confirm, err := ui.Confirm("Are you sure you want to overwrite the workflow?")
 				if err != nil {
@@ -328,11 +365,6 @@ func (h *handler) Execute(ctx context.Context) error {
 		return err
 	}
 
-	ui.Line()
-	ui.Dim("Uploading files...")
-	if err := h.uploadArtifacts(); err != nil {
-		return fmt.Errorf("failed to upload workflow: %w", err)
-	}
 	ui.Line()
 	ui.Dim("Preparing deployment transaction...")
 	if err := h.upsert(); err != nil {
