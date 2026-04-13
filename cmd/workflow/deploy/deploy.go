@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/rs/zerolog"
@@ -72,7 +71,7 @@ type handler struct {
 	runtimeContext   *runtime.Context
 	accessRequester  *accessrequest.Requester
 
-	target   registryTarget
+	target    registryTarget
 	validated bool
 
 	// URL-fetched data for WorkflowID computation when --wasm or --config are URLs.
@@ -82,9 +81,6 @@ type handler struct {
 	// existingWorkflowStatus stores the status of an existing workflow when updating.
 	// nil means this is a new workflow, otherwise it contains the current status (0=active, 1=paused).
 	existingWorkflowStatus *uint8
-
-	wg     sync.WaitGroup
-	wrcErr error
 }
 
 var defaultOutputPath = "./binary.wasm.br.b64"
@@ -137,28 +133,11 @@ func newHandler(ctx *runtime.Context, stdin io.Reader) *handler {
 		credentials:      ctx.Credentials,
 		environmentSet:   ctx.EnvironmentSet,
 		workflowArtifact: &workflowArtifact{},
-		wrc:              nil,
 		runtimeContext:   ctx,
 		accessRequester:  accessrequest.NewRequester(ctx.Credentials, ctx.EnvironmentSet, ctx.Logger),
-		validated:        false,
-		wg:               sync.WaitGroup{},
-		wrcErr:           nil,
 	}
 
 	return &h
-}
-
-func (h *handler) initWorkflowRegistryClient() {
-	h.wg.Add(1)
-	go func() {
-		defer h.wg.Done()
-		wrc, err := h.clientFactory.NewWorkflowRegistryV2Client()
-		if err != nil {
-			h.wrcErr = fmt.Errorf("failed to create workflow registry client: %w", err)
-			return
-		}
-		h.wrc = wrc
-	}()
 }
 
 func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
@@ -245,16 +224,13 @@ func (h *handler) Execute(ctx context.Context) error {
 	}
 	h.target = target
 
-	if !target.isPrivate() {
-		h.initWorkflowRegistryClient()
-	}
+	adapter := newRegistryAdapter(target, h)
 
 	if err := h.prepareArtifacts(); err != nil {
 		return err
 	}
 
-	svc := newDeployService(target, h)
-	return svc.Deploy()
+	return runDeploy(adapter, h)
 }
 
 // prepareArtifacts handles compile/fetch, artifact preparation, and hashing.
