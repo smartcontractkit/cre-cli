@@ -6,15 +6,31 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/smartcontractkit/cre-cli/cmd/client"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 )
+
+type fakeFactory struct{}
+
+func (f fakeFactory) NewWorkflowRegistryV2Client() (*client.WorkflowRegistryV2Client, error) {
+	return nil, nil
+}
+
+func (f fakeFactory) GetTxType() client.TxType {
+	return client.Regular
+}
+
+func (f fakeFactory) GetSkipConfirmation() bool {
+	return false
+}
 
 func TestResolveTargetRegistry(t *testing.T) {
 	t.Parallel()
 
 	t.Run("returns onchain target and adapter by default", func(t *testing.T) {
 		t.Parallel()
-		h := &handler{}
+		h := &handler{clientFactory: fakeFactory{}}
 		target, adapter, err := resolveTargetRegistry(
 			false,
 			&environments.EnvironmentSet{
@@ -22,7 +38,6 @@ func TestResolveTargetRegistry(t *testing.T) {
 				WorkflowRegistryChainName: "ethereum-testnet-sepolia",
 				WorkflowRegistryAddress:   "0x1234567890123456789012345678901234567890",
 			},
-			fakeFactory{},
 			h,
 		)
 		require.NoError(t, err)
@@ -40,8 +55,7 @@ func TestResolveTargetRegistry(t *testing.T) {
 				WorkflowRegistryChainName: "ethereum-testnet-sepolia",
 				WorkflowRegistryAddress:   "0x1234567890123456789012345678901234567890",
 			},
-			fakeFactory{},
-			&handler{},
+			&handler{clientFactory: fakeFactory{}},
 		)
 		require.NoError(t, err)
 		assert.Equal(t, registryTargetPrivate, target.targetType)

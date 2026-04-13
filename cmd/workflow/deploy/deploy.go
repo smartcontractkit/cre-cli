@@ -217,7 +217,7 @@ func (h *handler) Execute(ctx context.Context) error {
 		return h.accessRequester.PromptAndSubmitRequest(ctx)
 	}
 
-	target, adapter, err := resolveTargetRegistry(h.inputs.PreviewPrivateRegistry, h.environmentSet, h.clientFactory, h)
+	target, adapter, err := resolveTargetRegistry(h.inputs.PreviewPrivateRegistry, h.environmentSet, h)
 	if err != nil {
 		return err
 	}
