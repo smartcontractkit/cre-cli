@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -60,6 +61,9 @@ func createTestJWT(orgID string) string {
 func workflowDeployPrivateRegistry(t *testing.T, tc TestConfig) string {
 	t.Helper()
 
+	var presignedPostCalled atomic.Bool
+	var uploadCalled atomic.Bool
+	var upsertCalled atomic.Bool
 	var srv *httptest.Server
 	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
@@ -104,6 +108,7 @@ func workflowDeployPrivateRegistry(t *testing.T, tc TestConfig) string {
 			}
 
 			if strings.Contains(req.Query, "GeneratePresignedPostUrlForArtifact") {
+				presignedPostCalled.Store(true)
 				_ = json.NewEncoder(w).Encode(map[string]any{
 					"data": map[string]any{
 						"generatePresignedPostUrlForArtifact": map[string]any{
@@ -143,6 +148,7 @@ func workflowDeployPrivateRegistry(t *testing.T, tc TestConfig) string {
 			}
 
 			if strings.Contains(req.Query, "UpsertWorkflowInRegistry") {
+				upsertCalled.Store(true)
 				_ = json.NewEncoder(w).Encode(map[string]any{
 					"data": map[string]any{
 						"upsertWorkflowInRegistry": map[string]any{
@@ -172,6 +178,7 @@ func workflowDeployPrivateRegistry(t *testing.T, tc TestConfig) string {
 			return
 
 		case r.URL.Path == "/upload" && r.Method == http.MethodPost:
+			uploadCalled.Store(true)
 			w.WriteHeader(http.StatusCreated)
 			_, _ = w.Write([]byte("OK"))
 			return
@@ -208,6 +215,9 @@ func workflowDeployPrivateRegistry(t *testing.T, tc TestConfig) string {
 		stdout.String(),
 		stderr.String(),
 	)
+	require.True(t, presignedPostCalled.Load(), "expected GeneratePresignedPostUrlForArtifact to be called")
+	require.True(t, uploadCalled.Load(), "expected artifact upload endpoint to be called")
+	require.True(t, upsertCalled.Load(), "expected UpsertWorkflowInRegistry to be called")
 
 	return StripANSI(stdout.String() + stderr.String())
 }
