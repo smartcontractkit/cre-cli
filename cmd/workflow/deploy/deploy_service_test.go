@@ -8,7 +8,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/smartcontractkit/cre-cli/cmd/client"
-	"github.com/smartcontractkit/cre-cli/internal/environments"
 )
 
 type fakeFactory struct{}
@@ -25,40 +24,23 @@ func (f fakeFactory) GetSkipConfirmation() bool {
 	return false
 }
 
-func TestResolveTargetRegistry(t *testing.T) {
+func TestNewRegistryAdapter(t *testing.T) {
 	t.Parallel()
 
-	t.Run("returns onchain target and adapter by default", func(t *testing.T) {
+	t.Run("returns onchain adapter for onchain target", func(t *testing.T) {
 		t.Parallel()
 		h := &handler{clientFactory: fakeFactory{}}
-		target, adapter, err := resolveTargetRegistry(
-			false,
-			&environments.EnvironmentSet{
-				EnvName:                   "STAGING",
-				WorkflowRegistryChainName: "ethereum-testnet-sepolia",
-				WorkflowRegistryAddress:   "0x1234567890123456789012345678901234567890",
-			},
-			h,
-		)
-		require.NoError(t, err)
-		assert.Equal(t, registryTargetOnchain, target.targetType)
+		adapter := newRegistryAdapter(registryTarget{targetType: registryTargetOnchain}, h)
 		_, ok := adapter.(*onchainRegistryAdapter)
 		assert.True(t, ok, "expected onchainRegistryAdapter for onchain target")
 	})
 
-	t.Run("returns private target and adapter when preview is enabled", func(t *testing.T) {
+	t.Run("returns private adapter for private target", func(t *testing.T) {
 		t.Parallel()
-		target, adapter, err := resolveTargetRegistry(
-			true,
-			&environments.EnvironmentSet{
-				EnvName:                   "STAGING",
-				WorkflowRegistryChainName: "ethereum-testnet-sepolia",
-				WorkflowRegistryAddress:   "0x1234567890123456789012345678901234567890",
-			},
+		adapter := newRegistryAdapter(
+			registryTarget{targetType: registryTargetPrivate},
 			&handler{clientFactory: fakeFactory{}},
 		)
-		require.NoError(t, err)
-		assert.Equal(t, registryTargetPrivate, target.targetType)
 		_, ok := adapter.(*privateRegistryAdapter)
 		assert.True(t, ok, "expected privateRegistryAdapter for private target")
 	})

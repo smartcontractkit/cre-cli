@@ -20,10 +20,10 @@ func TestResolveRegistryTarget(t *testing.T) {
 			WorkflowRegistryAddress:   "0x1234567890123456789012345678901234567890",
 		}
 
-		target, err := resolveRegistryTarget(false, envSet)
+		targetWorkflowRegistry, err := resolveRegistryTarget(false, envSet)
 		require.NoError(t, err)
-		assert.Equal(t, registryTargetOnchain, target.targetType)
-		assert.False(t, target.isPrivate())
+		assert.Equal(t, registryTargetOnchain, targetWorkflowRegistry.targetType)
+		assert.False(t, targetWorkflowRegistry.isPrivate())
 	})
 
 	t.Run("preview flag in STAGING returns private target", func(t *testing.T) {
@@ -34,10 +34,10 @@ func TestResolveRegistryTarget(t *testing.T) {
 			WorkflowRegistryAddress:   "0x1234567890123456789012345678901234567890",
 		}
 
-		target, err := resolveRegistryTarget(true, envSet)
+		targetWorkflowRegistry, err := resolveRegistryTarget(true, envSet)
 		require.NoError(t, err)
-		assert.Equal(t, registryTargetPrivate, target.targetType)
-		assert.True(t, target.isPrivate())
+		assert.Equal(t, registryTargetPrivate, targetWorkflowRegistry.targetType)
+		assert.True(t, targetWorkflowRegistry.isPrivate())
 	})
 
 	t.Run("preview flag blocked in PRODUCTION", func(t *testing.T) {
@@ -74,8 +74,8 @@ func TestResolveRegistryTarget(t *testing.T) {
 			WorkflowRegistryAddress:   "0x1234567890123456789012345678901234567890",
 		}
 
-		target, err := resolveRegistryTarget(true, envSet)
+		targetWorkflowRegistry, err := resolveRegistryTarget(true, envSet)
 		require.NoError(t, err)
-		assert.True(t, target.isPrivate())
+		assert.True(t, targetWorkflowRegistry.isPrivate())
 	})
 }

@@ -47,6 +47,7 @@ type Inputs struct {
 	SkipTypeChecks bool
 
 	PreviewPrivateRegistry bool
+	TargetWorkflowRegistry registryTarget
 }
 
 func (i *Inputs) ResolveConfigURL(fallbackURL string) string {
@@ -70,7 +71,7 @@ type handler struct {
 	runtimeContext   *runtime.Context
 	accessRequester  *accessrequest.Requester
 
-	target    registryTarget
+	targetWorkflowRegistry registryTarget
 	validated bool
 
 	// URL-fetched data for WorkflowID computation when --wasm or --config are URLs.
@@ -145,6 +146,15 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 		url := v.GetString("config-url")
 		configURL = &url
 	}
+	previewPrivateRegistry := v.GetBool("preview-private-registry")
+	targetWorkflowRegistry, err := resolveRegistryTarget(previewPrivateRegistry, h.environmentSet)
+	if err != nil {
+		return Inputs{}, err
+	}
+	resolvedWorkflowOwner, err := h.resolveWorkflowOwner(targetWorkflowRegistry)
+	if err != nil {
+		return Inputs{}, fmt.Errorf("failed to resolve workflow owner: %w", err)
+	}
 
 	workflowTag := h.settings.Workflow.UserWorkflowSettings.WorkflowName
 	if len(workflowTag) > 32 {
@@ -153,7 +163,7 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 
 	return Inputs{
 		WorkflowName:  h.settings.Workflow.UserWorkflowSettings.WorkflowName,
-		WorkflowOwner: h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress,
+		WorkflowOwner: resolvedWorkflowOwner,
 		WorkflowTag:   workflowTag,
 		ConfigURL:     configURL,
 		DonFamily:     h.environmentSet.DonFamily,
@@ -167,10 +177,11 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 
 		WorkflowRegistryContractChainName: h.environmentSet.WorkflowRegistryChainName,
 		WorkflowRegistryContractAddress:   h.environmentSet.WorkflowRegistryAddress,
-		OwnerLabel:                        v.GetString("owner-label"),
-		SkipConfirmation:                  v.GetBool(settings.Flags.SkipConfirmation.Name),
-		SkipTypeChecks:                    v.GetBool(cmdcommon.SkipTypeChecksCLIFlag),
-		PreviewPrivateRegistry:            v.GetBool("preview-private-registry"),
+		OwnerLabel:             v.GetString("owner-label"),
+		SkipConfirmation:       v.GetBool(settings.Flags.SkipConfirmation.Name),
+		SkipTypeChecks:         v.GetBool(cmdcommon.SkipTypeChecksCLIFlag),
+		PreviewPrivateRegistry: previewPrivateRegistry,
+		TargetWorkflowRegistry: targetWorkflowRegistry,
 	}, nil
 }
 
@@ -217,11 +228,8 @@ func (h *handler) Execute(ctx context.Context) error {
 		return h.accessRequester.PromptAndSubmitRequest(ctx)
 	}
 
-	target, adapter, err := resolveTargetRegistry(h.inputs.PreviewPrivateRegistry, h.environmentSet, h)
-	if err != nil {
-		return err
-	}
-	h.target = target
+	h.targetWorkflowRegistry = h.inputs.TargetWorkflowRegistry
+	adapter := newRegistryAdapter(h.targetWorkflowRegistry, h)
 
 	if err := h.prepareArtifacts(); err != nil {
 		return err
@@ -264,12 +272,7 @@ func (h *handler) prepareArtifacts() error {
 		ui.Success(fmt.Sprintf("Using config URL: %s", url))
 	}
 
-	workflowOwner, err := h.resolveWorkflowOwner()
-	if err != nil {
-		return fmt.Errorf("failed to resolve workflow owner: %w", err)
-	}
-
-	if err := h.PrepareWorkflowArtifact(workflowOwner); err != nil {
+	if err := h.PrepareWorkflowArtifact(h.inputs.WorkflowOwner); err != nil {
 		return fmt.Errorf("failed to prepare workflow artifact: %w", err)
 	}
 
@@ -285,9 +288,9 @@ func (h *handler) prepareArtifacts() error {
 // resolveWorkflowOwner returns the effective owner address for workflow ID computation.
 // For private registry deploys, the owner is derived from tenantID and organizationID.
 // For onchain deploys, the configured WorkflowOwner address is used directly.
-func (h *handler) resolveWorkflowOwner() (string, error) {
-	if !h.target.isPrivate() {
-		return h.inputs.WorkflowOwner, nil
+func (h *handler) resolveWorkflowOwner(targetWorkflowRegistry registryTarget) (string, error) {
+	if !targetWorkflowRegistry.isPrivate() {
+		return h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress, nil
 	}
 
 	if h.runtimeContext.TenantContext == nil {
@@ -316,6 +319,6 @@ func (h *handler) displayWorkflowDetails() {
 	ui.Line()
 	ui.Title(fmt.Sprintf("Deploying Workflow: %s", h.inputs.WorkflowName))
 	ui.Dim(fmt.Sprintf("Target:        %s", h.settings.User.TargetName))
-	ui.Dim(fmt.Sprintf("Owner Address: %s", h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress))
+	ui.Dim(fmt.Sprintf("Owner Address: %s", h.inputs.WorkflowOwner))
 	ui.Line()
 }

@@ -64,20 +64,9 @@ func validatePrivateRegistryAllowed(envSet *environments.EnvironmentSet) error {
 	return nil
 }
 
-// resolveTargetRegistry resolves the deploy target details and returns the
-// adapter that handles target-specific registry operations.
-func resolveTargetRegistry(previewPrivateRegistry bool, envSet *environments.EnvironmentSet, h *handler) (registryTarget, registryAdapter, error) {
-	target, err := resolveRegistryTarget(previewPrivateRegistry, envSet)
-	if err != nil {
-		return registryTarget{}, nil, err
-	}
-
-	return target, newRegistryAdapter(target, h), nil
-}
-
 // newRegistryAdapter returns the appropriate adapter for the given target.
-func newRegistryAdapter(target registryTarget, h *handler) registryAdapter {
-	if target.isPrivate() {
+func newRegistryAdapter(targetWorkflowRegistry registryTarget, h *handler) registryAdapter {
+	if targetWorkflowRegistry.isPrivate() {
 		return newPrivateRegistryAdapter(h)
 	}
 	return newOnchainRegistryAdapter(h)

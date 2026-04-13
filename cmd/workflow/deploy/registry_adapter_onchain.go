@@ -105,7 +105,7 @@ func (a *onchainRegistryAdapter) Upsert() error {
 }
 
 func (h *handler) workflowExists() error {
-	workflow, err := h.wrc.GetWorkflow(common.HexToAddress(h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress), h.inputs.WorkflowName, h.inputs.WorkflowTag)
+	workflow, err := h.wrc.GetWorkflow(common.HexToAddress(h.inputs.WorkflowOwner), h.inputs.WorkflowName, h.inputs.WorkflowTag)
 	if err != nil {
 		return err
 	}

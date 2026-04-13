@@ -158,6 +158,13 @@ func TestResolveInputs_PreviewPrivateRegistryFlag(t *testing.T) {
 		)
 		h.settings = ctx.Settings
 
+		h.environmentSet.EnvName = "STAGING"
+		token := makeTestJWT(t, map[string]interface{}{
+			"sub":    "user1",
+			"org_id": "org-test-123",
+		})
+		h.credentials = makeBearerCredentials(t, token)
+		h.runtimeContext.TenantContext = &tenantctx.EnvironmentContext{TenantID: "42"}
 		ctx.Viper.Set("preview-private-registry", true)
 
 		inputs, err := h.ResolveInputs(ctx.Viper)
@@ -217,10 +224,16 @@ func TestResolveWorkflowOwner(t *testing.T) {
 
 		ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
 		h := newHandler(ctx, buf)
-		h.inputs = Inputs{WorkflowOwner: chainsim.TestAddress}
-		h.target = registryTarget{targetType: registryTargetOnchain}
+		ctx.Settings = createTestSettings(
+			chainsim.TestAddress,
+			"eoa",
+			"test_workflow",
+			"testdata/basic_workflow/main.go",
+			"",
+		)
+		h.settings = ctx.Settings
 
-		owner, err := h.resolveWorkflowOwner()
+		owner, err := h.resolveWorkflowOwner(registryTarget{targetType: registryTargetOnchain})
 		require.NoError(t, err)
 		assert.Equal(t, chainsim.TestAddress, owner)
 	})
@@ -238,11 +251,18 @@ func TestResolveWorkflowOwner(t *testing.T) {
 
 		ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
 		h := newHandler(ctx, buf)
+		ctx.Settings = createTestSettings(
+			chainsim.TestAddress,
+			"eoa",
+			"test_workflow",
+			"testdata/basic_workflow/main.go",
+			"",
+		)
+		h.settings = ctx.Settings
 		h.credentials = makeBearerCredentials(t, token)
 		h.runtimeContext.TenantContext = &tenantctx.EnvironmentContext{TenantID: "42"}
-		h.target = registryTarget{targetType: registryTargetPrivate}
 
-		owner, err := h.resolveWorkflowOwner()
+		owner, err := h.resolveWorkflowOwner(registryTarget{targetType: registryTargetPrivate})
 		require.NoError(t, err)
 
 		expectedBytes, err := workflowUtils.GenerateWorkflowOwnerAddress("42", "org-test-123")
@@ -257,10 +277,17 @@ func TestResolveWorkflowOwner(t *testing.T) {
 
 		ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
 		h := newHandler(ctx, buf)
+		ctx.Settings = createTestSettings(
+			chainsim.TestAddress,
+			"eoa",
+			"test_workflow",
+			"testdata/basic_workflow/main.go",
+			"",
+		)
+		h.settings = ctx.Settings
 		h.runtimeContext.TenantContext = nil
-		h.target = registryTarget{targetType: registryTargetPrivate}
 
-		_, err := h.resolveWorkflowOwner()
+		_, err := h.resolveWorkflowOwner(registryTarget{targetType: registryTargetPrivate})
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "tenant context is required")
 	})
@@ -272,10 +299,17 @@ func TestResolveWorkflowOwner(t *testing.T) {
 
 		ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
 		h := newHandler(ctx, buf)
+		ctx.Settings = createTestSettings(
+			chainsim.TestAddress,
+			"eoa",
+			"test_workflow",
+			"testdata/basic_workflow/main.go",
+			"",
+		)
+		h.settings = ctx.Settings
 		h.runtimeContext.TenantContext = &tenantctx.EnvironmentContext{TenantID: ""}
-		h.target = registryTarget{targetType: registryTargetPrivate}
 
-		_, err := h.resolveWorkflowOwner()
+		_, err := h.resolveWorkflowOwner(registryTarget{targetType: registryTargetPrivate})
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "tenant ID is required")
 	})
@@ -288,11 +322,18 @@ func TestResolveWorkflowOwner(t *testing.T) {
 
 		ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
 		h := newHandler(ctx, buf)
+		ctx.Settings = createTestSettings(
+			chainsim.TestAddress,
+			"eoa",
+			"test_workflow",
+			"testdata/basic_workflow/main.go",
+			"",
+		)
+		h.settings = ctx.Settings
 		h.credentials = makeAPIKeyCredentials(t)
 		h.runtimeContext.TenantContext = &tenantctx.EnvironmentContext{TenantID: "42"}
-		h.target = registryTarget{targetType: registryTargetPrivate}
 
-		_, err := h.resolveWorkflowOwner()
+		_, err := h.resolveWorkflowOwner(registryTarget{targetType: registryTargetPrivate})
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to get organization ID")
 	})
