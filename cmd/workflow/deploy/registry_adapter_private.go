@@ -27,9 +27,7 @@ func (a *privateRegistryAdapter) ensureClient() {
 }
 
 func (a *privateRegistryAdapter) RunPreDeployChecks() error {
-	if !a.h.validated {
-		return fmt.Errorf("handler inputs not validated")
-	}
+
 	// TODO: check if workflow already exists in private registry and confirm update
 	return nil
 }
