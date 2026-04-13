@@ -8,31 +8,31 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
-// privateRegistryAdapter deploys workflows to the private workflow registry
+// privateRegistryDeployStrategy deploys workflows to the private workflow registry
 // via GraphQL. Ownership linking and onchain prechecks are not applicable.
-type privateRegistryAdapter struct {
+type privateRegistryDeployStrategy struct {
 	h   *handler
 	prc *privateregistryclient.Client
 }
 
-func newPrivateRegistryAdapter(h *handler) *privateRegistryAdapter {
-	return &privateRegistryAdapter{h: h}
+func newPrivateRegistryDeployStrategy(h *handler) *privateRegistryDeployStrategy {
+	return &privateRegistryDeployStrategy{h: h}
 }
 
-func (a *privateRegistryAdapter) ensureClient() {
+func (a *privateRegistryDeployStrategy) ensureClient() {
 	if a.prc == nil {
 		gql := graphqlclient.New(a.h.credentials, a.h.environmentSet, a.h.log)
 		a.prc = privateregistryclient.New(gql, a.h.log)
 	}
 }
 
-func (a *privateRegistryAdapter) RunPreDeployChecks() error {
+func (a *privateRegistryDeployStrategy) RunPreDeployChecks() error {
 
 	// TODO: check if workflow already exists in private registry and confirm update
 	return nil
 }
 
-func (a *privateRegistryAdapter) Upsert() error {
+func (a *privateRegistryDeployStrategy) Upsert() error {
 	a.ensureClient()
 
 	h := a.h

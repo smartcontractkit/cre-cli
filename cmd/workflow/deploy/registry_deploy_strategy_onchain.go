@@ -11,17 +11,17 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
-// onchainRegistryAdapter deploys workflows to the onchain workflow registry.
+// onchainRegistryDeployStrategy deploys workflows to the onchain workflow registry.
 // It wraps async WRC client initialization and handles ownership linking,
 // duplicate detection, and DON limit checks.
-type onchainRegistryAdapter struct {
+type onchainRegistryDeployStrategy struct {
 	h       *handler
 	wg      sync.WaitGroup
 	initErr error
 }
 
-func newOnchainRegistryAdapter(h *handler) *onchainRegistryAdapter {
-	a := &onchainRegistryAdapter{h: h}
+func newOnchainRegistryDeployStrategy(h *handler) *onchainRegistryDeployStrategy {
+	a := &onchainRegistryDeployStrategy{h: h}
 	a.wg.Add(1)
 	go func() {
 		defer a.wg.Done()
@@ -35,7 +35,7 @@ func newOnchainRegistryAdapter(h *handler) *onchainRegistryAdapter {
 	return a
 }
 
-func (a *onchainRegistryAdapter) RunPreDeployChecks() error {
+func (a *onchainRegistryDeployStrategy) RunPreDeployChecks() error {
 	h := a.h
 
 	a.wg.Wait()
@@ -81,7 +81,7 @@ func (a *onchainRegistryAdapter) RunPreDeployChecks() error {
 	return nil
 }
 
-func (a *onchainRegistryAdapter) Upsert() error {
+func (a *onchainRegistryDeployStrategy) Upsert() error {
 	h := a.h
 
 	if err := checkUserDonLimitBeforeDeploy(

@@ -13,10 +13,10 @@ import (
 // re-running the command).
 var errDeployHalted = errors.New("deploy halted")
 
-// registryAdapter encapsulates target-specific deployment logic.
+// registryDeployStrategy encapsulates target-specific deployment logic.
 // The orchestrator calls these methods in a fixed sequence with common steps
 // (artifact upload) between RunPreDeployChecks and Upsert.
-type registryAdapter interface {
+type registryDeployStrategy interface {
 	// RunPreDeployChecks validates readiness and runs registry-specific
 	// prechecks (ownership linking, duplicate detection, etc.).
 	// Return errDeployHalted to stop the deploy without returning an error.
@@ -64,10 +64,10 @@ func validatePrivateRegistryAllowed(envSet *environments.EnvironmentSet) error {
 	return nil
 }
 
-// newRegistryAdapter returns the appropriate adapter for the given target.
-func newRegistryAdapter(targetWorkflowRegistry registryTarget, h *handler) registryAdapter {
+// newRegistryDeployStrategy returns the appropriate strategy for the given target.
+func newRegistryDeployStrategy(targetWorkflowRegistry registryTarget, h *handler) registryDeployStrategy {
 	if targetWorkflowRegistry.isPrivate() {
-		return newPrivateRegistryAdapter(h)
+		return newPrivateRegistryDeployStrategy(h)
 	}
-	return newOnchainRegistryAdapter(h)
+	return newOnchainRegistryDeployStrategy(h)
 }

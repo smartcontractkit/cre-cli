@@ -231,7 +231,7 @@ func (h *handler) Execute(ctx context.Context) error {
 		return err
 	}
 
-	adapter := newRegistryAdapter(h.inputs.TargetWorkflowRegistry, h)
+	adapter := newRegistryDeployStrategy(h.inputs.TargetWorkflowRegistry, h)
 	if err := adapter.RunPreDeployChecks(); err != nil {
 		if errors.Is(err, errDeployHalted) {
 			return nil
