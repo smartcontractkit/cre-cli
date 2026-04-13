@@ -6,26 +6,45 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/smartcontractkit/cre-cli/cmd/client"
+	"github.com/smartcontractkit/cre-cli/internal/environments"
 )
 
-func TestNewRegistryAdapter(t *testing.T) {
+func TestResolveTargetRegistry(t *testing.T) {
 	t.Parallel()
 
-	t.Run("returns onchain adapter for onchain target", func(t *testing.T) {
+	t.Run("returns onchain target and adapter by default", func(t *testing.T) {
 		t.Parallel()
-		target := registryTarget{targetType: registryTargetOnchain}
-		h := &handler{clientFactory: fakeFactory{txType: client.Regular}}
-		adapter := newRegistryAdapter(target, h)
+		h := &handler{}
+		target, adapter, err := resolveTargetRegistry(
+			false,
+			&environments.EnvironmentSet{
+				EnvName:                   "STAGING",
+				WorkflowRegistryChainName: "ethereum-testnet-sepolia",
+				WorkflowRegistryAddress:   "0x1234567890123456789012345678901234567890",
+			},
+			fakeFactory{},
+			h,
+		)
+		require.NoError(t, err)
+		assert.Equal(t, registryTargetOnchain, target.targetType)
 		_, ok := adapter.(*onchainRegistryAdapter)
 		assert.True(t, ok, "expected onchainRegistryAdapter for onchain target")
 	})
 
-	t.Run("returns private adapter for private target", func(t *testing.T) {
+	t.Run("returns private target and adapter when preview is enabled", func(t *testing.T) {
 		t.Parallel()
-		target := registryTarget{targetType: registryTargetPrivate}
-		adapter := newRegistryAdapter(target, &handler{})
+		target, adapter, err := resolveTargetRegistry(
+			true,
+			&environments.EnvironmentSet{
+				EnvName:                   "STAGING",
+				WorkflowRegistryChainName: "ethereum-testnet-sepolia",
+				WorkflowRegistryAddress:   "0x1234567890123456789012345678901234567890",
+			},
+			fakeFactory{},
+			&handler{},
+		)
+		require.NoError(t, err)
+		assert.Equal(t, registryTargetPrivate, target.targetType)
 		_, ok := adapter.(*privateRegistryAdapter)
 		assert.True(t, ok, "expected privateRegistryAdapter for private target")
 	})

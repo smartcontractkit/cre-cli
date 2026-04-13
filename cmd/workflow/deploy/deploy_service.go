@@ -7,14 +7,6 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
-// newRegistryAdapter returns the appropriate adapter for the given target.
-func newRegistryAdapter(target registryTarget, h *handler) registryAdapter {
-	if target.isPrivate() {
-		return newPrivateRegistryAdapter(h)
-	}
-	return newOnchainRegistryAdapter(h)
-}
-
 // runDeploy orchestrates the deploy flow common to all registry targets:
 // pre-deploy checks → artifact upload → registry upsert.
 func runDeploy(adapter registryAdapter, h *handler) error {

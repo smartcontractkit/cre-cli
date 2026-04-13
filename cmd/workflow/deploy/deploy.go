@@ -217,13 +217,11 @@ func (h *handler) Execute(ctx context.Context) error {
 		return h.accessRequester.PromptAndSubmitRequest(ctx)
 	}
 
-	target, err := resolveRegistryTarget(h.inputs.PreviewPrivateRegistry, h.environmentSet, h.clientFactory)
+	target, adapter, err := resolveTargetRegistry(h.inputs.PreviewPrivateRegistry, h.environmentSet, h.clientFactory, h)
 	if err != nil {
 		return err
 	}
 	h.target = target
-
-	adapter := newRegistryAdapter(target, h)
 
 	if err := h.prepareArtifacts(); err != nil {
 		return err
