@@ -3,6 +3,7 @@ package deploy
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 
@@ -70,8 +71,6 @@ type handler struct {
 	wrc              *client.WorkflowRegistryV2Client
 	runtimeContext   *runtime.Context
 	accessRequester  *accessrequest.Requester
-
-	targetWorkflowRegistry registryTarget
 	validated bool
 
 	// URL-fetched data for WorkflowID computation when --wasm or --config are URLs.
@@ -228,14 +227,25 @@ func (h *handler) Execute(ctx context.Context) error {
 		return h.accessRequester.PromptAndSubmitRequest(ctx)
 	}
 
-	h.targetWorkflowRegistry = h.inputs.TargetWorkflowRegistry
-	adapter := newRegistryAdapter(h.targetWorkflowRegistry, h)
-
 	if err := h.prepareArtifacts(); err != nil {
 		return err
 	}
 
-	return runDeploy(adapter, h)
+	adapter := newRegistryAdapter(h.inputs.TargetWorkflowRegistry, h)
+	if err := adapter.RunPreDeployChecks(); err != nil {
+		if errors.Is(err, errDeployHalted) {
+			return nil
+		}
+		return err
+	}
+
+	ui.Line()
+	ui.Dim("Uploading files...")
+	if err := h.uploadArtifacts(); err != nil {
+		return fmt.Errorf("failed to upload workflow: %w", err)
+	}
+
+	return adapter.Upsert()
 }
 
 // prepareArtifacts handles compile/fetch, artifact preparation, and hashing.
