@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -313,23 +312,6 @@ func (h *handler) resolveWorkflowOwner() (string, error) {
 	}
 
 	return "0x" + hex.EncodeToString(ownerBytes), nil
-}
-
-func (h *handler) workflowExists() error {
-	workflow, err := h.wrc.GetWorkflow(common.HexToAddress(h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress), h.inputs.WorkflowName, h.inputs.WorkflowTag)
-	if err != nil {
-		return err
-	}
-	if workflow.WorkflowId == [32]byte(common.Hex2Bytes(h.workflowArtifact.WorkflowID)) {
-		return fmt.Errorf("workflow with id %s already exists", h.workflowArtifact.WorkflowID)
-
-	}
-	if workflow.WorkflowName == h.inputs.WorkflowName {
-		status := workflow.Status
-		h.existingWorkflowStatus = &status
-		return fmt.Errorf("workflow with name %s already exists", h.inputs.WorkflowName)
-	}
-	return nil
 }
 
 func (h *handler) displayWorkflowDetails() {
