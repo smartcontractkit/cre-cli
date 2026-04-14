@@ -27,7 +27,8 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 				return nil
 			}
 
-			ui.EnvContext(runtimeContext.EnvironmentSet.EnvLabel())
+			ui.Line()
+			ui.Bold("Registries available to your organization")
 			ui.Line()
 
 			for _, r := range registries {

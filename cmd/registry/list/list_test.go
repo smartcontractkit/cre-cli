@@ -100,6 +100,7 @@ func TestList_OnChainAndOffChain(t *testing.T) {
 	output := buf.String()
 
 	for _, want := range []string{
+		"Registries available to your organization",
 		"onchain:ethereum-testnet-sepolia",
 		"on-chain",
 		"0xaE55eB3EDAc48a1163EE2cbb1205bE1e90Ea1135",
