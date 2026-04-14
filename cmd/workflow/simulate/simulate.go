@@ -743,18 +743,21 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 			holder.TriggerFunc = func() error {
 				cronCtx, cancel := context.WithCancel(ctx)
 
+				go func() {
+					defer cancel()
+					ui.Line()
+					ui.WaitForEnter(cronCtx, "Cron scheduler started. Press Enter to skip waiting...")
+				}()
+
 				done, err := triggerCaps.ManualCronTrigger.ManualTrigger(cronCtx, triggerRegistrationID)
 				if err != nil {
 					cancel()
 					return err
 				}
 
-				// Wait for user to press Enter to skip waiting for cron trigger
 				go func() {
-					ui.Line()
-					ui.Dim("Press Enter to skip waiting for the cron schedule...")
-					fmt.Scanln()
-					cancel()
+					defer cancel()
+					<-done
 				}()
 
 				return nil
