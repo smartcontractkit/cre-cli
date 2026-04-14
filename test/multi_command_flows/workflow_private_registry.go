@@ -160,7 +160,7 @@ func workflowDeployPrivateRegistry(t *testing.T, tc TestConfig) string {
 								"workflowName":   "private-registry-happy-path-workflow",
 								"binaryUrl":      srv.URL + "/get/binary.wasm",
 								"configUrl":      "",
-								"tag":            "private-registry-happy-path-workfl",
+								"tag":            "private-registry-happy-path-workflow",
 								"attributes":     "",
 								"donFamily":      "test-don",
 								"organizationId": "test-org-id",
