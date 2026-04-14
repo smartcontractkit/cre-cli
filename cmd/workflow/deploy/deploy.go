@@ -338,7 +338,14 @@ func (h *handler) Execute(ctx context.Context) error {
 	if err := h.upsert(); err != nil {
 		return fmt.Errorf("failed to register workflow: %w", err)
 	}
+	warnIfPausedWorkflowUpdate(h.existingWorkflowStatus)
 	return nil
+}
+
+func warnIfPausedWorkflowUpdate(status *uint8) {
+	if status != nil && *status == workflowStatusPaused {
+		ui.Warning("Your workflow is paused and has been updated")
+	}
 }
 
 func (h *handler) workflowExists() error {

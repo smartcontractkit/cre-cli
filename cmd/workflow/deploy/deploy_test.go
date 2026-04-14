@@ -1,9 +1,12 @@
 package deploy
 
 import (
+	"bytes"
 	"errors"
 	"io"
 	"math/big"
+	"os"
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -452,6 +455,47 @@ func (f fakeUserDonLimitClient) CheckUserDonLimit(owner common.Address, donFamil
 
 func (f fakeUserDonLimitClient) GetWorkflowListByOwnerAndName(common.Address, string, *big.Int, *big.Int) ([]workflow_registry_v2_wrapper.WorkflowRegistryWorkflowMetadataView, error) {
 	return f.workflowsByOwnerName, nil
+}
+
+func TestWarnExistingPausedWorkflowUpdate(t *testing.T) {
+	// Do not use t.Parallel: stderr redirection uses package-global os.Stderr.
+
+	captureStderr := func(f func()) string {
+		t.Helper()
+		old := os.Stderr
+		r, w, err := os.Pipe()
+		require.NoError(t, err)
+		os.Stderr = w
+
+		f()
+
+		require.NoError(t, w.Close())
+		os.Stderr = old
+
+		var buf bytes.Buffer
+		_, copyErr := io.Copy(&buf, r)
+		require.NoError(t, copyErr)
+		require.NoError(t, r.Close())
+		return buf.String()
+	}
+
+	t.Run("no output when status is nil", func(t *testing.T) {
+		out := captureStderr(func() { warnIfPausedWorkflowUpdate(nil) })
+		assert.Empty(t, strings.TrimSpace(out))
+	})
+
+	t.Run("no output when workflow is active", func(t *testing.T) {
+		active := workflowStatusActive
+		out := captureStderr(func() { warnIfPausedWorkflowUpdate(&active) })
+		assert.Empty(t, strings.TrimSpace(out))
+	})
+
+	t.Run("prints warning when workflow is paused", func(t *testing.T) {
+		paused := workflowStatusPaused
+		out := captureStderr(func() { warnIfPausedWorkflowUpdate(&paused) })
+		assert.Contains(t, out, "Your workflow is paused")
+		assert.Contains(t, out, "and has been updated")
+	})
 }
 
 func TestCheckUserDonLimitBeforeDeploy(t *testing.T) {
