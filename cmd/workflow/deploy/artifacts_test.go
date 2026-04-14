@@ -16,12 +16,15 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/testutil/chainsim"
 )
 
-func mockGraphQL() {
+func mockGraphQL(onRequest func(GraphQLRequest)) {
 	httpmock.RegisterResponder("POST", "http://graphql.endpoint",
 		func(req *http.Request) (*http.Response, error) {
 			bodyBytes, _ := io.ReadAll(req.Body)
 			var gqlReq GraphQLRequest
 			_ = json.Unmarshal(bodyBytes, &gqlReq)
+			if onRequest != nil {
+				onRequest(gqlReq)
+			}
 
 			if strings.Contains(gqlReq.Query, "mutation GeneratePresignedPostUrlForArtifact") {
 				resp, _ := httpmock.NewJsonResponse(200, map[string]interface{}{
@@ -81,7 +84,7 @@ func TestUpload_SuccessAndErrorCases(t *testing.T) {
 		"",
 	)
 
-	mockGraphQL()
+	mockGraphQL(nil)
 
 	// Mock origin upload response
 	httpmock.RegisterResponder("POST", "http://origin/upload",
@@ -157,7 +160,7 @@ func TestUploadArtifactToStorageService_OriginError(t *testing.T) {
 		"",
 	)
 
-	mockGraphQL()
+	mockGraphQL(nil)
 
 	// Mock origin upload response
 	httpmock.RegisterResponder("POST", "http://origin/upload",
@@ -241,4 +244,56 @@ func TestUploadArtifactToStorageService_AlreadyExistsError(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "http://origin/get", h.inputs.BinaryURL)
 	require.Equal(t, "http://origin/get", *h.inputs.ConfigURL)
+}
+
+func TestUpload_UsesResolvedWorkflowOwnerForPresignedUrls(t *testing.T) {
+	httpmock.Activate()
+	t.Cleanup(httpmock.DeactivateAndReset)
+
+	t.Setenv(credentials.CreApiKeyVar, "test-api")
+
+	simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
+	ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
+	h := newHandler(ctx, buf)
+	h.inputs.WorkflowOwner = "0x2222222222222222222222222222222222222222"
+	h.inputs.WorkflowName = "test_workflow"
+	h.inputs.DonFamily = "test_label"
+
+	// Intentionally set a different configured owner to ensure uploads use the resolved owner.
+	h.settings = createTestSettings(
+		"0x1111111111111111111111111111111111111111",
+		"eoa",
+		"test_workflow",
+		"",
+		"",
+	)
+
+	var ownersUsed []string
+	mockGraphQL(func(gqlReq GraphQLRequest) {
+		if !strings.Contains(gqlReq.Query, "mutation GeneratePresignedPostUrlForArtifact") {
+			return
+		}
+		artifact, ok := gqlReq.Variables["artifact"].(map[string]interface{})
+		require.True(t, ok, "expected artifact input in GraphQL variables")
+		owner, ok := artifact["workflowOwnerAddress"].(string)
+		require.True(t, ok, "expected workflowOwnerAddress in artifact input")
+		ownersUsed = append(ownersUsed, owner)
+	})
+
+	httpmock.RegisterResponder("POST", "http://origin/upload",
+		httpmock.NewStringResponder(201, ""))
+
+	h.environmentSet.GraphQLURL = "http://graphql.endpoint"
+	h.workflowArtifact = &workflowArtifact{
+		BinaryData: []byte("binarydata"),
+		ConfigData: []byte("configdata"),
+		WorkflowID: "workflow-id",
+	}
+
+	err := h.uploadArtifacts()
+	require.NoError(t, err)
+	require.NotEmpty(t, ownersUsed)
+	for _, owner := range ownersUsed {
+		require.Equal(t, h.inputs.WorkflowOwner, owner)
+	}
 }
