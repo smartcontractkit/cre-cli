@@ -204,14 +204,28 @@ func workflowDeployPrivateRegistry(t *testing.T, tc TestConfig) string {
 
 	cmd := exec.Command(CLIPath, args...)
 	testHome := createTestBearerCredentialsHome(t)
-	childEnv := make([]string, 0, len(os.Environ())+2)
+
+	realHome, err := os.UserHomeDir()
+	require.NoError(t, err, "failed to get real home dir")
+
+	childEnv := make([]string, 0, len(os.Environ())+3)
+	hasGOPATH := false
 	for _, entry := range os.Environ() {
 		if strings.HasPrefix(entry, "HOME=") || strings.HasPrefix(entry, "USERPROFILE=") {
 			continue
 		}
+		if strings.HasPrefix(entry, "GOPATH=") {
+			hasGOPATH = true
+		}
 		childEnv = append(childEnv, entry)
 	}
 	childEnv = append(childEnv, "HOME="+testHome, "USERPROFILE="+testHome)
+	// When HOME is overridden, Go defaults GOPATH to $HOME/go which lands
+	// inside t.TempDir(). Go modules are read-only, so TempDir cleanup
+	// fails and marks the test as failed. Pin GOPATH to the real home.
+	if !hasGOPATH {
+		childEnv = append(childEnv, "GOPATH="+filepath.Join(realHome, "go"))
+	}
 	cmd.Env = childEnv
 
 	var stdout, stderr bytes.Buffer
