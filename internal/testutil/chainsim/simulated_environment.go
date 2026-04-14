@@ -14,6 +14,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/testutil"
+	"github.com/smartcontractkit/cre-cli/internal/testutil/testsettings"
 )
 
 type SimulatedEnvironment struct {
@@ -62,7 +63,7 @@ func (se *SimulatedEnvironment) Close() {
 func (se *SimulatedEnvironment) createContextWithLogger(logger *zerolog.Logger) *runtime.Context {
 	v := viper.New()
 	v.Set(settings.EthPrivateKeyEnvVar, TestPrivateKey)
-	settings, err := testutil.NewTestSettings(v, logger)
+	settings, err := testsettings.NewTestSettings(v, logger)
 	if err != nil {
 		logger.Warn().Err(err).Msg("failed to create new test settings")
 	}

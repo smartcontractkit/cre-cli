@@ -238,6 +238,7 @@ func createTestSettings(workflowOwnerAddress, workflowOwnerType, workflowName, w
 				WorkflowOwnerAddress string `mapstructure:"workflow-owner-address" yaml:"workflow-owner-address"`
 				WorkflowOwnerType    string `mapstructure:"workflow-owner-type" yaml:"workflow-owner-type"`
 				WorkflowName         string `mapstructure:"workflow-name" yaml:"workflow-name"`
+				DeploymentRegistry   string `mapstructure:"deployment-registry" yaml:"deployment-registry"`
 			}{
 				WorkflowOwnerAddress: workflowOwnerAddress,
 				WorkflowOwnerType:    workflowOwnerType,
