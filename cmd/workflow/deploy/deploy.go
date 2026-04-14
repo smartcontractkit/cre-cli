@@ -227,11 +227,12 @@ func (h *handler) Execute(ctx context.Context) error {
 		return h.accessRequester.PromptAndSubmitRequest(ctx)
 	}
 
+	adapter := newRegistryDeployStrategy(h.inputs.TargetWorkflowRegistry, h)
+
 	if err := h.prepareArtifacts(); err != nil {
 		return err
 	}
 
-	adapter := newRegistryDeployStrategy(h.inputs.TargetWorkflowRegistry, h)
 	if err := adapter.RunPreDeployChecks(); err != nil {
 		if errors.Is(err, errDeployHalted) {
 			return nil

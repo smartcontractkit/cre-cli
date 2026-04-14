@@ -203,7 +203,16 @@ func workflowDeployPrivateRegistry(t *testing.T, tc TestConfig) string {
 	}
 
 	cmd := exec.Command(CLIPath, args...)
-	cmd.Env = append(os.Environ(), "HOME="+createTestBearerCredentialsHome(t))
+	testHome := createTestBearerCredentialsHome(t)
+	childEnv := make([]string, 0, len(os.Environ())+2)
+	for _, entry := range os.Environ() {
+		if strings.HasPrefix(entry, "HOME=") || strings.HasPrefix(entry, "USERPROFILE=") {
+			continue
+		}
+		childEnv = append(childEnv, entry)
+	}
+	childEnv = append(childEnv, "HOME="+testHome, "USERPROFILE="+testHome)
+	cmd.Env = childEnv
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr

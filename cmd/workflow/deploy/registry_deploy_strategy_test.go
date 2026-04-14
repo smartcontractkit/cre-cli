@@ -64,6 +64,7 @@ func TestResolveRegistryTarget(t *testing.T) {
 		_, err := resolveRegistryTarget(true, envSet)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "--preview-private-registry is only available in the STAGING environment")
+		assert.Contains(t, err.Error(), "current: PRODUCTION")
 	})
 
 	t.Run("preview flag case insensitive for STAGING", func(t *testing.T) {

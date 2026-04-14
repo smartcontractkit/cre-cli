@@ -58,8 +58,13 @@ func resolveRegistryTarget(previewPrivateRegistry bool, envSet *environments.Env
 
 // validatePrivateRegistryAllowed enforces the STAGING-only preview gate.
 func validatePrivateRegistryAllowed(envSet *environments.EnvironmentSet) error {
-	if !strings.EqualFold(envSet.EnvName, "STAGING") {
-		return fmt.Errorf("--preview-private-registry is only available in the STAGING environment (current: %s)", envSet.EnvName)
+	displayEnvName := envSet.EnvName
+	if displayEnvName == "" {
+		displayEnvName = environments.DefaultEnv
+	}
+
+	if !strings.EqualFold(displayEnvName, "STAGING") {
+		return fmt.Errorf("--preview-private-registry is only available in the STAGING environment (current: %s)", displayEnvName)
 	}
 	return nil
 }
