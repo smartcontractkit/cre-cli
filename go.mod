@@ -31,7 +31,7 @@ require (
 	github.com/smartcontractkit/chainlink-protos/workflows/go v0.0.0-20260323124644-faea187e6997
 	github.com/smartcontractkit/chainlink-testing-framework/seth v1.51.5
 	github.com/smartcontractkit/chainlink/deployment v0.0.0-20260407130455-5258160d170f
-	github.com/smartcontractkit/chainlink/v2 v2.29.1-cre-beta.0.0.20260414161753-f7510e81016c
+	github.com/smartcontractkit/chainlink/v2 v2.29.1-cre-beta.0.0.20260414163538-9bf42ddef2af
 	github.com/smartcontractkit/cre-sdk-go v1.7.0
 	github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm v1.0.0-beta.9
 	github.com/smartcontractkit/mcms v0.38.2
