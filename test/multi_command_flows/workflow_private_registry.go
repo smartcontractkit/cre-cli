@@ -1,8 +1,8 @@
 package multi_command_flows
 
 import (
-	"encoding/base64"
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"

@@ -71,7 +71,7 @@ type handler struct {
 	wrc              *client.WorkflowRegistryV2Client
 	runtimeContext   *runtime.Context
 	accessRequester  *accessrequest.Requester
-	validated bool
+	validated        bool
 
 	// URL-fetched data for WorkflowID computation when --wasm or --config are URLs.
 	urlBinaryData []byte
@@ -176,11 +176,11 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 
 		WorkflowRegistryContractChainName: h.environmentSet.WorkflowRegistryChainName,
 		WorkflowRegistryContractAddress:   h.environmentSet.WorkflowRegistryAddress,
-		OwnerLabel:             v.GetString("owner-label"),
-		SkipConfirmation:       v.GetBool(settings.Flags.SkipConfirmation.Name),
-		SkipTypeChecks:         v.GetBool(cmdcommon.SkipTypeChecksCLIFlag),
-		PreviewPrivateRegistry: previewPrivateRegistry,
-		TargetWorkflowRegistry: targetWorkflowRegistry,
+		OwnerLabel:                        v.GetString("owner-label"),
+		SkipConfirmation:                  v.GetBool(settings.Flags.SkipConfirmation.Name),
+		SkipTypeChecks:                    v.GetBool(cmdcommon.SkipTypeChecksCLIFlag),
+		PreviewPrivateRegistry:            previewPrivateRegistry,
+		TargetWorkflowRegistry:            targetWorkflowRegistry,
 	}, nil
 }
 
