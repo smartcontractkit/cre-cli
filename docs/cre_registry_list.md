@@ -4,7 +4,7 @@ Lists available workflow registries for the current environment
 
 ### Synopsis
 
-Displays the registries configured for your organization, including type, address, and supported secrets auth flows.
+Displays the registries configured for your organization, including type and address.
 
 ```
 cre registry list [optional flags]
