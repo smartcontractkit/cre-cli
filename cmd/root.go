@@ -262,6 +262,10 @@ func newRootCommand() *cobra.Command {
 					return fmt.Errorf("%w", err)
 				}
 
+				if err := runtimeContext.AttachResolvedRegistry(); err != nil {
+					return err
+				}
+
 				// Restart spinner for remaining initialization
 				if showSpinner {
 					spinner = ui.NewSpinner()

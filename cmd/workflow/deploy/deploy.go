@@ -95,6 +95,12 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			h := newHandler(runtimeContext, cmd.InOrStdin())
 
+			if runtimeContext.ResolvedRegistry != nil {
+				if err := runtimeContext.ResolvedRegistry.RequireOnChainRegistry("deploy"); err != nil {
+					return err
+				}
+			}
+
 			inputs, err := h.ResolveInputs(runtimeContext.Viper)
 			if err != nil {
 				return err
@@ -173,7 +179,7 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 		WorkflowOwner: h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress,
 		WorkflowTag:   workflowTag,
 		ConfigURL:     configURL,
-		DonFamily:     h.environmentSet.DonFamily,
+		DonFamily:     h.runtimeContext.ResolvedRegistry.DonFamily,
 
 		WorkflowPath: h.settings.Workflow.WorkflowArtifactSettings.WorkflowPath,
 		KeepAlive:    false,
@@ -182,8 +188,8 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 		OutputPath: v.GetString("output"),
 		WasmPath:   v.GetString("wasm"),
 
-		WorkflowRegistryContractChainName: h.environmentSet.WorkflowRegistryChainName,
-		WorkflowRegistryContractAddress:   h.environmentSet.WorkflowRegistryAddress,
+		WorkflowRegistryContractChainName: h.runtimeContext.ResolvedRegistry.ChainName,
+		WorkflowRegistryContractAddress:   h.runtimeContext.ResolvedRegistry.Address,
 		OwnerLabel:                        v.GetString("owner-label"),
 		SkipConfirmation:                  v.GetBool(settings.Flags.SkipConfirmation.Name),
 		SkipTypeChecks:                    v.GetBool(cmdcommon.SkipTypeChecksCLIFlag),

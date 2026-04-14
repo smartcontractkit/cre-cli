@@ -21,6 +21,7 @@ const (
 	SethConfigPathSettingName     = "logging.seth-config-path"
 	RegistriesSettingName         = "contracts.registries"
 	KeystoneSettingName           = "contracts.keystone"
+	DeploymentRegistrySettingName = "user-workflow.deployment-registry"
 	RpcsSettingName               = "rpcs"
 	ExperimentalChainsSettingName = "experimental-chains" // used by simulator when present in target config
 )

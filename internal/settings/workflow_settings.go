@@ -84,6 +84,7 @@ type WorkflowSettings struct {
 		WorkflowOwnerAddress string `mapstructure:"workflow-owner-address" yaml:"workflow-owner-address"`
 		WorkflowOwnerType    string `mapstructure:"workflow-owner-type" yaml:"workflow-owner-type"`
 		WorkflowName         string `mapstructure:"workflow-name" yaml:"workflow-name"`
+		DeploymentRegistry   string `mapstructure:"deployment-registry" yaml:"deployment-registry"`
 	} `mapstructure:"user-workflow" yaml:"user-workflow"`
 	WorkflowArtifactSettings struct {
 		WorkflowPath string `mapstructure:"workflow-path" yaml:"workflow-path"`
@@ -128,6 +129,7 @@ func loadWorkflowSettings(logger *zerolog.Logger, v *viper.Viper, cmd *cobra.Com
 	}
 
 	workflowSettings.UserWorkflowSettings.WorkflowName = getSetting(WorkflowNameSettingName)
+	workflowSettings.UserWorkflowSettings.DeploymentRegistry = getSetting(DeploymentRegistrySettingName)
 	workflowSettings.WorkflowArtifactSettings.WorkflowPath = getSetting(WorkflowPathSettingName)
 	workflowSettings.WorkflowArtifactSettings.ConfigPath = getSetting(ConfigPathSettingName)
 	workflowSettings.WorkflowArtifactSettings.SecretsPath = getSetting(SecretsPathSettingName)

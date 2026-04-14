@@ -45,6 +45,12 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			handler := newHandler(runtimeContext)
 
+			if runtimeContext.ResolvedRegistry != nil {
+				if err := runtimeContext.ResolvedRegistry.RequireOnChainRegistry("pause"); err != nil {
+					return err
+				}
+			}
+
 			inputs, err := handler.ResolveInputs(runtimeContext.Viper)
 			if err != nil {
 				return err
@@ -107,8 +113,8 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 	return Inputs{
 		WorkflowName:                      h.settings.Workflow.UserWorkflowSettings.WorkflowName,
 		WorkflowOwner:                     h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress,
-		WorkflowRegistryContractChainName: h.environmentSet.WorkflowRegistryChainName,
-		WorkflowRegistryContractAddress:   h.environmentSet.WorkflowRegistryAddress,
+		WorkflowRegistryContractChainName: h.runtimeContext.ResolvedRegistry.ChainName,
+		WorkflowRegistryContractAddress:   h.runtimeContext.ResolvedRegistry.Address,
 	}, nil
 }
 
@@ -176,11 +182,11 @@ func (h *handler) Execute() error {
 	switch txOut.Type {
 	case client.Regular:
 		ui.Success("Transaction confirmed")
-		ui.URL(fmt.Sprintf("%s/tx/%s", h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash))
+		ui.URL(fmt.Sprintf("%s/tx/%s", h.runtimeContext.ResolvedRegistry.ExplorerURL, txOut.Hash))
 		ui.Success("Workflows paused successfully")
 		ui.Line()
 		ui.Bold("Details:")
-		ui.Dim(fmt.Sprintf("   Contract address: %s", h.environmentSet.WorkflowRegistryAddress))
+		ui.Dim(fmt.Sprintf("   Contract address: %s", h.runtimeContext.ResolvedRegistry.Address))
 		ui.Dim(fmt.Sprintf("   Transaction hash: %s", txOut.Hash))
 		ui.Dim(fmt.Sprintf("   Workflow Name:    %s", workflowName))
 		for _, w := range activeWorkflowIDs {
@@ -204,9 +210,9 @@ func (h *handler) Execute() error {
 		ui.Line()
 
 	case client.Changeset:
-		chainSelector, err := settings.GetChainSelectorByChainName(h.environmentSet.WorkflowRegistryChainName)
+		chainSelector, err := settings.GetChainSelectorByChainName(h.runtimeContext.ResolvedRegistry.ChainName)
 		if err != nil {
-			return fmt.Errorf("failed to get chain selector for chain %q: %w", h.environmentSet.WorkflowRegistryChainName, err)
+			return fmt.Errorf("failed to get chain selector for chain %q: %w", h.runtimeContext.ResolvedRegistry.ChainName, err)
 		}
 		mcmsConfig, err := settings.GetMCMSConfig(h.settings, chainSelector)
 		if err != nil {
