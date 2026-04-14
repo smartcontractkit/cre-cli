@@ -743,7 +743,8 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 			holder.TriggerFunc = func() error {
 				cronCtx, cancel := context.WithCancel(ctx)
 
-				if err := triggerCaps.ManualCronTrigger.ManualTrigger(cronCtx, triggerRegistrationID); err != nil {
+				done, err := triggerCaps.ManualCronTrigger.ManualTrigger(cronCtx, triggerRegistrationID)
+				if err != nil {
 					cancel()
 					return err
 				}
@@ -834,7 +835,9 @@ func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inp
 				const nonInteractiveTimeout = 5 * time.Second
 				cronCtx, cancel := context.WithDeadline(ctx, time.Now().Add(nonInteractiveTimeout))
 				defer cancel()
-				return triggerCaps.ManualCronTrigger.ManualTrigger(cronCtx, triggerRegistrationID)
+
+				_, err := triggerCaps.ManualCronTrigger.ManualTrigger(cronCtx, triggerRegistrationID)
+				return err
 			}
 		case trigger == "http-trigger@1.0.0-alpha":
 			if strings.TrimSpace(inputs.HTTPPayload) == "" {
