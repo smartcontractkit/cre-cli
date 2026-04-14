@@ -253,6 +253,7 @@ func TestUpload_UsesResolvedWorkflowOwnerForPresignedUrls(t *testing.T) {
 	t.Setenv(credentials.CreApiKeyVar, "test-api")
 
 	simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
+	t.Cleanup(simulatedEnvironment.Close)
 	ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
 	h := newHandler(ctx, buf)
 	h.inputs.WorkflowOwner = "0x2222222222222222222222222222222222222222"
