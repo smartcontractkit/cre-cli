@@ -5,6 +5,7 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"math/big"
+	"strconv"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -146,22 +147,14 @@ func (f *EVMFamily) RegisterCapabilities(ctx context.Context, cfg chain.Capabili
 		}
 	}
 
-	// Type-assert the limits (SimulationLimits satisfies EVMChainLimits implicitly)
-	var evmLimits EVMChainLimits
-	if cfg.Limits != nil {
-		var ok bool
-		evmLimits, ok = cfg.Limits.(EVMChainLimits)
-		if !ok {
-			return nil, fmt.Errorf("EVM family: limits does not satisfy EVMChainLimits interface")
-		}
-	}
-
 	dryRun := !cfg.Broadcast
 
+	// cfg.Limits already satisfies EVMChainLimits via the chain.Limits interface
+	// contract; no type assertion needed.
 	evmCaps, err := NewEVMChainCapabilities(
 		ctx, cfg.Logger, cfg.Registry,
 		ethClients, evmForwarders, pk,
-		dryRun, evmLimits,
+		dryRun, cfg.Limits,
 	)
 	if err != nil {
 		return nil, err
@@ -236,6 +229,12 @@ func (f *EVMFamily) ResolveKey(creSettings *settings.Settings, broadcast bool) (
 	return pk, nil
 }
 
+// CLI input keys consumed from chain.TriggerParams.FamilyInputs.
+const (
+	TriggerInputTxHash     = "evm-tx-hash"
+	TriggerInputEventIndex = "evm-event-index"
+)
+
 // ResolveTriggerData fetches the EVM log payload for the given selector from
 // CLI-supplied or interactively-prompted inputs.
 func (f *EVMFamily) ResolveTriggerData(ctx context.Context, selector uint64, params chain.TriggerParams) (interface{}, error) {
@@ -252,8 +251,14 @@ func (f *EVMFamily) ResolveTriggerData(ctx context.Context, selector uint64, par
 		return GetEVMTriggerLog(ctx, client)
 	}
 
-	if strings.TrimSpace(params.EVMTxHash) == "" || params.EVMEventIndex < 0 {
+	txHash := strings.TrimSpace(params.FamilyInputs[TriggerInputTxHash])
+	eventIndexStr := strings.TrimSpace(params.FamilyInputs[TriggerInputEventIndex])
+	if txHash == "" || eventIndexStr == "" {
 		return nil, fmt.Errorf("--evm-tx-hash and --evm-event-index are required for EVM triggers in non-interactive mode")
 	}
-	return GetEVMTriggerLogFromValues(ctx, client, params.EVMTxHash, uint64(params.EVMEventIndex)) // #nosec G115 -- EVMEventIndex validated >= 0 above
+	eventIndex, err := strconv.ParseUint(eventIndexStr, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid --evm-event-index %q: %w", eventIndexStr, err)
+	}
+	return GetEVMTriggerLogFromValues(ctx, client, txHash, eventIndex)
 }

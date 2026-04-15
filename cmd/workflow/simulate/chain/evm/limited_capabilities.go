@@ -9,14 +9,14 @@ import (
 	evmcappb "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/chain-capabilities/evm"
 	evmserver "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/chain-capabilities/evm/server"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/core"
+
+	"github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain"
 )
 
-// EVMChainLimits defines the limit accessors needed by LimitedEVMChain.
-// The SimulationLimits type from the parent package satisfies this interface.
-type EVMChainLimits interface {
-	ChainWriteReportSizeLimit() int
-	ChainWriteEVMGasLimit() uint64
-}
+// EVMChainLimits is the limit-accessor contract LimitedEVMChain enforces.
+// Aliased to chain.Limits so the family-agnostic CapabilityConfig.Limits
+// value can be passed straight through without a type assertion.
+type EVMChainLimits = chain.Limits
 
 // LimitedEVMChain wraps an evmserver.ClientCapability and enforces chain write
 // report size and gas limits.

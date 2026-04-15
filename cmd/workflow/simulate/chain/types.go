@@ -15,6 +15,15 @@ type ChainConfig struct {
 	Forwarder string // family-specific forwarding address
 }
 
+// Limits exposes the chain-write limit accessors a family needs at
+// capability-registration time. Implementations live in the parent simulate
+// package; this interface is defined here so CapabilityConfig stays in the
+// chain package without an import cycle.
+type Limits interface {
+	ChainWriteReportSizeLimit() int
+	ChainWriteEVMGasLimit() uint64
+}
+
 // CapabilityConfig holds everything a family needs to register capabilities.
 type CapabilityConfig struct {
 	Registry   *capabilities.Registry
@@ -22,16 +31,15 @@ type CapabilityConfig struct {
 	Forwarders map[uint64]string
 	PrivateKey interface{} // family-specific key type; EVM uses *ecdsa.PrivateKey
 	Broadcast  bool
-	Limits     interface{} // *SimulationLimits from parent package, or nil
+	Limits     Limits // nil disables limit enforcement
 	Logger     logger.Logger
 }
 
 // TriggerParams carries family-agnostic inputs needed to resolve trigger data
-// for a given chain trigger. Family-specific fields are ignored by families
-// that don't need them.
+// for a given chain trigger. FamilyInputs is a free-form bag of CLI-supplied
+// strings; each family interprets the keys it knows about and ignores the rest.
 type TriggerParams struct {
-	Clients       map[uint64]ChainClient
-	Interactive   bool
-	EVMTxHash     string
-	EVMEventIndex int
+	Clients      map[uint64]ChainClient
+	Interactive  bool
+	FamilyInputs map[string]string
 }

@@ -271,10 +271,12 @@ func TestEVMFamily_ResolveTriggerData_NoClient(t *testing.T) {
 	t.Parallel()
 	f := newFamily()
 	_, err := f.ResolveTriggerData(context.Background(), 777, chain.TriggerParams{
-		Clients:       map[uint64]chain.ChainClient{},
-		Interactive:   false,
-		EVMTxHash:     "0x" + strings.Repeat("a", 64),
-		EVMEventIndex: 0,
+		Clients:     map[uint64]chain.ChainClient{},
+		Interactive: false,
+		FamilyInputs: map[string]string{
+			"evm-tx-hash":     "0x" + strings.Repeat("a", 64),
+			"evm-event-index": "0",
+		},
 	})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no RPC configured for chain selector 777")
@@ -284,10 +286,12 @@ func TestEVMFamily_ResolveTriggerData_WrongClientType(t *testing.T) {
 	t.Parallel()
 	f := newFamily()
 	_, err := f.ResolveTriggerData(context.Background(), 1, chain.TriggerParams{
-		Clients:       map[uint64]chain.ChainClient{1: "not-an-ethclient"},
-		Interactive:   false,
-		EVMTxHash:     "0x" + strings.Repeat("a", 64),
-		EVMEventIndex: 0,
+		Clients:     map[uint64]chain.ChainClient{1: "not-an-ethclient"},
+		Interactive: false,
+		FamilyInputs: map[string]string{
+			"evm-tx-hash":     "0x" + strings.Repeat("a", 64),
+			"evm-event-index": "0",
+		},
 	})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid client type for EVM chain selector 1")

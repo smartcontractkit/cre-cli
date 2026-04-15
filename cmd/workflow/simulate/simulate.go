@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -448,6 +449,13 @@ func run(
 			os.Exit(1)
 		}
 
+		// Only set Limits when non-nil to avoid the typed-nil interface trap
+		// (a nil *SimulationLimits boxed into chain.Limits compares != nil).
+		var capLimits chain.Limits
+		if simLimits != nil {
+			capLimits = simLimits
+		}
+
 		// Register chain-family-specific capabilities
 		for name, family := range chain.All() {
 			clients, ok := inputs.FamilyClients[name]
@@ -461,7 +469,7 @@ func run(
 				Forwarders: inputs.FamilyForwarders[name],
 				PrivateKey: inputs.FamilyKeys[name],
 				Broadcast:  inputs.Broadcast,
-				Limits:     simLimits,
+				Limits:     capLimits,
 				Logger:     triggerLggr,
 			})
 			if err != nil {
@@ -899,11 +907,18 @@ func getTriggerDataForFamily(ctx context.Context, family chain.ChainFamily, sele
 	if !ok {
 		return nil, fmt.Errorf("no %s clients configured", family.Name())
 	}
+	// Keys must match the constants the receiving family reads (e.g. evm.TriggerInputTxHash).
+	familyInputs := map[string]string{}
+	if strings.TrimSpace(inputs.EVMTxHash) != "" {
+		familyInputs["evm-tx-hash"] = inputs.EVMTxHash
+	}
+	if inputs.EVMEventIndex >= 0 {
+		familyInputs["evm-event-index"] = strconv.Itoa(inputs.EVMEventIndex)
+	}
 	return family.ResolveTriggerData(ctx, selector, chain.TriggerParams{
-		Clients:       clients,
-		Interactive:   interactive,
-		EVMTxHash:     inputs.EVMTxHash,
-		EVMEventIndex: inputs.EVMEventIndex,
+		Clients:      clients,
+		Interactive:  interactive,
+		FamilyInputs: familyInputs,
 	})
 }
 
