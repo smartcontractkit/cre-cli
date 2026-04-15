@@ -2,9 +2,14 @@ package deploy
 
 import (
 	"bytes"
+	"context"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"io"
 	"math/big"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
@@ -13,8 +18,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	workflowUtils "github.com/smartcontractkit/chainlink-common/pkg/workflows"
 	workflow_registry_v2_wrapper "github.com/smartcontractkit/chainlink-evm/gethwrappers/workflow/generated/workflow_registry_wrapper_v2"
 
+	"github.com/smartcontractkit/cre-cli/internal/tenantctx"
 	"github.com/smartcontractkit/cre-cli/internal/testutil/chainsim"
 	"github.com/smartcontractkit/cre-cli/internal/validation"
 )
@@ -427,6 +434,285 @@ func TestConfigFlagsMutuallyExclusive(t *testing.T) {
 	err := cmd.Execute()
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "if any flags in the group [config no-config default-config] are set none of the others can be")
+}
+
+func TestResolveInputs_PrivateRegistryTarget(t *testing.T) {
+	t.Run("resolves private target and derived owner in STAGING", func(t *testing.T) {
+		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
+		defer simulatedEnvironment.Close()
+
+		ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
+		h := newHandler(ctx, buf)
+		ctx.Settings = createTestSettings(
+			chainsim.TestAddress,
+			"eoa",
+			"test_workflow",
+			"testdata/basic_workflow/main.go",
+			"",
+		)
+		h.settings = ctx.Settings
+		h.environmentSet.EnvName = "STAGING"
+		h.environmentSet.DonFamily = "test_label"
+		token := makeTestJWT(t, map[string]interface{}{
+			"sub":    "user1",
+			"org_id": "org-test-123",
+		})
+		h.credentials = makeBearerCredentials(t, token)
+		h.runtimeContext.TenantContext = &tenantctx.EnvironmentContext{TenantID: "42"}
+		ctx.Viper.Set("preview-private-registry", true)
+
+		inputs, err := h.ResolveInputs(ctx.Viper)
+		require.NoError(t, err)
+		assert.True(t, inputs.PreviewPrivateRegistry)
+		assert.Equal(t, registryTargetPrivate, inputs.TargetWorkflowRegistry.targetType)
+		expectedBytes, err := workflowUtils.GenerateWorkflowOwnerAddress("42", "org-test-123")
+		require.NoError(t, err)
+		assert.Equal(t, "0x"+hex.EncodeToString(expectedBytes), inputs.WorkflowOwner)
+	})
+
+	t.Run("rejects private target outside STAGING", func(t *testing.T) {
+		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
+		defer simulatedEnvironment.Close()
+
+		ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
+		h := newHandler(ctx, buf)
+		ctx.Settings = createTestSettings(
+			chainsim.TestAddress,
+			"eoa",
+			"test_workflow",
+			"testdata/basic_workflow/main.go",
+			"",
+		)
+		h.settings = ctx.Settings
+		h.environmentSet.EnvName = "PRODUCTION"
+		ctx.Viper.Set("preview-private-registry", true)
+
+		_, err := h.ResolveInputs(ctx.Viper)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "--preview-private-registry is only available in the STAGING environment")
+	})
+}
+
+func TestValidateInputs_PrivateRegistry(t *testing.T) {
+	t.Run("accepts URL wasm and config paths for private target", func(t *testing.T) {
+		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
+		defer simulatedEnvironment.Close()
+
+		ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
+		h := newHandler(ctx, buf)
+		ctx.Settings = createTestSettings(
+			chainsim.TestAddress,
+			"eoa",
+			"test_workflow",
+			"testdata/basic_workflow/main.go",
+			"",
+		)
+		h.settings = ctx.Settings
+		h.environmentSet.EnvName = "STAGING"
+		h.environmentSet.DonFamily = "test_label"
+		token := makeTestJWT(t, map[string]interface{}{
+			"sub":    "user1",
+			"org_id": "org-test-123",
+		})
+		h.credentials = makeBearerCredentials(t, token)
+		h.runtimeContext.TenantContext = &tenantctx.EnvironmentContext{TenantID: "42"}
+		ctx.Viper.Set("preview-private-registry", true)
+		ctx.Viper.Set("wasm", "https://example.com/workflow.wasm")
+		ctx.Viper.Set("config", "https://example.com/workflow-config.json")
+
+		inputs, err := h.ResolveInputs(ctx.Viper)
+		require.NoError(t, err)
+		h.inputs = inputs
+
+		err = h.ValidateInputs()
+		require.NoError(t, err)
+		assert.True(t, h.validated)
+	})
+
+	t.Run("fails when required don family is missing for private target", func(t *testing.T) {
+		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
+		defer simulatedEnvironment.Close()
+
+		ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
+		h := newHandler(ctx, buf)
+		ctx.Settings = createTestSettings(
+			chainsim.TestAddress,
+			"eoa",
+			"test_workflow",
+			"testdata/basic_workflow/main.go",
+			"",
+		)
+		h.settings = ctx.Settings
+		h.environmentSet.EnvName = "STAGING"
+		h.environmentSet.DonFamily = ""
+		token := makeTestJWT(t, map[string]interface{}{
+			"sub":    "user1",
+			"org_id": "org-test-123",
+		})
+		h.credentials = makeBearerCredentials(t, token)
+		h.runtimeContext.TenantContext = &tenantctx.EnvironmentContext{TenantID: "42"}
+		ctx.Viper.Set("preview-private-registry", true)
+		ctx.Viper.Set("wasm", "https://example.com/workflow.wasm")
+
+		inputs, err := h.ResolveInputs(ctx.Viper)
+		require.NoError(t, err)
+		h.inputs = inputs
+
+		err = h.ValidateInputs()
+		require.Error(t, err)
+		var verrs validation.ValidationErrors
+		assert.True(t, errors.As(err, &verrs))
+		validation.AssertValidationErrs(t, verrs, "Inputs.DonFamily", "DonFamily is a required field")
+	})
+}
+
+func TestExecute_PrivateRegistry(t *testing.T) {
+	t.Run("executes private deploy path with GraphQL success", func(t *testing.T) {
+		wasmContent := []byte("workflow wasm payload")
+		wasmServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = w.Write(wasmContent)
+		}))
+		defer wasmServer.Close()
+
+		gqlServer := newAssertGQLServer(t, func(t *testing.T, req deployMockGraphQLRequest) (int, map[string]any) {
+			assert.Contains(t, req.Query, "mutation UpsertOffchainWorkflow")
+			rawRequest, ok := req.Variables["request"].(map[string]any)
+			require.True(t, ok)
+			rawWorkflow, ok := rawRequest["workflow"].(map[string]any)
+			require.True(t, ok)
+			assert.Equal(t, "test_workflow", rawWorkflow["workflowName"])
+			assert.Equal(t, "test-don", rawWorkflow["donFamily"])
+			assert.Equal(t, wasmServer.URL+"/binary.wasm", rawWorkflow["binaryUrl"])
+			assert.Equal(t, "WORKFLOW_STATUS_ACTIVE", rawWorkflow["status"])
+
+			return http.StatusOK, map[string]any{
+				"data": map[string]any{
+					"upsertOffchainWorkflow": map[string]any{
+						"workflow": map[string]any{
+							"workflowId":   "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+							"owner":        chainsim.TestAddress,
+							"createdAt":    "2025-01-01T00:00:00Z",
+							"status":       "WORKFLOW_STATUS_ACTIVE",
+							"workflowName": "test_workflow",
+							"binaryUrl":    wasmServer.URL + "/binary.wasm",
+							"configUrl":    "",
+							"tag":          "test_workflow",
+							"attributes":   "",
+							"donFamily":    "test-don",
+						},
+					},
+				},
+			}
+		})
+		defer gqlServer.Close()
+
+		h := newPrivateRegistryExecuteHandler(t, wasmServer.URL+"/binary.wasm", gqlServer.URL)
+		require.NoError(t, h.ValidateInputs())
+		require.NoError(t, h.Execute(context.Background()))
+		assert.NotEmpty(t, h.workflowArtifact.WorkflowID)
+	})
+
+	t.Run("surfaces GraphQL errors from private execute path", func(t *testing.T) {
+		wasmServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = w.Write([]byte("workflow wasm payload"))
+		}))
+		defer wasmServer.Close()
+
+		gqlServer := newMockGQLServer(t, map[string]any{
+			"errors": []map[string]string{{"message": "unauthorized"}},
+		})
+		defer gqlServer.Close()
+
+		h := newPrivateRegistryExecuteHandler(t, wasmServer.URL+"/binary.wasm", gqlServer.URL)
+		require.NoError(t, h.ValidateInputs())
+		err := h.Execute(context.Background())
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to register workflow in private registry")
+		assert.Contains(t, err.Error(), "unauthorized")
+	})
+
+	t.Run("surfaces transport errors from private execute path", func(t *testing.T) {
+		wasmServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = w.Write([]byte("workflow wasm payload"))
+		}))
+		defer wasmServer.Close()
+
+		gqlServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			http.Error(w, "server exploded", http.StatusInternalServerError)
+		}))
+		defer gqlServer.Close()
+
+		h := newPrivateRegistryExecuteHandler(t, wasmServer.URL+"/binary.wasm", gqlServer.URL)
+		require.NoError(t, h.ValidateInputs())
+		err := h.Execute(context.Background())
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to register workflow in private registry")
+	})
+}
+
+type deployMockGraphQLRequest struct {
+	Query     string                 `json:"query"`
+	Variables map[string]interface{} `json:"variables"`
+}
+
+func newMockGQLServer(t *testing.T, response map[string]any) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(response)
+	}))
+}
+
+func newAssertGQLServer(
+	t *testing.T,
+	handler func(t *testing.T, req deployMockGraphQLRequest) (status int, response map[string]any),
+) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req deployMockGraphQLRequest
+		err := json.NewDecoder(r.Body).Decode(&req)
+		require.NoError(t, err)
+		status, response := handler(t, req)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(status)
+		if response != nil {
+			_ = json.NewEncoder(w).Encode(response)
+		}
+	}))
+}
+
+func newPrivateRegistryExecuteHandler(t *testing.T, wasmURL, gqlURL string) *handler {
+	t.Helper()
+	simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
+	t.Cleanup(simulatedEnvironment.Close)
+
+	ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
+	h := newHandler(ctx, buf)
+	ctx.Settings = createTestSettings(
+		chainsim.TestAddress,
+		"eoa",
+		"test_workflow",
+		"testdata/basic_workflow/main.go",
+		"",
+	)
+	h.settings = ctx.Settings
+	h.credentials = makeAPIKeyCredentials(t)
+	h.environmentSet.GraphQLURL = gqlURL
+	h.environmentSet.DonFamily = "test-don"
+	h.inputs = Inputs{
+		WorkflowName:                      "test_workflow",
+		WorkflowOwner:                     chainsim.TestAddress,
+		WorkflowTag:                       "test_workflow",
+		DonFamily:                         "test-don",
+		WorkflowPath:                      "testdata/basic_workflow/main.go",
+		WasmPath:                          wasmURL,
+		WorkflowRegistryContractAddress:   "0x1234567890123456789012345678901234567890",
+		WorkflowRegistryContractChainName: "ethereum-testnet-sepolia",
+		TargetWorkflowRegistry:            registryTarget{targetType: registryTargetPrivate},
+		PreviewPrivateRegistry:            true,
+	}
+
+	return h
 }
 
 func stringPtr(s string) *string {

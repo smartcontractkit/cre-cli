@@ -107,7 +107,7 @@ func (h *handler) tryAutoLink() error {
 	}
 
 	lkInputs := linkkey.Inputs{
-		WorkflowOwner:                   h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress,
+		WorkflowOwner:                   h.inputs.WorkflowOwner,
 		WorkflowRegistryContractAddress: h.inputs.WorkflowRegistryContractAddress,
 		WorkflowOwnerLabel:              h.inputs.OwnerLabel,
 	}
