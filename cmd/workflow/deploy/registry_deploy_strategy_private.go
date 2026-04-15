@@ -34,9 +34,9 @@ func (a *privateRegistryDeployStrategy) RunPreDeployChecks() error {
 func (a *privateRegistryDeployStrategy) CheckWorkflowExists(_, workflowName, _, _ string) (bool, *uint8, error) {
 	a.ensureClient()
 
-	_, err := a.prc.GetWorkflowByName(workflowName)
+	workflow, err := a.prc.GetWorkflowByName(workflowName)
 	if err == nil {
-		return true, nil, nil
+		return true, offchainStatusToUint8(workflow.Status), nil
 	}
 	if isWorkflowNotFoundError(err) {
 		return false, nil, nil
@@ -100,4 +100,17 @@ func (h *handler) buildPrivateRegistryInput() privateregistryclient.OffchainWork
 func isWorkflowNotFoundError(err error) bool {
 	msg := strings.ToLower(err.Error())
 	return strings.Contains(msg, "not found")
+}
+
+func offchainStatusToUint8(status privateregistryclient.OffchainWorkflowStatus) *uint8 {
+	switch status {
+	case privateregistryclient.WorkflowStatusActive:
+		v := uint8(0)
+		return &v
+	case privateregistryclient.WorkflowStatusPaused:
+		v := uint8(1)
+		return &v
+	default:
+		return nil
+	}
 }
