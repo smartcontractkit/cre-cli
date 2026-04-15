@@ -19,6 +19,7 @@ import (
 	generatebindings "github.com/smartcontractkit/cre-cli/cmd/generate-bindings"
 	"github.com/smartcontractkit/cre-cli/cmd/login"
 	"github.com/smartcontractkit/cre-cli/cmd/logout"
+	"github.com/smartcontractkit/cre-cli/cmd/registry"
 	"github.com/smartcontractkit/cre-cli/cmd/secrets"
 	"github.com/smartcontractkit/cre-cli/cmd/templates"
 	"github.com/smartcontractkit/cre-cli/cmd/update"
@@ -389,17 +390,20 @@ func newRootCommand() *cobra.Command {
 	whoamiCmd := whoami.New(runtimeContext)
 	updateCmd := update.New(runtimeContext)
 	templatesCmd := templates.New(runtimeContext)
+	registryCmd := registry.New(runtimeContext)
 
 	secretsCmd.RunE = helpRunE
 	workflowCmd.RunE = helpRunE
 	accountCmd.RunE = helpRunE
 	templatesCmd.RunE = helpRunE
+	registryCmd.RunE = helpRunE
 
 	// Define groups (order controls display order)
 	rootCmd.AddGroup(&cobra.Group{ID: "getting-started", Title: "Getting Started"})
 	rootCmd.AddGroup(&cobra.Group{ID: "account", Title: "Account"})
 	rootCmd.AddGroup(&cobra.Group{ID: "workflow", Title: "Workflow"})
 	rootCmd.AddGroup(&cobra.Group{ID: "secret", Title: "Secret"})
+	rootCmd.AddGroup(&cobra.Group{ID: "registry", Title: "Registry"})
 
 	initCmd.GroupID = "getting-started"
 	templatesCmd.GroupID = "getting-started"
@@ -411,6 +415,7 @@ func newRootCommand() *cobra.Command {
 
 	secretsCmd.GroupID = "secret"
 	workflowCmd.GroupID = "workflow"
+	registryCmd.GroupID = "registry"
 
 	rootCmd.AddCommand(
 		initCmd,
@@ -421,6 +426,7 @@ func newRootCommand() *cobra.Command {
 		whoamiCmd,
 		secretsCmd,
 		workflowCmd,
+		registryCmd,
 		genBindingsCmd,
 		updateCmd,
 		templatesCmd,
@@ -458,6 +464,8 @@ func isLoadSettings(cmd *cobra.Command) bool {
 		"cre templates list":            {},
 		"cre templates add":             {},
 		"cre templates remove":          {},
+		"cre registry":                  {},
+		"cre registry list":             {},
 		"cre":                           {},
 	}
 

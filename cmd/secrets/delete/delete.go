@@ -123,14 +123,15 @@ func Execute(h *common.Handler, inputs DeleteSecretsInputs, duration time.Durati
 	}
 	spinner.Stop()
 
-	// Validate and canonicalize owner address
-	owner := strings.TrimSpace(h.OwnerAddress)
-	if !ethcommon.IsHexAddress(owner) {
-		return fmt.Errorf("invalid owner address: %q", h.OwnerAddress)
+	owner, err := h.ResolveEffectiveOwner()
+	if err != nil {
+		return err
 	}
-	owner = ethcommon.HexToAddress(owner).Hex() // checksummed string
+	// When not using org-owned secrets, canonicalize the address
+	if ethcommon.IsHexAddress(owner) {
+		owner = ethcommon.HexToAddress(owner).Hex()
+	}
 
-	// Prepare the list of SecretIdentifiers to be deleted.
 	ptrIDs := make([]*vault.SecretIdentifier, len(inputs))
 	for i, item := range inputs {
 		ptrIDs[i] = &vault.SecretIdentifier{
@@ -167,7 +168,7 @@ func Execute(h *common.Handler, inputs DeleteSecretsInputs, duration time.Durati
 
 	if common.IsBrowserFlow(secretsAuth) {
 		ui.Dim("Using your account to authorize vault access for this delete request...")
-		return h.ExecuteBrowserVaultAuthorization(context.Background(), vaulttypes.MethodSecretsDelete, digest)
+		return h.ExecuteBrowserVaultAuthorization(context.Background(), vaulttypes.MethodSecretsDelete, digest, requestBody)
 	}
 
 	gatewayPost := func() error {

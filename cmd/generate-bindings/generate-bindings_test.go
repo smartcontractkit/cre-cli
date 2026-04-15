@@ -1065,3 +1065,61 @@ func TestGenerateBindings_UnconventionalNaming(t *testing.T) {
 		})
 	}
 }
+
+func TestGenerateBindings_StructNamePrefixStripping(t *testing.T) {
+	// ABI where internalType embeds the contract name as a namespace prefix
+	// (e.g. "struct MyContract.Config"). go-ethereum folds the dot so the Go
+	// name becomes "MyContractConfig". sanitizeStructNames must strip the
+	// prefix from both struct declarations and field type references.
+	contractABI := `[
+		{
+			"type": "function",
+			"name": "getDON",
+			"inputs": [],
+			"outputs": [{
+				"name": "",
+				"type": "tuple",
+				"internalType": "struct MyContract.DONInfo",
+				"components": [
+					{"name": "id", "type": "uint32"},
+					{
+						"name": "capabilityConfigurations",
+						"type": "tuple[]",
+						"internalType": "struct MyContract.CapabilityConfiguration[]",
+						"components": [
+							{"name": "capabilityId", "type": "string"},
+							{"name": "config", "type": "bytes"}
+						]
+					}
+				]
+			}],
+			"stateMutability": "view"
+		}
+	]`
+
+	tempDir, err := os.MkdirTemp("", "bindings-prefix-test")
+	require.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	abiFile := filepath.Join(tempDir, "MyContract.abi")
+	err = os.WriteFile(abiFile, []byte(contractABI), 0600)
+	require.NoError(t, err)
+
+	outFile := filepath.Join(tempDir, "bindings.go")
+	err = bindings.GenerateBindings("", abiFile, "mycontract", "MyContract", outFile)
+	require.NoError(t, err)
+
+	content, err := os.ReadFile(outFile)
+	require.NoError(t, err)
+	src := string(content)
+
+	// Struct declarations should have the prefix stripped.
+	assert.Contains(t, src, "type DONInfo struct")
+	assert.Contains(t, src, "type CapabilityConfiguration struct")
+	assert.NotContains(t, src, "type MyContractDONInfo struct")
+	assert.NotContains(t, src, "type MyContractCapabilityConfiguration struct")
+
+	// Field type references inside structs should also be stripped.
+	assert.Contains(t, src, "[]CapabilityConfiguration")
+	assert.NotContains(t, src, "[]MyContractCapabilityConfiguration")
+}

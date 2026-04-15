@@ -65,6 +65,8 @@ type Inputs struct {
 	ExperimentalForwarders map[uint64]common.Address `validate:"-"` // forwarders keyed by chain ID
 	// Limits enforcement
 	LimitsPath string `validate:"-"` // "default" or path to custom limits JSON
+	// SkipTypeChecks passes --skip-type-checks to cre-compile for TypeScript workflows.
+	SkipTypeChecks bool `validate:"-"`
 }
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
@@ -103,6 +105,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	simulateCmd.Flags().String("evm-tx-hash", "", "EVM trigger transaction hash (0x...)")
 	simulateCmd.Flags().Int("evm-event-index", -1, "EVM trigger log index (0-based)")
 	simulateCmd.Flags().String("limits", "default", "Production limits to enforce during simulation: 'default' for prod defaults, path to a limits JSON file (e.g. from 'cre workflow limits export'), or 'none' to disable")
+	simulateCmd.Flags().Bool(cmdcommon.SkipTypeChecksCLIFlag, false, "Skip TypeScript project typecheck during compilation (passes "+cmdcommon.SkipTypeChecksFlag+" to cre-compile)")
 	return simulateCmd
 }
 
@@ -267,6 +270,7 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 		EVMEventIndex:          v.GetInt("evm-event-index"),
 		ExperimentalForwarders: experimentalForwarders,
 		LimitsPath:             v.GetString("limits"),
+		SkipTypeChecks:         v.GetBool(cmdcommon.SkipTypeChecksCLIFlag),
 	}, nil
 }
 
@@ -357,7 +361,10 @@ func (h *handler) Execute(inputs Inputs) error {
 
 		spinner := ui.NewSpinner()
 		spinner.Start("Compiling workflow...")
-		wasmFileBinary, err = cmdcommon.CompileWorkflowToWasm(resolvedWorkflowPath, false)
+		wasmFileBinary, err = cmdcommon.CompileWorkflowToWasm(resolvedWorkflowPath, cmdcommon.WorkflowCompileOptions{
+			StripSymbols:   false,
+			SkipTypeChecks: inputs.SkipTypeChecks,
+		})
 		spinner.Stop()
 		if err != nil {
 			ui.Error("Build failed:")
