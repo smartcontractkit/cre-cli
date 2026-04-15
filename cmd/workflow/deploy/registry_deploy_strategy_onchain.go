@@ -1,7 +1,6 @@
 package deploy
 
 import (
-	"errors"
 	"fmt"
 	"sync"
 
@@ -59,26 +58,19 @@ func (a *onchainRegistryDeployStrategy) RunPreDeployChecks() error {
 		}
 	}
 
-	existsErr := h.workflowExists()
-	if existsErr != nil {
-		if existsErr.Error() == "workflow with name "+h.inputs.WorkflowName+" already exists" {
-			ui.Warning(fmt.Sprintf("Workflow %s already exists", h.inputs.WorkflowName))
-			ui.Dim("This will update the existing workflow.")
-			if !h.inputs.SkipConfirmation {
-				confirm, err := ui.Confirm("Are you sure you want to overwrite the workflow?")
-				if err != nil {
-					return err
-				}
-				if !confirm {
-					return errors.New("deployment cancelled by user")
-				}
-			}
-		} else {
-			return existsErr
-		}
+	return nil
+}
+
+func (a *onchainRegistryDeployStrategy) CheckWorkflowExists() (bool, error) {
+	existsErr := a.h.workflowExists()
+	if existsErr == nil {
+		return false, nil
+	}
+	if existsErr.Error() == "workflow with name "+a.h.inputs.WorkflowName+" already exists" {
+		return true, nil
 	}
 
-	return nil
+	return false, existsErr
 }
 
 func (a *onchainRegistryDeployStrategy) Upsert() error {

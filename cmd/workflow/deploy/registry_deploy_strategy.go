@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/smartcontractkit/cre-cli/internal/environments"
+	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
 // errDeployHalted is a sentinel returned by RunPreDeployChecks when the deploy
@@ -21,6 +22,10 @@ type registryDeployStrategy interface {
 	// prechecks (ownership linking, duplicate detection, etc.).
 	// Return errDeployHalted to stop the deploy without returning an error.
 	RunPreDeployChecks() error
+
+	// CheckWorkflowExists returns whether a same-name workflow exists for this
+	// registry target.
+	CheckWorkflowExists() (bool, error)
 
 	// Upsert registers or updates the workflow in the target registry
 	// and displays the result.
@@ -75,4 +80,21 @@ func newRegistryDeployStrategy(targetWorkflowRegistry registryTarget, h *handler
 		return newPrivateRegistryDeployStrategy(h)
 	}
 	return newOnchainRegistryDeployStrategy(h)
+}
+
+func confirmWorkflowOverwrite(workflowName string, skipConfirmation bool) error {
+	ui.Warning(fmt.Sprintf("Workflow %s already exists", workflowName))
+	ui.Dim("This will update the existing workflow.")
+
+	if !skipConfirmation {
+		confirm, err := ui.Confirm("Are you sure you want to overwrite the workflow?")
+		if err != nil {
+			return err
+		}
+		if !confirm {
+			return errors.New("deployment cancelled by user")
+		}
+	}
+
+	return nil
 }

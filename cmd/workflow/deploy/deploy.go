@@ -240,6 +240,16 @@ func (h *handler) Execute(ctx context.Context) error {
 		return err
 	}
 
+	exists, err := adapter.CheckWorkflowExists()
+	if err != nil {
+		return fmt.Errorf("failed to check if workflow exists: %w", err)
+	}
+	if exists {
+		if err := confirmWorkflowOverwrite(h.inputs.WorkflowName, h.inputs.SkipConfirmation); err != nil {
+			return err
+		}
+	}
+
 	ui.Line()
 	ui.Dim("Uploading files...")
 	if err := h.uploadArtifacts(); err != nil {

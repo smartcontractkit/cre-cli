@@ -106,6 +106,61 @@ type DeleteOffchainWorkflowResponse struct {
 	WorkflowID string `json:"workflowId"`
 }
 
+type GetOffchainWorkflowByNameRequest struct {
+	WorkflowName string `json:"workflowName"`
+}
+
+type GetOffchainWorkflowByNameResponse struct {
+	Workflow OffchainWorkflow `json:"workflow"`
+}
+
+func (c *Client) GetWorkflowByName(workflowName string) (OffchainWorkflow, error) {
+	if workflowName == "" {
+		return OffchainWorkflow{}, fmt.Errorf("workflowName is required")
+	}
+	if len(workflowName) > maxWorkflowNameLength {
+		return OffchainWorkflow{}, fmt.Errorf("workflowName exceeds max length %d", maxWorkflowNameLength)
+	}
+
+	const query = `
+query GetOffchainWorkflowByName($request: GetOffchainWorkflowByNameRequest!) {
+  getOffchainWorkflowByName(request: $request) {
+    workflow {
+      workflowId
+      owner
+      createdAt
+      status
+      workflowName
+      binaryUrl
+      configUrl
+      tag
+      attributes
+      donFamily
+      organizationId
+    }
+  }
+}`
+
+	req := graphql.NewRequest(query)
+	req.Var("request", GetOffchainWorkflowByNameRequest{WorkflowName: workflowName})
+
+	var container struct {
+		GetOffchainWorkflowByName GetOffchainWorkflowByNameResponse `json:"getOffchainWorkflowByName"`
+	}
+
+	ctx, cancel := c.CreateServiceContextWithTimeout()
+	defer cancel()
+
+	if err := c.graphql.Execute(ctx, req, &container); err != nil {
+		return OffchainWorkflow{}, fmt.Errorf("get workflow by name in registry: %w", err)
+	}
+
+	c.log.Debug().Str("workflowName", workflowName).
+		Msg("Fetched workflow by name from private registry")
+
+	return container.GetOffchainWorkflowByName.Workflow, nil
+}
+
 func (c *Client) UpsertWorkflowInRegistry(workflow OffchainWorkflowInput) (OffchainWorkflow, error) {
 	if err := validateUpsertWorkflowInput(workflow); err != nil {
 		return OffchainWorkflow{}, err
