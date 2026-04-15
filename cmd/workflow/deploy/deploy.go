@@ -343,3 +343,20 @@ func (h *handler) displayWorkflowDetails() {
 	ui.Dim(fmt.Sprintf("Owner Address: %s", h.inputs.WorkflowOwner))
 	ui.Line()
 }
+
+func confirmWorkflowOverwrite(workflowName string, skipConfirmation bool) error {
+	ui.Warning(fmt.Sprintf("Workflow %s already exists", workflowName))
+	ui.Dim("This will update the existing workflow.")
+
+	if !skipConfirmation {
+		confirm, err := ui.Confirm("Are you sure you want to overwrite the workflow?")
+		if err != nil {
+			return err
+		}
+		if !confirm {
+			return errors.New("deployment cancelled by user")
+		}
+	}
+
+	return nil
+}
