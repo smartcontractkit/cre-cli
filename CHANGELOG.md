@@ -1,5 +1,11 @@
 # cre-cli
 
+## 1.8.2
+
+### Patch Changes
+
+- [#332](https://github.com/smartcontractkit/cre-cli/pull/332) [`31c1ab8`](https://github.com/smartcontractkit/cre-cli/commit/31c1ab8a500fa8ad1518ea610628302ba5ee76f2) Thanks [@timothyF95](https://github.com/timothyF95)! - Submit oauth secrets to vault DON
+
 ## 1.8.1
 
 ### Patch Changes

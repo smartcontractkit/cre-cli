@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
@@ -98,12 +97,13 @@ func Execute(h *common.Handler, namespace string, duration time.Duration, secret
 		namespace = "main"
 	}
 
-	// Validate and canonicalize owner address (checksummed)
-	owner := strings.TrimSpace(h.OwnerAddress)
-	if !ethcommon.IsHexAddress(owner) {
-		return fmt.Errorf("invalid owner address: %q", h.OwnerAddress)
+	owner, err := h.ResolveEffectiveOwner()
+	if err != nil {
+		return err
 	}
-	owner = ethcommon.HexToAddress(owner).Hex()
+	if ethcommon.IsHexAddress(owner) {
+		owner = ethcommon.HexToAddress(owner).Hex()
+	}
 
 	// Fresh request ID
 	requestID := uuid.New().String()
@@ -131,7 +131,7 @@ func Execute(h *common.Handler, namespace string, duration time.Duration, secret
 
 	if common.IsBrowserFlow(secretsAuth) {
 		ui.Dim("Using your account to authorize vault access for this list request...")
-		return h.ExecuteBrowserVaultAuthorization(context.Background(), vaulttypes.MethodSecretsList, digest)
+		return h.ExecuteBrowserVaultAuthorization(context.Background(), vaulttypes.MethodSecretsList, digest, body)
 	}
 
 	ownerAddr := ethcommon.HexToAddress(owner)
