@@ -34,17 +34,17 @@ func (c *Client) CreateServiceContextWithTimeout() (context.Context, context.Can
 }
 
 type OffchainWorkflow struct {
-	WorkflowID     string                   `json:"workflowId"`
-	Owner          string                   `json:"owner"`
-	CreatedAt      string                   `json:"createdAt"`
-	Status         OffchainWorkflowStatus   `json:"status"`
-	WorkflowName   string                   `json:"workflowName"`
-	BinaryURL      string                   `json:"binaryUrl"`
-	ConfigURL      string                   `json:"configUrl"`
-	Tag            string                   `json:"tag"`
-	Attributes     string                   `json:"attributes"`
-	DonFamily      string                   `json:"donFamily"`
-	OrganizationID string                   `json:"organizationId"`
+	WorkflowID     string                 `json:"workflowId"`
+	Owner          string                 `json:"owner"`
+	CreatedAt      string                 `json:"createdAt"`
+	Status         OffchainWorkflowStatus `json:"status"`
+	WorkflowName   string                 `json:"workflowName"`
+	BinaryURL      string                 `json:"binaryUrl"`
+	ConfigURL      string                 `json:"configUrl"`
+	Tag            string                 `json:"tag"`
+	Attributes     string                 `json:"attributes"`
+	DonFamily      string                 `json:"donFamily"`
+	OrganizationID string                 `json:"organizationId"`
 }
 
 type OffchainWorkflowStatus string
@@ -64,14 +64,14 @@ const (
 )
 
 type OffchainWorkflowInput struct {
-	WorkflowID   string                   `json:"workflowId"`
-	Status       OffchainWorkflowStatus   `json:"status"`
-	WorkflowName string                   `json:"workflowName"`
-	BinaryURL    string                   `json:"binaryUrl"`
-	ConfigURL    *string                  `json:"configUrl,omitempty"`
-	Tag          *string                  `json:"tag,omitempty"`
-	Attributes   *string                  `json:"attributes,omitempty"`
-	DonFamily    string                   `json:"donFamily"`
+	WorkflowID   string                 `json:"workflowId"`
+	Status       OffchainWorkflowStatus `json:"status"`
+	WorkflowName string                 `json:"workflowName"`
+	BinaryURL    string                 `json:"binaryUrl"`
+	ConfigURL    *string                `json:"configUrl,omitempty"`
+	Tag          *string                `json:"tag,omitempty"`
+	Attributes   *string                `json:"attributes,omitempty"`
+	DonFamily    string                 `json:"donFamily"`
 }
 
 type UpsertOffchainWorkflowRequest struct {
