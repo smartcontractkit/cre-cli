@@ -36,12 +36,17 @@ func (h *handler) uploadArtifacts() error {
 
 	gql := graphqlclient.New(h.credentials, h.environmentSet, h.log)
 
-	chainSelector, err := settings.GetChainSelectorByChainName(h.runtimeContext.ResolvedRegistry.ChainName)
+	oc, err := settings.AsOnChain(h.runtimeContext.ResolvedRegistry, "deploy")
 	if err != nil {
-		return fmt.Errorf("failed to get chain selector for chain %q: %w", h.runtimeContext.ResolvedRegistry.ChainName, err)
+		return err
 	}
 
-	storageClient := storageclient.New(gql, h.runtimeContext.ResolvedRegistry.Address, h.inputs.WorkflowOwner, chainSelector, h.log)
+	chainSelector, err := settings.GetChainSelectorByChainName(oc.ChainName)
+	if err != nil {
+		return fmt.Errorf("failed to get chain selector for chain %q: %w", oc.ChainName, err)
+	}
+
+	storageClient := storageclient.New(gql, oc.Address, h.inputs.WorkflowOwner, chainSelector, h.log)
 	if h.settings.StorageSettings.CREStorage.ServiceTimeout != 0 {
 		storageClient.SetServiceTimeout(h.settings.StorageSettings.CREStorage.ServiceTimeout)
 	}

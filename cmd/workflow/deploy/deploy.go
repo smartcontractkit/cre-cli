@@ -94,12 +94,6 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			h := newHandler(runtimeContext, cmd.InOrStdin())
 
-			if runtimeContext.ResolvedRegistry != nil {
-				if err := runtimeContext.ResolvedRegistry.RequireOnChainRegistry("deploy"); err != nil {
-					return err
-				}
-			}
-
 			inputs, err := h.ResolveInputs(runtimeContext.Viper)
 			if err != nil {
 				return err
@@ -166,12 +160,12 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 		workflowTag = workflowTag[:32]
 	}
 
-	return Inputs{
+	inputs := Inputs{
 		WorkflowName:  h.settings.Workflow.UserWorkflowSettings.WorkflowName,
 		WorkflowOwner: resolvedWorkflowOwner,
 		WorkflowTag:   workflowTag,
 		ConfigURL:     configURL,
-		DonFamily:     h.runtimeContext.ResolvedRegistry.DonFamily,
+		DonFamily:     h.runtimeContext.ResolvedRegistry.GetDonFamily(),
 
 		WorkflowPath: h.settings.Workflow.WorkflowArtifactSettings.WorkflowPath,
 		KeepAlive:    false,
@@ -180,14 +174,19 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 		OutputPath: v.GetString("output"),
 		WasmPath:   v.GetString("wasm"),
 
-		WorkflowRegistryContractChainName: h.runtimeContext.ResolvedRegistry.ChainName,
-		WorkflowRegistryContractAddress:   h.runtimeContext.ResolvedRegistry.Address,
-		OwnerLabel:                        v.GetString("owner-label"),
-		SkipConfirmation:                  v.GetBool(settings.Flags.SkipConfirmation.Name),
-		SkipTypeChecks:                    v.GetBool(cmdcommon.SkipTypeChecksCLIFlag),
-		PreviewPrivateRegistry:            previewPrivateRegistry,
-		TargetWorkflowRegistry:            targetWorkflowRegistry,
-	}, nil
+		OwnerLabel:             v.GetString("owner-label"),
+		SkipConfirmation:       v.GetBool(settings.Flags.SkipConfirmation.Name),
+		SkipTypeChecks:         v.GetBool(cmdcommon.SkipTypeChecksCLIFlag),
+		PreviewPrivateRegistry: previewPrivateRegistry,
+		TargetWorkflowRegistry: targetWorkflowRegistry,
+	}
+
+	if oc, ok := h.runtimeContext.ResolvedRegistry.(*settings.OnChainRegistry); ok {
+		inputs.WorkflowRegistryContractChainName = oc.ChainName
+		inputs.WorkflowRegistryContractAddress = oc.Address
+	}
+
+	return inputs, nil
 }
 
 func (h *handler) ValidateInputs() error {

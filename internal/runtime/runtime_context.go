@@ -30,7 +30,7 @@ type Context struct {
 	Credentials      *credentials.Credentials
 	EnvironmentSet   *environments.EnvironmentSet
 	TenantContext    *tenantctx.EnvironmentContext
-	ResolvedRegistry *settings.ResolvedRegistry
+	ResolvedRegistry settings.ResolvedRegistry
 	Workflow         WorkflowRuntime
 }
 

@@ -9,28 +9,59 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/tenantctx"
 )
 
-// ResolvedRegistry holds the fully resolved registry configuration for a
-// workflow command. It is built from either the static EnvironmentSet defaults
-// or from a tenant context registry entry selected via deployment-registry.
-type ResolvedRegistry struct {
+// RegistryType distinguishes between on-chain and off-chain workflow registries.
+type RegistryType string
+
+const (
+	RegistryTypeOnChain  RegistryType = "on-chain"
+	RegistryTypeOffChain RegistryType = "off-chain"
+)
+
+// ResolvedRegistry is the interface implemented by both OnChainRegistry and
+// OffChainRegistry. Commands type-switch on the concrete type to access
+// type-specific fields, which prevents accidental use of fields that don't
+// exist for a given registry kind.
+type ResolvedRegistry interface {
+	GetID() string
+	GetType() RegistryType
+	GetDonFamily() string
+}
+
+// OnChainRegistry holds the resolved configuration for an on-chain workflow
+// registry. Address and ChainName are guaranteed non-empty.
+type OnChainRegistry struct {
 	ID          string
-	Type        string // "on-chain" or "off-chain"
 	Address     string
 	ChainName   string
 	DonFamily   string
 	ExplorerURL string
 }
 
+func (r *OnChainRegistry) GetID() string         { return r.ID }
+func (r *OnChainRegistry) GetType() RegistryType { return RegistryTypeOnChain }
+func (r *OnChainRegistry) GetDonFamily() string  { return r.DonFamily }
+
+// OffChainRegistry holds the resolved configuration for an off-chain (private)
+// workflow registry. It has no on-chain address or chain.
+type OffChainRegistry struct {
+	ID        string
+	DonFamily string
+}
+
+func (r *OffChainRegistry) GetID() string         { return r.ID }
+func (r *OffChainRegistry) GetType() RegistryType { return RegistryTypeOffChain }
+func (r *OffChainRegistry) GetDonFamily() string  { return r.DonFamily }
+
 // ResolveRegistry maps an optional deployment-registry value to a concrete
 // ResolvedRegistry. When deploymentRegistry is empty the static EnvironmentSet
 // values are used (backwards-compatible default). When set, it is looked up in
-// tenantCtx.Registries and the matching entry is used. Off-chain registries
-// are rejected in production environments.
+// tenantCtx.Registries. On-chain entries must have a non-empty address.
+// Off-chain registries are rejected in production environments.
 func ResolveRegistry(
 	deploymentRegistry string,
 	tenantCtx *tenantctx.EnvironmentContext,
 	envSet *environments.EnvironmentSet,
-) (*ResolvedRegistry, error) {
+) (ResolvedRegistry, error) {
 	if deploymentRegistry == "" {
 		return defaultFromEnvironmentSet(envSet), nil
 	}
@@ -45,26 +76,29 @@ func ResolveRegistry(
 			deploymentRegistry, availableIDs(tenantCtx.Registries))
 	}
 
-	if reg.Type == "off-chain" {
+	if ParseRegistryType(reg.Type) == RegistryTypeOffChain {
 		if isProduction(envSet) {
 			return nil, fmt.Errorf("off-chain (private) registries are not yet supported in production")
 		}
-		return &ResolvedRegistry{
+		return &OffChainRegistry{
 			ID:        reg.ID,
-			Type:      reg.Type,
 			DonFamily: tenantCtx.DefaultDonFamily,
 		}, nil
 	}
 
-	resolved := &ResolvedRegistry{
-		ID:          reg.ID,
-		Type:        reg.Type,
-		DonFamily:   tenantCtx.DefaultDonFamily,
-		ExplorerURL: envSet.WorkflowRegistryChainExplorerURL,
+	address := ""
+	if reg.Address != nil {
+		address = *reg.Address
+	}
+	if address == "" {
+		return nil, fmt.Errorf("on-chain registry %q has no address in context.yaml", reg.ID)
 	}
 
-	if reg.Address != nil {
-		resolved.Address = *reg.Address
+	resolved := &OnChainRegistry{
+		ID:          reg.ID,
+		Address:     address,
+		DonFamily:   tenantCtx.DefaultDonFamily,
+		ExplorerURL: envSet.WorkflowRegistryChainExplorerURL,
 	}
 
 	if reg.ChainSelector != nil {
@@ -79,26 +113,24 @@ func ResolveRegistry(
 		resolved.ChainName = name
 	}
 
+	if resolved.ChainName == "" {
+		return nil, fmt.Errorf("on-chain registry %q has no chain_selector in context.yaml", reg.ID)
+	}
+
 	return resolved, nil
 }
 
-// TODO: remove this once off-chain routing is implemented
-// RequireOnChainRegistry returns an error if the resolved registry is not
-// on-chain. Use this in commands that only support on-chain workflow registries
-// (deploy, pause, activate, delete) until off-chain routing is implemented.
-func (r *ResolvedRegistry) RequireOnChainRegistry(commandName string) error {
-	if r.Type != "on-chain" {
-		return fmt.Errorf(
-			"%s currently only supports on-chain registries; deployment-registry %q is %s",
-			commandName, r.ID, r.Type,
-		)
+// ParseRegistryType converts a raw type string from context.yaml to a
+// RegistryType. Unknown values default to on-chain.
+func ParseRegistryType(raw string) RegistryType {
+	if strings.EqualFold(raw, string(RegistryTypeOffChain)) || strings.EqualFold(raw, "off_chain") {
+		return RegistryTypeOffChain
 	}
-	return nil
+	return RegistryTypeOnChain
 }
 
-func defaultFromEnvironmentSet(envSet *environments.EnvironmentSet) *ResolvedRegistry {
-	return &ResolvedRegistry{
-		Type:        "on-chain",
+func defaultFromEnvironmentSet(envSet *environments.EnvironmentSet) *OnChainRegistry {
+	return &OnChainRegistry{
 		Address:     envSet.WorkflowRegistryAddress,
 		ChainName:   envSet.WorkflowRegistryChainName,
 		DonFamily:   envSet.DonFamily,
@@ -125,4 +157,16 @@ func availableIDs(registries []*tenantctx.Registry) string {
 
 func isProduction(envSet *environments.EnvironmentSet) bool {
 	return envSet.EnvName == "" || envSet.EnvName == environments.DefaultEnv
+}
+
+// AsOnChain asserts that r is an *OnChainRegistry. If it is not, it returns a
+// descriptive error mentioning the command that required on-chain support.
+func AsOnChain(r ResolvedRegistry, commandName string) (*OnChainRegistry, error) {
+	if oc, ok := r.(*OnChainRegistry); ok {
+		return oc, nil
+	}
+	return nil, fmt.Errorf(
+		"%s currently only supports on-chain registries; deployment-registry %q is %s",
+		commandName, r.GetID(), r.GetType(),
+	)
 }

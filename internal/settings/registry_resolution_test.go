@@ -56,20 +56,22 @@ func TestResolveRegistry_EmptyFallsBackToEnvSet(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if resolved.Type != "on-chain" {
-		t.Errorf("expected on-chain, got %s", resolved.Type)
+
+	onchain, ok := resolved.(*OnChainRegistry)
+	if !ok {
+		t.Fatalf("expected *OnChainRegistry, got %T", resolved)
 	}
-	if resolved.Address != envSet.WorkflowRegistryAddress {
-		t.Errorf("expected address %s, got %s", envSet.WorkflowRegistryAddress, resolved.Address)
+	if onchain.Address != envSet.WorkflowRegistryAddress {
+		t.Errorf("expected address %s, got %s", envSet.WorkflowRegistryAddress, onchain.Address)
 	}
-	if resolved.ChainName != envSet.WorkflowRegistryChainName {
-		t.Errorf("expected chain %s, got %s", envSet.WorkflowRegistryChainName, resolved.ChainName)
+	if onchain.ChainName != envSet.WorkflowRegistryChainName {
+		t.Errorf("expected chain %s, got %s", envSet.WorkflowRegistryChainName, onchain.ChainName)
 	}
-	if resolved.DonFamily != envSet.DonFamily {
-		t.Errorf("expected don %s, got %s", envSet.DonFamily, resolved.DonFamily)
+	if onchain.DonFamily != envSet.DonFamily {
+		t.Errorf("expected don %s, got %s", envSet.DonFamily, onchain.DonFamily)
 	}
-	if resolved.ExplorerURL != envSet.WorkflowRegistryChainExplorerURL {
-		t.Errorf("expected explorer %s, got %s", envSet.WorkflowRegistryChainExplorerURL, resolved.ExplorerURL)
+	if onchain.ExplorerURL != envSet.WorkflowRegistryChainExplorerURL {
+		t.Errorf("expected explorer %s, got %s", envSet.WorkflowRegistryChainExplorerURL, onchain.ExplorerURL)
 	}
 }
 
@@ -78,17 +80,19 @@ func TestResolveRegistry_OnChainFromContext(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if resolved.Type != "on-chain" {
-		t.Errorf("expected on-chain, got %s", resolved.Type)
+
+	onchain, ok := resolved.(*OnChainRegistry)
+	if !ok {
+		t.Fatalf("expected *OnChainRegistry, got %T", resolved)
 	}
-	if resolved.Address != "0xaE55eB3EDAc48a1163EE2cbb1205bE1e90Ea1135" {
-		t.Errorf("unexpected address: %s", resolved.Address)
+	if onchain.Address != "0xaE55eB3EDAc48a1163EE2cbb1205bE1e90Ea1135" {
+		t.Errorf("unexpected address: %s", onchain.Address)
 	}
-	if resolved.ChainName != "ethereum-testnet-sepolia" {
-		t.Errorf("unexpected chain name: %s", resolved.ChainName)
+	if onchain.ChainName != "ethereum-testnet-sepolia" {
+		t.Errorf("unexpected chain name: %s", onchain.ChainName)
 	}
-	if resolved.DonFamily != "zone-a" {
-		t.Errorf("unexpected don family: %s", resolved.DonFamily)
+	if onchain.DonFamily != "zone-a" {
+		t.Errorf("unexpected don family: %s", onchain.DonFamily)
 	}
 }
 
@@ -97,17 +101,19 @@ func TestResolveRegistry_OffChainFromContext(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if resolved.Type != "off-chain" {
-		t.Errorf("expected off-chain, got %s", resolved.Type)
+
+	offchain, ok := resolved.(*OffChainRegistry)
+	if !ok {
+		t.Fatalf("expected *OffChainRegistry, got %T", resolved)
 	}
-	if resolved.Address != "" {
-		t.Errorf("expected empty address for off-chain, got %s", resolved.Address)
+	if offchain.ID != "private" {
+		t.Errorf("expected ID %q, got %q", "private", offchain.ID)
 	}
-	if resolved.ChainName != "" {
-		t.Errorf("expected empty chain for off-chain, got %s", resolved.ChainName)
+	if offchain.DonFamily != "zone-a" {
+		t.Errorf("unexpected don family: %s", offchain.DonFamily)
 	}
-	if resolved.DonFamily != "zone-a" {
-		t.Errorf("unexpected don family: %s", resolved.DonFamily)
+	if resolved.GetType() != RegistryTypeOffChain {
+		t.Errorf("expected type %s, got %s", RegistryTypeOffChain, resolved.GetType())
 	}
 }
 
@@ -156,14 +162,85 @@ func TestResolveRegistry_OffChainBlockedWhenEnvEmpty(t *testing.T) {
 	}
 }
 
-func TestRequireOnChainRegistry(t *testing.T) {
-	onChain := &ResolvedRegistry{ID: "onchain:ethereum-testnet-sepolia", Type: "on-chain"}
-	if err := onChain.RequireOnChainRegistry("deploy"); err != nil {
-		t.Errorf("on-chain should pass: %v", err)
+func TestResolveRegistry_OnChainMissingAddress(t *testing.T) {
+	ctx := &tenantctx.EnvironmentContext{
+		DefaultDonFamily: "zone-a",
+		Registries: []*tenantctx.Registry{
+			{
+				ID:            "onchain:no-addr",
+				Type:          "on-chain",
+				ChainSelector: strPtr("16015286601757825753"),
+			},
+		},
+	}
+	_, err := ResolveRegistry("onchain:no-addr", ctx, stagingEnvSet())
+	if err == nil {
+		t.Fatal("expected error for on-chain registry without address")
+	}
+	if !strings.Contains(err.Error(), "has no address") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestResolveRegistry_OnChainMissingChainSelector(t *testing.T) {
+	ctx := &tenantctx.EnvironmentContext{
+		DefaultDonFamily: "zone-a",
+		Registries: []*tenantctx.Registry{
+			{
+				ID:      "onchain:no-chain",
+				Type:    "on-chain",
+				Address: strPtr("0x1234"),
+			},
+		},
+	}
+	_, err := ResolveRegistry("onchain:no-chain", ctx, stagingEnvSet())
+	if err == nil {
+		t.Fatal("expected error for on-chain registry without chain selector")
+	}
+	if !strings.Contains(err.Error(), "has no chain_selector") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestParseRegistryType(t *testing.T) {
+	tests := []struct {
+		input string
+		want  RegistryType
+	}{
+		{"on-chain", RegistryTypeOnChain},
+		{"off-chain", RegistryTypeOffChain},
+		{"ON-CHAIN", RegistryTypeOnChain},
+		{"OFF-CHAIN", RegistryTypeOffChain},
+		{"off_chain", RegistryTypeOffChain},
+		{"unknown", RegistryTypeOnChain},
+	}
+	for _, tt := range tests {
+		if got := ParseRegistryType(tt.input); got != tt.want {
+			t.Errorf("ParseRegistryType(%q) = %q, want %q", tt.input, got, tt.want)
+		}
+	}
+}
+
+func TestInterfaceMethods(t *testing.T) {
+	onchain := &OnChainRegistry{ID: "oc-1", DonFamily: "zone-a"}
+	if onchain.GetType() != RegistryTypeOnChain {
+		t.Errorf("expected on-chain type")
+	}
+	if onchain.GetID() != "oc-1" {
+		t.Errorf("expected ID oc-1, got %s", onchain.GetID())
+	}
+	if onchain.GetDonFamily() != "zone-a" {
+		t.Errorf("expected don zone-a, got %s", onchain.GetDonFamily())
 	}
 
-	offChain := &ResolvedRegistry{ID: "private", Type: "off-chain"}
-	if err := offChain.RequireOnChainRegistry("deploy"); err == nil {
-		t.Error("off-chain should be rejected")
+	offchain := &OffChainRegistry{ID: "private", DonFamily: "zone-b"}
+	if offchain.GetType() != RegistryTypeOffChain {
+		t.Errorf("expected off-chain type")
+	}
+	if offchain.GetID() != "private" {
+		t.Errorf("expected ID private, got %s", offchain.GetID())
+	}
+	if offchain.GetDonFamily() != "zone-b" {
+		t.Errorf("expected don zone-b, got %s", offchain.GetDonFamily())
 	}
 }
