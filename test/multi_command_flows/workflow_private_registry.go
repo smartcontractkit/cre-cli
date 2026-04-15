@@ -147,6 +147,22 @@ func workflowDeployPrivateRegistry(t *testing.T, tc TestConfig) string {
 				return
 			}
 
+			if strings.Contains(req.Query, "GetOffchainWorkflowByName") {
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"errors": []map[string]any{
+						{
+							"message": "workflow not found",
+							"path":    []string{"getOffchainWorkflowByName"},
+							"extensions": map[string]any{
+								"code": "NOT_FOUND",
+							},
+						},
+					},
+					"data": nil,
+				})
+				return
+			}
+
 			if strings.Contains(req.Query, "UpsertOffchainWorkflow") {
 				upsertCalled.Store(true)
 				_ = json.NewEncoder(w).Encode(map[string]any{
