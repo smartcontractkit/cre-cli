@@ -543,6 +543,7 @@ func TestValidateInputs_PrivateRegistry(t *testing.T) {
 		h.settings = ctx.Settings
 		h.environmentSet.EnvName = "STAGING"
 		h.environmentSet.DonFamily = ""
+		h.runtimeContext.ResolvedRegistry = &settings.OffChainRegistry{ID: "private", DonFamily: ""}
 		token := makeTestJWT(t, map[string]interface{}{
 			"sub":    "user1",
 			"org_id": "org-test-123",
