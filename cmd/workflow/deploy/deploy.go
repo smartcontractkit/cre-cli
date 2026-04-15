@@ -116,7 +116,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	deployCmd.Flags().Bool("no-config", false, "Deploy without a config file")
 	deployCmd.Flags().Bool("default-config", false, "Use the config path from workflow.yaml settings (default behavior)")
 	deployCmd.Flags().Bool(cmdcommon.SkipTypeChecksCLIFlag, false, "Skip TypeScript project typecheck during compilation (passes "+cmdcommon.SkipTypeChecksFlag+" to cre-compile)")
-	deployCmd.Flags().Bool("preview-private-registry", false, "Deploy to the private workflow registry (preview, STAGING only)")
+	deployCmd.Flags().Bool("preview-private-registry", false, "Deploy to the private workflow registry (unreleased feature)")
 	deployCmd.MarkFlagsMutuallyExclusive("config", "no-config", "default-config")
 
 	return deployCmd
