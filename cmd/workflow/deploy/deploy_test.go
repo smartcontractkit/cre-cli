@@ -782,14 +782,6 @@ type deployMockGraphQLRequest struct {
 	Variables map[string]interface{} `json:"variables"`
 }
 
-func newMockGQLServer(t *testing.T, response map[string]any) *httptest.Server {
-	t.Helper()
-	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(response)
-	}))
-}
-
 func newAssertGQLServer(
 	t *testing.T,
 	handler func(t *testing.T, req deployMockGraphQLRequest) (status int, response map[string]any),
