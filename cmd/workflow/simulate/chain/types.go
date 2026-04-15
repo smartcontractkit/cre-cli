@@ -25,3 +25,13 @@ type CapabilityConfig struct {
 	Limits     interface{} // *SimulationLimits from parent package, or nil
 	Logger     logger.Logger
 }
+
+// TriggerParams carries family-agnostic inputs needed to resolve trigger data
+// for a given chain trigger. Family-specific fields are ignored by families
+// that don't need them.
+type TriggerParams struct {
+	Clients       map[uint64]ChainClient
+	Interactive   bool
+	EVMTxHash     string
+	EVMEventIndex int
+}

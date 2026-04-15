@@ -1,20 +1,15 @@
-package simulate
+package chain
 
 import (
 	"fmt"
 	"net/url"
 	"strings"
-	"time"
 )
 
-const WorkflowExecutionTimeout = 5 * time.Minute
-
-type ChainSelector = uint64
-
-// redactURL returns a version of the URL with path segments and query parameters
+// RedactURL returns a version of the URL with path segments and query parameters
 // masked to avoid leaking secrets that may have been resolved from environment variables.
 // For example, "https://rpc.example.com/v1/my-secret-key" becomes "https://rpc.example.com/v1/***".
-func redactURL(rawURL string) string {
+func RedactURL(rawURL string) string {
 	u, err := url.Parse(rawURL)
 	if err != nil {
 		return "***"

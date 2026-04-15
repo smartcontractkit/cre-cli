@@ -1,4 +1,4 @@
-package simulate
+package chain
 
 import (
 	"testing"
@@ -39,9 +39,9 @@ func TestRedactURL(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := redactURL(tt.raw)
+			got := RedactURL(tt.raw)
 			if got != tt.want {
-				t.Errorf("redactURL(%q) = %q, want %q", tt.raw, got, tt.want)
+				t.Errorf("RedactURL(%q) = %q, want %q", tt.raw, got, tt.want)
 			}
 		})
 	}

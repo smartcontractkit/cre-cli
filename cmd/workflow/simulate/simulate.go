@@ -2,19 +2,15 @@ package simulate
 
 import (
 	"context"
-	"crypto/ecdsa"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math/big"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
 	"time"
 
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -34,7 +30,7 @@ import (
 
 	cmdcommon "github.com/smartcontractkit/cre-cli/cmd/common"
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain"
-	evmpkg "github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain/evm"
+	_ "github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain/evm"
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
@@ -42,6 +38,8 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 	"github.com/smartcontractkit/cre-cli/internal/validation"
 )
+
+const WorkflowExecutionTimeout = 5 * time.Minute
 
 type Inputs struct {
 	WasmPath     string `validate:"omitempty,file,ascii,max=97" cli:"--wasm"`
@@ -124,6 +122,8 @@ func newHandler(ctx *runtime.Context) *handler {
 }
 
 func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) (Inputs, error) {
+	chain.Build(h.log)
+
 	familyClients := make(map[string]map[uint64]chain.ChainClient)
 	familyForwarders := make(map[string]map[uint64]string)
 	familyKeys := make(map[string]interface{})
@@ -149,20 +149,16 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 		return Inputs{}, fmt.Errorf("no RPC URLs found for supported or experimental chains")
 	}
 
-	// Private key parsing (EVM-specific for now, stored under "evm" key)
-	pk, err := crypto.HexToECDSA(creSettings.User.EthPrivateKey)
-	if err != nil {
-		if v.GetBool("broadcast") {
-			return Inputs{}, fmt.Errorf(
-				"failed to parse private key, required to broadcast. Please check CRE_ETH_PRIVATE_KEY in your .env file or system environment: %w", err)
-		}
-		pk, err = crypto.HexToECDSA("0000000000000000000000000000000000000000000000000000000000000001")
+	broadcast := v.GetBool("broadcast")
+	for name, family := range chain.All() {
+		key, err := family.ResolveKey(creSettings, broadcast)
 		if err != nil {
-			return Inputs{}, fmt.Errorf("failed to parse default private key. Please set CRE_ETH_PRIVATE_KEY in your .env file or system environment: %w", err)
+			return Inputs{}, err
 		}
-		ui.Warning("Using default private key for chain write simulation. To use your own key, set CRE_ETH_PRIVATE_KEY in your .env file or system environment.")
+		if key != nil {
+			familyKeys[name] = key
+		}
 	}
-	familyKeys["evm"] = pk
 
 	return Inputs{
 		WasmPath:         v.GetString("wasm"),
@@ -207,15 +203,6 @@ func (h *handler) ValidateInputs(inputs Inputs) error {
 
 	inputs.WasmPath = savedWasm
 	inputs.ConfigPath = savedConfig
-
-	// forbid the default 0x...01 key when broadcasting
-	if inputs.Broadcast {
-		if pkIface, ok := inputs.FamilyKeys["evm"]; ok {
-			if pk, ok2 := pkIface.(*ecdsa.PrivateKey); ok2 && pk.D.Cmp(big.NewInt(1)) == 0 {
-				return fmt.Errorf("you must configure a valid private key to perform on-chain writes. Please set your private key in the .env file before using the -–broadcast flag")
-			}
-		}
-	}
 
 	rpcErr := ui.WithSpinner("Checking RPC connectivity...", func() error {
 		var errs []error
@@ -468,7 +455,7 @@ func run(
 				continue
 			}
 
-			err := family.RegisterCapabilities(ctx, chain.CapabilityConfig{
+			familySrvcs, err := family.RegisterCapabilities(ctx, chain.CapabilityConfig{
 				Registry:   registry,
 				Clients:    clients,
 				Forwarders: inputs.FamilyForwarders[name],
@@ -481,6 +468,7 @@ func run(
 				ui.Error(fmt.Sprintf("Failed to register %s capabilities: %v", name, err))
 				os.Exit(1)
 			}
+			srvcs = append(srvcs, familySrvcs...)
 		}
 
 		// Register chain-agnostic action capabilities (consensus, HTTP, confidential HTTP)
@@ -716,9 +704,14 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 					continue
 				}
 
-				triggerData, err := getTriggerDataForFamily(ctx, name, sel, inputs, true)
+				triggerData, err := getTriggerDataForFamily(ctx, family, sel, inputs, true)
 				if err != nil {
-					ui.Error(fmt.Sprintf("Failed to get trigger data: %v", err))
+					ui.Error(err.Error())
+					os.Exit(1)
+				}
+
+				if !family.HasSelector(sel) {
+					ui.Error(fmt.Sprintf("No %s chain initialized for selector %d", name, sel))
 					os.Exit(1)
 				}
 
@@ -791,9 +784,14 @@ func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inp
 					continue
 				}
 
-				triggerData, err := getTriggerDataForFamily(ctx, name, sel, inputs, false)
+				triggerData, err := getTriggerDataForFamily(ctx, family, sel, inputs, false)
 				if err != nil {
-					ui.Error(fmt.Sprintf("Failed to get trigger data: %v", err))
+					ui.Error(err.Error())
+					os.Exit(1)
+				}
+
+				if !family.HasSelector(sel) {
+					ui.Error(fmt.Sprintf("No %s chain initialized for selector %d", name, sel))
 					os.Exit(1)
 				}
 
@@ -895,36 +893,18 @@ func getHTTPTriggerPayload() (*httptypedapi.Payload, error) {
 }
 
 // getTriggerDataForFamily resolves trigger data for a specific chain family.
-// For EVM, this fetches transaction receipt logs. Each family has its own trigger data format.
-func getTriggerDataForFamily(ctx context.Context, familyName string, selector uint64, inputs Inputs, interactive bool) (interface{}, error) {
-	switch familyName {
-	case "evm":
-		// Get the EVM client for this selector
-		evmClients, ok := inputs.FamilyClients["evm"]
-		if !ok {
-			return nil, fmt.Errorf("no EVM clients configured")
-		}
-		clientIface, ok := evmClients[selector]
-		if !ok {
-			return nil, fmt.Errorf("no RPC configured for chain selector %d", selector)
-		}
-		client, ok := clientIface.(*ethclient.Client)
-		if !ok {
-			return nil, fmt.Errorf("invalid client type for EVM chain selector %d", selector)
-		}
-
-		if interactive {
-			return evmpkg.GetEVMTriggerLog(ctx, client)
-		}
-
-		// Non-interactive: use CLI flags
-		if strings.TrimSpace(inputs.EVMTxHash) == "" || inputs.EVMEventIndex < 0 {
-			return nil, fmt.Errorf("--evm-tx-hash and --evm-event-index are required for EVM triggers in non-interactive mode")
-		}
-		return evmpkg.GetEVMTriggerLogFromValues(ctx, client, inputs.EVMTxHash, uint64(inputs.EVMEventIndex)) // #nosec G115 -- EVMEventIndex validated >= 0 above
-	default:
-		return nil, fmt.Errorf("trigger data resolution not implemented for chain family %q", familyName)
+// Each family defines its own trigger data format.
+func getTriggerDataForFamily(ctx context.Context, family chain.ChainFamily, selector uint64, inputs Inputs, interactive bool) (interface{}, error) {
+	clients, ok := inputs.FamilyClients[family.Name()]
+	if !ok {
+		return nil, fmt.Errorf("no %s clients configured", family.Name())
 	}
+	return family.ResolveTriggerData(ctx, selector, chain.TriggerParams{
+		Clients:       clients,
+		Interactive:   interactive,
+		EVMTxHash:     inputs.EVMTxHash,
+		EVMEventIndex: inputs.EVMEventIndex,
+	})
 }
 
 // getHTTPTriggerPayloadFromInput builds an HTTP trigger payload from a JSON string or a file path (optionally prefixed with '@')

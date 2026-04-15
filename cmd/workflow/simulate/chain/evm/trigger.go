@@ -18,6 +18,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
+// parse "ChainSelector:<digits>" from trigger id, e.g. "evm:ChainSelector:5009297550715157269@1.0.0 LogTrigger"
 var chainSelectorRe = regexp.MustCompile(`(?i)chainselector:(\d+)`)
 
 // ParseTriggerChainSelector extracts a chain selector from a trigger ID string.
@@ -123,6 +124,7 @@ func fetchAndConvertLog(ctx context.Context, ethClient *ethclient.Client, txHash
 	}
 
 	log := txReceipt.Logs[eventIndex]
+	ui.Success(fmt.Sprintf("Found log event at index %d: contract=%s, topics=%d", eventIndex, log.Address.Hex(), len(log.Topics)))
 
 	var txIndex, logIndex uint32
 	if log.TxIndex > math.MaxUint32 {
