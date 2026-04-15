@@ -120,6 +120,30 @@ func TestMultiCommandHappyPaths(t *testing.T) {
 		multi_command_flows.RunHappyPath3bWorkflow(t, tc)
 	})
 
+	// Run workflow private registry happy path: Deploy with --preview-private-registry
+	t.Run("WorkflowPrivateRegistry_DeployHappyPath", func(t *testing.T) {
+		anvilProc, testEthUrl := initTestEnv(t, "anvil-state.json")
+		defer StopAnvil(anvilProc)
+
+		// Private registry owner derivation needs bearer auth org_id.
+		t.Setenv(environments.EnvVarEnv, "STAGING")
+
+		// Setup environment variables for pre-baked registries from Anvil state dump
+		t.Setenv(environments.EnvVarWorkflowRegistryAddress, "0x5FbDB2315678afecb367f032d93F642f64180aa3")
+		t.Setenv(environments.EnvVarWorkflowRegistryChainName, chainselectors.ANVIL_DEVNET.Name)
+		t.Setenv(environments.EnvVarDonFamily, "test-don")
+
+		tc := NewTestConfig(t)
+
+		// Use linked Address3 + its key
+		require.NoError(t, createCliEnvFile(tc.EnvFile, constants.TestPrivateKey3), "failed to create env file")
+		require.NoError(t, createProjectSettingsFile(tc.ProjectDirectory+"project.yaml", "", testEthUrl), "failed to create project.yaml")
+		require.NoError(t, createWorkflowDirectory(tc.ProjectDirectory, "private-registry-happy-path-workflow", "", "blank_workflow"), "failed to create workflow directory")
+		t.Cleanup(tc.Cleanup(t))
+
+		multi_command_flows.RunWorkflowPrivateRegistryHappyPath(t, tc)
+	})
+
 	// Run Account Happy Path: Link -> List -> Unlink -> List (verify unlinked)
 	t.Run("AccountHappyPath_LinkListUnlinkList", func(t *testing.T) {
 		anvilProc, testEthUrl := initTestEnv(t, "anvil-state.json")

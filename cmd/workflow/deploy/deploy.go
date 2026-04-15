@@ -2,20 +2,20 @@ package deploy
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
-	"sync"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
+	workflowUtils "github.com/smartcontractkit/chainlink-common/pkg/workflows"
+
 	"github.com/smartcontractkit/cre-cli/cmd/client"
 	cmdcommon "github.com/smartcontractkit/cre-cli/cmd/common"
 	"github.com/smartcontractkit/cre-cli/internal/accessrequest"
-	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
@@ -46,6 +46,9 @@ type Inputs struct {
 	SkipConfirmation bool
 	// SkipTypeChecks passes --skip-type-checks to cre-compile for TypeScript workflows.
 	SkipTypeChecks bool
+
+	PreviewPrivateRegistry bool
+	TargetWorkflowRegistry registryTarget
 }
 
 func (i *Inputs) ResolveConfigURL(fallbackURL string) string {
@@ -68,8 +71,7 @@ type handler struct {
 	wrc              *client.WorkflowRegistryV2Client
 	runtimeContext   *runtime.Context
 	accessRequester  *accessrequest.Requester
-
-	validated bool
+	validated        bool
 
 	// URL-fetched data for WorkflowID computation when --wasm or --config are URLs.
 	urlBinaryData []byte
@@ -78,9 +80,6 @@ type handler struct {
 	// existingWorkflowStatus stores the status of an existing workflow when updating.
 	// nil means this is a new workflow, otherwise it contains the current status (0=active, 1=paused).
 	existingWorkflowStatus *uint8
-
-	wg     sync.WaitGroup
-	wrcErr error
 }
 
 var defaultOutputPath = "./binary.wasm.br.b64"
@@ -117,6 +116,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	deployCmd.Flags().Bool("no-config", false, "Deploy without a config file")
 	deployCmd.Flags().Bool("default-config", false, "Use the config path from workflow.yaml settings (default behavior)")
 	deployCmd.Flags().Bool(cmdcommon.SkipTypeChecksCLIFlag, false, "Skip TypeScript project typecheck during compilation (passes "+cmdcommon.SkipTypeChecksFlag+" to cre-compile)")
+	deployCmd.Flags().Bool("preview-private-registry", false, "Deploy to the private workflow registry (unreleased feature)")
 	deployCmd.MarkFlagsMutuallyExclusive("config", "no-config", "default-config")
 
 	return deployCmd
@@ -132,28 +132,11 @@ func newHandler(ctx *runtime.Context, stdin io.Reader) *handler {
 		credentials:      ctx.Credentials,
 		environmentSet:   ctx.EnvironmentSet,
 		workflowArtifact: &workflowArtifact{},
-		wrc:              nil,
 		runtimeContext:   ctx,
 		accessRequester:  accessrequest.NewRequester(ctx.Credentials, ctx.EnvironmentSet, ctx.Logger),
-		validated:        false,
-		wg:               sync.WaitGroup{},
-		wrcErr:           nil,
 	}
 
 	return &h
-}
-
-func (h *handler) initWorkflowRegistryClient() {
-	h.wg.Add(1)
-	go func() {
-		defer h.wg.Done()
-		wrc, err := h.clientFactory.NewWorkflowRegistryV2Client()
-		if err != nil {
-			h.wrcErr = fmt.Errorf("failed to create workflow registry client: %w", err)
-			return
-		}
-		h.wrc = wrc
-	}()
 }
 
 func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
@@ -161,6 +144,15 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 	if v.IsSet("config-url") {
 		url := v.GetString("config-url")
 		configURL = &url
+	}
+	previewPrivateRegistry := v.GetBool("preview-private-registry")
+	targetWorkflowRegistry, err := resolveRegistryTarget(previewPrivateRegistry, h.environmentSet)
+	if err != nil {
+		return Inputs{}, err
+	}
+	resolvedWorkflowOwner, err := h.resolveWorkflowOwner(targetWorkflowRegistry)
+	if err != nil {
+		return Inputs{}, fmt.Errorf("failed to resolve workflow owner: %w", err)
 	}
 
 	workflowTag := h.settings.Workflow.UserWorkflowSettings.WorkflowName
@@ -170,7 +162,7 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 
 	return Inputs{
 		WorkflowName:  h.settings.Workflow.UserWorkflowSettings.WorkflowName,
-		WorkflowOwner: h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress,
+		WorkflowOwner: resolvedWorkflowOwner,
 		WorkflowTag:   workflowTag,
 		ConfigURL:     configURL,
 		DonFamily:     h.environmentSet.DonFamily,
@@ -187,6 +179,8 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 		OwnerLabel:                        v.GetString("owner-label"),
 		SkipConfirmation:                  v.GetBool(settings.Flags.SkipConfirmation.Name),
 		SkipTypeChecks:                    v.GetBool(cmdcommon.SkipTypeChecksCLIFlag),
+		PreviewPrivateRegistry:            previewPrivateRegistry,
+		TargetWorkflowRegistry:            targetWorkflowRegistry,
 	}, nil
 }
 
@@ -233,8 +227,32 @@ func (h *handler) Execute(ctx context.Context) error {
 		return h.accessRequester.PromptAndSubmitRequest(ctx)
 	}
 
-	h.initWorkflowRegistryClient()
+	adapter := newRegistryDeployStrategy(h.inputs.TargetWorkflowRegistry, h)
 
+	if err := h.prepareArtifacts(); err != nil {
+		return err
+	}
+
+	if err := adapter.RunPreDeployChecks(); err != nil {
+		if errors.Is(err, errDeployHalted) {
+			return nil
+		}
+		return err
+	}
+
+	ui.Line()
+	ui.Dim("Uploading files...")
+	if err := h.uploadArtifacts(); err != nil {
+		return fmt.Errorf("failed to upload workflow: %w", err)
+	}
+
+	return adapter.Upsert()
+}
+
+// prepareArtifacts handles compile/fetch, artifact preparation, and hashing.
+// Artifact upload is deferred to the deploy service so it runs after any
+// existing-workflow update confirmation.
+func (h *handler) prepareArtifacts() error {
 	h.displayWorkflowDetails()
 
 	if cmdcommon.IsURL(h.inputs.WasmPath) {
@@ -265,7 +283,7 @@ func (h *handler) Execute(ctx context.Context) error {
 		ui.Success(fmt.Sprintf("Using config URL: %s", url))
 	}
 
-	if err := h.PrepareWorkflowArtifact(); err != nil {
+	if err := h.PrepareWorkflowArtifact(h.inputs.WorkflowOwner); err != nil {
 		return fmt.Errorf("failed to prepare workflow artifact: %w", err)
 	}
 
@@ -275,93 +293,43 @@ func (h *handler) Execute(ctx context.Context) error {
 
 	h.runtimeContext.Workflow.ID = h.workflowArtifact.WorkflowID
 
-	h.wg.Wait()
-	if h.wrcErr != nil {
-		return h.wrcErr
-	}
-
-	ui.Line()
-	ui.Dim("Verifying ownership...")
-	if h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerType == constants.WorkflowOwnerTypeMSIG {
-		halt, err := h.autoLinkMSIGAndExit()
-		if err != nil {
-			return fmt.Errorf("failed to check/handle MSIG owner link status: %w", err)
-		}
-		if halt {
-			return nil
-		}
-	} else {
-		if err := h.ensureOwnerLinkedOrFail(); err != nil {
-			return err
-		}
-	}
-
-	existsErr := h.workflowExists()
-	if existsErr != nil {
-		if existsErr.Error() == "workflow with name "+h.inputs.WorkflowName+" already exists" {
-			ui.Warning(fmt.Sprintf("Workflow %s already exists", h.inputs.WorkflowName))
-			ui.Dim("This will update the existing workflow.")
-			// Ask for user confirmation before updating existing workflow
-			if !h.inputs.SkipConfirmation {
-				confirm, err := ui.Confirm("Are you sure you want to overwrite the workflow?")
-				if err != nil {
-					return err
-				}
-				if !confirm {
-					return errors.New("deployment cancelled by user")
-				}
-			}
-		} else {
-			return existsErr
-		}
-	}
-
-	if err := checkUserDonLimitBeforeDeploy(
-		h.wrc,
-		h.wrc,
-		common.HexToAddress(h.inputs.WorkflowOwner),
-		h.inputs.DonFamily,
-		h.inputs.WorkflowName,
-		h.inputs.KeepAlive,
-		h.existingWorkflowStatus,
-	); err != nil {
-		return err
-	}
-
-	ui.Line()
-	ui.Dim("Uploading files...")
-	if err := h.uploadArtifacts(); err != nil {
-		return fmt.Errorf("failed to upload workflow: %w", err)
-	}
-	ui.Line()
-	ui.Dim("Preparing deployment transaction...")
-	if err := h.upsert(); err != nil {
-		return fmt.Errorf("failed to register workflow: %w", err)
-	}
 	return nil
 }
 
-func (h *handler) workflowExists() error {
-	workflow, err := h.wrc.GetWorkflow(common.HexToAddress(h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress), h.inputs.WorkflowName, h.inputs.WorkflowTag)
-	if err != nil {
-		return err
+// resolveWorkflowOwner returns the effective owner address for workflow ID computation.
+// For private registry deploys, the owner is derived from tenantID and organizationID.
+// For onchain deploys, the configured WorkflowOwner address is used directly.
+func (h *handler) resolveWorkflowOwner(targetWorkflowRegistry registryTarget) (string, error) {
+	if !targetWorkflowRegistry.isPrivate() {
+		return h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress, nil
 	}
-	if workflow.WorkflowId == [32]byte(common.Hex2Bytes(h.workflowArtifact.WorkflowID)) {
-		return fmt.Errorf("workflow with id %s already exists", h.workflowArtifact.WorkflowID)
 
+	if h.runtimeContext.TenantContext == nil {
+		return "", fmt.Errorf("tenant context is required for private registry deployment")
 	}
-	if workflow.WorkflowName == h.inputs.WorkflowName {
-		status := workflow.Status
-		h.existingWorkflowStatus = &status
-		return fmt.Errorf("workflow with name %s already exists", h.inputs.WorkflowName)
+
+	tenantID := h.runtimeContext.TenantContext.TenantID
+	if tenantID == "" {
+		return "", fmt.Errorf("tenant ID is required for private registry deployment")
 	}
-	return nil
+
+	orgID, err := h.credentials.GetOrgID()
+	if err != nil {
+		return "", fmt.Errorf("failed to get organization ID for private registry deployment: %w", err)
+	}
+
+	ownerBytes, err := workflowUtils.GenerateWorkflowOwnerAddress(tenantID, orgID)
+	if err != nil {
+		return "", fmt.Errorf("failed to derive workflow owner address: %w", err)
+	}
+
+	return "0x" + hex.EncodeToString(ownerBytes), nil
 }
 
 func (h *handler) displayWorkflowDetails() {
 	ui.Line()
 	ui.Title(fmt.Sprintf("Deploying Workflow: %s", h.inputs.WorkflowName))
 	ui.Dim(fmt.Sprintf("Target:        %s", h.settings.User.TargetName))
-	ui.Dim(fmt.Sprintf("Owner Address: %s", h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress))
+	ui.Dim(fmt.Sprintf("Owner Address: %s", h.inputs.WorkflowOwner))
 	ui.Line()
 }

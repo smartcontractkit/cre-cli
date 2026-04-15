@@ -13,6 +13,9 @@ func (h *handler) uploadArtifacts() error {
 	if h.workflowArtifact == nil {
 		return fmt.Errorf("workflowArtifact is nil")
 	}
+	if h.inputs.WorkflowOwner == "" {
+		return fmt.Errorf("workflow owner is empty")
+	}
 
 	// User-provided URLs (via --wasm URL / --config URL) skip the corresponding uploads.
 	binaryFromURL := h.urlBinaryData != nil && h.inputs.BinaryURL != ""
@@ -38,7 +41,7 @@ func (h *handler) uploadArtifacts() error {
 		return fmt.Errorf("failed to get chain selector for chain %q: %w", h.environmentSet.WorkflowRegistryChainName, err)
 	}
 
-	storageClient := storageclient.New(gql, h.environmentSet.WorkflowRegistryAddress, h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress, chainSelector, h.log)
+	storageClient := storageclient.New(gql, h.environmentSet.WorkflowRegistryAddress, h.inputs.WorkflowOwner, chainSelector, h.log)
 	if h.settings.StorageSettings.CREStorage.ServiceTimeout != 0 {
 		storageClient.SetServiceTimeout(h.settings.StorageSettings.CREStorage.ServiceTimeout)
 	}
