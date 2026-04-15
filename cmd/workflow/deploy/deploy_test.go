@@ -574,7 +574,7 @@ func TestExecute_PrivateRegistry(t *testing.T) {
 		defer wasmServer.Close()
 
 		gqlServer := newAssertGQLServer(t, func(t *testing.T, req deployMockGraphQLRequest) (int, map[string]any) {
-			assert.Contains(t, req.Query, "mutation UpsertWorkflowInRegistry")
+			assert.Contains(t, req.Query, "mutation UpsertOffchainWorkflow")
 			rawRequest, ok := req.Variables["request"].(map[string]any)
 			require.True(t, ok)
 			rawWorkflow, ok := rawRequest["workflow"].(map[string]any)
@@ -586,7 +586,7 @@ func TestExecute_PrivateRegistry(t *testing.T) {
 
 			return http.StatusOK, map[string]any{
 				"data": map[string]any{
-					"upsertWorkflowInRegistry": map[string]any{
+					"upsertOffchainWorkflow": map[string]any{
 						"workflow": map[string]any{
 							"workflowId":   "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
 							"owner":        chainsim.TestAddress,
