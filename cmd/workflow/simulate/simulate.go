@@ -217,7 +217,7 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 		return Inputs{}, fmt.Errorf(
 			"no RPC URLs found for target %q\n\n"+
 				"To fix:\n"+
-				"  • Check that your workflow.yaml has an 'rpcs' section under the target %q\n"+
+				"  • Check that your project.yaml has an 'rpcs' section under the target %q\n"+
 				"  • Ensure chain names are valid (run 'cre workflow supported-chains' to see all supported names)\n"+
 				"  • Verify the correct target is selected via --target or CRE_TARGET",
 			target, target,
