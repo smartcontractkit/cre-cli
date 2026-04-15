@@ -33,6 +33,8 @@ type Inputs struct {
 	WorkflowOwner                     string `validate:"workflow_owner"`
 	WorkflowRegistryContractAddress   string `validate:"required"`
 	WorkflowRegistryContractChainName string `validate:"required"`
+	SkipConfirmation                  bool
+	NonInteractive                    bool
 }
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
@@ -109,6 +111,8 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 		WorkflowOwner:                     h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress,
 		WorkflowRegistryContractChainName: h.environmentSet.WorkflowRegistryChainName,
 		WorkflowRegistryContractAddress:   h.environmentSet.WorkflowRegistryAddress,
+		SkipConfirmation:                  v.GetBool(settings.Flags.SkipConfirmation.Name),
+		NonInteractive:                    v.GetBool(settings.Flags.NonInteractive.Name),
 	}, nil
 }
 
@@ -129,6 +133,14 @@ func (h *handler) ValidateInputs() error {
 func (h *handler) Execute() error {
 	if !h.validated {
 		return fmt.Errorf("handler inputs not validated")
+	}
+
+	if h.inputs.NonInteractive && !h.inputs.SkipConfirmation {
+		ui.ErrorWithSuggestions(
+			"Non-interactive mode requires all inputs via flags",
+			[]string{"--yes"},
+		)
+		return fmt.Errorf("missing required flags for --non-interactive mode")
 	}
 
 	workflowName := h.inputs.WorkflowName
