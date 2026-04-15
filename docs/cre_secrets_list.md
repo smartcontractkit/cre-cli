@@ -11,7 +11,6 @@ cre secrets list [optional flags]
 ```
   -h, --help               help for list
       --namespace string   Namespace to list (default: main) (default "main")
-      --non-interactive    Fail instead of prompting; requires all inputs via flags
       --unsigned           If set, the command will either return the raw transaction instead of sending it to the network or execute the second step of secrets operations using a previously generated raw transaction
       --yes                If set, the command will skip the confirmation prompt and proceed with the operation even if it is potentially destructive
 ```
@@ -20,6 +19,7 @@ cre secrets list [optional flags]
 
 ```
   -e, --env string            Path to .env file which contains sensitive info
+      --non-interactive       Fail instead of prompting; requires all inputs via flags
   -R, --project-root string   Path to the project root
   -E, --public-env string     Path to .env.public file which contains shared, non-sensitive build config
   -T, --target string         Use target settings from YAML config
