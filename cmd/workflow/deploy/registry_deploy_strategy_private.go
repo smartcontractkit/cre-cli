@@ -31,18 +31,18 @@ func (a *privateRegistryDeployStrategy) RunPreDeployChecks() error {
 	return nil
 }
 
-func (a *privateRegistryDeployStrategy) CheckWorkflowExists() (bool, error) {
+func (a *privateRegistryDeployStrategy) CheckWorkflowExists(_, workflowName, _, _ string) (bool, *uint8, error) {
 	a.ensureClient()
 
-	_, err := a.prc.GetWorkflowByName(a.h.inputs.WorkflowName)
+	_, err := a.prc.GetWorkflowByName(workflowName)
 	if err == nil {
-		return true, nil
+		return true, nil, nil
 	}
 	if isWorkflowNotFoundError(err) {
-		return false, nil
+		return false, nil, nil
 	}
 
-	return false, err
+	return false, nil, err
 }
 
 func (a *privateRegistryDeployStrategy) Upsert() error {

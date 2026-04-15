@@ -240,10 +240,16 @@ func (h *handler) Execute(ctx context.Context) error {
 		return err
 	}
 
-	exists, err := adapter.CheckWorkflowExists()
+	exists, existingStatus, err := adapter.CheckWorkflowExists(
+		h.inputs.WorkflowOwner,
+		h.inputs.WorkflowName,
+		h.inputs.WorkflowTag,
+		h.workflowArtifact.WorkflowID,
+	)
 	if err != nil {
 		return fmt.Errorf("failed to check if workflow exists: %w", err)
 	}
+	h.existingWorkflowStatus = existingStatus
 	if exists {
 		if err := confirmWorkflowOverwrite(h.inputs.WorkflowName, h.inputs.SkipConfirmation); err != nil {
 			return err

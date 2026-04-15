@@ -23,8 +23,8 @@ type registryDeployStrategy interface {
 	RunPreDeployChecks() error
 
 	// CheckWorkflowExists returns whether a same-name workflow exists for this
-	// registry target.
-	CheckWorkflowExists() (bool, error)
+	// registry target and includes the existing workflow status for updates.
+	CheckWorkflowExists(workflowOwner, workflowName, workflowTag, workflowID string) (bool, *uint8, error)
 
 	// Upsert registers or updates the workflow in the target registry
 	// and displays the result.
