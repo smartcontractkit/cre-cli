@@ -63,8 +63,8 @@ func (a *privateRegistryDeployStrategy) Upsert() error {
 	return nil
 }
 
-func (h *handler) buildPrivateRegistryInput() privateregistryclient.WorkflowInRegistryInput {
-	input := privateregistryclient.WorkflowInRegistryInput{
+func (h *handler) buildPrivateRegistryInput() privateregistryclient.OffchainWorkflowInput {
+	input := privateregistryclient.OffchainWorkflowInput{
 		WorkflowID:   h.workflowArtifact.WorkflowID,
 		Status:       privateregistryclient.WorkflowStatusActive,
 		WorkflowName: h.inputs.WorkflowName,
