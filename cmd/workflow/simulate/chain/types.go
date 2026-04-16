@@ -21,7 +21,7 @@ type ChainConfig struct {
 // chain package without an import cycle.
 type Limits interface {
 	ChainWriteReportSizeLimit() int
-	ChainWriteEVMGasLimit() uint64
+	ChainWriteGasLimit() uint64
 }
 
 // CapabilityConfig holds everything a family needs to register capabilities.

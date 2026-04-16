@@ -42,7 +42,7 @@ func (l *LimitedEVMChain) WriteReport(ctx context.Context, metadata commonCap.Re
 	}
 
 	// Check gas limit
-	gasLimit := l.limits.ChainWriteEVMGasLimit()
+	gasLimit := l.limits.ChainWriteGasLimit()
 	if gasLimit > 0 && input.GasConfig != nil && input.GasConfig.GasLimit > gasLimit {
 		return nil, caperrors.NewPublicUserError(
 			fmt.Errorf("simulation limit exceeded: EVM gas limit %d exceeds maximum of %d", input.GasConfig.GasLimit, gasLimit),

@@ -21,7 +21,7 @@ type EVMChainLimit struct {
 }
 
 func (s *EVMChainLimit) ChainWriteReportSizeLimit() int { return s.reportSizeLimit }
-func (s *EVMChainLimit) ChainWriteEVMGasLimit() uint64  { return s.gasLimit }
+func (s *EVMChainLimit) ChainWriteGasLimit() uint64  { return s.gasLimit }
 
 type evmCapabilityBaseStub struct{}
 
