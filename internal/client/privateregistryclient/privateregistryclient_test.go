@@ -20,7 +20,7 @@ import (
 
 func TestValidateUpsertWorkflowInput(t *testing.T) {
 	t.Run("valid input", func(t *testing.T) {
-		err := validateUpsertWorkflowInput(WorkflowInRegistryInput{
+		err := validateUpsertWorkflowInput(OffchainWorkflowInput{
 			WorkflowID:   "wf-1",
 			Status:       WorkflowStatusActive,
 			WorkflowName: "test-workflow",
@@ -32,47 +32,47 @@ func TestValidateUpsertWorkflowInput(t *testing.T) {
 
 	tests := []struct {
 		name  string
-		input WorkflowInRegistryInput
+		input OffchainWorkflowInput
 		err   string
 	}{
 		{
 			name:  "missing workflowId",
-			input: WorkflowInRegistryInput{Status: WorkflowStatusActive, WorkflowName: "w", BinaryURL: "b", DonFamily: "f"},
+			input: OffchainWorkflowInput{Status: WorkflowStatusActive, WorkflowName: "w", BinaryURL: "b", DonFamily: "f"},
 			err:   "workflowId is required",
 		},
 		{
 			name:  "missing status",
-			input: WorkflowInRegistryInput{WorkflowID: "wf", WorkflowName: "w", BinaryURL: "b", DonFamily: "f"},
+			input: OffchainWorkflowInput{WorkflowID: "wf", WorkflowName: "w", BinaryURL: "b", DonFamily: "f"},
 			err:   "status is required",
 		},
 		{
 			name:  "missing workflowName",
-			input: WorkflowInRegistryInput{WorkflowID: "wf", Status: WorkflowStatusActive, BinaryURL: "b", DonFamily: "f"},
+			input: OffchainWorkflowInput{WorkflowID: "wf", Status: WorkflowStatusActive, BinaryURL: "b", DonFamily: "f"},
 			err:   "workflowName is required",
 		},
 		{
 			name:  "missing binaryUrl",
-			input: WorkflowInRegistryInput{WorkflowID: "wf", Status: WorkflowStatusActive, WorkflowName: "w", DonFamily: "f"},
+			input: OffchainWorkflowInput{WorkflowID: "wf", Status: WorkflowStatusActive, WorkflowName: "w", DonFamily: "f"},
 			err:   "binaryUrl is required",
 		},
 		{
 			name:  "missing donFamily",
-			input: WorkflowInRegistryInput{WorkflowID: "wf", Status: WorkflowStatusActive, WorkflowName: "w", BinaryURL: "b"},
+			input: OffchainWorkflowInput{WorkflowID: "wf", Status: WorkflowStatusActive, WorkflowName: "w", BinaryURL: "b"},
 			err:   "donFamily is required",
 		},
 		{
 			name:  "invalid status",
-			input: WorkflowInRegistryInput{WorkflowID: "wf", Status: "INVALID", WorkflowName: "w", BinaryURL: "b", DonFamily: "f"},
+			input: OffchainWorkflowInput{WorkflowID: "wf", Status: "INVALID", WorkflowName: "w", BinaryURL: "b", DonFamily: "f"},
 			err:   "status must be one of \"WORKFLOW_STATUS_UNSPECIFIED\", \"WORKFLOW_STATUS_ACTIVE\", \"WORKFLOW_STATUS_PAUSED\"",
 		},
 		{
 			name:  "workflowName exceeds max length",
-			input: WorkflowInRegistryInput{WorkflowID: "wf", Status: WorkflowStatusActive, WorkflowName: strings.Repeat("a", maxWorkflowNameLength+1), BinaryURL: "b", DonFamily: "f"},
+			input: OffchainWorkflowInput{WorkflowID: "wf", Status: WorkflowStatusActive, WorkflowName: strings.Repeat("a", maxWorkflowNameLength+1), BinaryURL: "b", DonFamily: "f"},
 			err:   "workflowName exceeds max length 64",
 		},
 		{
 			name:  "binaryUrl exceeds max length",
-			input: WorkflowInRegistryInput{WorkflowID: "wf", Status: WorkflowStatusActive, WorkflowName: "w", BinaryURL: strings.Repeat("b", maxBinaryURLLength+1), DonFamily: "f"},
+			input: OffchainWorkflowInput{WorkflowID: "wf", Status: WorkflowStatusActive, WorkflowName: "w", BinaryURL: strings.Repeat("b", maxBinaryURLLength+1), DonFamily: "f"},
 			err:   "binaryUrl exceeds max length 200",
 		},
 	}
@@ -101,7 +101,7 @@ func TestUpsertWorkflowInRegistry(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"data": map[string]any{
-				"upsertWorkflowInRegistry": map[string]any{
+				"upsertOffchainWorkflow": map[string]any{
 					"workflow": map[string]any{
 						"workflowId":     "wf-123",
 						"owner":          "owner-1",
@@ -125,7 +125,7 @@ func TestUpsertWorkflowInRegistry(t *testing.T) {
 	configURL := "s3://config"
 	tag := "v1"
 	attributes := "{\"region\":\"us-east-1\"}"
-	result, err := client.UpsertWorkflowInRegistry(WorkflowInRegistryInput{
+	result, err := client.UpsertWorkflowInRegistry(OffchainWorkflowInput{
 		WorkflowID:   "wf-123",
 		Status:       WorkflowStatusActive,
 		WorkflowName: "registry-workflow",
@@ -137,8 +137,8 @@ func TestUpsertWorkflowInRegistry(t *testing.T) {
 	})
 
 	require.NoError(t, err)
-	assert.Contains(t, capturedQuery, "mutation UpsertWorkflowInRegistry")
-	assert.Contains(t, capturedQuery, "upsertWorkflowInRegistry")
+	assert.Contains(t, capturedQuery, "mutation UpsertOffchainWorkflow")
+	assert.Contains(t, capturedQuery, "upsertOffchainWorkflow")
 	assert.Equal(t, "wf-123", result.WorkflowID)
 	assert.Equal(t, WorkflowStatusActive, result.Status)
 	assert.Equal(t, "family-a", result.DonFamily)
@@ -165,7 +165,7 @@ func TestUpsertWorkflowInRegistry_GQLError(t *testing.T) {
 	defer srv.Close()
 
 	client := newTestPrivateRegistryClient(t, srv.URL)
-	_, err := client.UpsertWorkflowInRegistry(WorkflowInRegistryInput{
+	_, err := client.UpsertWorkflowInRegistry(OffchainWorkflowInput{
 		WorkflowID:   "wf-123",
 		Status:       WorkflowStatusActive,
 		WorkflowName: "registry-workflow",
@@ -174,6 +174,81 @@ func TestUpsertWorkflowInRegistry_GQLError(t *testing.T) {
 	})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "upsert workflow in registry")
+}
+
+func TestGetWorkflowByName(t *testing.T) {
+	var capturedQuery string
+	var capturedVariables map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Query     string                 `json:"query"`
+			Variables map[string]interface{} `json:"variables"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		capturedQuery = req.Query
+		capturedVariables = req.Variables
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data": map[string]any{
+				"getOffchainWorkflowByName": map[string]any{
+					"workflow": map[string]any{
+						"workflowId":     "wf-123",
+						"owner":          "owner-1",
+						"createdAt":      "2026-01-01T00:00:00Z",
+						"status":         "WORKFLOW_STATUS_ACTIVE",
+						"workflowName":   "registry-workflow",
+						"binaryUrl":      "s3://binary",
+						"configUrl":      "s3://config",
+						"tag":            "v1",
+						"attributes":     "{\"region\":\"us-east-1\"}",
+						"donFamily":      "family-a",
+						"organizationId": "org-1",
+					},
+				},
+			},
+		})
+	}))
+	defer srv.Close()
+
+	client := newTestPrivateRegistryClient(t, srv.URL)
+	result, err := client.GetWorkflowByName("registry-workflow")
+
+	require.NoError(t, err)
+	assert.Contains(t, capturedQuery, "query GetOffchainWorkflowByName")
+	assert.Contains(t, capturedQuery, "getOffchainWorkflowByName")
+	assert.Equal(t, "wf-123", result.WorkflowID)
+	assert.Equal(t, WorkflowStatusActive, result.Status)
+	assert.Equal(t, "registry-workflow", result.WorkflowName)
+	assert.Equal(t, "family-a", result.DonFamily)
+	assert.Equal(t, "org-1", result.OrganizationID)
+
+	request, ok := capturedVariables["request"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "registry-workflow", request["workflowName"])
+}
+
+func TestGetWorkflowByName_GQLError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"errors": []map[string]string{{"message": "workflow not found"}},
+		})
+	}))
+	defer srv.Close()
+
+	client := newTestPrivateRegistryClient(t, srv.URL)
+	_, err := client.GetWorkflowByName("registry-workflow")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "get workflow by name in registry")
+}
+
+func TestGetWorkflowByName_EmptyName(t *testing.T) {
+	logger := testutil.NewTestLogger()
+	client := New(nil, logger)
+
+	_, err := client.GetWorkflowByName("")
+	require.EqualError(t, err, "workflowName is required")
 }
 
 func TestPauseWorkflowInRegistry(t *testing.T) {
@@ -189,7 +264,7 @@ func TestPauseWorkflowInRegistry(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"data": map[string]any{
-				"pauseWorkflowInRegistry": map[string]any{
+				"pauseOffchainWorkflow": map[string]any{
 					"workflow": map[string]any{
 						"workflowId":     "wf-123",
 						"status":         "WORKFLOW_STATUS_PAUSED",
@@ -227,7 +302,7 @@ func TestActivateWorkflowInRegistry(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"data": map[string]any{
-				"activateWorkflowInRegistry": map[string]any{
+				"activateOffchainWorkflow": map[string]any{
 					"workflow": map[string]any{
 						"workflowId":     "wf-123",
 						"status":         "WORKFLOW_STATUS_ACTIVE",
@@ -264,7 +339,7 @@ func TestDeleteWorkflowInRegistry(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"data": map[string]any{
-				"deleteWorkflowInRegistry": map[string]any{
+				"deleteOffchainWorkflow": map[string]any{
 					"workflowId": "wf-123",
 				},
 			},

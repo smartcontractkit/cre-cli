@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/smartcontractkit/cre-cli/internal/environments"
+	"github.com/smartcontractkit/cre-cli/internal/settings"
 )
 
 // errDeployHalted is a sentinel returned by RunPreDeployChecks when the deploy
@@ -22,24 +23,21 @@ type registryDeployStrategy interface {
 	// Return errDeployHalted to stop the deploy without returning an error.
 	RunPreDeployChecks() error
 
+	// CheckWorkflowExists returns whether a same-name workflow exists for this
+	// registry target and includes the existing workflow status for updates.
+	CheckWorkflowExists(workflowOwner, workflowName, workflowTag, workflowID string) (bool, *uint8, error)
+
 	// Upsert registers or updates the workflow in the target registry
 	// and displays the result.
 	Upsert() error
 }
 
-type registryTargetType string
-
-const (
-	registryTargetOnchain registryTargetType = "onchain"
-	registryTargetPrivate registryTargetType = "private"
-)
-
 type registryTarget struct {
-	targetType registryTargetType
+	targetType settings.RegistryType
 }
 
 func (t registryTarget) isPrivate() bool {
-	return t.targetType == registryTargetPrivate
+	return t.targetType == settings.RegistryTypeOffChain
 }
 
 // resolveRegistryTarget determines the target workflow registry from inputs and
@@ -50,10 +48,10 @@ func resolveRegistryTarget(previewPrivateRegistry bool, envSet *environments.Env
 		if err := validatePrivateRegistryAllowed(envSet); err != nil {
 			return registryTarget{}, err
 		}
-		return registryTarget{targetType: registryTargetPrivate}, nil
+		return registryTarget{targetType: settings.RegistryTypeOffChain}, nil
 	}
 
-	return registryTarget{targetType: registryTargetOnchain}, nil
+	return registryTarget{targetType: settings.RegistryTypeOnChain}, nil
 }
 
 // validatePrivateRegistryAllowed enforces the STAGING-only preview gate.

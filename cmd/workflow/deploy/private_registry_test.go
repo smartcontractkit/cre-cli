@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"net/http"
 	"os"
 	"testing"
 
@@ -14,6 +15,7 @@ import (
 
 	"github.com/smartcontractkit/cre-cli/internal/client/privateregistryclient"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
+	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/tenantctx"
 	"github.com/smartcontractkit/cre-cli/internal/testutil"
 	"github.com/smartcontractkit/cre-cli/internal/testutil/chainsim"
@@ -173,6 +175,132 @@ func TestResolveInputs_PreviewPrivateRegistryFlag(t *testing.T) {
 	})
 }
 
+func TestCheckWorkflowExists_PrivateRegistry(t *testing.T) {
+	tests := []struct {
+		name         string
+		serverStatus int
+		response     map[string]any
+		wantExists   bool
+		wantStatus   *uint8
+		wantErr      bool
+	}{
+		{
+			name:         "found active workflow returns active status",
+			serverStatus: http.StatusOK,
+			response: map[string]any{
+				"data": map[string]any{
+					"getOffchainWorkflowByName": map[string]any{
+						"workflow": map[string]any{
+							"workflowId":     "00a2b96d2f06961c3e0cf6fbba5cfa30d3b577026de094e5202d5fc3e3aabb87",
+							"owner":          "6028e8bd8759240ffe7bd80bdd5c99ca662f3363",
+							"createdAt":      "2026-04-10T14:07:25Z",
+							"status":         "WORKFLOW_STATUS_ACTIVE",
+							"workflowName":   "jnowak-workflow-test-v5",
+							"binaryUrl":      "https://storage.cre.stage.external.griddle.sh/artifacts/00a2b96d2f06961c3e0cf6fbba5cfa30d3b577026de094e5202d5fc3e3aabb87/binary.wasm",
+							"configUrl":      "https://storage.cre.stage.external.griddle.sh/artifacts/00a2b96d2f06961c3e0cf6fbba5cfa30d3b577026de094e5202d5fc3e3aabb87/config",
+							"tag":            "",
+							"attributes":     "{\"app\": \"test\"}",
+							"donFamily":      "zone-a",
+							"organizationId": "org_meoybOR7KEkNhEFf",
+						},
+					},
+				},
+			},
+			wantExists: true,
+			wantStatus: uint8Ptr(0),
+			wantErr:    false,
+		},
+		{
+			name:         "found paused workflow returns paused status",
+			serverStatus: http.StatusOK,
+			response: map[string]any{
+				"data": map[string]any{
+					"getOffchainWorkflowByName": map[string]any{
+						"workflow": map[string]any{
+							"workflowId":     "00a2b96d2f06961c3e0cf6fbba5cfa30d3b577026de094e5202d5fc3e3aabb87",
+							"owner":          "6028e8bd8759240ffe7bd80bdd5c99ca662f3363",
+							"createdAt":      "2026-04-10T14:07:25Z",
+							"status":         "WORKFLOW_STATUS_PAUSED",
+							"workflowName":   "jnowak-workflow-test-v5",
+							"binaryUrl":      "https://storage.cre.stage.external.griddle.sh/artifacts/00a2b96d2f06961c3e0cf6fbba5cfa30d3b577026de094e5202d5fc3e3aabb87/binary.wasm",
+							"configUrl":      "https://storage.cre.stage.external.griddle.sh/artifacts/00a2b96d2f06961c3e0cf6fbba5cfa30d3b577026de094e5202d5fc3e3aabb87/config",
+							"tag":            "",
+							"attributes":     "{\"app\": \"test\"}",
+							"donFamily":      "zone-a",
+							"organizationId": "org_meoybOR7KEkNhEFf",
+						},
+					},
+				},
+			},
+			wantExists: true,
+			wantStatus: uint8Ptr(1),
+			wantErr:    false,
+		},
+		{
+			name:         "not found returns no error and no status",
+			serverStatus: http.StatusOK,
+			response: map[string]any{
+				"errors": []map[string]any{
+					{
+						"message": "workflow not found",
+						"path":    []string{"getOffchainWorkflowByName"},
+						"extensions": map[string]any{
+							"code": "NOT_FOUND",
+						},
+					},
+				},
+				"data": nil,
+			},
+			wantExists: false,
+			wantStatus: nil,
+			wantErr:    false,
+		},
+		{
+			name:         "transport failure returns error",
+			serverStatus: http.StatusInternalServerError,
+			response: map[string]any{
+				"errors": []map[string]any{
+					{
+						"message": "server exploded",
+					},
+				},
+			},
+			wantExists: false,
+			wantStatus: nil,
+			wantErr:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
+			defer simulatedEnvironment.Close()
+
+			ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
+			h := newHandler(ctx, buf)
+			h.credentials = makeAPIKeyCredentials(t)
+
+			gqlServer := newAssertGQLServer(t, func(t *testing.T, req deployMockGraphQLRequest) (int, map[string]any) {
+				require.True(t, containsQuery(req.Query, "query GetOffchainWorkflowByName"))
+				return tt.serverStatus, tt.response
+			})
+			defer gqlServer.Close()
+
+			h.environmentSet.GraphQLURL = gqlServer.URL
+			strategy := newPrivateRegistryDeployStrategy(h)
+
+			exists, status, err := strategy.CheckWorkflowExists("", "jnowak-workflow-test-v5", "", "")
+			if tt.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+			assert.Equal(t, tt.wantExists, exists)
+			assert.Equal(t, tt.wantStatus, status)
+		})
+	}
+}
+
 func makeTestJWT(t *testing.T, claims map[string]interface{}) string {
 	t.Helper()
 	header, _ := json.Marshal(map[string]string{"alg": "HS256", "typ": "JWT"})
@@ -214,6 +342,10 @@ func makeAPIKeyCredentials(t *testing.T) *credentials.Credentials {
 	return creds
 }
 
+func uint8Ptr(v uint8) *uint8 {
+	return &v
+}
+
 func TestResolveWorkflowOwner(t *testing.T) {
 	t.Parallel()
 
@@ -233,7 +365,7 @@ func TestResolveWorkflowOwner(t *testing.T) {
 		)
 		h.settings = ctx.Settings
 
-		owner, err := h.resolveWorkflowOwner(registryTarget{targetType: registryTargetOnchain})
+		owner, err := h.resolveWorkflowOwner(registryTarget{targetType: settings.RegistryTypeOnChain})
 		require.NoError(t, err)
 		assert.Equal(t, chainsim.TestAddress, owner)
 	})
@@ -262,7 +394,7 @@ func TestResolveWorkflowOwner(t *testing.T) {
 		h.credentials = makeBearerCredentials(t, token)
 		h.runtimeContext.TenantContext = &tenantctx.EnvironmentContext{TenantID: "42"}
 
-		owner, err := h.resolveWorkflowOwner(registryTarget{targetType: registryTargetPrivate})
+		owner, err := h.resolveWorkflowOwner(registryTarget{targetType: settings.RegistryTypeOffChain})
 		require.NoError(t, err)
 
 		expectedBytes, err := workflowUtils.GenerateWorkflowOwnerAddress("42", "org-test-123")
@@ -287,7 +419,7 @@ func TestResolveWorkflowOwner(t *testing.T) {
 		h.settings = ctx.Settings
 		h.runtimeContext.TenantContext = nil
 
-		_, err := h.resolveWorkflowOwner(registryTarget{targetType: registryTargetPrivate})
+		_, err := h.resolveWorkflowOwner(registryTarget{targetType: settings.RegistryTypeOffChain})
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "tenant context is required")
 	})
@@ -309,7 +441,7 @@ func TestResolveWorkflowOwner(t *testing.T) {
 		h.settings = ctx.Settings
 		h.runtimeContext.TenantContext = &tenantctx.EnvironmentContext{TenantID: ""}
 
-		_, err := h.resolveWorkflowOwner(registryTarget{targetType: registryTargetPrivate})
+		_, err := h.resolveWorkflowOwner(registryTarget{targetType: settings.RegistryTypeOffChain})
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "tenant ID is required")
 	})
@@ -333,7 +465,7 @@ func TestResolveWorkflowOwner(t *testing.T) {
 		h.credentials = makeAPIKeyCredentials(t)
 		h.runtimeContext.TenantContext = &tenantctx.EnvironmentContext{TenantID: "42"}
 
-		_, err := h.resolveWorkflowOwner(registryTarget{targetType: registryTargetPrivate})
+		_, err := h.resolveWorkflowOwner(registryTarget{targetType: settings.RegistryTypeOffChain})
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to get organization ID")
 	})

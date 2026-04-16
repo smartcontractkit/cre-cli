@@ -2,6 +2,7 @@ package deploy
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/smartcontractkit/cre-cli/internal/client/graphqlclient"
 	"github.com/smartcontractkit/cre-cli/internal/client/privateregistryclient"
@@ -27,9 +28,21 @@ func (a *privateRegistryDeployStrategy) ensureClient() {
 }
 
 func (a *privateRegistryDeployStrategy) RunPreDeployChecks() error {
-
-	// TODO: check if workflow already exists in private registry and confirm update
 	return nil
+}
+
+func (a *privateRegistryDeployStrategy) CheckWorkflowExists(_, workflowName, _, _ string) (bool, *uint8, error) {
+	a.ensureClient()
+
+	workflow, err := a.prc.GetWorkflowByName(workflowName)
+	if err == nil {
+		return true, offchainStatusToUint8(workflow.Status), nil
+	}
+	if isWorkflowNotFoundError(err) {
+		return false, nil, nil
+	}
+
+	return false, nil, err
 }
 
 func (a *privateRegistryDeployStrategy) Upsert() error {
@@ -63,8 +76,8 @@ func (a *privateRegistryDeployStrategy) Upsert() error {
 	return nil
 }
 
-func (h *handler) buildPrivateRegistryInput() privateregistryclient.WorkflowInRegistryInput {
-	input := privateregistryclient.WorkflowInRegistryInput{
+func (h *handler) buildPrivateRegistryInput() privateregistryclient.OffchainWorkflowInput {
+	input := privateregistryclient.OffchainWorkflowInput{
 		WorkflowID:   h.workflowArtifact.WorkflowID,
 		Status:       privateregistryclient.WorkflowStatusActive,
 		WorkflowName: h.inputs.WorkflowName,
@@ -82,4 +95,22 @@ func (h *handler) buildPrivateRegistryInput() privateregistryclient.WorkflowInRe
 	}
 
 	return input
+}
+
+func isWorkflowNotFoundError(err error) bool {
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "not found")
+}
+
+func offchainStatusToUint8(status privateregistryclient.OffchainWorkflowStatus) *uint8 {
+	switch status {
+	case privateregistryclient.WorkflowStatusActive:
+		v := uint8(0)
+		return &v
+	case privateregistryclient.WorkflowStatusPaused:
+		v := uint8(1)
+		return &v
+	default:
+		return nil
+	}
 }

@@ -147,11 +147,27 @@ func workflowDeployPrivateRegistry(t *testing.T, tc TestConfig) string {
 				return
 			}
 
-			if strings.Contains(req.Query, "UpsertWorkflowInRegistry") {
+			if strings.Contains(req.Query, "GetOffchainWorkflowByName") {
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"errors": []map[string]any{
+						{
+							"message": "workflow not found",
+							"path":    []string{"getOffchainWorkflowByName"},
+							"extensions": map[string]any{
+								"code": "NOT_FOUND",
+							},
+						},
+					},
+					"data": nil,
+				})
+				return
+			}
+
+			if strings.Contains(req.Query, "UpsertOffchainWorkflow") {
 				upsertCalled.Store(true)
 				_ = json.NewEncoder(w).Encode(map[string]any{
 					"data": map[string]any{
-						"upsertWorkflowInRegistry": map[string]any{
+						"upsertOffchainWorkflow": map[string]any{
 							"workflow": map[string]any{
 								"workflowId":     "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
 								"owner":          privateRegistryOwnerAddress,
@@ -240,7 +256,7 @@ func workflowDeployPrivateRegistry(t *testing.T, tc TestConfig) string {
 	)
 	require.True(t, presignedPostCalled.Load(), "expected GeneratePresignedPostUrlForArtifact to be called")
 	require.True(t, uploadCalled.Load(), "expected artifact upload endpoint to be called")
-	require.True(t, upsertCalled.Load(), "expected UpsertWorkflowInRegistry to be called")
+	require.True(t, upsertCalled.Load(), "expected UpsertOffchainWorkflow to be called")
 
 	return StripANSI(stdout.String() + stderr.String())
 }

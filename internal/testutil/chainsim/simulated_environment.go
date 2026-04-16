@@ -12,8 +12,9 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
-	"github.com/smartcontractkit/cre-cli/internal/settings"
+	settingspkg "github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/testutil"
+	"github.com/smartcontractkit/cre-cli/internal/testutil/testsettings"
 )
 
 type SimulatedEnvironment struct {
@@ -61,8 +62,8 @@ func (se *SimulatedEnvironment) Close() {
 
 func (se *SimulatedEnvironment) createContextWithLogger(logger *zerolog.Logger) *runtime.Context {
 	v := viper.New()
-	v.Set(settings.EthPrivateKeyEnvVar, TestPrivateKey)
-	settings, err := testutil.NewTestSettings(v, logger)
+	v.Set(settingspkg.EthPrivateKeyEnvVar, TestPrivateKey)
+	settings, err := testsettings.NewTestSettings(v, logger)
 	if err != nil {
 		logger.Warn().Err(err).Msg("failed to create new test settings")
 	}
@@ -79,13 +80,16 @@ func (se *SimulatedEnvironment) createContextWithLogger(logger *zerolog.Logger) 
 		logger.Warn().Err(err).Msg("failed to create new credentials")
 	}
 
+	resolved, _ := settingspkg.ResolveRegistry("", nil, environmentSet)
+
 	ctx := &runtime.Context{
-		Logger:         logger,
-		Viper:          v,
-		ClientFactory:  simulatedFactory,
-		Settings:       settings,
-		EnvironmentSet: environmentSet,
-		Credentials:    creds,
+		Logger:           logger,
+		Viper:            v,
+		ClientFactory:    simulatedFactory,
+		Settings:         settings,
+		EnvironmentSet:   environmentSet,
+		Credentials:      creds,
+		ResolvedRegistry: resolved,
 	}
 
 	// Mark credentials as validated for tests to bypass validation
