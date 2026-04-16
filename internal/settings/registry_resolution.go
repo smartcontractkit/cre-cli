@@ -46,11 +46,11 @@ func NewOnChainRegistry(id, address, chainName, donFamily, explorerURL string) *
 	}
 }
 
-func (r *OnChainRegistry) ID() string         { return r.id }
-func (r *OnChainRegistry) Type() RegistryType { return RegistryTypeOnChain }
-func (r *OnChainRegistry) DonFamily() string  { return r.donFamily }
-func (r *OnChainRegistry) Address() string    { return r.address }
-func (r *OnChainRegistry) ChainName() string  { return r.chainName }
+func (r *OnChainRegistry) ID() string          { return r.id }
+func (r *OnChainRegistry) Type() RegistryType  { return RegistryTypeOnChain }
+func (r *OnChainRegistry) DonFamily() string   { return r.donFamily }
+func (r *OnChainRegistry) Address() string     { return r.address }
+func (r *OnChainRegistry) ChainName() string   { return r.chainName }
 func (r *OnChainRegistry) ExplorerURL() string { return r.explorerURL }
 
 // OffChainRegistry holds the resolved configuration for an off-chain (private)
