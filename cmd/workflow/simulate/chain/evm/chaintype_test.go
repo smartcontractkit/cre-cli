@@ -395,7 +395,10 @@ func TestEVMChainType_RegisterCapabilities_NoClients_ConstructsEmpty(t *testing.
 func TestEVMChainType_RunHealthCheck_PropagatesInvalidClientType(t *testing.T) {
 	t.Parallel()
 	ct := newEVMChainType()
-	err := ct.RunHealthCheck(map[uint64]chain.ChainClient{1: "not-ethclient"})
+	resolved := chain.ResolvedChains{
+		Clients: map[uint64]chain.ChainClient{1: "not-ethclient"},
+	}
+	err := ct.RunHealthCheck(resolved)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid client type for EVM chain type")
 }
@@ -403,7 +406,9 @@ func TestEVMChainType_RunHealthCheck_PropagatesInvalidClientType(t *testing.T) {
 func TestEVMChainType_RunHealthCheck_NoClients_Errors(t *testing.T) {
 	t.Parallel()
 	ct := newEVMChainType()
-	err := ct.RunHealthCheck(map[uint64]chain.ChainClient{})
+	err := ct.RunHealthCheck(chain.ResolvedChains{
+		Clients: map[uint64]chain.ChainClient{},
+	})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no RPC URLs found")
 }

@@ -15,13 +15,24 @@ type ChainConfig struct {
 	Forwarder string // chain-type-specific forwarding address
 }
 
-// Limits exposes the chain-write limit accessors a chain type needs at
-// capability-registration time. Implementations live in the parent simulate
-// package; this interface is defined here so CapabilityConfig stays in the
-// chain package without an import cycle.
+// Limits exposes the chain-write limits that every chain type's capability
+// enforcement layer needs. Chain-type-specific accessors (e.g. EVM gas limit)
+// live on chain-type-scoped extension interfaces in the family package so
+// non-EVM chain types cannot accidentally depend on EVM semantics.
 type Limits interface {
 	ChainWriteReportSizeLimit() int
-	ChainWriteGasLimit() uint64
+}
+
+// ResolvedChains is the result of ChainType.ResolveClients: the RPC clients,
+// forwarders, and any chain-type-agnostic metadata later interface methods
+// (e.g. RunHealthCheck) depend on.
+type ResolvedChains struct {
+	Clients    map[uint64]ChainClient
+	Forwarders map[uint64]string
+	// ExperimentalSelectors marks selectors that came from experimental-chain
+	// config rather than the chain type's built-in supported list. Used for
+	// error labelling (e.g. "experimental chain N" vs a chain name).
+	ExperimentalSelectors map[uint64]bool
 }
 
 // CapabilityConfig holds everything a chain type needs to register capabilities.

@@ -53,6 +53,11 @@ type Inputs struct {
 	ChainTypeClients    map[string]map[uint64]chain.ChainClient `validate:"omitempty"`
 	ChainTypeForwarders map[string]map[uint64]string            `validate:"-"`
 	ChainTypeKeys       map[string]interface{}                  `validate:"-"`
+	// ChainTypeResolved holds the full ResolveClients bundle per chain type
+	// so later steps (health check) have access to any chain-type-agnostic
+	// metadata (e.g. experimental-selector flags) without relying on hidden
+	// state on the ChainType instance.
+	ChainTypeResolved map[string]chain.ResolvedChains `validate:"-"`
 	// Non-interactive mode options
 	NonInteractive  bool              `validate:"-"`
 	TriggerIndex    int               `validate:"-"`
@@ -127,17 +132,19 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 
 	ctClients := make(map[string]map[uint64]chain.ChainClient)
 	ctForwarders := make(map[string]map[uint64]string)
+	ctResolved := make(map[string]chain.ResolvedChains)
 	ctKeys := make(map[string]interface{})
 
 	for name, ct := range chain.All() {
-		clients, forwarders, err := ct.ResolveClients(v)
+		resolved, err := ct.ResolveClients(v)
 		if err != nil {
 			return Inputs{}, fmt.Errorf("failed to resolve %s clients: %w", name, err)
 		}
 
-		if len(clients) > 0 {
-			ctClients[name] = clients
-			ctForwarders[name] = forwarders
+		if len(resolved.Clients) > 0 {
+			ctClients[name] = resolved.Clients
+			ctForwarders[name] = resolved.Forwarders
+			ctResolved[name] = resolved
 		}
 	}
 
@@ -173,6 +180,7 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 		Broadcast:           v.GetBool("broadcast"),
 		ChainTypeClients:    ctClients,
 		ChainTypeForwarders: ctForwarders,
+		ChainTypeResolved:   ctResolved,
 		ChainTypeKeys:       ctKeys,
 		WorkflowName:        creSettings.Workflow.UserWorkflowSettings.WorkflowName,
 		NonInteractive:      v.GetBool("non-interactive"),
@@ -210,14 +218,16 @@ func (h *handler) ValidateInputs(inputs Inputs) error {
 	rpcErr := ui.WithSpinner("Checking RPC connectivity...", func() error {
 		var errs []error
 		for name, ct := range chain.All() {
-			if clients, ok := inputs.ChainTypeClients[name]; ok {
-				if err := ct.RunHealthCheck(clients); err != nil {
-					errs = append(errs, err)
-				}
+			resolved, ok := inputs.ChainTypeResolved[name]
+			if !ok {
+				continue
+			}
+			if err := ct.RunHealthCheck(resolved); err != nil {
+				errs = append(errs, err)
 			}
 		}
 		if len(errs) > 0 {
-			return errors.Join(errs...)
+			return fmt.Errorf("RPC health check failed:\n%w", errors.Join(errs...))
 		}
 		return nil
 	})
@@ -721,7 +731,7 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 
 				triggerData, err := getTriggerDataForChainType(ctx, ct, sel, inputs, true)
 				if err != nil {
-					ui.Error(err.Error())
+					ui.Error(fmt.Sprintf("Failed to get %s trigger data: %v", name, err))
 					os.Exit(1)
 				}
 
@@ -801,7 +811,7 @@ func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inp
 
 				triggerData, err := getTriggerDataForChainType(ctx, ct, sel, inputs, false)
 				if err != nil {
-					ui.Error(err.Error())
+					ui.Error(fmt.Sprintf("Failed to get %s trigger data: %v", name, err))
 					os.Exit(1)
 				}
 

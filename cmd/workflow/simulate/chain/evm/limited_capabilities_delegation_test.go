@@ -190,7 +190,7 @@ func TestLimitedEVMChain_AllMethodsDelegate(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			stub := newFullStub()
-			w := NewLimitedEVMChain(stub, &EVMChainLimit{})
+			w := NewLimitedEVMChain(stub, &stubEVMLimits{})
 			tt.call(w, stub)
 			assert.Equal(t, 1, stub.calls[tt.wants], "expected 1 call to %s", tt.wants)
 		})
@@ -204,7 +204,7 @@ func TestLimitedEVMChain_AllMethodsDelegate(t *testing.T) {
 func TestLimitedEVMChain_WriteReport_NilReport_Delegates(t *testing.T) {
 	t.Parallel()
 	stub := newFullStub()
-	w := NewLimitedEVMChain(stub, &EVMChainLimit{reportSizeLimit: 4})
+	w := NewLimitedEVMChain(stub, &stubEVMLimits{reportSizeLimit: 4})
 	resp, err := w.WriteReport(context.Background(), commonCap.RequestMetadata{}, &evmcappb.WriteReportRequest{Report: nil})
 	require.NoError(t, err)
 	assert.NotNil(t, resp)
@@ -214,7 +214,7 @@ func TestLimitedEVMChain_WriteReport_NilReport_Delegates(t *testing.T) {
 func TestLimitedEVMChain_WriteReport_NilGasConfig_Delegates(t *testing.T) {
 	t.Parallel()
 	stub := newFullStub()
-	w := NewLimitedEVMChain(stub, &EVMChainLimit{gasLimit: 100})
+	w := NewLimitedEVMChain(stub, &stubEVMLimits{gasLimit: 100})
 	resp, err := w.WriteReport(context.Background(), commonCap.RequestMetadata{}, &evmcappb.WriteReportRequest{GasConfig: nil})
 	require.NoError(t, err)
 	assert.NotNil(t, resp)
@@ -224,7 +224,7 @@ func TestLimitedEVMChain_WriteReport_NilGasConfig_Delegates(t *testing.T) {
 func TestLimitedEVMChain_WriteReport_ZeroReportLimit_Disabled(t *testing.T) {
 	t.Parallel()
 	stub := newFullStub()
-	w := NewLimitedEVMChain(stub, &EVMChainLimit{reportSizeLimit: 0})
+	w := NewLimitedEVMChain(stub, &stubEVMLimits{reportSizeLimit: 0})
 	resp, err := w.WriteReport(context.Background(), commonCap.RequestMetadata{}, &evmcappb.WriteReportRequest{
 		Report: &sdkpb.ReportResponse{RawReport: make([]byte, 1<<20)},
 	})
@@ -236,7 +236,7 @@ func TestLimitedEVMChain_WriteReport_ZeroReportLimit_Disabled(t *testing.T) {
 func TestLimitedEVMChain_WriteReport_ZeroGasLimit_Disabled(t *testing.T) {
 	t.Parallel()
 	stub := newFullStub()
-	w := NewLimitedEVMChain(stub, &EVMChainLimit{gasLimit: 0})
+	w := NewLimitedEVMChain(stub, &stubEVMLimits{gasLimit: 0})
 	resp, err := w.WriteReport(context.Background(), commonCap.RequestMetadata{}, &evmcappb.WriteReportRequest{
 		GasConfig: &evmcappb.GasConfig{GasLimit: 1 << 30},
 	})
@@ -248,7 +248,7 @@ func TestLimitedEVMChain_WriteReport_ZeroGasLimit_Disabled(t *testing.T) {
 func TestLimitedEVMChain_WriteReport_GasBoundaryEqualsLimit_Delegates(t *testing.T) {
 	t.Parallel()
 	stub := newFullStub()
-	w := NewLimitedEVMChain(stub, &EVMChainLimit{gasLimit: 1000})
+	w := NewLimitedEVMChain(stub, &stubEVMLimits{gasLimit: 1000})
 	resp, err := w.WriteReport(context.Background(), commonCap.RequestMetadata{}, &evmcappb.WriteReportRequest{
 		GasConfig: &evmcappb.GasConfig{GasLimit: 1000},
 	})
@@ -259,7 +259,7 @@ func TestLimitedEVMChain_WriteReport_GasBoundaryEqualsLimit_Delegates(t *testing
 func TestLimitedEVMChain_WriteReport_ReportBoundaryEqualsLimit_Delegates(t *testing.T) {
 	t.Parallel()
 	stub := newFullStub()
-	w := NewLimitedEVMChain(stub, &EVMChainLimit{reportSizeLimit: 5})
+	w := NewLimitedEVMChain(stub, &stubEVMLimits{reportSizeLimit: 5})
 	resp, err := w.WriteReport(context.Background(), commonCap.RequestMetadata{}, &evmcappb.WriteReportRequest{
 		Report: &sdkpb.ReportResponse{RawReport: []byte("12345")},
 	})
@@ -270,7 +270,7 @@ func TestLimitedEVMChain_WriteReport_ReportBoundaryEqualsLimit_Delegates(t *test
 func TestLimitedEVMChain_WriteReport_ReportOneOverLimit_Rejects(t *testing.T) {
 	t.Parallel()
 	stub := newFullStub()
-	w := NewLimitedEVMChain(stub, &EVMChainLimit{reportSizeLimit: 5})
+	w := NewLimitedEVMChain(stub, &stubEVMLimits{reportSizeLimit: 5})
 	_, err := w.WriteReport(context.Background(), commonCap.RequestMetadata{}, &evmcappb.WriteReportRequest{
 		Report: &sdkpb.ReportResponse{RawReport: []byte("123456")},
 	})
@@ -282,7 +282,7 @@ func TestLimitedEVMChain_WriteReport_ReportOneOverLimit_Rejects(t *testing.T) {
 func TestLimitedEVMChain_WriteReport_GasOneOverLimit_Rejects(t *testing.T) {
 	t.Parallel()
 	stub := newFullStub()
-	w := NewLimitedEVMChain(stub, &EVMChainLimit{gasLimit: 1_000_000})
+	w := NewLimitedEVMChain(stub, &stubEVMLimits{gasLimit: 1_000_000})
 	_, err := w.WriteReport(context.Background(), commonCap.RequestMetadata{}, &evmcappb.WriteReportRequest{
 		GasConfig: &evmcappb.GasConfig{GasLimit: 1_000_001},
 	})
@@ -295,7 +295,7 @@ func TestLimitedEVMChain_WriteReport_ReportCheckedBeforeGas(t *testing.T) {
 	// When both fail, report-size error is surfaced first.
 	t.Parallel()
 	stub := newFullStub()
-	w := NewLimitedEVMChain(stub, &EVMChainLimit{reportSizeLimit: 1, gasLimit: 1})
+	w := NewLimitedEVMChain(stub, &stubEVMLimits{reportSizeLimit: 1, gasLimit: 1})
 	_, err := w.WriteReport(context.Background(), commonCap.RequestMetadata{}, &evmcappb.WriteReportRequest{
 		Report:    &sdkpb.ReportResponse{RawReport: []byte("ab")},
 		GasConfig: &evmcappb.GasConfig{GasLimit: 999},
@@ -308,7 +308,7 @@ func TestLimitedEVMChain_WriteReport_ReportCheckedBeforeGas(t *testing.T) {
 func TestLimitedEVMChain_WriteReport_ReturnsResourceExhaustedCode(t *testing.T) {
 	t.Parallel()
 	stub := newFullStub()
-	w := NewLimitedEVMChain(stub, &EVMChainLimit{reportSizeLimit: 1})
+	w := NewLimitedEVMChain(stub, &stubEVMLimits{reportSizeLimit: 1})
 	_, err := w.WriteReport(context.Background(), commonCap.RequestMetadata{}, &evmcappb.WriteReportRequest{
 		Report: &sdkpb.ReportResponse{RawReport: []byte("too-big")},
 	})
@@ -319,7 +319,7 @@ func TestLimitedEVMChain_WriteReport_ReturnsResourceExhaustedCode(t *testing.T) 
 func TestLimitedEVMChain_Constructor_StoresInnerAndLimits(t *testing.T) {
 	t.Parallel()
 	stub := newFullStub()
-	limits := &EVMChainLimit{reportSizeLimit: 7, gasLimit: 11}
+	limits := &stubEVMLimits{reportSizeLimit: 7, gasLimit: 11}
 	w := NewLimitedEVMChain(stub, limits)
 	require.NotNil(t, w)
 	// Verify Description delegates (indirectly proves inner is stored)
@@ -329,21 +329,21 @@ func TestLimitedEVMChain_Constructor_StoresInnerAndLimits(t *testing.T) {
 func TestLimitedEVMChain_ChainSelector_ReflectsInner(t *testing.T) {
 	t.Parallel()
 	stub := newFullStub()
-	w := NewLimitedEVMChain(stub, &EVMChainLimit{})
+	w := NewLimitedEVMChain(stub, &stubEVMLimits{})
 	require.Equal(t, uint64(42), w.ChainSelector())
 }
 
 func TestLimitedEVMChain_Name_ReflectsInner(t *testing.T) {
 	t.Parallel()
 	stub := newFullStub()
-	w := NewLimitedEVMChain(stub, &EVMChainLimit{})
+	w := NewLimitedEVMChain(stub, &stubEVMLimits{})
 	require.Equal(t, "stub-chain", w.Name())
 }
 
 func TestLimitedEVMChain_HealthReport_ReflectsInner(t *testing.T) {
 	t.Parallel()
 	stub := newFullStub()
-	w := NewLimitedEVMChain(stub, &EVMChainLimit{})
+	w := NewLimitedEVMChain(stub, &stubEVMLimits{})
 	hr := w.HealthReport()
 	_, ok := hr["ok"]
 	require.True(t, ok)

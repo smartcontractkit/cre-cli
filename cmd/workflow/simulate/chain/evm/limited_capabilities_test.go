@@ -15,13 +15,13 @@ import (
 	sdkpb "github.com/smartcontractkit/chainlink-protos/cre/go/sdk"
 )
 
-type EVMChainLimit struct {
+type stubEVMLimits struct {
 	reportSizeLimit int
 	gasLimit        uint64
 }
 
-func (s *EVMChainLimit) ChainWriteReportSizeLimit() int { return s.reportSizeLimit }
-func (s *EVMChainLimit) ChainWriteGasLimit() uint64     { return s.gasLimit }
+func (s *stubEVMLimits) ChainWriteReportSizeLimit() int { return s.reportSizeLimit }
+func (s *stubEVMLimits) ChainWriteGasLimit() uint64     { return s.gasLimit }
 
 type evmCapabilityBaseStub struct{}
 
@@ -94,7 +94,7 @@ func (s *evmClientCapabilityStub) ChainSelector() uint64 { return 0 }
 func TestLimitedEVMChainWriteReportRejectsOversizedReport(t *testing.T) {
 	t.Parallel()
 
-	limits := &EVMChainLimit{reportSizeLimit: 4}
+	limits := &stubEVMLimits{reportSizeLimit: 4}
 	inner := &evmClientCapabilityStub{}
 	wrapper := NewLimitedEVMChain(inner, limits)
 
@@ -110,7 +110,7 @@ func TestLimitedEVMChainWriteReportRejectsOversizedReport(t *testing.T) {
 func TestLimitedEVMChainWriteReportRejectsOversizedGasLimit(t *testing.T) {
 	t.Parallel()
 
-	limits := &EVMChainLimit{gasLimit: 10}
+	limits := &stubEVMLimits{gasLimit: 10}
 	inner := &evmClientCapabilityStub{}
 	wrapper := NewLimitedEVMChain(inner, limits)
 
@@ -126,7 +126,7 @@ func TestLimitedEVMChainWriteReportRejectsOversizedGasLimit(t *testing.T) {
 func TestLimitedEVMChainWriteReportDelegatesOnBoundaryValues(t *testing.T) {
 	t.Parallel()
 
-	limits := &EVMChainLimit{reportSizeLimit: 4, gasLimit: 10}
+	limits := &stubEVMLimits{reportSizeLimit: 4, gasLimit: 10}
 
 	input := &evmcappb.WriteReportRequest{
 		Report:    &sdkpb.ReportResponse{RawReport: []byte("1234")},

@@ -35,9 +35,8 @@ func init() {
 
 // EVMChainType implements chain.ChainType for EVM-based blockchains.
 type EVMChainType struct {
-	log                   *zerolog.Logger
-	evmChains             *EVMChainCapabilities
-	experimentalSelectors map[uint64]bool
+	log       *zerolog.Logger
+	evmChains *EVMChainCapabilities
 }
 
 var _ chain.ChainType = (*EVMChainType)(nil)
@@ -48,7 +47,7 @@ func (ct *EVMChainType) SupportedChains() []chain.ChainConfig {
 	return SupportedChains
 }
 
-func (ct *EVMChainType) ResolveClients(v *viper.Viper) (map[uint64]chain.ChainClient, map[uint64]string, error) {
+func (ct *EVMChainType) ResolveClients(v *viper.Viper) (chain.ResolvedChains, error) {
 	clients := make(map[uint64]chain.ChainClient)
 	forwarders := make(map[uint64]string)
 	experimental := make(map[uint64]bool)
@@ -81,18 +80,18 @@ func (ct *EVMChainType) ResolveClients(v *viper.Viper) (map[uint64]chain.ChainCl
 	// Resolve experimental chains
 	expChains, err := settings.GetExperimentalChains(v)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to load experimental chains config: %w", err)
+		return chain.ResolvedChains{}, fmt.Errorf("failed to load experimental chains config: %w", err)
 	}
 
 	for _, ec := range expChains {
 		if ec.ChainSelector == 0 {
-			return nil, nil, fmt.Errorf("experimental chain missing chain-selector")
+			return chain.ResolvedChains{}, fmt.Errorf("experimental chain missing chain-selector")
 		}
 		if strings.TrimSpace(ec.RPCURL) == "" {
-			return nil, nil, fmt.Errorf("experimental chain %d missing rpc-url", ec.ChainSelector)
+			return chain.ResolvedChains{}, fmt.Errorf("experimental chain %d missing rpc-url", ec.ChainSelector)
 		}
 		if strings.TrimSpace(ec.Forwarder) == "" {
-			return nil, nil, fmt.Errorf("experimental chain %d missing forwarder", ec.ChainSelector)
+			return chain.ResolvedChains{}, fmt.Errorf("experimental chain %d missing forwarder", ec.ChainSelector)
 		}
 
 		// For duplicate selectors, keep the supported client and only
@@ -111,7 +110,7 @@ func (ct *EVMChainType) ResolveClients(v *viper.Viper) (map[uint64]chain.ChainCl
 		ct.log.Debug().Msgf("Using RPC for experimental chain %d: %s", ec.ChainSelector, chain.RedactURL(ec.RPCURL))
 		c, err := ethclient.Dial(ec.RPCURL)
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to create eth client for experimental chain %d: %w", ec.ChainSelector, err)
+			return chain.ResolvedChains{}, fmt.Errorf("failed to create eth client for experimental chain %d: %w", ec.ChainSelector, err)
 		}
 		clients[ec.ChainSelector] = c
 		forwarders[ec.ChainSelector] = ec.Forwarder
@@ -119,8 +118,11 @@ func (ct *EVMChainType) ResolveClients(v *viper.Viper) (map[uint64]chain.ChainCl
 		ui.Dim(fmt.Sprintf("Added experimental chain (chain-selector: %d)\n", ec.ChainSelector))
 	}
 
-	ct.experimentalSelectors = experimental
-	return clients, forwarders, nil
+	return chain.ResolvedChains{
+		Clients:               clients,
+		Forwarders:            forwarders,
+		ExperimentalSelectors: experimental,
+	}, nil
 }
 
 func (ct *EVMChainType) RegisterCapabilities(ctx context.Context, cfg chain.CapabilityConfig) ([]services.Service, error) {
@@ -152,12 +154,22 @@ func (ct *EVMChainType) RegisterCapabilities(ctx context.Context, cfg chain.Capa
 
 	dryRun := !cfg.Broadcast
 
-	// cfg.Limits already satisfies EVMChainLimits via the chain.Limits interface
-	// contract; no type assertion needed.
+	// cfg.Limits is the generic chain.Limits contract. The EVM chain type
+	// needs the wider EVMChainLimits contract (adds ChainWriteGasLimit). A
+	// nil cfg.Limits disables enforcement entirely.
+	var evmLimits EVMChainLimits
+	if cfg.Limits != nil {
+		el, ok := cfg.Limits.(EVMChainLimits)
+		if !ok {
+			return nil, fmt.Errorf("EVM chain type: limits value does not implement evm.EVMChainLimits (got %T)", cfg.Limits)
+		}
+		evmLimits = el
+	}
+
 	evmCaps, err := NewEVMChainCapabilities(
 		ctx, cfg.Logger, cfg.Registry,
 		ethClients, evmForwarders, pk,
-		dryRun, cfg.Limits,
+		dryRun, evmLimits,
 	)
 	if err != nil {
 		return nil, err
@@ -206,8 +218,8 @@ func (ct *EVMChainType) ParseTriggerChainSelector(triggerID string) (uint64, boo
 	return ParseTriggerChainSelector(triggerID)
 }
 
-func (ct *EVMChainType) RunHealthCheck(clients map[uint64]chain.ChainClient) error {
-	return RunRPCHealthCheck(clients, ct.experimentalSelectors)
+func (ct *EVMChainType) RunHealthCheck(resolved chain.ResolvedChains) error {
+	return RunRPCHealthCheck(resolved.Clients, resolved.ExperimentalSelectors)
 }
 
 // ResolveKey parses the user's ECDSA private key from settings. When broadcast

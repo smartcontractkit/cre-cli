@@ -28,7 +28,6 @@ func TestHealthCheck_ExperimentalSelector_UsesExperimentalLabel(t *testing.T) {
 	)
 	require.Error(t, err)
 	mustContain(t, err.Error(),
-		"RPC health check failed",
 		"[experimental chain 99999999]",
 	)
 }
@@ -89,7 +88,6 @@ func TestHealthCheck_MixedKnownAndExperimental(t *testing.T) {
 	)
 	require.Error(t, err)
 	mustContain(t, err.Error(),
-		"RPC health check failed",
 		"[experimental chain 99999999] failed RPC health check",
 	)
 	// sepolia is healthy; its label must not appear.

@@ -81,7 +81,7 @@ func TestHealthCheck_NilClient(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected error for nil client")
 	}
-	mustContain(t, err.Error(), "RPC health check failed", "[123] nil client")
+	mustContain(t, err.Error(), "[123] nil client")
 }
 
 func TestHealthCheck_AllOK(t *testing.T) {
@@ -113,7 +113,6 @@ func TestHealthCheck_RPCError_usesChainName(t *testing.T) {
 		t.Fatalf("expected error for RPC failure")
 	}
 	mustContain(t, err.Error(),
-		"RPC health check failed",
 		"[ethereum-testnet-sepolia] failed RPC health check",
 	)
 }
@@ -132,7 +131,6 @@ func TestHealthCheck_ZeroChainID_usesChainName(t *testing.T) {
 		t.Fatalf("expected error for zero chain id")
 	}
 	mustContain(t, err.Error(),
-		"RPC health check failed",
 		"[ethereum-testnet-sepolia] invalid RPC response: empty or zero chain ID",
 	)
 }
@@ -152,7 +150,6 @@ func TestHealthCheck_AggregatesMultipleErrors(t *testing.T) {
 		t.Fatalf("expected aggregated error")
 	}
 	mustContain(t, err.Error(),
-		"RPC health check failed",
 		"[ethereum-testnet-sepolia] failed RPC health check",
 		"[777] nil client",
 	)

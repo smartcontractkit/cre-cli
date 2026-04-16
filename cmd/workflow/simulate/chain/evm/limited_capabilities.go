@@ -13,10 +13,13 @@ import (
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain"
 )
 
-// EVMChainLimits is the limit-accessor contract LimitedEVMChain enforces.
-// Aliased to chain.Limits so the chain-type-agnostic CapabilityConfig.Limits
-// value can be passed straight through without a type assertion.
-type EVMChainLimits = chain.Limits
+// EVMChainLimits is the EVM-scoped limit contract LimitedEVMChain enforces.
+// It extends chain.Limits with EVM-specific accessors (e.g. gas limit) so
+// non-EVM chain types cannot accidentally depend on EVM semantics.
+type EVMChainLimits interface {
+	chain.Limits
+	ChainWriteGasLimit() uint64
+}
 
 // LimitedEVMChain wraps an evmserver.ClientCapability and enforces chain write
 // report size and gas limits.

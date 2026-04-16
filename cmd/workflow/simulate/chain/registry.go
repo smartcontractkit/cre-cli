@@ -26,11 +26,12 @@ type ChainType interface {
 	// Name returns the chain type identifier (e.g., "evm", "aptos").
 	Name() string
 
-	// ResolveClients creates RPC clients for all chains this chain type
-	// can simulate, including both supported and experimental chains.
-	// Returns clients keyed by chain selector, and forwarder addresses
-	// for chains that have them.
-	ResolveClients(v *viper.Viper) (clients map[uint64]ChainClient, forwarders map[uint64]string, err error)
+	// ResolveClients creates RPC clients for all chains this chain type can
+	// simulate, including both supported and experimental chains. Returns a
+	// ResolvedChains bundle containing clients keyed by chain selector,
+	// forwarder addresses, and any chain-type-agnostic metadata (e.g.
+	// experimental-selector set) that later interface methods need.
+	ResolveClients(v *viper.Viper) (ResolvedChains, error)
 
 	// ResolveKey parses and validates this chain type's signing key from
 	// settings. If broadcast is true, missing or default-sentinel keys
@@ -64,7 +65,10 @@ type ChainType interface {
 	ParseTriggerChainSelector(triggerID string) (uint64, bool)
 
 	// RunHealthCheck validates RPC connectivity for all resolved clients.
-	RunHealthCheck(clients map[uint64]ChainClient) error
+	// The resolved argument is the same bundle ResolveClients returned,
+	// threaded back by the caller so RunHealthCheck is self-contained and
+	// does not depend on hidden state on the ChainType instance.
+	RunHealthCheck(resolved ResolvedChains) error
 
 	// SupportedChains returns the list of chains this chain type supports
 	// out of the box (for display/documentation purposes).

@@ -35,11 +35,10 @@ func (m *mockChainType) Name() string {
 	return args.String(0)
 }
 
-func (m *mockChainType) ResolveClients(v *viper.Viper) (map[uint64]ChainClient, map[uint64]string, error) {
+func (m *mockChainType) ResolveClients(v *viper.Viper) (ResolvedChains, error) {
 	args := m.Called(v)
-	clients, _ := args.Get(0).(map[uint64]ChainClient)
-	forwarders, _ := args.Get(1).(map[uint64]string)
-	return clients, forwarders, args.Error(2)
+	resolved, _ := args.Get(0).(ResolvedChains)
+	return resolved, args.Error(1)
 }
 
 func (m *mockChainType) RegisterCapabilities(ctx context.Context, cfg CapabilityConfig) ([]services.Service, error) {
@@ -63,8 +62,8 @@ func (m *mockChainType) ParseTriggerChainSelector(triggerID string) (uint64, boo
 	return args.Get(0).(uint64), args.Bool(1)
 }
 
-func (m *mockChainType) RunHealthCheck(clients map[uint64]ChainClient) error {
-	args := m.Called(clients)
+func (m *mockChainType) RunHealthCheck(resolved ResolvedChains) error {
+	args := m.Called(resolved)
 	return args.Error(0)
 }
 

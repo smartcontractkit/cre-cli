@@ -71,7 +71,10 @@ func checkRPCConnectivity(clients map[uint64]*ethclient.Client, experimentalSele
 	}
 
 	if len(errs) > 0 {
-		return fmt.Errorf("RPC health check failed:\n%w", errors.Join(errs...))
+		// Caller aggregates per-chain-type health-check errors under a single
+		// "RPC health check failed:" heading, so we only return the joined
+		// per-selector errors here.
+		return errors.Join(errs...)
 	}
 	return nil
 }
