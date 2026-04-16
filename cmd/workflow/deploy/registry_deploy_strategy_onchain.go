@@ -23,8 +23,13 @@ type onchainRegistryDeployStrategy struct {
 	initErr error
 }
 
-func newOnchainRegistryDeployStrategy(h *handler) *onchainRegistryDeployStrategy {
-	a := &onchainRegistryDeployStrategy{h: h}
+func newOnchainRegistryDeployStrategy(h *handler) (*onchainRegistryDeployStrategy, error) {
+	onChain, err := settings.AsOnChain(h.runtimeContext.ResolvedRegistry, "deploy")
+	if err != nil {
+		return nil, err
+	}
+
+	a := &onchainRegistryDeployStrategy{h: h, onChain: onChain}
 	a.wg.Add(1)
 	go func() {
 		defer a.wg.Done()
@@ -36,7 +41,7 @@ func newOnchainRegistryDeployStrategy(h *handler) *onchainRegistryDeployStrategy
 		a.wrc = wrc
 		h.wrc = wrc
 	}()
-	return a
+	return a, nil
 }
 
 func (a *onchainRegistryDeployStrategy) RunPreDeployChecks() error {
@@ -46,12 +51,6 @@ func (a *onchainRegistryDeployStrategy) RunPreDeployChecks() error {
 	if a.initErr != nil {
 		return a.initErr
 	}
-
-	onChain, err := settings.AsOnChain(h.runtimeContext.ResolvedRegistry, "deploy")
-	if err != nil {
-		return err
-	}
-	a.onChain = onChain
 
 	ui.Line()
 	ui.Dim("Verifying ownership...")

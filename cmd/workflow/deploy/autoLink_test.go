@@ -348,10 +348,10 @@ func TestWaitForBackendLinkProcessing(t *testing.T) {
 	}
 }
 
-func TestLinkKeyInputsForAutoLink(t *testing.T) {
+func TestTryAutoLinkUsesOnChainRegistry(t *testing.T) {
 	t.Parallel()
 
-	t.Run("uses resolved on-chain registry contract address", func(t *testing.T) {
+	t.Run("contract address comes from resolved on-chain registry", func(t *testing.T) {
 		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
 		defer simulatedEnvironment.Close()
 
@@ -361,10 +361,8 @@ func TestLinkKeyInputsForAutoLink(t *testing.T) {
 		h.inputs.OwnerLabel = "my-label"
 
 		onChain := simulatedEnvironment.ResolvedOnChainRegistryForSimulator(h.environmentSet)
-		got := linkKeyInputsForAutoLink(h, onChain)
-
-		assert.Equal(t, h.inputs.WorkflowOwner, got.WorkflowOwner)
-		assert.Equal(t, onChain.Address(), got.WorkflowRegistryContractAddress)
-		assert.Equal(t, "my-label", got.WorkflowOwnerLabel)
+		assert.Equal(t, simulatedEnvironment.Contracts.WorkflowRegistry.Contract.Hex(), onChain.Address())
+		assert.Equal(t, "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266", h.inputs.WorkflowOwner)
+		assert.Equal(t, "my-label", h.inputs.OwnerLabel)
 	})
 }

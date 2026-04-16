@@ -97,14 +97,6 @@ func (h *handler) autoLinkMSIGAndExit(onChain *settings.OnChainRegistry) (halt b
 	return true, nil
 }
 
-func linkKeyInputsForAutoLink(h *handler, onChain *settings.OnChainRegistry) linkkey.Inputs {
-	return linkkey.Inputs{
-		WorkflowOwner:                   h.inputs.WorkflowOwner,
-		WorkflowRegistryContractAddress: onChain.Address(),
-		WorkflowOwnerLabel:              h.inputs.OwnerLabel,
-	}
-}
-
 // tryAutoLink executes the auto-link process using the link-key command
 func (h *handler) tryAutoLink(onChain *settings.OnChainRegistry) error {
 	rtx := &runtime.Context{
@@ -115,7 +107,11 @@ func (h *handler) tryAutoLink(onChain *settings.OnChainRegistry) error {
 		EnvironmentSet: h.environmentSet,
 	}
 
-	return linkkey.Exec(rtx, linkKeyInputsForAutoLink(h, onChain))
+	return linkkey.Exec(rtx, linkkey.Inputs{
+		WorkflowOwner:                   h.inputs.WorkflowOwner,
+		WorkflowRegistryContractAddress: onChain.Address(),
+		WorkflowOwnerLabel:              h.inputs.OwnerLabel,
+	})
 }
 
 // checkLinkStatusViaGraphQL checks if the owner is linked and verified by querying the service
