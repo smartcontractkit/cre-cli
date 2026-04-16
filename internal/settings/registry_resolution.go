@@ -2,7 +2,6 @@ package settings
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/smartcontractkit/cre-cli/internal/environments"
@@ -107,13 +106,9 @@ func ResolveRegistry(
 	if reg.ChainSelector == nil {
 		return nil, fmt.Errorf("on-chain registry %q has no chain_selector in context.yaml", reg.ID)
 	}
-	sel, err := strconv.ParseUint(*reg.ChainSelector, 10, 64)
+	chainName, err := ChainNameFromSelectorString(*reg.ChainSelector)
 	if err != nil {
-		return nil, fmt.Errorf("invalid chain_selector %q for registry %q: %w", *reg.ChainSelector, reg.ID, err)
-	}
-	chainName, err := GetChainNameByChainSelector(sel)
-	if err != nil {
-		return nil, fmt.Errorf("cannot resolve chain name for selector %d (registry %q): %w", sel, reg.ID, err)
+		return nil, fmt.Errorf("registry %q: %w", reg.ID, err)
 	}
 
 	return NewOnChainRegistry(

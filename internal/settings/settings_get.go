@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
@@ -248,6 +249,17 @@ func GetChainNameByChainSelector(chainSelector uint64) (string, error) {
 	}
 
 	return chainDetails.ChainName, nil
+}
+
+// ChainNameFromSelectorString parses a raw chain-selector string and resolves
+// it to a chain name. It combines the string-to-uint64 conversion with the
+// selector-to-name lookup in a single call.
+func ChainNameFromSelectorString(raw string) (string, error) {
+	sel, err := strconv.ParseUint(raw, 10, 64)
+	if err != nil {
+		return "", fmt.Errorf("invalid chain_selector %q: %w", raw, err)
+	}
+	return GetChainNameByChainSelector(sel)
 }
 
 func GetChainSelectorByChainName(name string) (uint64, error) {
