@@ -21,17 +21,19 @@ type EVMChainLimit struct {
 }
 
 func (s *EVMChainLimit) ChainWriteReportSizeLimit() int { return s.reportSizeLimit }
-func (s *EVMChainLimit) ChainWriteGasLimit() uint64  { return s.gasLimit }
+func (s *EVMChainLimit) ChainWriteGasLimit() uint64     { return s.gasLimit }
 
 type evmCapabilityBaseStub struct{}
 
-func (evmCapabilityBaseStub) Start(context.Context) error                                    { return nil }
-func (evmCapabilityBaseStub) Close() error                                                   { return nil }
-func (evmCapabilityBaseStub) HealthReport() map[string]error                                 { return map[string]error{} }
-func (evmCapabilityBaseStub) Name() string                                                   { return "stub" }
-func (evmCapabilityBaseStub) Description() string                                            { return "stub" }
-func (evmCapabilityBaseStub) Ready() error                                                   { return nil }
-func (evmCapabilityBaseStub) Initialise(context.Context, core.StandardCapabilitiesDependencies) error { return nil }
+func (evmCapabilityBaseStub) Start(context.Context) error    { return nil }
+func (evmCapabilityBaseStub) Close() error                   { return nil }
+func (evmCapabilityBaseStub) HealthReport() map[string]error { return map[string]error{} }
+func (evmCapabilityBaseStub) Name() string                   { return "stub" }
+func (evmCapabilityBaseStub) Description() string            { return "stub" }
+func (evmCapabilityBaseStub) Ready() error                   { return nil }
+func (evmCapabilityBaseStub) Initialise(context.Context, core.StandardCapabilitiesDependencies) error {
+	return nil
+}
 
 type evmClientCapabilityStub struct {
 	evmCapabilityBaseStub

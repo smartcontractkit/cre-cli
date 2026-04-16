@@ -68,8 +68,8 @@ func newMockRPC(t *testing.T) *mockRPC {
 	}
 	m.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
-			ID     json.RawMessage `json:"id"`
-			Method string          `json:"method"`
+			ID     json.RawMessage   `json:"id"`
+			Method string            `json:"method"`
 			Params []json.RawMessage `json:"params"`
 		}
 		_ = json.NewDecoder(r.Body).Decode(&req)
