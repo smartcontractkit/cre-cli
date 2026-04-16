@@ -23,16 +23,15 @@ func TestWorkflowUpsert(t *testing.T) {
 			{
 				name: "Valid Inputs",
 				inputs: Inputs{
-					WorkflowName:                      "test_workflow",
-					WorkflowOwner:                     chainsim.TestAddress,
-					WorkflowPath:                      filepath.Join("testdata", "basic_workflow", "main.go"),
-					ConfigPath:                        filepath.Join("testdata", "basic_workflow", "config.yml"),
-					DonFamily:                         "zone-a",
-					WorkflowRegistryContractChainName: "ethereum-testnet-sepolia",
-					BinaryURL:                         "https://example.com/binary",
-					KeepAlive:                         true,
-					ConfigURL:                         nil,
-					WorkflowTag:                       "test_tag",
+					WorkflowName:  "test_workflow",
+					WorkflowOwner: chainsim.TestAddress,
+					WorkflowPath:  filepath.Join("testdata", "basic_workflow", "main.go"),
+					ConfigPath:    filepath.Join("testdata", "basic_workflow", "config.yml"),
+					DonFamily:     "zone-a",
+					BinaryURL:     "https://example.com/binary",
+					KeepAlive:     true,
+					ConfigURL:     nil,
+					WorkflowTag:   "test_tag",
 				},
 				wantErr:    false,
 				wantKey:    "",
@@ -46,7 +45,6 @@ func TestWorkflowUpsert(t *testing.T) {
 
 				ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
 				handler := newHandler(ctx, buf)
-				tt.inputs.WorkflowRegistryContractAddress = simulatedEnvironment.Contracts.WorkflowRegistry.Contract.Hex()
 
 				wrc, err := handler.clientFactory.NewWorkflowRegistryV2Client()
 				require.NoError(t, err)
@@ -64,7 +62,8 @@ func TestWorkflowUpsert(t *testing.T) {
 
 				handler.workflowArtifact = &wfArt
 
-				err = handler.upsert()
+				onChain := simulatedEnvironment.ResolvedOnChainRegistryForSimulator(handler.environmentSet)
+				err = handler.upsert(onChain)
 				require.NoError(t, err)
 			})
 		}
@@ -81,14 +80,12 @@ func TestPrepareUpsertParams_StatusPreservation(t *testing.T) {
 		handler := newHandler(ctx, buf)
 
 		handler.inputs = Inputs{
-			WorkflowName:                      "test_workflow",
-			WorkflowOwner:                     chainsim.TestAddress,
-			WorkflowPath:                      filepath.Join("testdata", "basic_workflow", "main.go"),
-			DonFamily:                         "zone-a",
-			WorkflowRegistryContractChainName: "ethereum-testnet-sepolia",
-			WorkflowRegistryContractAddress:   simulatedEnvironment.Contracts.WorkflowRegistry.Contract.Hex(),
-			BinaryURL:                         "https://example.com/binary",
-			WorkflowTag:                       "test_tag",
+			WorkflowName:  "test_workflow",
+			WorkflowOwner: chainsim.TestAddress,
+			WorkflowPath:  filepath.Join("testdata", "basic_workflow", "main.go"),
+			DonFamily:     "zone-a",
+			BinaryURL:     "https://example.com/binary",
+			WorkflowTag:   "test_tag",
 		}
 		handler.workflowArtifact = &workflowArtifact{
 			BinaryData: []byte("0x1234"),
@@ -112,14 +109,12 @@ func TestPrepareUpsertParams_StatusPreservation(t *testing.T) {
 		handler := newHandler(ctx, buf)
 
 		handler.inputs = Inputs{
-			WorkflowName:                      "test_workflow",
-			WorkflowOwner:                     chainsim.TestAddress,
-			WorkflowPath:                      filepath.Join("testdata", "basic_workflow", "main.go"),
-			DonFamily:                         "zone-a",
-			WorkflowRegistryContractChainName: "ethereum-testnet-sepolia",
-			WorkflowRegistryContractAddress:   simulatedEnvironment.Contracts.WorkflowRegistry.Contract.Hex(),
-			BinaryURL:                         "https://example.com/binary",
-			WorkflowTag:                       "test_tag",
+			WorkflowName:  "test_workflow",
+			WorkflowOwner: chainsim.TestAddress,
+			WorkflowPath:  filepath.Join("testdata", "basic_workflow", "main.go"),
+			DonFamily:     "zone-a",
+			BinaryURL:     "https://example.com/binary",
+			WorkflowTag:   "test_tag",
 		}
 		handler.workflowArtifact = &workflowArtifact{
 			BinaryData: []byte("0x1234"),
@@ -146,14 +141,12 @@ func TestPrepareUpsertParams_StatusPreservation(t *testing.T) {
 		handler := newHandler(ctx, buf)
 
 		handler.inputs = Inputs{
-			WorkflowName:                      "test_workflow",
-			WorkflowOwner:                     chainsim.TestAddress,
-			WorkflowPath:                      filepath.Join("testdata", "basic_workflow", "main.go"),
-			DonFamily:                         "zone-a",
-			WorkflowRegistryContractChainName: "ethereum-testnet-sepolia",
-			WorkflowRegistryContractAddress:   simulatedEnvironment.Contracts.WorkflowRegistry.Contract.Hex(),
-			BinaryURL:                         "https://example.com/binary",
-			WorkflowTag:                       "test_tag",
+			WorkflowName:  "test_workflow",
+			WorkflowOwner: chainsim.TestAddress,
+			WorkflowPath:  filepath.Join("testdata", "basic_workflow", "main.go"),
+			DonFamily:     "zone-a",
+			BinaryURL:     "https://example.com/binary",
+			WorkflowTag:   "test_tag",
 		}
 		handler.workflowArtifact = &workflowArtifact{
 			BinaryData: []byte("0x1234"),

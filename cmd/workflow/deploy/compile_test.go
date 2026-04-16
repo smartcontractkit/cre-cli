@@ -53,8 +53,6 @@ func TestCompileCmd(t *testing.T) {
 				cmd: Inputs{
 					WorkflowPath:                      "testdata/test_workflow.yaml",
 					ConfigPath:                        "nonexistent.yaml",
-					WorkflowRegistryContractAddress:   "0x1234567890123456789012345678901234567890",
-					WorkflowRegistryContractChainName: "ethereum-testnet-sepolia",
 				},
 				WorkflowOwnerType: constants.WorkflowOwnerTypeEOA,
 				wantError:         true,
@@ -66,8 +64,6 @@ func TestCompileCmd(t *testing.T) {
 				cmd: Inputs{
 					WorkflowPath:                      "testdata/test_workflow.yaml",
 					ConfigPath:                        "./testdata/đuveč.yaml",
-					WorkflowRegistryContractAddress:   "0x1234567890123456789012345678901234567890",
-					WorkflowRegistryContractChainName: "ethereum-testnet-sepolia",
 				},
 				WorkflowOwnerType: constants.WorkflowOwnerTypeEOA,
 				wantError:         true,
@@ -79,8 +75,6 @@ func TestCompileCmd(t *testing.T) {
 				cmd: Inputs{
 					WorkflowPath:                      "testdata/test_workflow.yaml",
 					OutputPath:                        "outputŠČ.yaml",
-					WorkflowRegistryContractAddress:   "0x1234567890123456789012345678901234567890",
-					WorkflowRegistryContractChainName: "ethereum-testnet-sepolia",
 				},
 				WorkflowOwnerType: constants.WorkflowOwnerTypeEOA,
 				wantError:         true,
@@ -182,8 +176,6 @@ func TestCompileCmd(t *testing.T) {
 				DonFamily:                         "test_label",
 				WorkflowPath:                      filepath.Join("testdata", "malformed_workflow", "main.go"),
 				OutputPath:                        outputPath,
-				WorkflowRegistryContractAddress:   "0x1234567890123456789012345678901234567890",
-				WorkflowRegistryContractChainName: "ethereum-testnet-sepolia",
 			}, constants.WorkflowOwnerTypeEOA)
 			require.Error(t, err)
 			assert.ErrorContains(t, err, "failed to compile workflow")
@@ -200,8 +192,6 @@ func TestCompileOutputMatchesUnderlying(t *testing.T) {
 		DonFamily:                         "test_label",
 		WorkflowPath:                      filepath.Join("testdata", "basic_workflow", "main.go"),
 		ConfigPath:                        filepath.Join("testdata", "basic_workflow", "config.yml"),
-		WorkflowRegistryContractAddress:   "0x1234567890123456789012345678901234567890",
-		WorkflowRegistryContractChainName: "ethereum-testnet-sepolia",
 	}
 
 	t.Run("default output path", func(t *testing.T) {
@@ -334,10 +324,8 @@ func TestCompileWithWasmPath(t *testing.T) {
 			WorkflowOwner:                     chainsim.TestAddress,
 			DonFamily:                         "test_label",
 			WorkflowPath:                      filepath.Join("testdata", "basic_workflow", "main.go"),
-			WasmPath:                          wasmFile,
-			OutputPath:                        outputPath,
-			WorkflowRegistryContractAddress:   "0x1234567890123456789012345678901234567890",
-			WorkflowRegistryContractChainName: "ethereum-testnet-sepolia",
+			WasmPath:   wasmFile,
+			OutputPath: outputPath,
 		}
 
 		err := runCompile(simulatedEnvironment, inputs, constants.WorkflowOwnerTypeEOA)
@@ -378,10 +366,8 @@ func TestCompileWithWasmPath(t *testing.T) {
 			WorkflowOwner:                     chainsim.TestAddress,
 			DonFamily:                         "test_label",
 			WorkflowPath:                      filepath.Join("testdata", "basic_workflow", "main.go"),
-			WasmPath:                          wasmFile,
-			OutputPath:                        outputPath,
-			WorkflowRegistryContractAddress:   "0x1234567890123456789012345678901234567890",
-			WorkflowRegistryContractChainName: "ethereum-testnet-sepolia",
+			WasmPath:   wasmFile,
+			OutputPath: outputPath,
 		}
 
 		err = runCompile(simulatedEnvironment, inputs, constants.WorkflowOwnerTypeEOA)
@@ -417,9 +403,7 @@ func TestCompileWithWasmPath(t *testing.T) {
 			WorkflowOwner:                     chainsim.TestAddress,
 			DonFamily:                         "test_label",
 			WorkflowPath:                      filepath.Join("testdata", "basic_workflow", "main.go"),
-			WasmPath:                          "/nonexistent/path/to/file.wasm",
-			WorkflowRegistryContractAddress:   "0x1234567890123456789012345678901234567890",
-			WorkflowRegistryContractChainName: "ethereum-testnet-sepolia",
+			WasmPath: "/nonexistent/path/to/file.wasm",
 		}
 
 		err := handler.ValidateInputs()
@@ -446,9 +430,7 @@ func TestCompileWithWasmPath(t *testing.T) {
 			WorkflowOwner:                     chainsim.TestAddress,
 			DonFamily:                         "test_label",
 			WorkflowPath:                      filepath.Join("testdata", "basic_workflow", "main.go"),
-			WasmPath:                          "https://example.com/binary.wasm",
-			WorkflowRegistryContractAddress:   "0x1234567890123456789012345678901234567890",
-			WorkflowRegistryContractChainName: "ethereum-testnet-sepolia",
+			WasmPath: "https://example.com/binary.wasm",
 		}
 		handler.validated = true
 
@@ -526,6 +508,11 @@ func TestCustomWasmWorkflowRunsMakeBuild(t *testing.T) {
 	_ = os.Remove(wasmPath)
 	t.Cleanup(func() { _ = os.Remove(wasmPath) })
 
+	require.NoError(t, os.MkdirAll(filepath.Dir(wasmPath), 0o755))
+	// ValidateInputs requires a readable workflow path; seed a minimal wasm header so make can replace the binary.
+	minimalWasm := append([]byte{0x00, 0x61, 0x73, 0x6d}, make([]byte, 8)...)
+	require.NoError(t, os.WriteFile(wasmPath, minimalWasm, 0o644))
+
 	simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
 	defer simulatedEnvironment.Close()
 
@@ -538,8 +525,6 @@ func TestCustomWasmWorkflowRunsMakeBuild(t *testing.T) {
 		DonFamily:                         "test_label",
 		WorkflowPath:                      wasmPath,
 		ConfigPath:                        filepath.Join(customWasmDir, "config.yml"),
-		WorkflowRegistryContractAddress:   "0x1234567890123456789012345678901234567890",
-		WorkflowRegistryContractChainName: "ethereum-testnet-sepolia",
 		OutputPath:                        outputPath,
 	}
 

@@ -8,6 +8,7 @@ import (
 
 	"github.com/smartcontractkit/cre-cli/cmd/client"
 	"github.com/smartcontractkit/cre-cli/internal/constants"
+	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
@@ -17,6 +18,7 @@ import (
 type onchainRegistryDeployStrategy struct {
 	h       *handler
 	wrc     *client.WorkflowRegistryV2Client
+	onChain *settings.OnChainRegistry
 	wg      sync.WaitGroup
 	initErr error
 }
@@ -45,10 +47,16 @@ func (a *onchainRegistryDeployStrategy) RunPreDeployChecks() error {
 		return a.initErr
 	}
 
+	onChain, err := settings.AsOnChain(h.runtimeContext.ResolvedRegistry, "deploy")
+	if err != nil {
+		return err
+	}
+	a.onChain = onChain
+
 	ui.Line()
 	ui.Dim("Verifying ownership...")
 	if h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerType == constants.WorkflowOwnerTypeMSIG {
-		halt, err := h.autoLinkMSIGAndExit()
+		halt, err := h.autoLinkMSIGAndExit(a.onChain)
 		if err != nil {
 			return fmt.Errorf("failed to check/handle MSIG owner link status: %w", err)
 		}
@@ -56,7 +64,7 @@ func (a *onchainRegistryDeployStrategy) RunPreDeployChecks() error {
 			return errDeployHalted
 		}
 	} else {
-		if err := h.ensureOwnerLinkedOrFail(); err != nil {
+		if err := h.ensureOwnerLinkedOrFail(a.onChain); err != nil {
 			return err
 		}
 	}
@@ -97,7 +105,7 @@ func (a *onchainRegistryDeployStrategy) Upsert() error {
 
 	ui.Line()
 	ui.Dim("Preparing deployment transaction...")
-	if err := h.upsert(); err != nil {
+	if err := h.upsert(a.onChain); err != nil {
 		return fmt.Errorf("failed to register workflow: %w", err)
 	}
 	return nil

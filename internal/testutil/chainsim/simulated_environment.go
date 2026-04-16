@@ -60,6 +60,18 @@ func (se *SimulatedEnvironment) Close() {
 	se.Chain.Close()
 }
 
+// ResolvedOnChainRegistryForSimulator returns an on-chain registry whose contract address
+// matches the simulator-deployed WorkflowRegistry, using chain metadata from envSet.
+func (se *SimulatedEnvironment) ResolvedOnChainRegistryForSimulator(envSet *environments.EnvironmentSet) *settingspkg.OnChainRegistry {
+	return settingspkg.NewOnChainRegistry(
+		"",
+		se.Contracts.WorkflowRegistry.Contract.Hex(),
+		envSet.WorkflowRegistryChainName,
+		envSet.DonFamily,
+		envSet.WorkflowRegistryChainExplorerURL,
+	)
+}
+
 func (se *SimulatedEnvironment) createContextWithLogger(logger *zerolog.Logger) *runtime.Context {
 	v := viper.New()
 	v.Set(settingspkg.EthPrivateKeyEnvVar, TestPrivateKey)
@@ -80,7 +92,10 @@ func (se *SimulatedEnvironment) createContextWithLogger(logger *zerolog.Logger) 
 		logger.Warn().Err(err).Msg("failed to create new credentials")
 	}
 
-	resolved, _ := settingspkg.ResolveRegistry("", nil, environmentSet)
+	var resolved settingspkg.ResolvedRegistry
+	if environmentSet != nil {
+		resolved = se.ResolvedOnChainRegistryForSimulator(environmentSet)
+	}
 
 	ctx := &runtime.Context{
 		Logger:           logger,

@@ -348,21 +348,23 @@ func TestWaitForBackendLinkProcessing(t *testing.T) {
 	}
 }
 
-// TestTryAutoLink tests the auto-link execution setup
-func TestTryAutoLink(t *testing.T) {
+func TestLinkKeyInputsForAutoLink(t *testing.T) {
 	t.Parallel()
 
-	t.Run("sets up linkkey inputs correctly", func(t *testing.T) {
+	t.Run("uses resolved on-chain registry contract address", func(t *testing.T) {
 		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
 		defer simulatedEnvironment.Close()
 
 		ctx, _ := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
 		h := newHandler(ctx, nil)
 		h.inputs.WorkflowOwner = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
-		h.inputs.WorkflowRegistryContractAddress = "0x1234567890123456789012345678901234567890"
+		h.inputs.OwnerLabel = "my-label"
 
-		// Verify the handler is set up correctly
-		assert.Equal(t, "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266", h.inputs.WorkflowOwner)
-		assert.Equal(t, "0x1234567890123456789012345678901234567890", h.inputs.WorkflowRegistryContractAddress)
+		onChain := simulatedEnvironment.ResolvedOnChainRegistryForSimulator(h.environmentSet)
+		got := linkKeyInputsForAutoLink(h, onChain)
+
+		assert.Equal(t, h.inputs.WorkflowOwner, got.WorkflowOwner)
+		assert.Equal(t, onChain.Address(), got.WorkflowRegistryContractAddress)
+		assert.Equal(t, "my-label", got.WorkflowOwnerLabel)
 	})
 }

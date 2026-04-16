@@ -39,9 +39,6 @@ type Inputs struct {
 	OutputPath   string `validate:"omitempty,filepath,ascii,max=97" cli:"--output"`
 	WasmPath     string `validate:"omitempty,file,ascii,max=2048" cli:"--wasm"`
 
-	WorkflowRegistryContractAddress   string `validate:"required"`
-	WorkflowRegistryContractChainName string `validate:"required"`
-
 	OwnerLabel       string `validate:"omitempty"`
 	SkipConfirmation bool
 	// SkipTypeChecks passes --skip-type-checks to cre-compile for TypeScript workflows.
@@ -179,11 +176,6 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 		SkipTypeChecks:         v.GetBool(cmdcommon.SkipTypeChecksCLIFlag),
 		PreviewPrivateRegistry: previewPrivateRegistry,
 		TargetWorkflowRegistry: targetWorkflowRegistry,
-	}
-
-	if oc, ok := h.runtimeContext.ResolvedRegistry.(*settings.OnChainRegistry); ok {
-		inputs.WorkflowRegistryContractChainName = oc.ChainName()
-		inputs.WorkflowRegistryContractAddress = oc.Address()
 	}
 
 	return inputs, nil
