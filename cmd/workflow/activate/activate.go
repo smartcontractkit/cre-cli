@@ -112,9 +112,9 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 	return Inputs{
 		WorkflowName:                      h.settings.Workflow.UserWorkflowSettings.WorkflowName,
 		WorkflowOwner:                     h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress,
-		DonFamily:                         oc.DonFamily,
-		WorkflowRegistryContractAddress:   oc.Address,
-		WorkflowRegistryContractChainName: oc.ChainName,
+		DonFamily:                         oc.DonFamily(),
+		WorkflowRegistryContractAddress:   oc.Address(),
+		WorkflowRegistryContractChainName: oc.ChainName(),
 	}, nil
 }
 
@@ -188,10 +188,10 @@ func (h *handler) Execute() error {
 	switch txOut.Type {
 	case client.Regular:
 		ui.Success(fmt.Sprintf("Transaction confirmed: %s", txOut.Hash))
-		ui.URL(fmt.Sprintf("%s/tx/%s", oc.ExplorerURL, txOut.Hash))
+		ui.URL(fmt.Sprintf("%s/tx/%s", oc.ExplorerURL(), txOut.Hash))
 		ui.Line()
 		ui.Success("Workflow activated successfully")
-		ui.Dim(fmt.Sprintf("   Contract address: %s", oc.Address))
+		ui.Dim(fmt.Sprintf("   Contract address: %s", oc.Address()))
 		ui.Dim(fmt.Sprintf("   Transaction hash: %s", txOut.Hash))
 		ui.Dim(fmt.Sprintf("   Workflow Name:    %s", workflowName))
 		ui.Dim(fmt.Sprintf("   Workflow ID:      %s", hex.EncodeToString(latest.WorkflowId[:])))
@@ -213,9 +213,9 @@ func (h *handler) Execute() error {
 		ui.Line()
 
 	case client.Changeset:
-		chainSelector, err := settings.GetChainSelectorByChainName(oc.ChainName)
+		chainSelector, err := settings.GetChainSelectorByChainName(oc.ChainName())
 		if err != nil {
-			return fmt.Errorf("failed to get chain selector for chain %q: %w", oc.ChainName, err)
+			return fmt.Errorf("failed to get chain selector for chain %q: %w", oc.ChainName(), err)
 		}
 		mcmsConfig, err := settings.GetMCMSConfig(h.settings, chainSelector)
 		if err != nil {

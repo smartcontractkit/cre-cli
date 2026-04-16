@@ -22,35 +22,52 @@ const (
 // type-specific fields, which prevents accidental use of fields that don't
 // exist for a given registry kind.
 type ResolvedRegistry interface {
-	GetID() string
-	GetType() RegistryType
-	GetDonFamily() string
+	ID() string
+	Type() RegistryType
+	DonFamily() string
 }
 
 // OnChainRegistry holds the resolved configuration for an on-chain workflow
 // registry. Address and ChainName are guaranteed non-empty.
 type OnChainRegistry struct {
-	ID          string
-	Address     string
-	ChainName   string
-	DonFamily   string
-	ExplorerURL string
+	id          string
+	address     string
+	chainName   string
+	donFamily   string
+	explorerURL string
 }
 
-func (r *OnChainRegistry) GetID() string         { return r.ID }
-func (r *OnChainRegistry) GetType() RegistryType { return RegistryTypeOnChain }
-func (r *OnChainRegistry) GetDonFamily() string  { return r.DonFamily }
+func NewOnChainRegistry(id, address, chainName, donFamily, explorerURL string) *OnChainRegistry {
+	return &OnChainRegistry{
+		id:          id,
+		address:     address,
+		chainName:   chainName,
+		donFamily:   donFamily,
+		explorerURL: explorerURL,
+	}
+}
+
+func (r *OnChainRegistry) ID() string         { return r.id }
+func (r *OnChainRegistry) Type() RegistryType { return RegistryTypeOnChain }
+func (r *OnChainRegistry) DonFamily() string  { return r.donFamily }
+func (r *OnChainRegistry) Address() string    { return r.address }
+func (r *OnChainRegistry) ChainName() string  { return r.chainName }
+func (r *OnChainRegistry) ExplorerURL() string { return r.explorerURL }
 
 // OffChainRegistry holds the resolved configuration for an off-chain (private)
 // workflow registry. It has no on-chain address or chain.
 type OffChainRegistry struct {
-	ID        string
-	DonFamily string
+	id        string
+	donFamily string
 }
 
-func (r *OffChainRegistry) GetID() string         { return r.ID }
-func (r *OffChainRegistry) GetType() RegistryType { return RegistryTypeOffChain }
-func (r *OffChainRegistry) GetDonFamily() string  { return r.DonFamily }
+func NewOffChainRegistry(id, donFamily string) *OffChainRegistry {
+	return &OffChainRegistry{id: id, donFamily: donFamily}
+}
+
+func (r *OffChainRegistry) ID() string         { return r.id }
+func (r *OffChainRegistry) Type() RegistryType { return RegistryTypeOffChain }
+func (r *OffChainRegistry) DonFamily() string  { return r.donFamily }
 
 // ResolveRegistry maps an optional deployment-registry value to a concrete
 // ResolvedRegistry. When deploymentRegistry is empty the static EnvironmentSet
@@ -80,44 +97,32 @@ func ResolveRegistry(
 		if isProduction(envSet) {
 			return nil, fmt.Errorf("off-chain (private) registries are not yet supported in production")
 		}
-		return &OffChainRegistry{
-			ID:        reg.ID,
-			DonFamily: tenantCtx.DefaultDonFamily,
-		}, nil
+		return NewOffChainRegistry(reg.ID, tenantCtx.DefaultDonFamily), nil
 	}
 
-	address := ""
-	if reg.Address != nil {
-		address = *reg.Address
-	}
-	if address == "" {
+	if reg.Address == nil || *reg.Address == "" {
 		return nil, fmt.Errorf("on-chain registry %q has no address in context.yaml", reg.ID)
 	}
 
-	resolved := &OnChainRegistry{
-		ID:          reg.ID,
-		Address:     address,
-		DonFamily:   tenantCtx.DefaultDonFamily,
-		ExplorerURL: envSet.WorkflowRegistryChainExplorerURL,
-	}
-
-	if reg.ChainSelector != nil {
-		sel, err := strconv.ParseUint(*reg.ChainSelector, 10, 64)
-		if err != nil {
-			return nil, fmt.Errorf("invalid chain_selector %q for registry %q: %w", *reg.ChainSelector, reg.ID, err)
-		}
-		name, err := GetChainNameByChainSelector(sel)
-		if err != nil {
-			return nil, fmt.Errorf("cannot resolve chain name for selector %d (registry %q): %w", sel, reg.ID, err)
-		}
-		resolved.ChainName = name
-	}
-
-	if resolved.ChainName == "" {
+	if reg.ChainSelector == nil {
 		return nil, fmt.Errorf("on-chain registry %q has no chain_selector in context.yaml", reg.ID)
 	}
+	sel, err := strconv.ParseUint(*reg.ChainSelector, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid chain_selector %q for registry %q: %w", *reg.ChainSelector, reg.ID, err)
+	}
+	chainName, err := GetChainNameByChainSelector(sel)
+	if err != nil {
+		return nil, fmt.Errorf("cannot resolve chain name for selector %d (registry %q): %w", sel, reg.ID, err)
+	}
 
-	return resolved, nil
+	return NewOnChainRegistry(
+		reg.ID,
+		*reg.Address,
+		chainName,
+		tenantCtx.DefaultDonFamily,
+		envSet.WorkflowRegistryChainExplorerURL,
+	), nil
 }
 
 // ParseRegistryType converts a raw type string from context.yaml to a
@@ -130,12 +135,13 @@ func ParseRegistryType(raw string) RegistryType {
 }
 
 func defaultFromEnvironmentSet(envSet *environments.EnvironmentSet) *OnChainRegistry {
-	return &OnChainRegistry{
-		Address:     envSet.WorkflowRegistryAddress,
-		ChainName:   envSet.WorkflowRegistryChainName,
-		DonFamily:   envSet.DonFamily,
-		ExplorerURL: envSet.WorkflowRegistryChainExplorerURL,
-	}
+	return NewOnChainRegistry(
+		"",
+		envSet.WorkflowRegistryAddress,
+		envSet.WorkflowRegistryChainName,
+		envSet.DonFamily,
+		envSet.WorkflowRegistryChainExplorerURL,
+	)
 }
 
 func findRegistry(registries []*tenantctx.Registry, id string) *tenantctx.Registry {
@@ -167,6 +173,6 @@ func AsOnChain(r ResolvedRegistry, commandName string) (*OnChainRegistry, error)
 	}
 	return nil, fmt.Errorf(
 		"%s currently only supports on-chain registries; deployment-registry %q is %s",
-		commandName, r.GetID(), r.GetType(),
+		commandName, r.ID(), r.Type(),
 	)
 }

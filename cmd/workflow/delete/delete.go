@@ -118,8 +118,8 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 		WorkflowName:                      h.settings.Workflow.UserWorkflowSettings.WorkflowName,
 		WorkflowOwner:                     h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress,
 		SkipConfirmation:                  v.GetBool(settings.Flags.SkipConfirmation.Name),
-		WorkflowRegistryContractChainName: oc.ChainName,
-		WorkflowRegistryContractAddress:   oc.Address,
+		WorkflowRegistryContractChainName: oc.ChainName(),
+		WorkflowRegistryContractAddress:   oc.Address(),
 	}, nil
 }
 
@@ -199,7 +199,7 @@ func (h *handler) Execute() error {
 		switch txOut.Type {
 		case client.Regular:
 			ui.Success("Transaction confirmed")
-			ui.URL(fmt.Sprintf("%s/tx/%s", oc.ExplorerURL, txOut.Hash))
+			ui.URL(fmt.Sprintf("%s/tx/%s", oc.ExplorerURL(), txOut.Hash))
 			ui.Success(fmt.Sprintf("Deleted workflow ID: %s", hex.EncodeToString(wf.WorkflowId[:])))
 
 		case client.Raw:
@@ -218,9 +218,9 @@ func (h *handler) Execute() error {
 			ui.Line()
 
 		case client.Changeset:
-			chainSelector, err := settings.GetChainSelectorByChainName(oc.ChainName)
+			chainSelector, err := settings.GetChainSelectorByChainName(oc.ChainName())
 			if err != nil {
-				return fmt.Errorf("failed to get chain selector for chain %q: %w", oc.ChainName, err)
+				return fmt.Errorf("failed to get chain selector for chain %q: %w", oc.ChainName(), err)
 			}
 			mcmsConfig, err := settings.GetMCMSConfig(h.settings, chainSelector)
 			if err != nil {

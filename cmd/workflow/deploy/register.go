@@ -73,12 +73,12 @@ func (h *handler) handleUpsert(params client.RegisterWorkflowV2Parameters) error
 	switch txOut.Type {
 	case client.Regular:
 		ui.Success("Transaction confirmed")
-		ui.URL(fmt.Sprintf("%s/tx/%s", oc.ExplorerURL, txOut.Hash))
+		ui.URL(fmt.Sprintf("%s/tx/%s", oc.ExplorerURL(), txOut.Hash))
 		ui.Line()
 		ui.Success("Workflow deployed successfully")
 		ui.Line()
 		ui.Bold("Details:")
-		ui.Dim(fmt.Sprintf("   Contract address: %s", oc.Address))
+		ui.Dim(fmt.Sprintf("   Contract address: %s", oc.Address()))
 		ui.Dim(fmt.Sprintf("   Transaction hash: %s", txOut.Hash))
 		ui.Dim(fmt.Sprintf("   Workflow Name:    %s", workflowName))
 		ui.Dim(fmt.Sprintf("   Workflow ID:      %s", h.workflowArtifact.WorkflowID))
@@ -104,9 +104,9 @@ func (h *handler) handleUpsert(params client.RegisterWorkflowV2Parameters) error
 		ui.Line()
 
 	case client.Changeset:
-		chainSelector, err := settings.GetChainSelectorByChainName(oc.ChainName)
+		chainSelector, err := settings.GetChainSelectorByChainName(oc.ChainName())
 		if err != nil {
-			return fmt.Errorf("failed to get chain selector for chain %q: %w", oc.ChainName, err)
+			return fmt.Errorf("failed to get chain selector for chain %q: %w", oc.ChainName(), err)
 		}
 		mcmsConfig, err := settings.GetMCMSConfig(h.settings, chainSelector)
 		if err != nil {

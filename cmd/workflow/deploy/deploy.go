@@ -165,7 +165,7 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 		WorkflowOwner: resolvedWorkflowOwner,
 		WorkflowTag:   workflowTag,
 		ConfigURL:     configURL,
-		DonFamily:     h.runtimeContext.ResolvedRegistry.GetDonFamily(),
+		DonFamily:     h.runtimeContext.ResolvedRegistry.DonFamily(),
 
 		WorkflowPath: h.settings.Workflow.WorkflowArtifactSettings.WorkflowPath,
 		KeepAlive:    false,
@@ -182,8 +182,8 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 	}
 
 	if oc, ok := h.runtimeContext.ResolvedRegistry.(*settings.OnChainRegistry); ok {
-		inputs.WorkflowRegistryContractChainName = oc.ChainName
-		inputs.WorkflowRegistryContractAddress = oc.Address
+		inputs.WorkflowRegistryContractChainName = oc.ChainName()
+		inputs.WorkflowRegistryContractAddress = oc.Address()
 	}
 
 	return inputs, nil

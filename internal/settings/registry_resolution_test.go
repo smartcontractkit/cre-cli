@@ -61,17 +61,17 @@ func TestResolveRegistry_EmptyFallsBackToEnvSet(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected *OnChainRegistry, got %T", resolved)
 	}
-	if onchain.Address != envSet.WorkflowRegistryAddress {
-		t.Errorf("expected address %s, got %s", envSet.WorkflowRegistryAddress, onchain.Address)
+	if onchain.Address() != envSet.WorkflowRegistryAddress {
+		t.Errorf("expected address %s, got %s", envSet.WorkflowRegistryAddress, onchain.Address())
 	}
-	if onchain.ChainName != envSet.WorkflowRegistryChainName {
-		t.Errorf("expected chain %s, got %s", envSet.WorkflowRegistryChainName, onchain.ChainName)
+	if onchain.ChainName() != envSet.WorkflowRegistryChainName {
+		t.Errorf("expected chain %s, got %s", envSet.WorkflowRegistryChainName, onchain.ChainName())
 	}
-	if onchain.DonFamily != envSet.DonFamily {
-		t.Errorf("expected don %s, got %s", envSet.DonFamily, onchain.DonFamily)
+	if onchain.DonFamily() != envSet.DonFamily {
+		t.Errorf("expected don %s, got %s", envSet.DonFamily, onchain.DonFamily())
 	}
-	if onchain.ExplorerURL != envSet.WorkflowRegistryChainExplorerURL {
-		t.Errorf("expected explorer %s, got %s", envSet.WorkflowRegistryChainExplorerURL, onchain.ExplorerURL)
+	if onchain.ExplorerURL() != envSet.WorkflowRegistryChainExplorerURL {
+		t.Errorf("expected explorer %s, got %s", envSet.WorkflowRegistryChainExplorerURL, onchain.ExplorerURL())
 	}
 }
 
@@ -85,14 +85,14 @@ func TestResolveRegistry_OnChainFromContext(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected *OnChainRegistry, got %T", resolved)
 	}
-	if onchain.Address != "0xaE55eB3EDAc48a1163EE2cbb1205bE1e90Ea1135" {
-		t.Errorf("unexpected address: %s", onchain.Address)
+	if onchain.Address() != "0xaE55eB3EDAc48a1163EE2cbb1205bE1e90Ea1135" {
+		t.Errorf("unexpected address: %s", onchain.Address())
 	}
-	if onchain.ChainName != "ethereum-testnet-sepolia" {
-		t.Errorf("unexpected chain name: %s", onchain.ChainName)
+	if onchain.ChainName() != "ethereum-testnet-sepolia" {
+		t.Errorf("unexpected chain name: %s", onchain.ChainName())
 	}
-	if onchain.DonFamily != "zone-a" {
-		t.Errorf("unexpected don family: %s", onchain.DonFamily)
+	if onchain.DonFamily() != "zone-a" {
+		t.Errorf("unexpected don family: %s", onchain.DonFamily())
 	}
 }
 
@@ -106,14 +106,14 @@ func TestResolveRegistry_OffChainFromContext(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected *OffChainRegistry, got %T", resolved)
 	}
-	if offchain.ID != "private" {
-		t.Errorf("expected ID %q, got %q", "private", offchain.ID)
+	if offchain.ID() != "private" {
+		t.Errorf("expected ID %q, got %q", "private", offchain.ID())
 	}
-	if offchain.DonFamily != "zone-a" {
-		t.Errorf("unexpected don family: %s", offchain.DonFamily)
+	if offchain.DonFamily() != "zone-a" {
+		t.Errorf("unexpected don family: %s", offchain.DonFamily())
 	}
-	if resolved.GetType() != RegistryTypeOffChain {
-		t.Errorf("expected type %s, got %s", RegistryTypeOffChain, resolved.GetType())
+	if resolved.Type() != RegistryTypeOffChain {
+		t.Errorf("expected type %s, got %s", RegistryTypeOffChain, resolved.Type())
 	}
 }
 
@@ -222,25 +222,25 @@ func TestParseRegistryType(t *testing.T) {
 }
 
 func TestInterfaceMethods(t *testing.T) {
-	onchain := &OnChainRegistry{ID: "oc-1", DonFamily: "zone-a"}
-	if onchain.GetType() != RegistryTypeOnChain {
+	onchain := NewOnChainRegistry("oc-1", "0x1234", "sepolia", "zone-a", "https://etherscan.io")
+	if onchain.Type() != RegistryTypeOnChain {
 		t.Errorf("expected on-chain type")
 	}
-	if onchain.GetID() != "oc-1" {
-		t.Errorf("expected ID oc-1, got %s", onchain.GetID())
+	if onchain.ID() != "oc-1" {
+		t.Errorf("expected ID oc-1, got %s", onchain.ID())
 	}
-	if onchain.GetDonFamily() != "zone-a" {
-		t.Errorf("expected don zone-a, got %s", onchain.GetDonFamily())
+	if onchain.DonFamily() != "zone-a" {
+		t.Errorf("expected don zone-a, got %s", onchain.DonFamily())
 	}
 
-	offchain := &OffChainRegistry{ID: "private", DonFamily: "zone-b"}
-	if offchain.GetType() != RegistryTypeOffChain {
+	offchain := NewOffChainRegistry("private", "zone-b")
+	if offchain.Type() != RegistryTypeOffChain {
 		t.Errorf("expected off-chain type")
 	}
-	if offchain.GetID() != "private" {
-		t.Errorf("expected ID private, got %s", offchain.GetID())
+	if offchain.ID() != "private" {
+		t.Errorf("expected ID private, got %s", offchain.ID())
 	}
-	if offchain.GetDonFamily() != "zone-b" {
-		t.Errorf("expected don zone-b, got %s", offchain.GetDonFamily())
+	if offchain.DonFamily() != "zone-b" {
+		t.Errorf("expected don zone-b, got %s", offchain.DonFamily())
 	}
 }
