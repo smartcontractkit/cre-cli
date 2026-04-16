@@ -87,7 +87,6 @@ func (s *consensusCapabilityStub) Report(ctx context.Context, metadata commonCap
 	return nil, nil
 }
 
-
 func newTestLimits(t *testing.T) *SimulationLimits {
 	t.Helper()
 	limits, err := DefaultLimits()
@@ -320,4 +319,3 @@ func TestLimitedConsensusNoDAGReportDelegates(t *testing.T) {
 	assert.Same(t, expectedResp, resp)
 	assert.Equal(t, 1, inner.reportCalls)
 }
-

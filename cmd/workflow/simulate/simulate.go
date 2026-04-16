@@ -51,8 +51,8 @@ type Inputs struct {
 	WorkflowName string `validate:"required"`
 	// Chain-type-specific fields
 	ChainTypeClients    map[string]map[uint64]chain.ChainClient `validate:"omitempty"`
-	ChainTypeForwarders map[string]map[uint64]string             `validate:"-"`
-	ChainTypeKeys       map[string]interface{}                   `validate:"-"`
+	ChainTypeForwarders map[string]map[uint64]string            `validate:"-"`
+	ChainTypeKeys       map[string]interface{}                  `validate:"-"`
 	// Non-interactive mode options
 	NonInteractive  bool              `validate:"-"`
 	TriggerIndex    int               `validate:"-"`
@@ -97,10 +97,10 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	simulateCmd.Flags().Bool(settings.Flags.NonInteractive.Name, false, "Run without prompts; requires --trigger-index and inputs for the selected trigger type")
 	simulateCmd.Flags().Int("trigger-index", -1, "Index of the trigger to run (0-based)")
 	simulateCmd.Flags().String("http-payload", "", "HTTP trigger payload as JSON string or path to JSON file (with or without @ prefix)")
-	
+
 	// Register chain-type-specific CLI flags (e.g., --evm-tx-hash).
 	chain.RegisterAllCLIFlags(simulateCmd)
-	
+
 	simulateCmd.Flags().String("limits", "default", "Production limits to enforce during simulation: 'default' for prod defaults, path to a limits JSON file (e.g. from 'cre workflow limits export'), or 'none' to disable")
 	simulateCmd.Flags().Bool(cmdcommon.SkipTypeChecksCLIFlag, false, "Skip TypeScript project typecheck during compilation (passes "+cmdcommon.SkipTypeChecksFlag+" to cre-compile)")
 	return simulateCmd
@@ -691,12 +691,12 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 		trigger := holder.TriggerToRun.Id
 		manualTriggerCaps := manualTriggersGetter()
 
-		switch {
-		case trigger == "cron-trigger@1.0.0":
+		switch trigger {
+		case "cron-trigger@1.0.0":
 			holder.TriggerFunc = func() error {
 				return manualTriggerCaps.ManualCronTrigger.ManualTrigger(ctx, triggerRegistrationID, time.Now())
 			}
-		case trigger == "http-trigger@1.0.0-alpha":
+		case "http-trigger@1.0.0-alpha":
 			payload, err := getHTTPTriggerPayload()
 			if err != nil {
 				ui.Error(fmt.Sprintf("Failed to get HTTP trigger payload: %v", err))
@@ -767,12 +767,12 @@ func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inp
 		trigger := holder.TriggerToRun.Id
 		manualTriggerCaps := manualTriggersGetter()
 
-		switch {
-		case trigger == "cron-trigger@1.0.0":
+		switch trigger {
+		case "cron-trigger@1.0.0":
 			holder.TriggerFunc = func() error {
 				return manualTriggerCaps.ManualCronTrigger.ManualTrigger(ctx, triggerRegistrationID, time.Now())
 			}
-		case trigger == "http-trigger@1.0.0-alpha":
+		case "http-trigger@1.0.0-alpha":
 			if strings.TrimSpace(inputs.HTTPPayload) == "" {
 				ui.Error("--http-payload is required for http-trigger@1.0.0-alpha in non-interactive mode")
 				os.Exit(1)

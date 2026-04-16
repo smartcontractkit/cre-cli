@@ -191,4 +191,3 @@ func (l *LimitedConsensusNoDAG) Ready() error                    { return l.inne
 func (l *LimitedConsensusNoDAG) Initialise(ctx context.Context, deps core.StandardCapabilitiesDependencies) error {
 	return l.inner.Initialise(ctx, deps)
 }
-

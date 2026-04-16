@@ -219,7 +219,6 @@ func TestEVMChainType_ResolveKey(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			ct := newEVMChainType()
 			s := &settings.Settings{User: settings.UserSettings{EthPrivateKey: tt.pk}}

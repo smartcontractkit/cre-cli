@@ -41,7 +41,6 @@ func TestGetEVMTriggerLogFromValues_Validation(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			_, err := GetEVMTriggerLogFromValues(context.Background(), nil, tt.hash, 0)
@@ -307,7 +306,6 @@ func TestParseTriggerChainSelector_AdditionalEdgeCases(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			got, ok := ParseTriggerChainSelector(tt.id)

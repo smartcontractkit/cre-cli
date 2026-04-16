@@ -17,7 +17,6 @@ import (
 // fullStubCapability extends the base stub with counters on every delegating
 // method so we can verify the limiter passes calls through.
 type fullStubCapability struct {
-	evmCapabilityBaseStub
 	calls map[string]int
 
 	// optional return override
@@ -188,7 +187,6 @@ func TestLimitedEVMChain_AllMethodsDelegate(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			stub := newFullStub()
