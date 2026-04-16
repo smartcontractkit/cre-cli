@@ -32,6 +32,9 @@ type Context struct {
 	TenantContext    *tenantctx.EnvironmentContext
 	ResolvedRegistry settings.ResolvedRegistry
 	Workflow         WorkflowRuntime
+
+	OrgID                string
+	DerivedWorkflowOwner string
 }
 
 type WorkflowRuntime struct {
@@ -79,8 +82,14 @@ func (ctx *Context) AttachCredentials(validationCtx context.Context, skipValidat
 		}
 
 		validator := authvalidation.NewValidator(ctx.Credentials, ctx.EnvironmentSet, ctx.Logger)
-		if err := validator.ValidateCredentials(validationCtx, ctx.Credentials); err != nil {
+		result, err := validator.ValidateCredentials(validationCtx, ctx.Credentials)
+		if err != nil {
 			return fmt.Errorf("%w: %w", ErrValidationFailed, err)
+		}
+
+		if result != nil {
+			ctx.OrgID = result.OrgID
+			ctx.DerivedWorkflowOwner = result.DerivedWorkflowOwner
 		}
 	}
 
