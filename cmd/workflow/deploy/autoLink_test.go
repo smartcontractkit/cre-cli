@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
+	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/testutil/chainsim"
 )
 
@@ -360,7 +361,8 @@ func TestTryAutoLinkUsesOnChainRegistry(t *testing.T) {
 		h.inputs.WorkflowOwner = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
 		h.inputs.OwnerLabel = "my-label"
 
-		onChain := simulatedEnvironment.ResolvedOnChainRegistryForSimulator(h.environmentSet)
+		onChain, err := settings.AsOnChain(ctx.ResolvedRegistry, "test")
+		assert.NoError(t, err)
 		assert.Equal(t, simulatedEnvironment.Contracts.WorkflowRegistry.Contract.Hex(), onChain.Address())
 		assert.Equal(t, "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266", h.inputs.WorkflowOwner)
 		assert.Equal(t, "my-label", h.inputs.OwnerLabel)

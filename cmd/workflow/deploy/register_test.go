@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/testutil/chainsim"
 )
 
@@ -62,7 +63,8 @@ func TestWorkflowUpsert(t *testing.T) {
 
 				handler.workflowArtifact = &wfArt
 
-				onChain := simulatedEnvironment.ResolvedOnChainRegistryForSimulator(handler.environmentSet)
+				onChain, err := settings.AsOnChain(ctx.ResolvedRegistry, "test")
+				require.NoError(t, err)
 				err = handler.upsert(onChain)
 				require.NoError(t, err)
 			})
