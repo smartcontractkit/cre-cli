@@ -262,7 +262,11 @@ func (h *handler) Execute(ctx context.Context) error {
 		return fmt.Errorf("failed to upload workflow: %w", err)
 	}
 
-	return adapter.Upsert()
+	err = adapter.Upsert()
+	if err == nil {
+		warnIfPausedWorkflowUpdate(h.existingWorkflowStatus)
+	}
+	return err
 }
 
 // prepareArtifacts handles compile/fetch, artifact preparation, and hashing.
@@ -365,4 +369,10 @@ func confirmWorkflowOverwrite(workflowName string, skipConfirmation bool) error 
 	}
 
 	return nil
+}
+
+func warnIfPausedWorkflowUpdate(status *uint8) {
+	if status != nil && *status == workflowStatusPaused {
+		ui.Warning("Your workflow is paused and has been updated")
+	}
 }
