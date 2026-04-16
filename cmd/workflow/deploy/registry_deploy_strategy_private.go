@@ -59,6 +59,7 @@ func (a *privateRegistryDeployStrategy) Upsert() error {
 	if result.Owner != "" {
 		ui.Dim(fmt.Sprintf("   Owner:         %s", result.Owner))
 	}
+	warnIfPausedWorkflowUpdate(h.existingWorkflowStatus)
 
 	return nil
 }
