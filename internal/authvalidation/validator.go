@@ -58,5 +58,9 @@ func (v *Validator) ValidateCredentials(validationCtx context.Context, creds *cr
 		return fmt.Errorf("authentication validation failed: %w", err)
 	}
 
+	if orgID := respEnvelope.GetOrganization.OrganizationID; orgID != "" {
+		creds.OrgID = orgID
+	}
+
 	return nil
 }

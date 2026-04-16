@@ -26,6 +26,7 @@ type Credentials struct {
 	APIKey      string            `yaml:"api_key"` // #nosec G117 -- credential stored in secure config file
 	AuthType    string            `yaml:"auth_type"`
 	IsValidated bool              `yaml:"-"`
+	OrgID       string            `yaml:"-"`
 	log         *zerolog.Logger
 }
 

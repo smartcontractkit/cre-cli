@@ -30,6 +30,7 @@ cre workflow simulate ./my-workflow
       --limits string         Production limits to enforce during simulation: 'default' for prod defaults, path to a limits JSON file (e.g. from 'cre workflow limits export'), or 'none' to disable (default "default")
       --no-config             Simulate without a config file
       --non-interactive       Run without prompts; requires --trigger-index and inputs for the selected trigger type
+      --skip-type-checks      Skip TypeScript project typecheck during compilation (passes --skip-type-checks to cre-compile)
       --trigger-index int     Index of the trigger to run (0-based) (default -1)
       --wasm string           Path or URL to a pre-built WASM binary (skips compilation)
 ```

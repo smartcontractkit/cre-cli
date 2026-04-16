@@ -19,8 +19,9 @@ cre workflow build ./my-workflow
 ### Options
 
 ```
-  -h, --help            help for build
-  -o, --output string   Output file path for the compiled WASM binary (default: <workflow-folder>/binary.wasm)
+  -h, --help               help for build
+  -o, --output string      Output file path for the compiled WASM binary (default: <workflow-folder>/binary.wasm)
+      --skip-type-checks   Skip TypeScript project typecheck during compilation (passes --skip-type-checks to cre-compile)
 ```
 
 ### Options inherited from parent commands
