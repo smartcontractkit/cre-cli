@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/smartcontractkit/cre-cli/internal/environments"
+	"github.com/smartcontractkit/cre-cli/internal/settings"
 )
 
 func TestResolveRegistryTarget(t *testing.T) {
@@ -22,7 +23,7 @@ func TestResolveRegistryTarget(t *testing.T) {
 
 		targetWorkflowRegistry, err := resolveRegistryTarget(false, envSet)
 		require.NoError(t, err)
-		assert.Equal(t, registryTargetOnchain, targetWorkflowRegistry.targetType)
+		assert.Equal(t, settings.RegistryTypeOnChain, targetWorkflowRegistry.targetType)
 		assert.False(t, targetWorkflowRegistry.isPrivate())
 	})
 
@@ -36,7 +37,7 @@ func TestResolveRegistryTarget(t *testing.T) {
 
 		targetWorkflowRegistry, err := resolveRegistryTarget(true, envSet)
 		require.NoError(t, err)
-		assert.Equal(t, registryTargetPrivate, targetWorkflowRegistry.targetType)
+		assert.Equal(t, settings.RegistryTypeOffChain, targetWorkflowRegistry.targetType)
 		assert.True(t, targetWorkflowRegistry.isPrivate())
 	})
 

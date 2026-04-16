@@ -21,6 +21,7 @@ import (
 	workflowUtils "github.com/smartcontractkit/chainlink-common/pkg/workflows"
 	workflow_registry_v2_wrapper "github.com/smartcontractkit/chainlink-evm/gethwrappers/workflow/generated/workflow_registry_wrapper_v2"
 
+	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/tenantctx"
 	"github.com/smartcontractkit/cre-cli/internal/testutil/chainsim"
 	"github.com/smartcontractkit/cre-cli/internal/validation"
@@ -464,7 +465,7 @@ func TestResolveInputs_PrivateRegistryTarget(t *testing.T) {
 		inputs, err := h.ResolveInputs(ctx.Viper)
 		require.NoError(t, err)
 		assert.True(t, inputs.PreviewPrivateRegistry)
-		assert.Equal(t, registryTargetPrivate, inputs.TargetWorkflowRegistry.targetType)
+		assert.Equal(t, settings.RegistryTypeOffChain, inputs.TargetWorkflowRegistry.targetType)
 		expectedBytes, err := workflowUtils.GenerateWorkflowOwnerAddress("42", "org-test-123")
 		require.NoError(t, err)
 		assert.Equal(t, "0x"+hex.EncodeToString(expectedBytes), inputs.WorkflowOwner)
@@ -545,6 +546,7 @@ func TestValidateInputs_PrivateRegistry(t *testing.T) {
 		h.settings = ctx.Settings
 		h.environmentSet.EnvName = "STAGING"
 		h.environmentSet.DonFamily = ""
+		h.runtimeContext.ResolvedRegistry = settings.NewOffChainRegistry("private", "")
 		token := makeTestJWT(t, map[string]interface{}{
 			"sub":    "user1",
 			"org_id": "org-test-123",
@@ -708,7 +710,7 @@ func newPrivateRegistryExecuteHandler(t *testing.T, wasmURL, gqlURL string) *han
 		WasmPath:                          wasmURL,
 		WorkflowRegistryContractAddress:   "0x1234567890123456789012345678901234567890",
 		WorkflowRegistryContractChainName: "ethereum-testnet-sepolia",
-		TargetWorkflowRegistry:            registryTarget{targetType: registryTargetPrivate},
+		TargetWorkflowRegistry:            registryTarget{targetType: settings.RegistryTypeOffChain},
 		PreviewPrivateRegistry:            true,
 	}
 

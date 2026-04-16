@@ -160,12 +160,12 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 		workflowTag = workflowTag[:32]
 	}
 
-	return Inputs{
+	inputs := Inputs{
 		WorkflowName:  h.settings.Workflow.UserWorkflowSettings.WorkflowName,
 		WorkflowOwner: resolvedWorkflowOwner,
 		WorkflowTag:   workflowTag,
 		ConfigURL:     configURL,
-		DonFamily:     h.environmentSet.DonFamily,
+		DonFamily:     h.runtimeContext.ResolvedRegistry.DonFamily(),
 
 		WorkflowPath: h.settings.Workflow.WorkflowArtifactSettings.WorkflowPath,
 		KeepAlive:    false,
@@ -174,14 +174,19 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 		OutputPath: v.GetString("output"),
 		WasmPath:   v.GetString("wasm"),
 
-		WorkflowRegistryContractChainName: h.environmentSet.WorkflowRegistryChainName,
-		WorkflowRegistryContractAddress:   h.environmentSet.WorkflowRegistryAddress,
-		OwnerLabel:                        v.GetString("owner-label"),
-		SkipConfirmation:                  v.GetBool(settings.Flags.SkipConfirmation.Name),
-		SkipTypeChecks:                    v.GetBool(cmdcommon.SkipTypeChecksCLIFlag),
-		PreviewPrivateRegistry:            previewPrivateRegistry,
-		TargetWorkflowRegistry:            targetWorkflowRegistry,
-	}, nil
+		OwnerLabel:             v.GetString("owner-label"),
+		SkipConfirmation:       v.GetBool(settings.Flags.SkipConfirmation.Name),
+		SkipTypeChecks:         v.GetBool(cmdcommon.SkipTypeChecksCLIFlag),
+		PreviewPrivateRegistry: previewPrivateRegistry,
+		TargetWorkflowRegistry: targetWorkflowRegistry,
+	}
+
+	if oc, ok := h.runtimeContext.ResolvedRegistry.(*settings.OnChainRegistry); ok {
+		inputs.WorkflowRegistryContractChainName = oc.ChainName()
+		inputs.WorkflowRegistryContractAddress = oc.Address()
+	}
+
+	return inputs, nil
 }
 
 func (h *handler) ValidateInputs() error {

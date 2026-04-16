@@ -23,14 +23,15 @@ var (
 )
 
 type Context struct {
-	Logger         *zerolog.Logger
-	Viper          *viper.Viper
-	ClientFactory  client.Factory
-	Settings       *settings.Settings
-	Credentials    *credentials.Credentials
-	EnvironmentSet *environments.EnvironmentSet
-	TenantContext  *tenantctx.EnvironmentContext
-	Workflow       WorkflowRuntime
+	Logger           *zerolog.Logger
+	Viper            *viper.Viper
+	ClientFactory    client.Factory
+	Settings         *settings.Settings
+	Credentials      *credentials.Credentials
+	EnvironmentSet   *environments.EnvironmentSet
+	TenantContext    *tenantctx.EnvironmentContext
+	ResolvedRegistry settings.ResolvedRegistry
+	Workflow         WorkflowRuntime
 }
 
 type WorkflowRuntime struct {
@@ -108,6 +109,24 @@ func (ctx *Context) AttachTenantContext(validationCtx context.Context) error {
 	}
 
 	ctx.TenantContext = envCtx
+	return nil
+}
+
+// AttachResolvedRegistry resolves the deployment-registry from workflow
+// settings against the tenant context registries. Must be called after
+// AttachSettings and AttachTenantContext.
+func (ctx *Context) AttachResolvedRegistry() error {
+	deploymentRegistry := ""
+	if ctx.Settings != nil {
+		deploymentRegistry = ctx.Settings.Workflow.UserWorkflowSettings.DeploymentRegistry
+	}
+
+	resolved, err := settings.ResolveRegistry(deploymentRegistry, ctx.TenantContext, ctx.EnvironmentSet)
+	if err != nil {
+		return fmt.Errorf("failed to resolve deployment registry: %w", err)
+	}
+
+	ctx.ResolvedRegistry = resolved
 	return nil
 }
 

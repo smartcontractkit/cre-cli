@@ -14,6 +14,7 @@ import (
 
 	"github.com/smartcontractkit/cre-cli/internal/client/privateregistryclient"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
+	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/tenantctx"
 	"github.com/smartcontractkit/cre-cli/internal/testutil"
 	"github.com/smartcontractkit/cre-cli/internal/testutil/chainsim"
@@ -233,7 +234,7 @@ func TestResolveWorkflowOwner(t *testing.T) {
 		)
 		h.settings = ctx.Settings
 
-		owner, err := h.resolveWorkflowOwner(registryTarget{targetType: registryTargetOnchain})
+		owner, err := h.resolveWorkflowOwner(registryTarget{targetType: settings.RegistryTypeOnChain})
 		require.NoError(t, err)
 		assert.Equal(t, chainsim.TestAddress, owner)
 	})
@@ -262,7 +263,7 @@ func TestResolveWorkflowOwner(t *testing.T) {
 		h.credentials = makeBearerCredentials(t, token)
 		h.runtimeContext.TenantContext = &tenantctx.EnvironmentContext{TenantID: "42"}
 
-		owner, err := h.resolveWorkflowOwner(registryTarget{targetType: registryTargetPrivate})
+		owner, err := h.resolveWorkflowOwner(registryTarget{targetType: settings.RegistryTypeOffChain})
 		require.NoError(t, err)
 
 		expectedBytes, err := workflowUtils.GenerateWorkflowOwnerAddress("42", "org-test-123")
@@ -287,7 +288,7 @@ func TestResolveWorkflowOwner(t *testing.T) {
 		h.settings = ctx.Settings
 		h.runtimeContext.TenantContext = nil
 
-		_, err := h.resolveWorkflowOwner(registryTarget{targetType: registryTargetPrivate})
+		_, err := h.resolveWorkflowOwner(registryTarget{targetType: settings.RegistryTypeOffChain})
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "tenant context is required")
 	})
@@ -309,7 +310,7 @@ func TestResolveWorkflowOwner(t *testing.T) {
 		h.settings = ctx.Settings
 		h.runtimeContext.TenantContext = &tenantctx.EnvironmentContext{TenantID: ""}
 
-		_, err := h.resolveWorkflowOwner(registryTarget{targetType: registryTargetPrivate})
+		_, err := h.resolveWorkflowOwner(registryTarget{targetType: settings.RegistryTypeOffChain})
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "tenant ID is required")
 	})
@@ -333,7 +334,7 @@ func TestResolveWorkflowOwner(t *testing.T) {
 		h.credentials = makeAPIKeyCredentials(t)
 		h.runtimeContext.TenantContext = &tenantctx.EnvironmentContext{TenantID: "42"}
 
-		_, err := h.resolveWorkflowOwner(registryTarget{targetType: registryTargetPrivate})
+		_, err := h.resolveWorkflowOwner(registryTarget{targetType: settings.RegistryTypeOffChain})
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to get organization ID")
 	})
