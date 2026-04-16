@@ -90,10 +90,12 @@ func GetEVMTriggerLog(ctx context.Context, ethClient *ethclient.Client) (*evmpb.
 		return nil, fmt.Errorf("invalid event index: %w", err)
 	}
 
-	return fetchAndConvertLog(ctx, ethClient, txHash, eventIndex)
+	return fetchAndConvertLog(ctx, ethClient, txHash, eventIndex, true)
 }
 
 // GetEVMTriggerLogFromValues fetches a log given tx hash string and event index.
+// Unlike GetEVMTriggerLog (interactive), this does not emit ui.Success messages
+// to keep non-interactive/CI output clean.
 func GetEVMTriggerLogFromValues(ctx context.Context, ethClient *ethclient.Client, txHashStr string, eventIndex uint64) (*evmpb.Log, error) {
 	txHashStr = strings.TrimSpace(txHashStr)
 	if txHashStr == "" {
@@ -107,11 +109,12 @@ func GetEVMTriggerLogFromValues(ctx context.Context, ethClient *ethclient.Client
 	}
 
 	txHash := common.HexToHash(txHashStr)
-	return fetchAndConvertLog(ctx, ethClient, txHash, eventIndex)
+	return fetchAndConvertLog(ctx, ethClient, txHash, eventIndex, false)
 }
 
 // fetchAndConvertLog fetches a transaction receipt log and converts it to the protobuf format.
-func fetchAndConvertLog(ctx context.Context, ethClient *ethclient.Client, txHash common.Hash, eventIndex uint64) (*evmpb.Log, error) {
+// When verbose is true (interactive mode), ui.Success messages are emitted.
+func fetchAndConvertLog(ctx context.Context, ethClient *ethclient.Client, txHash common.Hash, eventIndex uint64, verbose bool) (*evmpb.Log, error) {
 	receiptSpinner := ui.NewSpinner()
 	receiptSpinner.Start(fmt.Sprintf("Fetching transaction receipt for %s...", txHash.Hex()))
 	txReceipt, err := ethClient.TransactionReceipt(ctx, txHash)
@@ -124,7 +127,9 @@ func fetchAndConvertLog(ctx context.Context, ethClient *ethclient.Client, txHash
 	}
 
 	log := txReceipt.Logs[eventIndex]
-	ui.Success(fmt.Sprintf("Found log event at index %d: contract=%s, topics=%d", eventIndex, log.Address.Hex(), len(log.Topics)))
+	if verbose {
+		ui.Success(fmt.Sprintf("Found log event at index %d: contract=%s, topics=%d", eventIndex, log.Address.Hex(), len(log.Topics)))
+	}
 
 	var txIndex, logIndex uint32
 	if log.TxIndex > math.MaxUint32 {
@@ -154,6 +159,8 @@ func fetchAndConvertLog(ctx context.Context, ethClient *ethclient.Client, txHash
 		pbLog.EventSig = log.Topics[0].Bytes()
 	}
 
-	ui.Success(fmt.Sprintf("Created EVM trigger log for transaction %s, event %d", txHash.Hex(), eventIndex))
+	if verbose {
+		ui.Success(fmt.Sprintf("Created EVM trigger log for transaction %s, event %d", txHash.Hex(), eventIndex))
+	}
 	return pbLog, nil
 }
