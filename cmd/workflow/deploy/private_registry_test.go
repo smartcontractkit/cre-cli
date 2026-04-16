@@ -167,6 +167,7 @@ func TestResolveInputs_PreviewPrivateRegistryFlag(t *testing.T) {
 		})
 		h.credentials = makeBearerCredentials(t, token)
 		h.runtimeContext.TenantContext = &tenantctx.EnvironmentContext{TenantID: "42"}
+		h.runtimeContext.DerivedWorkflowOwner = "ab12cd34ef56ab12cd34ef56ab12cd34ef56ab12"
 		ctx.Viper.Set("preview-private-registry", true)
 
 		inputs, err := h.ResolveInputs(ctx.Viper)
