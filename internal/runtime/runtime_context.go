@@ -32,6 +32,9 @@ type Context struct {
 	TenantContext    *tenantctx.EnvironmentContext
 	ResolvedRegistry settings.ResolvedRegistry
 	Workflow         WorkflowRuntime
+	// InvocationDir is the working directory at the time the CLI was invoked,
+	// before any os.Chdir calls made by SetExecutionContext.
+	InvocationDir string
 }
 
 type WorkflowRuntime struct {
