@@ -165,7 +165,7 @@ func TestRunRPCHealthCheck_WrapperFailsOnNonEthClient(t *testing.T) {
 		nil,
 	)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid client type for EVM family")
+	assert.Contains(t, err.Error(), "invalid client type for EVM chain type")
 }
 
 func TestRunRPCHealthCheck_EmptyReturnsSettingsError(t *testing.T) {

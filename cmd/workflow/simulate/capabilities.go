@@ -5,7 +5,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 
-	chaintype "github.com/smartcontractkit/chainlink-common/keystore/corekeys"
+	corekeys "github.com/smartcontractkit/chainlink-common/keystore/corekeys"
 	"github.com/smartcontractkit/chainlink-common/keystore/corekeys/ocr2key"
 	confhttpserver "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/actions/confidentialhttp/server"
 	httpserver "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/actions/http/server"
@@ -25,7 +25,7 @@ type ManualTriggers struct {
 }
 
 // NewManualTriggerCapabilities creates and registers cron and HTTP trigger capabilities.
-// These are chain-agnostic and shared across all chain families.
+// These are chain-agnostic and shared across all chain types.
 func NewManualTriggerCapabilities(ctx context.Context, lggr logger.Logger, registry *capabilities.Registry) (*ManualTriggers, error) {
 	manualCronTrigger := fakes.NewManualCronTriggerService(lggr)
 	manualCronTriggerServer := crontrigger.NewCronServer(manualCronTrigger)
@@ -84,7 +84,7 @@ func NewFakeActionCapabilities(ctx context.Context, lggr logger.Logger, registry
 	nSigners := 4
 	signers := []ocr2key.KeyBundle{}
 	for i := 0; i < nSigners; i++ {
-		signer := ocr2key.MustNewInsecure(fakes.SeedForKeys(), chaintype.EVM)
+		signer := ocr2key.MustNewInsecure(fakes.SeedForKeys(), corekeys.EVM)
 		lggr.Infow("Generated new consensus signer", "address", common.BytesToAddress(signer.PublicKey()))
 		signers = append(signers, signer)
 	}

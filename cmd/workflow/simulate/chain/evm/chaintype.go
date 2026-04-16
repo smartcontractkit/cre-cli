@@ -25,30 +25,30 @@ import (
 const defaultSentinelPrivateKey = "0000000000000000000000000000000000000000000000000000000000000001"
 
 func init() {
-	chain.Register("evm", func(lggr *zerolog.Logger) chain.ChainFamily {
-		return &EVMFamily{log: lggr}
+	chain.Register("evm", func(lggr *zerolog.Logger) chain.ChainType {
+		return &EVMChainType{log: lggr}
 	}, []chain.CLIFlagDef{
 		{Name: TriggerInputTxHash, Description: "EVM trigger transaction hash (0x...)", FlagType: chain.CLIFlagString},
 		{Name: TriggerInputEventIndex, Description: "EVM trigger log index (0-based)", DefaultValue: "-1", FlagType: chain.CLIFlagInt},
 	})
 }
 
-// EVMFamily implements chain.ChainFamily for EVM-based blockchains.
-type EVMFamily struct {
+// EVMChainType implements chain.ChainType for EVM-based blockchains.
+type EVMChainType struct {
 	log                   *zerolog.Logger
 	evmChains             *EVMChainCapabilities
 	experimentalSelectors map[uint64]bool
 }
 
-var _ chain.ChainFamily = (*EVMFamily)(nil)
+var _ chain.ChainType = (*EVMChainType)(nil)
 
-func (f *EVMFamily) Name() string { return "evm" }
+func (ct *EVMChainType) Name() string { return "evm" }
 
-func (f *EVMFamily) SupportedChains() []chain.ChainConfig {
+func (ct *EVMChainType) SupportedChains() []chain.ChainConfig {
 	return SupportedChains
 }
 
-func (f *EVMFamily) ResolveClients(v *viper.Viper) (map[uint64]chain.ChainClient, map[uint64]string, error) {
+func (ct *EVMChainType) ResolveClients(v *viper.Viper) (map[uint64]chain.ChainClient, map[uint64]string, error) {
 	clients := make(map[uint64]chain.ChainClient)
 	forwarders := make(map[uint64]string)
 	experimental := make(map[uint64]bool)
@@ -57,15 +57,15 @@ func (f *EVMFamily) ResolveClients(v *viper.Viper) (map[uint64]chain.ChainClient
 	for _, ch := range SupportedChains {
 		chainName, err := settings.GetChainNameByChainSelector(ch.Selector)
 		if err != nil {
-			f.log.Error().Msgf("Invalid chain selector for supported EVM chains %d; skipping", ch.Selector)
+			ct.log.Error().Msgf("Invalid chain selector for supported EVM chains %d; skipping", ch.Selector)
 			continue
 		}
 		rpcURL, err := settings.GetRpcUrlSettings(v, chainName)
 		if err != nil || strings.TrimSpace(rpcURL) == "" {
-			f.log.Debug().Msgf("RPC not provided for %s; skipping", chainName)
+			ct.log.Debug().Msgf("RPC not provided for %s; skipping", chainName)
 			continue
 		}
-		f.log.Debug().Msgf("Using RPC for %s: %s", chainName, chain.RedactURL(rpcURL))
+		ct.log.Debug().Msgf("Using RPC for %s: %s", chainName, chain.RedactURL(rpcURL))
 
 		c, err := ethclient.Dial(rpcURL)
 		if err != nil {
@@ -103,12 +103,12 @@ func (f *EVMFamily) ResolveClients(v *viper.Viper) (map[uint64]chain.ChainClient
 					ec.ChainSelector, forwarders[ec.ChainSelector], ec.Forwarder))
 				forwarders[ec.ChainSelector] = ec.Forwarder
 			} else {
-				f.log.Debug().Uint64("chain-selector", ec.ChainSelector).Msg("Experimental chain matches supported chain config")
+				ct.log.Debug().Uint64("chain-selector", ec.ChainSelector).Msg("Experimental chain matches supported chain config")
 			}
 			continue
 		}
 
-		f.log.Debug().Msgf("Using RPC for experimental chain %d: %s", ec.ChainSelector, chain.RedactURL(ec.RPCURL))
+		ct.log.Debug().Msgf("Using RPC for experimental chain %d: %s", ec.ChainSelector, chain.RedactURL(ec.RPCURL))
 		c, err := ethclient.Dial(ec.RPCURL)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to create eth client for experimental chain %d: %w", ec.ChainSelector, err)
@@ -119,17 +119,17 @@ func (f *EVMFamily) ResolveClients(v *viper.Viper) (map[uint64]chain.ChainClient
 		ui.Dim(fmt.Sprintf("Added experimental chain (chain-selector: %d)\n", ec.ChainSelector))
 	}
 
-	f.experimentalSelectors = experimental
+	ct.experimentalSelectors = experimental
 	return clients, forwarders, nil
 }
 
-func (f *EVMFamily) RegisterCapabilities(ctx context.Context, cfg chain.CapabilityConfig) ([]services.Service, error) {
+func (ct *EVMChainType) RegisterCapabilities(ctx context.Context, cfg chain.CapabilityConfig) ([]services.Service, error) {
 	// Convert generic ChainClient map to typed *ethclient.Client map
 	ethClients := make(map[uint64]*ethclient.Client)
 	for sel, c := range cfg.Clients {
 		ec, ok := c.(*ethclient.Client)
 		if !ok {
-			return nil, fmt.Errorf("EVM family: client for selector %d is not *ethclient.Client", sel)
+			return nil, fmt.Errorf("EVM: client for selector %d is not *ethclient.Client", sel)
 		}
 		ethClients[sel] = ec
 	}
@@ -146,7 +146,7 @@ func (f *EVMFamily) RegisterCapabilities(ctx context.Context, cfg chain.Capabili
 		var ok bool
 		pk, ok = cfg.PrivateKey.(*ecdsa.PrivateKey)
 		if !ok {
-			return nil, fmt.Errorf("EVM family: private key is not *ecdsa.PrivateKey")
+			return nil, fmt.Errorf("EVM: private key is not *ecdsa.PrivateKey")
 		}
 	}
 
@@ -165,10 +165,10 @@ func (f *EVMFamily) RegisterCapabilities(ctx context.Context, cfg chain.Capabili
 
 	// Start the EVM chains so they begin listening for triggers
 	if err := evmCaps.Start(ctx); err != nil {
-		return nil, fmt.Errorf("EVM family: failed to start chain capabilities: %w", err)
+		return nil, fmt.Errorf("EVM: failed to start chain capabilities: %w", err)
 	}
 
-	f.evmChains = evmCaps
+	ct.evmChains = evmCaps
 
 	srvcs := make([]services.Service, 0, len(evmCaps.EVMChains))
 	for _, evm := range evmCaps.EVMChains {
@@ -177,43 +177,43 @@ func (f *EVMFamily) RegisterCapabilities(ctx context.Context, cfg chain.Capabili
 	return srvcs, nil
 }
 
-func (f *EVMFamily) ExecuteTrigger(ctx context.Context, selector uint64, registrationID string, triggerData interface{}) error {
-	if f.evmChains == nil {
-		return fmt.Errorf("EVM family: capabilities not registered")
+func (ct *EVMChainType) ExecuteTrigger(ctx context.Context, selector uint64, registrationID string, triggerData interface{}) error {
+	if ct.evmChains == nil {
+		return fmt.Errorf("EVM: capabilities not registered")
 	}
-	evmChain := f.evmChains.EVMChains[selector]
+	evmChain := ct.evmChains.EVMChains[selector]
 	if evmChain == nil {
 		return fmt.Errorf("no EVM chain initialized for selector %d", selector)
 	}
 	log, ok := triggerData.(*evmpb.Log)
 	if !ok {
-		return fmt.Errorf("EVM family: trigger data is not *evm.Log")
+		return fmt.Errorf("EVM: trigger data is not *evm.Log")
 	}
 	return evmChain.ManualTrigger(ctx, registrationID, log)
 }
 
 // HasSelector reports whether an EVM chain capability has been initialised
 // for the given selector. Callers use this at trigger-setup time to avoid
-// building a TriggerFunc for a selector the family cannot dispatch against.
-func (f *EVMFamily) HasSelector(selector uint64) bool {
-	if f.evmChains == nil {
+// building a TriggerFunc for a selector the chain type cannot dispatch against.
+func (ct *EVMChainType) HasSelector(selector uint64) bool {
+	if ct.evmChains == nil {
 		return false
 	}
-	return f.evmChains.EVMChains[selector] != nil
+	return ct.evmChains.EVMChains[selector] != nil
 }
 
-func (f *EVMFamily) ParseTriggerChainSelector(triggerID string) (uint64, bool) {
+func (ct *EVMChainType) ParseTriggerChainSelector(triggerID string) (uint64, bool) {
 	return ParseTriggerChainSelector(triggerID)
 }
 
-func (f *EVMFamily) RunHealthCheck(clients map[uint64]chain.ChainClient) error {
-	return RunRPCHealthCheck(clients, f.experimentalSelectors)
+func (ct *EVMChainType) RunHealthCheck(clients map[uint64]chain.ChainClient) error {
+	return RunRPCHealthCheck(clients, ct.experimentalSelectors)
 }
 
 // ResolveKey parses the user's ECDSA private key from settings. When broadcast
 // is true, an invalid or default-sentinel key is a hard error. Otherwise a
 // sentinel key is used with a warning so non-broadcast simulations can run.
-func (f *EVMFamily) ResolveKey(creSettings *settings.Settings, broadcast bool) (interface{}, error) {
+func (ct *EVMChainType) ResolveKey(creSettings *settings.Settings, broadcast bool) (interface{}, error) {
 	pk, err := crypto.HexToECDSA(creSettings.User.EthPrivateKey)
 	if err != nil {
 		if broadcast {
@@ -232,13 +232,13 @@ func (f *EVMFamily) ResolveKey(creSettings *settings.Settings, broadcast bool) (
 	return pk, nil
 }
 
-// CLI input keys consumed from chain.TriggerParams.FamilyInputs.
+// CLI input keys consumed from chain.TriggerParams.ChainTypeInputs.
 const (
 	TriggerInputTxHash     = "evm-tx-hash"
 	TriggerInputEventIndex = "evm-event-index"
 )
 
-func (f *EVMFamily) CollectCLIInputs(v *viper.Viper) map[string]string {
+func (ct *EVMChainType) CollectCLIInputs(v *viper.Viper) map[string]string {
 	inputs := map[string]string{}
 	if txHash := strings.TrimSpace(v.GetString(TriggerInputTxHash)); txHash != "" {
 		inputs[TriggerInputTxHash] = txHash
@@ -251,7 +251,7 @@ func (f *EVMFamily) CollectCLIInputs(v *viper.Viper) map[string]string {
 
 // ResolveTriggerData fetches the EVM log payload for the given selector from
 // CLI-supplied or interactively-prompted inputs.
-func (f *EVMFamily) ResolveTriggerData(ctx context.Context, selector uint64, params chain.TriggerParams) (interface{}, error) {
+func (ct *EVMChainType) ResolveTriggerData(ctx context.Context, selector uint64, params chain.TriggerParams) (interface{}, error) {
 	clientIface, ok := params.Clients[selector]
 	if !ok {
 		return nil, fmt.Errorf("no RPC configured for chain selector %d", selector)
@@ -265,8 +265,8 @@ func (f *EVMFamily) ResolveTriggerData(ctx context.Context, selector uint64, par
 		return GetEVMTriggerLog(ctx, client)
 	}
 
-	txHash := strings.TrimSpace(params.FamilyInputs[TriggerInputTxHash])
-	eventIndexStr := strings.TrimSpace(params.FamilyInputs[TriggerInputEventIndex])
+	txHash := strings.TrimSpace(params.ChainTypeInputs[TriggerInputTxHash])
+	eventIndexStr := strings.TrimSpace(params.ChainTypeInputs[TriggerInputEventIndex])
 	if txHash == "" || eventIndexStr == "" {
 		return nil, fmt.Errorf("--evm-tx-hash and --evm-event-index are required for EVM triggers in non-interactive mode")
 	}

@@ -115,9 +115,9 @@ func TestSupportedChains_NoForwarderEmpty(t *testing.T) {
 	}
 }
 
-func TestSupportedChains_ReturnedByFamily(t *testing.T) {
+func TestSupportedChains_ReturnedByChainType(t *testing.T) {
 	t.Parallel()
-	f := newFamily()
+	f := newEVMChainType()
 	ret := f.SupportedChains()
 	require.Equal(t, len(SupportedChains), len(ret))
 	// Element-wise identity (same struct values, same order).

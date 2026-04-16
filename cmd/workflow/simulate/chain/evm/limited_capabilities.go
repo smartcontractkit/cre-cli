@@ -14,7 +14,7 @@ import (
 )
 
 // EVMChainLimits is the limit-accessor contract LimitedEVMChain enforces.
-// Aliased to chain.Limits so the family-agnostic CapabilityConfig.Limits
+// Aliased to chain.Limits so the chain-type-agnostic CapabilityConfig.Limits
 // value can be passed straight through without a type assertion.
 type EVMChainLimits = chain.Limits
 

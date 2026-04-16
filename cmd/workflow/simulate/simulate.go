@@ -49,15 +49,15 @@ type Inputs struct {
 	EngineLogs   bool   `validate:"omitempty" cli:"--engine-logs"`
 	Broadcast    bool   `validate:"-"`
 	WorkflowName string `validate:"required"`
-	// Family-generic chain fields
-	FamilyClients    map[string]map[uint64]chain.ChainClient `validate:"omitempty"`
-	FamilyForwarders map[string]map[uint64]string             `validate:"-"`
-	FamilyKeys       map[string]interface{}                   `validate:"-"`
+	// Chain-type-specific fields
+	ChainTypeClients    map[string]map[uint64]chain.ChainClient `validate:"omitempty"`
+	ChainTypeForwarders map[string]map[uint64]string             `validate:"-"`
+	ChainTypeKeys       map[string]interface{}                   `validate:"-"`
 	// Non-interactive mode options
-	NonInteractive bool              `validate:"-"`
-	TriggerIndex   int               `validate:"-"`
-	HTTPPayload    string            `validate:"-"` // JSON string or @/path/to/file.json
-	FamilyInputs   map[string]string `validate:"-"` // CLI-supplied family-specific trigger inputs
+	NonInteractive  bool              `validate:"-"`
+	TriggerIndex    int               `validate:"-"`
+	HTTPPayload     string            `validate:"-"` // JSON string or @/path/to/file.json
+	ChainTypeInputs map[string]string `validate:"-"` // CLI-supplied chain-type-specific trigger inputs
 	// Limits enforcement
 	LimitsPath string `validate:"-"` // "default" or path to custom limits JSON
 	// SkipTypeChecks passes --skip-type-checks to cre-compile for TypeScript workflows.
@@ -98,7 +98,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	simulateCmd.Flags().Int("trigger-index", -1, "Index of the trigger to run (0-based)")
 	simulateCmd.Flags().String("http-payload", "", "HTTP trigger payload as JSON string or path to JSON file (with or without @ prefix)")
 	
-	// Register chain-family-specific CLI flags (e.g., --evm-tx-hash).
+	// Register chain-type-specific CLI flags (e.g., --evm-tx-hash).
 	chain.RegisterAllCLIFlags(simulateCmd)
 	
 	simulateCmd.Flags().String("limits", "default", "Production limits to enforce during simulation: 'default' for prod defaults, path to a limits JSON file (e.g. from 'cre workflow limits export'), or 'none' to disable")
@@ -125,25 +125,25 @@ func newHandler(ctx *runtime.Context) *handler {
 func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) (Inputs, error) {
 	chain.Build(h.log)
 
-	familyClients := make(map[string]map[uint64]chain.ChainClient)
-	familyForwarders := make(map[string]map[uint64]string)
-	familyKeys := make(map[string]interface{})
+	ctClients := make(map[string]map[uint64]chain.ChainClient)
+	ctForwarders := make(map[string]map[uint64]string)
+	ctKeys := make(map[string]interface{})
 
-	for name, family := range chain.All() {
-		clients, forwarders, err := family.ResolveClients(v)
+	for name, ct := range chain.All() {
+		clients, forwarders, err := ct.ResolveClients(v)
 		if err != nil {
 			return Inputs{}, fmt.Errorf("failed to resolve %s clients: %w", name, err)
 		}
 
 		if len(clients) > 0 {
-			familyClients[name] = clients
-			familyForwarders[name] = forwarders
+			ctClients[name] = clients
+			ctForwarders[name] = forwarders
 		}
 	}
 
-	// Check at least one family has clients
+	// Check at least one chain type has clients
 	totalClients := 0
-	for _, fc := range familyClients {
+	for _, fc := range ctClients {
 		totalClients += len(fc)
 	}
 	if totalClients == 0 {
@@ -151,36 +151,36 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 	}
 
 	broadcast := v.GetBool("broadcast")
-	for name, family := range chain.All() {
-		if _, ok := familyClients[name]; !ok {
-			continue // no clients for this family; skip key resolution
+	for name, ct := range chain.All() {
+		if _, ok := ctClients[name]; !ok {
+			continue // no clients for this chain type; skip key resolution
 		}
-		key, err := family.ResolveKey(creSettings, broadcast)
+		key, err := ct.ResolveKey(creSettings, broadcast)
 		if err != nil {
 			return Inputs{}, err
 		}
 		if key != nil {
-			familyKeys[name] = key
+			ctKeys[name] = key
 		}
 	}
 
 	return Inputs{
-		WasmPath:         v.GetString("wasm"),
-		WorkflowPath:     creSettings.Workflow.WorkflowArtifactSettings.WorkflowPath,
-		ConfigPath:       cmdcommon.ResolveConfigPath(v, creSettings.Workflow.WorkflowArtifactSettings.ConfigPath),
-		SecretsPath:      creSettings.Workflow.WorkflowArtifactSettings.SecretsPath,
-		EngineLogs:       v.GetBool("engine-logs"),
-		Broadcast:        v.GetBool("broadcast"),
-		FamilyClients:    familyClients,
-		FamilyForwarders: familyForwarders,
-		FamilyKeys:       familyKeys,
-		WorkflowName:     creSettings.Workflow.UserWorkflowSettings.WorkflowName,
-		NonInteractive:   v.GetBool("non-interactive"),
-		TriggerIndex:     v.GetInt("trigger-index"),
-		HTTPPayload:      v.GetString("http-payload"),
-		FamilyInputs:     chain.CollectAllCLIInputs(v),
-		LimitsPath:       v.GetString("limits"),
-		SkipTypeChecks:   v.GetBool(cmdcommon.SkipTypeChecksCLIFlag),
+		WasmPath:            v.GetString("wasm"),
+		WorkflowPath:        creSettings.Workflow.WorkflowArtifactSettings.WorkflowPath,
+		ConfigPath:          cmdcommon.ResolveConfigPath(v, creSettings.Workflow.WorkflowArtifactSettings.ConfigPath),
+		SecretsPath:         creSettings.Workflow.WorkflowArtifactSettings.SecretsPath,
+		EngineLogs:          v.GetBool("engine-logs"),
+		Broadcast:           v.GetBool("broadcast"),
+		ChainTypeClients:    ctClients,
+		ChainTypeForwarders: ctForwarders,
+		ChainTypeKeys:       ctKeys,
+		WorkflowName:        creSettings.Workflow.UserWorkflowSettings.WorkflowName,
+		NonInteractive:      v.GetBool("non-interactive"),
+		TriggerIndex:        v.GetInt("trigger-index"),
+		HTTPPayload:         v.GetString("http-payload"),
+		ChainTypeInputs:     chain.CollectAllCLIInputs(v),
+		LimitsPath:          v.GetString("limits"),
+		SkipTypeChecks:      v.GetBool(cmdcommon.SkipTypeChecksCLIFlag),
 	}, nil
 }
 
@@ -209,9 +209,9 @@ func (h *handler) ValidateInputs(inputs Inputs) error {
 
 	rpcErr := ui.WithSpinner("Checking RPC connectivity...", func() error {
 		var errs []error
-		for name, family := range chain.All() {
-			if clients, ok := inputs.FamilyClients[name]; ok {
-				if err := family.RunHealthCheck(clients); err != nil {
+		for name, ct := range chain.All() {
+			if clients, ok := inputs.ChainTypeClients[name]; ok {
+				if err := ct.RunHealthCheck(clients); err != nil {
 					errs = append(errs, err)
 				}
 			}
@@ -458,18 +458,18 @@ func run(
 			capLimits = simLimits
 		}
 
-		// Register chain-family-specific capabilities
-		for name, family := range chain.All() {
-			clients, ok := inputs.FamilyClients[name]
+		// Register chain-type-specific capabilities
+		for name, ct := range chain.All() {
+			clients, ok := inputs.ChainTypeClients[name]
 			if !ok || len(clients) == 0 {
 				continue
 			}
 
-			familySrvcs, err := family.RegisterCapabilities(ctx, chain.CapabilityConfig{
+			ctSrvcs, err := ct.RegisterCapabilities(ctx, chain.CapabilityConfig{
 				Registry:   registry,
 				Clients:    clients,
-				Forwarders: inputs.FamilyForwarders[name],
-				PrivateKey: inputs.FamilyKeys[name],
+				Forwarders: inputs.ChainTypeForwarders[name],
+				PrivateKey: inputs.ChainTypeKeys[name],
 				Broadcast:  inputs.Broadcast,
 				Limits:     capLimits,
 				Logger:     triggerLggr,
@@ -478,7 +478,7 @@ func run(
 				ui.Error(fmt.Sprintf("Failed to register %s capabilities: %v", name, err))
 				os.Exit(1)
 			}
-			srvcs = append(srvcs, familySrvcs...)
+			srvcs = append(srvcs, ctSrvcs...)
 		}
 
 		// Register chain-agnostic action capabilities (consensus, HTTP, confidential HTTP)
@@ -706,20 +706,20 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 				return manualTriggerCaps.ManualHTTPTrigger.ManualTrigger(ctx, triggerRegistrationID, payload)
 			}
 		default:
-			// Try each registered chain family
+			// Try each registered chain type
 			handled := false
-			for name, family := range chain.All() {
-				sel, ok := family.ParseTriggerChainSelector(holder.TriggerToRun.GetId())
+			for name, ct := range chain.All() {
+				sel, ok := ct.ParseTriggerChainSelector(holder.TriggerToRun.GetId())
 				if !ok {
 					continue
 				}
 
-				if !family.HasSelector(sel) {
+				if !ct.HasSelector(sel) {
 					ui.Error(fmt.Sprintf("No %s chain initialized for selector %d", name, sel))
 					os.Exit(1)
 				}
 
-				triggerData, err := getTriggerDataForFamily(ctx, family, sel, inputs, true)
+				triggerData, err := getTriggerDataForChainType(ctx, ct, sel, inputs, true)
 				if err != nil {
 					ui.Error(err.Error())
 					os.Exit(1)
@@ -727,7 +727,7 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 
 				handled = true
 				holder.TriggerFunc = func() error {
-					return family.ExecuteTrigger(ctx, sel, triggerRegistrationID, triggerData)
+					return ct.ExecuteTrigger(ctx, sel, triggerRegistrationID, triggerData)
 				}
 				break
 			}
@@ -786,20 +786,20 @@ func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inp
 				return manualTriggerCaps.ManualHTTPTrigger.ManualTrigger(ctx, triggerRegistrationID, payload)
 			}
 		default:
-			// Try each registered chain family
+			// Try each registered chain type
 			handled := false
-			for name, family := range chain.All() {
-				sel, ok := family.ParseTriggerChainSelector(holder.TriggerToRun.GetId())
+			for name, ct := range chain.All() {
+				sel, ok := ct.ParseTriggerChainSelector(holder.TriggerToRun.GetId())
 				if !ok {
 					continue
 				}
 
-				if !family.HasSelector(sel) {
+				if !ct.HasSelector(sel) {
 					ui.Error(fmt.Sprintf("No %s chain initialized for selector %d", name, sel))
 					os.Exit(1)
 				}
 
-				triggerData, err := getTriggerDataForFamily(ctx, family, sel, inputs, false)
+				triggerData, err := getTriggerDataForChainType(ctx, ct, sel, inputs, false)
 				if err != nil {
 					ui.Error(err.Error())
 					os.Exit(1)
@@ -807,7 +807,7 @@ func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inp
 
 				handled = true
 				holder.TriggerFunc = func() error {
-					return family.ExecuteTrigger(ctx, sel, triggerRegistrationID, triggerData)
+					return ct.ExecuteTrigger(ctx, sel, triggerRegistrationID, triggerData)
 				}
 				break
 			}
@@ -902,17 +902,17 @@ func getHTTPTriggerPayload() (*httptypedapi.Payload, error) {
 	return payload, nil
 }
 
-// getTriggerDataForFamily resolves trigger data for a specific chain family.
-// Each family defines its own trigger data format.
-func getTriggerDataForFamily(ctx context.Context, family chain.ChainFamily, selector uint64, inputs Inputs, interactive bool) (interface{}, error) {
-	clients, ok := inputs.FamilyClients[family.Name()]
+// getTriggerDataForChainType resolves trigger data for a specific chain type.
+// Each chain type defines its own trigger data format.
+func getTriggerDataForChainType(ctx context.Context, ct chain.ChainType, selector uint64, inputs Inputs, interactive bool) (interface{}, error) {
+	clients, ok := inputs.ChainTypeClients[ct.Name()]
 	if !ok {
-		return nil, fmt.Errorf("no %s clients configured", family.Name())
+		return nil, fmt.Errorf("no %s clients configured", ct.Name())
 	}
-	return family.ResolveTriggerData(ctx, selector, chain.TriggerParams{
-		Clients:      clients,
-		Interactive:  interactive,
-		FamilyInputs: inputs.FamilyInputs,
+	return ct.ResolveTriggerData(ctx, selector, chain.TriggerParams{
+		Clients:         clients,
+		Interactive:     interactive,
+		ChainTypeInputs: inputs.ChainTypeInputs,
 	})
 }
 

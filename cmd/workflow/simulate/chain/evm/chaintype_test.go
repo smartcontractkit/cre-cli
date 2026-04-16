@@ -100,9 +100,9 @@ func captureStdout(t *testing.T, fn func()) string {
 	return buf.String()
 }
 
-func newFamily() *EVMFamily {
+func newEVMChainType() *EVMChainType {
 	lg := zerolog.Nop()
-	return &EVMFamily{log: &lg}
+	return &EVMChainType{log: &lg}
 }
 
 // Valid anvil dev key #0; known non-sentinel.
@@ -112,18 +112,18 @@ const validPK = "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff8
 // Name
 // ---------------------------------------------------------------------------
 
-func TestEVMFamily_Name_IsEVM(t *testing.T) {
+func TestEVMChainType_Name_IsEVM(t *testing.T) {
 	t.Parallel()
-	require.Equal(t, "evm", newFamily().Name())
+	require.Equal(t, "evm", newEVMChainType().Name())
 }
 
 // ---------------------------------------------------------------------------
 // SupportedChains pass-through
 // ---------------------------------------------------------------------------
 
-func TestEVMFamily_SupportedChains_ReturnsPackageVar(t *testing.T) {
+func TestEVMChainType_SupportedChains_ReturnsPackageVar(t *testing.T) {
 	t.Parallel()
-	got := newFamily().SupportedChains()
+	got := newEVMChainType().SupportedChains()
 	require.Equal(t, len(SupportedChains), len(got))
 	require.Greater(t, len(got), 20, "expected many supported chains")
 }
@@ -132,7 +132,7 @@ func TestEVMFamily_SupportedChains_ReturnsPackageVar(t *testing.T) {
 // ResolveKey table
 // ---------------------------------------------------------------------------
 
-func TestEVMFamily_ResolveKey(t *testing.T) {
+func TestEVMChainType_ResolveKey(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -221,13 +221,13 @@ func TestEVMFamily_ResolveKey(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			f := newFamily()
+			ct := newEVMChainType()
 			s := &settings.Settings{User: settings.UserSettings{EthPrivateKey: tt.pk}}
 
 			var got interface{}
 			var err error
 			stderr := captureStderr(t, func() {
-				got, err = f.ResolveKey(s, tt.broadcast)
+				got, err = ct.ResolveKey(s, tt.broadcast)
 			})
 
 			if tt.wantErr {
@@ -257,7 +257,7 @@ func TestEVMFamily_ResolveKey(t *testing.T) {
 // ResolveKey sentinel identity
 // ---------------------------------------------------------------------------
 
-func TestEVMFamily_ResolveKey_SentinelDecodesToD1(t *testing.T) {
+func TestEVMChainType_ResolveKey_SentinelDecodesToD1(t *testing.T) {
 	t.Parallel()
 	pk, err := crypto.HexToECDSA(defaultSentinelPrivateKey)
 	require.NoError(t, err)
@@ -268,13 +268,13 @@ func TestEVMFamily_ResolveKey_SentinelDecodesToD1(t *testing.T) {
 // ResolveTriggerData — non-interactive validation
 // ---------------------------------------------------------------------------
 
-func TestEVMFamily_ResolveTriggerData_NoClient(t *testing.T) {
+func TestEVMChainType_ResolveTriggerData_NoClient(t *testing.T) {
 	t.Parallel()
-	f := newFamily()
-	_, err := f.ResolveTriggerData(context.Background(), 777, chain.TriggerParams{
+	ct := newEVMChainType()
+	_, err := ct.ResolveTriggerData(context.Background(), 777, chain.TriggerParams{
 		Clients:     map[uint64]chain.ChainClient{},
 		Interactive: false,
-		FamilyInputs: map[string]string{
+		ChainTypeInputs: map[string]string{
 			"evm-tx-hash":     "0x" + strings.Repeat("a", 64),
 			"evm-event-index": "0",
 		},
@@ -283,13 +283,13 @@ func TestEVMFamily_ResolveTriggerData_NoClient(t *testing.T) {
 	assert.Contains(t, err.Error(), "no RPC configured for chain selector 777")
 }
 
-func TestEVMFamily_ResolveTriggerData_WrongClientType(t *testing.T) {
+func TestEVMChainType_ResolveTriggerData_WrongClientType(t *testing.T) {
 	t.Parallel()
-	f := newFamily()
-	_, err := f.ResolveTriggerData(context.Background(), 1, chain.TriggerParams{
+	ct := newEVMChainType()
+	_, err := ct.ResolveTriggerData(context.Background(), 1, chain.TriggerParams{
 		Clients:     map[uint64]chain.ChainClient{1: "not-an-ethclient"},
 		Interactive: false,
-		FamilyInputs: map[string]string{
+		ChainTypeInputs: map[string]string{
 			"evm-tx-hash":     "0x" + strings.Repeat("a", 64),
 			"evm-event-index": "0",
 		},
@@ -302,20 +302,20 @@ func TestEVMFamily_ResolveTriggerData_WrongClientType(t *testing.T) {
 // ExecuteTrigger
 // ---------------------------------------------------------------------------
 
-func TestEVMFamily_ExecuteTrigger_NotRegistered(t *testing.T) {
+func TestEVMChainType_ExecuteTrigger_NotRegistered(t *testing.T) {
 	t.Parallel()
-	f := newFamily()
-	err := f.ExecuteTrigger(context.Background(), 1, "regID", nil)
+	ct := newEVMChainType()
+	err := ct.ExecuteTrigger(context.Background(), 1, "regID", nil)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "EVM family: capabilities not registered")
+	assert.Contains(t, err.Error(), "EVM: capabilities not registered")
 }
 
-func TestEVMFamily_ExecuteTrigger_UnknownSelector(t *testing.T) {
+func TestEVMChainType_ExecuteTrigger_UnknownSelector(t *testing.T) {
 	t.Parallel()
-	f := newFamily()
+	ct := newEVMChainType()
 	// set evmChains with empty map to bypass nil check
-	f.evmChains = &EVMChainCapabilities{EVMChains: nil}
-	err := f.ExecuteTrigger(context.Background(), 999, "regID", nil)
+	ct.evmChains = &EVMChainCapabilities{EVMChains: nil}
+	err := ct.ExecuteTrigger(context.Background(), 999, "regID", nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no EVM chain initialized for selector 999")
 }
@@ -324,32 +324,32 @@ func TestEVMFamily_ExecuteTrigger_UnknownSelector(t *testing.T) {
 // HasSelector
 // ---------------------------------------------------------------------------
 
-func TestEVMFamily_HasSelector_WhenNotRegistered_ReturnsFalse(t *testing.T) {
+func TestEVMChainType_HasSelector_WhenNotRegistered_ReturnsFalse(t *testing.T) {
 	t.Parallel()
-	f := newFamily()
-	assert.False(t, f.HasSelector(1))
-	assert.False(t, f.HasSelector(0))
+	ct := newEVMChainType()
+	assert.False(t, ct.HasSelector(1))
+	assert.False(t, ct.HasSelector(0))
 }
 
-func TestEVMFamily_HasSelector_EmptyMap_ReturnsFalse(t *testing.T) {
+func TestEVMChainType_HasSelector_EmptyMap_ReturnsFalse(t *testing.T) {
 	t.Parallel()
-	f := newFamily()
-	f.evmChains = &EVMChainCapabilities{EVMChains: nil}
-	assert.False(t, f.HasSelector(1))
+	ct := newEVMChainType()
+	ct.evmChains = &EVMChainCapabilities{EVMChains: nil}
+	assert.False(t, ct.HasSelector(1))
 }
 
 // ---------------------------------------------------------------------------
-// ParseTriggerChainSelector (via family interface)
+// ParseTriggerChainSelector (via chain type interface)
 // ---------------------------------------------------------------------------
 
-func TestEVMFamily_ParseTriggerChainSelector_Delegates(t *testing.T) {
+func TestEVMChainType_ParseTriggerChainSelector_Delegates(t *testing.T) {
 	t.Parallel()
-	f := newFamily()
-	got, ok := f.ParseTriggerChainSelector("evm:ChainSelector:42@1.0.0")
+	ct := newEVMChainType()
+	got, ok := ct.ParseTriggerChainSelector("evm:ChainSelector:42@1.0.0")
 	require.True(t, ok)
 	require.Equal(t, uint64(42), got)
 
-	got, ok = f.ParseTriggerChainSelector("no-selector-here")
+	got, ok = ct.ParseTriggerChainSelector("no-selector-here")
 	require.False(t, ok)
 	require.Zero(t, got)
 }
@@ -358,71 +358,71 @@ func TestEVMFamily_ParseTriggerChainSelector_Delegates(t *testing.T) {
 // RegisterCapabilities type-assertion failures
 // ---------------------------------------------------------------------------
 
-func TestEVMFamily_RegisterCapabilities_WrongClientType(t *testing.T) {
+func TestEVMChainType_RegisterCapabilities_WrongClientType(t *testing.T) {
 	t.Parallel()
-	f := newFamily()
+	ct := newEVMChainType()
 	cfg := chain.CapabilityConfig{
-		Clients:  map[uint64]chain.ChainClient{1: "not-an-ethclient"},
+		Clients:    map[uint64]chain.ChainClient{1: "not-an-ethclient"},
 		Forwarders: map[uint64]string{1: "0x" + strings.Repeat("a", 40)},
 	}
-	_, err := f.RegisterCapabilities(context.Background(), cfg)
+	_, err := ct.RegisterCapabilities(context.Background(), cfg)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "client for selector 1 is not *ethclient.Client")
 }
 
 // With no clients the caps should still construct, no type-assertion error.
-func TestEVMFamily_RegisterCapabilities_NoClients_ConstructsEmpty(t *testing.T) {
+func TestEVMChainType_RegisterCapabilities_NoClients_ConstructsEmpty(t *testing.T) {
 	t.Parallel()
-	f := newFamily()
+	ct := newEVMChainType()
 	cfg := chain.CapabilityConfig{
 		Clients:    map[uint64]chain.ChainClient{},
 		Forwarders: map[uint64]string{},
 		Logger:     nopCommonLogger(),
 		Registry:   newRegistry(t),
 	}
-	srvcs, err := f.RegisterCapabilities(context.Background(), cfg)
+	srvcs, err := ct.RegisterCapabilities(context.Background(), cfg)
 	// No clients means no chains; should succeed with empty service list.
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	assert.Empty(t, srvcs)
-	assert.False(t, f.HasSelector(1))
+	assert.False(t, ct.HasSelector(1))
 }
 
 // ---------------------------------------------------------------------------
 // RunHealthCheck plumbing
 // ---------------------------------------------------------------------------
 
-func TestEVMFamily_RunHealthCheck_PropagatesInvalidClientType(t *testing.T) {
+func TestEVMChainType_RunHealthCheck_PropagatesInvalidClientType(t *testing.T) {
 	t.Parallel()
-	f := newFamily()
-	err := f.RunHealthCheck(map[uint64]chain.ChainClient{1: "not-ethclient"})
+	ct := newEVMChainType()
+	err := ct.RunHealthCheck(map[uint64]chain.ChainClient{1: "not-ethclient"})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid client type for EVM family")
+	assert.Contains(t, err.Error(), "invalid client type for EVM chain type")
 }
 
-func TestEVMFamily_RunHealthCheck_NoClients_Errors(t *testing.T) {
+func TestEVMChainType_RunHealthCheck_NoClients_Errors(t *testing.T) {
 	t.Parallel()
-	f := newFamily()
-	err := f.RunHealthCheck(map[uint64]chain.ChainClient{})
+	ct := newEVMChainType()
+	err := ct.RunHealthCheck(map[uint64]chain.ChainClient{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no RPC URLs found")
 }
 
 // ---------------------------------------------------------------------------
-// ChainFamily interface contract
+// ChainType interface contract
 // ---------------------------------------------------------------------------
 
-func TestEVMFamily_ImplementsChainFamily(t *testing.T) {
+func TestEVMChainType_ImplementsChainType(t *testing.T) {
 	t.Parallel()
-	var _ chain.ChainFamily = (*EVMFamily)(nil)
+	var _ chain.ChainType = (*EVMChainType)(nil)
 }
 
 // ---------------------------------------------------------------------------
 // Registered via init
 // ---------------------------------------------------------------------------
 
-func TestEVMFamily_RegisteredInFactoryRegistry(t *testing.T) {
+func TestEVMChainType_RegisteredInFactoryRegistry(t *testing.T) {
 	t.Parallel()
 	lg := zerolog.Nop()
 	chain.Build(&lg)
@@ -434,22 +434,22 @@ func TestEVMFamily_RegisteredInFactoryRegistry(t *testing.T) {
 			break
 		}
 	}
-	require.True(t, found, "evm family should be registered at init; got %v", names)
+	require.True(t, found, "evm chain type should be registered at init; got %v", names)
 
-	fam, err := chain.Get("evm")
+	ct, err := chain.Get("evm")
 	require.NoError(t, err)
-	require.Equal(t, "evm", fam.Name())
+	require.Equal(t, "evm", ct.Name())
 }
 
 // ---------------------------------------------------------------------------
 // Sentinel error wrapping
 // ---------------------------------------------------------------------------
 
-func TestEVMFamily_ResolveKey_BroadcastErrorWrapsUnderlying(t *testing.T) {
+func TestEVMChainType_ResolveKey_BroadcastErrorWrapsUnderlying(t *testing.T) {
 	t.Parallel()
-	f := newFamily()
+	ct := newEVMChainType()
 	s := &settings.Settings{User: settings.UserSettings{EthPrivateKey: "zz"}}
-	_, err := f.ResolveKey(s, true)
+	_, err := ct.ResolveKey(s, true)
 	require.Error(t, err)
 	// Must mention env var for operator-facing clarity.
 	assert.Contains(t, err.Error(), "CRE_ETH_PRIVATE_KEY")
@@ -459,12 +459,12 @@ func TestEVMFamily_ResolveKey_BroadcastErrorWrapsUnderlying(t *testing.T) {
 // Non-broadcast with valid key: no UI warning leaked
 // ---------------------------------------------------------------------------
 
-func TestEVMFamily_ResolveKey_ValidNonBroadcast_NoWarning(t *testing.T) {
+func TestEVMChainType_ResolveKey_ValidNonBroadcast_NoWarning(t *testing.T) {
 	t.Parallel()
-	f := newFamily()
+	ct := newEVMChainType()
 	s := &settings.Settings{User: settings.UserSettings{EthPrivateKey: validPK}}
 	stderr := captureStderr(t, func() {
-		_, err := f.ResolveKey(s, false)
+		_, err := ct.ResolveKey(s, false)
 		require.NoError(t, err)
 	})
 	assert.NotContains(t, stderr, "Using default private key")
@@ -474,13 +474,13 @@ func TestEVMFamily_ResolveKey_ValidNonBroadcast_NoWarning(t *testing.T) {
 // ExecuteTrigger wrong triggerData type
 // ---------------------------------------------------------------------------
 
-func TestEVMFamily_ExecuteTrigger_WrongTriggerDataType(t *testing.T) {
+func TestEVMChainType_ExecuteTrigger_WrongTriggerDataType(t *testing.T) {
 	t.Parallel()
 	// Register a nil FakeEVMChain entry via map so the nil-check passes but the
 	// triggerData type assertion fails first.
-	f := newFamily()
-	f.evmChains = &EVMChainCapabilities{EVMChains: nil}
-	err := f.ExecuteTrigger(context.Background(), 1, "regID", "not-a-log")
+	ct := newEVMChainType()
+	ct.evmChains = &EVMChainCapabilities{EVMChains: nil}
+	err := ct.ExecuteTrigger(context.Background(), 1, "regID", "not-a-log")
 	require.Error(t, err)
 	// Whichever check fails first — both are acceptable.
 	if !errorContainsAny(err, "trigger data is not *evm.Log", "no EVM chain initialized") {
@@ -503,12 +503,12 @@ func errorContainsAny(err error, subs ...string) bool {
 // Defensive check: crypto.HexToECDSA rejects the string "0x..." so our
 // fallback behaviour under non-broadcast keeps functioning even if a user
 // copies their key with a prefix.
-func TestEVMFamily_ResolveKey_PrefixedHex_FallsBackToSentinel(t *testing.T) {
+func TestEVMChainType_ResolveKey_PrefixedHex_FallsBackToSentinel(t *testing.T) {
 	t.Parallel()
-	f := newFamily()
+	ct := newEVMChainType()
 	s := &settings.Settings{User: settings.UserSettings{EthPrivateKey: "0x" + validPK}}
 	stderr := captureStderr(t, func() {
-		got, err := f.ResolveKey(s, false)
+		got, err := ct.ResolveKey(s, false)
 		require.NoError(t, err)
 		pk := got.(*ecdsa.PrivateKey)
 		require.Equal(t, 0, pk.D.Cmp(bigOne()))
@@ -520,11 +520,11 @@ func TestEVMFamily_ResolveKey_PrefixedHex_FallsBackToSentinel(t *testing.T) {
 // Error type is standard error (not a sentinel) — ensures errors.Is behaviour.
 // ---------------------------------------------------------------------------
 
-func TestEVMFamily_ResolveKey_BroadcastError_IsError(t *testing.T) {
+func TestEVMChainType_ResolveKey_BroadcastError_IsError(t *testing.T) {
 	t.Parallel()
-	f := newFamily()
+	ct := newEVMChainType()
 	s := &settings.Settings{User: settings.UserSettings{EthPrivateKey: ""}}
-	_, err := f.ResolveKey(s, true)
+	_, err := ct.ResolveKey(s, true)
 	require.Error(t, err)
 	require.NotNil(t, errors.Unwrap(err))
 }
@@ -533,52 +533,52 @@ func TestEVMFamily_ResolveKey_BroadcastError_IsError(t *testing.T) {
 // CollectCLIInputs
 // ---------------------------------------------------------------------------
 
-func TestEVMFamily_CollectCLIInputs_BothSet(t *testing.T) {
+func TestEVMChainType_CollectCLIInputs_BothSet(t *testing.T) {
 	t.Parallel()
-	f := newFamily()
+	ct := newEVMChainType()
 	v := viper.New()
 	v.Set("evm-tx-hash", "0xabc123")
 	v.Set("evm-event-index", 2)
 
-	result := f.CollectCLIInputs(v)
+	result := ct.CollectCLIInputs(v)
 	assert.Equal(t, "0xabc123", result[TriggerInputTxHash])
 	assert.Equal(t, "2", result[TriggerInputEventIndex])
 }
 
-func TestEVMFamily_CollectCLIInputs_NegativeIndexOmitted(t *testing.T) {
+func TestEVMChainType_CollectCLIInputs_NegativeIndexOmitted(t *testing.T) {
 	t.Parallel()
-	f := newFamily()
+	ct := newEVMChainType()
 	v := viper.New()
 	v.Set("evm-tx-hash", "0xabc")
 	v.Set("evm-event-index", -1)
 
-	result := f.CollectCLIInputs(v)
+	result := ct.CollectCLIInputs(v)
 	assert.Equal(t, "0xabc", result[TriggerInputTxHash])
 	_, hasIndex := result[TriggerInputEventIndex]
 	assert.False(t, hasIndex, "negative index should be omitted")
 }
 
-func TestEVMFamily_CollectCLIInputs_EmptyTxHashOmitted(t *testing.T) {
+func TestEVMChainType_CollectCLIInputs_EmptyTxHashOmitted(t *testing.T) {
 	t.Parallel()
-	f := newFamily()
+	ct := newEVMChainType()
 	v := viper.New()
 	v.Set("evm-tx-hash", "")
 	v.Set("evm-event-index", 0)
 
-	result := f.CollectCLIInputs(v)
+	result := ct.CollectCLIInputs(v)
 	_, hasTx := result[TriggerInputTxHash]
 	assert.False(t, hasTx, "empty tx hash should be omitted")
 	assert.Equal(t, "0", result[TriggerInputEventIndex])
 }
 
-func TestEVMFamily_CollectCLIInputs_DefaultsOnly(t *testing.T) {
+func TestEVMChainType_CollectCLIInputs_DefaultsOnly(t *testing.T) {
 	t.Parallel()
-	f := newFamily()
+	ct := newEVMChainType()
 	v := viper.New()
 	// Viper defaults int to 0; simulate's flag registration sets default to -1.
 	// Without explicit flag defaults, CollectCLIInputs sees 0 (>= 0) and includes it.
 	v.SetDefault("evm-event-index", -1)
 
-	result := f.CollectCLIInputs(v)
+	result := ct.CollectCLIInputs(v)
 	assert.Empty(t, result)
 }

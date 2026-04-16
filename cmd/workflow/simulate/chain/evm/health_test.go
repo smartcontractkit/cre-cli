@@ -165,5 +165,5 @@ func TestRunRPCHealthCheck_InvalidClientType(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected error for invalid client type")
 	}
-	mustContain(t, err.Error(), "invalid client type for EVM family")
+	mustContain(t, err.Error(), "invalid client type for EVM chain type")
 }

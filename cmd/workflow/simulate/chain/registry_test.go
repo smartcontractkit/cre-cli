@@ -20,86 +20,86 @@ func resetRegistry() {
 	mu.Lock()
 	defer mu.Unlock()
 	registrations = make(map[string]registration)
-	families = make(map[string]ChainFamily)
+	chainTypes = make(map[string]ChainType)
 }
 
-// mockChainFamily is a testify/mock implementation of ChainFamily.
-type mockChainFamily struct {
+// mockChainType is a testify/mock implementation of ChainType.
+type mockChainType struct {
 	mock.Mock
 }
 
-var _ ChainFamily = (*mockChainFamily)(nil)
+var _ ChainType = (*mockChainType)(nil)
 
-func (m *mockChainFamily) Name() string {
+func (m *mockChainType) Name() string {
 	args := m.Called()
 	return args.String(0)
 }
 
-func (m *mockChainFamily) ResolveClients(v *viper.Viper) (map[uint64]ChainClient, map[uint64]string, error) {
+func (m *mockChainType) ResolveClients(v *viper.Viper) (map[uint64]ChainClient, map[uint64]string, error) {
 	args := m.Called(v)
 	clients, _ := args.Get(0).(map[uint64]ChainClient)
 	forwarders, _ := args.Get(1).(map[uint64]string)
 	return clients, forwarders, args.Error(2)
 }
 
-func (m *mockChainFamily) RegisterCapabilities(ctx context.Context, cfg CapabilityConfig) ([]services.Service, error) {
+func (m *mockChainType) RegisterCapabilities(ctx context.Context, cfg CapabilityConfig) ([]services.Service, error) {
 	args := m.Called(ctx, cfg)
 	srvcs, _ := args.Get(0).([]services.Service)
 	return srvcs, args.Error(1)
 }
 
-func (m *mockChainFamily) ExecuteTrigger(ctx context.Context, selector uint64, registrationID string, triggerData interface{}) error {
+func (m *mockChainType) ExecuteTrigger(ctx context.Context, selector uint64, registrationID string, triggerData interface{}) error {
 	args := m.Called(ctx, selector, registrationID, triggerData)
 	return args.Error(0)
 }
 
-func (m *mockChainFamily) HasSelector(selector uint64) bool {
+func (m *mockChainType) HasSelector(selector uint64) bool {
 	args := m.Called(selector)
 	return args.Bool(0)
 }
 
-func (m *mockChainFamily) ParseTriggerChainSelector(triggerID string) (uint64, bool) {
+func (m *mockChainType) ParseTriggerChainSelector(triggerID string) (uint64, bool) {
 	args := m.Called(triggerID)
 	return args.Get(0).(uint64), args.Bool(1)
 }
 
-func (m *mockChainFamily) RunHealthCheck(clients map[uint64]ChainClient) error {
+func (m *mockChainType) RunHealthCheck(clients map[uint64]ChainClient) error {
 	args := m.Called(clients)
 	return args.Error(0)
 }
 
-func (m *mockChainFamily) SupportedChains() []ChainConfig {
+func (m *mockChainType) SupportedChains() []ChainConfig {
 	args := m.Called()
 	result, _ := args.Get(0).([]ChainConfig)
 	return result
 }
 
-func (m *mockChainFamily) ResolveKey(creSettings *settings.Settings, broadcast bool) (interface{}, error) {
+func (m *mockChainType) ResolveKey(creSettings *settings.Settings, broadcast bool) (interface{}, error) {
 	args := m.Called(creSettings, broadcast)
 	return args.Get(0), args.Error(1)
 }
 
-func (m *mockChainFamily) ResolveTriggerData(ctx context.Context, selector uint64, params TriggerParams) (interface{}, error) {
+func (m *mockChainType) ResolveTriggerData(ctx context.Context, selector uint64, params TriggerParams) (interface{}, error) {
 	args := m.Called(ctx, selector, params)
 	return args.Get(0), args.Error(1)
 }
 
-func (m *mockChainFamily) CollectCLIInputs(v *viper.Viper) map[string]string {
+func (m *mockChainType) CollectCLIInputs(v *viper.Viper) map[string]string {
 	args := m.Called(v)
 	result, _ := args.Get(0).(map[string]string)
 	return result
 }
 
-func newMockFamily(name string) *mockChainFamily {
-	f := new(mockChainFamily)
+func newMockType(name string) *mockChainType {
+	f := new(mockChainType)
 	f.On("Name").Return(name)
 	return f
 }
 
-// registerMock registers a pre-built mock family and immediately builds it so
+// registerMock registers a pre-built mock chain type and immediately builds it so
 // tests can exercise Get/All/Names without wiring a real logger.
-func registerMock(name string, family ChainFamily) {
-	Register(name, func(*zerolog.Logger) ChainFamily { return family }, nil)
+func registerMock(name string, chainType ChainType) {
+	Register(name, func(*zerolog.Logger) ChainType { return chainType }, nil)
 	Build(nil)
 }
 
@@ -107,31 +107,31 @@ func TestRegisterAndGet(t *testing.T) {
 	resetRegistry()
 	defer resetRegistry()
 
-	mockFamily := newMockFamily("test")
-	registerMock("test", mockFamily)
+	mockCT := newMockType("test")
+	registerMock("test", mockCT)
 
 	f, err := Get("test")
 	require.NoError(t, err)
 	assert.Equal(t, "test", f.Name())
-	mockFamily.AssertExpectations(t)
+	mockCT.AssertExpectations(t)
 }
 
-func TestGetUnknownFamily(t *testing.T) {
+func TestGetUnknownChainType(t *testing.T) {
 	resetRegistry()
 	defer resetRegistry()
 
 	_, err := Get("nonexistent")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "unknown chain family")
+	assert.Contains(t, err.Error(), "unknown chain type")
 }
 
 func TestRegisterDuplicatePanics(t *testing.T) {
 	resetRegistry()
 	defer resetRegistry()
 
-	registerMock("dup", newMockFamily("dup"))
+	registerMock("dup", newMockType("dup"))
 	assert.Panics(t, func() {
-		registerMock("dup", newMockFamily("dup"))
+		registerMock("dup", newMockType("dup"))
 	})
 }
 
@@ -139,8 +139,8 @@ func TestAll(t *testing.T) {
 	resetRegistry()
 	defer resetRegistry()
 
-	registerMock("alpha", newMockFamily("alpha"))
-	registerMock("beta", newMockFamily("beta"))
+	registerMock("alpha", newMockType("alpha"))
+	registerMock("beta", newMockType("beta"))
 
 	all := All()
 	assert.Len(t, all, 2)
@@ -152,9 +152,9 @@ func TestNamesReturnsSorted(t *testing.T) {
 	resetRegistry()
 	defer resetRegistry()
 
-	registerMock("zebra", newMockFamily("zebra"))
-	registerMock("alpha", newMockFamily("alpha"))
-	registerMock("middle", newMockFamily("middle"))
+	registerMock("zebra", newMockType("zebra"))
+	registerMock("alpha", newMockType("alpha"))
+	registerMock("middle", newMockType("middle"))
 
 	names := Names()
 	assert.Equal(t, []string{"alpha", "middle", "zebra"}, names)
@@ -164,8 +164,8 @@ func TestGetErrorIncludesRegisteredNames(t *testing.T) {
 	resetRegistry()
 	defer resetRegistry()
 
-	registerMock("evm", newMockFamily("evm"))
-	registerMock("aptos", newMockFamily("aptos"))
+	registerMock("evm", newMockType("evm"))
+	registerMock("aptos", newMockType("aptos"))
 
 	_, err := Get("solana")
 	require.Error(t, err)
@@ -177,7 +177,7 @@ func TestRegisterAllCLIFlags_StringAndInt(t *testing.T) {
 	resetRegistry()
 	defer resetRegistry()
 
-	Register("test", func(*zerolog.Logger) ChainFamily { return newMockFamily("test") }, []CLIFlagDef{
+	Register("test", func(*zerolog.Logger) ChainType { return newMockType("test") }, []CLIFlagDef{
 		{Name: "test-hash", Description: "a hash", FlagType: CLIFlagString},
 		{Name: "test-index", Description: "an index", DefaultValue: "-1", FlagType: CLIFlagInt},
 	})
@@ -200,23 +200,23 @@ func TestRegisterAllCLIFlags_NilFlagDefs(t *testing.T) {
 	resetRegistry()
 	defer resetRegistry()
 
-	Register("test", func(*zerolog.Logger) ChainFamily { return newMockFamily("test") }, nil)
+	Register("test", func(*zerolog.Logger) ChainType { return newMockType("test") }, nil)
 
 	cmd := &cobra.Command{Use: "test"}
 	RegisterAllCLIFlags(cmd) // should not panic
 }
 
-func TestCollectAllCLIInputs_MergesAcrossFamilies(t *testing.T) {
+func TestCollectAllCLIInputs_MergesAcrossChainTypes(t *testing.T) {
 	resetRegistry()
 	defer resetRegistry()
 
-	fam1 := newMockFamily("alpha")
-	fam1.On("CollectCLIInputs", mock.Anything).Return(map[string]string{"key-a": "val-a"})
-	registerMock("alpha", fam1)
+	ct1 := newMockType("alpha")
+	ct1.On("CollectCLIInputs", mock.Anything).Return(map[string]string{"key-a": "val-a"})
+	registerMock("alpha", ct1)
 
-	fam2 := newMockFamily("beta")
-	fam2.On("CollectCLIInputs", mock.Anything).Return(map[string]string{"key-b": "val-b"})
-	registerMock("beta", fam2)
+	ct2 := newMockType("beta")
+	ct2.On("CollectCLIInputs", mock.Anything).Return(map[string]string{"key-b": "val-b"})
+	registerMock("beta", ct2)
 
 	v := viper.New()
 	result := CollectAllCLIInputs(v)
@@ -229,9 +229,9 @@ func TestCollectAllCLIInputs_EmptyWhenNoInputs(t *testing.T) {
 	resetRegistry()
 	defer resetRegistry()
 
-	fam := newMockFamily("empty")
-	fam.On("CollectCLIInputs", mock.Anything).Return(map[string]string{})
-	registerMock("empty", fam)
+	ct := newMockType("empty")
+	ct.On("CollectCLIInputs", mock.Anything).Return(map[string]string{})
+	registerMock("empty", ct)
 
 	v := viper.New()
 	result := CollectAllCLIInputs(v)
@@ -242,8 +242,8 @@ func TestAllReturnsCopy(t *testing.T) {
 	resetRegistry()
 	defer resetRegistry()
 
-	mockFamily := newMockFamily("original")
-	registerMock("original", mockFamily)
+	mockCT := newMockType("original")
+	registerMock("original", mockCT)
 
 	all := All()
 	delete(all, "original")
@@ -252,5 +252,5 @@ func TestAllReturnsCopy(t *testing.T) {
 	f, err := Get("original")
 	require.NoError(t, err)
 	assert.Equal(t, "original", f.Name())
-	mockFamily.AssertExpectations(t)
+	mockCT.AssertExpectations(t)
 }

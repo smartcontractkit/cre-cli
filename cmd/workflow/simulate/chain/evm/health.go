@@ -19,7 +19,7 @@ func RunRPCHealthCheck(clients map[uint64]chain.ChainClient, experimentalSelecto
 	for sel, c := range clients {
 		ec, ok := c.(*ethclient.Client)
 		if !ok {
-			return fmt.Errorf("[%d] invalid client type for EVM family", sel)
+			return fmt.Errorf("[%d] invalid client type for EVM chain type", sel)
 		}
 		ethClients[sel] = ec
 	}
