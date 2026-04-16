@@ -15,6 +15,7 @@ cre [optional flags]
 ```
   -e, --env string            Path to .env file which contains sensitive info
   -h, --help                  help for cre
+      --non-interactive       Fail instead of prompting; requires all inputs via flags
   -R, --project-root string   Path to the project root
   -E, --public-env string     Path to .env.public file which contains shared, non-sensitive build config
   -T, --target string         Use target settings from YAML config

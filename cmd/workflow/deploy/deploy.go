@@ -44,6 +44,7 @@ type Inputs struct {
 
 	OwnerLabel       string `validate:"omitempty"`
 	SkipConfirmation bool
+	NonInteractive   bool
 	// SkipTypeChecks passes --skip-type-checks to cre-compile for TypeScript workflows.
 	SkipTypeChecks bool
 
@@ -178,6 +179,7 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 		WorkflowRegistryContractAddress:   h.environmentSet.WorkflowRegistryAddress,
 		OwnerLabel:                        v.GetString("owner-label"),
 		SkipConfirmation:                  v.GetBool(settings.Flags.SkipConfirmation.Name),
+		NonInteractive:                    v.GetBool(settings.Flags.NonInteractive.Name),
 		SkipTypeChecks:                    v.GetBool(cmdcommon.SkipTypeChecksCLIFlag),
 		PreviewPrivateRegistry:            previewPrivateRegistry,
 		TargetWorkflowRegistry:            targetWorkflowRegistry,

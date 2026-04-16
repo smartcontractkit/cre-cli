@@ -75,7 +75,6 @@ Templates are fetched dynamically from GitHub repositories.`,
 	initCmd.Flags().StringP("template", "t", "", "Name of the template to use (e.g., kv-store-go)")
 	initCmd.Flags().Bool("refresh", false, "Bypass template cache and fetch fresh data")
 	initCmd.Flags().StringArray("rpc-url", nil, "RPC URL for a network (format: chain-name=url, repeatable)")
-	initCmd.Flags().Bool("non-interactive", false, "Fail instead of prompting; requires all inputs via flags")
 
 	// Deprecated: --template-id is kept for backwards compatibility, maps to hello-world-go
 	initCmd.Flags().Uint32("template-id", 0, "")

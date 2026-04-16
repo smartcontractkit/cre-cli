@@ -64,6 +64,13 @@ func (a *onchainRegistryDeployStrategy) RunPreDeployChecks() error {
 		if existsErr.Error() == "workflow with name "+h.inputs.WorkflowName+" already exists" {
 			ui.Warning(fmt.Sprintf("Workflow %s already exists", h.inputs.WorkflowName))
 			ui.Dim("This will update the existing workflow.")
+			if h.inputs.NonInteractive && !h.inputs.SkipConfirmation {
+				ui.ErrorWithSuggestions(
+					"Non-interactive mode requires all inputs via flags",
+					[]string{"--yes"},
+				)
+				return fmt.Errorf("missing required flags for --non-interactive mode")
+			}
 			if !h.inputs.SkipConfirmation {
 				confirm, err := ui.Confirm("Are you sure you want to overwrite the workflow?")
 				if err != nil {
