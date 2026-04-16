@@ -176,6 +176,81 @@ func TestUpsertWorkflowInRegistry_GQLError(t *testing.T) {
 	assert.Contains(t, err.Error(), "upsert workflow in registry")
 }
 
+func TestGetWorkflowByName(t *testing.T) {
+	var capturedQuery string
+	var capturedVariables map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Query     string                 `json:"query"`
+			Variables map[string]interface{} `json:"variables"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		capturedQuery = req.Query
+		capturedVariables = req.Variables
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data": map[string]any{
+				"getOffchainWorkflowByName": map[string]any{
+					"workflow": map[string]any{
+						"workflowId":     "wf-123",
+						"owner":          "owner-1",
+						"createdAt":      "2026-01-01T00:00:00Z",
+						"status":         "WORKFLOW_STATUS_ACTIVE",
+						"workflowName":   "registry-workflow",
+						"binaryUrl":      "s3://binary",
+						"configUrl":      "s3://config",
+						"tag":            "v1",
+						"attributes":     "{\"region\":\"us-east-1\"}",
+						"donFamily":      "family-a",
+						"organizationId": "org-1",
+					},
+				},
+			},
+		})
+	}))
+	defer srv.Close()
+
+	client := newTestPrivateRegistryClient(t, srv.URL)
+	result, err := client.GetWorkflowByName("registry-workflow")
+
+	require.NoError(t, err)
+	assert.Contains(t, capturedQuery, "query GetOffchainWorkflowByName")
+	assert.Contains(t, capturedQuery, "getOffchainWorkflowByName")
+	assert.Equal(t, "wf-123", result.WorkflowID)
+	assert.Equal(t, WorkflowStatusActive, result.Status)
+	assert.Equal(t, "registry-workflow", result.WorkflowName)
+	assert.Equal(t, "family-a", result.DonFamily)
+	assert.Equal(t, "org-1", result.OrganizationID)
+
+	request, ok := capturedVariables["request"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "registry-workflow", request["workflowName"])
+}
+
+func TestGetWorkflowByName_GQLError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"errors": []map[string]string{{"message": "workflow not found"}},
+		})
+	}))
+	defer srv.Close()
+
+	client := newTestPrivateRegistryClient(t, srv.URL)
+	_, err := client.GetWorkflowByName("registry-workflow")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "get workflow by name in registry")
+}
+
+func TestGetWorkflowByName_EmptyName(t *testing.T) {
+	logger := testutil.NewTestLogger()
+	client := New(nil, logger)
+
+	_, err := client.GetWorkflowByName("")
+	require.EqualError(t, err, "workflowName is required")
+}
+
 func TestPauseWorkflowInRegistry(t *testing.T) {
 	var capturedVariables map[string]any
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

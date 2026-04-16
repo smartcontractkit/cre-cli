@@ -577,33 +577,45 @@ func TestExecute_PrivateRegistry(t *testing.T) {
 		defer wasmServer.Close()
 
 		gqlServer := newAssertGQLServer(t, func(t *testing.T, req deployMockGraphQLRequest) (int, map[string]any) {
-			assert.Contains(t, req.Query, "mutation UpsertOffchainWorkflow")
-			rawRequest, ok := req.Variables["request"].(map[string]any)
-			require.True(t, ok)
-			rawWorkflow, ok := rawRequest["workflow"].(map[string]any)
-			require.True(t, ok)
-			assert.Equal(t, "test_workflow", rawWorkflow["workflowName"])
-			assert.Equal(t, "test-don", rawWorkflow["donFamily"])
-			assert.Equal(t, wasmServer.URL+"/binary.wasm", rawWorkflow["binaryUrl"])
-			assert.Equal(t, "WORKFLOW_STATUS_ACTIVE", rawWorkflow["status"])
+			switch {
+			case req.Query != "" && containsQuery(req.Query, "query GetOffchainWorkflowByName"):
+				rawRequest, ok := req.Variables["request"].(map[string]any)
+				require.True(t, ok)
+				assert.Equal(t, "test_workflow", rawRequest["workflowName"])
+				return http.StatusOK, map[string]any{
+					"errors": []map[string]string{{"message": "workflow not found"}},
+				}
+			case req.Query != "" && containsQuery(req.Query, "mutation UpsertOffchainWorkflow"):
+				rawRequest, ok := req.Variables["request"].(map[string]any)
+				require.True(t, ok)
+				rawWorkflow, ok := rawRequest["workflow"].(map[string]any)
+				require.True(t, ok)
+				assert.Equal(t, "test_workflow", rawWorkflow["workflowName"])
+				assert.Equal(t, "test-don", rawWorkflow["donFamily"])
+				assert.Equal(t, wasmServer.URL+"/binary.wasm", rawWorkflow["binaryUrl"])
+				assert.Equal(t, "WORKFLOW_STATUS_ACTIVE", rawWorkflow["status"])
 
-			return http.StatusOK, map[string]any{
-				"data": map[string]any{
-					"upsertOffchainWorkflow": map[string]any{
-						"workflow": map[string]any{
-							"workflowId":   "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
-							"owner":        chainsim.TestAddress,
-							"createdAt":    "2025-01-01T00:00:00Z",
-							"status":       "WORKFLOW_STATUS_ACTIVE",
-							"workflowName": "test_workflow",
-							"binaryUrl":    wasmServer.URL + "/binary.wasm",
-							"configUrl":    "",
-							"tag":          "test_workflow",
-							"attributes":   "",
-							"donFamily":    "test-don",
+				return http.StatusOK, map[string]any{
+					"data": map[string]any{
+						"upsertOffchainWorkflow": map[string]any{
+							"workflow": map[string]any{
+								"workflowId":   "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+								"owner":        chainsim.TestAddress,
+								"createdAt":    "2025-01-01T00:00:00Z",
+								"status":       "WORKFLOW_STATUS_ACTIVE",
+								"workflowName": "test_workflow",
+								"binaryUrl":    wasmServer.URL + "/binary.wasm",
+								"configUrl":    "",
+								"tag":          "test_workflow",
+								"attributes":   "",
+								"donFamily":    "test-don",
+							},
 						},
 					},
-				},
+				}
+			default:
+				t.Fatalf("unexpected GraphQL operation: %s", req.Query)
+				return 0, nil
 			}
 		})
 		defer gqlServer.Close()
@@ -614,14 +626,125 @@ func TestExecute_PrivateRegistry(t *testing.T) {
 		assert.NotEmpty(t, h.workflowArtifact.WorkflowID)
 	})
 
-	t.Run("surfaces GraphQL errors from private execute path", func(t *testing.T) {
+	t.Run("continues when private workflow lookup returns not found", func(t *testing.T) {
 		wasmServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			_, _ = w.Write([]byte("workflow wasm payload"))
 		}))
 		defer wasmServer.Close()
 
-		gqlServer := newMockGQLServer(t, map[string]any{
-			"errors": []map[string]string{{"message": "unauthorized"}},
+		gqlServer := newAssertGQLServer(t, func(t *testing.T, req deployMockGraphQLRequest) (int, map[string]any) {
+			if containsQuery(req.Query, "query GetOffchainWorkflowByName") {
+				return http.StatusOK, map[string]any{
+					"errors": []map[string]string{{"message": "workflow not found"}},
+				}
+			}
+			if containsQuery(req.Query, "mutation UpsertOffchainWorkflow") {
+				return http.StatusOK, map[string]any{
+					"data": map[string]any{
+						"upsertOffchainWorkflow": map[string]any{
+							"workflow": map[string]any{
+								"workflowId":   "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+								"owner":        chainsim.TestAddress,
+								"createdAt":    "2025-01-01T00:00:00Z",
+								"status":       "WORKFLOW_STATUS_ACTIVE",
+								"workflowName": "test_workflow",
+								"binaryUrl":    wasmServer.URL + "/binary.wasm",
+								"configUrl":    "",
+								"tag":          "test_workflow",
+								"attributes":   "",
+								"donFamily":    "test-don",
+							},
+						},
+					},
+				}
+			}
+			t.Fatalf("unexpected GraphQL operation: %s", req.Query)
+			return 0, nil
+		})
+		defer gqlServer.Close()
+
+		h := newPrivateRegistryExecuteHandler(t, wasmServer.URL+"/binary.wasm", gqlServer.URL)
+		require.NoError(t, h.ValidateInputs())
+		require.NoError(t, h.Execute(context.Background()))
+	})
+
+	t.Run("prompts overwrite path can proceed with skip confirmation", func(t *testing.T) {
+		wasmServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = w.Write([]byte("workflow wasm payload"))
+		}))
+		defer wasmServer.Close()
+
+		gqlServer := newAssertGQLServer(t, func(t *testing.T, req deployMockGraphQLRequest) (int, map[string]any) {
+			if containsQuery(req.Query, "query GetOffchainWorkflowByName") {
+				return http.StatusOK, map[string]any{
+					"data": map[string]any{
+						"getOffchainWorkflowByName": map[string]any{
+							"workflow": map[string]any{
+								"workflowId":   "existing-wf-id",
+								"owner":        chainsim.TestAddress,
+								"createdAt":    "2025-01-01T00:00:00Z",
+								"status":       "WORKFLOW_STATUS_ACTIVE",
+								"workflowName": "test_workflow",
+								"binaryUrl":    "https://example.com/old.wasm",
+								"configUrl":    "",
+								"tag":          "test_workflow",
+								"attributes":   "",
+								"donFamily":    "test-don",
+							},
+						},
+					},
+				}
+			}
+			if containsQuery(req.Query, "mutation UpsertOffchainWorkflow") {
+				return http.StatusOK, map[string]any{
+					"data": map[string]any{
+						"upsertOffchainWorkflow": map[string]any{
+							"workflow": map[string]any{
+								"workflowId":   "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+								"owner":        chainsim.TestAddress,
+								"createdAt":    "2025-01-01T00:00:00Z",
+								"status":       "WORKFLOW_STATUS_ACTIVE",
+								"workflowName": "test_workflow",
+								"binaryUrl":    wasmServer.URL + "/binary.wasm",
+								"configUrl":    "",
+								"tag":          "test_workflow",
+								"attributes":   "",
+								"donFamily":    "test-don",
+							},
+						},
+					},
+				}
+			}
+			t.Fatalf("unexpected GraphQL operation: %s", req.Query)
+			return 0, nil
+		})
+		defer gqlServer.Close()
+
+		h := newPrivateRegistryExecuteHandler(t, wasmServer.URL+"/binary.wasm", gqlServer.URL)
+		h.inputs.SkipConfirmation = true
+		require.NoError(t, h.ValidateInputs())
+		require.NoError(t, h.Execute(context.Background()))
+	})
+
+	t.Run("surfaces GraphQL errors from private execute upsert path", func(t *testing.T) {
+		wasmServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = w.Write([]byte("workflow wasm payload"))
+		}))
+		defer wasmServer.Close()
+
+		gqlServer := newAssertGQLServer(t, func(t *testing.T, req deployMockGraphQLRequest) (int, map[string]any) {
+			if containsQuery(req.Query, "query GetOffchainWorkflowByName") {
+				return http.StatusOK, map[string]any{
+					"errors": []map[string]string{{"message": "workflow not found"}},
+				}
+			}
+			if containsQuery(req.Query, "mutation UpsertOffchainWorkflow") {
+				return http.StatusOK, map[string]any{
+					"errors": []map[string]string{{"message": "unauthorized"}},
+				}
+			}
+			t.Fatalf("unexpected GraphQL operation: %s", req.Query)
+			return 0, nil
 		})
 		defer gqlServer.Close()
 
@@ -633,36 +756,34 @@ func TestExecute_PrivateRegistry(t *testing.T) {
 		assert.Contains(t, err.Error(), "unauthorized")
 	})
 
-	t.Run("surfaces transport errors from private execute path", func(t *testing.T) {
+	t.Run("surfaces transport errors from private existence check", func(t *testing.T) {
 		wasmServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			_, _ = w.Write([]byte("workflow wasm payload"))
 		}))
 		defer wasmServer.Close()
 
-		gqlServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-			http.Error(w, "server exploded", http.StatusInternalServerError)
-		}))
+		gqlServer := newAssertGQLServer(t, func(t *testing.T, req deployMockGraphQLRequest) (int, map[string]any) {
+			if containsQuery(req.Query, "query GetOffchainWorkflowByName") {
+				return http.StatusInternalServerError, map[string]any{
+					"errors": []map[string]string{{"message": "server exploded"}},
+				}
+			}
+			t.Fatalf("unexpected GraphQL operation: %s", req.Query)
+			return 0, nil
+		})
 		defer gqlServer.Close()
 
 		h := newPrivateRegistryExecuteHandler(t, wasmServer.URL+"/binary.wasm", gqlServer.URL)
 		require.NoError(t, h.ValidateInputs())
 		err := h.Execute(context.Background())
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to register workflow in private registry")
+		assert.Contains(t, err.Error(), "failed to check if workflow exists")
 	})
 }
 
 type deployMockGraphQLRequest struct {
 	Query     string                 `json:"query"`
 	Variables map[string]interface{} `json:"variables"`
-}
-
-func newMockGQLServer(t *testing.T, response map[string]any) *httptest.Server {
-	t.Helper()
-	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(response)
-	}))
 }
 
 func newAssertGQLServer(
@@ -681,6 +802,10 @@ func newAssertGQLServer(
 			_ = json.NewEncoder(w).Encode(response)
 		}
 	}))
+}
+
+func containsQuery(query, operation string) bool {
+	return query != "" && strings.Contains(query, operation)
 }
 
 func newPrivateRegistryExecuteHandler(t *testing.T, wasmURL, gqlURL string) *handler {

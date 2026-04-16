@@ -245,13 +245,33 @@ func (h *handler) Execute(ctx context.Context) error {
 		return err
 	}
 
+	exists, existingStatus, err := adapter.CheckWorkflowExists(
+		h.inputs.WorkflowOwner,
+		h.inputs.WorkflowName,
+		h.inputs.WorkflowTag,
+		h.workflowArtifact.WorkflowID,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to check if workflow exists: %w", err)
+	}
+	h.existingWorkflowStatus = existingStatus
+	if exists {
+		if err := confirmWorkflowOverwrite(h.inputs.WorkflowName, h.inputs.SkipConfirmation); err != nil {
+			return err
+		}
+	}
+
 	ui.Line()
 	ui.Dim("Uploading files...")
 	if err := h.uploadArtifacts(); err != nil {
 		return fmt.Errorf("failed to upload workflow: %w", err)
 	}
 
-	return adapter.Upsert()
+	err = adapter.Upsert()
+	if err == nil {
+		warnIfPausedWorkflowUpdate(h.existingWorkflowStatus)
+	}
+	return err
 }
 
 // prepareArtifacts handles compile/fetch, artifact preparation, and hashing.
@@ -337,4 +357,27 @@ func (h *handler) displayWorkflowDetails() {
 	ui.Dim(fmt.Sprintf("Target:        %s", h.settings.User.TargetName))
 	ui.Dim(fmt.Sprintf("Owner Address: %s", h.inputs.WorkflowOwner))
 	ui.Line()
+}
+
+func confirmWorkflowOverwrite(workflowName string, skipConfirmation bool) error {
+	ui.Warning(fmt.Sprintf("Workflow %s already exists", workflowName))
+	ui.Dim("This will update the existing workflow.")
+
+	if !skipConfirmation {
+		confirm, err := ui.Confirm("Are you sure you want to overwrite the workflow?")
+		if err != nil {
+			return err
+		}
+		if !confirm {
+			return errors.New("deployment cancelled by user")
+		}
+	}
+
+	return nil
+}
+
+func warnIfPausedWorkflowUpdate(status *uint8) {
+	if status != nil && *status == workflowStatusPaused {
+		ui.Warning("Your workflow is paused and has been updated")
+	}
 }
