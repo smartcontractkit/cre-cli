@@ -238,6 +238,7 @@ func createTestSettings(workflowOwnerAddress, workflowOwnerType, workflowName, w
 				WorkflowOwnerAddress string `mapstructure:"workflow-owner-address" yaml:"workflow-owner-address"`
 				WorkflowOwnerType    string `mapstructure:"workflow-owner-type" yaml:"workflow-owner-type"`
 				WorkflowName         string `mapstructure:"workflow-name" yaml:"workflow-name"`
+				DeploymentRegistry   string `mapstructure:"deployment-registry" yaml:"deployment-registry"`
 			}{
 				WorkflowOwnerAddress: workflowOwnerAddress,
 				WorkflowOwnerType:    workflowOwnerType,
@@ -477,7 +478,7 @@ func TestCompileWithWasmPath(t *testing.T) {
 		handler.urlBinaryData = wasmContent
 		handler.workflowArtifact = &workflowArtifact{}
 
-		err := handler.PrepareWorkflowArtifact()
+		err := handler.PrepareWorkflowArtifact(chainsim.TestAddress)
 		require.NoError(t, err)
 		assert.NotEmpty(t, handler.workflowArtifact.WorkflowID)
 		assert.Nil(t, handler.workflowArtifact.BinaryData, "BinaryData should be nil for URL case")
@@ -508,7 +509,7 @@ func TestCompileWithWasmPath(t *testing.T) {
 		handler.urlConfigData = configContent
 		handler.workflowArtifact = &workflowArtifact{}
 
-		err = handler.PrepareWorkflowArtifact()
+		err = handler.PrepareWorkflowArtifact(chainsim.TestAddress)
 		require.NoError(t, err)
 		assert.NotEmpty(t, handler.workflowArtifact.WorkflowID)
 		assert.Nil(t, handler.workflowArtifact.ConfigData, "ConfigData should be nil for URL case")
