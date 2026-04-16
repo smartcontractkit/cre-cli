@@ -67,7 +67,7 @@ func mustContain(t *testing.T, s string, subs ...string) {
 }
 
 func TestHealthCheck_NoClientsConfigured(t *testing.T) {
-	err := runRPCHealthCheck(map[uint64]*ethclient.Client{}, nil)
+	err := checkRPCConnectivity(map[uint64]*ethclient.Client{}, nil)
 	if err == nil {
 		t.Fatalf("expected error for no clients configured")
 	}
@@ -75,7 +75,7 @@ func TestHealthCheck_NoClientsConfigured(t *testing.T) {
 }
 
 func TestHealthCheck_NilClient(t *testing.T) {
-	err := runRPCHealthCheck(map[uint64]*ethclient.Client{
+	err := checkRPCConnectivity(map[uint64]*ethclient.Client{
 		123: nil,
 	}, nil)
 	if err == nil {
@@ -91,7 +91,7 @@ func TestHealthCheck_AllOK(t *testing.T) {
 	cOK := newEthClient(t, sOK.URL)
 	defer cOK.Close()
 
-	err := runRPCHealthCheck(map[uint64]*ethclient.Client{
+	err := checkRPCConnectivity(map[uint64]*ethclient.Client{
 		selectorSepolia: cOK,
 	}, nil)
 	if err != nil {
@@ -106,7 +106,7 @@ func TestHealthCheck_RPCError_usesChainName(t *testing.T) {
 	cErr := newEthClient(t, sErr.URL)
 	defer cErr.Close()
 
-	err := runRPCHealthCheck(map[uint64]*ethclient.Client{
+	err := checkRPCConnectivity(map[uint64]*ethclient.Client{
 		selectorSepolia: cErr,
 	}, nil)
 	if err == nil {
@@ -125,7 +125,7 @@ func TestHealthCheck_ZeroChainID_usesChainName(t *testing.T) {
 	cZero := newEthClient(t, sZero.URL)
 	defer cZero.Close()
 
-	err := runRPCHealthCheck(map[uint64]*ethclient.Client{
+	err := checkRPCConnectivity(map[uint64]*ethclient.Client{
 		selectorSepolia: cZero,
 	}, nil)
 	if err == nil {
@@ -144,7 +144,7 @@ func TestHealthCheck_AggregatesMultipleErrors(t *testing.T) {
 	cErr := newEthClient(t, sErr.URL)
 	defer cErr.Close()
 
-	err := runRPCHealthCheck(map[uint64]*ethclient.Client{
+	err := checkRPCConnectivity(map[uint64]*ethclient.Client{
 		selectorSepolia: cErr,
 		777:             nil,
 	}, nil)

@@ -22,7 +22,7 @@ func TestHealthCheck_ExperimentalSelector_UsesExperimentalLabel(t *testing.T) {
 	defer c.Close()
 
 	const expSel uint64 = 99999999
-	err := runRPCHealthCheck(
+	err := checkRPCConnectivity(
 		map[uint64]*ethclient.Client{expSel: c},
 		map[uint64]bool{expSel: true},
 	)
@@ -40,7 +40,7 @@ func TestHealthCheck_ExperimentalSelector_ZeroChainID_UsesExperimentalLabel(t *t
 	defer c.Close()
 
 	const expSel uint64 = 42424242
-	err := runRPCHealthCheck(
+	err := checkRPCConnectivity(
 		map[uint64]*ethclient.Client{expSel: c},
 		map[uint64]bool{expSel: true},
 	)
@@ -58,7 +58,7 @@ func TestHealthCheck_UnknownSelector_FallsBackToSelectorLabel(t *testing.T) {
 	defer c.Close()
 
 	const unknown uint64 = 11111
-	err := runRPCHealthCheck(
+	err := checkRPCConnectivity(
 		map[uint64]*ethclient.Client{unknown: c},
 		nil,
 	)
@@ -80,7 +80,7 @@ func TestHealthCheck_MixedKnownAndExperimental(t *testing.T) {
 	defer cErr.Close()
 
 	const expSel uint64 = 99999999
-	err := runRPCHealthCheck(
+	err := checkRPCConnectivity(
 		map[uint64]*ethclient.Client{
 			selectorSepolia: cOK,
 			expSel:          cErr,
@@ -107,7 +107,7 @@ func TestHealthCheck_MultipleOK_NoError(t *testing.T) {
 	cOK2 := newEthClient(t, sOK2.URL)
 	defer cOK2.Close()
 
-	err := runRPCHealthCheck(
+	err := checkRPCConnectivity(
 		map[uint64]*ethclient.Client{
 			selectorSepolia: cOK,
 			chainEthMainnet: cOK2,
@@ -125,7 +125,7 @@ func TestHealthCheck_EmptyExperimentalMap_StillWorks(t *testing.T) {
 	c := newEthClient(t, sOK.URL)
 	defer c.Close()
 
-	err := runRPCHealthCheck(
+	err := checkRPCConnectivity(
 		map[uint64]*ethclient.Client{selectorSepolia: c},
 		map[uint64]bool{},
 	)
@@ -138,7 +138,7 @@ func TestHealthCheck_NilExperimentalMap_EquivalentToEmpty(t *testing.T) {
 	c := newEthClient(t, sOK.URL)
 	defer c.Close()
 
-	err := runRPCHealthCheck(
+	err := checkRPCConnectivity(
 		map[uint64]*ethclient.Client{selectorSepolia: c},
 		nil,
 	)
@@ -186,7 +186,7 @@ func TestHealthCheck_ThreeErrors_AllLabelsInAggregated(t *testing.T) {
 	cErr2 := newEthClient(t, sErr2.URL)
 	defer cErr2.Close()
 
-	err := runRPCHealthCheck(
+	err := checkRPCConnectivity(
 		map[uint64]*ethclient.Client{
 			selectorSepolia: cErr1,
 			chainEthMainnet: cErr2,

@@ -24,12 +24,12 @@ func RunRPCHealthCheck(clients map[uint64]chain.ChainClient, experimentalSelecto
 		ethClients[sel] = ec
 	}
 
-	return runRPCHealthCheck(ethClients, experimentalSelectors)
+	return checkRPCConnectivity(ethClients, experimentalSelectors)
 }
 
-// runRPCHealthCheck runs connectivity check against every configured client.
+// checkRPCConnectivity runs connectivity check against every configured client.
 // experimentalSelectors set identifies experimental chains (not in chain-selectors).
-func runRPCHealthCheck(clients map[uint64]*ethclient.Client, experimentalSelectors map[uint64]bool) error {
+func checkRPCConnectivity(clients map[uint64]*ethclient.Client, experimentalSelectors map[uint64]bool) error {
 	if len(clients) == 0 {
 		return fmt.Errorf("check your settings: no RPC URLs found for supported or experimental chains")
 	}
