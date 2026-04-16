@@ -35,6 +35,9 @@ type Context struct {
 
 	OrgID                string
 	DerivedWorkflowOwner string
+	// InvocationDir is the working directory at the time the CLI was invoked,
+	// before any os.Chdir calls made by SetExecutionContext.
+	InvocationDir string
 }
 
 type WorkflowRuntime struct {
