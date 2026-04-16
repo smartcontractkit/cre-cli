@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strconv"
 	"sync"
 
 	"github.com/rs/zerolog"
+	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/services"
@@ -67,24 +69,50 @@ type ChainFamily interface {
 	// SupportedChains returns the list of chains this family supports
 	// out of the box (for display/documentation purposes).
 	SupportedChains() []ChainConfig
+
+	// CollectCLIInputs reads this family's CLI flags from viper and
+	// returns them as key-value pairs for TriggerParams.FamilyInputs.
+	CollectCLIInputs(v *viper.Viper) map[string]string
+}
+
+// CLIFlagDef describes a CLI flag a chain family needs registered.
+type CLIFlagDef struct {
+	Name         string
+	Description  string
+	DefaultValue string // empty string for string flags, or special handling
+	FlagType     CLIFlagType
+}
+
+// CLIFlagType indicates the Go type of a CLI flag.
+type CLIFlagType int
+
+const (
+	CLIFlagString CLIFlagType = iota
+	CLIFlagInt
+)
+
+// registration bundles a factory with its CLI flag definitions.
+type registration struct {
+	factory  Factory
+	flagDefs []CLIFlagDef
 }
 
 var (
-	mu        sync.RWMutex
-	factories = make(map[string]Factory)
-	families  = make(map[string]ChainFamily)
+	mu            sync.RWMutex
+	registrations = make(map[string]registration)
+	families      = make(map[string]ChainFamily)
 )
 
-// Register adds a chain family factory to the registry.
-// Called from family package init(); the factory is invoked later in Build().
-// Panics on duplicate registration (programming error).
-func Register(name string, factory Factory) {
+// Register adds a chain family factory and its CLI flag definitions to the
+// registry. Called from family package init(); the factory is invoked later
+// in Build(). Panics on duplicate registration (programming error).
+func Register(name string, factory Factory, flagDefs []CLIFlagDef) {
 	mu.Lock()
 	defer mu.Unlock()
-	if _, exists := factories[name]; exists {
+	if _, exists := registrations[name]; exists {
 		panic(fmt.Sprintf("chain family %q already registered", name))
 	}
-	factories[name] = factory
+	registrations[name] = registration{factory: factory, flagDefs: flagDefs}
 }
 
 // Build instantiates every registered family with the given logger.
@@ -93,8 +121,8 @@ func Register(name string, factory Factory) {
 func Build(lggr *zerolog.Logger) {
 	mu.Lock()
 	defer mu.Unlock()
-	for name, factory := range factories {
-		families[name] = factory(lggr)
+	for name, reg := range registrations {
+		families[name] = reg.factory(lggr)
 	}
 }
 
@@ -104,7 +132,7 @@ func Get(name string) (ChainFamily, error) {
 	defer mu.RUnlock()
 	f, ok := families[name]
 	if !ok {
-		return nil, fmt.Errorf("unknown chain family %q; registered: %v", name, Names())
+		return nil, fmt.Errorf("unknown chain family %q; registered: %v", name, namesLocked())
 	}
 	return f, nil
 }
@@ -120,14 +148,53 @@ func All() map[string]ChainFamily {
 	return result
 }
 
-// Names returns sorted registered family names.
-func Names() []string {
+// RegisterAllCLIFlags registers CLI flags from every registered family's
+// flag definitions. Called at command setup time before Build().
+func RegisterAllCLIFlags(cmd *cobra.Command) {
 	mu.RLock()
 	defer mu.RUnlock()
+	for _, reg := range registrations {
+		for _, def := range reg.flagDefs {
+			switch def.FlagType {
+			case CLIFlagInt:
+				defaultVal := -1
+				if def.DefaultValue != "" {
+					if v, err := strconv.Atoi(def.DefaultValue); err == nil {
+						defaultVal = v
+					}
+				}
+				cmd.Flags().Int(def.Name, defaultVal, def.Description)
+			default:
+				cmd.Flags().String(def.Name, def.DefaultValue, def.Description)
+			}
+		}
+	}
+}
+
+// CollectAllCLIInputs gathers CLI inputs from every registered family.
+func CollectAllCLIInputs(v *viper.Viper) map[string]string {
+	result := map[string]string{}
+	for _, family := range All() {
+		for k, v := range family.CollectCLIInputs(v) {
+			result[k] = v
+		}
+	}
+	return result
+}
+
+// namesLocked returns sorted family names. Caller must hold mu.
+func namesLocked() []string {
 	names := make([]string, 0, len(families))
 	for k := range families {
 		names = append(names, k)
 	}
 	sort.Strings(names)
 	return names
+}
+
+// Names returns sorted registered family names.
+func Names() []string {
+	mu.RLock()
+	defer mu.RUnlock()
+	return namesLocked()
 }

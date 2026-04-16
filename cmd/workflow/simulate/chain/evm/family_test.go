@@ -14,6 +14,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/rs/zerolog"
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -526,4 +527,58 @@ func TestEVMFamily_ResolveKey_BroadcastError_IsError(t *testing.T) {
 	_, err := f.ResolveKey(s, true)
 	require.Error(t, err)
 	require.NotNil(t, errors.Unwrap(err))
+}
+
+// ---------------------------------------------------------------------------
+// CollectCLIInputs
+// ---------------------------------------------------------------------------
+
+func TestEVMFamily_CollectCLIInputs_BothSet(t *testing.T) {
+	t.Parallel()
+	f := newFamily()
+	v := viper.New()
+	v.Set("evm-tx-hash", "0xabc123")
+	v.Set("evm-event-index", 2)
+
+	result := f.CollectCLIInputs(v)
+	assert.Equal(t, "0xabc123", result[TriggerInputTxHash])
+	assert.Equal(t, "2", result[TriggerInputEventIndex])
+}
+
+func TestEVMFamily_CollectCLIInputs_NegativeIndexOmitted(t *testing.T) {
+	t.Parallel()
+	f := newFamily()
+	v := viper.New()
+	v.Set("evm-tx-hash", "0xabc")
+	v.Set("evm-event-index", -1)
+
+	result := f.CollectCLIInputs(v)
+	assert.Equal(t, "0xabc", result[TriggerInputTxHash])
+	_, hasIndex := result[TriggerInputEventIndex]
+	assert.False(t, hasIndex, "negative index should be omitted")
+}
+
+func TestEVMFamily_CollectCLIInputs_EmptyTxHashOmitted(t *testing.T) {
+	t.Parallel()
+	f := newFamily()
+	v := viper.New()
+	v.Set("evm-tx-hash", "")
+	v.Set("evm-event-index", 0)
+
+	result := f.CollectCLIInputs(v)
+	_, hasTx := result[TriggerInputTxHash]
+	assert.False(t, hasTx, "empty tx hash should be omitted")
+	assert.Equal(t, "0", result[TriggerInputEventIndex])
+}
+
+func TestEVMFamily_CollectCLIInputs_DefaultsOnly(t *testing.T) {
+	t.Parallel()
+	f := newFamily()
+	v := viper.New()
+	// Viper defaults int to 0; simulate's flag registration sets default to -1.
+	// Without explicit flag defaults, CollectCLIInputs sees 0 (>= 0) and includes it.
+	v.SetDefault("evm-event-index", -1)
+
+	result := f.CollectCLIInputs(v)
+	assert.Empty(t, result)
 }

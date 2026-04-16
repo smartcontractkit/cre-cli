@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/rs/zerolog"
+	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -18,7 +19,7 @@ import (
 func resetRegistry() {
 	mu.Lock()
 	defer mu.Unlock()
-	factories = make(map[string]Factory)
+	registrations = make(map[string]registration)
 	families = make(map[string]ChainFamily)
 }
 
@@ -83,6 +84,12 @@ func (m *mockChainFamily) ResolveTriggerData(ctx context.Context, selector uint6
 	return args.Get(0), args.Error(1)
 }
 
+func (m *mockChainFamily) CollectCLIInputs(v *viper.Viper) map[string]string {
+	args := m.Called(v)
+	result, _ := args.Get(0).(map[string]string)
+	return result
+}
+
 func newMockFamily(name string) *mockChainFamily {
 	f := new(mockChainFamily)
 	f.On("Name").Return(name)
@@ -92,7 +99,7 @@ func newMockFamily(name string) *mockChainFamily {
 // registerMock registers a pre-built mock family and immediately builds it so
 // tests can exercise Get/All/Names without wiring a real logger.
 func registerMock(name string, family ChainFamily) {
-	Register(name, func(*zerolog.Logger) ChainFamily { return family })
+	Register(name, func(*zerolog.Logger) ChainFamily { return family }, nil)
 	Build(nil)
 }
 
@@ -164,6 +171,71 @@ func TestGetErrorIncludesRegisteredNames(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "aptos")
 	assert.Contains(t, err.Error(), "evm")
+}
+
+func TestRegisterAllCLIFlags_StringAndInt(t *testing.T) {
+	resetRegistry()
+	defer resetRegistry()
+
+	Register("test", func(*zerolog.Logger) ChainFamily { return newMockFamily("test") }, []CLIFlagDef{
+		{Name: "test-hash", Description: "a hash", FlagType: CLIFlagString},
+		{Name: "test-index", Description: "an index", DefaultValue: "-1", FlagType: CLIFlagInt},
+	})
+
+	cmd := &cobra.Command{Use: "test"}
+	RegisterAllCLIFlags(cmd)
+
+	f := cmd.Flags().Lookup("test-hash")
+	require.NotNil(t, f)
+	assert.Equal(t, "", f.DefValue)
+	assert.Equal(t, "a hash", f.Usage)
+
+	f = cmd.Flags().Lookup("test-index")
+	require.NotNil(t, f)
+	assert.Equal(t, "-1", f.DefValue)
+	assert.Equal(t, "an index", f.Usage)
+}
+
+func TestRegisterAllCLIFlags_NilFlagDefs(t *testing.T) {
+	resetRegistry()
+	defer resetRegistry()
+
+	Register("test", func(*zerolog.Logger) ChainFamily { return newMockFamily("test") }, nil)
+
+	cmd := &cobra.Command{Use: "test"}
+	RegisterAllCLIFlags(cmd) // should not panic
+}
+
+func TestCollectAllCLIInputs_MergesAcrossFamilies(t *testing.T) {
+	resetRegistry()
+	defer resetRegistry()
+
+	fam1 := newMockFamily("alpha")
+	fam1.On("CollectCLIInputs", mock.Anything).Return(map[string]string{"key-a": "val-a"})
+	registerMock("alpha", fam1)
+
+	fam2 := newMockFamily("beta")
+	fam2.On("CollectCLIInputs", mock.Anything).Return(map[string]string{"key-b": "val-b"})
+	registerMock("beta", fam2)
+
+	v := viper.New()
+	result := CollectAllCLIInputs(v)
+
+	assert.Equal(t, "val-a", result["key-a"])
+	assert.Equal(t, "val-b", result["key-b"])
+}
+
+func TestCollectAllCLIInputs_EmptyWhenNoInputs(t *testing.T) {
+	resetRegistry()
+	defer resetRegistry()
+
+	fam := newMockFamily("empty")
+	fam.On("CollectCLIInputs", mock.Anything).Return(map[string]string{})
+	registerMock("empty", fam)
+
+	v := viper.New()
+	result := CollectAllCLIInputs(v)
+	assert.Empty(t, result)
 }
 
 func TestAllReturnsCopy(t *testing.T) {

@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -55,11 +54,10 @@ type Inputs struct {
 	FamilyForwarders map[string]map[uint64]string             `validate:"-"`
 	FamilyKeys       map[string]interface{}                   `validate:"-"`
 	// Non-interactive mode options
-	NonInteractive bool   `validate:"-"`
-	TriggerIndex   int    `validate:"-"`
-	HTTPPayload    string `validate:"-"` // JSON string or @/path/to/file.json
-	EVMTxHash      string `validate:"-"` // 0x-prefixed
-	EVMEventIndex  int    `validate:"-"`
+	NonInteractive bool              `validate:"-"`
+	TriggerIndex   int               `validate:"-"`
+	HTTPPayload    string            `validate:"-"` // JSON string or @/path/to/file.json
+	FamilyInputs   map[string]string `validate:"-"` // CLI-supplied family-specific trigger inputs
 	// Limits enforcement
 	LimitsPath string `validate:"-"` // "default" or path to custom limits JSON
 	// SkipTypeChecks passes --skip-type-checks to cre-compile for TypeScript workflows.
@@ -99,8 +97,10 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	simulateCmd.Flags().Bool(settings.Flags.NonInteractive.Name, false, "Run without prompts; requires --trigger-index and inputs for the selected trigger type")
 	simulateCmd.Flags().Int("trigger-index", -1, "Index of the trigger to run (0-based)")
 	simulateCmd.Flags().String("http-payload", "", "HTTP trigger payload as JSON string or path to JSON file (with or without @ prefix)")
-	simulateCmd.Flags().String("evm-tx-hash", "", "EVM trigger transaction hash (0x...)")
-	simulateCmd.Flags().Int("evm-event-index", -1, "EVM trigger log index (0-based)")
+	
+	// Register chain-family-specific CLI flags (e.g., --evm-tx-hash).
+	chain.RegisterAllCLIFlags(simulateCmd)
+	
 	simulateCmd.Flags().String("limits", "default", "Production limits to enforce during simulation: 'default' for prod defaults, path to a limits JSON file (e.g. from 'cre workflow limits export'), or 'none' to disable")
 	simulateCmd.Flags().Bool(cmdcommon.SkipTypeChecksCLIFlag, false, "Skip TypeScript project typecheck during compilation (passes "+cmdcommon.SkipTypeChecksFlag+" to cre-compile)")
 	return simulateCmd
@@ -152,6 +152,9 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 
 	broadcast := v.GetBool("broadcast")
 	for name, family := range chain.All() {
+		if _, ok := familyClients[name]; !ok {
+			continue // no clients for this family; skip key resolution
+		}
 		key, err := family.ResolveKey(creSettings, broadcast)
 		if err != nil {
 			return Inputs{}, err
@@ -175,8 +178,7 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 		NonInteractive:   v.GetBool("non-interactive"),
 		TriggerIndex:     v.GetInt("trigger-index"),
 		HTTPPayload:      v.GetString("http-payload"),
-		EVMTxHash:        v.GetString("evm-tx-hash"),
-		EVMEventIndex:    v.GetInt("evm-event-index"),
+		FamilyInputs:     chain.CollectAllCLIInputs(v),
 		LimitsPath:       v.GetString("limits"),
 		SkipTypeChecks:   v.GetBool(cmdcommon.SkipTypeChecksCLIFlag),
 	}, nil
@@ -712,14 +714,14 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 					continue
 				}
 
-				triggerData, err := getTriggerDataForFamily(ctx, family, sel, inputs, true)
-				if err != nil {
-					ui.Error(err.Error())
+				if !family.HasSelector(sel) {
+					ui.Error(fmt.Sprintf("No %s chain initialized for selector %d", name, sel))
 					os.Exit(1)
 				}
 
-				if !family.HasSelector(sel) {
-					ui.Error(fmt.Sprintf("No %s chain initialized for selector %d", name, sel))
+				triggerData, err := getTriggerDataForFamily(ctx, family, sel, inputs, true)
+				if err != nil {
+					ui.Error(err.Error())
 					os.Exit(1)
 				}
 
@@ -792,14 +794,14 @@ func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inp
 					continue
 				}
 
-				triggerData, err := getTriggerDataForFamily(ctx, family, sel, inputs, false)
-				if err != nil {
-					ui.Error(err.Error())
+				if !family.HasSelector(sel) {
+					ui.Error(fmt.Sprintf("No %s chain initialized for selector %d", name, sel))
 					os.Exit(1)
 				}
 
-				if !family.HasSelector(sel) {
-					ui.Error(fmt.Sprintf("No %s chain initialized for selector %d", name, sel))
+				triggerData, err := getTriggerDataForFamily(ctx, family, sel, inputs, false)
+				if err != nil {
+					ui.Error(err.Error())
 					os.Exit(1)
 				}
 
@@ -907,18 +909,10 @@ func getTriggerDataForFamily(ctx context.Context, family chain.ChainFamily, sele
 	if !ok {
 		return nil, fmt.Errorf("no %s clients configured", family.Name())
 	}
-	// Keys must match the constants the receiving family reads (e.g. evm.TriggerInputTxHash).
-	familyInputs := map[string]string{}
-	if strings.TrimSpace(inputs.EVMTxHash) != "" {
-		familyInputs["evm-tx-hash"] = inputs.EVMTxHash
-	}
-	if inputs.EVMEventIndex >= 0 {
-		familyInputs["evm-event-index"] = strconv.Itoa(inputs.EVMEventIndex)
-	}
 	return family.ResolveTriggerData(ctx, selector, chain.TriggerParams{
 		Clients:      clients,
 		Interactive:  interactive,
-		FamilyInputs: familyInputs,
+		FamilyInputs: inputs.FamilyInputs,
 	})
 }
 

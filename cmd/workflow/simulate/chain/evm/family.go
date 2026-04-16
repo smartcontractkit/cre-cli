@@ -27,6 +27,9 @@ const defaultSentinelPrivateKey = "000000000000000000000000000000000000000000000
 func init() {
 	chain.Register("evm", func(lggr *zerolog.Logger) chain.ChainFamily {
 		return &EVMFamily{log: lggr}
+	}, []chain.CLIFlagDef{
+		{Name: TriggerInputTxHash, Description: "EVM trigger transaction hash (0x...)", FlagType: chain.CLIFlagString},
+		{Name: TriggerInputEventIndex, Description: "EVM trigger log index (0-based)", DefaultValue: "-1", FlagType: chain.CLIFlagInt},
 	})
 }
 
@@ -234,6 +237,17 @@ const (
 	TriggerInputTxHash     = "evm-tx-hash"
 	TriggerInputEventIndex = "evm-event-index"
 )
+
+func (f *EVMFamily) CollectCLIInputs(v *viper.Viper) map[string]string {
+	inputs := map[string]string{}
+	if txHash := strings.TrimSpace(v.GetString(TriggerInputTxHash)); txHash != "" {
+		inputs[TriggerInputTxHash] = txHash
+	}
+	if idx := v.GetInt(TriggerInputEventIndex); idx >= 0 {
+		inputs[TriggerInputEventIndex] = strconv.Itoa(idx)
+	}
+	return inputs
+}
 
 // ResolveTriggerData fetches the EVM log payload for the given selector from
 // CLI-supplied or interactively-prompted inputs.
