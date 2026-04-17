@@ -215,14 +215,41 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 	}
 
 	if len(clients) == 0 {
-		return Inputs{}, fmt.Errorf("no RPC URLs found for supported or experimental chains")
+		target, _ := settings.GetTarget(v)
+		if target == "" {
+			target = "(none)"
+		}
+		return Inputs{}, fmt.Errorf(
+			"no RPC URLs found for target %q\n\n"+
+				"To fix:\n"+
+				"  • Check that your project.yaml has an 'rpcs' section under the target %q\n"+
+				"  • Ensure chain names are valid (run 'cre workflow supported-chains' to see all supported names)\n"+
+				"  • Verify the correct target is selected via --target or CRE_TARGET",
+			target, target,
+		)
 	}
 
 	pk, err := crypto.HexToECDSA(creSettings.User.EthPrivateKey)
 	if err != nil {
+		// If the user explicitly set a key that looks like a hex string but is
+		// malformed (wrong length, invalid chars), always error with guidance.
+		// Skip placeholder values like "your-eth-private-key" from the default .env template.
+		if creSettings.User.EthPrivateKey != "" && isHexString(creSettings.User.EthPrivateKey) {
+			return Inputs{}, fmt.Errorf(
+				"invalid private key: expected 64 hex characters (256 bits), got %d characters.\n\n"+
+					"The CLI reads CRE_ETH_PRIVATE_KEY from your .env file or system environment.\n"+
+					"The 0x prefix is supported and stripped automatically.\n\n"+
+					"Common issues:\n"+
+					"  • Pasted an Ethereum address (40 chars) instead of a private key (64 chars)\n"+
+					"  • Value has extra quotes — use CRE_ETH_PRIVATE_KEY=abc123... without wrapping quotes\n"+
+					"  • Key was truncated during copy-paste",
+				len(creSettings.User.EthPrivateKey))
+		}
+		// Key not set or placeholder — require it for broadcast, otherwise use default for simulation
 		if v.GetBool("broadcast") {
 			return Inputs{}, fmt.Errorf(
-				"failed to parse private key, required to broadcast. Please check CRE_ETH_PRIVATE_KEY in your .env file or system environment: %w", err)
+				"a private key is required for --broadcast mode.\n" +
+					"Set CRE_ETH_PRIVATE_KEY in your .env file or system environment")
 		}
 		pk, err = crypto.HexToECDSA("0000000000000000000000000000000000000000000000000000000000000001")
 		if err != nil {
@@ -1172,4 +1199,14 @@ func getEVMTriggerLogFromValues(ctx context.Context, ethClient *ethclient.Client
 		pbLog.EventSig = log.Topics[0].Bytes()
 	}
 	return pbLog, nil
+}
+
+// isHexString returns true if s contains only hexadecimal characters (0-9, a-f, A-F).
+func isHexString(s string) bool {
+	for _, c := range s {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') && (c < 'A' || c > 'F') {
+			return false
+		}
+	}
+	return len(s) > 0
 }
