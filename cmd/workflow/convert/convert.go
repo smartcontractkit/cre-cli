@@ -152,7 +152,7 @@ export GOARCH := wasm
 export CGO_ENABLED := 0
 
 build:
-	go build -o wasm/workflow.wasm -trimpath -ldflags="-buildid= -w -s" .
+	go build -o wasm/workflow.wasm -trimpath -buildvcs=false -mod=readonly -ldflags="-buildid= -w -s" .
 `
 }
 
@@ -168,9 +168,10 @@ func makefileContent(workflowDir, lang string, mainFile string) (string, error) 
 }
 
 func makefileContentTS(_, mainFile string) (string, error) {
-	return fmt.Sprintf(`.PHONY: build
+	return fmt.Sprintf(`# Append %s after wasm/workflow.wasm to skip TypeScript typecheck (not recommended for production).
+.PHONY: build
 
 build:
 	bun cre-compile %s wasm/workflow.wasm
-`, mainFile), nil
+`, cmdcommon.SkipTypeChecksFlag, mainFile), nil
 }

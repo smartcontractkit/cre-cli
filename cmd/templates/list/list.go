@@ -1,24 +1,32 @@
 package list
 
 import (
+	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/templateconfig"
 	"github.com/smartcontractkit/cre-cli/internal/templaterepo"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
+	"github.com/smartcontractkit/cre-cli/internal/validation"
 )
 
+type Inputs struct {
+	Refresh    bool
+	JSONOutput bool
+}
+
 type handler struct {
-	log *zerolog.Logger
+	log       *zerolog.Logger
+	validated bool
 }
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
-	var refresh bool
-
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "Lists available templates",
@@ -26,16 +34,52 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			h := &handler{log: runtimeContext.Logger}
-			return h.Execute(refresh)
+
+			inputs, err := h.ResolveInputs(runtimeContext.Viper)
+			if err != nil {
+				return err
+			}
+
+			if err := h.ValidateInputs(inputs); err != nil {
+				return err
+			}
+
+			return h.Execute(inputs)
 		},
 	}
 
-	cmd.Flags().BoolVar(&refresh, "refresh", false, "Bypass cache and fetch fresh data")
+	cmd.Flags().Bool("refresh", false, "Bypass cache and fetch fresh data")
+	cmd.Flags().Bool("json", false, "Output template list as JSON")
 
 	return cmd
 }
 
-func (h *handler) Execute(refresh bool) error {
+func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
+	return Inputs{
+		Refresh:    v.GetBool("refresh"),
+		JSONOutput: v.GetBool("json"),
+	}, nil
+}
+
+func (h *handler) ValidateInputs(inputs Inputs) error {
+	validator, err := validation.NewValidator()
+	if err != nil {
+		return fmt.Errorf("failed to create validator: %w", err)
+	}
+
+	if err := validator.Struct(inputs); err != nil {
+		return fmt.Errorf("validation failed: %w", err)
+	}
+
+	h.validated = true
+	return nil
+}
+
+func (h *handler) Execute(inputs Inputs) error {
+	if !h.validated {
+		return fmt.Errorf("handler inputs not validated")
+	}
+
 	if err := templateconfig.EnsureDefaultConfig(h.log); err != nil {
 		return fmt.Errorf("failed to initialize template config: %w", err)
 	}
@@ -57,7 +101,7 @@ func (h *handler) Execute(refresh bool) error {
 
 	spinner := ui.NewSpinner()
 	spinner.Start("Fetching templates...")
-	templates, err := registry.ListTemplates(refresh)
+	templates, err := registry.ListTemplates(inputs.Refresh)
 	spinner.Stop()
 	if err != nil {
 		return fmt.Errorf("failed to list templates: %w", err)
@@ -70,11 +114,31 @@ func (h *handler) Execute(refresh bool) error {
 		return nil
 	}
 
+	if inputs.JSONOutput {
+		var filtered []templaterepo.TemplateSummary
+		for _, t := range templates {
+			if t.Category == templaterepo.CategoryWorkflow {
+				filtered = append(filtered, t)
+			}
+		}
+		data, err := json.MarshalIndent(filtered, "", "  ")
+		if err != nil {
+			return fmt.Errorf("failed to marshal templates: %w", err)
+		}
+		fmt.Println(string(data))
+		return nil
+	}
+
 	ui.Line()
 	ui.Title("Available Templates")
 	ui.Line()
 
 	for _, t := range templates {
+		// Only show workflow templates
+		if t.Category != templaterepo.CategoryWorkflow {
+			continue
+		}
+
 		title := t.Title
 		if title == "" {
 			title = t.Name
@@ -92,11 +156,27 @@ func (h *handler) Execute(refresh bool) error {
 			ui.Dim(fmt.Sprintf("    %s", t.Description))
 		}
 
+		if len(t.Solutions) > 0 {
+			ui.Dim(fmt.Sprintf("    Solutions: %s", strings.Join(t.Solutions, ", ")))
+		}
+		if len(t.Capabilities) > 0 {
+			ui.Dim(fmt.Sprintf("    Capabilities: %s", strings.Join(t.Capabilities, ", ")))
+		}
+		if len(t.Tags) > 0 {
+			ui.Dim(fmt.Sprintf("    Tags: %s", strings.Join(t.Tags, ", ")))
+		}
+		if len(t.Networks) > 0 {
+			ui.Dim(fmt.Sprintf("    Networks: %s", strings.Join(t.Networks, ", ")))
+		}
+
 		ui.Line()
 	}
 
 	ui.Dim("Install a template with:")
 	ui.Command("  cre init --template=<id>")
+	ui.Line()
+	ui.Dim("If a template requires Networks, provide them with:")
+	ui.Command("  cre init --template=<id> --rpc-url=\"<chain-name>=<url>\"")
 	ui.Line()
 
 	return nil

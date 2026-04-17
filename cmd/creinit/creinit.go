@@ -11,6 +11,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"golang.org/x/term"
 
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
@@ -24,11 +25,13 @@ import (
 )
 
 type Inputs struct {
-	ProjectName  string            `validate:"omitempty,project_name" cli:"project-name"`
-	TemplateName string            `validate:"omitempty" cli:"template"`
-	WorkflowName string            `validate:"omitempty,workflow_name" cli:"workflow-name"`
-	RpcURLs      map[string]string // chain-name -> url, from --rpc-url flags
-	UseTenderly  bool              // use Tenderly Virtual Networks for RPCs
+	ProjectName    string            `validate:"omitempty,project_name" cli:"project-name"`
+	TemplateName   string            `validate:"omitempty" cli:"template"`
+	WorkflowName   string            `validate:"omitempty,workflow_name" cli:"workflow-name"`
+	RpcURLs        map[string]string // chain-name -> url, from --rpc-url flags
+	UseTenderly    bool              // use Tenderly Virtual Networks for RPCs
+	NonInteractive bool
+	ProjectRoot    string // from -R / --project-root flag
 }
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
@@ -49,6 +52,11 @@ Templates are fetched dynamically from GitHub repositories.`,
 			inputs, err := h.ResolveInputs(runtimeContext.Viper)
 			if err != nil {
 				return err
+			}
+
+			// Only use -R if the user explicitly passed it on the command line
+			if cmd.Flags().Changed(settings.Flags.ProjectRoot.Name) {
+				inputs.ProjectRoot = runtimeContext.Viper.GetString(settings.Flags.ProjectRoot.Name)
 			}
 			if err = h.ValidateInputs(inputs); err != nil {
 				return err
@@ -71,6 +79,7 @@ Templates are fetched dynamically from GitHub repositories.`,
 	initCmd.Flags().Bool("refresh", false, "Bypass template cache and fetch fresh data")
 	initCmd.Flags().StringArray("rpc-url", nil, "RPC URL for a network (format: chain-name=url, repeatable)")
 	initCmd.Flags().Bool("use-tenderly", false, "Use Tenderly Virtual Networks for RPC URLs")
+	initCmd.Flags().Bool("non-interactive", false, "Fail instead of prompting; requires all inputs via flags")
 
 	// Deprecated: --template-id is kept for backwards compatibility, maps to hello-world-go
 	initCmd.Flags().Uint32("template-id", 0, "")
@@ -138,11 +147,12 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 	}
 
 	return Inputs{
-		ProjectName:  v.GetString("project-name"),
-		TemplateName: templateName,
-		WorkflowName: v.GetString("workflow-name"),
-		RpcURLs:      rpcURLs,
-		UseTenderly:  v.GetBool("use-tenderly"),
+		ProjectName:    v.GetString("project-name"),
+		TemplateName:   templateName,
+		WorkflowName:   v.GetString("workflow-name"),
+		RpcURLs:        rpcURLs,
+		UseTenderly:    v.GetBool("use-tenderly"),
+		NonInteractive: v.GetBool("non-interactive"),
 	}, nil
 }
 
@@ -176,6 +186,21 @@ func (h *handler) Execute(inputs Inputs) error {
 	}
 	startDir := cwd
 
+	// Respect -R / --project-root flag if provided.
+	// For init, treat -R as the base directory for project creation.
+	// The directory does not need to exist yet — it will be created during scaffolding.
+	if inputs.ProjectRoot != "" {
+		absRoot, err := filepath.Abs(inputs.ProjectRoot)
+		if err != nil {
+			return fmt.Errorf("invalid --project-root path: %w", err)
+		}
+		// If -R points to a file, that's a user error — it must be a directory
+		if info, err := os.Stat(absRoot); err == nil && !info.IsDir() {
+			return fmt.Errorf("--project-root %q is a file, not a directory", inputs.ProjectRoot)
+		}
+		startDir = absRoot
+	}
+
 	// Detect if we're in an existing project
 	existingProjectRoot, _, existingErr := h.findExistingProject(startDir)
 	isNewProject := existingErr != nil
@@ -202,23 +227,78 @@ func (h *handler) Execute(inputs Inputs) error {
 		return fmt.Errorf("failed to fetch templates: %w", err)
 	}
 
+	// Filter to only workflow templates (category == "workflow")
+	var workflowTemplates []templaterepo.TemplateSummary
+	for _, t := range templates {
+		if t.Category == templaterepo.CategoryWorkflow {
+			workflowTemplates = append(workflowTemplates, t)
+		}
+	}
+
 	// Resolve template from flag if provided
 	var selectedTemplate *templaterepo.TemplateSummary
 	if inputs.TemplateName != "" {
-		for i := range templates {
-			if templates[i].Name == inputs.TemplateName {
-				selectedTemplate = &templates[i]
+		for i := range workflowTemplates {
+			if workflowTemplates[i].Name == inputs.TemplateName || workflowTemplates[i].ID == inputs.TemplateName {
+				selectedTemplate = &workflowTemplates[i]
 				break
 			}
 		}
 		if selectedTemplate == nil {
-			return fmt.Errorf("template %q not found", inputs.TemplateName)
+			return fmt.Errorf("template %q not found. Run 'cre templates list' to see all available templates", inputs.TemplateName)
+		}
+	}
+
+	// Non-interactive mode: validate all required inputs are present
+	if inputs.NonInteractive {
+		var missingFlags []string
+		if isNewProject && inputs.ProjectName == "" {
+			missingFlags = append(missingFlags, "--project-name")
+		}
+		if inputs.TemplateName == "" {
+			missingFlags = append(missingFlags, "--template")
+		}
+		if selectedTemplate != nil {
+			missing := MissingNetworks(selectedTemplate, inputs.RpcURLs)
+			for _, network := range missing {
+				missingFlags = append(missingFlags, fmt.Sprintf("--rpc-url=\"%s=<url>\"", network))
+			}
+			if inputs.WorkflowName == "" && selectedTemplate.ProjectDir == "" && len(selectedTemplate.Workflows) <= 1 {
+				missingFlags = append(missingFlags, "--workflow-name")
+			}
+		}
+		if len(missingFlags) > 0 {
+			ui.ErrorWithSuggestions(
+				"Non-interactive mode requires all inputs via flags",
+				missingFlags,
+			)
+			return fmt.Errorf("missing required flags for --non-interactive mode")
 		}
 	}
 
 	// Run the interactive wizard
-	result, err := RunWizard(inputs, isNewProject, startDir, templates, selectedTemplate)
+	result, err := RunWizard(inputs, isNewProject, startDir, workflowTemplates, selectedTemplate)
 	if err != nil {
+		// If stdin is not a terminal, the wizard will fail trying to open a TTY.
+		// Detect this via term.IsTerminal rather than matching third-party error strings.
+		if !term.IsTerminal(int(os.Stdin.Fd())) { // #nosec G115 -- stdin fd is always 0
+			var suggestions []string
+			if selectedTemplate != nil {
+				missing := MissingNetworks(selectedTemplate, inputs.RpcURLs)
+				for _, network := range missing {
+					suggestions = append(suggestions, fmt.Sprintf("--rpc-url=\"%s=<url>\"", network))
+				}
+			}
+			if len(suggestions) > 0 {
+				ui.ErrorWithSuggestions(
+					"Interactive mode requires a terminal (TTY). Provide the missing flags to run non-interactively",
+					suggestions,
+				)
+			} else {
+				ui.Error("Interactive mode requires a terminal (TTY). Use --non-interactive with all required flags, or run in a terminal")
+			}
+			return fmt.Errorf("interactive mode requires a terminal (TTY)")
+		}
 		return fmt.Errorf("wizard error: %w", err)
 	}
 	if result.Cancelled {
@@ -327,22 +407,24 @@ func (h *handler) Execute(inputs Inputs) error {
 		return fmt.Errorf("failed to scaffold template: %w", err)
 	}
 
+	// Patch RPC URLs into project.yaml for all templates (including those with projectDir).
+	// Templates that ship their own project.yaml still need user-provided RPCs applied.
+	projectYAMLPath := filepath.Join(projectRoot, constants.DefaultProjectSettingsFileName)
+	if isNewProject && h.pathExists(projectYAMLPath) {
+		if err := settings.PatchProjectRPCs(projectYAMLPath, networkRPCs); err != nil {
+			return fmt.Errorf("failed to update RPC URLs in project.yaml: %w", err)
+		}
+	}
+
 	// Templates with projectDir provide their own project structure — skip config generation.
 	// Only built-in templates (no projectDir) need config files generated by the CLI.
 	if selectedTemplate.ProjectDir == "" {
-		// Handle project.yaml
-		projectYAMLPath := filepath.Join(projectRoot, constants.DefaultProjectSettingsFileName)
-		if isNewProject {
-			if h.pathExists(projectYAMLPath) {
-				if err := settings.PatchProjectRPCs(projectYAMLPath, networkRPCs); err != nil {
-					return fmt.Errorf("failed to update RPC URLs in project.yaml: %w", err)
-				}
-			} else {
-				networks := selectedTemplate.Networks
-				repl := settings.GetReplacementsWithNetworks(networks, networkRPCs)
-				if e := settings.FindOrCreateProjectSettings(projectRoot, repl); e != nil {
-					return e
-				}
+		// Generate project.yaml if the template didn't provide one
+		if isNewProject && !h.pathExists(projectYAMLPath) {
+			networks := selectedTemplate.Networks
+			repl := settings.GetReplacementsWithNetworks(networks, networkRPCs)
+			if e := settings.FindOrCreateProjectSettings(projectRoot, repl); e != nil {
+				return e
 			}
 		}
 
@@ -500,7 +582,14 @@ func (h *handler) printSuccessMessage(projectRoot string, tmpl *templaterepo.Tem
 		sb.WriteString(ui.RenderStep("2. Install Bun (if needed):") + "\n")
 		sb.WriteString("     " + ui.RenderDim("npm install -g bun") + "\n\n")
 		sb.WriteString(ui.RenderStep("3. Install dependencies:") + "\n")
-		sb.WriteString("     " + ui.RenderDim("bun install --cwd ./"+primaryWorkflow) + "\n\n")
+		if isMultiWorkflow {
+			for _, wf := range workflows {
+				sb.WriteString("     " + ui.RenderDim("bun install --cwd ./"+wf.Dir) + "\n")
+			}
+		} else {
+			sb.WriteString("     " + ui.RenderDim("bun install --cwd ./"+primaryWorkflow) + "\n")
+		}
+		sb.WriteString("\n")
 
 		if isMultiWorkflow {
 			sb.WriteString(ui.RenderStep("4. Run a workflow:") + "\n")

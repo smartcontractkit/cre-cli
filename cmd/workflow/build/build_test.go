@@ -73,6 +73,14 @@ func TestBuildCommandDefaultFlag(t *testing.T) {
 	assert.Equal(t, "o", f.Shorthand)
 }
 
+func TestBuildCommandSkipTypeChecksFlag(t *testing.T) {
+	t.Parallel()
+	cmd := New(nil)
+	f := cmd.Flags().Lookup(cmdcommon.SkipTypeChecksCLIFlag)
+	require.NotNil(t, f)
+	assert.Equal(t, "false", f.DefValue)
+}
+
 func TestBuildMissingWorkflowYAML(t *testing.T) {
 	t.Parallel()
 	tmpDir := t.TempDir()
@@ -112,6 +120,18 @@ func setupWorkflowDir(t *testing.T) string {
 	tmpDir := t.TempDir()
 	copyDir(t, filepath.Join("..", "deploy", "testdata", "basic_workflow"), tmpDir)
 	workflowYAML := `staging-settings:
+  workflow-artifacts:
+    workflow-path: main.go
+`
+	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "workflow.yaml"), []byte(workflowYAML), 0600))
+	return tmpDir
+}
+
+func setupWorkflowDirWithCustomTargetOnly(t *testing.T) string {
+	t.Helper()
+	tmpDir := t.TempDir()
+	copyDir(t, filepath.Join("..", "deploy", "testdata", "basic_workflow"), tmpDir)
+	workflowYAML := `production-jovay:
   workflow-artifacts:
     workflow-path: main.go
 `
@@ -167,6 +187,23 @@ func TestBuildCustomOutputPath(t *testing.T) {
 
 	extendedPath := outputPath + ".wasm"
 	data, err := os.ReadFile(extendedPath)
+	require.NoError(t, err)
+	require.NotEmpty(t, data)
+	assert.True(t, cmdcommon.IsRawWasm(data), "output should be raw WASM")
+}
+
+func TestBuildWithCustomTargetOnly(t *testing.T) {
+	workflowDir := setupWorkflowDirWithCustomTargetOnly(t)
+	outputPath := filepath.Join(t.TempDir(), "output.wasm")
+
+	cmd := New(nil)
+	cmd.SetArgs([]string{workflowDir, "-o", outputPath})
+	cmd.SetOut(io.Discard)
+	cmd.SetErr(io.Discard)
+	err := cmd.Execute()
+	require.NoError(t, err)
+
+	data, err := os.ReadFile(outputPath)
 	require.NoError(t, err)
 	require.NotEmpty(t, data)
 	assert.True(t, cmdcommon.IsRawWasm(data), "output should be raw WASM")

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
@@ -61,7 +62,11 @@ func GetRpcUrlSettings(v *viper.Viper, chainName string) (string, error) {
 
 	for _, rpc := range rpcs {
 		if rpc.ChainName == chainName {
-			return rpc.Url, nil
+			resolved, resolveErr := ResolveEnvVars(rpc.Url)
+			if resolveErr != nil {
+				return "", fmt.Errorf("rpc url for chain %q: %w", chainName, resolveErr)
+			}
+			return resolved, nil
 		}
 	}
 
@@ -85,6 +90,15 @@ func GetExperimentalChains(v *viper.Viper) ([]ExperimentalChain, error) {
 	err = v.UnmarshalKey(keyWithTarget, &chains)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal experimental-chains: %w", err)
+	}
+
+	for i := range chains {
+		resolved, resolveErr := ResolveEnvVars(chains[i].RPCURL)
+		if resolveErr != nil {
+			return nil, fmt.Errorf("experimental chain rpc-url (selector %d): %w",
+				chains[i].ChainSelector, resolveErr)
+		}
+		chains[i].RPCURL = resolved
 	}
 
 	return chains, nil
@@ -235,6 +249,17 @@ func GetChainNameByChainSelector(chainSelector uint64) (string, error) {
 	}
 
 	return chainDetails.ChainName, nil
+}
+
+// ChainNameFromSelectorString parses a raw chain-selector string and resolves
+// it to a chain name. It combines the string-to-uint64 conversion with the
+// selector-to-name lookup in a single call.
+func ChainNameFromSelectorString(raw string) (string, error) {
+	sel, err := strconv.ParseUint(raw, 10, 64)
+	if err != nil {
+		return "", fmt.Errorf("invalid chain_selector %q: %w", raw, err)
+	}
+	return GetChainNameByChainSelector(sel)
 }
 
 func GetChainSelectorByChainName(name string) (uint64, error) {

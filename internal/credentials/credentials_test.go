@@ -108,6 +108,113 @@ func createTestJWT(t *testing.T, claims map[string]interface{}) string {
 	return headerEncoded + "." + claimsEncoded + "." + signature
 }
 
+func TestGetOrgID_BearerWithOrgID(t *testing.T) {
+	logger := testutil.NewTestLogger()
+	token := createTestJWT(t, map[string]interface{}{
+		"sub":    "user123",
+		"org_id": "org_abc123",
+	})
+
+	creds := &Credentials{
+		AuthType: AuthTypeBearer,
+		Tokens:   &CreLoginTokenSet{AccessToken: token},
+		log:      logger,
+	}
+
+	orgID, err := creds.GetOrgID()
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	if orgID != "org_abc123" {
+		t.Errorf("expected org_id %q, got %q", "org_abc123", orgID)
+	}
+}
+
+func TestGetOrgID_MissingClaim(t *testing.T) {
+	logger := testutil.NewTestLogger()
+	token := createTestJWT(t, map[string]interface{}{
+		"sub": "user123",
+	})
+
+	creds := &Credentials{
+		AuthType: AuthTypeBearer,
+		Tokens:   &CreLoginTokenSet{AccessToken: token},
+		log:      logger,
+	}
+
+	_, err := creds.GetOrgID()
+	if err == nil {
+		t.Fatal("expected error for missing org_id claim, got nil")
+	}
+	if !strings.Contains(err.Error(), "org_id claim not found") {
+		t.Errorf("expected org_id not found error, got: %v", err)
+	}
+}
+
+func TestGetOrgID_EmptyClaim(t *testing.T) {
+	logger := testutil.NewTestLogger()
+	token := createTestJWT(t, map[string]interface{}{
+		"sub":    "user123",
+		"org_id": "",
+	})
+
+	creds := &Credentials{
+		AuthType: AuthTypeBearer,
+		Tokens:   &CreLoginTokenSet{AccessToken: token},
+		log:      logger,
+	}
+
+	_, err := creds.GetOrgID()
+	if err == nil {
+		t.Fatal("expected error for empty org_id, got nil")
+	}
+}
+
+func TestGetOrgID_APIKeyReturnsError(t *testing.T) {
+	logger := testutil.NewTestLogger()
+	creds := &Credentials{
+		AuthType: AuthTypeApiKey,
+		APIKey:   "test-key",
+		log:      logger,
+	}
+
+	_, err := creds.GetOrgID()
+	if err == nil {
+		t.Fatal("expected error for API key auth, got nil")
+	}
+	if !strings.Contains(err.Error(), "not available for API key") {
+		t.Errorf("expected API key error, got: %v", err)
+	}
+}
+
+func TestGetOrgID_InvalidJWT(t *testing.T) {
+	logger := testutil.NewTestLogger()
+	creds := &Credentials{
+		AuthType: AuthTypeBearer,
+		Tokens:   &CreLoginTokenSet{AccessToken: "not-a-jwt"},
+		log:      logger,
+	}
+
+	_, err := creds.GetOrgID()
+	if err == nil {
+		t.Fatal("expected error for invalid JWT, got nil")
+	}
+}
+
+func TestGetOrgID_NoToken(t *testing.T) {
+	logger := testutil.NewTestLogger()
+	creds := &Credentials{
+		AuthType: AuthTypeBearer,
+		Tokens:   &CreLoginTokenSet{},
+		log:      logger,
+	}
+
+	_, err := creds.GetOrgID()
+	if err == nil {
+		t.Fatal("expected error for empty token, got nil")
+	}
+}
+
 func TestCheckIsUngatedOrganization_APIKey(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	creds := &Credentials{

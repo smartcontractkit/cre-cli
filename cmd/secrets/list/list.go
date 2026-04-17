@@ -1,13 +1,13 @@
 package list
 
 import (
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
@@ -36,6 +36,14 @@ func New(ctx *runtime.Context) *cobra.Command {
 		Use:   "list",
 		Short: "Lists secret identifiers for the current owner address in the given namespace.",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			secretsAuth, err := cmd.Flags().GetString("secrets-auth")
+			if err != nil {
+				return err
+			}
+			if err := common.ValidateSecretsAuthFlow(secretsAuth, ctx.EnvironmentSet.EnvName); err != nil {
+				return err
+			}
+
 			h, err := common.NewHandler(ctx, "")
 			if err != nil {
 				return err
@@ -58,12 +66,7 @@ func New(ctx *runtime.Context) *cobra.Command {
 				return fmt.Errorf("invalid --timeout: must be greater than 0 and less than %dh (%dd)", maxHours, maxDays)
 			}
 
-			return Execute(
-				h,
-				namespace,
-				duration,
-				ctx.Settings.Workflow.UserWorkflowSettings.WorkflowOwnerType,
-			)
+			return Execute(h, namespace, duration, secretsAuth)
 		},
 	}
 
@@ -75,7 +78,13 @@ func New(ctx *runtime.Context) *cobra.Command {
 }
 
 // Execute performs: build request → (MSIG step 1 bundle OR EOA allowlist+post) → parse.
-func Execute(h *common.Handler, namespace string, duration time.Duration, ownerType string) error {
+func Execute(h *common.Handler, namespace string, duration time.Duration, secretsAuth string) error {
+	if !common.IsBrowserFlow(secretsAuth) {
+		if err := h.EnsureDeploymentRPCForOwnerKeySecrets(); err != nil {
+			return err
+		}
+	}
+
 	spinner := ui.NewSpinner()
 	spinner.Start("Verifying ownership...")
 	if err := h.EnsureOwnerLinkedOrFail(); err != nil {
@@ -88,12 +97,13 @@ func Execute(h *common.Handler, namespace string, duration time.Duration, ownerT
 		namespace = "main"
 	}
 
-	// Validate and canonicalize owner address (checksummed)
-	owner := strings.TrimSpace(h.OwnerAddress)
-	if !ethcommon.IsHexAddress(owner) {
-		return fmt.Errorf("invalid owner address: %q", h.OwnerAddress)
+	owner, err := h.ResolveEffectiveOwner()
+	if err != nil {
+		return err
 	}
-	owner = ethcommon.HexToAddress(owner).Hex()
+	if ethcommon.IsHexAddress(owner) {
+		owner = ethcommon.HexToAddress(owner).Hex()
+	}
 
 	// Fresh request ID
 	requestID := uuid.New().String()
@@ -117,6 +127,11 @@ func Execute(h *common.Handler, namespace string, duration time.Duration, ownerT
 	body, err := json.Marshal(req)
 	if err != nil {
 		return fmt.Errorf("failed to marshal JSON-RPC request: %w", err)
+	}
+
+	if common.IsBrowserFlow(secretsAuth) {
+		ui.Dim("Using your account to authorize vault access for this list request...")
+		return h.ExecuteBrowserVaultAuthorization(context.Background(), vaulttypes.MethodSecretsList, digest, body)
 	}
 
 	ownerAddr := ethcommon.HexToAddress(owner)

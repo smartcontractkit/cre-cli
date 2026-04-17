@@ -19,6 +19,7 @@ cre init [optional flags]
 
 ```
   -h, --help                   help for init
+      --non-interactive        Fail instead of prompting; requires all inputs via flags
   -p, --project-name string    Name for the new project
       --refresh                Bypass template cache and fetch fresh data
       --rpc-url stringArray    RPC URL for a network (format: chain-name=url, repeatable)
@@ -29,8 +30,9 @@ cre init [optional flags]
 ### Options inherited from parent commands
 
 ```
-  -e, --env string            Path to .env file which contains sensitive info (default ".env")
+  -e, --env string            Path to .env file which contains sensitive info
   -R, --project-root string   Path to the project root
+  -E, --public-env string     Path to .env.public file which contains shared, non-sensitive build config
   -T, --target string         Use target settings from YAML config
   -v, --verbose               Run command in VERBOSE mode
 ```

@@ -48,7 +48,7 @@ func SetWorkflowPathInFile(workflowYAMLPath, newPath string) error {
 }
 
 func workflowPathFromRaw(raw map[string]interface{}) (string, error) {
-	for _, key := range []string{"staging-settings", "production-settings"} {
+	for key := range raw {
 		target, _ := raw[key].(map[string]interface{})
 		if target == nil {
 			continue
@@ -57,7 +57,8 @@ func workflowPathFromRaw(raw map[string]interface{}) (string, error) {
 		if artifacts == nil {
 			continue
 		}
-		if p, ok := artifacts["workflow-path"].(string); ok && p != "" {
+		p, ok := artifacts["workflow-path"].(string)
+		if ok && p != "" {
 			return p, nil
 		}
 	}
@@ -83,6 +84,7 @@ type WorkflowSettings struct {
 		WorkflowOwnerAddress string `mapstructure:"workflow-owner-address" yaml:"workflow-owner-address"`
 		WorkflowOwnerType    string `mapstructure:"workflow-owner-type" yaml:"workflow-owner-type"`
 		WorkflowName         string `mapstructure:"workflow-name" yaml:"workflow-name"`
+		DeploymentRegistry   string `mapstructure:"deployment-registry" yaml:"deployment-registry"`
 	} `mapstructure:"user-workflow" yaml:"user-workflow"`
 	WorkflowArtifactSettings struct {
 		WorkflowPath string `mapstructure:"workflow-path" yaml:"workflow-path"`
@@ -127,6 +129,7 @@ func loadWorkflowSettings(logger *zerolog.Logger, v *viper.Viper, cmd *cobra.Com
 	}
 
 	workflowSettings.UserWorkflowSettings.WorkflowName = getSetting(WorkflowNameSettingName)
+	workflowSettings.UserWorkflowSettings.DeploymentRegistry = getSetting(DeploymentRegistrySettingName)
 	workflowSettings.WorkflowArtifactSettings.WorkflowPath = getSetting(WorkflowPathSettingName)
 	workflowSettings.WorkflowArtifactSettings.ConfigPath = getSetting(ConfigPathSettingName)
 	workflowSettings.WorkflowArtifactSettings.SecretsPath = getSetting(SecretsPathSettingName)
@@ -140,10 +143,17 @@ func loadWorkflowSettings(logger *zerolog.Logger, v *viper.Viper, cmd *cobra.Com
 		logger.Debug().Msgf("rpcs settings not found in target %q", target)
 	}
 
-	if registryChainName != "" {
-		if err := validateDeploymentRPC(&workflowSettings, registryChainName); err != nil {
-			return WorkflowSettings{}, errors.Wrap(err, "for target "+target)
+	for i := range workflowSettings.RPCs {
+		resolved, err := ResolveEnvVars(workflowSettings.RPCs[i].Url)
+		if err != nil {
+			return WorkflowSettings{}, fmt.Errorf("rpc url for chain %q: %w",
+				workflowSettings.RPCs[i].ChainName, err)
 		}
+		workflowSettings.RPCs[i].Url = resolved
+	}
+
+	if err := ValidateDeploymentRPC(&workflowSettings, registryChainName); err != nil {
+		return WorkflowSettings{}, errors.Wrap(err, "for target "+target)
 	}
 
 	if err := validateSettings(&workflowSettings); err != nil {
@@ -252,6 +262,8 @@ func ShouldSkipGetOwner(cmd *cobra.Command) bool {
 	switch cmd.Name() {
 	case "help":
 		return true
+	case "hash":
+		return true
 	case "simulate":
 		// Treat missing/invalid flag as false (i.e., skip).
 		// If broadcast is explicitly true, don't skip.
@@ -262,7 +274,12 @@ func ShouldSkipGetOwner(cmd *cobra.Command) bool {
 	}
 }
 
-func validateDeploymentRPC(config *WorkflowSettings, chainName string) error {
+// ValidateDeploymentRPC ensures project settings define a valid RPC URL for chainName (e.g. the workflow
+// registry chain). It is a no-op when chainName is empty. Used during settings load and from secrets owner-key flows.
+func ValidateDeploymentRPC(config *WorkflowSettings, chainName string) error {
+	if chainName == "" {
+		return nil
+	}
 	deploymentRPCFound := false
 	deploymentRPCURL := ""
 	commonError := " - required to deploy CRE workflows"

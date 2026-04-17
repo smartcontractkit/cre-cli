@@ -25,14 +25,16 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 		Example: `cre workflow build ./my-workflow`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			outputPath, _ := cmd.Flags().GetString("output")
-			return execute(args[0], outputPath)
+			skipTypeChecks, _ := cmd.Flags().GetBool(cmdcommon.SkipTypeChecksCLIFlag)
+			return execute(args[0], outputPath, skipTypeChecks)
 		},
 	}
 	buildCmd.Flags().StringP("output", "o", "", "Output file path for the compiled WASM binary (default: <workflow-folder>/binary.wasm)")
+	buildCmd.Flags().Bool(cmdcommon.SkipTypeChecksCLIFlag, false, "Skip TypeScript project typecheck during compilation (passes "+cmdcommon.SkipTypeChecksFlag+" to cre-compile)")
 	return buildCmd
 }
 
-func execute(workflowFolder, outputPath string) error {
+func execute(workflowFolder, outputPath string, skipTypeChecks bool) error {
 	workflowDir, err := filepath.Abs(workflowFolder)
 	if err != nil {
 		return fmt.Errorf("resolve workflow folder: %w", err)
@@ -58,12 +60,16 @@ func execute(workflowFolder, outputPath string) error {
 	outputPath = cmdcommon.EnsureWasmExtension(outputPath)
 
 	ui.Dim("Compiling workflow...")
-	wasmBytes, err := cmdcommon.CompileWorkflowToWasm(resolvedPath)
+	wasmBytes, err := cmdcommon.CompileWorkflowToWasm(resolvedPath, cmdcommon.WorkflowCompileOptions{
+		StripSymbols:   true,
+		SkipTypeChecks: skipTypeChecks,
+	})
 	if err != nil {
 		ui.Error("Build failed:")
 		return fmt.Errorf("failed to compile workflow: %w", err)
 	}
 	ui.Success("Workflow compiled successfully")
+	ui.Dim(fmt.Sprintf("Binary hash: %s", cmdcommon.HashBytes(wasmBytes)))
 
 	if err := os.WriteFile(outputPath, wasmBytes, 0666); err != nil { //nolint:gosec
 		return fmt.Errorf("failed to write WASM binary: %w", err)

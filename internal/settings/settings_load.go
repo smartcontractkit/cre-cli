@@ -21,6 +21,7 @@ const (
 	SethConfigPathSettingName     = "logging.seth-config-path"
 	RegistriesSettingName         = "contracts.registries"
 	KeystoneSettingName           = "contracts.keystone"
+	DeploymentRegistrySettingName = "user-workflow.deployment-registry"
 	RpcsSettingName               = "rpcs"
 	ExperimentalChainsSettingName = "experimental-chains" // used by simulator when present in target config
 )
@@ -34,6 +35,7 @@ type flagNames struct {
 	Owner                Flag
 	ProjectRoot          Flag
 	CliEnvFile           Flag
+	CliPublicEnvFile     Flag
 	Verbose              Flag
 	Target               Flag
 	OverridePreviousRoot Flag
@@ -51,6 +53,7 @@ var Flags = flagNames{
 	Owner:                Flag{"owner", "o"},
 	ProjectRoot:          Flag{"project-root", "R"},
 	CliEnvFile:           Flag{"env", "e"},
+	CliPublicEnvFile:     Flag{"public-env", "E"},
 	Verbose:              Flag{"verbose", "v"},
 	Target:               Flag{"target", "T"},
 	OverridePreviousRoot: Flag{"override-previous-root", "O"},

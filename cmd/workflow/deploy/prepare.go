@@ -9,9 +9,11 @@ import (
 )
 
 type workflowArtifact struct {
-	BinaryData []byte
-	ConfigData []byte
-	WorkflowID string
+	BinaryData     []byte
+	ConfigData     []byte
+	WorkflowID     string
+	RawBinaryForID []byte
+	RawConfigForID []byte
 }
 
 func (h *handler) prepareWorkflowBinary() ([]byte, error) {
@@ -40,7 +42,7 @@ func (h *handler) prepareWorkflowConfig() ([]byte, error) {
 	return configData, nil
 }
 
-func (h *handler) PrepareWorkflowArtifact() error {
+func (h *handler) PrepareWorkflowArtifact(workflowOwner string) error {
 	var binaryForID []byte
 
 	if h.urlBinaryData != nil {
@@ -74,12 +76,14 @@ func (h *handler) PrepareWorkflowArtifact() error {
 		h.workflowArtifact.ConfigData = configData
 	}
 
-	workflowID, err := workflowUtils.GenerateWorkflowIDFromStrings(h.inputs.WorkflowOwner, h.inputs.WorkflowName, binaryForID, configData, "")
+	workflowID, err := workflowUtils.GenerateWorkflowIDFromStrings(workflowOwner, h.inputs.WorkflowName, binaryForID, configData, "")
 	if err != nil {
 		return fmt.Errorf("failed to generate workflow ID: %w", err)
 	}
 
 	h.workflowArtifact.WorkflowID = workflowID
+	h.workflowArtifact.RawBinaryForID = binaryForID
+	h.workflowArtifact.RawConfigForID = configData
 
 	return nil
 }
