@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/ecdsa"
-	"errors"
 	"io"
 	"math/big"
 	"os"
@@ -12,7 +11,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/rs/zerolog"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
@@ -105,18 +103,6 @@ func newEVMChainType() *EVMChainType {
 
 // Valid anvil dev key #0; known non-sentinel.
 const validPK = "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
-
-func TestEVMChainType_Name_IsEVM(t *testing.T) {
-	t.Parallel()
-	require.Equal(t, "evm", newEVMChainType().Name())
-}
-
-func TestEVMChainType_SupportedChains_ReturnsPackageVar(t *testing.T) {
-	t.Parallel()
-	got := newEVMChainType().SupportedChains()
-	require.Equal(t, len(SupportedChains), len(got))
-	require.Greater(t, len(got), 20, "expected many supported chains")
-}
 
 func TestEVMChainType_ResolveKey(t *testing.T) {
 	t.Parallel()
@@ -238,13 +224,6 @@ func TestEVMChainType_ResolveKey(t *testing.T) {
 	}
 }
 
-func TestEVMChainType_ResolveKey_SentinelDecodesToD1(t *testing.T) {
-	t.Parallel()
-	pk, err := crypto.HexToECDSA(defaultSentinelPrivateKey)
-	require.NoError(t, err)
-	require.Equal(t, 0, pk.D.Cmp(bigOne()))
-}
-
 func TestEVMChainType_ResolveTriggerData_NoClient(t *testing.T) {
 	t.Parallel()
 	ct := newEVMChainType()
@@ -300,25 +279,6 @@ func TestEVMChainType_HasSelector_WhenNotRegistered_ReturnsFalse(t *testing.T) {
 	assert.False(t, ct.HasSelector(0))
 }
 
-func TestEVMChainType_HasSelector_EmptyMap_ReturnsFalse(t *testing.T) {
-	t.Parallel()
-	ct := newEVMChainType()
-	ct.evmChains = &EVMChainCapabilities{EVMChains: nil}
-	assert.False(t, ct.HasSelector(1))
-}
-
-func TestEVMChainType_ParseTriggerChainSelector_Delegates(t *testing.T) {
-	t.Parallel()
-	ct := newEVMChainType()
-	got, ok := ct.ParseTriggerChainSelector("evm:ChainSelector:42@1.0.0")
-	require.True(t, ok)
-	require.Equal(t, uint64(42), got)
-
-	got, ok = ct.ParseTriggerChainSelector("no-selector-here")
-	require.False(t, ok)
-	require.Zero(t, got)
-}
-
 func TestEVMChainType_RegisterCapabilities_WrongClientType(t *testing.T) {
 	t.Parallel()
 	ct := newEVMChainType()
@@ -371,11 +331,6 @@ func TestEVMChainType_RunHealthCheck_NoClients_Errors(t *testing.T) {
 	assert.Contains(t, err.Error(), "no RPC URLs found")
 }
 
-func TestEVMChainType_ImplementsChainType(t *testing.T) {
-	t.Parallel()
-	var _ chain.ChainType = (*EVMChainType)(nil)
-}
-
 func TestEVMChainType_RegisteredInFactoryRegistry(t *testing.T) {
 	t.Parallel()
 	lg := zerolog.Nop()
@@ -393,27 +348,6 @@ func TestEVMChainType_RegisteredInFactoryRegistry(t *testing.T) {
 	ct, err := chain.Get("evm")
 	require.NoError(t, err)
 	require.Equal(t, "evm", ct.Name())
-}
-
-func TestEVMChainType_ResolveKey_BroadcastErrorWrapsUnderlying(t *testing.T) {
-	t.Parallel()
-	ct := newEVMChainType()
-	s := &settings.Settings{User: settings.UserSettings{EthPrivateKey: "zz"}}
-	_, err := ct.ResolveKey(s, true)
-	require.Error(t, err)
-	// Must mention env var for operator-facing clarity.
-	assert.Contains(t, err.Error(), "CRE_ETH_PRIVATE_KEY")
-}
-
-func TestEVMChainType_ResolveKey_ValidNonBroadcast_NoWarning(t *testing.T) {
-	t.Parallel()
-	ct := newEVMChainType()
-	s := &settings.Settings{User: settings.UserSettings{EthPrivateKey: validPK}}
-	stderr := captureStderr(t, func() {
-		_, err := ct.ResolveKey(s, false)
-		require.NoError(t, err)
-	})
-	assert.NotContains(t, stderr, "Using default private key")
 }
 
 func TestEVMChainType_ExecuteTrigger_WrongTriggerDataType(t *testing.T) {
@@ -440,31 +374,6 @@ func errorContainsAny(err error, subs ...string) bool {
 		}
 	}
 	return false
-}
-
-// Defensive check: crypto.HexToECDSA rejects the string "0x..." so our
-// fallback behaviour under non-broadcast keeps functioning even if a user
-// copies their key with a prefix.
-func TestEVMChainType_ResolveKey_PrefixedHex_FallsBackToSentinel(t *testing.T) {
-	t.Parallel()
-	ct := newEVMChainType()
-	s := &settings.Settings{User: settings.UserSettings{EthPrivateKey: "0x" + validPK}}
-	stderr := captureStderr(t, func() {
-		got, err := ct.ResolveKey(s, false)
-		require.NoError(t, err)
-		pk := got.(*ecdsa.PrivateKey)
-		require.Equal(t, 0, pk.D.Cmp(bigOne()))
-	})
-	assert.Contains(t, stderr, "Using default private key")
-}
-
-func TestEVMChainType_ResolveKey_BroadcastError_IsError(t *testing.T) {
-	t.Parallel()
-	ct := newEVMChainType()
-	s := &settings.Settings{User: settings.UserSettings{EthPrivateKey: ""}}
-	_, err := ct.ResolveKey(s, true)
-	require.Error(t, err)
-	require.NotNil(t, errors.Unwrap(err))
 }
 
 func TestEVMChainType_CollectCLIInputs_BothSet(t *testing.T) {

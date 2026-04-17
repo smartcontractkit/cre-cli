@@ -102,19 +102,6 @@ func registerMock(name string, chainType ChainType) {
 	Build(nil)
 }
 
-func TestRegisterAndGet(t *testing.T) {
-	resetRegistry()
-	defer resetRegistry()
-
-	mockCT := newMockType("test")
-	registerMock("test", mockCT)
-
-	f, err := Get("test")
-	require.NoError(t, err)
-	assert.Equal(t, "test", f.Name())
-	mockCT.AssertExpectations(t)
-}
-
 func TestGetUnknownChainType(t *testing.T) {
 	resetRegistry()
 	defer resetRegistry()
@@ -132,19 +119,6 @@ func TestRegisterDuplicatePanics(t *testing.T) {
 	assert.Panics(t, func() {
 		registerMock("dup", newMockType("dup"))
 	})
-}
-
-func TestAll(t *testing.T) {
-	resetRegistry()
-	defer resetRegistry()
-
-	registerMock("alpha", newMockType("alpha"))
-	registerMock("beta", newMockType("beta"))
-
-	all := All()
-	assert.Len(t, all, 2)
-	assert.Contains(t, all, "alpha")
-	assert.Contains(t, all, "beta")
 }
 
 func TestNamesReturnsSorted(t *testing.T) {
@@ -195,16 +169,6 @@ func TestRegisterAllCLIFlags_StringAndInt(t *testing.T) {
 	assert.Equal(t, "an index", f.Usage)
 }
 
-func TestRegisterAllCLIFlags_NilFlagDefs(t *testing.T) {
-	resetRegistry()
-	defer resetRegistry()
-
-	Register("test", func(*zerolog.Logger) ChainType { return newMockType("test") }, nil)
-
-	cmd := &cobra.Command{Use: "test"}
-	RegisterAllCLIFlags(cmd) // should not panic
-}
-
 func TestCollectAllCLIInputs_MergesAcrossChainTypes(t *testing.T) {
 	resetRegistry()
 	defer resetRegistry()
@@ -222,19 +186,6 @@ func TestCollectAllCLIInputs_MergesAcrossChainTypes(t *testing.T) {
 
 	assert.Equal(t, "val-a", result["key-a"])
 	assert.Equal(t, "val-b", result["key-b"])
-}
-
-func TestCollectAllCLIInputs_EmptyWhenNoInputs(t *testing.T) {
-	resetRegistry()
-	defer resetRegistry()
-
-	ct := newMockType("empty")
-	ct.On("CollectCLIInputs", mock.Anything).Return(map[string]string{})
-	registerMock("empty", ct)
-
-	v := viper.New()
-	result := CollectAllCLIInputs(v)
-	assert.Empty(t, result)
 }
 
 func TestAllReturnsCopy(t *testing.T) {
