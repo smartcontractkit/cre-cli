@@ -446,10 +446,10 @@ func RunWorkflowPausePrivateRegistryHappyPath(t *testing.T, tc TestConfig) {
 
 	projectRoot := strings.TrimPrefix(tc.GetProjectRootFlag(), "--project-root=")
 	workflowYamlPath := filepath.Join(projectRoot, "blank_workflow", "workflow.yaml")
-	b, err := os.ReadFile(workflowYamlPath)
+	b, err := os.ReadFile(workflowYamlPath) //nolint:gosec // G304 -- test file
 	require.NoError(t, err)
 	newYaml := strings.Replace(string(b), "workflow-name:", "deployment-registry: reg-test\n        workflow-name:", 1)
-	err = os.WriteFile(workflowYamlPath, []byte(newYaml), 0644)
+	err = os.WriteFile(workflowYamlPath, []byte(newYaml), 0o600) //nolint:gosec // G703 -- test file
 	require.NoError(t, err)
 
 	out := workflowPausePrivateRegistry(t, tc)
