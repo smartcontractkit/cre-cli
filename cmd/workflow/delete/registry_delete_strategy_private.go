@@ -24,7 +24,7 @@ func (a *privateRegistryDeleteStrategy) ensureClient() {
 	}
 }
 
-func (a *privateRegistryDeleteStrategy) Delete() error {
+func (a *privateRegistryDeleteStrategy) FetchWorkflows() ([]WorkflowToDelete, error) {
 	a.ensureClient()
 
 	h := a.h
@@ -34,43 +34,38 @@ func (a *privateRegistryDeleteStrategy) Delete() error {
 
 	workflow, err := a.prc.GetWorkflowByName(workflowName)
 	if err != nil {
-		return fmt.Errorf("failed to get workflow: %w", err)
+		return nil, fmt.Errorf("failed to get workflow: %w", err)
 	}
 
-	h.runtimeContext.Workflow.ID = workflow.WorkflowID
+	return []WorkflowToDelete{
+		{
+			ID:        workflow.WorkflowID,
+			Owner:     workflow.Owner,
+			DonFamily: workflow.DonFamily,
+			Tag:       workflow.Tag,
+			BinaryURL: workflow.BinaryUrl,
+			Status:    workflow.Status,
+			RawID:     workflow.WorkflowID,
+		},
+	}, nil
+}
 
-	ui.Bold(fmt.Sprintf("Found 1 workflow(s) to delete for name: %s", workflowName))
-	ui.Print("   1. Workflow")
-	ui.Dim(fmt.Sprintf("      ID:              %s", workflow.WorkflowID))
-	ui.Dim(fmt.Sprintf("      Owner:           %s", workflow.Owner))
-	ui.Dim(fmt.Sprintf("      DON Family:      %s", workflow.DonFamily))
-	ui.Dim(fmt.Sprintf("      Tag:             %s", workflow.Tag))
-	ui.Dim(fmt.Sprintf("      Binary URL:      %s", workflow.BinaryUrl))
-	ui.Dim(fmt.Sprintf("      Workflow Status: %s", workflow.Status))
-	ui.Line()
+func (a *privateRegistryDeleteStrategy) DeleteWorkflows(workflows []WorkflowToDelete) error {
+	h := a.h
 
-	shouldDeleteWorkflow, err := h.shouldDeleteWorkflow(h.inputs.SkipConfirmation, workflowName)
-	if err != nil {
-		return err
+	for _, wf := range workflows {
+		workflowID := wf.RawID.(string)
+		deletedID, err := a.prc.DeleteWorkflowInRegistry(workflowID)
+		if err != nil {
+			h.log.Error().
+				Err(err).
+				Str("workflowId", workflowID).
+				Msg("Failed to delete workflow")
+			return fmt.Errorf("failed to delete workflow in private registry: %w", err)
+		}
+
+		ui.Success(fmt.Sprintf("Deleted workflow ID: %s", deletedID))
 	}
-	if !shouldDeleteWorkflow {
-		ui.Warning("Workflow deletion canceled")
-		return nil
-	}
-
-	ui.Dim("Deleting 1 workflow(s)...")
-
-	deletedID, err := a.prc.DeleteWorkflowInRegistry(workflow.WorkflowID)
-	if err != nil {
-		h.log.Error().
-			Err(err).
-			Str("workflowId", workflow.WorkflowID).
-			Msg("Failed to delete workflow")
-		return fmt.Errorf("failed to delete workflow in private registry: %w", err)
-	}
-
-	ui.Success(fmt.Sprintf("Deleted workflow ID: %s", deletedID))
-	ui.Success("Workflows deleted successfully")
 
 	return nil
 }

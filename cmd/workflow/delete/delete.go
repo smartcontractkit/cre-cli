@@ -135,7 +135,51 @@ func (h *handler) Execute() error {
 		return err
 	}
 
-	return adapter.Delete()
+	h.displayWorkflowDetails()
+
+	workflows, err := adapter.FetchWorkflows()
+	if err != nil {
+		return err
+	}
+
+	if len(workflows) == 0 {
+		ui.Warning(fmt.Sprintf("No workflows found for name: %s", h.inputs.WorkflowName))
+		return nil
+	}
+
+	// Note: The way deploy is set up, there will only ever be one workflow in the command for now
+	h.runtimeContext.Workflow.ID = workflows[0].ID
+
+	ui.Bold(fmt.Sprintf("Found %d workflow(s) to delete for name: %s", len(workflows), h.inputs.WorkflowName))
+	for i, wf := range workflows {
+		ui.Print(fmt.Sprintf("   %d. Workflow", i+1))
+		ui.Dim(fmt.Sprintf("      ID:              %s", wf.ID))
+		ui.Dim(fmt.Sprintf("      Owner:           %s", wf.Owner))
+		ui.Dim(fmt.Sprintf("      DON Family:      %s", wf.DonFamily))
+		ui.Dim(fmt.Sprintf("      Tag:             %s", wf.Tag))
+		ui.Dim(fmt.Sprintf("      Binary URL:      %s", wf.BinaryURL))
+		ui.Dim(fmt.Sprintf("      Workflow Status: %s", wf.Status))
+		ui.Line()
+	}
+
+	shouldDeleteWorkflow, err := h.shouldDeleteWorkflow(h.inputs.SkipConfirmation, h.inputs.WorkflowName)
+	if err != nil {
+		return err
+	}
+	if !shouldDeleteWorkflow {
+		ui.Warning("Workflow deletion canceled")
+		return nil
+	}
+
+	ui.Dim(fmt.Sprintf("Deleting %d workflow(s)...", len(workflows)))
+	
+	err = adapter.DeleteWorkflows(workflows)
+	if err != nil {
+		return err
+	}
+
+	ui.Success("Workflows deleted successfully")
+	return nil
 }
 
 func (h *handler) shouldDeleteWorkflow(skipConfirmation bool, workflowName string) (bool, error) {

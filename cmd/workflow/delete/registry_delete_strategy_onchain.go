@@ -45,12 +45,12 @@ func newOnchainRegistryDeleteStrategy(h *handler) (*onchainRegistryDeleteStrateg
 	return a, nil
 }
 
-func (a *onchainRegistryDeleteStrategy) Delete() error {
+func (a *onchainRegistryDeleteStrategy) FetchWorkflows() ([]WorkflowToDelete, error) {
 	h := a.h
 
 	a.wg.Wait()
 	if a.initErr != nil {
-		return a.initErr
+		return nil, a.initErr
 	}
 
 	workflowName := h.inputs.WorkflowName
@@ -58,46 +58,36 @@ func (a *onchainRegistryDeleteStrategy) Delete() error {
 
 	allWorkflows, err := a.wrc.GetWorkflowListByOwnerAndName(workflowOwner, workflowName, big.NewInt(0), big.NewInt(100))
 	if err != nil {
-		return fmt.Errorf("failed to get workflow list: %w", err)
-	}
-	if len(allWorkflows) == 0 {
-		ui.Warning(fmt.Sprintf("No workflows found for name: %s", workflowName))
-		return nil
+		return nil, fmt.Errorf("failed to get workflow list: %w", err)
 	}
 
-	// Note: The way deploy is set up, there will only ever be one workflow in the command for now
-	h.runtimeContext.Workflow.ID = hex.EncodeToString(allWorkflows[0].WorkflowId[:])
-
-	ui.Bold(fmt.Sprintf("Found %d workflow(s) to delete for name: %s", len(allWorkflows), workflowName))
-	for i, wf := range allWorkflows {
-		status := map[uint8]string{0: "ACTIVE", 1: "PAUSED"}[wf.Status]
-		ui.Print(fmt.Sprintf("   %d. Workflow", i+1))
-		ui.Dim(fmt.Sprintf("      ID:              %s", hex.EncodeToString(wf.WorkflowId[:])))
-		ui.Dim(fmt.Sprintf("      Owner:           %s", wf.Owner.Hex()))
-		ui.Dim(fmt.Sprintf("      DON Family:      %s", wf.DonFamily))
-		ui.Dim(fmt.Sprintf("      Tag:             %s", wf.Tag))
-		ui.Dim(fmt.Sprintf("      Binary URL:      %s", wf.BinaryUrl))
-		ui.Dim(fmt.Sprintf("      Workflow Status: %s", status))
-		ui.Line()
-	}
-
-	shouldDeleteWorkflow, err := h.shouldDeleteWorkflow(h.inputs.SkipConfirmation, workflowName)
-	if err != nil {
-		return err
-	}
-	if !shouldDeleteWorkflow {
-		ui.Warning("Workflow deletion canceled")
-		return nil
-	}
-
-	ui.Dim(fmt.Sprintf("Deleting %d workflow(s)...", len(allWorkflows)))
-	var errs []error
+	var workflows []WorkflowToDelete
 	for _, wf := range allWorkflows {
-		txOut, err := a.wrc.DeleteWorkflow(wf.WorkflowId)
+		status := map[uint8]string{0: "ACTIVE", 1: "PAUSED"}[wf.Status]
+		workflows = append(workflows, WorkflowToDelete{
+			ID:        hex.EncodeToString(wf.WorkflowId[:]),
+			Owner:     wf.Owner.Hex(),
+			DonFamily: wf.DonFamily,
+			Tag:       wf.Tag,
+			BinaryURL: wf.BinaryUrl,
+			Status:    status,
+			RawID:     wf.WorkflowId,
+		})
+	}
+
+	return workflows, nil
+}
+
+func (a *onchainRegistryDeleteStrategy) DeleteWorkflows(workflows []WorkflowToDelete) error {
+	h := a.h
+	var errs []error
+	for _, wf := range workflows {
+		workflowID := wf.RawID.([32]byte)
+		txOut, err := a.wrc.DeleteWorkflow(workflowID)
 		if err != nil {
 			h.log.Error().
 				Err(err).
-				Str("workflowId", hex.EncodeToString(wf.WorkflowId[:])).
+				Str("workflowId", wf.ID).
 				Msg("Failed to delete workflow")
 			errs = append(errs, err)
 			continue
@@ -108,7 +98,7 @@ func (a *onchainRegistryDeleteStrategy) Delete() error {
 		case client.Regular:
 			ui.Success("Transaction confirmed")
 			ui.URL(fmt.Sprintf("%s/tx/%s", oc.ExplorerURL(), txOut.Hash))
-			ui.Success(fmt.Sprintf("Deleted workflow ID: %s", hex.EncodeToString(wf.WorkflowId[:])))
+			ui.Success(fmt.Sprintf("Deleted workflow ID: %s", wf.ID))
 
 		case client.Raw:
 			ui.Line()
@@ -139,7 +129,7 @@ func (a *onchainRegistryDeleteStrategy) Delete() error {
 				{
 					DeleteWorkflow: &types.DeleteWorkflow{
 						Payload: types.UserWorkflowDeleteInput{
-							WorkflowID: h.runtimeContext.Workflow.ID,
+							WorkflowID: wf.ID,
 
 							ChainSelector:             chainSelector,
 							MCMSConfig:                mcmsConfig,
@@ -154,10 +144,13 @@ func (a *onchainRegistryDeleteStrategy) Delete() error {
 			if cldSettings.ChangesetFile != "" {
 				fileName = cldSettings.ChangesetFile
 			} else {
-				fileName = fmt.Sprintf("DeleteWorkflow_%s_%s.yaml", workflowName, time.Now().Format("20060102_150405"))
+				fileName = fmt.Sprintf("DeleteWorkflow_%s_%s.yaml", h.inputs.WorkflowName, time.Now().Format("20060102_150405"))
 			}
 
-			return cmdCommon.WriteChangesetFile(fileName, csFile, h.settings)
+			err = cmdCommon.WriteChangesetFile(fileName, csFile, h.settings)
+			if err != nil {
+				return err
+			}
 
 		default:
 			h.log.Warn().Msgf("Unsupported transaction type: %s", txOut.Type)
@@ -168,6 +161,5 @@ func (a *onchainRegistryDeleteStrategy) Delete() error {
 	if len(errs) > 0 {
 		return fmt.Errorf("failed to delete some workflows: %w", errors.Join(errs...))
 	}
-	ui.Success("Workflows deleted successfully")
 	return nil
 }
