@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -67,6 +68,10 @@ type Inputs struct {
 	LimitsPath string `validate:"-"` // "default" or path to custom limits JSON
 	// SkipTypeChecks passes --skip-type-checks to cre-compile for TypeScript workflows.
 	SkipTypeChecks bool `validate:"-"`
+	// InvocationDir is the working directory at the time the CLI was invoked, before
+	// SetExecutionContext changes it to the workflow directory. Used to resolve file
+	// paths entered interactively or via flags relative to where the user ran the command.
+	InvocationDir string `validate:"-"`
 }
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
@@ -189,6 +194,7 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 		ChainTypeInputs:     chain.CollectAllCLIInputs(v),
 		LimitsPath:          v.GetString("limits"),
 		SkipTypeChecks:      v.GetBool(cmdcommon.SkipTypeChecksCLIFlag),
+		InvocationDir:       h.runtimeContext.InvocationDir,
 	}, nil
 }
 
@@ -707,7 +713,7 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 				return manualTriggerCaps.ManualCronTrigger.ManualTrigger(ctx, triggerRegistrationID, time.Now())
 			}
 		case "http-trigger@1.0.0-alpha":
-			payload, err := getHTTPTriggerPayload()
+			payload, err := getHTTPTriggerPayload(inputs.InvocationDir)
 			if err != nil {
 				ui.Error(fmt.Sprintf("Failed to get HTTP trigger payload: %v", err))
 				os.Exit(1)
@@ -787,7 +793,7 @@ func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inp
 				ui.Error("--http-payload is required for http-trigger@1.0.0-alpha in non-interactive mode")
 				os.Exit(1)
 			}
-			payload, err := getHTTPTriggerPayloadFromInput(inputs.HTTPPayload)
+			payload, err := getHTTPTriggerPayloadFromInput(inputs.HTTPPayload, inputs.InvocationDir)
 			if err != nil {
 				ui.Error(fmt.Sprintf("Failed to parse HTTP trigger payload: %v", err))
 				os.Exit(1)
@@ -861,8 +867,10 @@ func cleanupBeholder() error {
 	return nil
 }
 
-// getHTTPTriggerPayload prompts user for HTTP trigger data
-func getHTTPTriggerPayload() (*httptypedapi.Payload, error) {
+// getHTTPTriggerPayload prompts user for HTTP trigger data. Relative paths are
+// resolved against invocationDir so file references work from where the user ran
+// the command even after SetExecutionContext switches cwd to the workflow dir.
+func getHTTPTriggerPayload(invocationDir string) (*httptypedapi.Payload, error) {
 	ui.Line()
 	input, err := ui.Input("HTTP Trigger Configuration",
 		ui.WithInputDescription("Enter a file path or JSON directly for the HTTP trigger"),
@@ -879,17 +887,16 @@ func getHTTPTriggerPayload() (*httptypedapi.Payload, error) {
 
 	var jsonData map[string]interface{}
 
-	// Check if input is a file path
-	if _, err := os.Stat(input); err == nil {
-		// It's a file path
-		data, err := os.ReadFile(input)
+	resolvedPath := resolvePathFromInvocation(input, invocationDir)
+	if _, err := os.Stat(resolvedPath); err == nil {
+		data, err := os.ReadFile(resolvedPath)
 		if err != nil {
-			return nil, fmt.Errorf("failed to read file %s: %w", input, err)
+			return nil, fmt.Errorf("failed to read file %s: %w", resolvedPath, err)
 		}
 		if err := json.Unmarshal(data, &jsonData); err != nil {
-			return nil, fmt.Errorf("failed to parse JSON from file %s: %w", input, err)
+			return nil, fmt.Errorf("failed to parse JSON from file %s: %w", resolvedPath, err)
 		}
-		ui.Success(fmt.Sprintf("Loaded JSON from file: %s", input))
+		ui.Success(fmt.Sprintf("Loaded JSON from file: %s", resolvedPath))
 	} else {
 		// It's direct JSON input
 		if err := json.Unmarshal([]byte(input), &jsonData); err != nil {
@@ -926,8 +933,20 @@ func getTriggerDataForChainType(ctx context.Context, ct chain.ChainType, selecto
 	})
 }
 
-// getHTTPTriggerPayloadFromInput builds an HTTP trigger payload from a JSON string or a file path (optionally prefixed with '@')
-func getHTTPTriggerPayloadFromInput(input string) (*httptypedapi.Payload, error) {
+// resolvePathFromInvocation converts a (potentially relative) path to an absolute
+// path anchored at invocationDir. Absolute paths and paths that are already
+// reachable from the current working directory are returned unchanged.
+func resolvePathFromInvocation(path, invocationDir string) string {
+	if filepath.IsAbs(path) || invocationDir == "" {
+		return path
+	}
+	return filepath.Join(invocationDir, path)
+}
+
+// getHTTPTriggerPayloadFromInput builds an HTTP trigger payload from a JSON string or a file path
+// (optionally prefixed with '@'). invocationDir is used to resolve relative paths against the
+// directory where the user invoked the CLI rather than the current working directory.
+func getHTTPTriggerPayloadFromInput(input, invocationDir string) (*httptypedapi.Payload, error) {
 	trimmed := strings.TrimSpace(input)
 	if trimmed == "" {
 		return nil, fmt.Errorf("empty http payload input")
@@ -935,17 +954,18 @@ func getHTTPTriggerPayloadFromInput(input string) (*httptypedapi.Payload, error)
 
 	var raw []byte
 	if strings.HasPrefix(trimmed, "@") {
-		path := strings.TrimPrefix(trimmed, "@")
+		path := resolvePathFromInvocation(strings.TrimPrefix(trimmed, "@"), invocationDir)
 		data, err := os.ReadFile(path)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read file %s: %w", path, err)
 		}
 		raw = data
 	} else {
-		if _, err := os.Stat(trimmed); err == nil {
-			data, err := os.ReadFile(trimmed)
+		resolvedPath := resolvePathFromInvocation(trimmed, invocationDir)
+		if _, err := os.Stat(resolvedPath); err == nil {
+			data, err := os.ReadFile(resolvedPath)
 			if err != nil {
-				return nil, fmt.Errorf("failed to read file %s: %w", trimmed, err)
+				return nil, fmt.Errorf("failed to read file %s: %w", resolvedPath, err)
 			}
 			raw = data
 		} else {

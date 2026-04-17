@@ -167,6 +167,7 @@ func TestResolveInputs_PreviewPrivateRegistryFlag(t *testing.T) {
 		})
 		h.credentials = makeBearerCredentials(t, token)
 		h.runtimeContext.TenantContext = &tenantctx.EnvironmentContext{TenantID: "42"}
+		h.runtimeContext.DerivedWorkflowOwner = "ab12cd34ef56ab12cd34ef56ab12cd34ef56ab12"
 		ctx.Viper.Set("preview-private-registry", true)
 
 		inputs, err := h.ResolveInputs(ctx.Viper)
@@ -370,40 +371,13 @@ func TestResolveWorkflowOwner(t *testing.T) {
 		assert.Equal(t, chainsim.TestAddress, owner)
 	})
 
-	t.Run("private target derives owner from tenantID and orgID", func(t *testing.T) {
+	t.Run("private target uses derived workflow owner from runtime context", func(t *testing.T) {
 		t.Parallel()
-
-		token := makeTestJWT(t, map[string]interface{}{
-			"sub":    "user1",
-			"org_id": "org-test-123",
-		})
-
-		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
-		defer simulatedEnvironment.Close()
-
-		ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
-		h := newHandler(ctx, buf)
-		ctx.Settings = createTestSettings(
-			chainsim.TestAddress,
-			"eoa",
-			"test_workflow",
-			"testdata/basic_workflow/main.go",
-			"",
-		)
-		h.settings = ctx.Settings
-		h.credentials = makeBearerCredentials(t, token)
-		h.runtimeContext.TenantContext = &tenantctx.EnvironmentContext{TenantID: "42"}
-
-		owner, err := h.resolveWorkflowOwner(registryTarget{targetType: settings.RegistryTypeOffChain})
-		require.NoError(t, err)
 
 		expectedBytes, err := workflowUtils.GenerateWorkflowOwnerAddress("42", "org-test-123")
 		require.NoError(t, err)
-		assert.Equal(t, "0x"+hex.EncodeToString(expectedBytes), owner)
-	})
+		expectedOwner := "0x" + hex.EncodeToString(expectedBytes)
 
-	t.Run("private target errors when tenant context is nil", func(t *testing.T) {
-		t.Parallel()
 		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
 		defer simulatedEnvironment.Close()
 
@@ -417,36 +391,14 @@ func TestResolveWorkflowOwner(t *testing.T) {
 			"",
 		)
 		h.settings = ctx.Settings
-		h.runtimeContext.TenantContext = nil
+		h.runtimeContext.DerivedWorkflowOwner = expectedOwner
 
-		_, err := h.resolveWorkflowOwner(registryTarget{targetType: settings.RegistryTypeOffChain})
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "tenant context is required")
+		owner, err := h.resolveWorkflowOwner(registryTarget{targetType: settings.RegistryTypeOffChain})
+		require.NoError(t, err)
+		assert.Equal(t, expectedOwner, owner)
 	})
 
-	t.Run("private target errors when tenant ID is empty", func(t *testing.T) {
-		t.Parallel()
-		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
-		defer simulatedEnvironment.Close()
-
-		ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
-		h := newHandler(ctx, buf)
-		ctx.Settings = createTestSettings(
-			chainsim.TestAddress,
-			"eoa",
-			"test_workflow",
-			"testdata/basic_workflow/main.go",
-			"",
-		)
-		h.settings = ctx.Settings
-		h.runtimeContext.TenantContext = &tenantctx.EnvironmentContext{TenantID: ""}
-
-		_, err := h.resolveWorkflowOwner(registryTarget{targetType: settings.RegistryTypeOffChain})
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "tenant ID is required")
-	})
-
-	t.Run("private target errors when orgID unavailable", func(t *testing.T) {
+	t.Run("private target adds 0x prefix when missing", func(t *testing.T) {
 		t.Parallel()
 
 		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
@@ -462,11 +414,32 @@ func TestResolveWorkflowOwner(t *testing.T) {
 			"",
 		)
 		h.settings = ctx.Settings
-		h.credentials = makeAPIKeyCredentials(t)
-		h.runtimeContext.TenantContext = &tenantctx.EnvironmentContext{TenantID: "42"}
+		h.runtimeContext.DerivedWorkflowOwner = "abcdef1234567890"
+
+		owner, err := h.resolveWorkflowOwner(registryTarget{targetType: settings.RegistryTypeOffChain})
+		require.NoError(t, err)
+		assert.Equal(t, "0xabcdef1234567890", owner)
+	})
+
+	t.Run("private target errors when derived workflow owner is empty", func(t *testing.T) {
+		t.Parallel()
+		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
+		defer simulatedEnvironment.Close()
+
+		ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
+		h := newHandler(ctx, buf)
+		ctx.Settings = createTestSettings(
+			chainsim.TestAddress,
+			"eoa",
+			"test_workflow",
+			"testdata/basic_workflow/main.go",
+			"",
+		)
+		h.settings = ctx.Settings
+		h.runtimeContext.DerivedWorkflowOwner = ""
 
 		_, err := h.resolveWorkflowOwner(registryTarget{targetType: settings.RegistryTypeOffChain})
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to get organization ID")
+		assert.Contains(t, err.Error(), "derived workflow owner is not available")
 	})
 }

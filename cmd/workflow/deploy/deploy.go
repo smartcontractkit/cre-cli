@@ -2,7 +2,6 @@ package deploy
 
 import (
 	"context"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -10,8 +9,6 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-
-	workflowUtils "github.com/smartcontractkit/chainlink-common/pkg/workflows"
 
 	"github.com/smartcontractkit/cre-cli/cmd/client"
 	cmdcommon "github.com/smartcontractkit/cre-cli/cmd/common"
@@ -38,9 +35,6 @@ type Inputs struct {
 	ConfigPath   string `validate:"omitempty,file,ascii,max=2048" cli:"--config"`
 	OutputPath   string `validate:"omitempty,filepath,ascii,max=97" cli:"--output"`
 	WasmPath     string `validate:"omitempty,file,ascii,max=2048" cli:"--wasm"`
-
-	WorkflowRegistryContractAddress   string `validate:"required"`
-	WorkflowRegistryContractChainName string `validate:"required"`
 
 	OwnerLabel       string `validate:"omitempty"`
 	SkipConfirmation bool
@@ -181,11 +175,6 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 		TargetWorkflowRegistry: targetWorkflowRegistry,
 	}
 
-	if oc, ok := h.runtimeContext.ResolvedRegistry.(*settings.OnChainRegistry); ok {
-		inputs.WorkflowRegistryContractChainName = oc.ChainName()
-		inputs.WorkflowRegistryContractAddress = oc.Address()
-	}
-
 	return inputs, nil
 }
 
@@ -232,7 +221,10 @@ func (h *handler) Execute(ctx context.Context) error {
 		return h.accessRequester.PromptAndSubmitRequest(ctx)
 	}
 
-	adapter := newRegistryDeployStrategy(h.inputs.TargetWorkflowRegistry, h)
+	adapter, err := newRegistryDeployStrategy(h.inputs.TargetWorkflowRegistry, h)
+	if err != nil {
+		return err
+	}
 
 	if err := h.prepareArtifacts(); err != nil {
 		return err
@@ -322,33 +314,23 @@ func (h *handler) prepareArtifacts() error {
 }
 
 // resolveWorkflowOwner returns the effective owner address for workflow ID computation.
-// For private registry deploys, the owner is derived from tenantID and organizationID.
+// For private registry deploys, the derived workflow owner from the runtime context is used.
 // For onchain deploys, the configured WorkflowOwner address is used directly.
 func (h *handler) resolveWorkflowOwner(targetWorkflowRegistry registryTarget) (string, error) {
 	if !targetWorkflowRegistry.isPrivate() {
 		return h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress, nil
 	}
 
-	if h.runtimeContext.TenantContext == nil {
-		return "", fmt.Errorf("tenant context is required for private registry deployment")
+	owner := h.runtimeContext.DerivedWorkflowOwner
+	if owner == "" {
+		return "", fmt.Errorf("derived workflow owner is not available; ensure authentication succeeded")
 	}
 
-	tenantID := h.runtimeContext.TenantContext.TenantID
-	if tenantID == "" {
-		return "", fmt.Errorf("tenant ID is required for private registry deployment")
+	if len(owner) >= 2 && owner[:2] != "0x" {
+		owner = "0x" + owner
 	}
 
-	orgID, err := h.credentials.GetOrgID()
-	if err != nil {
-		return "", fmt.Errorf("failed to get organization ID for private registry deployment: %w", err)
-	}
-
-	ownerBytes, err := workflowUtils.GenerateWorkflowOwnerAddress(tenantID, orgID)
-	if err != nil {
-		return "", fmt.Errorf("failed to derive workflow owner address: %w", err)
-	}
-
-	return "0x" + hex.EncodeToString(ownerBytes), nil
+	return owner, nil
 }
 
 func (h *handler) displayWorkflowDetails() {

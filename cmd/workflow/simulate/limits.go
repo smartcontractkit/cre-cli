@@ -4,9 +4,13 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"strings"
+	"time"
 
+	"github.com/smartcontractkit/chainlink-common/pkg/config"
+	"github.com/smartcontractkit/chainlink-common/pkg/settings"
 	"github.com/smartcontractkit/chainlink-common/pkg/settings/cresettings"
 )
 
@@ -91,6 +95,70 @@ func applyEngineLimits(cfg *cresettings.Workflows, limits *SimulationLimits) {
 	cfg.LogTrigger = src.LogTrigger
 
 	// NOTE: ChainAllowed is NOT overridden — simulation keeps allow-all
+}
+
+// disableEngineLimits sets all engine limit fields to very high values,
+// effectively disabling limit enforcement when --limits none is used.
+func disableEngineLimits(cfg *cresettings.Workflows) {
+	maxInt := settings.Setting[int]{DefaultValue: math.MaxInt32}
+	maxSize := settings.Setting[config.Size]{DefaultValue: math.MaxInt32}
+	maxDuration := settings.Setting[time.Duration]{DefaultValue: 24 * time.Hour}
+
+	// Execution limits
+	cfg.ExecutionTimeout = maxDuration
+	cfg.ExecutionResponseLimit = maxSize
+	cfg.ExecutionConcurrencyLimit = maxInt
+
+	// Capability limits
+	cfg.CapabilityConcurrencyLimit = maxInt
+	cfg.CapabilityCallTimeout = maxDuration
+	cfg.SecretsConcurrencyLimit = maxInt
+
+	// Trigger limits
+	cfg.TriggerRegistrationsTimeout = maxDuration
+	cfg.TriggerEventQueueLimit = maxInt
+	cfg.TriggerEventQueueTimeout = maxDuration
+	cfg.TriggerSubscriptionTimeout = maxDuration
+	cfg.TriggerSubscriptionLimit = maxInt
+
+	// WASM limits
+	cfg.WASMMemoryLimit = maxSize
+	cfg.WASMBinarySizeLimit = maxSize
+	cfg.WASMCompressedBinarySizeLimit = maxSize
+	cfg.WASMConfigSizeLimit = maxSize
+	cfg.WASMSecretsSizeLimit = maxSize
+
+	// Log limits
+	cfg.LogLineLimit = maxSize
+	cfg.LogEventLimit = maxInt
+
+	// HTTPAction limits
+	cfg.HTTPAction.CallLimit = maxInt
+	cfg.HTTPAction.CacheAgeLimit = maxDuration
+	cfg.HTTPAction.ConnectionTimeout = maxDuration
+	cfg.HTTPAction.RequestSizeLimit = maxSize
+	cfg.HTTPAction.ResponseSizeLimit = maxSize
+
+	// ConfidentialHTTP limits
+	cfg.ConfidentialHTTP.CallLimit = maxInt
+	cfg.ConfidentialHTTP.ConnectionTimeout = maxDuration
+	cfg.ConfidentialHTTP.RequestSizeLimit = maxSize
+	cfg.ConfidentialHTTP.ResponseSizeLimit = maxSize
+
+	// Consensus limits
+	cfg.Consensus.CallLimit = maxInt
+	cfg.Consensus.ObservationSizeLimit = maxSize
+
+	// ChainWrite limits
+	cfg.ChainWrite.TargetsLimit = maxInt
+	cfg.ChainWrite.ReportSizeLimit = maxSize
+
+	// ChainRead limits
+	cfg.ChainRead.CallLimit = maxInt
+	cfg.ChainRead.PayloadSizeLimit = maxSize
+
+	// Secrets limits
+	cfg.Secrets.CallLimit = maxInt
 }
 
 // HTTPRequestSizeLimit returns the HTTP action request size limit in bytes.

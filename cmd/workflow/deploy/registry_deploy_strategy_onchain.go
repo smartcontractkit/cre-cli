@@ -8,6 +8,7 @@ import (
 
 	"github.com/smartcontractkit/cre-cli/cmd/client"
 	"github.com/smartcontractkit/cre-cli/internal/constants"
+	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
@@ -17,12 +18,18 @@ import (
 type onchainRegistryDeployStrategy struct {
 	h       *handler
 	wrc     *client.WorkflowRegistryV2Client
+	onChain *settings.OnChainRegistry
 	wg      sync.WaitGroup
 	initErr error
 }
 
-func newOnchainRegistryDeployStrategy(h *handler) *onchainRegistryDeployStrategy {
-	a := &onchainRegistryDeployStrategy{h: h}
+func newOnchainRegistryDeployStrategy(h *handler) (*onchainRegistryDeployStrategy, error) {
+	onChain, err := settings.AsOnChain(h.runtimeContext.ResolvedRegistry, "deploy")
+	if err != nil {
+		return nil, err
+	}
+
+	a := &onchainRegistryDeployStrategy{h: h, onChain: onChain}
 	a.wg.Add(1)
 	go func() {
 		defer a.wg.Done()
@@ -34,7 +41,7 @@ func newOnchainRegistryDeployStrategy(h *handler) *onchainRegistryDeployStrategy
 		a.wrc = wrc
 		h.wrc = wrc
 	}()
-	return a
+	return a, nil
 }
 
 func (a *onchainRegistryDeployStrategy) RunPreDeployChecks() error {
@@ -48,7 +55,7 @@ func (a *onchainRegistryDeployStrategy) RunPreDeployChecks() error {
 	ui.Line()
 	ui.Dim("Verifying ownership...")
 	if h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerType == constants.WorkflowOwnerTypeMSIG {
-		halt, err := h.autoLinkMSIGAndExit()
+		halt, err := h.autoLinkMSIGAndExit(a.onChain)
 		if err != nil {
 			return fmt.Errorf("failed to check/handle MSIG owner link status: %w", err)
 		}
@@ -56,7 +63,7 @@ func (a *onchainRegistryDeployStrategy) RunPreDeployChecks() error {
 			return errDeployHalted
 		}
 	} else {
-		if err := h.ensureOwnerLinkedOrFail(); err != nil {
+		if err := h.ensureOwnerLinkedOrFail(a.onChain); err != nil {
 			return err
 		}
 	}
@@ -97,7 +104,7 @@ func (a *onchainRegistryDeployStrategy) Upsert() error {
 
 	ui.Line()
 	ui.Dim("Preparing deployment transaction...")
-	if err := h.upsert(); err != nil {
+	if err := h.upsert(a.onChain); err != nil {
 		return fmt.Errorf("failed to register workflow: %w", err)
 	}
 	return nil

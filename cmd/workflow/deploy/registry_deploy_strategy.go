@@ -68,9 +68,9 @@ func validatePrivateRegistryAllowed(envSet *environments.EnvironmentSet) error {
 }
 
 // newRegistryDeployStrategy returns the appropriate strategy for the given target.
-func newRegistryDeployStrategy(targetWorkflowRegistry registryTarget, h *handler) registryDeployStrategy {
+func newRegistryDeployStrategy(targetWorkflowRegistry registryTarget, h *handler) (registryDeployStrategy, error) {
 	if targetWorkflowRegistry.isPrivate() {
-		return newPrivateRegistryDeployStrategy(h)
+		return newPrivateRegistryDeployStrategy(h), nil
 	}
 	return newOnchainRegistryDeployStrategy(h)
 }
