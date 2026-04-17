@@ -889,7 +889,11 @@ func getHTTPTriggerPayload(invocationDir string) (*httptypedapi.Payload, error) 
 
 	var jsonData map[string]interface{}
 
+	// Resolve the path against the invocation directory so that relative paths
+	// like ./production.json work from where the user ran the command, even though
+	// the process cwd has been changed to the workflow subdirectory.
 	resolvedPath := resolvePathFromInvocation(input, invocationDir)
+
 	if _, err := os.Stat(resolvedPath); err == nil {
 		data, err := os.ReadFile(resolvedPath)
 		if err != nil {
@@ -900,7 +904,7 @@ func getHTTPTriggerPayload(invocationDir string) (*httptypedapi.Payload, error) 
 		}
 		ui.Success(fmt.Sprintf("Loaded JSON from file: %s", resolvedPath))
 	} else {
-		// It's direct JSON input
+		// Treat as direct JSON input
 		if err := json.Unmarshal([]byte(input), &jsonData); err != nil {
 			return nil, fmt.Errorf("failed to parse JSON: %w", err)
 		}
@@ -911,7 +915,6 @@ func getHTTPTriggerPayload(invocationDir string) (*httptypedapi.Payload, error) 
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal JSON: %w", err)
 	}
-	// Create the payload
 	payload := &httptypedapi.Payload{
 		Input: jsonDataBytes,
 		// Key is optional for simulation
