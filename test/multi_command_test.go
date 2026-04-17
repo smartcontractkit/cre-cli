@@ -142,14 +142,14 @@ func TestMultiCommandHappyPaths(t *testing.T) {
 		require.NoError(t, createCliEnvFile(tc.EnvFile, constants.TestPrivateKey3), "failed to create env file")
 		require.NoError(t, createProjectSettingsFile(tc.ProjectDirectory+"project.yaml", "", testEthUrl), "failed to create project.yaml")
 		require.NoError(t, createWorkflowDirectory(tc.ProjectDirectory, "private-registry-happy-path-workflow", "", "blank_workflow"), "failed to create workflow directory")
-		
+
 		// Set deployment-registry to reg-test to trigger private registry path
 		v := viper.New()
 		v.SetConfigFile(filepath.Join(tc.ProjectDirectory, "blank_workflow", constants.DefaultWorkflowSettingsFileName))
 		require.NoError(t, v.ReadInConfig())
 		v.Set(fmt.Sprintf("%s.user-workflow.deployment-registry", SettingsTarget), "reg-test")
 		require.NoError(t, v.WriteConfig())
-		
+
 		t.Cleanup(tc.Cleanup(t))
 
 		multi_command_flows.RunWorkflowPrivateRegistryHappyPath(t, tc)

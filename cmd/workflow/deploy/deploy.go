@@ -160,9 +160,9 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 		OutputPath: v.GetString("output"),
 		WasmPath:   v.GetString("wasm"),
 
-		OwnerLabel:             v.GetString("owner-label"),
-		SkipConfirmation:       v.GetBool(settings.Flags.SkipConfirmation.Name),
-		SkipTypeChecks:         v.GetBool(cmdcommon.SkipTypeChecksCLIFlag),
+		OwnerLabel:       v.GetString("owner-label"),
+		SkipConfirmation: v.GetBool(settings.Flags.SkipConfirmation.Name),
+		SkipTypeChecks:   v.GetBool(cmdcommon.SkipTypeChecksCLIFlag),
 	}
 
 	return inputs, nil

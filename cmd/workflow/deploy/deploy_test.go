@@ -756,12 +756,12 @@ func newPrivateRegistryExecuteHandler(t *testing.T, wasmURL, gqlURL string) *han
 	h.credentials = makeAPIKeyCredentials(t)
 	h.environmentSet.GraphQLURL = gqlURL
 	h.inputs = Inputs{
-		WorkflowName:           "test_workflow",
-		WorkflowOwner:          chainsim.TestAddress,
-		WorkflowTag:            "test_workflow",
-		DonFamily:              "test-don",
-		WorkflowPath:           "testdata/basic_workflow/main.go",
-		WasmPath:               wasmURL,
+		WorkflowName:  "test_workflow",
+		WorkflowOwner: chainsim.TestAddress,
+		WorkflowTag:   "test_workflow",
+		DonFamily:     "test-don",
+		WorkflowPath:  "testdata/basic_workflow/main.go",
+		WasmPath:      wasmURL,
 	}
 
 	return h
