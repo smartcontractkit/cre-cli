@@ -463,9 +463,10 @@ func run(
 		var err error
 		manualTriggerCaps, err = NewManualTriggerCapabilities(ctx, triggerLggr, registry)
 		if err != nil {
-			ui.Error(fmt.Sprintf("Failed to create cron/HTTP trigger capabilities: %v", err))
+			ui.Error(fmt.Sprintf("Failed to create trigger capabilities: %v", err))
 			os.Exit(1)
 		}
+		srvcs = append(srvcs, manualTriggerCaps.ManualCronTrigger, manualTriggerCaps.ManualHTTPTrigger)
 
 		// Only set Limits when non-nil to avoid the typed-nil interface trap
 		// (a nil *SimulationLimits boxed into chain.Limits compares != nil).
@@ -519,7 +520,6 @@ func run(
 			}
 		}
 
-		srvcs = append(srvcs, manualTriggerCaps.ManualCronTrigger, manualTriggerCaps.ManualHTTPTrigger)
 		srvcs = append(srvcs, computeCaps...)
 		return registry, srvcs
 	}
