@@ -96,7 +96,7 @@ func workflowDeployPrivateRegistry(t *testing.T, tc TestConfig) string {
 								{
 									"id":               "reg-test",
 									"label":            "reg-test",
-									"type":             "ON_CHAIN",
+									"type":             "OFF_CHAIN",
 									"chainSelector":    "6433500567565415381",
 									"address":          "0x5FbDB2315678afecb367f032d93F642f64180aa3",
 									"secretsAuthFlows": []string{"BROWSER"},
@@ -215,7 +215,6 @@ func workflowDeployPrivateRegistry(t *testing.T, tc TestConfig) string {
 		"blank_workflow",
 		tc.GetCliEnvFlag(),
 		tc.GetProjectRootFlag(),
-		"--preview-private-registry",
 		"--" + settings.Flags.SkipConfirmation.Name,
 	}
 
@@ -251,7 +250,7 @@ func workflowDeployPrivateRegistry(t *testing.T, tc TestConfig) string {
 	require.NoError(
 		t,
 		cmd.Run(),
-		"cre workflow deploy --preview-private-registry failed:\nSTDOUT:\n%s\nSTDERR:\n%s",
+		"cre workflow deploy failed:\nSTDOUT:\n%s\nSTDERR:\n%s",
 		stdout.String(),
 		stderr.String(),
 	)

@@ -3,7 +3,6 @@ package deploy
 import (
 	"bytes"
 	"context"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -18,10 +17,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	workflowUtils "github.com/smartcontractkit/chainlink-common/pkg/workflows"
 	workflow_registry_v2_wrapper "github.com/smartcontractkit/chainlink-evm/gethwrappers/workflow/generated/workflow_registry_wrapper_v2"
 
-	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/testutil/chainsim"
 	"github.com/smartcontractkit/cre-cli/internal/validation"
 )
@@ -432,64 +429,6 @@ func TestConfigFlagsMutuallyExclusive(t *testing.T) {
 	assert.Contains(t, err.Error(), "if any flags in the group [config no-config default-config] are set none of the others can be")
 }
 
-func TestResolveInputs_PrivateRegistryTarget(t *testing.T) {
-	t.Run("resolves private target and derived owner in STAGING", func(t *testing.T) {
-		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
-		defer simulatedEnvironment.Close()
-
-		expectedBytes, err := workflowUtils.GenerateWorkflowOwnerAddress("42", "org-test-123")
-		require.NoError(t, err)
-		expectedOwner := "0x" + hex.EncodeToString(expectedBytes)
-
-		ctx, buf := simulatedEnvironment.NewOffChainRuntimeContextWithBufferedOutput("42", "test_label")
-		h := newHandler(ctx, buf)
-		ctx.Settings = createTestSettings(
-			chainsim.TestAddress,
-			"eoa",
-			"test_workflow",
-			"testdata/basic_workflow/main.go",
-			"",
-		)
-		h.settings = ctx.Settings
-		h.environmentSet.EnvName = "STAGING"
-		token := makeTestJWT(t, map[string]interface{}{
-			"sub":    "user1",
-			"org_id": "org-test-123",
-		})
-		h.credentials = makeBearerCredentials(t, token)
-		h.runtimeContext.DerivedWorkflowOwner = expectedOwner
-		ctx.Viper.Set("preview-private-registry", true)
-
-		inputs, err := h.ResolveInputs(ctx.Viper)
-		require.NoError(t, err)
-		assert.True(t, inputs.PreviewPrivateRegistry)
-		assert.Equal(t, settings.RegistryTypeOffChain, inputs.TargetWorkflowRegistry.targetType)
-		assert.Equal(t, expectedOwner, inputs.WorkflowOwner)
-	})
-
-	t.Run("rejects private target outside STAGING", func(t *testing.T) {
-		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
-		defer simulatedEnvironment.Close()
-
-		ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
-		h := newHandler(ctx, buf)
-		ctx.Settings = createTestSettings(
-			chainsim.TestAddress,
-			"eoa",
-			"test_workflow",
-			"testdata/basic_workflow/main.go",
-			"",
-		)
-		h.settings = ctx.Settings
-		h.environmentSet.EnvName = "PRODUCTION"
-		ctx.Viper.Set("preview-private-registry", true)
-
-		_, err := h.ResolveInputs(ctx.Viper)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "--preview-private-registry is only available in the STAGING environment")
-	})
-}
-
 func TestValidateInputs_PrivateRegistry(t *testing.T) {
 	t.Run("accepts URL wasm and config with off-chain resolved registry and no on-chain contract inputs", func(t *testing.T) {
 		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
@@ -512,7 +451,6 @@ func TestValidateInputs_PrivateRegistry(t *testing.T) {
 		})
 		h.credentials = makeBearerCredentials(t, token)
 		h.runtimeContext.DerivedWorkflowOwner = "0xabcdef1234567890abcdef1234567890abcdef12"
-		ctx.Viper.Set("preview-private-registry", true)
 		ctx.Viper.Set("wasm", "https://example.com/workflow.wasm")
 		ctx.Viper.Set("config", "https://example.com/workflow-config.json")
 
@@ -546,7 +484,6 @@ func TestValidateInputs_PrivateRegistry(t *testing.T) {
 		})
 		h.credentials = makeBearerCredentials(t, token)
 		h.runtimeContext.DerivedWorkflowOwner = "0xabcdef1234567890abcdef1234567890abcdef12"
-		ctx.Viper.Set("preview-private-registry", true)
 		ctx.Viper.Set("wasm", "https://example.com/workflow.wasm")
 
 		inputs, err := h.ResolveInputs(ctx.Viper)
@@ -819,14 +756,12 @@ func newPrivateRegistryExecuteHandler(t *testing.T, wasmURL, gqlURL string) *han
 	h.credentials = makeAPIKeyCredentials(t)
 	h.environmentSet.GraphQLURL = gqlURL
 	h.inputs = Inputs{
-		WorkflowName:           "test_workflow",
-		WorkflowOwner:          chainsim.TestAddress,
-		WorkflowTag:            "test_workflow",
-		DonFamily:              "test-don",
-		WorkflowPath:           "testdata/basic_workflow/main.go",
-		WasmPath:               wasmURL,
-		TargetWorkflowRegistry: registryTarget{targetType: settings.RegistryTypeOffChain},
-		PreviewPrivateRegistry: true,
+		WorkflowName:  "test_workflow",
+		WorkflowOwner: chainsim.TestAddress,
+		WorkflowTag:   "test_workflow",
+		DonFamily:     "test-don",
+		WorkflowPath:  "testdata/basic_workflow/main.go",
+		WasmPath:      wasmURL,
 	}
 
 	return h
