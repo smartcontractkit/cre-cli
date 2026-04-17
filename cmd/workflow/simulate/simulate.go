@@ -428,7 +428,7 @@ func run(
 	initializedCh := make(chan struct{})
 	executionFinishedCh := make(chan struct{})
 
-	var manualTriggers *ManualTriggers
+	var triggerCaps *ManualTriggers
 	simulatorInitialize := func(ctx context.Context, cfg simulator.RunnerConfig) (*capabilities.Registry, []services.Service) {
 		lggr := logger.Sugared(cfg.Lggr)
 		// Create the registry and fake capabilities with specific loggers
@@ -461,7 +461,7 @@ func run(
 		// Register chain-agnostic cron and HTTP triggers
 		triggerLggr := lggr.Named("TriggerCapabilities")
 		var err error
-		manualTriggers, err = NewManualTriggerCapabilities(ctx, triggerLggr, registry)
+		triggerCaps, err = NewManualTriggerCapabilities(ctx, triggerLggr, registry)
 		if err != nil {
 			ui.Error(fmt.Sprintf("Failed to create cron/HTTP trigger capabilities: %v", err))
 			os.Exit(1)
@@ -506,7 +506,7 @@ func run(
 		}
 
 		// Start trigger capabilities
-		if err := manualTriggers.Start(ctx); err != nil {
+		if err := triggerCaps.Start(ctx); err != nil {
 			ui.Error(fmt.Sprintf("Failed to start cron/HTTP triggers: %v", err))
 			os.Exit(1)
 		}
@@ -519,7 +519,7 @@ func run(
 			}
 		}
 
-		srvcs = append(srvcs, manualTriggers.ManualCronTrigger, manualTriggers.ManualHTTPTrigger)
+		srvcs = append(srvcs, triggerCaps.ManualCronTrigger, triggerCaps.ManualHTTPTrigger)
 		srvcs = append(srvcs, computeCaps...)
 		return registry, srvcs
 	}
@@ -527,11 +527,11 @@ func run(
 	// Create a holder for trigger info that will be populated in beforeStart
 	triggerInfoAndBeforeStart := &TriggerInfoAndBeforeStart{}
 
-	getManualTriggers := func() *ManualTriggers { return manualTriggers }
+	getTriggerCaps := func() *ManualTriggers { return triggerCaps }
 	if inputs.NonInteractive {
-		triggerInfoAndBeforeStart.BeforeStart = makeBeforeStartNonInteractive(triggerInfoAndBeforeStart, inputs, getManualTriggers)
+		triggerInfoAndBeforeStart.BeforeStart = makeBeforeStartNonInteractive(triggerInfoAndBeforeStart, inputs, getTriggerCaps)
 	} else {
-		triggerInfoAndBeforeStart.BeforeStart = makeBeforeStartInteractive(triggerInfoAndBeforeStart, inputs, getManualTriggers)
+		triggerInfoAndBeforeStart.BeforeStart = makeBeforeStartInteractive(triggerInfoAndBeforeStart, inputs, getTriggerCaps)
 	}
 
 	waitFn := func(context.Context, simulator.RunnerConfig, *capabilities.Registry, []services.Service) {
@@ -668,7 +668,7 @@ type TriggerInfoAndBeforeStart struct {
 }
 
 // makeBeforeStartInteractive builds the interactive BeforeStart closure
-func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs, manualTriggersGetter func() *ManualTriggers) func(context.Context, simulator.RunnerConfig, *capabilities.Registry, []services.Service, []*pb.TriggerSubscription) {
+func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs, triggerCapsGetter func() *ManualTriggers) func(context.Context, simulator.RunnerConfig, *capabilities.Registry, []services.Service, []*pb.TriggerSubscription) {
 	return func(
 		ctx context.Context,
 		cfg simulator.RunnerConfig,
@@ -707,12 +707,12 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 
 		triggerRegistrationID := fmt.Sprintf("trigger_reg_1111111111111111111111111111111111111111111111111111111111111111_%d", triggerIndex)
 		trigger := holder.TriggerToRun.Id
-		manualTriggerCaps := manualTriggersGetter()
+		triggerCaps := triggerCapsGetter()
 
 		switch trigger {
 		case "cron-trigger@1.0.0":
 			holder.TriggerFunc = func() error {
-				return manualTriggerCaps.ManualCronTrigger.ManualTrigger(ctx, triggerRegistrationID, time.Now())
+				return triggerCaps.ManualCronTrigger.ManualTrigger(ctx, triggerRegistrationID, time.Now())
 			}
 		case "http-trigger@1.0.0-alpha":
 			payload, err := getHTTPTriggerPayload(inputs.InvocationDir)
@@ -721,7 +721,7 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 				os.Exit(1)
 			}
 			holder.TriggerFunc = func() error {
-				return manualTriggerCaps.ManualHTTPTrigger.ManualTrigger(ctx, triggerRegistrationID, payload)
+				return triggerCaps.ManualHTTPTrigger.ManualTrigger(ctx, triggerRegistrationID, payload)
 			}
 		default:
 			// Try each registered chain type
@@ -759,7 +759,7 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 }
 
 // makeBeforeStartNonInteractive builds the non-interactive BeforeStart closure
-func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs, manualTriggersGetter func() *ManualTriggers) func(context.Context, simulator.RunnerConfig, *capabilities.Registry, []services.Service, []*pb.TriggerSubscription) {
+func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs, triggerCapsGetter func() *ManualTriggers) func(context.Context, simulator.RunnerConfig, *capabilities.Registry, []services.Service, []*pb.TriggerSubscription) {
 	return func(
 		ctx context.Context,
 		cfg simulator.RunnerConfig,
@@ -783,12 +783,12 @@ func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inp
 		holder.TriggerToRun = triggerSub[inputs.TriggerIndex]
 		triggerRegistrationID := fmt.Sprintf("trigger_reg_1111111111111111111111111111111111111111111111111111111111111111_%d", inputs.TriggerIndex)
 		trigger := holder.TriggerToRun.Id
-		manualTriggerCaps := manualTriggersGetter()
+		triggerCaps := triggerCapsGetter()
 
 		switch trigger {
 		case "cron-trigger@1.0.0":
 			holder.TriggerFunc = func() error {
-				return manualTriggerCaps.ManualCronTrigger.ManualTrigger(ctx, triggerRegistrationID, time.Now())
+				return triggerCaps.ManualCronTrigger.ManualTrigger(ctx, triggerRegistrationID, time.Now())
 			}
 		case "http-trigger@1.0.0-alpha":
 			if strings.TrimSpace(inputs.HTTPPayload) == "" {
@@ -801,7 +801,7 @@ func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inp
 				os.Exit(1)
 			}
 			holder.TriggerFunc = func() error {
-				return manualTriggerCaps.ManualHTTPTrigger.ManualTrigger(ctx, triggerRegistrationID, payload)
+				return triggerCaps.ManualHTTPTrigger.ManualTrigger(ctx, triggerRegistrationID, payload)
 			}
 		default:
 			// Try each registered chain type
