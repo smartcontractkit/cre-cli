@@ -18,10 +18,6 @@ import (
 
 const zero64 = "0x" + "0000000000000000000000000000000000000000000000000000000000000000"
 
-// ---------------------------------------------------------------------------
-// GetEVMTriggerLogFromValues — validation table.
-// ---------------------------------------------------------------------------
-
 func TestGetEVMTriggerLogFromValues_Validation(t *testing.T) {
 	t.Parallel()
 
@@ -49,10 +45,6 @@ func TestGetEVMTriggerLogFromValues_Validation(t *testing.T) {
 		})
 	}
 }
-
-// ---------------------------------------------------------------------------
-// fetchAndConvertLog + GetEVMTriggerLogFromValues via mock eth_getTransactionReceipt.
-// ---------------------------------------------------------------------------
 
 type mockRPC struct {
 	srv      *httptest.Server
@@ -278,10 +270,6 @@ func TestGetEVMTriggerLogFromValues_SuccessNoTopicsLeavesEventSigNil(t *testing.
 	assert.Nil(t, got.EventSig)
 }
 
-// ---------------------------------------------------------------------------
-// ParseTriggerChainSelector — additional coverage.
-// ---------------------------------------------------------------------------
-
 func TestParseTriggerChainSelector_AdditionalEdgeCases(t *testing.T) {
 	t.Parallel()
 
@@ -316,10 +304,6 @@ func TestParseTriggerChainSelector_AdditionalEdgeCases(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Regex directly — defensive coverage.
-// ---------------------------------------------------------------------------
-
 func TestChainSelectorRegex_Matches(t *testing.T) {
 	t.Parallel()
 	matches := chainSelectorRe.FindAllStringSubmatch("ChainSelector:1 chainselector:2 CHAINSELECTOR:3", -1)
@@ -335,10 +319,6 @@ func TestChainSelectorRegex_NoMatch(t *testing.T) {
 	assert.Nil(t, chainSelectorRe.FindStringSubmatch(""))
 }
 
-// ---------------------------------------------------------------------------
-// Non-0x rejection fast — doesn't touch RPC.
-// ---------------------------------------------------------------------------
-
 func TestGetEVMTriggerLogFromValues_NoRPCWhenHashInvalid(t *testing.T) {
 	t.Parallel()
 	// Pass nil client; validation should fire before any RPC attempt.
@@ -346,10 +326,6 @@ func TestGetEVMTriggerLogFromValues_NoRPCWhenHashInvalid(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "must start with 0x")
 }
-
-// ---------------------------------------------------------------------------
-// Zero-address log still decodes.
-// ---------------------------------------------------------------------------
 
 func TestGetEVMTriggerLogFromValues_ZeroAddressLog(t *testing.T) {
 	t.Parallel()

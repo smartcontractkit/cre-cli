@@ -11,10 +11,6 @@ import (
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain"
 )
 
-// ---------------------------------------------------------------------------
-// Experimental selectors label — "experimental chain N" in error messages.
-// ---------------------------------------------------------------------------
-
 func TestHealthCheck_ExperimentalSelector_UsesExperimentalLabel(t *testing.T) {
 	sErr := newChainIDServer(t, fmt.Errorf("boom"))
 	defer sErr.Close()

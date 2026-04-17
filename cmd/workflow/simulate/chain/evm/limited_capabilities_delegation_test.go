@@ -129,10 +129,6 @@ func (s *fullStubCapability) Initialise(context.Context, core.StandardCapabiliti
 	return nil
 }
 
-// ---------------------------------------------------------------------------
-// Table-driven: every method is called through the limiter exactly once.
-// ---------------------------------------------------------------------------
-
 func TestLimitedEVMChain_AllMethodsDelegate(t *testing.T) {
 	t.Parallel()
 
@@ -196,10 +192,6 @@ func TestLimitedEVMChain_AllMethodsDelegate(t *testing.T) {
 		})
 	}
 }
-
-// ---------------------------------------------------------------------------
-// WriteReport policy edge cases
-// ---------------------------------------------------------------------------
 
 func TestLimitedEVMChain_WriteReport_NilReport_Delegates(t *testing.T) {
 	t.Parallel()

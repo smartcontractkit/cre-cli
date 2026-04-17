@@ -38,8 +38,6 @@ func newRegistry(t *testing.T) *capabilities.Registry {
 	return r
 }
 
-// --- helpers ---
-
 // stdioMu serialises os.Stderr / os.Stdout hijacks so parallel capture tests
 // don't clobber each other's pipes.
 var stdioMu sync.Mutex
@@ -108,18 +106,10 @@ func newEVMChainType() *EVMChainType {
 // Valid anvil dev key #0; known non-sentinel.
 const validPK = "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
 
-// ---------------------------------------------------------------------------
-// Name
-// ---------------------------------------------------------------------------
-
 func TestEVMChainType_Name_IsEVM(t *testing.T) {
 	t.Parallel()
 	require.Equal(t, "evm", newEVMChainType().Name())
 }
-
-// ---------------------------------------------------------------------------
-// SupportedChains pass-through
-// ---------------------------------------------------------------------------
 
 func TestEVMChainType_SupportedChains_ReturnsPackageVar(t *testing.T) {
 	t.Parallel()
@@ -127,10 +117,6 @@ func TestEVMChainType_SupportedChains_ReturnsPackageVar(t *testing.T) {
 	require.Equal(t, len(SupportedChains), len(got))
 	require.Greater(t, len(got), 20, "expected many supported chains")
 }
-
-// ---------------------------------------------------------------------------
-// ResolveKey table
-// ---------------------------------------------------------------------------
 
 func TestEVMChainType_ResolveKey(t *testing.T) {
 	t.Parallel()
@@ -252,20 +238,12 @@ func TestEVMChainType_ResolveKey(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// ResolveKey sentinel identity
-// ---------------------------------------------------------------------------
-
 func TestEVMChainType_ResolveKey_SentinelDecodesToD1(t *testing.T) {
 	t.Parallel()
 	pk, err := crypto.HexToECDSA(defaultSentinelPrivateKey)
 	require.NoError(t, err)
 	require.Equal(t, 0, pk.D.Cmp(bigOne()))
 }
-
-// ---------------------------------------------------------------------------
-// ResolveTriggerData — non-interactive validation
-// ---------------------------------------------------------------------------
 
 func TestEVMChainType_ResolveTriggerData_NoClient(t *testing.T) {
 	t.Parallel()
@@ -297,10 +275,6 @@ func TestEVMChainType_ResolveTriggerData_WrongClientType(t *testing.T) {
 	assert.Contains(t, err.Error(), "invalid client type for EVM chain selector 1")
 }
 
-// ---------------------------------------------------------------------------
-// ExecuteTrigger
-// ---------------------------------------------------------------------------
-
 func TestEVMChainType_ExecuteTrigger_NotRegistered(t *testing.T) {
 	t.Parallel()
 	ct := newEVMChainType()
@@ -319,10 +293,6 @@ func TestEVMChainType_ExecuteTrigger_UnknownSelector(t *testing.T) {
 	assert.Contains(t, err.Error(), "no EVM chain initialized for selector 999")
 }
 
-// ---------------------------------------------------------------------------
-// HasSelector
-// ---------------------------------------------------------------------------
-
 func TestEVMChainType_HasSelector_WhenNotRegistered_ReturnsFalse(t *testing.T) {
 	t.Parallel()
 	ct := newEVMChainType()
@@ -337,10 +307,6 @@ func TestEVMChainType_HasSelector_EmptyMap_ReturnsFalse(t *testing.T) {
 	assert.False(t, ct.HasSelector(1))
 }
 
-// ---------------------------------------------------------------------------
-// ParseTriggerChainSelector (via chain type interface)
-// ---------------------------------------------------------------------------
-
 func TestEVMChainType_ParseTriggerChainSelector_Delegates(t *testing.T) {
 	t.Parallel()
 	ct := newEVMChainType()
@@ -352,10 +318,6 @@ func TestEVMChainType_ParseTriggerChainSelector_Delegates(t *testing.T) {
 	require.False(t, ok)
 	require.Zero(t, got)
 }
-
-// ---------------------------------------------------------------------------
-// RegisterCapabilities type-assertion failures
-// ---------------------------------------------------------------------------
 
 func TestEVMChainType_RegisterCapabilities_WrongClientType(t *testing.T) {
 	t.Parallel()
@@ -388,10 +350,6 @@ func TestEVMChainType_RegisterCapabilities_NoClients_ConstructsEmpty(t *testing.
 	assert.False(t, ct.HasSelector(1))
 }
 
-// ---------------------------------------------------------------------------
-// RunHealthCheck plumbing
-// ---------------------------------------------------------------------------
-
 func TestEVMChainType_RunHealthCheck_PropagatesInvalidClientType(t *testing.T) {
 	t.Parallel()
 	ct := newEVMChainType()
@@ -413,18 +371,10 @@ func TestEVMChainType_RunHealthCheck_NoClients_Errors(t *testing.T) {
 	assert.Contains(t, err.Error(), "no RPC URLs found")
 }
 
-// ---------------------------------------------------------------------------
-// ChainType interface contract
-// ---------------------------------------------------------------------------
-
 func TestEVMChainType_ImplementsChainType(t *testing.T) {
 	t.Parallel()
 	var _ chain.ChainType = (*EVMChainType)(nil)
 }
-
-// ---------------------------------------------------------------------------
-// Registered via init
-// ---------------------------------------------------------------------------
 
 func TestEVMChainType_RegisteredInFactoryRegistry(t *testing.T) {
 	t.Parallel()
@@ -445,10 +395,6 @@ func TestEVMChainType_RegisteredInFactoryRegistry(t *testing.T) {
 	require.Equal(t, "evm", ct.Name())
 }
 
-// ---------------------------------------------------------------------------
-// Sentinel error wrapping
-// ---------------------------------------------------------------------------
-
 func TestEVMChainType_ResolveKey_BroadcastErrorWrapsUnderlying(t *testing.T) {
 	t.Parallel()
 	ct := newEVMChainType()
@@ -458,10 +404,6 @@ func TestEVMChainType_ResolveKey_BroadcastErrorWrapsUnderlying(t *testing.T) {
 	// Must mention env var for operator-facing clarity.
 	assert.Contains(t, err.Error(), "CRE_ETH_PRIVATE_KEY")
 }
-
-// ---------------------------------------------------------------------------
-// Non-broadcast with valid key: no UI warning leaked
-// ---------------------------------------------------------------------------
 
 func TestEVMChainType_ResolveKey_ValidNonBroadcast_NoWarning(t *testing.T) {
 	t.Parallel()
@@ -473,10 +415,6 @@ func TestEVMChainType_ResolveKey_ValidNonBroadcast_NoWarning(t *testing.T) {
 	})
 	assert.NotContains(t, stderr, "Using default private key")
 }
-
-// ---------------------------------------------------------------------------
-// ExecuteTrigger wrong triggerData type
-// ---------------------------------------------------------------------------
 
 func TestEVMChainType_ExecuteTrigger_WrongTriggerDataType(t *testing.T) {
 	t.Parallel()
@@ -520,10 +458,6 @@ func TestEVMChainType_ResolveKey_PrefixedHex_FallsBackToSentinel(t *testing.T) {
 	assert.Contains(t, stderr, "Using default private key")
 }
 
-// ---------------------------------------------------------------------------
-// Error type is standard error (not a sentinel) — ensures errors.Is behaviour.
-// ---------------------------------------------------------------------------
-
 func TestEVMChainType_ResolveKey_BroadcastError_IsError(t *testing.T) {
 	t.Parallel()
 	ct := newEVMChainType()
@@ -532,10 +466,6 @@ func TestEVMChainType_ResolveKey_BroadcastError_IsError(t *testing.T) {
 	require.Error(t, err)
 	require.NotNil(t, errors.Unwrap(err))
 }
-
-// ---------------------------------------------------------------------------
-// CollectCLIInputs
-// ---------------------------------------------------------------------------
 
 func TestEVMChainType_CollectCLIInputs_BothSet(t *testing.T) {
 	t.Parallel()
