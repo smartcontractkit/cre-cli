@@ -142,6 +142,7 @@ func TestMultiCommandHappyPaths(t *testing.T) {
 		t.Cleanup(tc.Cleanup(t))
 
 		multi_command_flows.RunWorkflowPrivateRegistryHappyPath(t, tc)
+		multi_command_flows.RunWorkflowPausePrivateRegistryHappyPath(t, tc)
 	})
 
 	// Run Account Happy Path: Link -> List -> Unlink -> List (verify unlinked)
