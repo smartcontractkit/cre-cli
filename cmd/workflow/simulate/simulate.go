@@ -507,7 +507,7 @@ func run(
 
 		// Start trigger capabilities
 		if err := manualTriggerCaps.Start(ctx); err != nil {
-			ui.Error(fmt.Sprintf("Failed to start cron/HTTP triggers: %v", err))
+			ui.Error(fmt.Sprintf("Failed to start trigger: %v", err))
 			os.Exit(1)
 		}
 
