@@ -172,7 +172,7 @@ func (h *handler) Execute() error {
 	}
 
 	ui.Dim(fmt.Sprintf("Deleting %d workflow(s)...", len(workflows)))
-	
+
 	err = adapter.DeleteWorkflows(workflows)
 	if err != nil {
 		return err
