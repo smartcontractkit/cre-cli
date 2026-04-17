@@ -51,8 +51,8 @@ func TestCompileCmd(t *testing.T) {
 			{
 				name: "Invalid ConfigPath",
 				cmd: Inputs{
-					WorkflowPath:                      "testdata/test_workflow.yaml",
-					ConfigPath:                        "nonexistent.yaml",
+					WorkflowPath: "testdata/test_workflow.yaml",
+					ConfigPath:   "nonexistent.yaml",
 				},
 				WorkflowOwnerType: constants.WorkflowOwnerTypeEOA,
 				wantError:         true,
@@ -62,8 +62,8 @@ func TestCompileCmd(t *testing.T) {
 			{
 				name: "Non-ASCII ConfigPath",
 				cmd: Inputs{
-					WorkflowPath:                      "testdata/test_workflow.yaml",
-					ConfigPath:                        "./testdata/đuveč.yaml",
+					WorkflowPath: "testdata/test_workflow.yaml",
+					ConfigPath:   "./testdata/đuveč.yaml",
 				},
 				WorkflowOwnerType: constants.WorkflowOwnerTypeEOA,
 				wantError:         true,
@@ -73,8 +73,8 @@ func TestCompileCmd(t *testing.T) {
 			{
 				name: "Non-ASCII OutputPath",
 				cmd: Inputs{
-					WorkflowPath:                      "testdata/test_workflow.yaml",
-					OutputPath:                        "outputŠČ.yaml",
+					WorkflowPath: "testdata/test_workflow.yaml",
+					OutputPath:   "outputŠČ.yaml",
 				},
 				WorkflowOwnerType: constants.WorkflowOwnerTypeEOA,
 				wantError:         true,
@@ -171,11 +171,11 @@ func TestCompileCmd(t *testing.T) {
 			defer simulatedEnvironment.Close()
 
 			err := runCompile(simulatedEnvironment, Inputs{
-				WorkflowName:                      "test_workflow",
-				WorkflowOwner:                     chainsim.TestAddress,
-				DonFamily:                         "test_label",
-				WorkflowPath:                      filepath.Join("testdata", "malformed_workflow", "main.go"),
-				OutputPath:                        outputPath,
+				WorkflowName:  "test_workflow",
+				WorkflowOwner: chainsim.TestAddress,
+				DonFamily:     "test_label",
+				WorkflowPath:  filepath.Join("testdata", "malformed_workflow", "main.go"),
+				OutputPath:    outputPath,
 			}, constants.WorkflowOwnerTypeEOA)
 			require.Error(t, err)
 			assert.ErrorContains(t, err, "failed to compile workflow")
@@ -187,11 +187,11 @@ func TestCompileCmd(t *testing.T) {
 func TestCompileOutputMatchesUnderlying(t *testing.T) {
 	simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
 	baseInputs := Inputs{
-		WorkflowName:                      "test_workflow",
-		WorkflowOwner:                     chainsim.TestAddress,
-		DonFamily:                         "test_label",
-		WorkflowPath:                      filepath.Join("testdata", "basic_workflow", "main.go"),
-		ConfigPath:                        filepath.Join("testdata", "basic_workflow", "config.yml"),
+		WorkflowName:  "test_workflow",
+		WorkflowOwner: chainsim.TestAddress,
+		DonFamily:     "test_label",
+		WorkflowPath:  filepath.Join("testdata", "basic_workflow", "main.go"),
+		ConfigPath:    filepath.Join("testdata", "basic_workflow", "config.yml"),
 	}
 
 	t.Run("default output path", func(t *testing.T) {
@@ -320,12 +320,12 @@ func TestCompileWithWasmPath(t *testing.T) {
 		t.Cleanup(func() { _ = os.Remove(outputPath) })
 
 		inputs := Inputs{
-			WorkflowName:                      "test_workflow",
-			WorkflowOwner:                     chainsim.TestAddress,
-			DonFamily:                         "test_label",
-			WorkflowPath:                      filepath.Join("testdata", "basic_workflow", "main.go"),
-			WasmPath:   wasmFile,
-			OutputPath: outputPath,
+			WorkflowName:  "test_workflow",
+			WorkflowOwner: chainsim.TestAddress,
+			DonFamily:     "test_label",
+			WorkflowPath:  filepath.Join("testdata", "basic_workflow", "main.go"),
+			WasmPath:      wasmFile,
+			OutputPath:    outputPath,
 		}
 
 		err := runCompile(simulatedEnvironment, inputs, constants.WorkflowOwnerTypeEOA)
@@ -362,12 +362,12 @@ func TestCompileWithWasmPath(t *testing.T) {
 		t.Cleanup(func() { _ = os.Remove(outputPath) })
 
 		inputs := Inputs{
-			WorkflowName:                      "test_workflow",
-			WorkflowOwner:                     chainsim.TestAddress,
-			DonFamily:                         "test_label",
-			WorkflowPath:                      filepath.Join("testdata", "basic_workflow", "main.go"),
-			WasmPath:   wasmFile,
-			OutputPath: outputPath,
+			WorkflowName:  "test_workflow",
+			WorkflowOwner: chainsim.TestAddress,
+			DonFamily:     "test_label",
+			WorkflowPath:  filepath.Join("testdata", "basic_workflow", "main.go"),
+			WasmPath:      wasmFile,
+			OutputPath:    outputPath,
 		}
 
 		err = runCompile(simulatedEnvironment, inputs, constants.WorkflowOwnerTypeEOA)
@@ -399,11 +399,11 @@ func TestCompileWithWasmPath(t *testing.T) {
 		)
 		handler.settings = ctx.Settings
 		handler.inputs = Inputs{
-			WorkflowName:                      "test_workflow",
-			WorkflowOwner:                     chainsim.TestAddress,
-			DonFamily:                         "test_label",
-			WorkflowPath:                      filepath.Join("testdata", "basic_workflow", "main.go"),
-			WasmPath: "/nonexistent/path/to/file.wasm",
+			WorkflowName:  "test_workflow",
+			WorkflowOwner: chainsim.TestAddress,
+			DonFamily:     "test_label",
+			WorkflowPath:  filepath.Join("testdata", "basic_workflow", "main.go"),
+			WasmPath:      "/nonexistent/path/to/file.wasm",
 		}
 
 		err := handler.ValidateInputs()
@@ -426,11 +426,11 @@ func TestCompileWithWasmPath(t *testing.T) {
 		)
 		handler.settings = ctx.Settings
 		handler.inputs = Inputs{
-			WorkflowName:                      "test_workflow",
-			WorkflowOwner:                     chainsim.TestAddress,
-			DonFamily:                         "test_label",
-			WorkflowPath:                      filepath.Join("testdata", "basic_workflow", "main.go"),
-			WasmPath: "https://example.com/binary.wasm",
+			WorkflowName:  "test_workflow",
+			WorkflowOwner: chainsim.TestAddress,
+			DonFamily:     "test_label",
+			WorkflowPath:  filepath.Join("testdata", "basic_workflow", "main.go"),
+			WasmPath:      "https://example.com/binary.wasm",
 		}
 		handler.validated = true
 
@@ -511,7 +511,7 @@ func TestCustomWasmWorkflowRunsMakeBuild(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Dir(wasmPath), 0o755))
 	// ValidateInputs requires a readable workflow path; seed a minimal wasm header so make can replace the binary.
 	minimalWasm := append([]byte{0x00, 0x61, 0x73, 0x6d}, make([]byte, 8)...)
-	require.NoError(t, os.WriteFile(wasmPath, minimalWasm, 0o644))
+	require.NoError(t, os.WriteFile(wasmPath, minimalWasm, 0600))
 
 	simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
 	defer simulatedEnvironment.Close()
@@ -520,12 +520,12 @@ func TestCustomWasmWorkflowRunsMakeBuild(t *testing.T) {
 	t.Cleanup(func() { _ = os.Remove(outputPath) })
 
 	inputs := Inputs{
-		WorkflowName:                      "custom_wasm_workflow",
-		WorkflowOwner:                     chainsim.TestAddress,
-		DonFamily:                         "test_label",
-		WorkflowPath:                      wasmPath,
-		ConfigPath:                        filepath.Join(customWasmDir, "config.yml"),
-		OutputPath:                        outputPath,
+		WorkflowName:  "custom_wasm_workflow",
+		WorkflowOwner: chainsim.TestAddress,
+		DonFamily:     "test_label",
+		WorkflowPath:  wasmPath,
+		ConfigPath:    filepath.Join(customWasmDir, "config.yml"),
+		OutputPath:    outputPath,
 	}
 
 	// runCompile calls ValidateInputs then Compile; CompileWorkflowToWasm runs make build internally. No manual make build.
