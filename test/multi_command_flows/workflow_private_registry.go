@@ -452,4 +452,3 @@ func RunWorkflowPausePrivateRegistryHappyPath(t *testing.T, tc TestConfig) {
 	require.Contains(t, out, "Status:        WORKFLOW_STATUS_PAUSED", "expected paused status in details.\nCLI OUTPUT:\n%s", out)
 	require.Contains(t, out, "Owner:         "+privateRegistryOwnerAddress, "expected owner in details.\nCLI OUTPUT:\n%s", out)
 }
-
