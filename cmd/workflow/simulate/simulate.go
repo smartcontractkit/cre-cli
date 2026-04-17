@@ -927,12 +927,8 @@ func getHTTPTriggerPayload(invocationDir string) (*httptypedapi.Payload, error) 
 // getTriggerDataForChainType resolves trigger data for a specific chain type.
 // Each chain type defines its own trigger data format.
 func getTriggerDataForChainType(ctx context.Context, ct chain.ChainType, selector uint64, inputs Inputs, interactive bool) (interface{}, error) {
-	clients, ok := inputs.ChainTypeClients[ct.Name()]
-	if !ok {
-		return nil, fmt.Errorf("no %s clients configured", ct.Name())
-	}
 	return ct.ResolveTriggerData(ctx, selector, chain.TriggerParams{
-		Clients:         clients,
+		Clients:         inputs.ChainTypeClients[ct.Name()],
 		Interactive:     interactive,
 		ChainTypeInputs: inputs.ChainTypeInputs,
 	})
