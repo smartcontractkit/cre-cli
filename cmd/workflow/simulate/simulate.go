@@ -173,23 +173,23 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 	}
 
 	return Inputs{
-		WasmPath:            v.GetString("wasm"),
-		WorkflowPath:        creSettings.Workflow.WorkflowArtifactSettings.WorkflowPath,
-		ConfigPath:          cmdcommon.ResolveConfigPath(v, creSettings.Workflow.WorkflowArtifactSettings.ConfigPath),
-		SecretsPath:         creSettings.Workflow.WorkflowArtifactSettings.SecretsPath,
-		EngineLogs:          v.GetBool("engine-logs"),
-		Broadcast:           v.GetBool("broadcast"),
+		WasmPath:          v.GetString("wasm"),
+		WorkflowPath:      creSettings.Workflow.WorkflowArtifactSettings.WorkflowPath,
+		ConfigPath:        cmdcommon.ResolveConfigPath(v, creSettings.Workflow.WorkflowArtifactSettings.ConfigPath),
+		SecretsPath:       creSettings.Workflow.WorkflowArtifactSettings.SecretsPath,
+		EngineLogs:        v.GetBool("engine-logs"),
+		Broadcast:         v.GetBool("broadcast"),
 		ChainTypeClients:  ctClients,
 		ChainTypeResolved: ctResolved,
 		ChainTypeKeys:     ctKeys,
-		WorkflowName:        creSettings.Workflow.UserWorkflowSettings.WorkflowName,
-		NonInteractive:      v.GetBool("non-interactive"),
-		TriggerIndex:        v.GetInt("trigger-index"),
-		HTTPPayload:         v.GetString("http-payload"),
-		ChainTypeInputs:     chain.CollectAllCLIInputs(v),
-		LimitsPath:          v.GetString("limits"),
-		SkipTypeChecks:      v.GetBool(cmdcommon.SkipTypeChecksCLIFlag),
-		InvocationDir:       h.runtimeContext.InvocationDir,
+		WorkflowName:      creSettings.Workflow.UserWorkflowSettings.WorkflowName,
+		NonInteractive:    v.GetBool("non-interactive"),
+		TriggerIndex:      v.GetInt("trigger-index"),
+		HTTPPayload:       v.GetString("http-payload"),
+		ChainTypeInputs:   chain.CollectAllCLIInputs(v),
+		LimitsPath:        v.GetString("limits"),
+		SkipTypeChecks:    v.GetBool(cmdcommon.SkipTypeChecksCLIFlag),
+		InvocationDir:     h.runtimeContext.InvocationDir,
 	}, nil
 }
 
