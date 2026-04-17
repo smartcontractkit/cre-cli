@@ -36,9 +36,6 @@ type Inputs struct {
 	OutputPath   string `validate:"omitempty,filepath,ascii,max=97" cli:"--output"`
 	WasmPath     string `validate:"omitempty,file,ascii,max=2048" cli:"--wasm"`
 
-	WorkflowRegistryContractAddress   string `validate:"required"`
-	WorkflowRegistryContractChainName string `validate:"required"`
-
 	OwnerLabel       string `validate:"omitempty"`
 	SkipConfirmation bool
 	// SkipTypeChecks passes --skip-type-checks to cre-compile for TypeScript workflows.
@@ -178,11 +175,6 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 		TargetWorkflowRegistry: targetWorkflowRegistry,
 	}
 
-	if oc, ok := h.runtimeContext.ResolvedRegistry.(*settings.OnChainRegistry); ok {
-		inputs.WorkflowRegistryContractChainName = oc.ChainName()
-		inputs.WorkflowRegistryContractAddress = oc.Address()
-	}
-
 	return inputs, nil
 }
 
@@ -229,7 +221,10 @@ func (h *handler) Execute(ctx context.Context) error {
 		return h.accessRequester.PromptAndSubmitRequest(ctx)
 	}
 
-	adapter := newRegistryDeployStrategy(h.inputs.TargetWorkflowRegistry, h)
+	adapter, err := newRegistryDeployStrategy(h.inputs.TargetWorkflowRegistry, h)
+	if err != nil {
+		return err
+	}
 
 	if err := h.prepareArtifacts(); err != nil {
 		return err

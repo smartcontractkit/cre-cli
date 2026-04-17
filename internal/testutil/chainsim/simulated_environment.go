@@ -13,6 +13,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	settingspkg "github.com/smartcontractkit/cre-cli/internal/settings"
+	"github.com/smartcontractkit/cre-cli/internal/tenantctx"
 	"github.com/smartcontractkit/cre-cli/internal/testutil"
 	"github.com/smartcontractkit/cre-cli/internal/testutil/testsettings"
 )
@@ -56,6 +57,20 @@ func (se *SimulatedEnvironment) NewRuntimeContextWithBufferedOutput() (*runtime.
 	return se.createContextWithLogger(logger), buf
 }
 
+func (se *SimulatedEnvironment) NewOffChainRuntimeContext(tenantID, donFamily string) *runtime.Context {
+	ctx := se.NewRuntimeContext()
+	ctx.TenantContext = &tenantctx.EnvironmentContext{TenantID: tenantID}
+	ctx.ResolvedRegistry = settingspkg.NewOffChainRegistry("private", donFamily)
+	return ctx
+}
+
+func (se *SimulatedEnvironment) NewOffChainRuntimeContextWithBufferedOutput(tenantID, donFamily string) (*runtime.Context, *bytes.Buffer) {
+	ctx, buf := se.NewRuntimeContextWithBufferedOutput()
+	ctx.TenantContext = &tenantctx.EnvironmentContext{TenantID: tenantID}
+	ctx.ResolvedRegistry = settingspkg.NewOffChainRegistry("private", donFamily)
+	return ctx, buf
+}
+
 func (se *SimulatedEnvironment) Close() {
 	se.Chain.Close()
 }
@@ -80,7 +95,16 @@ func (se *SimulatedEnvironment) createContextWithLogger(logger *zerolog.Logger) 
 		logger.Warn().Err(err).Msg("failed to create new credentials")
 	}
 
-	resolved, _ := settingspkg.ResolveRegistry("", nil, environmentSet)
+	var resolved settingspkg.ResolvedRegistry
+	if environmentSet != nil {
+		resolved = settingspkg.NewOnChainRegistry(
+			"",
+			se.Contracts.WorkflowRegistry.Contract.Hex(),
+			environmentSet.WorkflowRegistryChainName,
+			environmentSet.DonFamily,
+			environmentSet.WorkflowRegistryChainExplorerURL,
+		)
+	}
 
 	ctx := &runtime.Context{
 		Logger:           logger,

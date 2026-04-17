@@ -22,7 +22,6 @@ import (
 	workflow_registry_v2_wrapper "github.com/smartcontractkit/chainlink-evm/gethwrappers/workflow/generated/workflow_registry_wrapper_v2"
 
 	"github.com/smartcontractkit/cre-cli/internal/settings"
-	"github.com/smartcontractkit/cre-cli/internal/tenantctx"
 	"github.com/smartcontractkit/cre-cli/internal/testutil/chainsim"
 	"github.com/smartcontractkit/cre-cli/internal/validation"
 )
@@ -378,13 +377,11 @@ func TestValidateInputs_URLBypass(t *testing.T) {
 		)
 		handler.settings = ctx.Settings
 		handler.inputs = Inputs{
-			WorkflowName:                      "test_workflow",
-			WorkflowOwner:                     chainsim.TestAddress,
-			DonFamily:                         "test_label",
-			WorkflowPath:                      "testdata/basic_workflow/main.go",
-			WasmPath:                          "https://example.com/binary.wasm",
-			WorkflowRegistryContractAddress:   "0x1234567890123456789012345678901234567890",
-			WorkflowRegistryContractChainName: "ethereum-testnet-sepolia",
+			WorkflowName:  "test_workflow",
+			WorkflowOwner: chainsim.TestAddress,
+			DonFamily:     "test_label",
+			WorkflowPath:  "testdata/basic_workflow/main.go",
+			WasmPath:      "https://example.com/binary.wasm",
 		}
 
 		err := handler.ValidateInputs()
@@ -407,13 +404,11 @@ func TestValidateInputs_URLBypass(t *testing.T) {
 		)
 		handler.settings = ctx.Settings
 		handler.inputs = Inputs{
-			WorkflowName:                      "test_workflow",
-			WorkflowOwner:                     chainsim.TestAddress,
-			DonFamily:                         "test_label",
-			WorkflowPath:                      "testdata/basic_workflow/main.go",
-			ConfigPath:                        "https://example.com/config.yaml",
-			WorkflowRegistryContractAddress:   "0x1234567890123456789012345678901234567890",
-			WorkflowRegistryContractChainName: "ethereum-testnet-sepolia",
+			WorkflowName:  "test_workflow",
+			WorkflowOwner: chainsim.TestAddress,
+			DonFamily:     "test_label",
+			WorkflowPath:  "testdata/basic_workflow/main.go",
+			ConfigPath:    "https://example.com/config.yaml",
 		}
 
 		err := handler.ValidateInputs()
@@ -446,7 +441,7 @@ func TestResolveInputs_PrivateRegistryTarget(t *testing.T) {
 		require.NoError(t, err)
 		expectedOwner := "0x" + hex.EncodeToString(expectedBytes)
 
-		ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
+		ctx, buf := simulatedEnvironment.NewOffChainRuntimeContextWithBufferedOutput("42", "test_label")
 		h := newHandler(ctx, buf)
 		ctx.Settings = createTestSettings(
 			chainsim.TestAddress,
@@ -457,9 +452,12 @@ func TestResolveInputs_PrivateRegistryTarget(t *testing.T) {
 		)
 		h.settings = ctx.Settings
 		h.environmentSet.EnvName = "STAGING"
-		h.environmentSet.DonFamily = "test_label"
+		token := makeTestJWT(t, map[string]interface{}{
+			"sub":    "user1",
+			"org_id": "org-test-123",
+		})
+		h.credentials = makeBearerCredentials(t, token)
 		h.runtimeContext.DerivedWorkflowOwner = expectedOwner
-		h.runtimeContext.TenantContext = &tenantctx.EnvironmentContext{TenantID: "42"}
 		ctx.Viper.Set("preview-private-registry", true)
 
 		inputs, err := h.ResolveInputs(ctx.Viper)
@@ -493,11 +491,11 @@ func TestResolveInputs_PrivateRegistryTarget(t *testing.T) {
 }
 
 func TestValidateInputs_PrivateRegistry(t *testing.T) {
-	t.Run("accepts URL wasm and config paths for private target", func(t *testing.T) {
+	t.Run("accepts URL wasm and config with off-chain resolved registry and no on-chain contract inputs", func(t *testing.T) {
 		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
 		defer simulatedEnvironment.Close()
 
-		ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
+		ctx, buf := simulatedEnvironment.NewOffChainRuntimeContextWithBufferedOutput("42", "test_label")
 		h := newHandler(ctx, buf)
 		ctx.Settings = createTestSettings(
 			chainsim.TestAddress,
@@ -508,9 +506,12 @@ func TestValidateInputs_PrivateRegistry(t *testing.T) {
 		)
 		h.settings = ctx.Settings
 		h.environmentSet.EnvName = "STAGING"
-		h.environmentSet.DonFamily = "test_label"
+		token := makeTestJWT(t, map[string]interface{}{
+			"sub":    "user1",
+			"org_id": "org-test-123",
+		})
+		h.credentials = makeBearerCredentials(t, token)
 		h.runtimeContext.DerivedWorkflowOwner = "0xabcdef1234567890abcdef1234567890abcdef12"
-		h.runtimeContext.TenantContext = &tenantctx.EnvironmentContext{TenantID: "42"}
 		ctx.Viper.Set("preview-private-registry", true)
 		ctx.Viper.Set("wasm", "https://example.com/workflow.wasm")
 		ctx.Viper.Set("config", "https://example.com/workflow-config.json")
@@ -528,7 +529,7 @@ func TestValidateInputs_PrivateRegistry(t *testing.T) {
 		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
 		defer simulatedEnvironment.Close()
 
-		ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
+		ctx, buf := simulatedEnvironment.NewOffChainRuntimeContextWithBufferedOutput("42", "")
 		h := newHandler(ctx, buf)
 		ctx.Settings = createTestSettings(
 			chainsim.TestAddress,
@@ -539,10 +540,12 @@ func TestValidateInputs_PrivateRegistry(t *testing.T) {
 		)
 		h.settings = ctx.Settings
 		h.environmentSet.EnvName = "STAGING"
-		h.environmentSet.DonFamily = ""
-		h.runtimeContext.ResolvedRegistry = settings.NewOffChainRegistry("private", "")
+		token := makeTestJWT(t, map[string]interface{}{
+			"sub":    "user1",
+			"org_id": "org-test-123",
+		})
+		h.credentials = makeBearerCredentials(t, token)
 		h.runtimeContext.DerivedWorkflowOwner = "0xabcdef1234567890abcdef1234567890abcdef12"
-		h.runtimeContext.TenantContext = &tenantctx.EnvironmentContext{TenantID: "42"}
 		ctx.Viper.Set("preview-private-registry", true)
 		ctx.Viper.Set("wasm", "https://example.com/workflow.wasm")
 
@@ -803,7 +806,7 @@ func newPrivateRegistryExecuteHandler(t *testing.T, wasmURL, gqlURL string) *han
 	simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
 	t.Cleanup(simulatedEnvironment.Close)
 
-	ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
+	ctx, buf := simulatedEnvironment.NewOffChainRuntimeContextWithBufferedOutput("", "test-don")
 	h := newHandler(ctx, buf)
 	ctx.Settings = createTestSettings(
 		chainsim.TestAddress,
@@ -815,18 +818,15 @@ func newPrivateRegistryExecuteHandler(t *testing.T, wasmURL, gqlURL string) *han
 	h.settings = ctx.Settings
 	h.credentials = makeAPIKeyCredentials(t)
 	h.environmentSet.GraphQLURL = gqlURL
-	h.environmentSet.DonFamily = "test-don"
 	h.inputs = Inputs{
-		WorkflowName:                      "test_workflow",
-		WorkflowOwner:                     chainsim.TestAddress,
-		WorkflowTag:                       "test_workflow",
-		DonFamily:                         "test-don",
-		WorkflowPath:                      "testdata/basic_workflow/main.go",
-		WasmPath:                          wasmURL,
-		WorkflowRegistryContractAddress:   "0x1234567890123456789012345678901234567890",
-		WorkflowRegistryContractChainName: "ethereum-testnet-sepolia",
-		TargetWorkflowRegistry:            registryTarget{targetType: settings.RegistryTypeOffChain},
-		PreviewPrivateRegistry:            true,
+		WorkflowName:           "test_workflow",
+		WorkflowOwner:          chainsim.TestAddress,
+		WorkflowTag:            "test_workflow",
+		DonFamily:              "test-don",
+		WorkflowPath:           "testdata/basic_workflow/main.go",
+		WasmPath:               wasmURL,
+		TargetWorkflowRegistry: registryTarget{targetType: settings.RegistryTypeOffChain},
+		PreviewPrivateRegistry: true,
 	}
 
 	return h
