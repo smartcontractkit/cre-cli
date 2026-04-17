@@ -26,14 +26,14 @@ func NewEVMChainCapabilities(
 	lggr logger.Logger,
 	registry *capabilities.Registry,
 	clients map[uint64]*ethclient.Client,
-	forwarders map[uint64]common.Address,
+	forwarders map[uint64]string,
 	privateKey *ecdsa.PrivateKey,
 	dryRunChainWrite bool,
 	limits EVMChainLimits,
 ) (*EVMChainCapabilities, error) {
 	evmChains := make(map[uint64]*fakes.FakeEVMChain)
 	for sel, client := range clients {
-		fwd, ok := forwarders[sel]
+		fwdStr, ok := forwarders[sel]
 		if !ok {
 			lggr.Infow("Forwarder not found for chain", "selector", sel)
 			continue
@@ -43,7 +43,7 @@ func NewEVMChainCapabilities(
 			lggr,
 			client,
 			privateKey,
-			fwd,
+			common.HexToAddress(fwdStr),
 			sel,
 			dryRunChainWrite,
 		)

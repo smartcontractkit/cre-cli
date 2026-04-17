@@ -51,13 +51,11 @@ type Inputs struct {
 	Broadcast    bool   `validate:"-"`
 	WorkflowName string `validate:"required"`
 	// Chain-type-specific fields
-	ChainTypeClients    map[string]map[uint64]chain.ChainClient `validate:"omitempty"`
-	ChainTypeForwarders map[string]map[uint64]string            `validate:"-"`
-	ChainTypeKeys       map[string]interface{}                  `validate:"-"`
+	ChainTypeClients map[string]map[uint64]chain.ChainClient `validate:"omitempty"`
+	ChainTypeKeys    map[string]interface{}                  `validate:"-"`
 	// ChainTypeResolved holds the full ResolveClients bundle per chain type
-	// so later steps (health check) have access to any chain-type-agnostic
-	// metadata (e.g. experimental-selector flags) without relying on hidden
-	// state on the ChainType instance.
+	// (clients, forwarders, experimental-selector flags) so later steps
+	// (health check, capability registration) have a single source of truth.
 	ChainTypeResolved map[string]chain.ResolvedChains `validate:"-"`
 	// Non-interactive mode options
 	NonInteractive  bool              `validate:"-"`
@@ -136,7 +134,6 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 	chain.Build(h.log)
 
 	ctClients := make(map[string]map[uint64]chain.ChainClient)
-	ctForwarders := make(map[string]map[uint64]string)
 	ctResolved := make(map[string]chain.ResolvedChains)
 	ctKeys := make(map[string]interface{})
 
@@ -148,7 +145,6 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 
 		if len(resolved.Clients) > 0 {
 			ctClients[name] = resolved.Clients
-			ctForwarders[name] = resolved.Forwarders
 			ctResolved[name] = resolved
 		}
 	}
@@ -183,10 +179,9 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 		SecretsPath:         creSettings.Workflow.WorkflowArtifactSettings.SecretsPath,
 		EngineLogs:          v.GetBool("engine-logs"),
 		Broadcast:           v.GetBool("broadcast"),
-		ChainTypeClients:    ctClients,
-		ChainTypeForwarders: ctForwarders,
-		ChainTypeResolved:   ctResolved,
-		ChainTypeKeys:       ctKeys,
+		ChainTypeClients:  ctClients,
+		ChainTypeResolved: ctResolved,
+		ChainTypeKeys:     ctKeys,
 		WorkflowName:        creSettings.Workflow.UserWorkflowSettings.WorkflowName,
 		NonInteractive:      v.GetBool("non-interactive"),
 		TriggerIndex:        v.GetInt("trigger-index"),
@@ -485,7 +480,7 @@ func run(
 			ctSrvcs, err := ct.RegisterCapabilities(ctx, chain.CapabilityConfig{
 				Registry:   registry,
 				Clients:    clients,
-				Forwarders: inputs.ChainTypeForwarders[name],
+				Forwarders: inputs.ChainTypeResolved[name].Forwarders,
 				PrivateKey: inputs.ChainTypeKeys[name],
 				Broadcast:  inputs.Broadcast,
 				Limits:     capLimits,

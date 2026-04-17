@@ -46,13 +46,13 @@ func NewManualTriggerCapabilities(ctx context.Context, lggr logger.Logger, regis
 }
 
 // Start starts cron and HTTP trigger services.
-func (t *ManualTriggers) Start(ctx context.Context) error {
-	err := t.ManualCronTrigger.Start(ctx)
+func (m *ManualTriggers) Start(ctx context.Context) error {
+	err := m.ManualCronTrigger.Start(ctx)
 	if err != nil {
 		return err
 	}
 
-	err = t.ManualHTTPTrigger.Start(ctx)
+	err = m.ManualHTTPTrigger.Start(ctx)
 	if err != nil {
 		return err
 	}
@@ -61,13 +61,13 @@ func (t *ManualTriggers) Start(ctx context.Context) error {
 }
 
 // Close closes cron and HTTP trigger services.
-func (t *ManualTriggers) Close() error {
-	err := t.ManualCronTrigger.Close()
+func (m *ManualTriggers) Close() error {
+	err := m.ManualCronTrigger.Close()
 	if err != nil {
 		return err
 	}
 
-	err = t.ManualHTTPTrigger.Close()
+	err = m.ManualHTTPTrigger.Close()
 	if err != nil {
 		return err
 	}

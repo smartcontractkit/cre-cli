@@ -14,6 +14,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/spf13/viper"
 
+	corekeys "github.com/smartcontractkit/chainlink-common/keystore/corekeys"
 	evmpb "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/chain-capabilities/evm"
 	"github.com/smartcontractkit/chainlink-common/pkg/services"
 
@@ -25,7 +26,7 @@ import (
 const defaultSentinelPrivateKey = "0000000000000000000000000000000000000000000000000000000000000001"
 
 func init() {
-	chain.Register("evm", func(lggr *zerolog.Logger) chain.ChainType {
+	chain.Register(string(corekeys.EVM), func(lggr *zerolog.Logger) chain.ChainType {
 		return &EVMChainType{log: lggr}
 	}, []chain.CLIFlagDef{
 		{Name: TriggerInputTxHash, Description: "EVM trigger transaction hash (0x...)", FlagType: chain.CLIFlagString},
@@ -52,7 +53,7 @@ func (ct *EVMChainType) ResolveClients(v *viper.Viper) (chain.ResolvedChains, er
 	forwarders := make(map[uint64]string)
 	experimental := make(map[uint64]bool)
 
-	// Resolve supported chains
+	// build clients for each supported chain from settings, skip if rpc is empty
 	for _, ch := range SupportedChains {
 		chainName, err := settings.GetChainNameByChainSelector(ch.Selector)
 		if err != nil {
@@ -136,12 +137,6 @@ func (ct *EVMChainType) RegisterCapabilities(ctx context.Context, cfg chain.Capa
 		ethClients[sel] = ec
 	}
 
-	// Convert string forwarders to common.Address
-	evmForwarders := make(map[uint64]common.Address)
-	for sel, fwd := range cfg.Forwarders {
-		evmForwarders[sel] = common.HexToAddress(fwd)
-	}
-
 	// Type-assert the private key
 	var pk *ecdsa.PrivateKey
 	if cfg.PrivateKey != nil {
@@ -168,7 +163,7 @@ func (ct *EVMChainType) RegisterCapabilities(ctx context.Context, cfg chain.Capa
 
 	evmCaps, err := NewEVMChainCapabilities(
 		ctx, cfg.Logger, cfg.Registry,
-		ethClients, evmForwarders, pk,
+		ethClients, cfg.Forwarders, pk,
 		dryRun, evmLimits,
 	)
 	if err != nil {
