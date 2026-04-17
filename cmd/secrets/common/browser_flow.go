@@ -66,9 +66,9 @@ func (h *Handler) executeBrowserUpsert(ctx context.Context, inputs UpsertSecrets
 	if h.Credentials.AuthType == credentials.AuthTypeApiKey {
 		return fmt.Errorf("this sign-in flow requires an interactive login; API keys are not supported")
 	}
-	orgID, err := h.Credentials.GetOrgID()
-	if err != nil {
-		return fmt.Errorf("organization information is missing from your session; sign in again or use owner-key-signing: %w", err)
+	orgID := h.Credentials.OrgID
+	if orgID == "" {
+		return fmt.Errorf("organization information is missing from your session; sign in again or use owner-key-signing")
 	}
 
 	ui.Dim("Using your account to authorize vault access for your organization...")

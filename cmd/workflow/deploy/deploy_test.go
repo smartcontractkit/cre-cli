@@ -442,6 +442,10 @@ func TestResolveInputs_PrivateRegistryTarget(t *testing.T) {
 		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
 		defer simulatedEnvironment.Close()
 
+		expectedBytes, err := workflowUtils.GenerateWorkflowOwnerAddress("42", "org-test-123")
+		require.NoError(t, err)
+		expectedOwner := "0x" + hex.EncodeToString(expectedBytes)
+
 		ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
 		h := newHandler(ctx, buf)
 		ctx.Settings = createTestSettings(
@@ -454,11 +458,7 @@ func TestResolveInputs_PrivateRegistryTarget(t *testing.T) {
 		h.settings = ctx.Settings
 		h.environmentSet.EnvName = "STAGING"
 		h.environmentSet.DonFamily = "test_label"
-		token := makeTestJWT(t, map[string]interface{}{
-			"sub":    "user1",
-			"org_id": "org-test-123",
-		})
-		h.credentials = makeBearerCredentials(t, token)
+		h.runtimeContext.DerivedWorkflowOwner = expectedOwner
 		h.runtimeContext.TenantContext = &tenantctx.EnvironmentContext{TenantID: "42"}
 		ctx.Viper.Set("preview-private-registry", true)
 
@@ -466,9 +466,7 @@ func TestResolveInputs_PrivateRegistryTarget(t *testing.T) {
 		require.NoError(t, err)
 		assert.True(t, inputs.PreviewPrivateRegistry)
 		assert.Equal(t, settings.RegistryTypeOffChain, inputs.TargetWorkflowRegistry.targetType)
-		expectedBytes, err := workflowUtils.GenerateWorkflowOwnerAddress("42", "org-test-123")
-		require.NoError(t, err)
-		assert.Equal(t, "0x"+hex.EncodeToString(expectedBytes), inputs.WorkflowOwner)
+		assert.Equal(t, expectedOwner, inputs.WorkflowOwner)
 	})
 
 	t.Run("rejects private target outside STAGING", func(t *testing.T) {
@@ -511,11 +509,7 @@ func TestValidateInputs_PrivateRegistry(t *testing.T) {
 		h.settings = ctx.Settings
 		h.environmentSet.EnvName = "STAGING"
 		h.environmentSet.DonFamily = "test_label"
-		token := makeTestJWT(t, map[string]interface{}{
-			"sub":    "user1",
-			"org_id": "org-test-123",
-		})
-		h.credentials = makeBearerCredentials(t, token)
+		h.runtimeContext.DerivedWorkflowOwner = "0xabcdef1234567890abcdef1234567890abcdef12"
 		h.runtimeContext.TenantContext = &tenantctx.EnvironmentContext{TenantID: "42"}
 		ctx.Viper.Set("preview-private-registry", true)
 		ctx.Viper.Set("wasm", "https://example.com/workflow.wasm")
@@ -547,11 +541,7 @@ func TestValidateInputs_PrivateRegistry(t *testing.T) {
 		h.environmentSet.EnvName = "STAGING"
 		h.environmentSet.DonFamily = ""
 		h.runtimeContext.ResolvedRegistry = settings.NewOffChainRegistry("private", "")
-		token := makeTestJWT(t, map[string]interface{}{
-			"sub":    "user1",
-			"org_id": "org-test-123",
-		})
-		h.credentials = makeBearerCredentials(t, token)
+		h.runtimeContext.DerivedWorkflowOwner = "0xabcdef1234567890abcdef1234567890abcdef12"
 		h.runtimeContext.TenantContext = &tenantctx.EnvironmentContext{TenantID: "42"}
 		ctx.Viper.Set("preview-private-registry", true)
 		ctx.Viper.Set("wasm", "https://example.com/workflow.wasm")
