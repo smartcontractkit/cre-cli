@@ -43,8 +43,8 @@ func (a *privateRegistryDeleteStrategy) FetchWorkflows() ([]WorkflowToDelete, er
 			Owner:     workflow.Owner,
 			DonFamily: workflow.DonFamily,
 			Tag:       workflow.Tag,
-			BinaryURL: workflow.BinaryUrl,
-			Status:    workflow.Status,
+			BinaryURL: workflow.BinaryURL,
+			Status:    string(workflow.Status),
 			RawID:     workflow.WorkflowID,
 		},
 	}, nil
