@@ -437,6 +437,10 @@ func TestResolveInputs_PrivateRegistryTarget(t *testing.T) {
 		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
 		defer simulatedEnvironment.Close()
 
+		expectedBytes, err := workflowUtils.GenerateWorkflowOwnerAddress("42", "org-test-123")
+		require.NoError(t, err)
+		expectedOwner := "0x" + hex.EncodeToString(expectedBytes)
+
 		ctx, buf := simulatedEnvironment.NewOffChainRuntimeContextWithBufferedOutput("42", "test_label")
 		h := newHandler(ctx, buf)
 		ctx.Settings = createTestSettings(
@@ -453,15 +457,14 @@ func TestResolveInputs_PrivateRegistryTarget(t *testing.T) {
 			"org_id": "org-test-123",
 		})
 		h.credentials = makeBearerCredentials(t, token)
+		h.runtimeContext.DerivedWorkflowOwner = expectedOwner
 		ctx.Viper.Set("preview-private-registry", true)
 
 		inputs, err := h.ResolveInputs(ctx.Viper)
 		require.NoError(t, err)
 		assert.True(t, inputs.PreviewPrivateRegistry)
 		assert.Equal(t, settings.RegistryTypeOffChain, inputs.TargetWorkflowRegistry.targetType)
-		expectedBytes, err := workflowUtils.GenerateWorkflowOwnerAddress("42", "org-test-123")
-		require.NoError(t, err)
-		assert.Equal(t, "0x"+hex.EncodeToString(expectedBytes), inputs.WorkflowOwner)
+		assert.Equal(t, expectedOwner, inputs.WorkflowOwner)
 	})
 
 	t.Run("rejects private target outside STAGING", func(t *testing.T) {
@@ -508,6 +511,7 @@ func TestValidateInputs_PrivateRegistry(t *testing.T) {
 			"org_id": "org-test-123",
 		})
 		h.credentials = makeBearerCredentials(t, token)
+		h.runtimeContext.DerivedWorkflowOwner = "0xabcdef1234567890abcdef1234567890abcdef12"
 		ctx.Viper.Set("preview-private-registry", true)
 		ctx.Viper.Set("wasm", "https://example.com/workflow.wasm")
 		ctx.Viper.Set("config", "https://example.com/workflow-config.json")
@@ -541,6 +545,7 @@ func TestValidateInputs_PrivateRegistry(t *testing.T) {
 			"org_id": "org-test-123",
 		})
 		h.credentials = makeBearerCredentials(t, token)
+		h.runtimeContext.DerivedWorkflowOwner = "0xabcdef1234567890abcdef1234567890abcdef12"
 		ctx.Viper.Set("preview-private-registry", true)
 		ctx.Viper.Set("wasm", "https://example.com/workflow.wasm")
 
