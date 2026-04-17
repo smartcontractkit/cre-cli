@@ -68,34 +68,6 @@ func captureStderr(t *testing.T, fn func()) string {
 	return buf.String()
 }
 
-// captureStdout captures anything written to os.Stdout during fn.
-func captureStdout(t *testing.T, fn func()) string {
-	t.Helper()
-	stdioMu.Lock()
-	defer stdioMu.Unlock()
-	old := os.Stdout
-	r, w, err := os.Pipe()
-	require.NoError(t, err)
-	os.Stdout = w
-
-	done := make(chan struct{})
-	var buf bytes.Buffer
-	go func() {
-		_, _ = io.Copy(&buf, r)
-		close(done)
-	}()
-
-	defer func() {
-		os.Stdout = old
-	}()
-
-	fn()
-
-	_ = w.Close()
-	<-done
-	return buf.String()
-}
-
 func newEVMChainType() *EVMChainType {
 	lg := zerolog.Nop()
 	return &EVMChainType{log: &lg}
