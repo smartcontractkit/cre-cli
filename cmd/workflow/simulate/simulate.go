@@ -647,6 +647,8 @@ func run(
 			// Apply simulation limits to engine-level settings when --limits is set
 			if simLimits != nil {
 				applyEngineLimits(cfg, simLimits)
+			} else if inputs.LimitsPath == "none" {
+				disableEngineLimits(cfg)
 			}
 			// Always allow all chains in simulation, overriding any chain restrictions from limits
 			cfg.ChainAllowed = commonsettings.PerChainSelector(
