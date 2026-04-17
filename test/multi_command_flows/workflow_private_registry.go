@@ -447,12 +447,12 @@ func RunWorkflowPausePrivateRegistryHappyPath(t *testing.T, tc TestConfig) {
 
 	projectRoot := strings.TrimPrefix(tc.GetProjectRootFlag(), "--project-root=")
 	workflowYamlPath := filepath.Join(projectRoot, "blank_workflow", "workflow.yaml")
-	
+
 	v := viper.New()
 	v.SetConfigFile(workflowYamlPath)
 	err := v.ReadInConfig()
 	require.NoError(t, err)
-	
+
 	v.Set("staging-settings.user-workflow.deployment-registry", "reg-test")
 	err = v.WriteConfig()
 	require.NoError(t, err)
