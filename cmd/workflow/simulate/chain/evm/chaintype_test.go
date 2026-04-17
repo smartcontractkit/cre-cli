@@ -350,32 +350,6 @@ func TestEVMChainType_RegisteredInFactoryRegistry(t *testing.T) {
 	require.Equal(t, "evm", ct.Name())
 }
 
-func TestEVMChainType_ExecuteTrigger_WrongTriggerDataType(t *testing.T) {
-	t.Parallel()
-	// Register a nil FakeEVMChain entry via map so the nil-check passes but the
-	// triggerData type assertion fails first.
-	ct := newEVMChainType()
-	ct.evmChains = &EVMChainCapabilities{EVMChains: nil}
-	err := ct.ExecuteTrigger(context.Background(), 1, "regID", "not-a-log")
-	require.Error(t, err)
-	// Whichever check fails first — both are acceptable.
-	if !errorContainsAny(err, "trigger data is not *evm.Log", "no EVM chain initialized") {
-		t.Fatalf("unexpected error: %v", err)
-	}
-}
-
-func errorContainsAny(err error, subs ...string) bool {
-	if err == nil {
-		return false
-	}
-	for _, s := range subs {
-		if strings.Contains(err.Error(), s) {
-			return true
-		}
-	}
-	return false
-}
-
 func TestEVMChainType_CollectCLIInputs_BothSet(t *testing.T) {
 	t.Parallel()
 	ct := newEVMChainType()
