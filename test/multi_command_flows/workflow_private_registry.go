@@ -640,3 +640,162 @@ func RunWorkflowActivatePrivateRegistryHappyPath(t *testing.T, tc TestConfig) {
 	require.Contains(t, out, "Status:        WORKFLOW_STATUS_ACTIVE", "expected active status in details.\nCLI OUTPUT:\n%s", out)
 	require.Contains(t, out, "Owner:         "+privateRegistryOwnerAddress, "expected owner in details.\nCLI OUTPUT:\n%s", out)
 }
+
+// workflowDeletePrivateRegistry deletes a workflow in the private registry via CLI
+// using a mock GraphQL server.
+func workflowDeletePrivateRegistry(t *testing.T, tc TestConfig) string {
+	t.Helper()
+
+	var getWorkflowCalled atomic.Bool
+	var deleteWorkflowCalled atomic.Bool
+	var srv *httptest.Server
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasPrefix(r.URL.Path, "/graphql") && r.Method == http.MethodPost:
+			var req graphQLRequest
+			_ = json.NewDecoder(r.Body).Decode(&req)
+
+			w.Header().Set("Content-Type", "application/json")
+
+			if strings.Contains(req.Query, "getCreOrganizationInfo") {
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"data": map[string]any{
+						"getCreOrganizationInfo": map[string]any{
+							"orgId":                 "test-org-id",
+							"derivedWorkflowOwners": []string{"ab12cd34ef56ab12cd34ef56ab12cd34ef56ab12"},
+						},
+					},
+				})
+				return
+			}
+
+			if strings.Contains(req.Query, "GetTenantConfig") || strings.Contains(req.Query, "getTenantConfig") {
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"data": map[string]any{
+						"getTenantConfig": map[string]any{
+							"tenantId":         "42",
+							"defaultDonFamily": "test-don",
+							"vaultGatewayUrl":  "https://vault.example.test",
+							"registries": []map[string]any{
+								{
+									"id":               "reg-test",
+									"label":            "reg-test",
+									"type":             "OFF_CHAIN",
+									"chainSelector":    "6433500567565415381",
+									"address":          "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+									"secretsAuthFlows": []string{"BROWSER"},
+								},
+							},
+						},
+					},
+				})
+				return
+			}
+
+			if strings.Contains(req.Query, "GetOffchainWorkflowByName") {
+				getWorkflowCalled.Store(true)
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"data": map[string]any{
+						"getOffchainWorkflowByName": map[string]any{
+							"workflow": map[string]any{
+								"workflowId":     "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+								"owner":          privateRegistryOwnerAddress,
+								"createdAt":      "2025-01-01T00:00:00Z",
+								"status":         "WORKFLOW_STATUS_ACTIVE",
+								"workflowName":   "private-registry-happy-path-workflow",
+								"binaryUrl":      srv.URL + "/get/binary.wasm",
+								"configUrl":      "",
+								"tag":            "private-registry-happy-path-workflow",
+								"attributes":     "",
+								"donFamily":      "test-don",
+								"organizationId": "test-org-id",
+							},
+						},
+					},
+				})
+				return
+			}
+
+			if strings.Contains(req.Query, "DeleteOffchainWorkflow") {
+				deleteWorkflowCalled.Store(true)
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"data": map[string]any{
+						"deleteOffchainWorkflow": map[string]any{
+							"workflowId": "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+						},
+					},
+				})
+				return
+			}
+
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"errors": []map[string]string{{"message": "Unsupported GraphQL query"}},
+			})
+			return
+
+		default:
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte("not found"))
+			return
+		}
+	}))
+	defer srv.Close()
+
+	t.Setenv(environments.EnvVarGraphQLURL, srv.URL+"/graphql")
+
+	args := []string{
+		"workflow", "delete",
+		"blank_workflow",
+		tc.GetCliEnvFlag(),
+		tc.GetProjectRootFlag(),
+		"--" + settings.Flags.SkipConfirmation.Name,
+	}
+
+	cmd := exec.Command(CLIPath, args...)
+	testHome := createTestBearerCredentialsHome(t)
+
+	realHome, err := os.UserHomeDir()
+	require.NoError(t, err, "failed to get real home dir")
+
+	childEnv := make([]string, 0, len(os.Environ())+3)
+	hasGOPATH := false
+	for _, entry := range os.Environ() {
+		if strings.HasPrefix(entry, "HOME=") || strings.HasPrefix(entry, "USERPROFILE=") {
+			continue
+		}
+		if strings.HasPrefix(entry, "GOPATH=") {
+			hasGOPATH = true
+		}
+		childEnv = append(childEnv, entry)
+	}
+	childEnv = append(childEnv, "HOME="+testHome, "USERPROFILE="+testHome)
+	if !hasGOPATH {
+		childEnv = append(childEnv, "GOPATH="+filepath.Join(realHome, "go"))
+	}
+	cmd.Env = childEnv
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+
+	require.NoError(
+		t,
+		cmd.Run(),
+		"cre workflow delete failed:\nSTDOUT:\n%s\nSTDERR:\n%s",
+		stdout.String(),
+		stderr.String(),
+	)
+	require.True(t, getWorkflowCalled.Load(), "expected GetOffchainWorkflowByName to be called")
+	require.True(t, deleteWorkflowCalled.Load(), "expected DeleteOffchainWorkflow to be called")
+
+	return StripANSI(stdout.String() + stderr.String())
+}
+
+// RunWorkflowDeletePrivateRegistryHappyPath runs the workflow delete happy path for private registry.
+func RunWorkflowDeletePrivateRegistryHappyPath(t *testing.T, tc TestConfig) {
+	t.Helper()
+
+	out := workflowDeletePrivateRegistry(t, tc)
+	require.Contains(t, out, "Workflows deleted successfully", "expected private registry delete success.\nCLI OUTPUT:\n%s", out)
+	require.Contains(t, out, "Deleted workflow ID: 1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef", "expected workflow ID in details.\nCLI OUTPUT:\n%s", out)
+}
