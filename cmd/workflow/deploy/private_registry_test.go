@@ -321,7 +321,7 @@ func TestResolveWorkflowOwner(t *testing.T) {
 		require.NoError(t, err)
 		expectedOwner := "0x" + hex.EncodeToString(expectedBytes)
 
-		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
+		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t).WithPrivateRegistry("42", "test-don")
 		defer simulatedEnvironment.Close()
 
 		ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
@@ -344,7 +344,7 @@ func TestResolveWorkflowOwner(t *testing.T) {
 	t.Run("private target adds 0x prefix when missing", func(t *testing.T) {
 		t.Parallel()
 
-		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
+		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t).WithPrivateRegistry("42", "test-don")
 		defer simulatedEnvironment.Close()
 
 		ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
@@ -366,7 +366,7 @@ func TestResolveWorkflowOwner(t *testing.T) {
 
 	t.Run("private target errors when derived workflow owner is empty", func(t *testing.T) {
 		t.Parallel()
-		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
+		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t).WithPrivateRegistry("42", "test-don")
 		defer simulatedEnvironment.Close()
 
 		ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
