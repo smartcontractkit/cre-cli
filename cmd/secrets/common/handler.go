@@ -702,7 +702,7 @@ func (h *Handler) ParseVaultGatewayResponse(method string, respBody []byte) erro
 	return nil
 }
 
-// EnsureOwnerLinkedOrFail TODO this reuses the same logic as in autoLink.go which is tied to deploy; consider refactoring to avoid duplication
+// EnsureOwnerLinkedOrFail TODO this reuses the same logic as in auto_link.go which is tied to deploy; consider refactoring to avoid duplication
 func (h *Handler) EnsureOwnerLinkedOrFail() error {
 	ownerAddr := common.HexToAddress(h.OwnerAddress)
 
