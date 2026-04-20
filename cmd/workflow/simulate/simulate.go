@@ -749,22 +749,27 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 		switch {
 		case trigger == "cron-trigger@1.0.0":
 			holder.TriggerFunc = func() error {
-				cronCtx, cancel := context.WithCancel(ctx)
+				skipWaitSignal := make(chan struct{}, 1)
+				userPromptCtx, cancel := context.WithCancel(ctx)
 
 				go func() {
-					defer cancel()
 					ui.Line()
-					ui.WaitForEnter(cronCtx, "Cron scheduler started. Press Enter to skip waiting...")
+					pressed := ui.WaitForEnter(userPromptCtx, "Cron scheduler started. Press Enter to skip waiting...")
+					if pressed {
+						skipWaitSignal <- struct{}{}
+					}
 				}()
 
-				done, err := triggerCaps.ManualCronTrigger.ManualTrigger(cronCtx, triggerRegistrationID)
+				done, err := triggerCaps.ManualCronTrigger.ManualTrigger(ctx, triggerRegistrationID, skipWaitSignal)
 				if err != nil {
 					cancel()
 					return err
 				}
 
 				go func() {
+					// After trigger event happens we can stop the user prompt goroutine if it's still waiting for input
 					defer cancel()
+					defer close(skipWaitSignal)
 					<-done
 				}()
 
@@ -843,11 +848,12 @@ func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inp
 		switch {
 		case trigger == "cron-trigger@1.0.0":
 			holder.TriggerFunc = func() error {
-				const nonInteractiveTimeout = 5 * time.Second
+				// for non-interactive we don't need to wait for the real full cron schedule
+				const nonInteractiveTimeout = time.Second
 				cronCtx, cancel := context.WithDeadline(ctx, time.Now().Add(nonInteractiveTimeout))
 				defer cancel()
 
-				_, err := triggerCaps.ManualCronTrigger.ManualTrigger(cronCtx, triggerRegistrationID)
+				_, err := triggerCaps.ManualCronTrigger.ManualTrigger(cronCtx, triggerRegistrationID, nil)
 				return err
 			}
 		case trigger == "http-trigger@1.0.0-alpha":

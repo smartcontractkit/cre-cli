@@ -7,14 +7,13 @@ import (
 )
 
 // WaitForEnter displays a styled note prompt and blocks until the user presses
-// Enter or ctx is cancelled (e.g. because a done signal fired). All exit paths
-// are treated as normal — no error is returned.
-func WaitForEnter(ctx context.Context, message string) {
+// Enter or ctx is cancelled (e.g. because a done signal fired).
+// It returns true if Enter was pressed, or false if the context was cancelled.
+func WaitForEnter(ctx context.Context, message string) bool {
 	note := huh.NewNote().Title(message).Next(true)
 	form := huh.NewForm(huh.NewGroup(note)).WithTheme(ChainlinkTheme())
-	// Ignore the error: Enter (nil) and context-cancel (huh.ErrTimeout wrapping
-	// tea.ErrProgramKilled) are both expected, non-fatal exits.
-	_ = form.RunWithContext(ctx)
+	err := form.RunWithContext(ctx)
+	return err == nil
 }
 
 // --- Option types for functional options pattern ---
