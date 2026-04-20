@@ -431,10 +431,10 @@ func TestConfigFlagsMutuallyExclusive(t *testing.T) {
 
 func TestValidateInputs_PrivateRegistry(t *testing.T) {
 	t.Run("accepts URL wasm and config with off-chain resolved registry and no on-chain contract inputs", func(t *testing.T) {
-		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
+		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t).WithPrivateRegistry("42", "test_label")
 		defer simulatedEnvironment.Close()
 
-		ctx, buf := simulatedEnvironment.NewOffChainRuntimeContextWithBufferedOutput("42", "test_label")
+		ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
 		h := newHandler(ctx, buf)
 		ctx.Settings = createTestSettings(
 			chainsim.TestAddress,
@@ -464,10 +464,10 @@ func TestValidateInputs_PrivateRegistry(t *testing.T) {
 	})
 
 	t.Run("fails when required don family is missing for private target", func(t *testing.T) {
-		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
+		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t).WithPrivateRegistry("42", "")
 		defer simulatedEnvironment.Close()
 
-		ctx, buf := simulatedEnvironment.NewOffChainRuntimeContextWithBufferedOutput("42", "")
+		ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
 		h := newHandler(ctx, buf)
 		ctx.Settings = createTestSettings(
 			chainsim.TestAddress,
@@ -740,10 +740,10 @@ func containsQuery(query, operation string) bool {
 
 func newPrivateRegistryExecuteHandler(t *testing.T, wasmURL, gqlURL string) *handler {
 	t.Helper()
-	simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
+	simulatedEnvironment := chainsim.NewSimulatedEnvironment(t).WithPrivateRegistry("42", "test-don")
 	t.Cleanup(simulatedEnvironment.Close)
 
-	ctx, buf := simulatedEnvironment.NewOffChainRuntimeContextWithBufferedOutput("", "test-don")
+	ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
 	h := newHandler(ctx, buf)
 	ctx.Settings = createTestSettings(
 		chainsim.TestAddress,
