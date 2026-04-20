@@ -2,7 +2,6 @@ package multi_command_flows
 
 import (
 	"bytes"
-	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -12,12 +11,12 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
+	"github.com/smartcontractkit/cre-cli/internal/testutil/testjwt"
 )
 
 const privateRegistryOwnerAddress = "0x0bb6e890f43f93f4f4f5eb64fdf17f81f15bf12a"
@@ -42,18 +41,7 @@ func createTestBearerCredentialsHome(t *testing.T) string {
 }
 
 func createTestJWT(orgID string) string {
-	header, _ := json.Marshal(map[string]any{"alg": "none", "typ": "JWT"})
-	payload, _ := json.Marshal(map[string]any{
-		"sub":                 "test-user",
-		"org_id":              orgID,
-		"organization_status": "FULL_ACCESS",
-		"exp":                 time.Now().Add(2 * time.Hour).Unix(),
-	})
-
-	headerEnc := base64.RawURLEncoding.EncodeToString(header)
-	payloadEnc := base64.RawURLEncoding.EncodeToString(payload)
-
-	return headerEnc + "." + payloadEnc + ".signature"
+	return testjwt.CreateTestJWT(orgID)
 }
 
 // workflowDeployPrivateRegistry deploys a workflow to the private registry via CLI

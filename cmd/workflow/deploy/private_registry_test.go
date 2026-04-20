@@ -324,7 +324,7 @@ func TestResolveWorkflowOwner(t *testing.T) {
 		expectedOwner := ethkeys.FormatWorkflowOwnerAddress(rawOwner)
 		require.NotEmpty(t, expectedOwner)
 
-		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
+		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t).WithPrivateRegistry("42", "test-don")
 		defer simulatedEnvironment.Close()
 
 		ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
@@ -346,7 +346,7 @@ func TestResolveWorkflowOwner(t *testing.T) {
 
 	t.Run("private target errors when derived workflow owner is empty", func(t *testing.T) {
 		t.Parallel()
-		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
+		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t).WithPrivateRegistry("42", "test-don")
 		defer simulatedEnvironment.Close()
 
 		ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
