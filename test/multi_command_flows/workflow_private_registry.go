@@ -14,7 +14,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 
 	"github.com/smartcontractkit/cre-cli/internal/environments"
@@ -97,7 +96,7 @@ func workflowDeployPrivateRegistry(t *testing.T, tc TestConfig) string {
 								{
 									"id":               "reg-test",
 									"label":            "reg-test",
-									"type":             "ON_CHAIN",
+									"type":             "OFF_CHAIN",
 									"chainSelector":    "6433500567565415381",
 									"address":          "0x5FbDB2315678afecb367f032d93F642f64180aa3",
 									"secretsAuthFlows": []string{"BROWSER"},
@@ -216,7 +215,6 @@ func workflowDeployPrivateRegistry(t *testing.T, tc TestConfig) string {
 		"blank_workflow",
 		tc.GetCliEnvFlag(),
 		tc.GetProjectRootFlag(),
-		"--preview-private-registry",
 		"--" + settings.Flags.SkipConfirmation.Name,
 	}
 
@@ -252,7 +250,7 @@ func workflowDeployPrivateRegistry(t *testing.T, tc TestConfig) string {
 	require.NoError(
 		t,
 		cmd.Run(),
-		"cre workflow deploy --preview-private-registry failed:\nSTDOUT:\n%s\nSTDERR:\n%s",
+		"cre workflow deploy failed:\nSTDOUT:\n%s\nSTDERR:\n%s",
 		stdout.String(),
 		stderr.String(),
 	)
@@ -444,18 +442,6 @@ func workflowPausePrivateRegistry(t *testing.T, tc TestConfig) string {
 // RunWorkflowPausePrivateRegistryHappyPath runs the workflow pause happy path for private registry.
 func RunWorkflowPausePrivateRegistryHappyPath(t *testing.T, tc TestConfig) {
 	t.Helper()
-
-	projectRoot := strings.TrimPrefix(tc.GetProjectRootFlag(), "--project-root=")
-	workflowYamlPath := filepath.Join(projectRoot, "blank_workflow", "workflow.yaml")
-
-	v := viper.New()
-	v.SetConfigFile(workflowYamlPath)
-	err := v.ReadInConfig()
-	require.NoError(t, err)
-
-	v.Set("staging-settings.user-workflow.deployment-registry", "reg-test")
-	err = v.WriteConfig()
-	require.NoError(t, err)
 
 	out := workflowPausePrivateRegistry(t, tc)
 	require.Contains(t, out, "Workflow paused successfully", "expected private registry pause success.\nCLI OUTPUT:\n%s", out)

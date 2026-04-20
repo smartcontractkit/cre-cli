@@ -40,9 +40,6 @@ type Inputs struct {
 	SkipConfirmation bool
 	// SkipTypeChecks passes --skip-type-checks to cre-compile for TypeScript workflows.
 	SkipTypeChecks bool
-
-	PreviewPrivateRegistry bool
-	TargetWorkflowRegistry registryTarget
 }
 
 func (i *Inputs) ResolveConfigURL(fallbackURL string) string {
@@ -110,7 +107,6 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	deployCmd.Flags().Bool("no-config", false, "Deploy without a config file")
 	deployCmd.Flags().Bool("default-config", false, "Use the config path from workflow.yaml settings (default behavior)")
 	deployCmd.Flags().Bool(cmdcommon.SkipTypeChecksCLIFlag, false, "Skip TypeScript project typecheck during compilation (passes "+cmdcommon.SkipTypeChecksFlag+" to cre-compile)")
-	deployCmd.Flags().Bool("preview-private-registry", false, "Deploy to the private workflow registry (unreleased feature)")
 	deployCmd.MarkFlagsMutuallyExclusive("config", "no-config", "default-config")
 
 	return deployCmd
@@ -139,12 +135,8 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 		url := v.GetString("config-url")
 		configURL = &url
 	}
-	previewPrivateRegistry := v.GetBool("preview-private-registry")
-	targetWorkflowRegistry, err := resolveRegistryTarget(previewPrivateRegistry, h.environmentSet)
-	if err != nil {
-		return Inputs{}, err
-	}
-	resolvedWorkflowOwner, err := h.resolveWorkflowOwner(targetWorkflowRegistry)
+
+	resolvedWorkflowOwner, err := h.resolveWorkflowOwner(h.runtimeContext.ResolvedRegistry.Type())
 	if err != nil {
 		return Inputs{}, fmt.Errorf("failed to resolve workflow owner: %w", err)
 	}
@@ -168,11 +160,9 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 		OutputPath: v.GetString("output"),
 		WasmPath:   v.GetString("wasm"),
 
-		OwnerLabel:             v.GetString("owner-label"),
-		SkipConfirmation:       v.GetBool(settings.Flags.SkipConfirmation.Name),
-		SkipTypeChecks:         v.GetBool(cmdcommon.SkipTypeChecksCLIFlag),
-		PreviewPrivateRegistry: previewPrivateRegistry,
-		TargetWorkflowRegistry: targetWorkflowRegistry,
+		OwnerLabel:       v.GetString("owner-label"),
+		SkipConfirmation: v.GetBool(settings.Flags.SkipConfirmation.Name),
+		SkipTypeChecks:   v.GetBool(cmdcommon.SkipTypeChecksCLIFlag),
 	}
 
 	return inputs, nil
@@ -221,7 +211,7 @@ func (h *handler) Execute(ctx context.Context) error {
 		return h.accessRequester.PromptAndSubmitRequest(ctx)
 	}
 
-	adapter, err := newRegistryDeployStrategy(h.inputs.TargetWorkflowRegistry, h)
+	adapter, err := newRegistryDeployStrategy(h.runtimeContext.ResolvedRegistry, h)
 	if err != nil {
 		return err
 	}
@@ -316,8 +306,8 @@ func (h *handler) prepareArtifacts() error {
 // resolveWorkflowOwner returns the effective owner address for workflow ID computation.
 // For private registry deploys, the derived workflow owner from the runtime context is used.
 // For onchain deploys, the configured WorkflowOwner address is used directly.
-func (h *handler) resolveWorkflowOwner(targetWorkflowRegistry registryTarget) (string, error) {
-	if !targetWorkflowRegistry.isPrivate() {
+func (h *handler) resolveWorkflowOwner(registryType settings.RegistryType) (string, error) {
+	if registryType != settings.RegistryTypeOffChain {
 		return h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress, nil
 	}
 
