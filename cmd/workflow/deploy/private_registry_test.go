@@ -15,6 +15,7 @@ import (
 
 	"github.com/smartcontractkit/cre-cli/internal/client/privateregistryclient"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
+	"github.com/smartcontractkit/cre-cli/internal/ethkeys"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/testutil"
 	"github.com/smartcontractkit/cre-cli/internal/testutil/chainsim"
@@ -319,7 +320,9 @@ func TestResolveWorkflowOwner(t *testing.T) {
 
 		expectedBytes, err := workflowUtils.GenerateWorkflowOwnerAddress("42", "org-test-123")
 		require.NoError(t, err)
-		expectedOwner := "0x" + hex.EncodeToString(expectedBytes)
+		rawOwner := "0x" + hex.EncodeToString(expectedBytes)
+		expectedOwner := ethkeys.FormatWorkflowOwnerAddress(rawOwner)
+		require.NotEmpty(t, expectedOwner)
 
 		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
 		defer simulatedEnvironment.Close()
@@ -339,29 +342,6 @@ func TestResolveWorkflowOwner(t *testing.T) {
 		owner, err := h.resolveWorkflowOwner(settings.RegistryTypeOffChain)
 		require.NoError(t, err)
 		assert.Equal(t, expectedOwner, owner)
-	})
-
-	t.Run("private target adds 0x prefix when missing", func(t *testing.T) {
-		t.Parallel()
-
-		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
-		defer simulatedEnvironment.Close()
-
-		ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
-		h := newHandler(ctx, buf)
-		ctx.Settings = createTestSettings(
-			chainsim.TestAddress,
-			"eoa",
-			"test_workflow",
-			"testdata/basic_workflow/main.go",
-			"",
-		)
-		h.settings = ctx.Settings
-		h.runtimeContext.DerivedWorkflowOwner = "abcdef1234567890"
-
-		owner, err := h.resolveWorkflowOwner(settings.RegistryTypeOffChain)
-		require.NoError(t, err)
-		assert.Equal(t, "0xabcdef1234567890", owner)
 	})
 
 	t.Run("private target errors when derived workflow owner is empty", func(t *testing.T) {

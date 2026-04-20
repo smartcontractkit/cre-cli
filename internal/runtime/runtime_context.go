@@ -13,6 +13,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/authvalidation"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
+	"github.com/smartcontractkit/cre-cli/internal/ethkeys"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/tenantctx"
 )
@@ -71,6 +72,22 @@ func (ctx *Context) AttachSettings(cmd *cobra.Command, validateDeployRPC bool) e
 	return nil
 }
 
+// FinalizeDeferredWorkflowOwner fills workflow owner when settings load deferred it
+// (non-empty deployment-registry). Call after AttachResolvedRegistry.
+func (ctx *Context) FinalizeDeferredWorkflowOwner(cmd *cobra.Command) error {
+	if ctx.Settings == nil {
+		return nil
+	}
+	return settings.FinalizeWorkflowOwner(
+		ctx.Viper,
+		cmd,
+		&ctx.Settings.Workflow,
+		ctx.Settings.User.TargetName,
+		ctx.ResolvedRegistry,
+		ctx.DerivedWorkflowOwner,
+	)
+}
+
 func (ctx *Context) AttachCredentials(validationCtx context.Context, skipValidation bool) error {
 	var err error
 
@@ -92,7 +109,7 @@ func (ctx *Context) AttachCredentials(validationCtx context.Context, skipValidat
 
 		if result != nil {
 			ctx.OrgID = result.OrgID
-			ctx.DerivedWorkflowOwner = result.DerivedWorkflowOwner
+			ctx.DerivedWorkflowOwner = ethkeys.FormatWorkflowOwnerAddress(result.DerivedWorkflowOwner)
 		}
 	}
 

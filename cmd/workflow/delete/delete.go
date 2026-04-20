@@ -108,10 +108,6 @@ func (h *handler) resolveWorkflowOwner() (string, error) {
 		return "", fmt.Errorf("derived workflow owner is not available; ensure authentication succeeded")
 	}
 
-	if len(owner) >= 2 && owner[:2] != "0x" {
-		owner = "0x" + owner
-	}
-
 	return owner, nil
 }
 
