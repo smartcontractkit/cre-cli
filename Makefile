@@ -17,6 +17,11 @@ GENDOC_BINARY_NAME=gendoc-cli
 
 all: clean test build
 
+cabra:
+	 curl -X POST http://127.0.0.1:9900 \
+		-H "Authorization: foo" \
+		--data "{}"
+
 build:
 	$(GOBUILD) $(BUILD_FLAGS) -o $(BINARY_NAME) -v
 

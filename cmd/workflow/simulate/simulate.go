@@ -752,13 +752,26 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 				return triggerCaps.ManualCronTrigger.ManualTrigger(ctx, triggerRegistrationID, time.Now())
 			}
 		case trigger == "http-trigger@1.0.0-alpha":
-			payload, err := getHTTPTriggerPayload(inputs.InvocationDir)
+			//payload, err := getHTTPTriggerPayload(inputs.InvocationDir)
+			//if err != nil {
+			//	ui.Error(fmt.Sprintf("Failed to get HTTP trigger payload: %v", err))
+			//	os.Exit(1)
+			//}
+
+			ui.Line()
+			ui.Print("Fala dai chefe")
+
+			p, err := foo(ctx, GatewayConfig{
+				Port:    9900,
+				Timeout: 60 * time.Second,
+			})
 			if err != nil {
-				ui.Error(fmt.Sprintf("Failed to get HTTP trigger payload: %v", err))
+				ui.Error(fmt.Sprintf("Failed to get trigger payload: %v", err))
 				os.Exit(1)
 			}
+
 			holder.TriggerFunc = func() error {
-				return triggerCaps.ManualHTTPTrigger.ManualTrigger(ctx, triggerRegistrationID, payload)
+				return triggerCaps.ManualHTTPTrigger.ManualTrigger(ctx, triggerRegistrationID, p)
 			}
 		case strings.HasPrefix(trigger, "evm") && strings.HasSuffix(trigger, "@1.0.0"):
 			// Derive the chain selector directly from the selected trigger ID.
