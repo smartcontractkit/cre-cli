@@ -740,7 +740,7 @@ func containsQuery(query, operation string) bool {
 
 func newPrivateRegistryExecuteHandler(t *testing.T, wasmURL, gqlURL string) *handler {
 	t.Helper()
-	simulatedEnvironment := chainsim.NewSimulatedEnvironment(t).WithPrivateRegistry("", "test-don")
+	simulatedEnvironment := chainsim.NewSimulatedEnvironment(t).WithPrivateRegistry("42", "test-don")
 	t.Cleanup(simulatedEnvironment.Close)
 
 	ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()

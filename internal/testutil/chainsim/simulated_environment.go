@@ -98,7 +98,7 @@ func (se *SimulatedEnvironment) createContextWithLogger(logger *zerolog.Logger) 
 	}
 
 	var resolved settingspkg.ResolvedRegistry
-	if se.tenantID != "" && se.donFamily != "" {
+	if se.tenantID != "" {
 		resolved = settingspkg.NewOffChainRegistry("private", se.donFamily)
 	} else if environmentSet != nil {
 		resolved = settingspkg.NewOnChainRegistry(
