@@ -127,19 +127,39 @@ func TestEncryptSecrets(t *testing.T) {
 }
 
 func TestResolveEffectiveOwner(t *testing.T) {
-	t.Run("returns owner address when SecretsOrgOwned is false", func(t *testing.T) {
+	t.Run("returns canonicalized address when SecretsOrgOwned is false", func(t *testing.T) {
 		h, _, _ := newMockHandler(t)
-		h.OwnerAddress = "0xabc"
+		h.OwnerAddress = "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
 		h.EnvironmentSet.SecretsOrgOwned = false
 
 		owner, err := h.ResolveEffectiveOwner()
 		require.NoError(t, err)
-		require.Equal(t, "0xabc", owner)
+		require.Equal(t, "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266", owner)
+	})
+
+	t.Run("errors when SecretsOrgOwned is false and owner address is empty", func(t *testing.T) {
+		h, _, _ := newMockHandler(t)
+		h.OwnerAddress = ""
+		h.EnvironmentSet.SecretsOrgOwned = false
+
+		_, err := h.ResolveEffectiveOwner()
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "not a valid hex address")
+	})
+
+	t.Run("errors when SecretsOrgOwned is false and owner address is malformed", func(t *testing.T) {
+		h, _, _ := newMockHandler(t)
+		h.OwnerAddress = "not-an-address"
+		h.EnvironmentSet.SecretsOrgOwned = false
+
+		_, err := h.ResolveEffectiveOwner()
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "not a valid hex address")
 	})
 
 	t.Run("returns org ID when SecretsOrgOwned is true and org ID is set", func(t *testing.T) {
 		h, _, _ := newMockHandler(t)
-		h.OwnerAddress = "0xabc"
+		h.OwnerAddress = "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
 		h.EnvironmentSet.SecretsOrgOwned = true
 		h.Credentials.OrgID = "org-123"
 
@@ -150,7 +170,7 @@ func TestResolveEffectiveOwner(t *testing.T) {
 
 	t.Run("errors when SecretsOrgOwned is true but org ID is empty", func(t *testing.T) {
 		h, _, _ := newMockHandler(t)
-		h.OwnerAddress = "0xabc"
+		h.OwnerAddress = "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
 		h.EnvironmentSet.SecretsOrgOwned = true
 		h.Credentials.OrgID = ""
 
