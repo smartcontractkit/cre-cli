@@ -69,6 +69,15 @@ func copyFile(src, dest string) error {
 	return err
 }
 
+// workflowSubcommand returns a cobra command that is a child of "workflow", matching
+// how LoadSettingsIntoViper loads workflow.yaml only for workflow commands.
+func workflowSubcommand(use string) *cobra.Command {
+	workflowCmd := &cobra.Command{Use: "workflow"}
+	sub := &cobra.Command{Use: use}
+	workflowCmd.AddCommand(sub)
+	return sub
+}
+
 func TestLoadEnvAndSettingsEmptyTarget(t *testing.T) {
 	envVars := map[string]string{
 		settings.CreTargetEnvVar: "",
@@ -310,7 +319,7 @@ func TestOffChainDeploymentRegistryUsesDerivedOwnerWithoutPrivateKey(t *testing.
 	}
 	envSet := &environments.EnvironmentSet{EnvName: "STAGING"}
 
-	cmd := &cobra.Command{Use: "deploy"}
+	cmd := workflowSubcommand("deploy")
 	s, err := settings.New(logger, v, cmd, "")
 	require.NoError(t, err)
 	require.NotNil(t, s)
@@ -351,7 +360,7 @@ func TestOffChainDeploymentRegistryMissingDerivedOwnerReturnsError(t *testing.T)
 	}
 	envSet := &environments.EnvironmentSet{EnvName: "STAGING"}
 
-	cmd := &cobra.Command{Use: "deploy"}
+	cmd := workflowSubcommand("deploy")
 	s, err := settings.New(logger, v, cmd, "")
 	require.NoError(t, err)
 	resolved, err := settings.ResolveRegistry("my-private-registry", tenantCtx, envSet)
@@ -398,7 +407,7 @@ func TestOnChainDeploymentRegistryStillRequiresPrivateKey(t *testing.T) {
 	}
 	envSet := &environments.EnvironmentSet{EnvName: "STAGING"}
 
-	cmd := &cobra.Command{Use: "deploy"}
+	cmd := workflowSubcommand("deploy")
 	s, err := settings.New(logger, v, cmd, "")
 	require.NoError(t, err)
 	resolved, err := settings.ResolveRegistry("onchain:ethereum-testnet-sepolia", tenantCtx, envSet)
