@@ -17,8 +17,9 @@ import (
 
 // sensitive information (not in configuration file)
 const (
-	EthPrivateKeyEnvVar = "CRE_ETH_PRIVATE_KEY"
-	CreTargetEnvVar     = "CRE_TARGET"
+	EthPrivateKeyEnvVar   = "CRE_ETH_PRIVATE_KEY"
+	AptosPrivateKeyEnvVar = "CRE_APTOS_PRIVATE_KEY"
+	CreTargetEnvVar       = "CRE_TARGET"
 )
 
 // State tracked by LoadEnv / LoadPublicEnv so downstream code (e.g. build
@@ -56,9 +57,10 @@ type Settings struct {
 
 // UserSettings stores user-specific configurations.
 type UserSettings struct {
-	TargetName    string
-	EthPrivateKey string
-	EthUrl        string
+	TargetName      string
+	EthPrivateKey   string
+	EthUrl          string
+	AptosPrivateKey string
 }
 
 // New initializes and loads settings from YAML config files and the environment.
@@ -104,10 +106,14 @@ func New(logger *zerolog.Logger, v *viper.Viper, cmd *cobra.Command, registryCha
 	rawPrivKey := v.GetString(EthPrivateKeyEnvVar)
 	normPrivKey := NormalizeHexKey(rawPrivKey)
 
+	rawAptosKey := v.GetString(AptosPrivateKeyEnvVar)
+	normAptosKey := NormalizeHexKey(rawAptosKey)
+
 	return &Settings{
 		User: UserSettings{
-			EthPrivateKey: normPrivKey,
-			TargetName:    target,
+			EthPrivateKey:   normPrivKey,
+			AptosPrivateKey: normAptosKey,
+			TargetName:      target,
 		},
 		Workflow:        workflowSettings,
 		StorageSettings: storageSettings,
@@ -163,7 +169,7 @@ func LoadEnv(logger *zerolog.Logger, v *viper.Viper, envPath string) {
 	loadedEnvFilePath = ""
 	loadedEnvVars = nil
 	loadedEnvFilePath, loadedEnvVars = loadEnvFile(logger, envPath)
-	bindAllVars(v, loadedEnvVars, EthPrivateKeyEnvVar, CreTargetEnvVar)
+	bindAllVars(v, loadedEnvVars, EthPrivateKeyEnvVar, AptosPrivateKeyEnvVar, CreTargetEnvVar)
 }
 
 // LoadPublicEnv loads variables from envPath into the process environment

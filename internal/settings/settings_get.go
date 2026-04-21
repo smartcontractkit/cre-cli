@@ -263,15 +263,22 @@ func ChainNameFromSelectorString(raw string) (string, error) {
 }
 
 func GetChainSelectorByChainName(name string) (uint64, error) {
-	chainID, err := chainSelectors.ChainIdFromName(name)
-	if err != nil {
-		return 0, fmt.Errorf("failed to get chain ID from name %q: %w", name, err)
+	if chainID, err := chainSelectors.ChainIdFromName(name); err == nil {
+		selector, err := chainSelectors.SelectorFromChainId(chainID)
+		if err != nil {
+			return 0, fmt.Errorf("failed to get selector from chain ID %d: %w", chainID, err)
+		}
+		return selector, nil
 	}
 
-	selector, err := chainSelectors.SelectorFromChainId(chainID)
-	if err != nil {
-		return 0, fmt.Errorf("failed to get selector from chain ID %d: %w", chainID, err)
+	// Fallback to Aptos: chain-selectors has no AptosChainIdFromName, so scan.
+	for chainID := range chainSelectors.AptosChainIdToChainSelector() {
+		if n, err := chainSelectors.AptosNameFromChainId(chainID); err == nil && n == name {
+			sel, ok := chainSelectors.AptosChainIdToChainSelector()[chainID]
+			if ok {
+				return sel, nil
+			}
+		}
 	}
-
-	return selector, nil
+	return 0, fmt.Errorf("failed to get chain ID from name %q: chain not found", name)
 }
