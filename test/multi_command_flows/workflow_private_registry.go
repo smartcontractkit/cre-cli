@@ -2,6 +2,7 @@ package multi_command_flows
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -12,16 +13,50 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 
+	"github.com/smartcontractkit/cre-cli/internal/authvalidation"
+	"github.com/smartcontractkit/cre-cli/internal/constants"
+	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
+	"github.com/smartcontractkit/cre-cli/internal/ethkeys"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
+	"github.com/smartcontractkit/cre-cli/internal/tenantctx"
+	"github.com/smartcontractkit/cre-cli/internal/testutil"
 	"github.com/smartcontractkit/cre-cli/internal/testutil/testjwt"
 )
 
-const privateRegistryOwnerAddress = "0x0bb6e890f43f93f4f4f5eb64fdf17f81f15bf12a"
+// MockDerivedWorkflowOwnerHex is the raw address (no 0x) in getCreOrganizationInfo.derivedWorkflowOwners
+// in tests. The canonical checksummed form is privateRegistryOwnerAddress.
+const MockDerivedWorkflowOwnerHex = "ab12cd34ef56ab12cd34ef56ab12cd34ef56ab12"
 
-func createTestBearerCredentialsHome(t *testing.T) string {
+var privateRegistryOwnerAddress = mustChecksumMockDerivedOwner()
+
+func mustChecksumMockDerivedOwner() string {
+	s, err := ethkeys.FormatWorkflowOwnerAddress("0x" + MockDerivedWorkflowOwnerHex)
+	if err != nil {
+		panic(err)
+	}
+	return s
+}
+
+// mockGetCreOrganizationInfoGraphQLPayload is the full GraphQL JSON body for getCreOrganizationInfo
+// (shared by composite mocks and graphQLMockOrgInfoOnly).
+func mockGetCreOrganizationInfoGraphQLPayload() map[string]any {
+	return map[string]any{
+		"data": map[string]any{
+			"getCreOrganizationInfo": map[string]any{
+				"orgId":                 "test-org-id",
+				"derivedWorkflowOwners": []string{MockDerivedWorkflowOwnerHex},
+			},
+		},
+	}
+}
+
+// CreateTestBearerCredentialsHome writes JWT bearer credentials under HOME/.cre for subprocess CLI tests.
+func CreateTestBearerCredentialsHome(t *testing.T) string {
 	t.Helper()
 
 	homeDir := t.TempDir()
@@ -44,8 +79,10 @@ func createTestJWT(orgID string) string {
 	return testjwt.CreateTestJWT(orgID)
 }
 
-// workflowDeployPrivateRegistry deploys a workflow to the private registry via CLI
-// using a mock GraphQL + upload server.
+// workflowDeployPrivateRegistry deploys a workflow to the private registry via CLI.
+// It starts a single httptest.Server that mocks GraphQL (getCreOrganizationInfo,
+// GetTenantConfig, GeneratePresignedPostUrlForArtifact, GenerateUnsignedGetUrlForArtifact,
+// listWorkflowOwners, GetOffchainWorkflowByName, UpsertOffchainWorkflow) and POST /upload.
 func workflowDeployPrivateRegistry(t *testing.T, tc TestConfig) string {
 	t.Helper()
 
@@ -62,14 +99,7 @@ func workflowDeployPrivateRegistry(t *testing.T, tc TestConfig) string {
 			w.Header().Set("Content-Type", "application/json")
 
 			if strings.Contains(req.Query, "getCreOrganizationInfo") {
-				_ = json.NewEncoder(w).Encode(map[string]any{
-					"data": map[string]any{
-						"getCreOrganizationInfo": map[string]any{
-							"orgId":                 "test-org-id",
-							"derivedWorkflowOwners": []string{"ab12cd34ef56ab12cd34ef56ab12cd34ef56ab12"},
-						},
-					},
-				})
+				_ = json.NewEncoder(w).Encode(mockGetCreOrganizationInfoGraphQLPayload())
 				return
 			}
 
@@ -207,7 +237,7 @@ func workflowDeployPrivateRegistry(t *testing.T, tc TestConfig) string {
 	}
 
 	cmd := exec.Command(CLIPath, args...)
-	testHome := createTestBearerCredentialsHome(t)
+	testHome := CreateTestBearerCredentialsHome(t)
 
 	realHome, err := os.UserHomeDir()
 	require.NoError(t, err, "failed to get real home dir")
@@ -282,14 +312,7 @@ func workflowPausePrivateRegistry(t *testing.T, tc TestConfig) string {
 			w.Header().Set("Content-Type", "application/json")
 
 			if strings.Contains(req.Query, "getCreOrganizationInfo") {
-				_ = json.NewEncoder(w).Encode(map[string]any{
-					"data": map[string]any{
-						"getCreOrganizationInfo": map[string]any{
-							"orgId":                 "test-org-id",
-							"derivedWorkflowOwners": []string{"ab12cd34ef56ab12cd34ef56ab12cd34ef56ab12"},
-						},
-					},
-				})
+				_ = json.NewEncoder(w).Encode(mockGetCreOrganizationInfoGraphQLPayload())
 				return
 			}
 
@@ -389,7 +412,7 @@ func workflowPausePrivateRegistry(t *testing.T, tc TestConfig) string {
 	}
 
 	cmd := exec.Command(CLIPath, args...)
-	testHome := createTestBearerCredentialsHome(t)
+	testHome := CreateTestBearerCredentialsHome(t)
 
 	realHome, err := os.UserHomeDir()
 	require.NoError(t, err, "failed to get real home dir")
@@ -457,14 +480,7 @@ func workflowActivatePrivateRegistry(t *testing.T, tc TestConfig) string {
 			w.Header().Set("Content-Type", "application/json")
 
 			if strings.Contains(req.Query, "getCreOrganizationInfo") {
-				_ = json.NewEncoder(w).Encode(map[string]any{
-					"data": map[string]any{
-						"getCreOrganizationInfo": map[string]any{
-							"orgId":                 "test-org-id",
-							"derivedWorkflowOwners": []string{"ab12cd34ef56ab12cd34ef56ab12cd34ef56ab12"},
-						},
-					},
-				})
+				_ = json.NewEncoder(w).Encode(mockGetCreOrganizationInfoGraphQLPayload())
 				return
 			}
 
@@ -564,7 +580,7 @@ func workflowActivatePrivateRegistry(t *testing.T, tc TestConfig) string {
 	}
 
 	cmd := exec.Command(CLIPath, args...)
-	testHome := createTestBearerCredentialsHome(t)
+	testHome := CreateTestBearerCredentialsHome(t)
 
 	realHome, err := os.UserHomeDir()
 	require.NoError(t, err, "failed to get real home dir")
@@ -632,14 +648,7 @@ func workflowDeletePrivateRegistry(t *testing.T, tc TestConfig) string {
 			w.Header().Set("Content-Type", "application/json")
 
 			if strings.Contains(req.Query, "getCreOrganizationInfo") {
-				_ = json.NewEncoder(w).Encode(map[string]any{
-					"data": map[string]any{
-						"getCreOrganizationInfo": map[string]any{
-							"orgId":                 "test-org-id",
-							"derivedWorkflowOwners": []string{"ab12cd34ef56ab12cd34ef56ab12cd34ef56ab12"},
-						},
-					},
-				})
+				_ = json.NewEncoder(w).Encode(mockGetCreOrganizationInfoGraphQLPayload())
 				return
 			}
 
@@ -727,7 +736,7 @@ func workflowDeletePrivateRegistry(t *testing.T, tc TestConfig) string {
 	}
 
 	cmd := exec.Command(CLIPath, args...)
-	testHome := createTestBearerCredentialsHome(t)
+	testHome := CreateTestBearerCredentialsHome(t)
 
 	realHome, err := os.UserHomeDir()
 	require.NoError(t, err, "failed to get real home dir")
@@ -772,4 +781,136 @@ func RunWorkflowDeletePrivateRegistryHappyPath(t *testing.T, tc TestConfig) {
 	out := workflowDeletePrivateRegistry(t, tc)
 	require.Contains(t, out, "Workflows deleted successfully", "expected private registry delete success.\nCLI OUTPUT:\n%s", out)
 	require.Contains(t, out, "Deleted workflow ID: 1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef", "expected workflow ID in details.\nCLI OUTPUT:\n%s", out)
+}
+
+func workflowDeployCmd() *cobra.Command {
+	w := &cobra.Command{Use: "workflow"}
+	d := &cobra.Command{Use: "deploy"}
+	w.AddCommand(d)
+	return d
+}
+
+func assertEnvFileHasNoEthPrivateKey(t *testing.T, envPath string) {
+	t.Helper()
+	b, err := os.ReadFile(envPath)
+	require.NoError(t, err)
+	for _, line := range strings.Split(string(b), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		key, val, ok := strings.Cut(line, "=")
+		if !ok {
+			continue
+		}
+		if strings.EqualFold(strings.TrimSpace(key), settings.EthPrivateKeyEnvVar) {
+			if strings.TrimSpace(val) != "" {
+				t.Fatalf("expected %s to be unset in %s, got a non-empty value", settings.EthPrivateKeyEnvVar, envPath)
+			}
+		}
+	}
+}
+
+func graphQLMockOrgInfoOnly(t *testing.T) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasPrefix(r.URL.Path, "/graphql") || r.Method != http.MethodPost {
+			http.NotFound(w, r)
+			return
+		}
+		var req struct {
+			Query string `json:"query"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		w.Header().Set("Content-Type", "application/json")
+		if strings.Contains(req.Query, "getCreOrganizationInfo") {
+			require.NoError(t, json.NewEncoder(w).Encode(mockGetCreOrganizationInfoGraphQLPayload()))
+			return
+		}
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"errors":[{"message":"unsupported"}]}`))
+	}))
+}
+
+// RunPrivateRegistryAuthAndSettingsFinalize asserts .env has no private key, runs auth
+// validation against a minimal GraphQL mock (getCreOrganizationInfo), then loads settings
+// from disk and finalizes org-derived workflow owner for deployment-registry reg-test.
+func RunPrivateRegistryAuthAndSettingsFinalize(t *testing.T, envPath, blankWorkflowDir string) {
+	t.Helper()
+	assertEnvFileHasNoEthPrivateKey(t, envPath)
+
+	orgSrv := graphQLMockOrgInfoOnly(t)
+	defer orgSrv.Close()
+	t.Setenv(environments.EnvVarGraphQLURL, orgSrv.URL+"/graphql")
+
+	bearerHome := CreateTestBearerCredentialsHome(t)
+	t.Setenv("HOME", bearerHome)
+	t.Setenv("USERPROFILE", bearerHome)
+
+	logger := testutil.NewTestLogger()
+	creds, err := credentials.New(logger)
+	require.NoError(t, err)
+	require.False(t, creds.IsValidated)
+
+	envSet, err := environments.New()
+	require.NoError(t, err)
+	require.NotEmpty(t, envSet.GraphQLURL)
+
+	val := authvalidation.NewValidator(creds, envSet, logger)
+	result, err := val.ValidateCredentials(context.Background(), creds)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.Equal(t, "test-org-id", result.OrgID)
+
+	derivedFormatted, err := ethkeys.FormatWorkflowOwnerAddress(result.DerivedWorkflowOwner)
+	require.NoError(t, err)
+	wantDerived, err := ethkeys.FormatWorkflowOwnerAddress("0x" + MockDerivedWorkflowOwnerHex)
+	require.NoError(t, err)
+	require.Equal(t, wantDerived, derivedFormatted, "derived owner from mock GQL must match formatted MockDerivedWorkflowOwnerHex")
+
+	restoreWD, err := testutil.ChangeWorkingDirectory(blankWorkflowDir)
+	require.NoError(t, err)
+	defer restoreWD()
+
+	v := viper.New()
+	settings.LoadEnv(logger, v, envPath)
+	cmd := workflowDeployCmd()
+	s, err := settings.New(logger, v, cmd, "")
+	require.NoError(t, err)
+	require.NotNil(t, s)
+	require.Empty(t, s.User.EthPrivateKey, "CRE_ETH_PRIVATE_KEY must be absent")
+	require.Equal(t, "reg-test", s.Workflow.UserWorkflowSettings.DeploymentRegistry)
+	require.Empty(t, s.Workflow.UserWorkflowSettings.WorkflowOwnerAddress, "owner is deferred until finalize when deployment-registry is set")
+	require.Empty(t, s.Workflow.UserWorkflowSettings.WorkflowOwnerType)
+
+	tenantCtx := &tenantctx.EnvironmentContext{
+		DefaultDonFamily: "test-don",
+		Registries: []*tenantctx.Registry{
+			{ID: "reg-test", Type: "OFF_CHAIN"},
+		},
+	}
+	resolved, err := settings.ResolveRegistry("reg-test", tenantCtx, envSet)
+	require.NoError(t, err)
+	require.NotNil(t, resolved)
+	require.Equal(t, settings.RegistryTypeOffChain, resolved.Type())
+
+	err = settings.FinalizeWorkflowOwner(v, cmd, &s.Workflow, s.User.TargetName, resolved, derivedFormatted)
+	require.NoError(t, err)
+	require.Equal(t, derivedFormatted, s.Workflow.UserWorkflowSettings.WorkflowOwnerAddress)
+	require.Equal(t, constants.WorkflowOwnerTypeOrgDerived, s.Workflow.UserWorkflowSettings.WorkflowOwnerType)
+}
+
+// RunPrivateRegistryE2E runs auth/settings finalize (no private key) then the full CLI
+// private-registry lifecycle (deploy, pause, activate, delete) with httptest GraphQL mocks.
+func RunPrivateRegistryE2E(t *testing.T, tc TestConfig, envPath, blankWorkflowDir string) {
+	t.Helper()
+	t.Run("auth_and_settings_finalize_without_private_key", func(t *testing.T) {
+		RunPrivateRegistryAuthAndSettingsFinalize(t, envPath, blankWorkflowDir)
+	})
+	t.Run("cli_private_registry_lifecycle", func(t *testing.T) {
+		RunWorkflowPrivateRegistryHappyPath(t, tc)
+		RunWorkflowPausePrivateRegistryHappyPath(t, tc)
+		RunWorkflowActivatePrivateRegistryHappyPath(t, tc)
+		RunWorkflowDeletePrivateRegistryHappyPath(t, tc)
+	})
 }
