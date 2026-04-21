@@ -288,11 +288,12 @@ func RunWorkflowPrivateRegistryHappyPath(t *testing.T, tc TestConfig) {
 	require.Contains(t, out, "Uploaded binary", "expected binary upload to succeed.\nCLI OUTPUT:\n%s", out)
 	require.Contains(t, out, "Workflow registered in private registry", "expected private registry deployment success.\nCLI OUTPUT:\n%s", out)
 	require.Contains(t, out, "Details:", "expected details block.\nCLI OUTPUT:\n%s", out)
-	require.Contains(t, out, "Workflow Name: private-registry-happy-path-workflow", "expected workflow name in details.\nCLI OUTPUT:\n%s", out)
+	require.Contains(t, out, "Registry:         reg-test", "expected registry ID in details.\nCLI OUTPUT:\n%s", out)
+	require.Contains(t, out, "Workflow Name:    private-registry-happy-path-workflow", "expected workflow name in details.\nCLI OUTPUT:\n%s", out)
 	require.Contains(t, out, "Workflow ID:", "expected workflow ID in details.\nCLI OUTPUT:\n%s", out)
-	require.Contains(t, out, "Status:        WORKFLOW_STATUS_ACTIVE", "expected active status in details.\nCLI OUTPUT:\n%s", out)
+	require.Contains(t, out, "Status:           Active", "expected active status in details.\nCLI OUTPUT:\n%s", out)
 	require.Contains(t, out, "Binary URL:", "expected binary URL in details.\nCLI OUTPUT:\n%s", out)
-	require.Contains(t, out, "Owner:         "+privateRegistryOwnerAddress, "expected owner in details.\nCLI OUTPUT:\n%s", out)
+	require.Contains(t, out, "Owner:            "+privateRegistryOwnerAddress, "expected owner in details.\nCLI OUTPUT:\n%s", out)
 }
 
 // workflowPausePrivateRegistry pauses a workflow in the private registry via CLI
@@ -457,10 +458,11 @@ func RunWorkflowPausePrivateRegistryHappyPath(t *testing.T, tc TestConfig) {
 	out := workflowPausePrivateRegistry(t, tc)
 	require.Contains(t, out, "Workflow paused successfully", "expected private registry pause success.\nCLI OUTPUT:\n%s", out)
 	require.Contains(t, out, "Details:", "expected details block.\nCLI OUTPUT:\n%s", out)
-	require.Contains(t, out, "Workflow Name: private-registry-happy-path-workflow", "expected workflow name in details.\nCLI OUTPUT:\n%s", out)
+	require.Contains(t, out, "Registry:         reg-test", "expected registry ID in details.\nCLI OUTPUT:\n%s", out)
+	require.Contains(t, out, "Workflow Name:    private-registry-happy-path-workflow", "expected workflow name in details.\nCLI OUTPUT:\n%s", out)
 	require.Contains(t, out, "Workflow ID:", "expected workflow ID in details.\nCLI OUTPUT:\n%s", out)
-	require.Contains(t, out, "Status:        WORKFLOW_STATUS_PAUSED", "expected paused status in details.\nCLI OUTPUT:\n%s", out)
-	require.Contains(t, out, "Owner:         "+privateRegistryOwnerAddress, "expected owner in details.\nCLI OUTPUT:\n%s", out)
+	require.Contains(t, out, "Status:           Paused", "expected paused status in details.\nCLI OUTPUT:\n%s", out)
+	require.Contains(t, out, "Owner:            "+privateRegistryOwnerAddress, "expected owner in details.\nCLI OUTPUT:\n%s", out)
 }
 
 // workflowActivatePrivateRegistry activates a workflow in the private registry via CLI
@@ -625,10 +627,11 @@ func RunWorkflowActivatePrivateRegistryHappyPath(t *testing.T, tc TestConfig) {
 	out := workflowActivatePrivateRegistry(t, tc)
 	require.Contains(t, out, "Workflow activated successfully", "expected private registry activate success.\nCLI OUTPUT:\n%s", out)
 	require.Contains(t, out, "Details:", "expected details block.\nCLI OUTPUT:\n%s", out)
-	require.Contains(t, out, "Workflow Name: private-registry-happy-path-workflow", "expected workflow name in details.\nCLI OUTPUT:\n%s", out)
+	require.Contains(t, out, "Registry:         reg-test", "expected registry ID in details.\nCLI OUTPUT:\n%s", out)
+	require.Contains(t, out, "Workflow Name:    private-registry-happy-path-workflow", "expected workflow name in details.\nCLI OUTPUT:\n%s", out)
 	require.Contains(t, out, "Workflow ID:", "expected workflow ID in details.\nCLI OUTPUT:\n%s", out)
-	require.Contains(t, out, "Status:        WORKFLOW_STATUS_ACTIVE", "expected active status in details.\nCLI OUTPUT:\n%s", out)
-	require.Contains(t, out, "Owner:         "+privateRegistryOwnerAddress, "expected owner in details.\nCLI OUTPUT:\n%s", out)
+	require.Contains(t, out, "Status:           Active", "expected active status in details.\nCLI OUTPUT:\n%s", out)
+	require.Contains(t, out, "Owner:            "+privateRegistryOwnerAddress, "expected owner in details.\nCLI OUTPUT:\n%s", out)
 }
 
 // workflowDeletePrivateRegistry deletes a workflow in the private registry via CLI
@@ -780,6 +783,8 @@ func RunWorkflowDeletePrivateRegistryHappyPath(t *testing.T, tc TestConfig) {
 
 	out := workflowDeletePrivateRegistry(t, tc)
 	require.Contains(t, out, "Workflows deleted successfully", "expected private registry delete success.\nCLI OUTPUT:\n%s", out)
+	require.Contains(t, out, "Registry:         reg-test", "expected registry ID in delete preview.\nCLI OUTPUT:\n%s", out)
+	require.Contains(t, out, "Workflow Status:  Active", "expected formatted status in delete preview.\nCLI OUTPUT:\n%s", out)
 	require.Contains(t, out, "Deleted workflow ID: 1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef", "expected workflow ID in details.\nCLI OUTPUT:\n%s", out)
 }
 
