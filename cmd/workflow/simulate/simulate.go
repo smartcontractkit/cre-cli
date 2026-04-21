@@ -750,27 +750,26 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 		case trigger == "cron-trigger@1.0.0":
 			holder.TriggerFunc = func() error {
 				skipWaitSignal := make(chan struct{}, 1)
-				userPromptCtx, cancel := context.WithCancel(ctx)
-
-				go func() {
-					ui.Line()
-					pressed := ui.WaitForEnter(userPromptCtx, "Cron scheduler started. Press Enter to skip waiting...")
-					if pressed {
-						skipWaitSignal <- struct{}{}
-					}
-				}()
 
 				done, err := triggerCaps.ManualCronTrigger.ManualTrigger(ctx, triggerRegistrationID, skipWaitSignal)
 				if err != nil {
-					cancel()
 					return err
 				}
+
+				userPromptCtx, cancel := context.WithCancel(ctx)
 
 				go func() {
 					// After trigger event happens we can stop the user prompt goroutine if it's still waiting for input
 					defer cancel()
 					<-done
 				}()
+
+				ui.Line()
+				pressed := ui.WaitForEnter(userPromptCtx, "Cron scheduler started. Press Enter to skip waiting...")
+				if pressed {
+					skipWaitSignal <- struct{}{}
+					cancel()
+				}
 
 				return nil
 			}
