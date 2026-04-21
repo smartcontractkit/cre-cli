@@ -769,7 +769,6 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 				go func() {
 					// After trigger event happens we can stop the user prompt goroutine if it's still waiting for input
 					defer cancel()
-					defer close(skipWaitSignal)
 					<-done
 				}()
 
