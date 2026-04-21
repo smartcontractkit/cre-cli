@@ -846,13 +846,16 @@ func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inp
 		switch {
 		case trigger == "cron-trigger@1.0.0":
 			holder.TriggerFunc = func() error {
-				// for non-interactive we don't need to wait for the real full cron schedule
-				const nonInteractiveTimeout = time.Second
-				cronCtx, cancel := context.WithDeadline(ctx, time.Now().Add(nonInteractiveTimeout))
-				defer cancel()
+				skipWaitSignal := make(chan struct{}, 1)
+				_, err := triggerCaps.ManualCronTrigger.ManualTrigger(ctx, triggerRegistrationID, skipWaitSignal)
+				if err != nil {
+					return err
+				}
 
-				_, err := triggerCaps.ManualCronTrigger.ManualTrigger(cronCtx, triggerRegistrationID, nil)
-				return err
+				// With cron schedule on non-interactive mode
+				skipWaitSignal <- struct{}{}
+
+				return nil
 			}
 		case trigger == "http-trigger@1.0.0-alpha":
 			if strings.TrimSpace(inputs.HTTPPayload) == "" {
