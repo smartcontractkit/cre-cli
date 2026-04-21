@@ -109,7 +109,11 @@ func (ctx *Context) AttachCredentials(validationCtx context.Context, skipValidat
 
 		if result != nil {
 			ctx.OrgID = result.OrgID
-			ctx.DerivedWorkflowOwner = ethkeys.FormatWorkflowOwnerAddress(result.DerivedWorkflowOwner)
+			formatted, err := ethkeys.FormatWorkflowOwnerAddress(result.DerivedWorkflowOwner)
+			if err != nil {
+				return fmt.Errorf("%w: %w", ErrValidationFailed, err)
+			}
+			ctx.DerivedWorkflowOwner = formatted
 		}
 	}
 

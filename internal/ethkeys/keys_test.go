@@ -83,7 +83,10 @@ func TestFormatWorkflowOwnerAddress(t *testing.T) {
 
 	t.Run("trims and checksums", func(t *testing.T) {
 		t.Parallel()
-		got := FormatWorkflowOwnerAddress("  " + addr + "  ")
+		got, err := FormatWorkflowOwnerAddress("  " + addr + "  ")
+		if err != nil {
+			t.Fatal(err)
+		}
 		if got != want {
 			t.Fatalf("got %q want %q", got, want)
 		}
@@ -91,7 +94,10 @@ func TestFormatWorkflowOwnerAddress(t *testing.T) {
 
 	t.Run("adds 0x when missing", func(t *testing.T) {
 		t.Parallel()
-		got := FormatWorkflowOwnerAddress(strings.TrimPrefix(addr, "0x"))
+		got, err := FormatWorkflowOwnerAddress(strings.TrimPrefix(addr, "0x"))
+		if err != nil {
+			t.Fatal(err)
+		}
 		if got != want {
 			t.Fatalf("got %q want %q", got, want)
 		}
@@ -99,18 +105,27 @@ func TestFormatWorkflowOwnerAddress(t *testing.T) {
 
 	t.Run("empty", func(t *testing.T) {
 		t.Parallel()
-		if got := FormatWorkflowOwnerAddress(""); got != "" {
+		got, err := FormatWorkflowOwnerAddress("")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != "" {
 			t.Fatalf("got %q want empty", got)
 		}
-		if got := FormatWorkflowOwnerAddress("   "); got != "" {
+		got, err = FormatWorkflowOwnerAddress("   ")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != "" {
 			t.Fatalf("got %q want empty", got)
 		}
 	})
 
 	t.Run("invalid", func(t *testing.T) {
 		t.Parallel()
-		if got := FormatWorkflowOwnerAddress("not-an-address"); got != "" {
-			t.Fatalf("got %q want empty", got)
+		_, err := FormatWorkflowOwnerAddress("not-an-address")
+		if err == nil {
+			t.Fatal("expected error")
 		}
 	})
 }

@@ -309,7 +309,8 @@ func TestOffChainDeploymentRegistryUsesDerivedOwnerWithoutPrivateKey(t *testing.
 
 	setUpTestSettingsFiles(t, v, workflowTemplatePath, projectTemplatePath, tempDir)
 
-	derived := ethkeys.FormatWorkflowOwnerAddress("  0x1234567890123456789012345678901234567890  ")
+	derived, err := ethkeys.FormatWorkflowOwnerAddress("  0x1234567890123456789012345678901234567890  ")
+	require.NoError(t, err)
 	require.NotEmpty(t, derived)
 	tenantCtx := &tenantctx.EnvironmentContext{
 		DefaultDonFamily: "test-don",

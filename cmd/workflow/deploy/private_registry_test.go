@@ -321,7 +321,8 @@ func TestResolveWorkflowOwner(t *testing.T) {
 		expectedBytes, err := workflowUtils.GenerateWorkflowOwnerAddress("42", "org-test-123")
 		require.NoError(t, err)
 		rawOwner := "0x" + hex.EncodeToString(expectedBytes)
-		expectedOwner := ethkeys.FormatWorkflowOwnerAddress(rawOwner)
+		expectedOwner, err := ethkeys.FormatWorkflowOwnerAddress(rawOwner)
+		require.NoError(t, err)
 		require.NotEmpty(t, expectedOwner)
 
 		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t).WithPrivateRegistry("42", "test-don")
