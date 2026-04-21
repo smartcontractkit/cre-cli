@@ -18,6 +18,28 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/testutil"
 )
 
+func TestFormatStatus(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		status OffchainWorkflowStatus
+		want   string
+	}{
+		{name: "active", status: WorkflowStatusActive, want: "Active"},
+		{name: "paused", status: WorkflowStatusPaused, want: "Paused"},
+		{name: "unspecified", status: WorkflowStatusUnspecified, want: "Unspecified"},
+		{name: "empty", status: "", want: ""},
+		{name: "unknown passthrough", status: OffchainWorkflowStatus("WORKFLOW_STATUS_FUTURE"), want: "WORKFLOW_STATUS_FUTURE"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, tt.want, FormatStatus(tt.status))
+		})
+	}
+}
+
 func TestValidateUpsertWorkflowInput(t *testing.T) {
 	t.Run("valid input", func(t *testing.T) {
 		err := validateUpsertWorkflowInput(OffchainWorkflowInput{

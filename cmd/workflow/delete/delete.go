@@ -153,12 +153,22 @@ func (h *handler) Execute() error {
 	ui.Bold(fmt.Sprintf("Found %d workflow(s) to delete for name: %s", len(workflows), h.inputs.WorkflowName))
 	for i, wf := range workflows {
 		ui.Print(fmt.Sprintf("   %d. Workflow", i+1))
-		ui.Dim(fmt.Sprintf("      ID:              %s", wf.ID))
-		ui.Dim(fmt.Sprintf("      Owner:           %s", wf.Owner))
-		ui.Dim(fmt.Sprintf("      DON Family:      %s", wf.DonFamily))
-		ui.Dim(fmt.Sprintf("      Tag:             %s", wf.Tag))
-		ui.Dim(fmt.Sprintf("      Binary URL:      %s", wf.BinaryURL))
-		ui.Dim(fmt.Sprintf("      Workflow Status: %s", wf.Status))
+		if h.runtimeContext.ResolvedRegistry.Type() == settings.RegistryTypeOffChain {
+			ui.Dim(fmt.Sprintf("      Registry:         %s", h.runtimeContext.ResolvedRegistry.ID()))
+			ui.Dim(fmt.Sprintf("      ID:               %s", wf.ID))
+			ui.Dim(fmt.Sprintf("      Owner:            %s", wf.Owner))
+			ui.Dim(fmt.Sprintf("      DON Family:       %s", wf.DonFamily))
+			ui.Dim(fmt.Sprintf("      Tag:              %s", wf.Tag))
+			ui.Dim(fmt.Sprintf("      Binary URL:       %s", wf.BinaryURL))
+			ui.Dim(fmt.Sprintf("      Workflow Status:  %s", wf.Status))
+		} else {
+			ui.Dim(fmt.Sprintf("      ID:              %s", wf.ID))
+			ui.Dim(fmt.Sprintf("      Owner:           %s", wf.Owner))
+			ui.Dim(fmt.Sprintf("      DON Family:      %s", wf.DonFamily))
+			ui.Dim(fmt.Sprintf("      Tag:             %s", wf.Tag))
+			ui.Dim(fmt.Sprintf("      Binary URL:      %s", wf.BinaryURL))
+			ui.Dim(fmt.Sprintf("      Workflow Status: %s", wf.Status))
+		}
 		ui.Line()
 	}
 

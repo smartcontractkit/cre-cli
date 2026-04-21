@@ -53,11 +53,12 @@ func (a *privateRegistryActivateStrategy) Activate() error {
 	ui.Success("Workflow activated successfully")
 	ui.Line()
 	ui.Bold("Details:")
-	ui.Dim(fmt.Sprintf("   Workflow Name: %s", result.WorkflowName))
-	ui.Dim(fmt.Sprintf("   Workflow ID:   %s", result.WorkflowID))
-	ui.Dim(fmt.Sprintf("   Status:        %s", result.Status))
+	ui.Dim(fmt.Sprintf("   Registry:         %s", h.runtimeContext.ResolvedRegistry.ID()))
+	ui.Dim(fmt.Sprintf("   Workflow Name:    %s", result.WorkflowName))
+	ui.Dim(fmt.Sprintf("   Workflow ID:      %s", result.WorkflowID))
+	ui.Dim(fmt.Sprintf("   Status:           %s", privateregistryclient.FormatStatus(result.Status)))
 	if result.Owner != "" {
-		ui.Dim(fmt.Sprintf("   Owner:         %s", result.Owner))
+		ui.Dim(fmt.Sprintf("   Owner:            %s", result.Owner))
 	}
 
 	return nil

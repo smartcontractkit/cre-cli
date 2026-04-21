@@ -44,7 +44,7 @@ func (a *privateRegistryDeleteStrategy) FetchWorkflows() ([]WorkflowToDelete, er
 			DonFamily: workflow.DonFamily,
 			Tag:       workflow.Tag,
 			BinaryURL: workflow.BinaryURL,
-			Status:    string(workflow.Status),
+			Status:    privateregistryclient.FormatStatus(workflow.Status),
 			RawID:     workflow.WorkflowID,
 		},
 	}, nil
