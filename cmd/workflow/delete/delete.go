@@ -162,6 +162,7 @@ func (h *handler) Execute() error {
 			ui.Dim(fmt.Sprintf("      Binary URL:       %s", wf.BinaryURL))
 			ui.Dim(fmt.Sprintf("      Workflow Status:  %s", wf.Status))
 		} else {
+			ui.Dim(fmt.Sprintf("      Registry:         %s", h.runtimeContext.ResolvedRegistry.ID()))
 			ui.Dim(fmt.Sprintf("      ID:              %s", wf.ID))
 			ui.Dim(fmt.Sprintf("      Owner:           %s", wf.Owner))
 			ui.Dim(fmt.Sprintf("      DON Family:      %s", wf.DonFamily))
