@@ -96,7 +96,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	}
 
 	simulateCmd.Flags().BoolP("engine-logs", "g", false, "Enable non-fatal engine logging")
-	simulateCmd.Flags().Bool("broadcast", false, "Broadcast transactions to the EVM (default: false)")
+	simulateCmd.Flags().Bool("broadcast", false, "Broadcast transactions to configured chains (requires a valid per-chain-type private key; default: false)")
 	simulateCmd.Flags().String("wasm", "", "Path or URL to a pre-built WASM binary (skips compilation)")
 	simulateCmd.Flags().String("config", "", "Override the config file path from workflow.yaml")
 	simulateCmd.Flags().Bool("no-config", false, "Simulate without a config file")

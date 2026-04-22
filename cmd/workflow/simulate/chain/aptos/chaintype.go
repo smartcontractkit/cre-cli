@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/aptos-labs/aptos-go-sdk/crypto"
@@ -71,7 +72,10 @@ func (ct *AptosChainType) ResolveKey(s *settings.Settings, broadcast bool) (inte
 	bytes, err := hex.DecodeString(seed)
 	if err != nil || len(bytes) != 32 {
 		if broadcast {
-			return nil, fmt.Errorf("CRE_APTOS_PRIVATE_KEY must be 32 hex bytes (64 chars); got len=%d err=%v", len(bytes), err)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse private key, required to broadcast. Please check CRE_APTOS_PRIVATE_KEY in your .env file or system environment: %w", err)
+			}
+			return nil, fmt.Errorf("CRE_APTOS_PRIVATE_KEY must be 32 hex bytes (64 chars); got len=%d", len(bytes))
 		}
 		bytes, _ = hex.DecodeString(defaultSentinelAptosSeed)
 		ui.Warning("Using default Aptos private key for dry-run simulation. Set CRE_APTOS_PRIVATE_KEY to broadcast.")
@@ -143,11 +147,14 @@ func (ct *AptosChainType) HasSelector(selector uint64) bool {
 }
 
 func (ct *AptosChainType) ParseTriggerChainSelector(triggerID string) (uint64, bool) {
-	if !strings.HasPrefix(triggerID, "aptos:ChainSelector:") {
+	const prefix = "aptos:ChainSelector:"
+	const suffix = "@1.0.0"
+	if !strings.HasPrefix(triggerID, prefix) || !strings.HasSuffix(triggerID, suffix) {
 		return 0, false
 	}
-	var sel uint64
-	if _, err := fmt.Sscanf(triggerID, "aptos:ChainSelector:%d@1.0.0", &sel); err != nil {
+	mid := triggerID[len(prefix) : len(triggerID)-len(suffix)]
+	sel, err := strconv.ParseUint(mid, 10, 64)
+	if err != nil {
 		return 0, false
 	}
 	return sel, true

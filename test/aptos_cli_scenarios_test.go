@@ -40,8 +40,9 @@ func TestCLIAptosSimulator_100DryRuns(t *testing.T) {
 	cliBin := filepath.Join(repoRoot, "bin", "cre")
 	require.FileExists(t, cliBin, "./bin/cre not built; run `go build -o ./bin/cre .`")
 
-	wasmPath := "/tmp/aptos_smoke.wasm"
-	require.FileExists(t, wasmPath, "WASM not built; run `cd test/test_project/aptos_smoke && GOOS=wasip1 GOARCH=wasm go build -o /tmp/aptos_smoke.wasm .`")
+
+	wasmPath := filepath.Join(t.TempDir(), "aptos_smoke.wasm")
+	require.FileExists(t, wasmPath, "WASM not built; set APTOS_SMOKE_WASM or run `cd test/test_project/aptos_smoke && GOOS=wasip1 GOARCH=wasm go build -o $APTOS_SMOKE_WASM .`")
 
 	projectDir := filepath.Join(repoRoot, "test", "test_project", "aptos_smoke")
 
@@ -223,11 +224,10 @@ func TestCLIAptosSimulator_100DryRuns(t *testing.T) {
 			// Scenarios that don't supply cfg (help / purely CLI-arg-driven)
 			// skip the config-file plumbing entirely.
 			if s.cfg != nil {
-				cfgPath := fmt.Sprintf("/tmp/apcfg_%03d.json", i+1)
+				cfgPath := filepath.Join(t.TempDir(), fmt.Sprintf("apcfg_%03d.json", i+1))
 				data, err := json.Marshal(s.cfg)
 				require.NoError(t, err)
 				require.NoError(t, os.WriteFile(cfgPath, data, 0644))
-				defer os.Remove(cfgPath)
 
 				args = []string{
 					"-T", "dev-aptos-testnet",

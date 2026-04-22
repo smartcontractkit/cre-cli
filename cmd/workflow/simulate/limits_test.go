@@ -173,6 +173,7 @@ func TestSimulationLimitsSummaryIncludesKeyLimitValues(t *testing.T) {
 	assert.Contains(t, summary, "HTTP: req=10kb resp=100kb timeout=10s")
 	assert.Contains(t, summary, "ConfHTTP: req=10kb resp=100kb timeout=10s")
 	assert.Contains(t, summary, "Consensus obs=100kb")
-	assert.Contains(t, summary, "ChainWrite report=5kb gas=5000000")
+	assert.Contains(t, summary, "ChainWrite report=5kb evm_gas=5000000")
+	assert.Contains(t, summary, "aptos_gas=")
 	assert.Contains(t, summary, "WASM binary=100mb compressed=20mb")
 }
