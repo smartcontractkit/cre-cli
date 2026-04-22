@@ -244,11 +244,11 @@ func TestEVMChainType_ExecuteTrigger_UnknownSelector(t *testing.T) {
 	assert.Contains(t, err.Error(), "no EVM chain initialized for selector 999")
 }
 
-func TestEVMChainType_HasSelector_WhenNotRegistered_ReturnsFalse(t *testing.T) {
+func TestEVMChainType_Supports_WhenNotRegistered_ReturnsFalse(t *testing.T) {
 	t.Parallel()
 	ct := newEVMChainType()
-	assert.False(t, ct.HasSelector(1))
-	assert.False(t, ct.HasSelector(0))
+	assert.False(t, ct.Supports(1))
+	assert.False(t, ct.Supports(0))
 }
 
 func TestEVMChainType_RegisterCapabilities_WrongClientType(t *testing.T) {
@@ -279,7 +279,7 @@ func TestEVMChainType_RegisterCapabilities_NoClients_ConstructsEmpty(t *testing.
 		t.Fatalf("unexpected error: %v", err)
 	}
 	assert.Empty(t, srvcs)
-	assert.False(t, ct.HasSelector(1))
+	assert.False(t, ct.Supports(1))
 }
 
 func TestEVMChainType_RunHealthCheck_PropagatesInvalidClientType(t *testing.T) {

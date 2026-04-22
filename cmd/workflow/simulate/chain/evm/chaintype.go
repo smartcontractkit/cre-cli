@@ -199,10 +199,8 @@ func (ct *EVMChainType) ExecuteTrigger(ctx context.Context, selector uint64, reg
 	return evmChain.ManualTrigger(ctx, registrationID, log)
 }
 
-// HasSelector reports whether an EVM chain capability has been initialised
-// for the given selector. Callers use this at trigger-setup time to avoid
-// building a TriggerFunc for a selector the chain type cannot dispatch against.
-func (ct *EVMChainType) HasSelector(selector uint64) bool {
+// Supports reports whether an EVM chain capability is live for the selector.
+func (ct *EVMChainType) Supports(selector uint64) bool {
 	if ct.evmChains == nil {
 		return false
 	}
@@ -210,7 +208,7 @@ func (ct *EVMChainType) HasSelector(selector uint64) bool {
 }
 
 func (ct *EVMChainType) ParseTriggerChainSelector(triggerID string) (uint64, bool) {
-	return ParseTriggerChainSelector(triggerID)
+	return chain.ParseTriggerChainSelector(ct.Name(), triggerID)
 }
 
 func (ct *EVMChainType) RunHealthCheck(resolved chain.ResolvedChains) error {

@@ -727,8 +727,8 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 					continue
 				}
 
-				if !ct.HasSelector(sel) {
-					ui.Error(fmt.Sprintf("No %s chain initialized for selector %d", name, sel))
+				if !ct.Supports(sel) {
+					ui.Error(fmt.Sprintf("%s unsupported or misconfigured chain for selector %d", name, sel))
 					os.Exit(1)
 				}
 
@@ -807,8 +807,8 @@ func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inp
 					continue
 				}
 
-				if !ct.HasSelector(sel) {
-					ui.Error(fmt.Sprintf("No %s chain initialized for selector %d", name, sel))
+				if !ct.Supports(sel) {
+					ui.Error(fmt.Sprintf("%s unsupported or misconfigured chain for selector %d", name, sel))
 					os.Exit(1)
 				}
 
