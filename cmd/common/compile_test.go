@@ -118,7 +118,7 @@ func TestCompileWorkflowToWasm_TS_Success(t *testing.T) {
 	mainPath := filepath.Join(dir, "main.ts")
 	require.NoError(t, os.WriteFile(mainPath, []byte(`export async function main() { return "ok"; }
 `), 0600))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "package.json"), []byte(`{"name":"test","dependencies":{"@chainlink/cre-sdk":"^1.5.0"}}
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "package.json"), []byte(`{"name":"test","dependencies":{"@chainlink/cre-sdk":"^1.6.0"}}
 `), 0600))
 	install := exec.Command("bun", "install")
 	install.Dir = dir
