@@ -196,6 +196,8 @@ func TestUpsertWorkflowInRegistry_GQLError(t *testing.T) {
 	})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "upsert workflow in registry")
+	assert.Contains(t, err.Error(), "cre api client: upsert failed")
+	assert.NotContains(t, err.Error(), "graphql:")
 }
 
 func TestGetWorkflowByName(t *testing.T) {
@@ -263,6 +265,8 @@ func TestGetWorkflowByName_GQLError(t *testing.T) {
 	_, err := client.GetWorkflowByName("registry-workflow")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "get workflow by name in registry")
+	assert.Contains(t, err.Error(), "cre api client: workflow not found")
+	assert.NotContains(t, err.Error(), "graphql:")
 }
 
 func TestGetWorkflowByName_EmptyName(t *testing.T) {
