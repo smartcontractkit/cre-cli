@@ -277,8 +277,11 @@ func (h *handler) ValidateInputs(inputs Inputs) error {
 	inputs.ConfigPath = savedConfig
 
 	// forbid the default 0x...01 key when broadcasting
-	if inputs.Broadcast && inputs.EthPrivateKey != nil && inputs.EthPrivateKey.D.Cmp(big.NewInt(1)) == 0 {
-		return fmt.Errorf("you must configure a valid private key to perform on-chain writes. Please set your private key in the .env file before using the -–broadcast flag")
+	if inputs.Broadcast && inputs.EthPrivateKey != nil {
+		keyBytes, keyBytesErr := inputs.EthPrivateKey.Bytes()
+		if keyBytesErr == nil && new(big.Int).SetBytes(keyBytes).Cmp(big.NewInt(1)) == 0 {
+			return fmt.Errorf("you must configure a valid private key to perform on-chain writes. Please set your private key in the .env file before using the -–broadcast flag")
+		}
 	}
 
 	rpcErr := ui.WithSpinner("Checking RPC connectivity...", func() error {
