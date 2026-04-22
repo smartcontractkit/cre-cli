@@ -8,6 +8,7 @@ import (
 
 	"github.com/machinebox/graphql"
 	"github.com/rs/zerolog"
+
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 )
@@ -64,7 +65,7 @@ func TestExecute_ErrorPrefixReplacement(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		// This will cause the machinebox/graphql client to return an error starting with "graphql: "
-		w.Write([]byte(`{"errors": [{"message": "DON family \"zone-a\" is not supported"}]}`))
+		_, _ = w.Write([]byte(`{"errors": [{"message": "DON family \"zone-a\" is not supported"}]}`))
 	}))
 	defer srv.Close()
 
@@ -74,18 +75,18 @@ func TestExecute_ErrorPrefixReplacement(t *testing.T) {
 	}
 	envSet := &environments.EnvironmentSet{GraphQLURL: srv.URL}
 	logger := zerolog.Nop()
-	
+
 	client := New(creds, envSet, &logger)
-	
+
 	req := graphql.NewRequest(`query { test }`)
 	var resp interface{}
-	
+
 	err := client.Execute(context.Background(), req, &resp)
-	
+
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
-	
+
 	expectedErr := "cre api client: DON family \"zone-a\" is not supported"
 	if err.Error() != expectedErr {
 		t.Errorf("expected error %q, got %q", expectedErr, err.Error())
