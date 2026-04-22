@@ -122,7 +122,7 @@ func TestResolveRegistry_UnknownID(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for unknown registry ID")
 	}
-	if !strings.Contains(err.Error(), "not found in context.yaml") {
+	if !strings.Contains(err.Error(), "not found in user context") {
 		t.Errorf("unexpected error: %v", err)
 	}
 	if !strings.Contains(err.Error(), "onchain:ethereum-testnet-sepolia") {

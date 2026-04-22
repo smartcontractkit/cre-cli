@@ -4,7 +4,7 @@ Lists workflows deployed for your organization
 
 ### Synopsis
 
-Lists workflows across registries using the platform API. Requires authentication and user context (context.yaml). Does not use a workflow folder or --target. Deleted workflows are hidden by default.
+Lists workflows across registries using the platform API. Requires authentication and user context. Does not use a workflow folder or --target. Deleted workflows are hidden by default.
 
 ```
 cre workflow list [optional flags]
@@ -23,7 +23,7 @@ cre workflow list
 ```
   -h, --help              help for list
       --include-deleted   Include workflows in DELETED status
-      --registry string   Filter by registry ID from context.yaml (e.g. private)
+      --registry string   Filter by registry ID from user context
 ```
 
 ### Options inherited from parent commands

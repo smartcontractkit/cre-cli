@@ -88,7 +88,7 @@ func ResolveRegistry(
 
 	reg := findRegistry(tenantCtx.Registries, deploymentRegistry)
 	if reg == nil {
-		return nil, fmt.Errorf("registry %q not found in context.yaml; available: [%s]",
+		return nil, fmt.Errorf("registry %q not found in user context; available: [%s]",
 			deploymentRegistry, availableIDs(tenantCtx.Registries))
 	}
 
@@ -100,11 +100,11 @@ func ResolveRegistry(
 	}
 
 	if reg.Address == nil || *reg.Address == "" {
-		return nil, fmt.Errorf("on-chain registry %q has no address in context.yaml", reg.ID)
+			return nil, fmt.Errorf("on-chain registry %q has no address in user context", reg.ID)
 	}
 
 	if reg.ChainSelector == nil {
-		return nil, fmt.Errorf("on-chain registry %q has no chain_selector in context.yaml", reg.ID)
+			return nil, fmt.Errorf("on-chain registry %q has no chain_selector in user context", reg.ID)
 	}
 	chainName, err := ChainNameFromSelectorString(*reg.ChainSelector)
 	if err != nil {
@@ -120,7 +120,7 @@ func ResolveRegistry(
 	), nil
 }
 
-// ParseRegistryType converts a raw type string from context.yaml to a
+// ParseRegistryType converts a raw type string from user context to a
 // RegistryType. Unknown values default to on-chain.
 func ParseRegistryType(raw string) RegistryType {
 	if strings.EqualFold(raw, string(RegistryTypeOffChain)) || strings.EqualFold(raw, "off_chain") {

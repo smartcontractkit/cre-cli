@@ -69,7 +69,7 @@ func NewHandlerWithClient(ctx *runtime.Context, gql GraphQLExecutor) *Handler {
 	}
 }
 
-// Execute lists workflows, optionally filtering by registry ID from context.yaml.
+// Execute lists workflows, optionally filtering by registry ID from user context.
 // Deleted workflows are omitted unless includeDeleted is true.
 func (h *Handler) Execute(ctx context.Context, registryFilter string, includeDeleted bool) error {
 	if h.tenantCtx == nil {
@@ -82,7 +82,7 @@ func (h *Handler) Execute(ctx context.Context, registryFilter string, includeDel
 
 	if registryFilter != "" {
 		if findRegistry(h.tenantCtx.Registries, registryFilter) == nil {
-			return fmt.Errorf("registry %q not found in context.yaml; available: [%s]",
+			return fmt.Errorf("registry %q not found in user context; available: [%s]",
 				registryFilter, availableRegistryIDs(h.tenantCtx.Registries))
 		}
 	}
@@ -117,7 +117,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "list",
 		Short:   "Lists workflows deployed for your organization",
-		Long:    `Lists workflows across registries using the platform API. Requires authentication and user context (context.yaml). Does not use a workflow folder or --target. Deleted workflows are hidden by default.`,
+		Long:    `Lists workflows across registries using the platform API. Requires authentication and user context. Does not use a workflow folder or --target. Deleted workflows are hidden by default.`,
 		Example: "cre workflow list\n  cre workflow list --registry private\n  cre workflow list --include-deleted",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -125,7 +125,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&registryID, "registry", "", "Filter by registry ID from context.yaml (e.g. private, onchain:ethereum-testnet-sepolia)")
+	cmd.Flags().StringVar(&registryID, "registry", "", "Filter by registry ID from user context")
 	cmd.Flags().BoolVar(&includeDeleted, "include-deleted", false, "Include workflows in DELETED status")
 	return cmd
 }
@@ -206,7 +206,7 @@ func rowMatchesRegistry(workflowSource string, reg *tenantctx.Registry, all []*t
 	return false
 }
 
-// registryTypeOffChain mirrors how context.yaml may store OFF_CHAIN / off_chain / off-chain.
+// registryTypeOffChain mirrors how user context may store OFF_CHAIN / off_chain / off-chain.
 func registryTypeOffChain(reg *tenantctx.Registry) bool {
 	if reg == nil {
 		return false
@@ -267,7 +267,7 @@ func contractSourceMatchesRegistry(workflowSource string, reg *tenantctx.Registr
 }
 
 // resolveGrpcSourceRegistry maps API grpc workflow sources (e.g. grpc:private-grpc-registry:v1)
-// to the tenant registry from context.yaml (same rules as --registry). Returns nil if ambiguous
+// to the tenant registry from user context (same rules as --registry). Returns nil if ambiguous
 // or unmatched.
 func resolveGrpcSourceRegistry(workflowSource string, all []*tenantctx.Registry) *tenantctx.Registry {
 	if !strings.HasPrefix(workflowSource, "grpc:") {

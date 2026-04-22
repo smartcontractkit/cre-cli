@@ -80,7 +80,7 @@ func TestNew_UnknownRegistry(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for unknown registry")
 	}
-	if !strings.Contains(err.Error(), "not found in context.yaml") {
+	if !strings.Contains(err.Error(), "not found in user context") {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
@@ -411,7 +411,7 @@ func TestExecute_RegistryFilter_MatchesContractSource(t *testing.T) {
 				{
 					ID:    "onchain:ethereum-testnet-sepolia",
 					Label: "ethereum-testnet-sepolia (0xaE55...1135)",
-					// type often omitted in context.yaml; matching uses address + chain selector
+					// type often omitted in user context; matching uses address + chain selector
 					ChainSelector: strPtr(chainSel),
 					Address:       strPtr(addr),
 				},
