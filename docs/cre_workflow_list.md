@@ -4,7 +4,7 @@ Lists workflows deployed for your organization
 
 ### Synopsis
 
-Lists workflows across registries using the platform API. Requires authentication and user context. Does not use a workflow folder or --target. Deleted workflows are hidden by default.
+Lists workflows across registries in your organization. Requires authentication and user context. Deleted workflows are hidden by default.
 
 ```
 cre workflow list [optional flags]

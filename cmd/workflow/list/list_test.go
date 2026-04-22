@@ -204,7 +204,7 @@ func TestExecute_WithMock_PrintsWorkflowBlocks(t *testing.T) {
 		"Status:",
 		"ACTIVE",
 		"Registry:",
-		"Private hosted",
+		"private",
 		"2. beta",
 		"0xbbb",
 		"0xowner2",
@@ -532,8 +532,9 @@ func TestExecute_List_ShowsRegistryIDForGrpcSource(t *testing.T) {
 	_, _ = io.Copy(&buf, r)
 	out := buf.String()
 
+	// Resolved grpc maps to context "private"; unresolved grpc would print the raw API source.
 	if strings.Contains(out, "grpc:private-grpc-registry:v1") {
-		t.Errorf("expected grpc source mapped to registry id, not raw API source; output:\n%s", out)
+		t.Errorf("expected resolved grpc to show context registry id, not raw API source; output:\n%s", out)
 	}
 	idx := strings.Index(out, "grpc-wf")
 	if idx < 0 {
@@ -543,8 +544,168 @@ func TestExecute_List_ShowsRegistryIDForGrpcSource(t *testing.T) {
 	if end > len(out) {
 		end = len(out)
 	}
-	if !strings.Contains(out[idx:end], "private") {
-		t.Errorf("expected registry id private near grpc-wf block; output:\n%s", out)
+	if !strings.Contains(out[idx:end], "Registry:     private") {
+		t.Errorf("expected registry private (as in cre registry list) near grpc-wf block; output:\n%s", out)
+	}
+	if strings.Contains(out[idx:end], "Address:") {
+		t.Errorf("did not expect Address line for off-chain/grpc workflow; output:\n%s", out)
+	}
+
+	idxOn := strings.Index(out, "onchain-wf")
+	if idxOn < 0 {
+		t.Fatal("expected onchain-wf in output")
+	}
+	endOn := idxOn + 500
+	if endOn > len(out) {
+		endOn = len(out)
+	}
+	onChunk := out[idxOn:endOn]
+	if !strings.Contains(onChunk, "onchain:ethereum-testnet-sepolia") ||
+		!strings.Contains(onChunk, "Registry:") {
+		t.Errorf("expected on-chain registry as in cre registry list near onchain-wf block; output:\n%s", out)
+	}
+	if !strings.Contains(onChunk, "Address:") ||
+		!strings.Contains(onChunk, "0xaE55eB3EDAc48a1163EE2cbb1205bE1e90Ea1135") {
+		t.Errorf("expected full registry Address line for on-chain workflow; output:\n%s", onChunk)
+	}
+}
+
+// fakeGQLOrphanContractAndGrpc: contract address not in user context + one grpc workflow.
+type fakeGQLOrphanContractAndGrpc struct{}
+
+func (f *fakeGQLOrphanContractAndGrpc) Execute(ctx context.Context, req *graphql.Request, resp any) error {
+	chainSel := "16015286601757825753"
+	orphanAddr := "0x1111111111111111111111111111111111111111"
+	body, err := json.Marshal(map[string]any{
+		"workflows": map[string]any{
+			"count": 2,
+			"data": []map[string]string{
+				{
+					"name":           "orphan-onchain",
+					"workflowId":     "0x01",
+					"ownerAddress":   "0xbb",
+					"status":         "ACTIVE",
+					"workflowSource": "contract:" + chainSel + ":" + orphanAddr,
+				},
+				{
+					"name":           "grpc-wf",
+					"workflowId":     "0x02",
+					"ownerAddress":   "0xdd",
+					"status":         "ACTIVE",
+					"workflowSource": "grpc:private-grpc-registry:v1",
+				},
+			},
+		},
+	})
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(body, resp)
+}
+
+func TestExecute_List_UnmatchedContractShowsAPISource(t *testing.T) {
+	chainSel := "16015286601757825753"
+	addr := "0xaE55eB3EDAc48a1163EE2cbb1205bE1e90Ea1135"
+	logger := zerolog.New(io.Discard)
+	rtCtx := &runtime.Context{
+		Logger:         &logger,
+		Credentials:    &credentials.Credentials{},
+		EnvironmentSet: &environments.EnvironmentSet{EnvName: "STAGING"},
+		TenantContext: &tenantctx.EnvironmentContext{
+			Registries: []*tenantctx.Registry{
+				{
+					ID:            "onchain:ethereum-testnet-sepolia",
+					Label:         "sepolia",
+					ChainSelector: strPtr(chainSel),
+					Address:       strPtr(addr),
+				},
+				{ID: "private", Label: "Private hosted"},
+			},
+		},
+	}
+
+	h := workflowlist.NewHandlerWithClient(rtCtx, &fakeGQLOrphanContractAndGrpc{})
+
+	oldStdout := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stdout = w
+
+	err = h.Execute(context.Background(), "", false)
+	w.Close()
+	os.Stdout = oldStdout
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var buf strings.Builder
+	_, _ = io.Copy(&buf, r)
+	out := buf.String()
+
+	wantSource := "contract:" + chainSel + ":0x1111111111111111111111111111111111111111"
+	idx := strings.Index(out, "orphan-onchain")
+	if idx < 0 {
+		t.Fatal("expected orphan-onchain in output")
+	}
+	end := idx + 500
+	if end > len(out) {
+		end = len(out)
+	}
+	chunk := out[idx:end]
+	if !strings.Contains(chunk, "Registry:     "+wantSource) {
+		t.Errorf("expected unmatched contract to show API workflowSource in Registry line; chunk:\n%s", chunk)
+	}
+	if !strings.Contains(chunk, "Address:") ||
+		!strings.Contains(chunk, "0x1111111111111111111111111111111111111111") {
+		t.Errorf("expected Address from workflow source for orphan contract; chunk:\n%s", chunk)
+	}
+}
+
+func TestExecute_RegistryFilter_PrivateExcludesUnmatchedContract(t *testing.T) {
+	chainSel := "16015286601757825753"
+	addr := "0xaE55eB3EDAc48a1163EE2cbb1205bE1e90Ea1135"
+	logger := zerolog.New(io.Discard)
+	rtCtx := &runtime.Context{
+		Logger:         &logger,
+		Credentials:    &credentials.Credentials{},
+		EnvironmentSet: &environments.EnvironmentSet{EnvName: "STAGING"},
+		TenantContext: &tenantctx.EnvironmentContext{
+			Registries: []*tenantctx.Registry{
+				{
+					ID:            "onchain:ethereum-testnet-sepolia",
+					Label:         "sepolia",
+					ChainSelector: strPtr(chainSel),
+					Address:       strPtr(addr),
+				},
+				{ID: "private", Label: "Private hosted"},
+			},
+		},
+	}
+
+	h := workflowlist.NewHandlerWithClient(rtCtx, &fakeGQLOrphanContractAndGrpc{})
+
+	oldStdout := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stdout = w
+
+	err = h.Execute(context.Background(), "private", false)
+	w.Close()
+	os.Stdout = oldStdout
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var buf strings.Builder
+	_, _ = io.Copy(&buf, r)
+	out := buf.String()
+
+	if !strings.Contains(out, "grpc-wf") || strings.Contains(out, "orphan-onchain") {
+		t.Errorf("expected private filter to include only grpc workflows resolved to private, not unmatched contract rows; output:\n%s", out)
 	}
 }
 

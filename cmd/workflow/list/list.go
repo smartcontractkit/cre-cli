@@ -191,7 +191,7 @@ func rowMatchesRegistry(workflowSource string, reg *tenantctx.Registry, all []*t
 
 	const contractPrefix = "contract:"
 	if strings.HasPrefix(workflowSource, contractPrefix) {
-		return contractSourceMatchesRegistry(workflowSource, reg)
+		return contractSourceMatchesRegistry(workflowSource, reg, all)
 	}
 
 	if strings.HasPrefix(workflowSource, "grpc:") {
@@ -218,7 +218,7 @@ func hasContractAddress(reg *tenantctx.Registry) bool {
 	return reg != nil && reg.Address != nil && strings.TrimSpace(*reg.Address) != ""
 }
 
-// registryEligibleForContractRows matches formatRegistryDisplay: on-chain rows need a registry
+// registryEligibleForContractRows: on-chain rows need a registry
 // entry with an address; many manifests omit "type" entirely.
 func registryEligibleForContractRows(reg *tenantctx.Registry) bool {
 	if reg == nil || !hasContractAddress(reg) {
@@ -245,24 +245,44 @@ func registryEligibleForGrpcRows(reg *tenantctx.Registry) bool {
 	return true
 }
 
-func contractSourceMatchesRegistry(workflowSource string, reg *tenantctx.Registry) bool {
-	if !registryEligibleForContractRows(reg) {
-		return false
-	}
+func contractSourceMatchesRegistry(workflowSource string, reg *tenantctx.Registry, all []*tenantctx.Registry) bool {
+	found := findContractRegistry(workflowSource, all)
+	return found != nil && found.ID == reg.ID
+}
+
+func findContractRegistry(workflowSource string, registries []*tenantctx.Registry) *tenantctx.Registry {
 	const contractPrefix = "contract:"
+	if !strings.HasPrefix(workflowSource, contractPrefix) {
+		return nil
+	}
 	rest := strings.TrimPrefix(workflowSource, contractPrefix)
 	selector, addr, ok := strings.Cut(rest, ":")
 	if !ok || addr == "" {
-		return false
+		return nil
 	}
-	if !addressesEqual(addr, *reg.Address) {
-		return false
+	for _, r := range registries {
+		if !registryEligibleForContractRows(r) {
+			continue
+		}
+		if !addressesEqual(addr, *r.Address) {
+			continue
+		}
+		if r.ChainSelector != nil && strings.TrimSpace(*r.ChainSelector) != "" &&
+			strings.TrimSpace(*r.ChainSelector) != strings.TrimSpace(selector) {
+			continue
+		}
+		return r
 	}
-	if reg.ChainSelector != nil && strings.TrimSpace(*reg.ChainSelector) != "" &&
-		strings.TrimSpace(*reg.ChainSelector) != strings.TrimSpace(selector) {
-		return false
+	return nil
+}
+
+func parseContractWorkflowSource(workflowSource string) (selector, addr string, ok bool) {
+	const contractPrefix = "contract:"
+	if !strings.HasPrefix(workflowSource, contractPrefix) {
+		return "", "", false
 	}
-	return true
+	rest := strings.TrimPrefix(workflowSource, contractPrefix)
+	return strings.Cut(rest, ":")
 }
 
 // resolveGrpcSourceRegistry maps API grpc workflow sources (e.g. grpc:private-grpc-registry:v1)
@@ -324,55 +344,50 @@ func (h *Handler) printWorkflows(rows []workflowRow, afterRegistryFilter int, in
 	ui.Line()
 
 	for i, r := range rows {
-		regCol := formatRegistryDisplay(r.WorkflowSource, h.tenantCtx.Registries)
+		matchedReg := resolveWorkflowRegistry(r.WorkflowSource, h.tenantCtx.Registries)
+		regIDCol := formatRegistryIDFromResolved(r.WorkflowSource, matchedReg)
 		ui.Bold(fmt.Sprintf("%d. %s", i+1, r.Name))
 		ui.Dim(fmt.Sprintf("   Workflow ID:  %s", r.WorkflowID))
 		ui.Dim(fmt.Sprintf("   Owner:        %s", r.OwnerAddress))
 		ui.Dim(fmt.Sprintf("   Status:       %s", r.Status))
-		ui.Dim(fmt.Sprintf("   Registry:     %s", regCol))
+		ui.Dim(fmt.Sprintf("   Registry:     %s", regIDCol))
+		if matchedReg != nil && registryEligibleForContractRows(matchedReg) && matchedReg.Address != nil {
+			ui.Dim(fmt.Sprintf("   Address:      %s", strings.TrimSpace(*matchedReg.Address)))
+		} else if _, addr, ok := parseContractWorkflowSource(r.WorkflowSource); ok && strings.TrimSpace(addr) != "" {
+			ui.Dim(fmt.Sprintf("   Address:      %s", strings.TrimSpace(addr)))
+		}
 		ui.Line()
 	}
 }
 
-func formatRegistryDisplay(workflowSource string, registries []*tenantctx.Registry) string {
+// resolveWorkflowRegistry finds the tenant registry entry for a workflowSource, if any.
+func resolveWorkflowRegistry(workflowSource string, registries []*tenantctx.Registry) *tenantctx.Registry {
 	byID := registryByWorkflowSource(registries)
 	if reg, ok := byID[workflowSource]; ok {
-		if reg.Label != "" {
-			return reg.Label
-		}
-		return reg.ID
+		return reg
 	}
 
+	if cr := findContractRegistry(workflowSource, registries); cr != nil {
+		return cr
+	}
 	const contractPrefix = "contract:"
 	if strings.HasPrefix(workflowSource, contractPrefix) {
-		rest := strings.TrimPrefix(workflowSource, contractPrefix)
-		selector, addr, ok := strings.Cut(rest, ":")
-		if ok && addr != "" {
-			for _, r := range registries {
-				if r == nil || r.Address == nil {
-					continue
-				}
-				if !addressesEqual(addr, *r.Address) {
-					continue
-				}
-				if r.ChainSelector != nil && strings.TrimSpace(*r.ChainSelector) != "" &&
-					strings.TrimSpace(*r.ChainSelector) != strings.TrimSpace(selector) {
-					continue
-				}
-				if r.Label != "" {
-					return r.Label
-				}
-				return r.ID
-			}
-		}
+		return nil
 	}
 
 	if strings.HasPrefix(workflowSource, "grpc:") {
-		if reg := resolveGrpcSourceRegistry(workflowSource, registries); reg != nil {
-			return reg.ID
-		}
+		return resolveGrpcSourceRegistry(workflowSource, registries)
 	}
 
+	return nil
+}
+
+// formatRegistryIDFromResolved returns the registry ID for display when the API source maps to
+// user context (same as "ID:" in cre registry list); otherwise the raw workflowSource from the API.
+func formatRegistryIDFromResolved(workflowSource string, matched *tenantctx.Registry) string {
+	if matched != nil {
+		return matched.ID
+	}
 	return workflowSource
 }
 
