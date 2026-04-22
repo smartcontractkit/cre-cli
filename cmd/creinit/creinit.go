@@ -15,6 +15,7 @@ import (
 
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
+	"github.com/smartcontractkit/cre-cli/internal/runtimeattach"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/templateconfig"
 	"github.com/smartcontractkit/cre-cli/internal/templaterepo"
@@ -82,6 +83,7 @@ Templates are fetched dynamically from GitHub repositories.`,
 	_ = initCmd.Flags().MarkDeprecated("template-id", "use --template instead")
 	_ = initCmd.Flags().MarkHidden("template-id")
 
+	runtimeattach.Register(initCmd, runtimeattach.Empty)
 	return initCmd
 }
 

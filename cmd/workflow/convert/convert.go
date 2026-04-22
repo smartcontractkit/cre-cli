@@ -12,6 +12,7 @@ import (
 	cmdcommon "github.com/smartcontractkit/cre-cli/cmd/common"
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
+	"github.com/smartcontractkit/cre-cli/internal/runtimeattach"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/transformation"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
@@ -45,6 +46,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 		},
 	}
 	convertCmd.Flags().BoolVarP(&force, "force", "f", false, "Skip confirmation prompt and convert immediately")
+	runtimeattach.Register(convertCmd, runtimeattach.CredsAndTenant)
 	return convertCmd
 }
 

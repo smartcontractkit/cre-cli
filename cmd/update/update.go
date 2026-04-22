@@ -21,6 +21,7 @@ import (
 
 	"github.com/smartcontractkit/cre-cli/cmd/version"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
+	"github.com/smartcontractkit/cre-cli/internal/runtimeattach"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
@@ -401,5 +402,6 @@ func New(_ *runtime.Context) *cobra.Command { // <-- No longer uses rt
 		},
 	}
 
+	runtimeattach.Register(versionCmd, runtimeattach.Empty)
 	return versionCmd
 }

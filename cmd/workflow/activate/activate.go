@@ -10,6 +10,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/cmd/client"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
+	"github.com/smartcontractkit/cre-cli/internal/runtimeattach"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 	"github.com/smartcontractkit/cre-cli/internal/validation"
@@ -51,6 +52,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	settings.AddTxnTypeFlags(activateCmd)
 	settings.AddSkipConfirmation(activateCmd)
 
+	runtimeattach.Register(activateCmd, runtimeattach.FullWithDeploymentRPC)
 	return activateCmd
 }
 

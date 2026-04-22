@@ -124,7 +124,8 @@ func loadWorkflowSettings(logger *zerolog.Logger, v *viper.Viper, cmd *cobra.Com
 	deploymentRegistry := workflowSettings.UserWorkflowSettings.DeploymentRegistry
 
 	// If deployment-registry is set, owner depends on how that id resolves; defer to
-	// FinalizeWorkflowOwner (after ResolveRegistry). Otherwise resolve from env/config now.
+	// FinalizeWorkflowOwner (called from runtime.Context.AttachResolvedRegistry after
+	// ResolveRegistry). Otherwise resolve from env/config now.
 	if !ShouldSkipGetOwner(cmd) {
 		if deploymentRegistry == "" {
 			ownerAddress, ownerType, err := GetWorkflowOwner(v)

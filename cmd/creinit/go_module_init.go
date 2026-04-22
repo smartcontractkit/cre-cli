@@ -35,16 +35,16 @@ func initializeGoModule(logger *zerolog.Logger, workingDirectory, moduleName str
 		}
 	}
 
-	if err := runCommand(logger, workingDirectory, "go", "get", "github.com/smartcontractkit/cre-sdk-go@"+constants.SdkVersion); err != nil {
-		return nil, err
+	// Single go get: one module graph resolution instead of four sequential
+	// downloads (important for tests under tight -timeout, e.g. -timeout=120s).
+	getArgs := []string{
+		"get",
+		"github.com/smartcontractkit/cre-sdk-go@" + constants.SdkVersion,
+		"github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm@" + constants.EVMCapabilitiesVersion,
+		"github.com/smartcontractkit/cre-sdk-go/capabilities/networking/http@" + constants.HTTPCapabilitiesVersion,
+		"github.com/smartcontractkit/cre-sdk-go/capabilities/scheduler/cron@" + constants.CronCapabilitiesVersion,
 	}
-	if err := runCommand(logger, workingDirectory, "go", "get", "github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm@"+constants.EVMCapabilitiesVersion); err != nil {
-		return nil, err
-	}
-	if err := runCommand(logger, workingDirectory, "go", "get", "github.com/smartcontractkit/cre-sdk-go/capabilities/networking/http@"+constants.HTTPCapabilitiesVersion); err != nil {
-		return nil, err
-	}
-	if err := runCommand(logger, workingDirectory, "go", "get", "github.com/smartcontractkit/cre-sdk-go/capabilities/scheduler/cron@"+constants.CronCapabilitiesVersion); err != nil {
+	if err := runCommand(logger, workingDirectory, "go", getArgs...); err != nil {
 		return nil, err
 	}
 
@@ -67,6 +67,7 @@ func runCommand(logger *zerolog.Logger, dir, command string, args ...string) err
 
 	cmd := exec.Command(command, args...)
 	cmd.Dir = dir
+	cmd.Env = os.Environ()
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {

@@ -6,11 +6,12 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
+	"github.com/smartcontractkit/cre-cli/internal/runtimeattach"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:     "list",
 		Short:   "Lists available workflow registries for the current environment",
 		Long:    `Displays the registries configured for your organization, including type and address.`,
@@ -44,4 +45,6 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 			return nil
 		},
 	}
+	runtimeattach.Register(cmd, runtimeattach.CredsAndTenant)
+	return cmd
 }

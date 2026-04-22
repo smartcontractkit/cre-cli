@@ -14,6 +14,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
+	"github.com/smartcontractkit/cre-cli/internal/runtimeattach"
 	"github.com/smartcontractkit/cre-cli/internal/tenantctx"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
@@ -33,6 +34,7 @@ func New(runtimeCtx *runtime.Context) *cobra.Command {
 			return h.execute()
 		},
 	}
+	runtimeattach.Register(cmd, runtimeattach.Empty)
 	return cmd
 }
 

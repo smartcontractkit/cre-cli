@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
+	"github.com/smartcontractkit/cre-cli/internal/runtimeattach"
 	"github.com/smartcontractkit/cre-cli/internal/templateconfig"
 	"github.com/smartcontractkit/cre-cli/internal/templaterepo"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
@@ -17,7 +18,7 @@ type handler struct {
 }
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:     "remove <owner/repo>...",
 		Short:   "Removes a template repository source",
 		Long:    `Removes one or more template repository sources from ~/.cre/template.yaml. The ref portion is optional and ignored during matching.`,
@@ -28,6 +29,8 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 			return h.Execute(args)
 		},
 	}
+	runtimeattach.Register(cmd, runtimeattach.Empty)
+	return cmd
 }
 
 func (h *handler) Execute(repos []string) error {

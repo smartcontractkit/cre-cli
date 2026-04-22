@@ -10,6 +10,7 @@ import (
 	cmdcommon "github.com/smartcontractkit/cre-cli/cmd/common"
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
+	"github.com/smartcontractkit/cre-cli/internal/runtimeattach"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
@@ -31,6 +32,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	}
 	buildCmd.Flags().StringP("output", "o", "", "Output file path for the compiled WASM binary (default: <workflow-folder>/binary.wasm)")
 	buildCmd.Flags().Bool(cmdcommon.SkipTypeChecksCLIFlag, false, "Skip TypeScript project typecheck during compilation (passes "+cmdcommon.SkipTypeChecksFlag+" to cre-compile)")
+	runtimeattach.Register(buildCmd, runtimeattach.Empty)
 	return buildCmd
 }
 

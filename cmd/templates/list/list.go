@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
+	"github.com/smartcontractkit/cre-cli/internal/runtimeattach"
 	"github.com/smartcontractkit/cre-cli/internal/templateconfig"
 	"github.com/smartcontractkit/cre-cli/internal/templaterepo"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
@@ -51,6 +52,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	cmd.Flags().Bool("refresh", false, "Bypass cache and fetch fresh data")
 	cmd.Flags().Bool("json", false, "Output template list as JSON")
 
+	runtimeattach.Register(cmd, runtimeattach.Empty)
 	return cmd
 }
 

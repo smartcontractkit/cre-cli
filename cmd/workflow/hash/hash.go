@@ -11,6 +11,7 @@ import (
 	cmdcommon "github.com/smartcontractkit/cre-cli/cmd/common"
 	"github.com/smartcontractkit/cre-cli/internal/ethkeys"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
+	"github.com/smartcontractkit/cre-cli/internal/runtimeattach"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
@@ -68,6 +69,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	hashCmd.MarkFlagsMutuallyExclusive("config", "no-config", "default-config")
 	hashCmd.Flags().Bool(cmdcommon.SkipTypeChecksCLIFlag, false, "Skip TypeScript project typecheck during compilation (passes "+cmdcommon.SkipTypeChecksFlag+" to cre-compile)")
 
+	runtimeattach.Register(hashCmd, runtimeattach.ProjectSettingsNoCreds)
 	return hashCmd
 }
 

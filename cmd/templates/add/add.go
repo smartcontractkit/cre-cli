@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
+	"github.com/smartcontractkit/cre-cli/internal/runtimeattach"
 	"github.com/smartcontractkit/cre-cli/internal/templateconfig"
 	"github.com/smartcontractkit/cre-cli/internal/templaterepo"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
@@ -17,7 +18,7 @@ type handler struct {
 }
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:     "add <owner/repo[@ref]>...",
 		Short:   "Adds a template repository source",
 		Long:    `Adds one or more template repository sources to ~/.cre/template.yaml. These repositories are used by cre init to discover available templates.`,
@@ -28,6 +29,8 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 			return h.Execute(args)
 		},
 	}
+	runtimeattach.Register(cmd, runtimeattach.Empty)
+	return cmd
 }
 
 func (h *handler) Execute(repos []string) error {

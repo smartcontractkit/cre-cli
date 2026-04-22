@@ -10,6 +10,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/cmd/client"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
+	"github.com/smartcontractkit/cre-cli/internal/runtimeattach"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 	"github.com/smartcontractkit/cre-cli/internal/validation"
@@ -33,13 +34,11 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 		Example: `cre workflow pause ./my-workflow`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			handler := newHandler(runtimeContext)
-
 			inputs, err := handler.ResolveInputs(runtimeContext.Viper)
 			if err != nil {
 				return err
 			}
 			handler.inputs = inputs
-
 			if err := handler.ValidateInputs(); err != nil {
 				return err
 			}
@@ -49,6 +48,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 
 	settings.AddTxnTypeFlags(pauseCmd)
 	settings.AddSkipConfirmation(pauseCmd)
+	runtimeattach.Register(pauseCmd, runtimeattach.FullWithDeploymentRPC)
 	return pauseCmd
 }
 
