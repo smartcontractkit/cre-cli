@@ -47,9 +47,9 @@ type workflowRow struct {
 
 // Handler loads and prints workflows (used by the command and tests).
 type Handler struct {
-	credentials    *credentials.Credentials
-	tenantCtx      *tenantctx.EnvironmentContext
-	gql            GraphQLExecutor
+	credentials *credentials.Credentials
+	tenantCtx   *tenantctx.EnvironmentContext
+	gql         GraphQLExecutor
 }
 
 // NewHandler builds a handler with the real GraphQL client.

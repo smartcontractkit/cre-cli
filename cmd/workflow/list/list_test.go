@@ -409,8 +409,8 @@ func TestExecute_RegistryFilter_MatchesContractSource(t *testing.T) {
 		TenantContext: &tenantctx.EnvironmentContext{
 			Registries: []*tenantctx.Registry{
 				{
-					ID:            "onchain:ethereum-testnet-sepolia",
-					Label:         "ethereum-testnet-sepolia (0xaE55...1135)",
+					ID:    "onchain:ethereum-testnet-sepolia",
+					Label: "ethereum-testnet-sepolia (0xaE55...1135)",
 					// type often omitted in context.yaml; matching uses address + chain selector
 					ChainSelector: strPtr(chainSel),
 					Address:       strPtr(addr),
