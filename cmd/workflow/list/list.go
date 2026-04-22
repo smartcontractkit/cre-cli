@@ -117,7 +117,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "list",
 		Short:   "Lists workflows deployed for your organization",
-		Long:    `Lists workflows across registries using the platform API. Requires authentication and user context. Does not use a workflow folder or --target. Deleted workflows are hidden by default.`,
+		Long:    `Lists workflows across registries in your organization. Requires authentication and user context. Deleted workflows are hidden by default.`,
 		Example: "cre workflow list\n  cre workflow list --registry private\n  cre workflow list --include-deleted",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -171,7 +171,6 @@ func (h *Handler) fetchAllWorkflows(ctx context.Context) ([]workflowRow, error) 
 
 // filterRowsByRegistry keeps rows whose workflowSource resolves to the given registry.
 // API workflowSource values (e.g. contract:…:0x…, grpc:…) rarely equal context registry IDs
-// (e.g. onchain:ethereum-testnet-sepolia, private), so matching mirrors formatRegistryDisplay.
 func filterRowsByRegistry(rows []workflowRow, reg *tenantctx.Registry, all []*tenantctx.Registry) []workflowRow {
 	if reg == nil {
 		return rows

@@ -100,11 +100,11 @@ func ResolveRegistry(
 	}
 
 	if reg.Address == nil || *reg.Address == "" {
-			return nil, fmt.Errorf("on-chain registry %q has no address in user context", reg.ID)
+		return nil, fmt.Errorf("on-chain registry %q has no address in user context", reg.ID)
 	}
 
 	if reg.ChainSelector == nil {
-			return nil, fmt.Errorf("on-chain registry %q has no chain_selector in user context", reg.ID)
+		return nil, fmt.Errorf("on-chain registry %q has no chain_selector in user context", reg.ID)
 	}
 	chainName, err := ChainNameFromSelectorString(*reg.ChainSelector)
 	if err != nil {
