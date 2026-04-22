@@ -7,6 +7,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/cmd/templates/list"
 	"github.com/smartcontractkit/cre-cli/cmd/templates/remove"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
+	"github.com/smartcontractkit/cre-cli/internal/runtimeattach"
 )
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
@@ -25,5 +26,6 @@ To scaffold a new project from a template, use: cre init`,
 	templatesCmd.AddCommand(add.New(runtimeContext))
 	templatesCmd.AddCommand(remove.New(runtimeContext))
 
+	runtimeattach.Register(templatesCmd, runtimeattach.Empty)
 	return templatesCmd
 }

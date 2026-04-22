@@ -14,6 +14,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/simulate"
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/test"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
+	"github.com/smartcontractkit/cre-cli/internal/runtimeattach"
 )
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
@@ -34,5 +35,6 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	workflowCmd.AddCommand(simulate.New(runtimeContext))
 	workflowCmd.AddCommand(limits.New())
 
+	runtimeattach.Register(workflowCmd, runtimeattach.Empty)
 	return workflowCmd
 }

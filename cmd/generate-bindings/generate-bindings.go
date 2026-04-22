@@ -15,6 +15,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/cmd/generate-bindings/bindings"
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
+	"github.com/smartcontractkit/cre-cli/internal/runtimeattach"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 	"github.com/smartcontractkit/cre-cli/internal/validation"
 )
@@ -65,6 +66,7 @@ For JSON files the ABI is read from the top-level "abi" field.`,
 	generateBindingsCmd.Flags().StringP("abi", "a", "", "Path to ABI directory (defaults to contracts/{chain-family}/src/abi/). Supports *.abi and *.json files")
 	generateBindingsCmd.Flags().StringP("pkg", "k", "bindings", "Base package name (each contract gets its own subdirectory)")
 
+	runtimeattach.Register(generateBindingsCmd, runtimeattach.Empty)
 	return generateBindingsCmd
 }
 

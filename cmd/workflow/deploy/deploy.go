@@ -16,6 +16,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
+	"github.com/smartcontractkit/cre-cli/internal/runtimeattach"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 	"github.com/smartcontractkit/cre-cli/internal/validation"
@@ -109,6 +110,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	deployCmd.Flags().Bool(cmdcommon.SkipTypeChecksCLIFlag, false, "Skip TypeScript project typecheck during compilation (passes "+cmdcommon.SkipTypeChecksFlag+" to cre-compile)")
 	deployCmd.MarkFlagsMutuallyExclusive("config", "no-config", "default-config")
 
+	runtimeattach.Register(deployCmd, runtimeattach.FullWithDeploymentRPC)
 	return deployCmd
 }
 

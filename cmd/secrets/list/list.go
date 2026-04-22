@@ -23,6 +23,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/cmd/secrets/common"
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
+	"github.com/smartcontractkit/cre-cli/internal/runtimeattach"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/types"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
@@ -74,6 +75,7 @@ func New(ctx *runtime.Context) *cobra.Command {
 	settings.AddTxnTypeFlags(cmd)
 	settings.AddSkipConfirmation(cmd)
 
+	runtimeattach.Register(cmd, runtimeattach.Full)
 	return cmd
 }
 

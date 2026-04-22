@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/simulate"
+	"github.com/smartcontractkit/cre-cli/internal/runtimeattach"
 )
 
 func New() *cobra.Command {
@@ -15,8 +16,11 @@ func New() *cobra.Command {
 		Long:  `The limits command provides tools for managing workflow simulation limits.`,
 	}
 
-	limitsCmd.AddCommand(newExportCmd())
+	export := newExportCmd()
+	limitsCmd.AddCommand(export)
 
+	runtimeattach.Register(limitsCmd, runtimeattach.Empty)
+	runtimeattach.Register(export, runtimeattach.Empty)
 	return limitsCmd
 }
 

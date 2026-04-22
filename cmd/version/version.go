@@ -4,6 +4,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
+	"github.com/smartcontractkit/cre-cli/internal/runtimeattach"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
@@ -21,5 +22,6 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 		},
 	}
 
+	runtimeattach.Register(versionCmd, runtimeattach.Empty)
 	return versionCmd
 }

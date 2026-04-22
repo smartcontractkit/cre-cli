@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
+	"github.com/smartcontractkit/cre-cli/internal/runtimeattach"
 	"github.com/smartcontractkit/cre-cli/internal/validation"
 )
 
@@ -43,6 +44,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 
 	testCmd.Flags().StringP("run", "r", "", "Runs only tests and examples matching provided regular expression")
 
+	runtimeattach.Register(testCmd, runtimeattach.Full)
 	return testCmd
 }
 

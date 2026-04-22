@@ -12,6 +12,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/cmd/secrets/update"
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
+	"github.com/smartcontractkit/cre-cli/internal/runtimeattach"
 )
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
@@ -41,5 +42,6 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	secretsCmd.AddCommand(list.New(runtimeContext))
 	secretsCmd.AddCommand(execute.New(runtimeContext))
 
+	runtimeattach.Register(secretsCmd, runtimeattach.Empty)
 	return secretsCmd
 }

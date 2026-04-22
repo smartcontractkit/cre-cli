@@ -12,6 +12,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
+	"github.com/smartcontractkit/cre-cli/internal/runtimeattach"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 	"github.com/smartcontractkit/cre-cli/internal/validation"
@@ -49,6 +50,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	settings.AddTxnTypeFlags(deleteCmd)
 	settings.AddSkipConfirmation(deleteCmd)
 
+	runtimeattach.Register(deleteCmd, runtimeattach.FullWithDeploymentRPC)
 	return deleteCmd
 }
 

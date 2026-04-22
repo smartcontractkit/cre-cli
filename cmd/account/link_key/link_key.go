@@ -26,6 +26,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
+	"github.com/smartcontractkit/cre-cli/internal/runtimeattach"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/types"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
@@ -89,6 +90,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	settings.AddSkipConfirmation(cmd)
 	cmd.Flags().StringP("owner-label", "l", "", "Label for the workflow owner")
 
+	runtimeattach.Register(cmd, runtimeattach.FullWithDeploymentRPC)
 	return cmd
 }
 

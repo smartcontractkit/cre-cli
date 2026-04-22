@@ -27,10 +27,11 @@ import (
 	"github.com/smartcontractkit/cre-cli/cmd/whoami"
 	"github.com/smartcontractkit/cre-cli/cmd/workflow"
 	"github.com/smartcontractkit/cre-cli/internal/constants"
-	"github.com/smartcontractkit/cre-cli/internal/context"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/logger"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
+	"github.com/smartcontractkit/cre-cli/internal/runtimeattach"
+	"github.com/smartcontractkit/cre-cli/internal/runtimespec"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/telemetry"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
@@ -40,11 +41,10 @@ import (
 //go:embed template/help_template.tpl
 var helpTemplate string
 
-// errLoginCompleted is a sentinel error returned from PersistentPreRunE when
-// the auto-login flow completes successfully. Returning an error (instead of
-// calling os.Exit) lets Execute() emit telemetry and exit cleanly with code 0,
-// while still preventing Cobra from running the original command's RunE.
-var errLoginCompleted = errors.New("login completed successfully; please re-run your command")
+// errLoginCompleted aliases runtime.ErrLoginCompleted for backwards-compatible
+// comparison in this package. Pre-run (runtimespec.Apply) can return the same
+// sentinel after an interactive login during credential setup.
+var errLoginCompleted = runtime.ErrLoginCompleted
 
 var (
 	// RootCmd represents the base command when called without any subcommands
@@ -161,124 +161,29 @@ func newRootCommand() *cobra.Command {
 				return fmt.Errorf("failed to load environment details: %w", err)
 			}
 
-			if isLoadCredentials(cmd) {
+			preRunSpec := runtimeattach.SpecForCommand(cmd)
+			if !preRunSpec.IsEmpty() {
 				if showSpinner {
-					spinner.Update("Validating credentials...")
+					if preRunSpec.Credentials {
+						spinner.Update("Validating credentials...")
+					} else if preRunSpec.NeedsSettingsLoad() {
+						spinner.Update("Loading settings...")
+					}
 				}
-				skipValidation := shouldSkipValidation(cmd)
-				err := runtimeContext.AttachCredentials(cmd.Context(), skipValidation)
-				if err != nil {
+				if err := runtimespec.Apply(cmd.Context(), runtimeContext, cmd, args, preRunSpec); err != nil {
 					if showSpinner {
 						spinner.Stop()
 					}
-
-					if errors.Is(err, runtime.ErrValidationFailed) {
-						// Credentials exist but validation failed (likely network).
-						// Do NOT prompt for re-login -- that causes an infinite loop.
-						ui.Line()
-						if runtimeContext.EnvironmentSet != nil && runtimeContext.EnvironmentSet.RequiresVPN() {
-							ui.ErrorWithSuggestions("Credential validation failed", []string{
-								fmt.Sprintf("The %s environment requires Tailscale VPN.", runtimeContext.EnvironmentSet.EnvName),
-								"Ensure Tailscale is connected to the smartcontract.com network, then retry.",
-							})
-						} else {
-							ui.Error("Credential validation failed")
-						}
-						ui.EnvContext(runtimeContext.EnvironmentSet.EnvLabel())
-						ui.Line()
-						return fmt.Errorf("authentication required: %w", err)
-					}
-
-					// No credentials on disk -- prompt user to login
-					ui.Line()
-					ui.Warning("You are not logged in")
-					ui.EnvContext(runtimeContext.EnvironmentSet.EnvLabel())
-					ui.Line()
-
-					runLogin, formErr := ui.Confirm("Would you like to login now?",
-						ui.WithLabels("Yes, login", "No, cancel"),
-					)
-					if formErr != nil {
-						return fmt.Errorf("authentication required: %w", err)
-					}
-
-					if !runLogin {
-						return fmt.Errorf("authentication required: %w", err)
-					}
-
-					// Run login flow
-					ui.Line()
-					if loginErr := login.Run(runtimeContext); loginErr != nil {
-						return fmt.Errorf("login failed: %w", loginErr)
-					}
-
-					// Signal Execute() to exit cleanly (code 0) without running
-					// the original command. The user needs to re-run their command
-					// now that credentials are available.
-					return errLoginCompleted
+					return err
 				}
 
-				// Ensure user context exists (fetches via GQL if missing, supports API key and bearer)
-				if showSpinner {
-					spinner.Update("Loading user context...")
-				}
-				if err := runtimeContext.AttachTenantContext(cmd.Context()); err != nil {
-					runtimeContext.Logger.Warn().Err(err).Msg("failed to load user context — context.yaml not available")
-				}
-
-				// Check if organization is ungated for commands that require it
-				cmdPath := cmd.CommandPath()
-				if cmdPath == "cre account link-key" {
+				if preRunSpec.Credentials && cmd.CommandPath() == "cre account link-key" {
 					if err := runtimeContext.Credentials.CheckIsUngatedOrganization(); err != nil {
 						if showSpinner {
 							spinner.Stop()
 						}
 						return err
 					}
-				}
-			}
-
-			// load settings from yaml files
-			if isLoadSettings(cmd) {
-				if showSpinner {
-					spinner.Update("Loading settings...")
-				}
-				// Capture the invocation directory before SetExecutionContext changes it.
-				if invocationDir, err := os.Getwd(); err == nil {
-					runtimeContext.InvocationDir = invocationDir
-				}
-
-				// Set execution context (project root + workflow directory if applicable)
-				projectRootFlag := runtimeContext.Viper.GetString(settings.Flags.ProjectRoot.Name)
-				if err := context.SetExecutionContext(cmd, args, projectRootFlag, rootLogger); err != nil {
-					if showSpinner {
-						spinner.Stop()
-					}
-					return err
-				}
-
-				// Stop spinner before AttachSettings — it may prompt for target selection
-				if showSpinner {
-					spinner.Stop()
-				}
-
-				err := runtimeContext.AttachSettings(cmd, isLoadDeploymentRPC(cmd))
-				if err != nil {
-					return fmt.Errorf("%w", err)
-				}
-
-				if err := runtimeContext.AttachResolvedRegistry(); err != nil {
-					return err
-				}
-
-				if err := runtimeContext.FinalizeDeferredWorkflowOwner(cmd); err != nil {
-					return err
-				}
-
-				// Restart spinner for remaining initialization
-				if showSpinner {
-					spinner = ui.NewSpinner()
-					spinner.Start("Loading settings...")
 				}
 			}
 
@@ -445,97 +350,9 @@ func newRootCommand() *cobra.Command {
 		templatesCmd,
 	)
 
+	runtimeattach.Register(rootCmd, runtimeattach.Empty)
+
 	return rootCmd
-}
-
-func isLoadSettings(cmd *cobra.Command) bool {
-	// It is not expected to have the settings file when running the following commands
-	var excludedCommands = map[string]struct{}{
-		"cre version":                {},
-		"cre login":                  {},
-		"cre logout":                 {},
-		"cre whoami":                 {},
-		"cre account access":         {},
-		"cre account list-key":       {},
-		"cre init":                   {},
-		"cre generate-bindings":      {},
-		"cre completion bash":        {},
-		"cre completion fish":        {},
-		"cre completion powershell":  {},
-		"cre completion zsh":         {},
-		"cre help":                   {},
-		"cre update":                 {},
-		"cre workflow":               {},
-		"cre workflow custom-build":  {},
-		"cre workflow limits":        {},
-		"cre workflow limits export": {},
-		"cre workflow build":         {},
-		"cre account":                {},
-		"cre secrets":                {},
-		"cre templates":              {},
-		"cre templates list":         {},
-		"cre templates add":          {},
-		"cre templates remove":       {},
-		"cre registry":               {},
-		"cre registry list":          {},
-		"cre":                        {},
-	}
-
-	_, exists := excludedCommands[cmd.CommandPath()]
-	return !exists
-}
-
-func isLoadCredentials(cmd *cobra.Command) bool {
-	// It is not expected to have the credentials loaded when running the following commands
-	var excludedCommands = map[string]struct{}{
-		"cre version":                {},
-		"cre login":                  {},
-		"cre logout":                 {},
-		"cre completion bash":        {},
-		"cre completion fish":        {},
-		"cre completion powershell":  {},
-		"cre completion zsh":         {},
-		"cre help":                   {},
-		"cre generate-bindings":      {},
-		"cre update":                 {},
-		"cre workflow":               {},
-		"cre workflow limits":        {},
-		"cre workflow limits export": {},
-		"cre account":                {},
-		"cre secrets":                {},
-		"cre workflow build":         {},
-		"cre workflow hash":          {},
-		"cre templates":              {},
-		"cre templates list":         {},
-		"cre templates add":          {},
-		"cre templates remove":       {},
-		"cre":                        {},
-	}
-
-	_, exists := excludedCommands[cmd.CommandPath()]
-	return !exists
-}
-
-func isLoadDeploymentRPC(cmd *cobra.Command) bool {
-	var includedCommands = map[string]struct{}{
-		"cre workflow deploy":    {},
-		"cre workflow pause":     {},
-		"cre workflow activate":  {},
-		"cre workflow delete":    {},
-		"cre account link-key":   {},
-		"cre account unlink-key": {},
-	}
-	_, exists := includedCommands[cmd.CommandPath()]
-	return exists
-}
-
-func shouldSkipValidation(cmd *cobra.Command) bool {
-	var excludedCommands = map[string]struct{}{
-		"cre logout": {},
-	}
-
-	_, exists := excludedCommands[cmd.CommandPath()]
-	return exists
 }
 
 func shouldCheckForUpdates(cmd *cobra.Command) bool {

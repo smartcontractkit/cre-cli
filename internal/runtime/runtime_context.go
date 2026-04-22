@@ -72,22 +72,6 @@ func (ctx *Context) AttachSettings(cmd *cobra.Command, validateDeployRPC bool) e
 	return nil
 }
 
-// FinalizeDeferredWorkflowOwner fills workflow owner when settings load deferred it
-// (non-empty deployment-registry). Call after AttachResolvedRegistry.
-func (ctx *Context) FinalizeDeferredWorkflowOwner(cmd *cobra.Command) error {
-	if ctx.Settings == nil {
-		return nil
-	}
-	return settings.FinalizeWorkflowOwner(
-		ctx.Viper,
-		cmd,
-		&ctx.Settings.Workflow,
-		ctx.Settings.User.TargetName,
-		ctx.ResolvedRegistry,
-		ctx.DerivedWorkflowOwner,
-	)
-}
-
 func (ctx *Context) AttachCredentials(validationCtx context.Context, skipValidation bool) error {
 	var err error
 
@@ -148,7 +132,10 @@ func (ctx *Context) AttachTenantContext(validationCtx context.Context) error {
 // AttachResolvedRegistry resolves the deployment-registry from workflow
 // settings against the tenant context registries. Must be called after
 // AttachSettings and AttachTenantContext.
-func (ctx *Context) AttachResolvedRegistry() error {
+// When finalizeWorkflowOwner is true, it also fills workflow owner when settings
+// load deferred it (non-empty deployment-registry); that requires resolved
+// registry and (for off-chain) derived owner from credentials.
+func (ctx *Context) AttachResolvedRegistry(cmd *cobra.Command, finalizeWorkflowOwner bool) error {
 	deploymentRegistry := ""
 	if ctx.Settings != nil {
 		deploymentRegistry = ctx.Settings.Workflow.UserWorkflowSettings.DeploymentRegistry
@@ -160,7 +147,18 @@ func (ctx *Context) AttachResolvedRegistry() error {
 	}
 
 	ctx.ResolvedRegistry = resolved
-	return nil
+
+	if !finalizeWorkflowOwner || ctx.Settings == nil {
+		return nil
+	}
+	return settings.FinalizeWorkflowOwner(
+		ctx.Viper,
+		cmd,
+		&ctx.Settings.Workflow,
+		ctx.Settings.User.TargetName,
+		ctx.ResolvedRegistry,
+		ctx.DerivedWorkflowOwner,
+	)
 }
 
 func (ctx *Context) AttachEnvironmentSet() error {

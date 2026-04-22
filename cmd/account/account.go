@@ -8,6 +8,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/cmd/account/list_key"
 	"github.com/smartcontractkit/cre-cli/cmd/account/unlink_key"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
+	"github.com/smartcontractkit/cre-cli/internal/runtimeattach"
 )
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
@@ -22,5 +23,6 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	accountCmd.AddCommand(unlink_key.New(runtimeContext))
 	accountCmd.AddCommand(list_key.New(runtimeContext))
 
+	runtimeattach.Register(accountCmd, runtimeattach.Empty)
 	return accountCmd
 }
