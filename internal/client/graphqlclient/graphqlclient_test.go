@@ -87,7 +87,7 @@ func TestExecute_ErrorPrefixReplacement(t *testing.T) {
 		t.Fatal("expected error, got nil")
 	}
 
-	expectedErr := "cre api client: DON family \"zone-a\" is not supported"
+	expectedErr := "cre api error: DON family \"zone-a\" is not supported"
 	if err.Error() != expectedErr {
 		t.Errorf("expected error %q, got %q", expectedErr, err.Error())
 	}

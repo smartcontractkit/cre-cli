@@ -66,7 +66,7 @@ func (c *Client) Execute(ctx context.Context, req *graphql.Request, resp any) er
 	err = c.client.Run(ctx, req, resp)
 	if err != nil {
 		if strings.HasPrefix(err.Error(), "graphql: ") {
-			return errors.New(strings.Replace(err.Error(), "graphql: ", "cre api client: ", 1))
+			return errors.New(strings.Replace(err.Error(), "graphql: ", "cre api error: ", 1))
 		}
 		return err
 	}
