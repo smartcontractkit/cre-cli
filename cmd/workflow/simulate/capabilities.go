@@ -42,7 +42,10 @@ func NewManualTriggerCapabilities(
 	limits *SimulationLimits,
 ) (*ManualTriggers, error) {
 	// Cron
-	manualCronTrigger := fakes.NewManualCronTriggerService(lggr)
+	manualCronTrigger, err := fakes.NewManualCronTriggerService(lggr)
+	if err != nil {
+		return nil, err
+	}
 	manualCronTriggerServer := crontrigger.NewCronServer(manualCronTrigger)
 	if err := registry.Add(ctx, manualCronTriggerServer); err != nil {
 		return nil, err
