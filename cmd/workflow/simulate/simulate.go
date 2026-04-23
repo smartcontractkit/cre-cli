@@ -707,7 +707,20 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 		switch trigger {
 		case "cron-trigger@1.0.0":
 			holder.TriggerFunc = func() error {
-				return manualTriggerCaps.ManualCronTrigger.ManualTrigger(ctx, triggerRegistrationID, time.Now())
+				skipWaitSignal := make(chan struct{}, 1)
+
+				userPromptCtx, cancel := context.WithCancel(ctx)
+				defer cancel()
+
+				go func() {
+					ui.Line()
+					pressed := ui.WaitForEnter(userPromptCtx, "Cron scheduler started. Press Enter to skip waiting...")
+					if pressed {
+						skipWaitSignal <- struct{}{}
+					}
+				}()
+
+				return manualTriggerCaps.ManualCronTrigger.ManualTrigger(ctx, triggerRegistrationID, skipWaitSignal)
 			}
 		case "http-trigger@1.0.0-alpha":
 			payload, err := getHTTPTriggerPayload(inputs.InvocationDir)
@@ -783,7 +796,13 @@ func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inp
 		switch trigger {
 		case "cron-trigger@1.0.0":
 			holder.TriggerFunc = func() error {
-				return manualTriggerCaps.ManualCronTrigger.ManualTrigger(ctx, triggerRegistrationID, time.Now())
+				skipWaitSignal := make(chan struct{}, 1)
+				if err := manualTriggerCaps.ManualCronTrigger.ManualTrigger(ctx, triggerRegistrationID, skipWaitSignal); err != nil {
+					return err
+				}
+				// With cron schedule on non-interactive mode
+				skipWaitSignal <- struct{}{}
+				return nil
 			}
 		case "http-trigger@1.0.0-alpha":
 			if strings.TrimSpace(inputs.HTTPPayload) == "" {
