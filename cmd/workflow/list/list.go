@@ -11,14 +11,13 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/tenantctx"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
-	"github.com/smartcontractkit/cre-cli/internal/workflowlist"
 )
 
 // Handler loads workflows via the list client and prints them.
 type Handler struct {
 	credentials *credentials.Credentials
 	tenantCtx   *tenantctx.EnvironmentContext
-	gql         workflowlist.Executor
+	gql         Executor
 }
 
 // NewHandler builds a handler with the real GraphQL executor.
@@ -27,7 +26,7 @@ func NewHandler(ctx *runtime.Context) *Handler {
 }
 
 // NewHandlerWithClient builds a handler with an optional GraphQL executor (nil uses graphqlclient.New).
-func NewHandlerWithClient(ctx *runtime.Context, gql workflowlist.Executor) *Handler {
+func NewHandlerWithClient(ctx *runtime.Context, gql Executor) *Handler {
 	if gql == nil {
 		gql = graphqlclient.New(ctx.Credentials, ctx.EnvironmentSet, ctx.Logger)
 	}
@@ -58,7 +57,7 @@ func (h *Handler) Execute(ctx context.Context, registryFilter string, includeDel
 
 	spinner := ui.NewSpinner()
 	spinner.Start("Listing workflows...")
-	rows, err := workflowlist.ListAll(ctx, h.gql, workflowlist.DefaultPageSize)
+	rows, err := ListAll(ctx, h.gql, DefaultPageSize)
 	spinner.Stop()
 	if err != nil {
 		return err

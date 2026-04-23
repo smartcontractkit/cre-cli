@@ -16,7 +16,6 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/tenantctx"
-	"github.com/smartcontractkit/cre-cli/internal/workflowlist"
 )
 
 func strPtr(s string) *string { return &s }
@@ -719,7 +718,7 @@ func (f *pagingFake) Execute(ctx context.Context, req *graphql.Request, resp any
 	var err error
 	switch f.call {
 	case 1:
-		data := make([]map[string]string, workflowlist.DefaultPageSize)
+		data := make([]map[string]string, cmdlist.DefaultPageSize)
 		for i := range data {
 			data[i] = map[string]string{
 				"name":           "wf-page-batch",
@@ -731,14 +730,14 @@ func (f *pagingFake) Execute(ctx context.Context, req *graphql.Request, resp any
 		}
 		body, err = json.Marshal(map[string]any{
 			"workflows": map[string]any{
-				"count": workflowlist.DefaultPageSize + 2,
+				"count": cmdlist.DefaultPageSize + 2,
 				"data":  data,
 			},
 		})
 	case 2:
 		body, err = json.Marshal(map[string]any{
 			"workflows": map[string]any{
-				"count": workflowlist.DefaultPageSize + 2,
+				"count": cmdlist.DefaultPageSize + 2,
 				"data": []map[string]string{
 					{
 						"name":           "wf-page-tail-1",
@@ -759,7 +758,7 @@ func (f *pagingFake) Execute(ctx context.Context, req *graphql.Request, resp any
 		})
 	default:
 		body, err = json.Marshal(map[string]any{
-			"workflows": map[string]any{"count": workflowlist.DefaultPageSize + 2, "data": []any{}},
+			"workflows": map[string]any{"count": cmdlist.DefaultPageSize + 2, "data": []any{}},
 		})
 	}
 	if err != nil {
@@ -800,7 +799,7 @@ func TestExecute_Pagination(t *testing.T) {
 	_, _ = io.Copy(&buf, r)
 	out := buf.String()
 
-	wantRows := workflowlist.DefaultPageSize + 2
+	wantRows := cmdlist.DefaultPageSize + 2
 	if got := strings.Count(out, "9292929292929292929292929292929292929292"); got < wantRows {
 		t.Errorf("expected at least %d owner cells, got %d in:\n%s", wantRows, got, out)
 	}

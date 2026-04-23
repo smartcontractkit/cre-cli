@@ -6,11 +6,10 @@ import (
 
 	"github.com/smartcontractkit/cre-cli/internal/tenantctx"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
-	"github.com/smartcontractkit/cre-cli/internal/workflowlist"
 )
 
-func omitDeleted(rows []workflowlist.Workflow) []workflowlist.Workflow {
-	out := make([]workflowlist.Workflow, 0, len(rows))
+func omitDeleted(rows []Workflow) []Workflow {
+	out := make([]Workflow, 0, len(rows))
 	for _, r := range rows {
 		if strings.EqualFold(strings.TrimSpace(r.Status), "DELETED") {
 			continue
@@ -20,7 +19,7 @@ func omitDeleted(rows []workflowlist.Workflow) []workflowlist.Workflow {
 	return out
 }
 
-func printWorkflowTable(rows []workflowlist.Workflow, registries []*tenantctx.Registry, afterRegistryFilter int, includeDeleted bool) {
+func printWorkflowTable(rows []Workflow, registries []*tenantctx.Registry, afterRegistryFilter int, includeDeleted bool) {
 	ui.Line()
 	if len(rows) == 0 {
 		if afterRegistryFilter > 0 && !includeDeleted {

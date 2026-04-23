@@ -4,7 +4,6 @@ import (
 	"strings"
 
 	"github.com/smartcontractkit/cre-cli/internal/tenantctx"
-	"github.com/smartcontractkit/cre-cli/internal/workflowlist"
 )
 
 // Registry matching: user context stores registry id
@@ -12,11 +11,11 @@ import (
 // contract:<chainSelector>:<0x…> or grpc:… — not the manifest id string. Direct equality with
 // reg.ID therefore only applies when the API echoes the same id (e.g. "private").
 
-func filterRowsByRegistry(rows []workflowlist.Workflow, reg *tenantctx.Registry, all []*tenantctx.Registry) []workflowlist.Workflow {
+func filterRowsByRegistry(rows []Workflow, reg *tenantctx.Registry, all []*tenantctx.Registry) []Workflow {
 	if reg == nil {
 		return rows
 	}
-	out := make([]workflowlist.Workflow, 0, len(rows))
+	out := make([]Workflow, 0, len(rows))
 	for _, r := range rows {
 		if rowMatchesRegistry(r.WorkflowSource, reg, all) {
 			out = append(out, r)

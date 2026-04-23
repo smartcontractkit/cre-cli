@@ -1,4 +1,4 @@
-package workflowlist
+package list
 
 import (
 	"context"
@@ -82,7 +82,13 @@ func ListAll(ctx context.Context, exec Executor, pageSize int) ([]Workflow, erro
 
 		batch := env.Workflows.Data
 		for _, g := range batch {
-			all = append(all, Workflow(g))
+			all = append(all, Workflow{
+				Name:           g.Name,
+				WorkflowID:     g.WorkflowID,
+				OwnerAddress:   g.OwnerAddress,
+				Status:         g.Status,
+				WorkflowSource: g.WorkflowSource,
+			})
 		}
 
 		if len(all) >= total || len(batch) == 0 {

@@ -1,4 +1,4 @@
-package workflowlist_test
+package list_test
 
 import (
 	"context"
@@ -7,20 +7,20 @@ import (
 
 	"github.com/machinebox/graphql"
 
-	"github.com/smartcontractkit/cre-cli/internal/workflowlist"
+	cmdlist "github.com/smartcontractkit/cre-cli/cmd/workflow/list"
 )
 
-type seqExecutor struct {
+type listAllSeqExecutor struct {
 	call int
 }
 
-func (s *seqExecutor) Execute(ctx context.Context, req *graphql.Request, resp any) error {
+func (s *listAllSeqExecutor) Execute(ctx context.Context, req *graphql.Request, resp any) error {
 	s.call++
 	var body []byte
 	var err error
 	switch s.call {
 	case 1:
-		data := make([]map[string]string, workflowlist.DefaultPageSize)
+		data := make([]map[string]string, cmdlist.DefaultPageSize)
 		for i := range data {
 			data[i] = map[string]string{
 				"name":           "mock-wf-page",
@@ -32,14 +32,14 @@ func (s *seqExecutor) Execute(ctx context.Context, req *graphql.Request, resp an
 		}
 		body, err = json.Marshal(map[string]any{
 			"workflows": map[string]any{
-				"count": workflowlist.DefaultPageSize + 1,
+				"count": cmdlist.DefaultPageSize + 1,
 				"data":  data,
 			},
 		})
 	case 2:
 		body, err = json.Marshal(map[string]any{
 			"workflows": map[string]any{
-				"count": workflowlist.DefaultPageSize + 1,
+				"count": cmdlist.DefaultPageSize + 1,
 				"data": []map[string]string{
 					{
 						"name":           "mock-wf-last",
@@ -53,7 +53,7 @@ func (s *seqExecutor) Execute(ctx context.Context, req *graphql.Request, resp an
 		})
 	default:
 		body, err = json.Marshal(map[string]any{
-			"workflows": map[string]any{"count": workflowlist.DefaultPageSize + 1, "data": []any{}},
+			"workflows": map[string]any{"count": cmdlist.DefaultPageSize + 1, "data": []any{}},
 		})
 	}
 	if err != nil {
@@ -63,13 +63,13 @@ func (s *seqExecutor) Execute(ctx context.Context, req *graphql.Request, resp an
 }
 
 func TestListAll_PaginatesAndMapsRows(t *testing.T) {
-	ex := &seqExecutor{}
-	got, err := workflowlist.ListAll(context.Background(), ex, workflowlist.DefaultPageSize)
+	ex := &listAllSeqExecutor{}
+	got, err := cmdlist.ListAll(context.Background(), ex, cmdlist.DefaultPageSize)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != workflowlist.DefaultPageSize+1 {
-		t.Fatalf("got %d workflows, want %d", len(got), workflowlist.DefaultPageSize+1)
+	if len(got) != cmdlist.DefaultPageSize+1 {
+		t.Fatalf("got %d workflows, want %d", len(got), cmdlist.DefaultPageSize+1)
 	}
 	if got[0].WorkflowSource != "contract:77766655544433322211:0xfeedface00000000000000000000000000c0ffee" {
 		t.Errorf("first row source: %q", got[0].WorkflowSource)
