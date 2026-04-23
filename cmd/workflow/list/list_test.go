@@ -11,15 +11,13 @@ import (
 	"github.com/machinebox/graphql"
 	"github.com/rs/zerolog"
 
-	workflowlist "github.com/smartcontractkit/cre-cli/cmd/workflow/list"
+	cmdlist "github.com/smartcontractkit/cre-cli/cmd/workflow/list"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/tenantctx"
+	"github.com/smartcontractkit/cre-cli/internal/workflowlist"
 )
-
-// Must match workflowListPageSize in list.go.
-const testWorkflowListPageSize = 100
 
 func strPtr(s string) *string { return &s }
 
@@ -32,7 +30,7 @@ func TestNew_NoTenantContext(t *testing.T) {
 		TenantContext:  nil,
 	}
 
-	cmd := workflowlist.New(rtCtx)
+	cmd := cmdlist.New(rtCtx)
 	cmd.SetArgs([]string{})
 	err := cmd.Execute()
 	if err == nil {
@@ -52,7 +50,7 @@ func TestNew_NoCredentials(t *testing.T) {
 		TenantContext:  &tenantctx.EnvironmentContext{Registries: []*tenantctx.Registry{{ID: "private"}}},
 	}
 
-	cmd := workflowlist.New(rtCtx)
+	cmd := cmdlist.New(rtCtx)
 	cmd.SetArgs([]string{})
 	err := cmd.Execute()
 	if err == nil {
@@ -74,7 +72,7 @@ func TestNew_UnknownRegistry(t *testing.T) {
 		},
 	}
 
-	cmd := workflowlist.New(rtCtx)
+	cmd := cmdlist.New(rtCtx)
 	cmd.SetArgs([]string{"--registry", "nope"})
 	err := cmd.Execute()
 	if err == nil {
@@ -94,7 +92,7 @@ func TestNew_RejectsArgs(t *testing.T) {
 		TenantContext:  &tenantctx.EnvironmentContext{},
 	}
 
-	cmd := workflowlist.New(rtCtx)
+	cmd := cmdlist.New(rtCtx)
 	cmd.SetArgs([]string{"extra"})
 	cmd.SilenceUsage = true
 	cmd.SilenceErrors = true
@@ -121,22 +119,22 @@ func (f *fakeGQL) Execute(ctx context.Context, req *graphql.Request, resp any) e
 				"data": []map[string]string{
 					{
 						"name":           "alpha",
-						"workflowId":     "0xaaa",
-						"ownerAddress":   "0xowner1",
+						"workflowId":     "1010101010101010101010101010101010101010101010101010101010101010",
+						"ownerAddress":   "2020202020202020202020202020202020202020",
 						"status":         "ACTIVE",
 						"workflowSource": "private",
 					},
 					{
 						"name":           "beta",
-						"workflowId":     "0xbbb",
-						"ownerAddress":   "0xowner2",
+						"workflowId":     "3030303030303030303030303030303030303030303030303030303030303030",
+						"ownerAddress":   "4040404040404040404040404040404040404040",
 						"status":         "PAUSED",
-						"workflowSource": "other",
+						"workflowSource": "contract:999888777666555444333:0xabababababababababababababababababababab",
 					},
 					{
 						"name":           "gone-deleted",
-						"workflowId":     "0xccc",
-						"ownerAddress":   "0xowner3",
+						"workflowId":     "5050505050505050505050505050505050505050505050505050505050505050",
+						"ownerAddress":   "6060606060606060606060606060606060606060",
 						"status":         "DELETED",
 						"workflowSource": "private",
 					},
@@ -171,7 +169,7 @@ func TestExecute_WithMock_PrintsWorkflowBlocks(t *testing.T) {
 	}
 
 	fake := &fakeGQL{}
-	h := workflowlist.NewHandlerWithClient(rtCtx, fake)
+	h := cmdlist.NewHandlerWithClient(rtCtx, fake)
 
 	oldStdout := os.Stdout
 	r, w, err := os.Pipe()
@@ -198,18 +196,20 @@ func TestExecute_WithMock_PrintsWorkflowBlocks(t *testing.T) {
 		"Workflows",
 		"1. alpha",
 		"Workflow ID:",
-		"0xaaa",
+		"1010101010101010101010101010101010101010101010101010101010101010",
 		"Owner:",
-		"0xowner1",
+		"2020202020202020202020202020202020202020",
 		"Status:",
 		"ACTIVE",
 		"Registry:",
 		"private",
 		"2. beta",
-		"0xbbb",
-		"0xowner2",
+		"Workflow ID:",
+		"3030303030303030303030303030303030303030303030303030303030303030",
+		"Owner:",
+		"4040404040404040404040404040404040404040",
 		"PAUSED",
-		"other",
+		"contract:999888777666555444333:0xabababababababababababababababababababab",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output missing %q:\n%s", want, out)
@@ -232,7 +232,7 @@ func TestExecute_WithMock_IncludeDeleted(t *testing.T) {
 	}
 
 	fake := &fakeGQL{}
-	h := workflowlist.NewHandlerWithClient(rtCtx, fake)
+	h := cmdlist.NewHandlerWithClient(rtCtx, fake)
 
 	oldStdout := os.Stdout
 	r, w, err := os.Pipe()
@@ -267,7 +267,7 @@ func TestExecute_AllDeletedShowsHint(t *testing.T) {
 	}
 
 	deletedOnly := &fakeGQLDeletedOnly{}
-	h := workflowlist.NewHandlerWithClient(rtCtx, deletedOnly)
+	h := cmdlist.NewHandlerWithClient(rtCtx, deletedOnly)
 
 	oldStdout := os.Stdout
 	sr, sw, err := os.Pipe()
@@ -313,9 +313,9 @@ func (f *fakeGQLDeletedOnly) Execute(ctx context.Context, req *graphql.Request, 
 			"count": 1,
 			"data": []map[string]string{
 				{
-					"name":           "x",
-					"workflowId":     "0x1",
-					"ownerAddress":   "0x2",
+					"name":           "gone-deleted-only",
+					"workflowId":     "7070707070707070707070707070707070707070707070707070707070707070",
+					"ownerAddress":   "8080808080808080808080808080808080808080",
 					"status":         "DELETED",
 					"workflowSource": "private",
 				},
@@ -340,7 +340,7 @@ func TestExecute_WithMock_RegistryFilter(t *testing.T) {
 	}
 
 	fake := &fakeGQL{}
-	h := workflowlist.NewHandlerWithClient(rtCtx, fake)
+	h := cmdlist.NewHandlerWithClient(rtCtx, fake)
 
 	oldStdout := os.Stdout
 	r, w, err := os.Pipe()
@@ -369,25 +369,25 @@ func TestExecute_WithMock_RegistryFilter(t *testing.T) {
 type fakeGQLMixedRegistries struct{}
 
 func (f *fakeGQLMixedRegistries) Execute(ctx context.Context, req *graphql.Request, resp any) error {
-	chainSel := "16015286601757825753"
-	addr := "0xaE55eB3EDAc48a1163EE2cbb1205bE1e90Ea1135"
+	chainSel := "12345678901234567890"
+	addr := "0xcafebabe00000000000000000000000000feed"
 	body, err := json.Marshal(map[string]any{
 		"workflows": map[string]any{
 			"count": 2,
 			"data": []map[string]string{
 				{
 					"name":           "onchain-wf",
-					"workflowId":     "00aa",
-					"ownerAddress":   "0xbb",
+					"workflowId":     "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1",
+					"ownerAddress":   "b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2",
 					"status":         "ACTIVE",
 					"workflowSource": "contract:" + chainSel + ":" + addr,
 				},
 				{
 					"name":           "grpc-wf",
-					"workflowId":     "00cc",
-					"ownerAddress":   "0xdd",
+					"workflowId":     "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+					"ownerAddress":   "d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4",
 					"status":         "ACTIVE",
-					"workflowSource": "grpc:private-grpc-registry:v1",
+					"workflowSource": "grpc:mock-private-registry:v1",
 				},
 			},
 		},
@@ -399,8 +399,8 @@ func (f *fakeGQLMixedRegistries) Execute(ctx context.Context, req *graphql.Reque
 }
 
 func TestExecute_RegistryFilter_MatchesContractSource(t *testing.T) {
-	chainSel := "16015286601757825753"
-	addr := "0xaE55eB3EDAc48a1163EE2cbb1205bE1e90Ea1135"
+	chainSel := "12345678901234567890"
+	addr := "0xcafebabe00000000000000000000000000feed"
 	logger := zerolog.New(io.Discard)
 	rtCtx := &runtime.Context{
 		Logger:         &logger,
@@ -409,8 +409,8 @@ func TestExecute_RegistryFilter_MatchesContractSource(t *testing.T) {
 		TenantContext: &tenantctx.EnvironmentContext{
 			Registries: []*tenantctx.Registry{
 				{
-					ID:    "onchain:ethereum-testnet-sepolia",
-					Label: "ethereum-testnet-sepolia (0xaE55...1135)",
+					ID:    "onchain:mock-testnet",
+					Label: "mock-testnet (short)",
 					// type often omitted in user context; matching uses address + chain selector
 					ChainSelector: strPtr(chainSel),
 					Address:       strPtr(addr),
@@ -420,7 +420,7 @@ func TestExecute_RegistryFilter_MatchesContractSource(t *testing.T) {
 		},
 	}
 
-	h := workflowlist.NewHandlerWithClient(rtCtx, &fakeGQLMixedRegistries{})
+	h := cmdlist.NewHandlerWithClient(rtCtx, &fakeGQLMixedRegistries{})
 
 	oldStdout := os.Stdout
 	r, w, err := os.Pipe()
@@ -429,7 +429,7 @@ func TestExecute_RegistryFilter_MatchesContractSource(t *testing.T) {
 	}
 	os.Stdout = w
 
-	err = h.Execute(context.Background(), "onchain:ethereum-testnet-sepolia", false)
+	err = h.Execute(context.Background(), "onchain:mock-testnet", false)
 	w.Close()
 	os.Stdout = oldStdout
 	if err != nil {
@@ -446,8 +446,8 @@ func TestExecute_RegistryFilter_MatchesContractSource(t *testing.T) {
 }
 
 func TestExecute_RegistryFilter_MatchesGrpcSource(t *testing.T) {
-	chainSel := "16015286601757825753"
-	addr := "0xaE55eB3EDAc48a1163EE2cbb1205bE1e90Ea1135"
+	chainSel := "12345678901234567890"
+	addr := "0xcafebabe00000000000000000000000000feed"
 	logger := zerolog.New(io.Discard)
 	rtCtx := &runtime.Context{
 		Logger:         &logger,
@@ -456,8 +456,8 @@ func TestExecute_RegistryFilter_MatchesGrpcSource(t *testing.T) {
 		TenantContext: &tenantctx.EnvironmentContext{
 			Registries: []*tenantctx.Registry{
 				{
-					ID:            "onchain:ethereum-testnet-sepolia",
-					Label:         "sepolia",
+					ID:            "onchain:mock-testnet",
+					Label:         "mock",
 					ChainSelector: strPtr(chainSel),
 					Address:       strPtr(addr),
 				},
@@ -466,7 +466,7 @@ func TestExecute_RegistryFilter_MatchesGrpcSource(t *testing.T) {
 		},
 	}
 
-	h := workflowlist.NewHandlerWithClient(rtCtx, &fakeGQLMixedRegistries{})
+	h := cmdlist.NewHandlerWithClient(rtCtx, &fakeGQLMixedRegistries{})
 
 	oldStdout := os.Stdout
 	r, w, err := os.Pipe()
@@ -492,8 +492,8 @@ func TestExecute_RegistryFilter_MatchesGrpcSource(t *testing.T) {
 }
 
 func TestExecute_List_ShowsRegistryIDForGrpcSource(t *testing.T) {
-	chainSel := "16015286601757825753"
-	addr := "0xaE55eB3EDAc48a1163EE2cbb1205bE1e90Ea1135"
+	chainSel := "12345678901234567890"
+	addr := "0xcafebabe00000000000000000000000000feed"
 	logger := zerolog.New(io.Discard)
 	rtCtx := &runtime.Context{
 		Logger:         &logger,
@@ -502,8 +502,8 @@ func TestExecute_List_ShowsRegistryIDForGrpcSource(t *testing.T) {
 		TenantContext: &tenantctx.EnvironmentContext{
 			Registries: []*tenantctx.Registry{
 				{
-					ID:            "onchain:ethereum-testnet-sepolia",
-					Label:         "sepolia",
+					ID:            "onchain:mock-testnet",
+					Label:         "mock",
 					ChainSelector: strPtr(chainSel),
 					Address:       strPtr(addr),
 				},
@@ -512,7 +512,7 @@ func TestExecute_List_ShowsRegistryIDForGrpcSource(t *testing.T) {
 		},
 	}
 
-	h := workflowlist.NewHandlerWithClient(rtCtx, &fakeGQLMixedRegistries{})
+	h := cmdlist.NewHandlerWithClient(rtCtx, &fakeGQLMixedRegistries{})
 
 	oldStdout := os.Stdout
 	r, w, err := os.Pipe()
@@ -533,7 +533,7 @@ func TestExecute_List_ShowsRegistryIDForGrpcSource(t *testing.T) {
 	out := buf.String()
 
 	// Resolved grpc maps to context "private"; unresolved grpc would print the raw API source.
-	if strings.Contains(out, "grpc:private-grpc-registry:v1") {
+	if strings.Contains(out, "grpc:mock-private-registry:v1") {
 		t.Errorf("expected resolved grpc to show context registry id, not raw API source; output:\n%s", out)
 	}
 	idx := strings.Index(out, "grpc-wf")
@@ -560,12 +560,12 @@ func TestExecute_List_ShowsRegistryIDForGrpcSource(t *testing.T) {
 		endOn = len(out)
 	}
 	onChunk := out[idxOn:endOn]
-	if !strings.Contains(onChunk, "onchain:ethereum-testnet-sepolia") ||
+	if !strings.Contains(onChunk, "onchain:mock-testnet") ||
 		!strings.Contains(onChunk, "Registry:") {
 		t.Errorf("expected on-chain registry as in cre registry list near onchain-wf block; output:\n%s", out)
 	}
 	if !strings.Contains(onChunk, "Address:") ||
-		!strings.Contains(onChunk, "0xaE55eB3EDAc48a1163EE2cbb1205bE1e90Ea1135") {
+		!strings.Contains(onChunk, "0xcafebabe00000000000000000000000000feed") {
 		t.Errorf("expected full registry Address line for on-chain workflow; output:\n%s", onChunk)
 	}
 }
@@ -574,25 +574,25 @@ func TestExecute_List_ShowsRegistryIDForGrpcSource(t *testing.T) {
 type fakeGQLOrphanContractAndGrpc struct{}
 
 func (f *fakeGQLOrphanContractAndGrpc) Execute(ctx context.Context, req *graphql.Request, resp any) error {
-	chainSel := "16015286601757825753"
-	orphanAddr := "0x1111111111111111111111111111111111111111"
+	chainSel := "12345678901234567890"
+	orphanAddr := "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
 	body, err := json.Marshal(map[string]any{
 		"workflows": map[string]any{
 			"count": 2,
 			"data": []map[string]string{
 				{
 					"name":           "orphan-onchain",
-					"workflowId":     "0x01",
-					"ownerAddress":   "0xbb",
+					"workflowId":     "f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1",
+					"ownerAddress":   "e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2",
 					"status":         "ACTIVE",
 					"workflowSource": "contract:" + chainSel + ":" + orphanAddr,
 				},
 				{
 					"name":           "grpc-wf",
-					"workflowId":     "0x02",
-					"ownerAddress":   "0xdd",
+					"workflowId":     "c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3",
+					"ownerAddress":   "d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4",
 					"status":         "ACTIVE",
-					"workflowSource": "grpc:private-grpc-registry:v1",
+					"workflowSource": "grpc:mock-private-registry:v1",
 				},
 			},
 		},
@@ -604,8 +604,8 @@ func (f *fakeGQLOrphanContractAndGrpc) Execute(ctx context.Context, req *graphql
 }
 
 func TestExecute_List_UnmatchedContractShowsAPISource(t *testing.T) {
-	chainSel := "16015286601757825753"
-	addr := "0xaE55eB3EDAc48a1163EE2cbb1205bE1e90Ea1135"
+	chainSel := "12345678901234567890"
+	addr := "0xcafebabe00000000000000000000000000feed"
 	logger := zerolog.New(io.Discard)
 	rtCtx := &runtime.Context{
 		Logger:         &logger,
@@ -614,8 +614,8 @@ func TestExecute_List_UnmatchedContractShowsAPISource(t *testing.T) {
 		TenantContext: &tenantctx.EnvironmentContext{
 			Registries: []*tenantctx.Registry{
 				{
-					ID:            "onchain:ethereum-testnet-sepolia",
-					Label:         "sepolia",
+					ID:            "onchain:mock-testnet",
+					Label:         "mock",
 					ChainSelector: strPtr(chainSel),
 					Address:       strPtr(addr),
 				},
@@ -624,7 +624,7 @@ func TestExecute_List_UnmatchedContractShowsAPISource(t *testing.T) {
 		},
 	}
 
-	h := workflowlist.NewHandlerWithClient(rtCtx, &fakeGQLOrphanContractAndGrpc{})
+	h := cmdlist.NewHandlerWithClient(rtCtx, &fakeGQLOrphanContractAndGrpc{})
 
 	oldStdout := os.Stdout
 	r, w, err := os.Pipe()
@@ -644,7 +644,7 @@ func TestExecute_List_UnmatchedContractShowsAPISource(t *testing.T) {
 	_, _ = io.Copy(&buf, r)
 	out := buf.String()
 
-	wantSource := "contract:" + chainSel + ":0x1111111111111111111111111111111111111111"
+	wantSource := "contract:" + chainSel + ":0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
 	idx := strings.Index(out, "orphan-onchain")
 	if idx < 0 {
 		t.Fatal("expected orphan-onchain in output")
@@ -658,14 +658,14 @@ func TestExecute_List_UnmatchedContractShowsAPISource(t *testing.T) {
 		t.Errorf("expected unmatched contract to show API workflowSource in Registry line; chunk:\n%s", chunk)
 	}
 	if !strings.Contains(chunk, "Address:") ||
-		!strings.Contains(chunk, "0x1111111111111111111111111111111111111111") {
+		!strings.Contains(chunk, "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee") {
 		t.Errorf("expected Address from workflow source for orphan contract; chunk:\n%s", chunk)
 	}
 }
 
 func TestExecute_RegistryFilter_PrivateExcludesUnmatchedContract(t *testing.T) {
-	chainSel := "16015286601757825753"
-	addr := "0xaE55eB3EDAc48a1163EE2cbb1205bE1e90Ea1135"
+	chainSel := "12345678901234567890"
+	addr := "0xcafebabe00000000000000000000000000feed"
 	logger := zerolog.New(io.Discard)
 	rtCtx := &runtime.Context{
 		Logger:         &logger,
@@ -674,8 +674,8 @@ func TestExecute_RegistryFilter_PrivateExcludesUnmatchedContract(t *testing.T) {
 		TenantContext: &tenantctx.EnvironmentContext{
 			Registries: []*tenantctx.Registry{
 				{
-					ID:            "onchain:ethereum-testnet-sepolia",
-					Label:         "sepolia",
+					ID:            "onchain:mock-testnet",
+					Label:         "mock",
 					ChainSelector: strPtr(chainSel),
 					Address:       strPtr(addr),
 				},
@@ -684,7 +684,7 @@ func TestExecute_RegistryFilter_PrivateExcludesUnmatchedContract(t *testing.T) {
 		},
 	}
 
-	h := workflowlist.NewHandlerWithClient(rtCtx, &fakeGQLOrphanContractAndGrpc{})
+	h := cmdlist.NewHandlerWithClient(rtCtx, &fakeGQLOrphanContractAndGrpc{})
 
 	oldStdout := os.Stdout
 	r, w, err := os.Pipe()
@@ -719,38 +719,38 @@ func (f *pagingFake) Execute(ctx context.Context, req *graphql.Request, resp any
 	var err error
 	switch f.call {
 	case 1:
-		data := make([]map[string]string, testWorkflowListPageSize)
+		data := make([]map[string]string, workflowlist.DefaultPageSize)
 		for i := range data {
 			data[i] = map[string]string{
-				"name":           "wf",
-				"workflowId":     "0x1",
-				"ownerAddress":   "0xo",
+				"name":           "wf-page-batch",
+				"workflowId":     "9191919191919191919191919191919191919191919191919191919191919191",
+				"ownerAddress":   "9292929292929292929292929292929292929292",
 				"status":         "ACTIVE",
 				"workflowSource": "private",
 			}
 		}
 		body, err = json.Marshal(map[string]any{
 			"workflows": map[string]any{
-				"count": testWorkflowListPageSize + 2,
+				"count": workflowlist.DefaultPageSize + 2,
 				"data":  data,
 			},
 		})
 	case 2:
 		body, err = json.Marshal(map[string]any{
 			"workflows": map[string]any{
-				"count": testWorkflowListPageSize + 2,
+				"count": workflowlist.DefaultPageSize + 2,
 				"data": []map[string]string{
 					{
-						"name":           "last",
-						"workflowId":     "0x2",
-						"ownerAddress":   "0xo",
+						"name":           "wf-page-tail-1",
+						"workflowId":     "9393939393939393939393939393939393939393939393939393939393939393",
+						"ownerAddress":   "9292929292929292929292929292929292929292",
 						"status":         "ACTIVE",
 						"workflowSource": "private",
 					},
 					{
-						"name":           "last2",
-						"workflowId":     "0x3",
-						"ownerAddress":   "0xo",
+						"name":           "wf-page-tail-2",
+						"workflowId":     "9494949494949494949494949494949494949494949494949494949494949494",
+						"ownerAddress":   "9292929292929292929292929292929292929292",
 						"status":         "ACTIVE",
 						"workflowSource": "private",
 					},
@@ -759,7 +759,7 @@ func (f *pagingFake) Execute(ctx context.Context, req *graphql.Request, resp any
 		})
 	default:
 		body, err = json.Marshal(map[string]any{
-			"workflows": map[string]any{"count": testWorkflowListPageSize + 2, "data": []any{}},
+			"workflows": map[string]any{"count": workflowlist.DefaultPageSize + 2, "data": []any{}},
 		})
 	}
 	if err != nil {
@@ -780,7 +780,7 @@ func TestExecute_Pagination(t *testing.T) {
 	}
 
 	fake := &pagingFake{}
-	h := workflowlist.NewHandlerWithClient(rtCtx, fake)
+	h := cmdlist.NewHandlerWithClient(rtCtx, fake)
 
 	oldStdout := os.Stdout
 	r, w, err := os.Pipe()
@@ -800,8 +800,8 @@ func TestExecute_Pagination(t *testing.T) {
 	_, _ = io.Copy(&buf, r)
 	out := buf.String()
 
-	wantRows := testWorkflowListPageSize + 2
-	if got := strings.Count(out, "0xo"); got < wantRows {
+	wantRows := workflowlist.DefaultPageSize + 2
+	if got := strings.Count(out, "9292929292929292929292929292929292929292"); got < wantRows {
 		t.Errorf("expected at least %d owner cells, got %d in:\n%s", wantRows, got, out)
 	}
 	if fake.call != 2 {
