@@ -9,6 +9,7 @@ import (
 	"math/big"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -65,6 +66,12 @@ type Inputs struct {
 	ExperimentalForwarders map[uint64]common.Address `validate:"-"` // forwarders keyed by chain ID
 	// Limits enforcement
 	LimitsPath string `validate:"-"` // "default" or path to custom limits JSON
+	// SkipTypeChecks passes --skip-type-checks to cre-compile for TypeScript workflows.
+	SkipTypeChecks bool `validate:"-"`
+	// InvocationDir is the working directory at the time the CLI was invoked, before
+	// SetExecutionContext changes it to the workflow directory. Used to resolve file
+	// paths entered interactively or via flags relative to where the user ran the command.
+	InvocationDir string `validate:"-"`
 }
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
@@ -103,6 +110,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	simulateCmd.Flags().String("evm-tx-hash", "", "EVM trigger transaction hash (0x...)")
 	simulateCmd.Flags().Int("evm-event-index", -1, "EVM trigger log index (0-based)")
 	simulateCmd.Flags().String("limits", "default", "Production limits to enforce during simulation: 'default' for prod defaults, path to a limits JSON file (e.g. from 'cre workflow limits export'), or 'none' to disable")
+	simulateCmd.Flags().Bool(cmdcommon.SkipTypeChecksCLIFlag, false, "Skip TypeScript project typecheck during compilation (passes "+cmdcommon.SkipTypeChecksFlag+" to cre-compile)")
 	return simulateCmd
 }
 
@@ -207,14 +215,41 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 	}
 
 	if len(clients) == 0 {
-		return Inputs{}, fmt.Errorf("no RPC URLs found for supported or experimental chains")
+		target, _ := settings.GetTarget(v)
+		if target == "" {
+			target = "(none)"
+		}
+		return Inputs{}, fmt.Errorf(
+			"no RPC URLs found for target %q\n\n"+
+				"To fix:\n"+
+				"  • Check that your project.yaml has an 'rpcs' section under the target %q\n"+
+				"  • Ensure chain names are valid (run 'cre workflow supported-chains' to see all supported names)\n"+
+				"  • Verify the correct target is selected via --target or CRE_TARGET",
+			target, target,
+		)
 	}
 
 	pk, err := crypto.HexToECDSA(creSettings.User.EthPrivateKey)
 	if err != nil {
+		// If the user explicitly set a key that looks like a hex string but is
+		// malformed (wrong length, invalid chars), always error with guidance.
+		// Skip placeholder values like "your-eth-private-key" from the default .env template.
+		if creSettings.User.EthPrivateKey != "" && isHexString(creSettings.User.EthPrivateKey) {
+			return Inputs{}, fmt.Errorf(
+				"invalid private key: expected 64 hex characters (256 bits), got %d characters.\n\n"+
+					"The CLI reads CRE_ETH_PRIVATE_KEY from your .env file or system environment.\n"+
+					"The 0x prefix is supported and stripped automatically.\n\n"+
+					"Common issues:\n"+
+					"  • Pasted an Ethereum address (40 chars) instead of a private key (64 chars)\n"+
+					"  • Value has extra quotes — use CRE_ETH_PRIVATE_KEY=abc123... without wrapping quotes\n"+
+					"  • Key was truncated during copy-paste",
+				len(creSettings.User.EthPrivateKey))
+		}
+		// Key not set or placeholder — require it for broadcast, otherwise use default for simulation
 		if v.GetBool("broadcast") {
 			return Inputs{}, fmt.Errorf(
-				"failed to parse private key, required to broadcast. Please check CRE_ETH_PRIVATE_KEY in your .env file or system environment: %w", err)
+				"a private key is required for --broadcast mode.\n" +
+					"Set CRE_ETH_PRIVATE_KEY in your .env file or system environment")
 		}
 		pk, err = crypto.HexToECDSA("0000000000000000000000000000000000000000000000000000000000000001")
 		if err != nil {
@@ -240,6 +275,8 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 		EVMEventIndex:          v.GetInt("evm-event-index"),
 		ExperimentalForwarders: experimentalForwarders,
 		LimitsPath:             v.GetString("limits"),
+		SkipTypeChecks:         v.GetBool(cmdcommon.SkipTypeChecksCLIFlag),
+		InvocationDir:          h.runtimeContext.InvocationDir,
 	}, nil
 }
 
@@ -267,8 +304,11 @@ func (h *handler) ValidateInputs(inputs Inputs) error {
 	inputs.ConfigPath = savedConfig
 
 	// forbid the default 0x...01 key when broadcasting
-	if inputs.Broadcast && inputs.EthPrivateKey != nil && inputs.EthPrivateKey.D.Cmp(big.NewInt(1)) == 0 {
-		return fmt.Errorf("you must configure a valid private key to perform on-chain writes. Please set your private key in the .env file before using the -–broadcast flag")
+	if inputs.Broadcast && inputs.EthPrivateKey != nil {
+		keyBytes, keyBytesErr := inputs.EthPrivateKey.Bytes()
+		if keyBytesErr == nil && new(big.Int).SetBytes(keyBytes).Cmp(big.NewInt(1)) == 0 {
+			return fmt.Errorf("you must configure a valid private key to perform on-chain writes. Please set your private key in the .env file before using the -–broadcast flag")
+		}
 	}
 
 	rpcErr := ui.WithSpinner("Checking RPC connectivity...", func() error {
@@ -330,7 +370,10 @@ func (h *handler) Execute(inputs Inputs) error {
 
 		spinner := ui.NewSpinner()
 		spinner.Start("Compiling workflow...")
-		wasmFileBinary, err = cmdcommon.CompileWorkflowToWasm(resolvedWorkflowPath, false)
+		wasmFileBinary, err = cmdcommon.CompileWorkflowToWasm(resolvedWorkflowPath, cmdcommon.WorkflowCompileOptions{
+			StripSymbols:   false,
+			SkipTypeChecks: inputs.SkipTypeChecks,
+		})
 		spinner.Stop()
 		if err != nil {
 			ui.Error("Build failed:")
@@ -671,6 +714,8 @@ func run(
 			// Apply simulation limits to engine-level settings when --limits is set
 			if simLimits != nil {
 				applyEngineLimits(cfg, simLimits)
+			} else if inputs.LimitsPath == "none" {
+				disableEngineLimits(cfg)
 			}
 			// Always allow all chains in simulation, overriding any chain restrictions from limits
 			cfg.ChainAllowed = commonsettings.PerChainSelector(
@@ -734,10 +779,28 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 		switch {
 		case trigger == "cron-trigger@1.0.0":
 			holder.TriggerFunc = func() error {
-				return triggerCaps.ManualCronTrigger.ManualTrigger(ctx, triggerRegistrationID, time.Now())
+				skipWaitSignal := make(chan struct{}, 1)
+
+				userPromptCtx, cancel := context.WithCancel(ctx)
+				defer cancel()
+
+				go func() {
+					ui.Line()
+					pressed := ui.WaitForEnter(userPromptCtx, "Cron scheduler started. Press Enter to skip waiting...")
+					if pressed {
+						skipWaitSignal <- struct{}{}
+					}
+				}()
+
+				err := triggerCaps.ManualCronTrigger.ManualTrigger(ctx, triggerRegistrationID, skipWaitSignal)
+				if err != nil {
+					return err
+				}
+
+				return nil
 			}
 		case trigger == "http-trigger@1.0.0-alpha":
-			payload, err := getHTTPTriggerPayload()
+			payload, err := getHTTPTriggerPayload(inputs.InvocationDir)
 			if err != nil {
 				ui.Error(fmt.Sprintf("Failed to get HTTP trigger payload: %v", err))
 				os.Exit(1)
@@ -809,14 +872,23 @@ func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inp
 		switch {
 		case trigger == "cron-trigger@1.0.0":
 			holder.TriggerFunc = func() error {
-				return triggerCaps.ManualCronTrigger.ManualTrigger(ctx, triggerRegistrationID, time.Now())
+				skipWaitSignal := make(chan struct{}, 1)
+				err := triggerCaps.ManualCronTrigger.ManualTrigger(ctx, triggerRegistrationID, skipWaitSignal)
+				if err != nil {
+					return err
+				}
+
+				// With cron schedule on non-interactive mode
+				skipWaitSignal <- struct{}{}
+
+				return nil
 			}
 		case trigger == "http-trigger@1.0.0-alpha":
 			if strings.TrimSpace(inputs.HTTPPayload) == "" {
 				ui.Error("--http-payload is required for http-trigger@1.0.0-alpha in non-interactive mode")
 				os.Exit(1)
 			}
-			payload, err := getHTTPTriggerPayloadFromInput(inputs.HTTPPayload)
+			payload, err := getHTTPTriggerPayloadFromInput(inputs.HTTPPayload, inputs.InvocationDir)
 			if err != nil {
 				ui.Error(fmt.Sprintf("Failed to parse HTTP trigger payload: %v", err))
 				os.Exit(1)
@@ -893,8 +965,11 @@ func cleanupBeholder() error {
 	return nil
 }
 
-// getHTTPTriggerPayload prompts user for HTTP trigger data
-func getHTTPTriggerPayload() (*httptypedapi.Payload, error) {
+// getHTTPTriggerPayload prompts user for HTTP trigger data.
+// invocationDir is the working directory at the time the CLI was invoked; relative
+// paths entered by the user are resolved against it rather than the current working
+// directory (which may have been changed to the workflow folder by SetExecutionContext).
+func getHTTPTriggerPayload(invocationDir string) (*httptypedapi.Payload, error) {
 	ui.Line()
 	input, err := ui.Input("HTTP Trigger Configuration",
 		ui.WithInputDescription("Enter a file path or JSON directly for the HTTP trigger"),
@@ -911,19 +986,22 @@ func getHTTPTriggerPayload() (*httptypedapi.Payload, error) {
 
 	var jsonData map[string]interface{}
 
-	// Check if input is a file path
-	if _, err := os.Stat(input); err == nil {
-		// It's a file path
-		data, err := os.ReadFile(input)
+	// Resolve the path against the invocation directory so that relative paths
+	// like ./production.json work from where the user ran the command, even though
+	// the process cwd has been changed to the workflow subdirectory.
+	resolvedPath := resolvePathFromInvocation(input, invocationDir)
+
+	if _, err := os.Stat(resolvedPath); err == nil {
+		data, err := os.ReadFile(resolvedPath)
 		if err != nil {
-			return nil, fmt.Errorf("failed to read file %s: %w", input, err)
+			return nil, fmt.Errorf("failed to read file %s: %w", resolvedPath, err)
 		}
 		if err := json.Unmarshal(data, &jsonData); err != nil {
-			return nil, fmt.Errorf("failed to parse JSON from file %s: %w", input, err)
+			return nil, fmt.Errorf("failed to parse JSON from file %s: %w", resolvedPath, err)
 		}
-		ui.Success(fmt.Sprintf("Loaded JSON from file: %s", input))
+		ui.Success(fmt.Sprintf("Loaded JSON from file: %s", resolvedPath))
 	} else {
-		// It's direct JSON input
+		// Treat as direct JSON input
 		if err := json.Unmarshal([]byte(input), &jsonData); err != nil {
 			return nil, fmt.Errorf("failed to parse JSON: %w", err)
 		}
@@ -934,7 +1012,6 @@ func getHTTPTriggerPayload() (*httptypedapi.Payload, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal JSON: %w", err)
 	}
-	// Create the payload
 	payload := &httptypedapi.Payload{
 		Input: jsonDataBytes,
 		// Key is optional for simulation
@@ -942,6 +1019,16 @@ func getHTTPTriggerPayload() (*httptypedapi.Payload, error) {
 
 	ui.Success(fmt.Sprintf("Created HTTP trigger payload with %d fields", len(jsonData)))
 	return payload, nil
+}
+
+// resolvePathFromInvocation converts a (potentially relative) path to an absolute
+// path anchored at invocationDir. Absolute paths and paths that are already
+// reachable from the current working directory are returned unchanged.
+func resolvePathFromInvocation(path, invocationDir string) string {
+	if filepath.IsAbs(path) || invocationDir == "" {
+		return path
+	}
+	return filepath.Join(invocationDir, path)
 }
 
 // getEVMTriggerLog prompts user for EVM trigger data and fetches the log
@@ -1054,8 +1141,10 @@ func getEVMTriggerLog(ctx context.Context, ethClient *ethclient.Client) (*evm.Lo
 	return pbLog, nil
 }
 
-// getHTTPTriggerPayloadFromInput builds an HTTP trigger payload from a JSON string or a file path (optionally prefixed with '@')
-func getHTTPTriggerPayloadFromInput(input string) (*httptypedapi.Payload, error) {
+// getHTTPTriggerPayloadFromInput builds an HTTP trigger payload from a JSON string or a file path
+// (optionally prefixed with '@'). invocationDir is used to resolve relative paths against the
+// directory where the user invoked the CLI rather than the current working directory.
+func getHTTPTriggerPayloadFromInput(input, invocationDir string) (*httptypedapi.Payload, error) {
 	trimmed := strings.TrimSpace(input)
 	if trimmed == "" {
 		return nil, fmt.Errorf("empty http payload input")
@@ -1063,17 +1152,18 @@ func getHTTPTriggerPayloadFromInput(input string) (*httptypedapi.Payload, error)
 
 	var raw []byte
 	if strings.HasPrefix(trimmed, "@") {
-		path := strings.TrimPrefix(trimmed, "@")
+		path := resolvePathFromInvocation(strings.TrimPrefix(trimmed, "@"), invocationDir)
 		data, err := os.ReadFile(path)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read file %s: %w", path, err)
 		}
 		raw = data
 	} else {
-		if _, err := os.Stat(trimmed); err == nil {
-			data, err := os.ReadFile(trimmed)
+		resolvedPath := resolvePathFromInvocation(trimmed, invocationDir)
+		if _, err := os.Stat(resolvedPath); err == nil {
+			data, err := os.ReadFile(resolvedPath)
 			if err != nil {
-				return nil, fmt.Errorf("failed to read file %s: %w", trimmed, err)
+				return nil, fmt.Errorf("failed to read file %s: %w", resolvedPath, err)
 			}
 			raw = data
 		} else {
@@ -1139,4 +1229,14 @@ func getEVMTriggerLogFromValues(ctx context.Context, ethClient *ethclient.Client
 		pbLog.EventSig = log.Topics[0].Bytes()
 	}
 	return pbLog, nil
+}
+
+// isHexString returns true if s contains only hexadecimal characters (0-9, a-f, A-F).
+func isHexString(s string) bool {
+	for _, c := range s {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') && (c < 'A' || c > 'F') {
+			return false
+		}
+	}
+	return len(s) > 0
 }

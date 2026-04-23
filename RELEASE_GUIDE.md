@@ -1,20 +1,27 @@
-# How to create a new release
-Let's assume we want to create a release for version `v0.1.0`.
+# Release Process
 
-Steps:
-1. Create a new branch from `main` with the name `releases/v0.1.x`
-2. Create a tag on the release branch `git tag -a v0.1.0 -m "Release v0.1.0" -s`
-3. Push the tag to the remote `git push origin v0.1.0`
-4. Wait for `build-and-release` pipeline to run.
-    - Once pipeline is successful, the release will be created as a Draft
-    - Verify all is good and publish release as needed (set as latest if that is the case)
+This project uses [Changesets](https://github.com/changesets/changesets) for versioning and release management.
 
-# How to fix a bug in an existing release
-Let's assume we want to fix a bug in the release `v0.1.0`.
+## Adding a changeset
 
-Steps:
-1. Create a new branch from `releases/v0.1.x`.
-2. Fix the bug. 
-3. Create a PR against the branch `releases/v0.1.x`.
-4. Go through the review process and merge the PR.
-5. Create a release with a tag `v0.1.1` from the branch `releases/v0.1.x`.
+When your PR includes changes that warrant a version bump, run:
+
+```bash
+pnpm changeset
+```
+
+Select the bump type (major, minor, or patch) and provide a summary. This creates a `.changeset/*.md` file that should be committed with your PR.
+
+## How releases happen
+
+1. PRs with changeset files are merged to `main`.
+2. The `release.yml` workflow detects pending changesets and opens (or updates) a **"Version Packages"** PR. This PR bumps `package.json`, updates `CHANGELOG.md`, and consumes the changeset files.
+3. When the Version Packages PR is merged, the workflow creates a `v*` tag.
+4. The tag triggers `build-and-release.yml`, which builds and signs binaries across all platforms and creates a draft GitHub Release.
+5. Review the draft release and publish it.
+
+## Hotfixing an existing release
+
+1. Create a branch from the relevant release tag (e.g. `git checkout -b hotfix/v1.3.1 v1.3.0`).
+2. Fix the bug and add a changeset (`pnpm changeset` -- typically a `patch`).
+3. Follow the standard PR and merge process against `main`.

@@ -65,6 +65,10 @@ func New(ctx *runtime.Context) *cobra.Command {
 				return fmt.Errorf("invalid bundle digest: %w", err)
 			}
 
+			if err := h.EnsureDeploymentRPCForOwnerKeySecrets(); err != nil {
+				return err
+			}
+
 			ownerAddr := ethcommon.HexToAddress(h.OwnerAddress)
 
 			allowlisted, err := h.Wrc.IsRequestAllowlisted(ownerAddr, digest)

@@ -1,9 +1,16 @@
 package deploy
 
 import (
+	"bytes"
+	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"math/big"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -367,13 +374,11 @@ func TestValidateInputs_URLBypass(t *testing.T) {
 		)
 		handler.settings = ctx.Settings
 		handler.inputs = Inputs{
-			WorkflowName:                      "test_workflow",
-			WorkflowOwner:                     chainsim.TestAddress,
-			DonFamily:                         "test_label",
-			WorkflowPath:                      "testdata/basic_workflow/main.go",
-			WasmPath:                          "https://example.com/binary.wasm",
-			WorkflowRegistryContractAddress:   "0x1234567890123456789012345678901234567890",
-			WorkflowRegistryContractChainName: "ethereum-testnet-sepolia",
+			WorkflowName:  "test_workflow",
+			WorkflowOwner: chainsim.TestAddress,
+			DonFamily:     "test_label",
+			WorkflowPath:  "testdata/basic_workflow/main.go",
+			WasmPath:      "https://example.com/binary.wasm",
 		}
 
 		err := handler.ValidateInputs()
@@ -396,13 +401,11 @@ func TestValidateInputs_URLBypass(t *testing.T) {
 		)
 		handler.settings = ctx.Settings
 		handler.inputs = Inputs{
-			WorkflowName:                      "test_workflow",
-			WorkflowOwner:                     chainsim.TestAddress,
-			DonFamily:                         "test_label",
-			WorkflowPath:                      "testdata/basic_workflow/main.go",
-			ConfigPath:                        "https://example.com/config.yaml",
-			WorkflowRegistryContractAddress:   "0x1234567890123456789012345678901234567890",
-			WorkflowRegistryContractChainName: "ethereum-testnet-sepolia",
+			WorkflowName:  "test_workflow",
+			WorkflowOwner: chainsim.TestAddress,
+			DonFamily:     "test_label",
+			WorkflowPath:  "testdata/basic_workflow/main.go",
+			ConfigPath:    "https://example.com/config.yaml",
 		}
 
 		err := handler.ValidateInputs()
@@ -424,6 +427,344 @@ func TestConfigFlagsMutuallyExclusive(t *testing.T) {
 	err := cmd.Execute()
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "if any flags in the group [config no-config default-config] are set none of the others can be")
+}
+
+func TestValidateInputs_PrivateRegistry(t *testing.T) {
+	t.Run("accepts URL wasm and config with off-chain resolved registry and no on-chain contract inputs", func(t *testing.T) {
+		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t).WithPrivateRegistry("42", "test_label")
+		defer simulatedEnvironment.Close()
+
+		ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
+		h := newHandler(ctx, buf)
+		ctx.Settings = createTestSettings(
+			chainsim.TestAddress,
+			"eoa",
+			"test_workflow",
+			"testdata/basic_workflow/main.go",
+			"",
+		)
+		h.settings = ctx.Settings
+		h.environmentSet.EnvName = "STAGING"
+		token := makeTestJWT(t, map[string]interface{}{
+			"sub":    "user1",
+			"org_id": "org-test-123",
+		})
+		h.credentials = makeBearerCredentials(t, token)
+		h.runtimeContext.DerivedWorkflowOwner = "0xabcdef1234567890abcdef1234567890abcdef12"
+		ctx.Viper.Set("wasm", "https://example.com/workflow.wasm")
+		ctx.Viper.Set("config", "https://example.com/workflow-config.json")
+
+		inputs, err := h.ResolveInputs(ctx.Viper)
+		require.NoError(t, err)
+		h.inputs = inputs
+
+		err = h.ValidateInputs()
+		require.NoError(t, err)
+		assert.True(t, h.validated)
+	})
+
+	t.Run("fails when required don family is missing for private target", func(t *testing.T) {
+		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t).WithPrivateRegistry("42", "")
+		defer simulatedEnvironment.Close()
+
+		ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
+		h := newHandler(ctx, buf)
+		ctx.Settings = createTestSettings(
+			chainsim.TestAddress,
+			"eoa",
+			"test_workflow",
+			"testdata/basic_workflow/main.go",
+			"",
+		)
+		h.settings = ctx.Settings
+		h.environmentSet.EnvName = "STAGING"
+		token := makeTestJWT(t, map[string]interface{}{
+			"sub":    "user1",
+			"org_id": "org-test-123",
+		})
+		h.credentials = makeBearerCredentials(t, token)
+		h.runtimeContext.DerivedWorkflowOwner = "0xabcdef1234567890abcdef1234567890abcdef12"
+		ctx.Viper.Set("wasm", "https://example.com/workflow.wasm")
+
+		inputs, err := h.ResolveInputs(ctx.Viper)
+		require.NoError(t, err)
+		h.inputs = inputs
+
+		err = h.ValidateInputs()
+		require.Error(t, err)
+		var verrs validation.ValidationErrors
+		assert.True(t, errors.As(err, &verrs))
+		validation.AssertValidationErrs(t, verrs, "Inputs.DonFamily", "DonFamily is a required field")
+	})
+}
+
+func TestExecute_PrivateRegistry(t *testing.T) {
+	t.Run("executes private deploy path with GraphQL success", func(t *testing.T) {
+		wasmContent := []byte("workflow wasm payload")
+		wasmServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = w.Write(wasmContent)
+		}))
+		defer wasmServer.Close()
+
+		gqlServer := newAssertGQLServer(t, func(t *testing.T, req deployMockGraphQLRequest) (int, map[string]any) {
+			switch {
+			case req.Query != "" && containsQuery(req.Query, "query GetOffchainWorkflowByName"):
+				rawRequest, ok := req.Variables["request"].(map[string]any)
+				require.True(t, ok)
+				assert.Equal(t, "test_workflow", rawRequest["workflowName"])
+				return http.StatusOK, map[string]any{
+					"errors": []map[string]string{{"message": "workflow not found"}},
+				}
+			case req.Query != "" && containsQuery(req.Query, "mutation UpsertOffchainWorkflow"):
+				rawRequest, ok := req.Variables["request"].(map[string]any)
+				require.True(t, ok)
+				rawWorkflow, ok := rawRequest["workflow"].(map[string]any)
+				require.True(t, ok)
+				assert.Equal(t, "test_workflow", rawWorkflow["workflowName"])
+				assert.Equal(t, "test-don", rawWorkflow["donFamily"])
+				assert.Equal(t, wasmServer.URL+"/binary.wasm", rawWorkflow["binaryUrl"])
+				assert.Equal(t, "WORKFLOW_STATUS_ACTIVE", rawWorkflow["status"])
+
+				return http.StatusOK, map[string]any{
+					"data": map[string]any{
+						"upsertOffchainWorkflow": map[string]any{
+							"workflow": map[string]any{
+								"workflowId":   "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+								"owner":        chainsim.TestAddress,
+								"createdAt":    "2025-01-01T00:00:00Z",
+								"status":       "WORKFLOW_STATUS_ACTIVE",
+								"workflowName": "test_workflow",
+								"binaryUrl":    wasmServer.URL + "/binary.wasm",
+								"configUrl":    "",
+								"tag":          "test_workflow",
+								"attributes":   "",
+								"donFamily":    "test-don",
+							},
+						},
+					},
+				}
+			default:
+				t.Fatalf("unexpected GraphQL operation: %s", req.Query)
+				return 0, nil
+			}
+		})
+		defer gqlServer.Close()
+
+		h := newPrivateRegistryExecuteHandler(t, wasmServer.URL+"/binary.wasm", gqlServer.URL)
+		require.NoError(t, h.ValidateInputs())
+		require.NoError(t, h.Execute(context.Background()))
+		assert.NotEmpty(t, h.workflowArtifact.WorkflowID)
+	})
+
+	t.Run("continues when private workflow lookup returns not found", func(t *testing.T) {
+		wasmServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = w.Write([]byte("workflow wasm payload"))
+		}))
+		defer wasmServer.Close()
+
+		gqlServer := newAssertGQLServer(t, func(t *testing.T, req deployMockGraphQLRequest) (int, map[string]any) {
+			if containsQuery(req.Query, "query GetOffchainWorkflowByName") {
+				return http.StatusOK, map[string]any{
+					"errors": []map[string]string{{"message": "workflow not found"}},
+				}
+			}
+			if containsQuery(req.Query, "mutation UpsertOffchainWorkflow") {
+				return http.StatusOK, map[string]any{
+					"data": map[string]any{
+						"upsertOffchainWorkflow": map[string]any{
+							"workflow": map[string]any{
+								"workflowId":   "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+								"owner":        chainsim.TestAddress,
+								"createdAt":    "2025-01-01T00:00:00Z",
+								"status":       "WORKFLOW_STATUS_ACTIVE",
+								"workflowName": "test_workflow",
+								"binaryUrl":    wasmServer.URL + "/binary.wasm",
+								"configUrl":    "",
+								"tag":          "test_workflow",
+								"attributes":   "",
+								"donFamily":    "test-don",
+							},
+						},
+					},
+				}
+			}
+			t.Fatalf("unexpected GraphQL operation: %s", req.Query)
+			return 0, nil
+		})
+		defer gqlServer.Close()
+
+		h := newPrivateRegistryExecuteHandler(t, wasmServer.URL+"/binary.wasm", gqlServer.URL)
+		require.NoError(t, h.ValidateInputs())
+		require.NoError(t, h.Execute(context.Background()))
+	})
+
+	t.Run("prompts overwrite path can proceed with skip confirmation", func(t *testing.T) {
+		wasmServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = w.Write([]byte("workflow wasm payload"))
+		}))
+		defer wasmServer.Close()
+
+		gqlServer := newAssertGQLServer(t, func(t *testing.T, req deployMockGraphQLRequest) (int, map[string]any) {
+			if containsQuery(req.Query, "query GetOffchainWorkflowByName") {
+				return http.StatusOK, map[string]any{
+					"data": map[string]any{
+						"getOffchainWorkflowByName": map[string]any{
+							"workflow": map[string]any{
+								"workflowId":   "existing-wf-id",
+								"owner":        chainsim.TestAddress,
+								"createdAt":    "2025-01-01T00:00:00Z",
+								"status":       "WORKFLOW_STATUS_ACTIVE",
+								"workflowName": "test_workflow",
+								"binaryUrl":    "https://example.com/old.wasm",
+								"configUrl":    "",
+								"tag":          "test_workflow",
+								"attributes":   "",
+								"donFamily":    "test-don",
+							},
+						},
+					},
+				}
+			}
+			if containsQuery(req.Query, "mutation UpsertOffchainWorkflow") {
+				return http.StatusOK, map[string]any{
+					"data": map[string]any{
+						"upsertOffchainWorkflow": map[string]any{
+							"workflow": map[string]any{
+								"workflowId":   "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+								"owner":        chainsim.TestAddress,
+								"createdAt":    "2025-01-01T00:00:00Z",
+								"status":       "WORKFLOW_STATUS_ACTIVE",
+								"workflowName": "test_workflow",
+								"binaryUrl":    wasmServer.URL + "/binary.wasm",
+								"configUrl":    "",
+								"tag":          "test_workflow",
+								"attributes":   "",
+								"donFamily":    "test-don",
+							},
+						},
+					},
+				}
+			}
+			t.Fatalf("unexpected GraphQL operation: %s", req.Query)
+			return 0, nil
+		})
+		defer gqlServer.Close()
+
+		h := newPrivateRegistryExecuteHandler(t, wasmServer.URL+"/binary.wasm", gqlServer.URL)
+		h.inputs.SkipConfirmation = true
+		require.NoError(t, h.ValidateInputs())
+		require.NoError(t, h.Execute(context.Background()))
+	})
+
+	t.Run("surfaces GraphQL errors from private execute upsert path", func(t *testing.T) {
+		wasmServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = w.Write([]byte("workflow wasm payload"))
+		}))
+		defer wasmServer.Close()
+
+		gqlServer := newAssertGQLServer(t, func(t *testing.T, req deployMockGraphQLRequest) (int, map[string]any) {
+			if containsQuery(req.Query, "query GetOffchainWorkflowByName") {
+				return http.StatusOK, map[string]any{
+					"errors": []map[string]string{{"message": "workflow not found"}},
+				}
+			}
+			if containsQuery(req.Query, "mutation UpsertOffchainWorkflow") {
+				return http.StatusOK, map[string]any{
+					"errors": []map[string]string{{"message": "unauthorized"}},
+				}
+			}
+			t.Fatalf("unexpected GraphQL operation: %s", req.Query)
+			return 0, nil
+		})
+		defer gqlServer.Close()
+
+		h := newPrivateRegistryExecuteHandler(t, wasmServer.URL+"/binary.wasm", gqlServer.URL)
+		require.NoError(t, h.ValidateInputs())
+		err := h.Execute(context.Background())
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to register workflow in private registry")
+		assert.Contains(t, err.Error(), "unauthorized")
+	})
+
+	t.Run("surfaces transport errors from private existence check", func(t *testing.T) {
+		wasmServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			_, _ = w.Write([]byte("workflow wasm payload"))
+		}))
+		defer wasmServer.Close()
+
+		gqlServer := newAssertGQLServer(t, func(t *testing.T, req deployMockGraphQLRequest) (int, map[string]any) {
+			if containsQuery(req.Query, "query GetOffchainWorkflowByName") {
+				return http.StatusInternalServerError, map[string]any{
+					"errors": []map[string]string{{"message": "server exploded"}},
+				}
+			}
+			t.Fatalf("unexpected GraphQL operation: %s", req.Query)
+			return 0, nil
+		})
+		defer gqlServer.Close()
+
+		h := newPrivateRegistryExecuteHandler(t, wasmServer.URL+"/binary.wasm", gqlServer.URL)
+		require.NoError(t, h.ValidateInputs())
+		err := h.Execute(context.Background())
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to check if workflow exists")
+	})
+}
+
+type deployMockGraphQLRequest struct {
+	Query     string                 `json:"query"`
+	Variables map[string]interface{} `json:"variables"`
+}
+
+func newAssertGQLServer(
+	t *testing.T,
+	handler func(t *testing.T, req deployMockGraphQLRequest) (status int, response map[string]any),
+) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req deployMockGraphQLRequest
+		err := json.NewDecoder(r.Body).Decode(&req)
+		require.NoError(t, err)
+		status, response := handler(t, req)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(status)
+		if response != nil {
+			_ = json.NewEncoder(w).Encode(response)
+		}
+	}))
+}
+
+func containsQuery(query, operation string) bool {
+	return query != "" && strings.Contains(query, operation)
+}
+
+func newPrivateRegistryExecuteHandler(t *testing.T, wasmURL, gqlURL string) *handler {
+	t.Helper()
+	simulatedEnvironment := chainsim.NewSimulatedEnvironment(t).WithPrivateRegistry("42", "test-don")
+	t.Cleanup(simulatedEnvironment.Close)
+
+	ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
+	h := newHandler(ctx, buf)
+	ctx.Settings = createTestSettings(
+		chainsim.TestAddress,
+		"eoa",
+		"test_workflow",
+		"testdata/basic_workflow/main.go",
+		"",
+	)
+	h.settings = ctx.Settings
+	h.credentials = makeAPIKeyCredentials(t)
+	h.environmentSet.GraphQLURL = gqlURL
+	h.inputs = Inputs{
+		WorkflowName:  "test_workflow",
+		WorkflowOwner: chainsim.TestAddress,
+		WorkflowTag:   "test_workflow",
+		DonFamily:     "test-don",
+		WorkflowPath:  "testdata/basic_workflow/main.go",
+		WasmPath:      wasmURL,
+	}
+
+	return h
 }
 
 func stringPtr(s string) *string {
@@ -452,6 +793,47 @@ func (f fakeUserDonLimitClient) CheckUserDonLimit(owner common.Address, donFamil
 
 func (f fakeUserDonLimitClient) GetWorkflowListByOwnerAndName(common.Address, string, *big.Int, *big.Int) ([]workflow_registry_v2_wrapper.WorkflowRegistryWorkflowMetadataView, error) {
 	return f.workflowsByOwnerName, nil
+}
+
+func TestWarnExistingPausedWorkflowUpdate(t *testing.T) {
+	// Do not use t.Parallel: stderr redirection uses package-global os.Stderr.
+
+	captureStderr := func(f func()) string {
+		t.Helper()
+		old := os.Stderr
+		r, w, err := os.Pipe()
+		require.NoError(t, err)
+		os.Stderr = w
+
+		f()
+
+		require.NoError(t, w.Close())
+		os.Stderr = old
+
+		var buf bytes.Buffer
+		_, copyErr := io.Copy(&buf, r)
+		require.NoError(t, copyErr)
+		require.NoError(t, r.Close())
+		return buf.String()
+	}
+
+	t.Run("no output when status is nil", func(t *testing.T) {
+		out := captureStderr(func() { warnIfPausedWorkflowUpdate(nil) })
+		assert.Empty(t, strings.TrimSpace(out))
+	})
+
+	t.Run("no output when workflow is active", func(t *testing.T) {
+		active := workflowStatusActive
+		out := captureStderr(func() { warnIfPausedWorkflowUpdate(&active) })
+		assert.Empty(t, strings.TrimSpace(out))
+	})
+
+	t.Run("prints warning when workflow is paused", func(t *testing.T) {
+		paused := workflowStatusPaused
+		out := captureStderr(func() { warnIfPausedWorkflowUpdate(&paused) })
+		assert.Contains(t, out, "Your workflow is paused")
+		assert.Contains(t, out, "and has been updated")
+	})
 }
 
 func TestCheckUserDonLimitBeforeDeploy(t *testing.T) {

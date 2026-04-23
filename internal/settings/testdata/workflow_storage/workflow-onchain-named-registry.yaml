@@ -1,0 +1,9 @@
+# staging target with named on-chain deployment-registry (owner still from key or MSIG)
+staging:
+  user-workflow:
+    workflow-name: "workflowTest"
+    deployment-registry: "onchain:ethereum-testnet-sepolia"
+  workflow-artifacts:
+    workflow-language: "go"
+    workflow-path: "./main.go"
+    config-path: "./config.json"

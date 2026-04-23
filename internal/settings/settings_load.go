@@ -21,6 +21,7 @@ const (
 	SethConfigPathSettingName     = "logging.seth-config-path"
 	RegistriesSettingName         = "contracts.registries"
 	KeystoneSettingName           = "contracts.keystone"
+	DeploymentRegistrySettingName = "user-workflow.deployment-registry"
 	RpcsSettingName               = "rpcs"
 	ExperimentalChainsSettingName = "experimental-chains" // used by simulator when present in target config
 )
@@ -103,7 +104,15 @@ func LoadSettingsIntoViper(v *viper.Viper, cmd *cobra.Command) error {
 	if context.IsWorkflowCommand(cmd) {
 		// Step 2: Load workflow settings next (overwrites values from project settings)
 		if err := mergeConfigToViper(v, constants.DefaultWorkflowSettingsFileName); err != nil {
-			return fmt.Errorf("failed to load workflow settings: %w", err)
+			cwd, _ := os.Getwd()
+			return fmt.Errorf(
+				"workflow settings file not found: no '%s' in '%s'\n\n"+
+					"To fix:\n"+
+					"  • Run 'cre workflow init' to create a properly initialized workflow\n"+
+					"  • If this workflow was manually created, add a %s with your target configuration\n"+
+					"  • Check that the workflow folder path argument is correct",
+				constants.DefaultWorkflowSettingsFileName, cwd, constants.DefaultWorkflowSettingsFileName,
+			)
 		}
 	}
 

@@ -18,12 +18,6 @@ func TestWorkflowActivateCommand(t *testing.T) {
 		t.Parallel()
 
 		fillRequired := func(in Inputs) Inputs {
-			if in.WorkflowRegistryContractAddress == "" {
-				in.WorkflowRegistryContractAddress = "0x0000000000000000000000000000000000000000"
-			}
-			if in.WorkflowRegistryContractChainName == "" {
-				in.WorkflowRegistryContractChainName = "ethereum-testnet-sepolia"
-			}
 			return in
 		}
 

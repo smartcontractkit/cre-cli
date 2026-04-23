@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -25,6 +26,21 @@ type ChainSelector = uint64
 type ChainConfig struct {
 	Selector  ChainSelector
 	Forwarder string
+}
+
+// SupportedChainNames returns the human-readable names of all supported EVM chains,
+// sorted alphabetically.
+func SupportedChainNames() []string {
+	var names []string
+	for _, chain := range SupportedEVM {
+		name, err := settings.GetChainNameByChainSelector(chain.Selector)
+		if err != nil {
+			continue
+		}
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }
 
 // SupportedEVM is the canonical list you can range over.
@@ -185,7 +201,7 @@ func redactURL(rawURL string) string {
 // experimentalForwarders keys identify experimental chains (not in chain-selectors).
 func runRPCHealthCheck(clients map[uint64]*ethclient.Client, experimentalForwarders map[uint64]common.Address) error {
 	if len(clients) == 0 {
-		return fmt.Errorf("check your settings: no RPC URLs found for supported or experimental chains")
+		return fmt.Errorf("no RPC URLs found for supported or experimental chains. Run 'cre workflow supported-chains' to see all supported chain names")
 	}
 
 	var errs []error

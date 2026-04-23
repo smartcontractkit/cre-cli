@@ -14,6 +14,7 @@ cre templates list [optional flags]
 
 ```
   -h, --help      help for list
+      --json      Output template list as JSON
       --refresh   Bypass cache and fetch fresh data
 ```
 

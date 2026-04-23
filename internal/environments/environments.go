@@ -22,6 +22,7 @@ const (
 	EnvVarWorkflowRegistryChainName        = "CRE_CLI_WORKFLOW_REGISTRY_CHAIN_NAME"
 	EnvVarWorkflowRegistryChainExplorerURL = "CRE_CLI_WORKFLOW_REGISTRY_CHAIN_EXPLORER_URL"
 	EnvVarDonFamily                        = "CRE_CLI_DON_FAMILY"
+	EnvVarSecretsOrgOwned                  = "CRE_CLI_SECRETS_ORG_OWNED"
 
 	DefaultEnv = "PRODUCTION"
 )
@@ -42,6 +43,7 @@ type EnvironmentSet struct {
 	WorkflowRegistryChainName        string `yaml:"CRE_CLI_WORKFLOW_REGISTRY_CHAIN_NAME"`
 	WorkflowRegistryChainExplorerURL string `yaml:"CRE_CLI_WORKFLOW_REGISTRY_CHAIN_EXPLORER_URL"`
 	DonFamily                        string `yaml:"CRE_CLI_DON_FAMILY"`
+	SecretsOrgOwned                  bool   `yaml:"CRE_CLI_SECRETS_ORG_OWNED"`
 }
 
 // RequiresVPN returns true if the GraphQL endpoint is on a private network
@@ -111,6 +113,10 @@ func NewEnvironmentSet(ff *fileFormat, envName string) *EnvironmentSet {
 
 	if v := os.Getenv(EnvVarDonFamily); v != "" {
 		set.DonFamily = v
+	}
+
+	if v := os.Getenv(EnvVarSecretsOrgOwned); v != "" {
+		set.SecretsOrgOwned = strings.EqualFold(v, "true")
 	}
 
 	return &set
