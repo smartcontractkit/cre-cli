@@ -1,12 +1,50 @@
 package list
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/smartcontractkit/cre-cli/internal/tenantctx"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
+
+// workflowJSON is the JSON representation of a workflow for file output.
+type workflowJSON struct {
+	Name            string `json:"name"`
+	WorkflowID      string `json:"workflowId"`
+	OwnerAddress    string `json:"ownerAddress"`
+	Status          string `json:"status"`
+	Registry        string `json:"registry"`
+	ContractAddress string `json:"contractAddress,omitempty"`
+}
+
+func writeWorkflowsJSON(rows []Workflow, registries []*tenantctx.Registry, path string) error {
+	out := make([]workflowJSON, 0, len(rows))
+	for _, r := range rows {
+		matched := resolveWorkflowRegistry(r.WorkflowSource, registries)
+		entry := workflowJSON{
+			Name:         r.Name,
+			WorkflowID:   r.WorkflowID,
+			OwnerAddress: r.OwnerAddress,
+			Status:       r.Status,
+			Registry:     formatRegistryIDFromResolved(r.WorkflowSource, matched),
+		}
+		if matched != nil && registryEligibleForContractRows(matched) && matched.Address != nil {
+			entry.ContractAddress = strings.TrimSpace(*matched.Address)
+		} else if _, addr, ok := parseContractWorkflowSource(r.WorkflowSource); ok && strings.TrimSpace(addr) != "" {
+			entry.ContractAddress = strings.TrimSpace(addr)
+		}
+		out = append(out, entry)
+	}
+
+	data, err := json.MarshalIndent(out, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0o600)
+}
 
 func omitDeleted(rows []Workflow) []Workflow {
 	out := make([]Workflow, 0, len(rows))

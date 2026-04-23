@@ -217,7 +217,7 @@ func TestExecute_WithMock_PrintsWorkflowBlocks(t *testing.T) {
 	h := newHandlerWithServer(t, rtCtx, srv)
 
 	out := captureStdout(t, func() {
-		if err := h.Execute(context.Background(), "", false); err != nil {
+		if err := h.Execute(context.Background(), cmdlist.Inputs{}); err != nil {
 			t.Fatal(err)
 		}
 	})
@@ -266,7 +266,7 @@ func TestExecute_WithMock_IncludeDeleted(t *testing.T) {
 	h := newHandlerWithServer(t, rtCtx, srv)
 
 	out := captureStdout(t, func() {
-		if err := h.Execute(context.Background(), "", true); err != nil {
+		if err := h.Execute(context.Background(), cmdlist.Inputs{IncludeDeleted: true}); err != nil {
 			t.Fatal(err)
 		}
 	})
@@ -301,7 +301,7 @@ func TestExecute_AllDeletedShowsHint(t *testing.T) {
 	var errOut string
 	captureStdout(t, func() {
 		errOut = captureStderr(t, func() {
-			if err := h.Execute(context.Background(), "", false); err != nil {
+			if err := h.Execute(context.Background(), cmdlist.Inputs{}); err != nil {
 				t.Fatal(err)
 			}
 		})
@@ -328,7 +328,7 @@ func TestExecute_WithMock_RegistryFilter(t *testing.T) {
 	h := newHandlerWithServer(t, rtCtx, srv)
 
 	out := captureStdout(t, func() {
-		if err := h.Execute(context.Background(), "private", false); err != nil {
+		if err := h.Execute(context.Background(), cmdlist.Inputs{RegistryFilter: "private"}); err != nil {
 			t.Fatal(err)
 		}
 	})
@@ -387,7 +387,7 @@ func TestExecute_RegistryFilter_MatchesContractSource(t *testing.T) {
 	h := newHandlerWithServer(t, rtCtx, srv)
 
 	out := captureStdout(t, func() {
-		if err := h.Execute(context.Background(), "onchain:mock-testnet", false); err != nil {
+		if err := h.Execute(context.Background(), cmdlist.Inputs{RegistryFilter: "onchain:mock-testnet"}); err != nil {
 			t.Fatal(err)
 		}
 	})
@@ -411,7 +411,7 @@ func TestExecute_RegistryFilter_MatchesGrpcSource(t *testing.T) {
 	h := newHandlerWithServer(t, rtCtx, srv)
 
 	out := captureStdout(t, func() {
-		if err := h.Execute(context.Background(), "private", false); err != nil {
+		if err := h.Execute(context.Background(), cmdlist.Inputs{RegistryFilter: "private"}); err != nil {
 			t.Fatal(err)
 		}
 	})
@@ -435,7 +435,7 @@ func TestExecute_List_ShowsRegistryIDForGrpcSource(t *testing.T) {
 	h := newHandlerWithServer(t, rtCtx, srv)
 
 	out := captureStdout(t, func() {
-		if err := h.Execute(context.Background(), "", false); err != nil {
+		if err := h.Execute(context.Background(), cmdlist.Inputs{}); err != nil {
 			t.Fatal(err)
 		}
 	})
@@ -522,7 +522,7 @@ func TestExecute_List_UnmatchedContractShowsAPISource(t *testing.T) {
 	h := newHandlerWithServer(t, rtCtx, srv)
 
 	out := captureStdout(t, func() {
-		if err := h.Execute(context.Background(), "", false); err != nil {
+		if err := h.Execute(context.Background(), cmdlist.Inputs{}); err != nil {
 			t.Fatal(err)
 		}
 	})
@@ -571,7 +571,7 @@ func TestExecute_RegistryFilter_PrivateExcludesUnmatchedContract(t *testing.T) {
 	h := newHandlerWithServer(t, rtCtx, srv)
 
 	out := captureStdout(t, func() {
-		if err := h.Execute(context.Background(), "private", false); err != nil {
+		if err := h.Execute(context.Background(), cmdlist.Inputs{RegistryFilter: "private"}); err != nil {
 			t.Fatal(err)
 		}
 	})
@@ -625,7 +625,7 @@ func TestExecute_Pagination(t *testing.T) {
 	h := newHandlerWithServer(t, rtCtx, srv)
 
 	out := captureStdout(t, func() {
-		if err := h.Execute(context.Background(), "", false); err != nil {
+		if err := h.Execute(context.Background(), cmdlist.Inputs{}); err != nil {
 			t.Fatal(err)
 		}
 	})
@@ -633,5 +633,103 @@ func TestExecute_Pagination(t *testing.T) {
 	wantRows := workflowdataclient.DefaultPageSize + 2
 	if got := strings.Count(out, "9292929292929292929292929292929292929292"); got < wantRows {
 		t.Errorf("expected at least %d owner cells, got %d in:\n%s", wantRows, got, out)
+	}
+}
+
+func TestExecute_JSONOutput_WritesFile(t *testing.T) {
+	logger := zerolog.New(io.Discard)
+	rtCtx := &runtime.Context{
+		Logger:         &logger,
+		Credentials:    &credentials.Credentials{},
+		EnvironmentSet: &environments.EnvironmentSet{EnvName: "STAGING"},
+		TenantContext: &tenantctx.EnvironmentContext{
+			Registries: []*tenantctx.Registry{
+				{ID: "private", Label: "Private hosted"},
+			},
+		},
+	}
+
+	srv := newWorkflowServer(t, [][]map[string]string{threeWorkflowPage()}, 3)
+	defer srv.Close()
+	h := newHandlerWithServer(t, rtCtx, srv)
+
+	outFile := t.TempDir() + "/workflows.json"
+	captureStdout(t, func() {
+		if err := h.Execute(context.Background(), cmdlist.Inputs{OutputPath: outFile}); err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	data, err := os.ReadFile(outFile)
+	if err != nil {
+		t.Fatalf("expected JSON file to be written: %v", err)
+	}
+
+	var result []map[string]any
+	if err := json.Unmarshal(data, &result); err != nil {
+		t.Fatalf("invalid JSON written: %v\n%s", err, data)
+	}
+
+	// Deleted workflow is excluded (includeDeleted=false).
+	if len(result) != 2 {
+		t.Fatalf("expected 2 workflows in JSON (deleted excluded), got %d", len(result))
+	}
+
+	names := []string{result[0]["name"].(string), result[1]["name"].(string)}
+	if names[0] != "alpha" || names[1] != "beta" {
+		t.Errorf("unexpected workflow names in JSON: %v", names)
+	}
+	if result[0]["registry"] != "private" {
+		t.Errorf("expected registry=private for alpha, got %v", result[0]["registry"])
+	}
+	if result[0]["status"] != "ACTIVE" {
+		t.Errorf("expected status=ACTIVE for alpha, got %v", result[0]["status"])
+	}
+}
+
+func TestExecute_JSONOutput_IncludeDeleted(t *testing.T) {
+	logger := zerolog.New(io.Discard)
+	rtCtx := &runtime.Context{
+		Logger:         &logger,
+		Credentials:    &credentials.Credentials{},
+		EnvironmentSet: &environments.EnvironmentSet{EnvName: "STAGING"},
+		TenantContext: &tenantctx.EnvironmentContext{
+			Registries: []*tenantctx.Registry{
+				{ID: "private", Label: "Private hosted"},
+			},
+		},
+	}
+
+	srv := newWorkflowServer(t, [][]map[string]string{threeWorkflowPage()}, 3)
+	defer srv.Close()
+	h := newHandlerWithServer(t, rtCtx, srv)
+
+	outFile := t.TempDir() + "/workflows.json"
+	captureStdout(t, func() {
+		if err := h.Execute(context.Background(), cmdlist.Inputs{IncludeDeleted: true, OutputPath: outFile}); err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	data, err := os.ReadFile(outFile)
+	if err != nil {
+		t.Fatalf("expected JSON file to be written: %v", err)
+	}
+
+	var result []map[string]any
+	if err := json.Unmarshal(data, &result); err != nil {
+		t.Fatalf("invalid JSON written: %v\n%s", err, data)
+	}
+
+	if len(result) != 3 {
+		t.Fatalf("expected 3 workflows in JSON (include-deleted), got %d", len(result))
+	}
+
+	statuses := make([]string, len(result))
+	for i, r := range result {
+		statuses[i] = r["status"].(string)
+	}
+	if statuses[2] != "DELETED" {
+		t.Errorf("expected last workflow to be DELETED, got %v", statuses[2])
 	}
 }

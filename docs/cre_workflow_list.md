@@ -16,6 +16,7 @@ cre workflow list [optional flags]
 cre workflow list
   cre workflow list --registry private
   cre workflow list --include-deleted
+  cre workflow list --output /path/to/workflows.json
 ```
 
 ### Options
@@ -23,6 +24,7 @@ cre workflow list
 ```
   -h, --help              help for list
       --include-deleted   Include workflows in DELETED status
+      --output string     Write results to a .json file at the given path (relative or absolute)
       --registry string   Filter by registry ID from user context
 ```
 

@@ -17,14 +17,14 @@ func filterRowsByRegistry(rows []Workflow, reg *tenantctx.Registry, all []*tenan
 	}
 	out := make([]Workflow, 0, len(rows))
 	for _, r := range rows {
-		if rowMatchesRegistry(r.WorkflowSource, reg, all) {
+		if workflowSourceMatchesRegistry(r.WorkflowSource, reg, all) {
 			out = append(out, r)
 		}
 	}
 	return out
 }
 
-func rowMatchesRegistry(workflowSource string, reg *tenantctx.Registry, all []*tenantctx.Registry) bool {
+func workflowSourceMatchesRegistry(workflowSource string, reg *tenantctx.Registry, all []*tenantctx.Registry) bool {
 	if workflowSource == reg.ID {
 		return true
 	}
