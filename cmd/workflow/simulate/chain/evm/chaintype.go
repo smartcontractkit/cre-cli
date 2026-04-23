@@ -233,16 +233,10 @@ func (ct *EVMChainType) ResolveKey(creSettings *settings.Settings, broadcast boo
 		}
 		ui.Warning("Using default private key for chain write simulation. To use your own key, set CRE_ETH_PRIVATE_KEY in your .env file or system environment.")
 	}
-	if broadcast && isSentinelKey(pk) {
+	if broadcast && bytes.Equal(crypto.FromECDSA(pk), sentinelKeyBytes) {
 		return nil, fmt.Errorf("you must configure a valid private key to perform on-chain writes. Please set your private key in the .env file before using the --broadcast flag")
 	}
 	return pk, nil
-}
-
-// isSentinelKey reports whether pk matches the hard-coded default sentinel
-// key, without reading the deprecated *ecdsa.PrivateKey.D field.
-func isSentinelKey(pk *ecdsa.PrivateKey) bool {
-	return pk != nil && bytes.Equal(crypto.FromECDSA(pk), sentinelKeyBytes)
 }
 
 // CLI input keys consumed from chain.TriggerParams.ChainTypeInputs.

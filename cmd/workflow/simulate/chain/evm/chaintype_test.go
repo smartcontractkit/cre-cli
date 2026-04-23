@@ -10,6 +10,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/rs/zerolog"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
@@ -181,7 +182,7 @@ func TestEVMChainType_ResolveKey(t *testing.T) {
 			require.True(t, ok, "expected *ecdsa.PrivateKey, got %T", got)
 			require.NotNil(t, pk)
 			if tt.checkD1 {
-				assert.True(t, isSentinelKey(pk), "expected sentinel key")
+				assert.True(t, bytes.Equal(crypto.FromECDSA(pk), sentinelKeyBytes), "expected sentinel key")
 			}
 			if tt.wantStderr == "" {
 				assert.NotContains(t, stderr, "Using default private key",
