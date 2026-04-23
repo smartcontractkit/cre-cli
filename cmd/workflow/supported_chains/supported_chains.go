@@ -5,7 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/smartcontractkit/cre-cli/cmd/workflow/simulate"
+	"github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain/evm"
 )
 
 func New() *cobra.Command {
@@ -14,7 +14,7 @@ func New() *cobra.Command {
 		Short: "List all supported chain names",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			names := simulate.SupportedChainNames()
+			names := evm.SupportedChainNames()
 			fmt.Println("Supported chain names:")
 			for _, name := range names {
 				fmt.Printf("  %s\n", name)

@@ -1,39 +1,20 @@
-package simulate
+package evm
 
 import (
-	"context"
-	"errors"
-	"fmt"
-	"net/url"
-	"regexp"
 	"sort"
-	"strconv"
-	"strings"
-	"time"
-
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/ethclient"
 
 	chainselectors "github.com/smartcontractkit/chain-selectors"
 
+	"github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 )
-
-const WorkflowExecutionTimeout = 5 * time.Minute
-
-type ChainSelector = uint64
-
-type ChainConfig struct {
-	Selector  ChainSelector
-	Forwarder string
-}
 
 // SupportedChainNames returns the human-readable names of all supported EVM chains,
 // sorted alphabetically.
 func SupportedChainNames() []string {
 	var names []string
-	for _, chain := range SupportedEVM {
-		name, err := settings.GetChainNameByChainSelector(chain.Selector)
+	for _, c := range SupportedChains {
+		name, err := settings.GetChainNameByChainSelector(c.Selector)
 		if err != nil {
 			continue
 		}
@@ -43,8 +24,8 @@ func SupportedChainNames() []string {
 	return names
 }
 
-// SupportedEVM is the canonical list you can range over.
-var SupportedEVM = []ChainConfig{
+// SupportedChains is the canonical list of EVM chains supported for simulation.
+var SupportedChains = []chain.ChainConfig{
 	// Ethereum
 	{Selector: chainselectors.ETHEREUM_TESTNET_SEPOLIA.Selector, Forwarder: "0x15fC6ae953E024d975e77382eEeC56A9101f9F88"},
 	{Selector: chainselectors.ETHEREUM_MAINNET.Selector, Forwarder: "0xa3d1ad4ac559a6575a114998affb2fb2ec97a7d9"},
@@ -153,95 +134,4 @@ var SupportedEVM = []ChainConfig{
 
 	// DTCC
 	{Selector: chainselectors.DTCC_TESTNET_ANDESITE.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
-}
-
-// parse "ChainSelector:<digits>" from trigger id, e.g. "evm:ChainSelector:5009297550715157269@1.0.0 LogTrigger"
-var chainSelectorRe = regexp.MustCompile(`(?i)chainselector:(\d+)`)
-
-func parseChainSelectorFromTriggerID(id string) (uint64, bool) {
-	m := chainSelectorRe.FindStringSubmatch(id)
-	if len(m) < 2 {
-		return 0, false
-	}
-
-	v, err := strconv.ParseUint(m[1], 10, 64)
-	if err != nil {
-		return 0, false
-	}
-
-	return v, true
-}
-
-// redactURL returns a version of the URL with path segments and query parameters
-// masked to avoid leaking secrets that may have been resolved from environment variables.
-// For example, "https://rpc.example.com/v1/my-secret-key" becomes "https://rpc.example.com/v1/***".
-func redactURL(rawURL string) string {
-	u, err := url.Parse(rawURL)
-	if err != nil {
-		return "***"
-	}
-	// Mask the last path segment (most common location for API keys)
-	u.Path = strings.TrimRight(u.Path, "/")
-	if u.Path != "" && u.Path != "/" {
-		parts := strings.Split(u.Path, "/")
-		if len(parts) > 1 {
-			parts[len(parts)-1] = "***"
-		}
-		u.RawPath = ""
-		u.Path = strings.Join(parts, "/")
-	}
-	// Remove query params entirely
-	u.RawQuery = ""
-	u.Fragment = ""
-	// Use Opaque to avoid re-encoding the path
-	return fmt.Sprintf("%s://%s%s", u.Scheme, u.Host, u.Path)
-}
-
-// runRPCHealthCheck runs connectivity check against every configured client.
-// experimentalForwarders keys identify experimental chains (not in chain-selectors).
-func runRPCHealthCheck(clients map[uint64]*ethclient.Client, experimentalForwarders map[uint64]common.Address) error {
-	if len(clients) == 0 {
-		return fmt.Errorf("no RPC URLs found for supported or experimental chains. Run 'cre workflow supported-chains' to see all supported chain names")
-	}
-
-	var errs []error
-	for selector, c := range clients {
-		if c == nil {
-			// shouldnt happen
-			errs = append(errs, fmt.Errorf("[%d] nil client", selector))
-			continue
-		}
-
-		// Determine chain label for error messages
-		var chainLabel string
-		if _, isExperimental := experimentalForwarders[selector]; isExperimental {
-			chainLabel = fmt.Sprintf("experimental chain %d", selector)
-		} else {
-			name, err := settings.GetChainNameByChainSelector(selector)
-			if err != nil {
-				// If we can't get the name, use the selector as the label
-				chainLabel = fmt.Sprintf("chain %d", selector)
-			} else {
-				chainLabel = name
-			}
-		}
-
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		chainID, err := c.ChainID(ctx)
-		cancel() // don't defer in a loop
-
-		if err != nil {
-			errs = append(errs, fmt.Errorf("[%s] failed RPC health check: %w", chainLabel, err))
-			continue
-		}
-		if chainID == nil || chainID.Sign() <= 0 {
-			errs = append(errs, fmt.Errorf("[%s] invalid RPC response: empty or zero chain ID", chainLabel))
-			continue
-		}
-	}
-
-	if len(errs) > 0 {
-		return fmt.Errorf("RPC health check failed:\n%w", errors.Join(errs...))
-	}
-	return nil
 }
