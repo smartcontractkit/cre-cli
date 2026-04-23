@@ -277,8 +277,11 @@ func (h *handler) ValidateInputs(inputs Inputs) error {
 	inputs.ConfigPath = savedConfig
 
 	// forbid the default 0x...01 key when broadcasting
-	if inputs.Broadcast && inputs.EthPrivateKey != nil && inputs.EthPrivateKey.D.Cmp(big.NewInt(1)) == 0 {
-		return fmt.Errorf("you must configure a valid private key to perform on-chain writes. Please set your private key in the .env file before using the -–broadcast flag")
+	if inputs.Broadcast && inputs.EthPrivateKey != nil {
+		keyBytes, keyBytesErr := inputs.EthPrivateKey.Bytes()
+		if keyBytesErr == nil && new(big.Int).SetBytes(keyBytes).Cmp(big.NewInt(1)) == 0 {
+			return fmt.Errorf("you must configure a valid private key to perform on-chain writes. Please set your private key in the .env file before using the -–broadcast flag")
+		}
 	}
 
 	rpcErr := ui.WithSpinner("Checking RPC connectivity...", func() error {
@@ -749,7 +752,25 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 		switch {
 		case trigger == "cron-trigger@1.0.0":
 			holder.TriggerFunc = func() error {
-				return triggerCaps.ManualCronTrigger.ManualTrigger(ctx, triggerRegistrationID, time.Now())
+				skipWaitSignal := make(chan struct{}, 1)
+
+				userPromptCtx, cancel := context.WithCancel(ctx)
+				defer cancel()
+
+				go func() {
+					ui.Line()
+					pressed := ui.WaitForEnter(userPromptCtx, "Cron scheduler started. Press Enter to skip waiting...")
+					if pressed {
+						skipWaitSignal <- struct{}{}
+					}
+				}()
+
+				err := triggerCaps.ManualCronTrigger.ManualTrigger(ctx, triggerRegistrationID, skipWaitSignal)
+				if err != nil {
+					return err
+				}
+
+				return nil
 			}
 		case trigger == "http-trigger@1.0.0-alpha":
 			payload, err := getHTTPTriggerPayload(inputs.InvocationDir)
@@ -824,7 +845,16 @@ func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inp
 		switch {
 		case trigger == "cron-trigger@1.0.0":
 			holder.TriggerFunc = func() error {
-				return triggerCaps.ManualCronTrigger.ManualTrigger(ctx, triggerRegistrationID, time.Now())
+				skipWaitSignal := make(chan struct{}, 1)
+				err := triggerCaps.ManualCronTrigger.ManualTrigger(ctx, triggerRegistrationID, skipWaitSignal)
+				if err != nil {
+					return err
+				}
+
+				// With cron schedule on non-interactive mode
+				skipWaitSignal <- struct{}{}
+
+				return nil
 			}
 		case trigger == "http-trigger@1.0.0-alpha":
 			if strings.TrimSpace(inputs.HTTPPayload) == "" {
