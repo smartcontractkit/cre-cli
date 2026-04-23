@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"io"
-	"math/big"
 	"os"
 	"strings"
 	"sync"
@@ -22,8 +21,6 @@ import (
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 )
-
-func bigOne() *big.Int { return big.NewInt(1) }
 
 func nopCommonLogger() logger.Logger {
 	lg := logger.NewWithSync(io.Discard)
@@ -184,7 +181,7 @@ func TestEVMChainType_ResolveKey(t *testing.T) {
 			require.True(t, ok, "expected *ecdsa.PrivateKey, got %T", got)
 			require.NotNil(t, pk)
 			if tt.checkD1 {
-				assert.Equal(t, 0, pk.D.Cmp(bigOne()), "expected sentinel D==1")
+				assert.True(t, isSentinelKey(pk), "expected sentinel key")
 			}
 			if tt.wantStderr == "" {
 				assert.NotContains(t, stderr, "Using default private key",

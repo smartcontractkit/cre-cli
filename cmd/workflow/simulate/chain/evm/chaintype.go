@@ -1,10 +1,10 @@
 package evm
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"fmt"
-	"math/big"
 	"strconv"
 	"strings"
 
@@ -231,10 +231,24 @@ func (ct *EVMChainType) ResolveKey(creSettings *settings.Settings, broadcast boo
 		}
 		ui.Warning("Using default private key for chain write simulation. To use your own key, set CRE_ETH_PRIVATE_KEY in your .env file or system environment.")
 	}
-	if broadcast && pk.D.Cmp(big.NewInt(1)) == 0 {
+	if broadcast && isSentinelKey(pk) {
 		return nil, fmt.Errorf("you must configure a valid private key to perform on-chain writes. Please set your private key in the .env file before using the --broadcast flag")
 	}
 	return pk, nil
+}
+
+// isSentinelKey reports whether pk is the hard-coded default sentinel key.
+// Compares the serialized raw bytes so callers avoid the deprecated
+// *ecdsa.PrivateKey.D field.
+func isSentinelKey(pk *ecdsa.PrivateKey) bool {
+	if pk == nil {
+		return false
+	}
+	sentinel, err := crypto.HexToECDSA(defaultSentinelPrivateKey)
+	if err != nil {
+		return false
+	}
+	return bytes.Equal(crypto.FromECDSA(pk), crypto.FromECDSA(sentinel))
 }
 
 // CLI input keys consumed from chain.TriggerParams.ChainTypeInputs.
