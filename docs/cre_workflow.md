@@ -36,6 +36,7 @@ cre workflow [optional flags]
 * [cre workflow deploy](cre_workflow_deploy.md)	 - Deploys a workflow to the Workflow Registry contract
 * [cre workflow hash](cre_workflow_hash.md)	 - Computes and displays workflow hashes
 * [cre workflow limits](cre_workflow_limits.md)	 - Manage simulation limits
+* [cre workflow list](cre_workflow_list.md)	 - Lists workflows deployed for your organization
 * [cre workflow pause](cre_workflow_pause.md)	 - Pauses workflow on the Workflow Registry contract
 * [cre workflow simulate](cre_workflow_simulate.md)	 - Simulates a workflow
 * [cre workflow supported-chains](cre_workflow_supported-chains.md)	 - List all supported chain names
