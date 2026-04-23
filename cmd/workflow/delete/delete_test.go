@@ -28,12 +28,10 @@ func TestNonInteractive_WithoutYes_ReturnsError(t *testing.T) {
 
 	handler := newHandler(ctx, testutil.EmptyMockStdinReader())
 	handler.inputs = Inputs{
-		WorkflowName:                      "test-workflow",
-		WorkflowOwner:                     chainsim.TestAddress,
-		SkipConfirmation:                  false,
-		NonInteractive:                    true,
-		WorkflowRegistryContractAddress:   "0x0000000000000000000000000000000000000000",
-		WorkflowRegistryContractChainName: "ethereum-testnet-sepolia",
+		WorkflowName:     "test-workflow",
+		WorkflowOwner:    chainsim.TestAddress,
+		SkipConfirmation: false,
+		NonInteractive:   true,
 	}
 
 	ok, err := handler.shouldDeleteWorkflow(false, "test-workflow")
@@ -56,12 +54,10 @@ func TestNonInteractive_WithYes_Proceeds(t *testing.T) {
 
 	handler := newHandler(ctx, testutil.EmptyMockStdinReader())
 	handler.inputs = Inputs{
-		WorkflowName:                      "test-workflow",
-		WorkflowOwner:                     chainsim.TestAddress,
-		SkipConfirmation:                  true,
-		NonInteractive:                    true,
-		WorkflowRegistryContractAddress:   "0x0000000000000000000000000000000000000000",
-		WorkflowRegistryContractChainName: "ethereum-testnet-sepolia",
+		WorkflowName:     "test-workflow",
+		WorkflowOwner:    chainsim.TestAddress,
+		SkipConfirmation: true,
+		NonInteractive:   true,
 	}
 
 	ok, err := handler.shouldDeleteWorkflow(true, "test-workflow")

@@ -27,12 +27,10 @@ func TestNonInteractive_WithoutYes_ReturnsError(t *testing.T) {
 
 	h := newHandler(ctx)
 	h.inputs = Inputs{
-		WorkflowName:                      "test-workflow",
-		WorkflowOwner:                     chainsim.TestAddress,
-		WorkflowRegistryContractAddress:   "0x0000000000000000000000000000000000000000",
-		WorkflowRegistryContractChainName: "ethereum-testnet-sepolia",
-		NonInteractive:                    true,
-		SkipConfirmation:                  false,
+		WorkflowName:     "test-workflow",
+		WorkflowOwner:    chainsim.TestAddress,
+		NonInteractive:   true,
+		SkipConfirmation: false,
 	}
 	h.validated = true
 
@@ -55,12 +53,10 @@ func TestNonInteractive_WithYes_PassesGuard(t *testing.T) {
 
 	h := newHandler(ctx)
 	h.inputs = Inputs{
-		WorkflowName:                      "test-workflow",
-		WorkflowOwner:                     chainsim.TestAddress,
-		WorkflowRegistryContractAddress:   "0x0000000000000000000000000000000000000000",
-		WorkflowRegistryContractChainName: "ethereum-testnet-sepolia",
-		NonInteractive:                    true,
-		SkipConfirmation:                  true,
+		WorkflowName:     "test-workflow",
+		WorkflowOwner:    chainsim.TestAddress,
+		NonInteractive:   true,
+		SkipConfirmation: true,
 	}
 	h.validated = true
 
