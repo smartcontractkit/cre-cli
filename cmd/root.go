@@ -254,6 +254,11 @@ func newRootCommand() *cobra.Command {
 				if showSpinner {
 					spinner.Update("Loading settings...")
 				}
+				// Capture the invocation directory before SetExecutionContext changes it.
+				if invocationDir, err := os.Getwd(); err == nil {
+					runtimeContext.InvocationDir = invocationDir
+				}
+
 				// Set execution context (project root + workflow directory if applicable)
 				projectRootFlag := runtimeContext.Viper.GetString(settings.Flags.ProjectRoot.Name)
 				if err := context.SetExecutionContext(cmd, args, projectRootFlag, rootLogger); err != nil {
@@ -271,6 +276,14 @@ func newRootCommand() *cobra.Command {
 				err := runtimeContext.AttachSettings(cmd, isLoadDeploymentRPC(cmd))
 				if err != nil {
 					return fmt.Errorf("%w", err)
+				}
+
+				if err := runtimeContext.AttachResolvedRegistry(); err != nil {
+					return err
+				}
+
+				if err := runtimeContext.FinalizeDeferredWorkflowOwner(cmd); err != nil {
+					return err
 				}
 
 				// Restart spinner for remaining initialization

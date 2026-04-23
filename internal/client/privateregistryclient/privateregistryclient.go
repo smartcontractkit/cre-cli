@@ -33,27 +33,44 @@ func (c *Client) CreateServiceContextWithTimeout() (context.Context, context.Can
 	return context.WithTimeout(context.Background(), c.serviceTimeout) //nolint:gosec // G118 -- cancel is deferred by callers
 }
 
-type WorkflowInRegistry struct {
-	WorkflowID     string                   `json:"workflowId"`
-	Owner          string                   `json:"owner"`
-	CreatedAt      string                   `json:"createdAt"`
-	Status         WorkflowInRegistryStatus `json:"status"`
-	WorkflowName   string                   `json:"workflowName"`
-	BinaryURL      string                   `json:"binaryUrl"`
-	ConfigURL      string                   `json:"configUrl"`
-	Tag            string                   `json:"tag"`
-	Attributes     string                   `json:"attributes"`
-	DonFamily      string                   `json:"donFamily"`
-	OrganizationID string                   `json:"organizationId"`
+type OffchainWorkflow struct {
+	WorkflowID     string                 `json:"workflowId"`
+	Owner          string                 `json:"owner"`
+	CreatedAt      string                 `json:"createdAt"`
+	Status         OffchainWorkflowStatus `json:"status"`
+	WorkflowName   string                 `json:"workflowName"`
+	BinaryURL      string                 `json:"binaryUrl"`
+	ConfigURL      string                 `json:"configUrl"`
+	Tag            string                 `json:"tag"`
+	Attributes     string                 `json:"attributes"`
+	DonFamily      string                 `json:"donFamily"`
+	OrganizationID string                 `json:"organizationId"`
 }
 
-type WorkflowInRegistryStatus string
+type OffchainWorkflowStatus string
 
 const (
-	WorkflowStatusUnspecified WorkflowInRegistryStatus = "WORKFLOW_STATUS_UNSPECIFIED"
-	WorkflowStatusActive      WorkflowInRegistryStatus = "WORKFLOW_STATUS_ACTIVE"
-	WorkflowStatusPaused      WorkflowInRegistryStatus = "WORKFLOW_STATUS_PAUSED"
+	WorkflowStatusUnspecified OffchainWorkflowStatus = "WORKFLOW_STATUS_UNSPECIFIED"
+	WorkflowStatusActive      OffchainWorkflowStatus = "WORKFLOW_STATUS_ACTIVE"
+	WorkflowStatusPaused      OffchainWorkflowStatus = "WORKFLOW_STATUS_PAUSED"
 )
+
+// FormatStatus returns a short human-readable label for CLI output.
+func FormatStatus(status OffchainWorkflowStatus) string {
+	switch status {
+	case WorkflowStatusActive:
+		return "Active"
+	case WorkflowStatusPaused:
+		return "Paused"
+	case WorkflowStatusUnspecified:
+		return "Unspecified"
+	default:
+		if status == "" {
+			return ""
+		}
+		return string(status)
+	}
+}
 
 const (
 	maxWorkflowNameLength = 64
@@ -63,57 +80,112 @@ const (
 	maxAttributesLength   = 1024
 )
 
-type WorkflowInRegistryInput struct {
-	WorkflowID   string                   `json:"workflowId"`
-	Status       WorkflowInRegistryStatus `json:"status"`
-	WorkflowName string                   `json:"workflowName"`
-	BinaryURL    string                   `json:"binaryUrl"`
-	ConfigURL    *string                  `json:"configUrl,omitempty"`
-	Tag          *string                  `json:"tag,omitempty"`
-	Attributes   *string                  `json:"attributes,omitempty"`
-	DonFamily    string                   `json:"donFamily"`
+type OffchainWorkflowInput struct {
+	WorkflowID   string                 `json:"workflowId"`
+	Status       OffchainWorkflowStatus `json:"status"`
+	WorkflowName string                 `json:"workflowName"`
+	BinaryURL    string                 `json:"binaryUrl"`
+	ConfigURL    *string                `json:"configUrl,omitempty"`
+	Tag          *string                `json:"tag,omitempty"`
+	Attributes   *string                `json:"attributes,omitempty"`
+	DonFamily    string                 `json:"donFamily"`
 }
 
-type UpsertWorkflowInRegistryRequest struct {
-	Workflow WorkflowInRegistryInput `json:"workflow"`
+type UpsertOffchainWorkflowRequest struct {
+	Workflow OffchainWorkflowInput `json:"workflow"`
 }
 
-type UpsertWorkflowInRegistryResponse struct {
-	Workflow WorkflowInRegistry `json:"workflow"`
+type UpsertOffchainWorkflowResponse struct {
+	Workflow OffchainWorkflow `json:"workflow"`
 }
 
-type PauseWorkflowInRegistryRequest struct {
+type PauseOffchainWorkflowRequest struct {
 	WorkflowID string `json:"workflowId"`
 }
 
-type PauseWorkflowInRegistryResponse struct {
-	Workflow WorkflowInRegistry `json:"workflow"`
+type PauseOffchainWorkflowResponse struct {
+	Workflow OffchainWorkflow `json:"workflow"`
 }
 
-type ActivateWorkflowInRegistryRequest struct {
+type ActivateOffchainWorkflowRequest struct {
 	WorkflowID string `json:"workflowId"`
 }
 
-type ActivateWorkflowInRegistryResponse struct {
-	Workflow WorkflowInRegistry `json:"workflow"`
+type ActivateOffchainWorkflowResponse struct {
+	Workflow OffchainWorkflow `json:"workflow"`
 }
 
-type DeleteWorkflowInRegistryRequest struct {
+type DeleteOffchainWorkflowRequest struct {
 	WorkflowID string `json:"workflowId"`
 }
 
-type DeleteWorkflowInRegistryResponse struct {
+type DeleteOffchainWorkflowResponse struct {
 	WorkflowID string `json:"workflowId"`
 }
 
-func (c *Client) UpsertWorkflowInRegistry(workflow WorkflowInRegistryInput) (WorkflowInRegistry, error) {
+type GetOffchainWorkflowByNameRequest struct {
+	WorkflowName string `json:"workflowName"`
+}
+
+type GetOffchainWorkflowByNameResponse struct {
+	Workflow OffchainWorkflow `json:"workflow"`
+}
+
+func (c *Client) GetWorkflowByName(workflowName string) (OffchainWorkflow, error) {
+	if workflowName == "" {
+		return OffchainWorkflow{}, fmt.Errorf("workflowName is required")
+	}
+	if len(workflowName) > maxWorkflowNameLength {
+		return OffchainWorkflow{}, fmt.Errorf("workflowName exceeds max length %d", maxWorkflowNameLength)
+	}
+
+	const query = `
+query GetOffchainWorkflowByName($request: GetOffchainWorkflowByNameRequest!) {
+  getOffchainWorkflowByName(request: $request) {
+    workflow {
+      workflowId
+      owner
+      createdAt
+      status
+      workflowName
+      binaryUrl
+      configUrl
+      tag
+      attributes
+      donFamily
+      organizationId
+    }
+  }
+}`
+
+	req := graphql.NewRequest(query)
+	req.Var("request", GetOffchainWorkflowByNameRequest{WorkflowName: workflowName})
+
+	var container struct {
+		GetOffchainWorkflowByName GetOffchainWorkflowByNameResponse `json:"getOffchainWorkflowByName"`
+	}
+
+	ctx, cancel := c.CreateServiceContextWithTimeout()
+	defer cancel()
+
+	if err := c.graphql.Execute(ctx, req, &container); err != nil {
+		return OffchainWorkflow{}, fmt.Errorf("get workflow by name in registry: %w", err)
+	}
+
+	c.log.Debug().Str("workflowName", workflowName).
+		Msg("Fetched workflow by name from private registry")
+
+	return container.GetOffchainWorkflowByName.Workflow, nil
+}
+
+func (c *Client) UpsertWorkflowInRegistry(workflow OffchainWorkflowInput) (OffchainWorkflow, error) {
 	if err := validateUpsertWorkflowInput(workflow); err != nil {
-		return WorkflowInRegistry{}, err
+		return OffchainWorkflow{}, err
 	}
 
 	const mutation = `
-mutation UpsertWorkflowInRegistry($request: UpsertWorkflowInRegistryRequest!) {
-  upsertWorkflowInRegistry(request: $request) {
+mutation UpsertOffchainWorkflow($request: UpsertOffchainWorkflowRequest!) {
+  upsertOffchainWorkflow(request: $request) {
     workflow {
       workflowId
       owner
@@ -131,33 +203,33 @@ mutation UpsertWorkflowInRegistry($request: UpsertWorkflowInRegistryRequest!) {
 }`
 
 	req := graphql.NewRequest(mutation)
-	req.Var("request", UpsertWorkflowInRegistryRequest{Workflow: workflow})
+	req.Var("request", UpsertOffchainWorkflowRequest{Workflow: workflow})
 
 	var container struct {
-		UpsertWorkflowInRegistry UpsertWorkflowInRegistryResponse `json:"upsertWorkflowInRegistry"`
+		UpsertOffchainWorkflow UpsertOffchainWorkflowResponse `json:"upsertOffchainWorkflow"`
 	}
 
 	ctx, cancel := c.CreateServiceContextWithTimeout()
 	defer cancel()
 
 	if err := c.graphql.Execute(ctx, req, &container); err != nil {
-		return WorkflowInRegistry{}, fmt.Errorf("upsert workflow in registry: %w", err)
+		return OffchainWorkflow{}, fmt.Errorf("upsert workflow in registry: %w", err)
 	}
 
-	c.log.Debug().Str("workflowId", container.UpsertWorkflowInRegistry.Workflow.WorkflowID).
+	c.log.Debug().Str("workflowId", container.UpsertOffchainWorkflow.Workflow.WorkflowID).
 		Msg("Upserted workflow in private registry")
 
-	return container.UpsertWorkflowInRegistry.Workflow, nil
+	return container.UpsertOffchainWorkflow.Workflow, nil
 }
 
-func (c *Client) PauseWorkflowInRegistry(workflowID string) (WorkflowInRegistry, error) {
+func (c *Client) PauseWorkflowInRegistry(workflowID string) (OffchainWorkflow, error) {
 	if workflowID == "" {
-		return WorkflowInRegistry{}, fmt.Errorf("workflowId is required")
+		return OffchainWorkflow{}, fmt.Errorf("workflowId is required")
 	}
 
 	const mutation = `
-mutation PauseWorkflowInRegistry($request: PauseWorkflowInRegistryRequest!) {
-  pauseWorkflowInRegistry(request: $request) {
+mutation PauseOffchainWorkflow($request: PauseOffchainWorkflowRequest!) {
+  pauseOffchainWorkflow(request: $request) {
     workflow {
       workflowId
       owner
@@ -175,33 +247,33 @@ mutation PauseWorkflowInRegistry($request: PauseWorkflowInRegistryRequest!) {
 }`
 
 	req := graphql.NewRequest(mutation)
-	req.Var("request", PauseWorkflowInRegistryRequest{WorkflowID: workflowID})
+	req.Var("request", PauseOffchainWorkflowRequest{WorkflowID: workflowID})
 
 	var container struct {
-		PauseWorkflowInRegistry PauseWorkflowInRegistryResponse `json:"pauseWorkflowInRegistry"`
+		PauseOffchainWorkflow PauseOffchainWorkflowResponse `json:"pauseOffchainWorkflow"`
 	}
 
 	ctx, cancel := c.CreateServiceContextWithTimeout()
 	defer cancel()
 
 	if err := c.graphql.Execute(ctx, req, &container); err != nil {
-		return WorkflowInRegistry{}, fmt.Errorf("pause workflow in registry: %w", err)
+		return OffchainWorkflow{}, fmt.Errorf("pause workflow in registry: %w", err)
 	}
 
 	c.log.Debug().Str("workflowId", workflowID).
 		Msg("Paused workflow in private registry")
 
-	return container.PauseWorkflowInRegistry.Workflow, nil
+	return container.PauseOffchainWorkflow.Workflow, nil
 }
 
-func (c *Client) ActivateWorkflowInRegistry(workflowID string) (WorkflowInRegistry, error) {
+func (c *Client) ActivateWorkflowInRegistry(workflowID string) (OffchainWorkflow, error) {
 	if workflowID == "" {
-		return WorkflowInRegistry{}, fmt.Errorf("workflowId is required")
+		return OffchainWorkflow{}, fmt.Errorf("workflowId is required")
 	}
 
 	const mutation = `
-mutation ActivateWorkflowInRegistry($request: ActivateWorkflowInRegistryRequest!) {
-  activateWorkflowInRegistry(request: $request) {
+mutation ActivateOffchainWorkflow($request: ActivateOffchainWorkflowRequest!) {
+  activateOffchainWorkflow(request: $request) {
     workflow {
       workflowId
       owner
@@ -219,23 +291,23 @@ mutation ActivateWorkflowInRegistry($request: ActivateWorkflowInRegistryRequest!
 }`
 
 	req := graphql.NewRequest(mutation)
-	req.Var("request", ActivateWorkflowInRegistryRequest{WorkflowID: workflowID})
+	req.Var("request", ActivateOffchainWorkflowRequest{WorkflowID: workflowID})
 
 	var container struct {
-		ActivateWorkflowInRegistry ActivateWorkflowInRegistryResponse `json:"activateWorkflowInRegistry"`
+		ActivateOffchainWorkflow ActivateOffchainWorkflowResponse `json:"activateOffchainWorkflow"`
 	}
 
 	ctx, cancel := c.CreateServiceContextWithTimeout()
 	defer cancel()
 
 	if err := c.graphql.Execute(ctx, req, &container); err != nil {
-		return WorkflowInRegistry{}, fmt.Errorf("activate workflow in registry: %w", err)
+		return OffchainWorkflow{}, fmt.Errorf("activate workflow in registry: %w", err)
 	}
 
 	c.log.Debug().Str("workflowId", workflowID).
 		Msg("Activated workflow in private registry")
 
-	return container.ActivateWorkflowInRegistry.Workflow, nil
+	return container.ActivateOffchainWorkflow.Workflow, nil
 }
 
 func (c *Client) DeleteWorkflowInRegistry(workflowID string) (string, error) {
@@ -244,17 +316,17 @@ func (c *Client) DeleteWorkflowInRegistry(workflowID string) (string, error) {
 	}
 
 	const mutation = `
-mutation DeleteWorkflowInRegistry($request: DeleteWorkflowInRegistryRequest!) {
-  deleteWorkflowInRegistry(request: $request) {
+mutation DeleteOffchainWorkflow($request: DeleteOffchainWorkflowRequest!) {
+  deleteOffchainWorkflow(request: $request) {
     workflowId
   }
 }`
 
 	req := graphql.NewRequest(mutation)
-	req.Var("request", DeleteWorkflowInRegistryRequest{WorkflowID: workflowID})
+	req.Var("request", DeleteOffchainWorkflowRequest{WorkflowID: workflowID})
 
 	var container struct {
-		DeleteWorkflowInRegistry DeleteWorkflowInRegistryResponse `json:"deleteWorkflowInRegistry"`
+		DeleteOffchainWorkflow DeleteOffchainWorkflowResponse `json:"deleteOffchainWorkflow"`
 	}
 
 	ctx, cancel := c.CreateServiceContextWithTimeout()
@@ -267,10 +339,10 @@ mutation DeleteWorkflowInRegistry($request: DeleteWorkflowInRegistryRequest!) {
 	c.log.Debug().Str("workflowId", workflowID).
 		Msg("Deleted workflow in private registry")
 
-	return container.DeleteWorkflowInRegistry.WorkflowID, nil
+	return container.DeleteOffchainWorkflow.WorkflowID, nil
 }
 
-func validateUpsertWorkflowInput(input WorkflowInRegistryInput) error {
+func validateUpsertWorkflowInput(input OffchainWorkflowInput) error {
 	if input.WorkflowID == "" {
 		return fmt.Errorf("workflowId is required")
 	}

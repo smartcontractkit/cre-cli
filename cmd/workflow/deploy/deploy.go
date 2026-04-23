@@ -2,7 +2,6 @@ package deploy
 
 import (
 	"context"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -10,8 +9,6 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-
-	workflowUtils "github.com/smartcontractkit/chainlink-common/pkg/workflows"
 
 	"github.com/smartcontractkit/cre-cli/cmd/client"
 	cmdcommon "github.com/smartcontractkit/cre-cli/cmd/common"
@@ -39,17 +36,11 @@ type Inputs struct {
 	OutputPath   string `validate:"omitempty,filepath,ascii,max=97" cli:"--output"`
 	WasmPath     string `validate:"omitempty,file,ascii,max=2048" cli:"--wasm"`
 
-	WorkflowRegistryContractAddress   string `validate:"required"`
-	WorkflowRegistryContractChainName string `validate:"required"`
-
 	OwnerLabel       string `validate:"omitempty"`
 	SkipConfirmation bool
 	NonInteractive   bool
 	// SkipTypeChecks passes --skip-type-checks to cre-compile for TypeScript workflows.
 	SkipTypeChecks bool
-
-	PreviewPrivateRegistry bool
-	TargetWorkflowRegistry registryTarget
 }
 
 func (i *Inputs) ResolveConfigURL(fallbackURL string) string {
@@ -117,7 +108,6 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	deployCmd.Flags().Bool("no-config", false, "Deploy without a config file")
 	deployCmd.Flags().Bool("default-config", false, "Use the config path from workflow.yaml settings (default behavior)")
 	deployCmd.Flags().Bool(cmdcommon.SkipTypeChecksCLIFlag, false, "Skip TypeScript project typecheck during compilation (passes "+cmdcommon.SkipTypeChecksFlag+" to cre-compile)")
-	deployCmd.Flags().Bool("preview-private-registry", false, "Deploy to the private workflow registry (unreleased feature)")
 	deployCmd.MarkFlagsMutuallyExclusive("config", "no-config", "default-config")
 
 	return deployCmd
@@ -146,12 +136,8 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 		url := v.GetString("config-url")
 		configURL = &url
 	}
-	previewPrivateRegistry := v.GetBool("preview-private-registry")
-	targetWorkflowRegistry, err := resolveRegistryTarget(previewPrivateRegistry, h.environmentSet)
-	if err != nil {
-		return Inputs{}, err
-	}
-	resolvedWorkflowOwner, err := h.resolveWorkflowOwner(targetWorkflowRegistry)
+
+	resolvedWorkflowOwner, err := h.resolveWorkflowOwner(h.runtimeContext.ResolvedRegistry.Type())
 	if err != nil {
 		return Inputs{}, fmt.Errorf("failed to resolve workflow owner: %w", err)
 	}
@@ -161,12 +147,12 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 		workflowTag = workflowTag[:32]
 	}
 
-	return Inputs{
+	inputs := Inputs{
 		WorkflowName:  h.settings.Workflow.UserWorkflowSettings.WorkflowName,
 		WorkflowOwner: resolvedWorkflowOwner,
 		WorkflowTag:   workflowTag,
 		ConfigURL:     configURL,
-		DonFamily:     h.environmentSet.DonFamily,
+		DonFamily:     h.runtimeContext.ResolvedRegistry.DonFamily(),
 
 		WorkflowPath: h.settings.Workflow.WorkflowArtifactSettings.WorkflowPath,
 		KeepAlive:    false,
@@ -175,15 +161,13 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 		OutputPath: v.GetString("output"),
 		WasmPath:   v.GetString("wasm"),
 
-		WorkflowRegistryContractChainName: h.environmentSet.WorkflowRegistryChainName,
-		WorkflowRegistryContractAddress:   h.environmentSet.WorkflowRegistryAddress,
-		OwnerLabel:                        v.GetString("owner-label"),
-		SkipConfirmation:                  v.GetBool(settings.Flags.SkipConfirmation.Name),
-		NonInteractive:                    v.GetBool(settings.Flags.NonInteractive.Name),
-		SkipTypeChecks:                    v.GetBool(cmdcommon.SkipTypeChecksCLIFlag),
-		PreviewPrivateRegistry:            previewPrivateRegistry,
-		TargetWorkflowRegistry:            targetWorkflowRegistry,
-	}, nil
+		OwnerLabel:       v.GetString("owner-label"),
+		SkipConfirmation: v.GetBool(settings.Flags.SkipConfirmation.Name),
+		NonInteractive:   v.GetBool(settings.Flags.NonInteractive.Name),
+		SkipTypeChecks:   v.GetBool(cmdcommon.SkipTypeChecksCLIFlag),
+	}
+
+	return inputs, nil
 }
 
 func (h *handler) ValidateInputs() error {
@@ -229,7 +213,10 @@ func (h *handler) Execute(ctx context.Context) error {
 		return h.accessRequester.PromptAndSubmitRequest(ctx)
 	}
 
-	adapter := newRegistryDeployStrategy(h.inputs.TargetWorkflowRegistry, h)
+	adapter, err := newRegistryDeployStrategy(h.runtimeContext.ResolvedRegistry, h)
+	if err != nil {
+		return err
+	}
 
 	if err := h.prepareArtifacts(); err != nil {
 		return err
@@ -242,13 +229,33 @@ func (h *handler) Execute(ctx context.Context) error {
 		return err
 	}
 
+	exists, existingStatus, err := adapter.CheckWorkflowExists(
+		h.inputs.WorkflowOwner,
+		h.inputs.WorkflowName,
+		h.inputs.WorkflowTag,
+		h.workflowArtifact.WorkflowID,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to check if workflow exists: %w", err)
+	}
+	h.existingWorkflowStatus = existingStatus
+	if exists {
+		if err := confirmWorkflowOverwrite(h.inputs.WorkflowName, h.inputs.SkipConfirmation, h.inputs.NonInteractive); err != nil {
+			return err
+		}
+	}
+
 	ui.Line()
 	ui.Dim("Uploading files...")
 	if err := h.uploadArtifacts(); err != nil {
 		return fmt.Errorf("failed to upload workflow: %w", err)
 	}
 
-	return adapter.Upsert()
+	err = adapter.Upsert()
+	if err == nil {
+		warnIfPausedWorkflowUpdate(h.existingWorkflowStatus)
+	}
+	return err
 }
 
 // prepareArtifacts handles compile/fetch, artifact preparation, and hashing.
@@ -299,33 +306,19 @@ func (h *handler) prepareArtifacts() error {
 }
 
 // resolveWorkflowOwner returns the effective owner address for workflow ID computation.
-// For private registry deploys, the owner is derived from tenantID and organizationID.
+// For private registry deploys, the derived workflow owner from the runtime context is used.
 // For onchain deploys, the configured WorkflowOwner address is used directly.
-func (h *handler) resolveWorkflowOwner(targetWorkflowRegistry registryTarget) (string, error) {
-	if !targetWorkflowRegistry.isPrivate() {
+func (h *handler) resolveWorkflowOwner(registryType settings.RegistryType) (string, error) {
+	if registryType != settings.RegistryTypeOffChain {
 		return h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress, nil
 	}
 
-	if h.runtimeContext.TenantContext == nil {
-		return "", fmt.Errorf("tenant context is required for private registry deployment")
+	owner := h.runtimeContext.DerivedWorkflowOwner
+	if owner == "" {
+		return "", fmt.Errorf("derived workflow owner is not available; ensure authentication succeeded")
 	}
 
-	tenantID := h.runtimeContext.TenantContext.TenantID
-	if tenantID == "" {
-		return "", fmt.Errorf("tenant ID is required for private registry deployment")
-	}
-
-	orgID, err := h.credentials.GetOrgID()
-	if err != nil {
-		return "", fmt.Errorf("failed to get organization ID for private registry deployment: %w", err)
-	}
-
-	ownerBytes, err := workflowUtils.GenerateWorkflowOwnerAddress(tenantID, orgID)
-	if err != nil {
-		return "", fmt.Errorf("failed to derive workflow owner address: %w", err)
-	}
-
-	return "0x" + hex.EncodeToString(ownerBytes), nil
+	return owner, nil
 }
 
 func (h *handler) displayWorkflowDetails() {
@@ -334,4 +327,35 @@ func (h *handler) displayWorkflowDetails() {
 	ui.Dim(fmt.Sprintf("Target:        %s", h.settings.User.TargetName))
 	ui.Dim(fmt.Sprintf("Owner Address: %s", h.inputs.WorkflowOwner))
 	ui.Line()
+}
+
+func confirmWorkflowOverwrite(workflowName string, skipConfirmation, nonInteractive bool) error {
+	ui.Warning(fmt.Sprintf("Workflow %s already exists", workflowName))
+	ui.Dim("This will update the existing workflow.")
+
+	if nonInteractive && !skipConfirmation {
+		ui.ErrorWithSuggestions(
+			"Non-interactive mode requires all inputs via flags",
+			[]string{"--yes"},
+		)
+		return fmt.Errorf("missing required flags for --non-interactive mode")
+	}
+
+	if !skipConfirmation {
+		confirm, err := ui.Confirm("Are you sure you want to overwrite the workflow?")
+		if err != nil {
+			return err
+		}
+		if !confirm {
+			return errors.New("deployment cancelled by user")
+		}
+	}
+
+	return nil
+}
+
+func warnIfPausedWorkflowUpdate(status *uint8) {
+	if status != nil && *status == workflowStatusPaused {
+		ui.Warning("Your workflow is paused and has been updated")
+	}
 }

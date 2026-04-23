@@ -143,13 +143,6 @@ func TestWorkflowDeleteCommand(t *testing.T) {
 				}
 				ctx.Settings.Workflow.UserWorkflowSettings.WorkflowOwnerType = constants.WorkflowOwnerTypeEOA
 
-				if tt.inputs.WorkflowRegistryContractAddress == "" {
-					tt.inputs.WorkflowRegistryContractAddress = "0x0000000000000000000000000000000000000000"
-				}
-				if tt.inputs.WorkflowRegistryContractChainName == "" {
-					tt.inputs.WorkflowRegistryContractChainName = "ethereum-testnet-sepolia"
-				}
-
 				handler := newHandler(ctx, testutil.EmptyMockStdinReader())
 				handler.inputs = tt.inputs
 

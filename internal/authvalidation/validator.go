@@ -12,12 +12,19 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 )
 
-const queryOrganization = `
-query GetOrganizationDetails  {
-	getOrganization {
-		organizationId
+const queryCreOrganizationInfo = `
+query GetCreOrganizationInfo {
+	getCreOrganizationInfo {
+		orgId
+		derivedWorkflowOwners
 	}
 }`
+
+// ValidationResult holds the data returned by credential validation.
+type ValidationResult struct {
+	OrgID                string
+	DerivedWorkflowOwner string
+}
 
 // Validator validates authentication credentials
 type Validator struct {
@@ -35,32 +42,42 @@ func NewValidator(creds *credentials.Credentials, environmentSet *environments.E
 }
 
 // ValidateCredentials validates the provided credentials by making a lightweight GraphQL query
-// The GraphQL client automatically handles token refresh if needed
-func (v *Validator) ValidateCredentials(validationCtx context.Context, creds *credentials.Credentials) error {
+// and returns organization info including the derived workflow owner.
+// The GraphQL client automatically handles token refresh if needed.
+func (v *Validator) ValidateCredentials(validationCtx context.Context, creds *credentials.Credentials) (*ValidationResult, error) {
 	if creds == nil {
-		return fmt.Errorf("credentials not provided")
+		return nil, fmt.Errorf("credentials not provided")
 	}
 
-	// Skip validation if already validated
 	if creds.IsValidated {
-		return nil
+		return nil, nil
 	}
 
-	req := graphql.NewRequest(queryOrganization)
+	req := graphql.NewRequest(queryCreOrganizationInfo)
 
 	var respEnvelope struct {
-		GetOrganization struct {
-			OrganizationID string `json:"organizationId"`
-		} `json:"getOrganization"`
+		GetCreOrganizationInfo struct {
+			OrgID                 string   `json:"orgId"`
+			DerivedWorkflowOwners []string `json:"derivedWorkflowOwners"`
+		} `json:"getCreOrganizationInfo"`
 	}
 
 	if err := v.gqlClient.Execute(validationCtx, req, &respEnvelope); err != nil {
-		return fmt.Errorf("authentication validation failed: %w", err)
+		return nil, fmt.Errorf("authentication failed: unable to retrieve organization info. Your account may not be fully set up yet — please try again in a few minutes: %w", err)
 	}
 
-	if orgID := respEnvelope.GetOrganization.OrganizationID; orgID != "" {
-		creds.OrgID = orgID
+	info := respEnvelope.GetCreOrganizationInfo
+
+	if info.OrgID == "" || len(info.DerivedWorkflowOwners) == 0 {
+		return nil, fmt.Errorf("authentication failed: unable to retrieve organization info. Your account may not be fully set up yet — please try again in a few minutes")
 	}
 
-	return nil
+	result := &ValidationResult{
+		OrgID:                info.OrgID,
+		DerivedWorkflowOwner: info.DerivedWorkflowOwners[0],
+	}
+
+	creds.OrgID = result.OrgID
+
+	return result, nil
 }

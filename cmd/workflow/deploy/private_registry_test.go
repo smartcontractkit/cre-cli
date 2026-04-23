@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"net/http"
 	"os"
 	"testing"
 
@@ -14,7 +15,8 @@ import (
 
 	"github.com/smartcontractkit/cre-cli/internal/client/privateregistryclient"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
-	"github.com/smartcontractkit/cre-cli/internal/tenantctx"
+	"github.com/smartcontractkit/cre-cli/internal/ethkeys"
+	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/testutil"
 	"github.com/smartcontractkit/cre-cli/internal/testutil/chainsim"
 )
@@ -118,59 +120,130 @@ func TestBuildPrivateRegistryInput(t *testing.T) {
 	})
 }
 
-func TestResolveInputs_PreviewPrivateRegistryFlag(t *testing.T) {
-	t.Parallel()
+func TestCheckWorkflowExists_PrivateRegistry(t *testing.T) {
+	tests := []struct {
+		name         string
+		serverStatus int
+		response     map[string]any
+		wantExists   bool
+		wantStatus   *uint8
+		wantErr      bool
+	}{
+		{
+			name:         "found active workflow returns active status",
+			serverStatus: http.StatusOK,
+			response: map[string]any{
+				"data": map[string]any{
+					"getOffchainWorkflowByName": map[string]any{
+						"workflow": map[string]any{
+							"workflowId":     "00a2b96d2f06961c3e0cf6fbba5cfa30d3b577026de094e5202d5fc3e3aabb87",
+							"owner":          "6028e8bd8759240ffe7bd80bdd5c99ca662f3363",
+							"createdAt":      "2026-04-10T14:07:25Z",
+							"status":         "WORKFLOW_STATUS_ACTIVE",
+							"workflowName":   "jnowak-workflow-test-v5",
+							"binaryUrl":      "https://storage.cre.stage.external.griddle.sh/artifacts/00a2b96d2f06961c3e0cf6fbba5cfa30d3b577026de094e5202d5fc3e3aabb87/binary.wasm",
+							"configUrl":      "https://storage.cre.stage.external.griddle.sh/artifacts/00a2b96d2f06961c3e0cf6fbba5cfa30d3b577026de094e5202d5fc3e3aabb87/config",
+							"tag":            "",
+							"attributes":     "{\"app\": \"test\"}",
+							"donFamily":      "zone-a",
+							"organizationId": "org_meoybOR7KEkNhEFf",
+						},
+					},
+				},
+			},
+			wantExists: true,
+			wantStatus: uint8Ptr(0),
+			wantErr:    false,
+		},
+		{
+			name:         "found paused workflow returns paused status",
+			serverStatus: http.StatusOK,
+			response: map[string]any{
+				"data": map[string]any{
+					"getOffchainWorkflowByName": map[string]any{
+						"workflow": map[string]any{
+							"workflowId":     "00a2b96d2f06961c3e0cf6fbba5cfa30d3b577026de094e5202d5fc3e3aabb87",
+							"owner":          "6028e8bd8759240ffe7bd80bdd5c99ca662f3363",
+							"createdAt":      "2026-04-10T14:07:25Z",
+							"status":         "WORKFLOW_STATUS_PAUSED",
+							"workflowName":   "jnowak-workflow-test-v5",
+							"binaryUrl":      "https://storage.cre.stage.external.griddle.sh/artifacts/00a2b96d2f06961c3e0cf6fbba5cfa30d3b577026de094e5202d5fc3e3aabb87/binary.wasm",
+							"configUrl":      "https://storage.cre.stage.external.griddle.sh/artifacts/00a2b96d2f06961c3e0cf6fbba5cfa30d3b577026de094e5202d5fc3e3aabb87/config",
+							"tag":            "",
+							"attributes":     "{\"app\": \"test\"}",
+							"donFamily":      "zone-a",
+							"organizationId": "org_meoybOR7KEkNhEFf",
+						},
+					},
+				},
+			},
+			wantExists: true,
+			wantStatus: uint8Ptr(1),
+			wantErr:    false,
+		},
+		{
+			name:         "not found returns no error and no status",
+			serverStatus: http.StatusOK,
+			response: map[string]any{
+				"errors": []map[string]any{
+					{
+						"message": "workflow not found",
+						"path":    []string{"getOffchainWorkflowByName"},
+						"extensions": map[string]any{
+							"code": "NOT_FOUND",
+						},
+					},
+				},
+				"data": nil,
+			},
+			wantExists: false,
+			wantStatus: nil,
+			wantErr:    false,
+		},
+		{
+			name:         "transport failure returns error",
+			serverStatus: http.StatusInternalServerError,
+			response: map[string]any{
+				"errors": []map[string]any{
+					{
+						"message": "server exploded",
+					},
+				},
+			},
+			wantExists: false,
+			wantStatus: nil,
+			wantErr:    true,
+		},
+	}
 
-	t.Run("defaults to false", func(t *testing.T) {
-		t.Parallel()
-		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
-		defer simulatedEnvironment.Close()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
+			defer simulatedEnvironment.Close()
 
-		ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
-		h := newHandler(ctx, buf)
-		ctx.Settings = createTestSettings(
-			chainsim.TestAddress,
-			"eoa",
-			"test_workflow",
-			"testdata/basic_workflow/main.go",
-			"",
-		)
-		h.settings = ctx.Settings
+			ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
+			h := newHandler(ctx, buf)
+			h.credentials = makeAPIKeyCredentials(t)
 
-		inputs, err := h.ResolveInputs(ctx.Viper)
-		require.NoError(t, err)
-		assert.False(t, inputs.PreviewPrivateRegistry)
-	})
+			gqlServer := newAssertGQLServer(t, func(t *testing.T, req deployMockGraphQLRequest) (int, map[string]any) {
+				require.True(t, containsQuery(req.Query, "query GetOffchainWorkflowByName"))
+				return tt.serverStatus, tt.response
+			})
+			defer gqlServer.Close()
 
-	t.Run("set to true via viper", func(t *testing.T) {
-		t.Parallel()
-		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
-		defer simulatedEnvironment.Close()
+			h.environmentSet.GraphQLURL = gqlServer.URL
+			strategy := newPrivateRegistryDeployStrategy(h)
 
-		ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
-		h := newHandler(ctx, buf)
-		ctx.Settings = createTestSettings(
-			chainsim.TestAddress,
-			"eoa",
-			"test_workflow",
-			"testdata/basic_workflow/main.go",
-			"",
-		)
-		h.settings = ctx.Settings
-
-		h.environmentSet.EnvName = "STAGING"
-		token := makeTestJWT(t, map[string]interface{}{
-			"sub":    "user1",
-			"org_id": "org-test-123",
+			exists, status, err := strategy.CheckWorkflowExists("", "jnowak-workflow-test-v5", "", "")
+			if tt.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+			assert.Equal(t, tt.wantExists, exists)
+			assert.Equal(t, tt.wantStatus, status)
 		})
-		h.credentials = makeBearerCredentials(t, token)
-		h.runtimeContext.TenantContext = &tenantctx.EnvironmentContext{TenantID: "42"}
-		ctx.Viper.Set("preview-private-registry", true)
-
-		inputs, err := h.ResolveInputs(ctx.Viper)
-		require.NoError(t, err)
-		assert.True(t, inputs.PreviewPrivateRegistry)
-	})
+	}
 }
 
 func makeTestJWT(t *testing.T, claims map[string]interface{}) string {
@@ -214,6 +287,10 @@ func makeAPIKeyCredentials(t *testing.T) *credentials.Credentials {
 	return creds
 }
 
+func uint8Ptr(v uint8) *uint8 {
+	return &v
+}
+
 func TestResolveWorkflowOwner(t *testing.T) {
 	t.Parallel()
 
@@ -233,46 +310,22 @@ func TestResolveWorkflowOwner(t *testing.T) {
 		)
 		h.settings = ctx.Settings
 
-		owner, err := h.resolveWorkflowOwner(registryTarget{targetType: registryTargetOnchain})
+		owner, err := h.resolveWorkflowOwner(settings.RegistryTypeOnChain)
 		require.NoError(t, err)
 		assert.Equal(t, chainsim.TestAddress, owner)
 	})
 
-	t.Run("private target derives owner from tenantID and orgID", func(t *testing.T) {
+	t.Run("private target uses derived workflow owner from runtime context", func(t *testing.T) {
 		t.Parallel()
-
-		token := makeTestJWT(t, map[string]interface{}{
-			"sub":    "user1",
-			"org_id": "org-test-123",
-		})
-
-		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
-		defer simulatedEnvironment.Close()
-
-		ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
-		h := newHandler(ctx, buf)
-		ctx.Settings = createTestSettings(
-			chainsim.TestAddress,
-			"eoa",
-			"test_workflow",
-			"testdata/basic_workflow/main.go",
-			"",
-		)
-		h.settings = ctx.Settings
-		h.credentials = makeBearerCredentials(t, token)
-		h.runtimeContext.TenantContext = &tenantctx.EnvironmentContext{TenantID: "42"}
-
-		owner, err := h.resolveWorkflowOwner(registryTarget{targetType: registryTargetPrivate})
-		require.NoError(t, err)
 
 		expectedBytes, err := workflowUtils.GenerateWorkflowOwnerAddress("42", "org-test-123")
 		require.NoError(t, err)
-		assert.Equal(t, "0x"+hex.EncodeToString(expectedBytes), owner)
-	})
+		rawOwner := "0x" + hex.EncodeToString(expectedBytes)
+		expectedOwner, err := ethkeys.FormatWorkflowOwnerAddress(rawOwner)
+		require.NoError(t, err)
+		require.NotEmpty(t, expectedOwner)
 
-	t.Run("private target errors when tenant context is nil", func(t *testing.T) {
-		t.Parallel()
-		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
+		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t).WithPrivateRegistry("42", "test-don")
 		defer simulatedEnvironment.Close()
 
 		ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
@@ -285,16 +338,16 @@ func TestResolveWorkflowOwner(t *testing.T) {
 			"",
 		)
 		h.settings = ctx.Settings
-		h.runtimeContext.TenantContext = nil
+		h.runtimeContext.DerivedWorkflowOwner = expectedOwner
 
-		_, err := h.resolveWorkflowOwner(registryTarget{targetType: registryTargetPrivate})
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "tenant context is required")
+		owner, err := h.resolveWorkflowOwner(settings.RegistryTypeOffChain)
+		require.NoError(t, err)
+		assert.Equal(t, expectedOwner, owner)
 	})
 
-	t.Run("private target errors when tenant ID is empty", func(t *testing.T) {
+	t.Run("private target errors when derived workflow owner is empty", func(t *testing.T) {
 		t.Parallel()
-		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
+		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t).WithPrivateRegistry("42", "test-don")
 		defer simulatedEnvironment.Close()
 
 		ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
@@ -307,34 +360,10 @@ func TestResolveWorkflowOwner(t *testing.T) {
 			"",
 		)
 		h.settings = ctx.Settings
-		h.runtimeContext.TenantContext = &tenantctx.EnvironmentContext{TenantID: ""}
+		h.runtimeContext.DerivedWorkflowOwner = ""
 
-		_, err := h.resolveWorkflowOwner(registryTarget{targetType: registryTargetPrivate})
+		_, err := h.resolveWorkflowOwner(settings.RegistryTypeOffChain)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "tenant ID is required")
-	})
-
-	t.Run("private target errors when orgID unavailable", func(t *testing.T) {
-		t.Parallel()
-
-		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
-		defer simulatedEnvironment.Close()
-
-		ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
-		h := newHandler(ctx, buf)
-		ctx.Settings = createTestSettings(
-			chainsim.TestAddress,
-			"eoa",
-			"test_workflow",
-			"testdata/basic_workflow/main.go",
-			"",
-		)
-		h.settings = ctx.Settings
-		h.credentials = makeAPIKeyCredentials(t)
-		h.runtimeContext.TenantContext = &tenantctx.EnvironmentContext{TenantID: "42"}
-
-		_, err := h.resolveWorkflowOwner(registryTarget{targetType: registryTargetPrivate})
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to get organization ID")
+		assert.Contains(t, err.Error(), "derived workflow owner is not available")
 	})
 }

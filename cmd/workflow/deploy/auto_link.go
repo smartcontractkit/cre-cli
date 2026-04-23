@@ -13,6 +13,7 @@ import (
 	linkkey "github.com/smartcontractkit/cre-cli/cmd/account/link_key"
 	"github.com/smartcontractkit/cre-cli/internal/client/graphqlclient"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
+	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
@@ -21,7 +22,7 @@ const (
 )
 
 // ensureOwnerLinkedOrFail checks if the owner is linked and attempts auto-link if needed
-func (h *handler) ensureOwnerLinkedOrFail() error {
+func (h *handler) ensureOwnerLinkedOrFail(onChain *settings.OnChainRegistry) error {
 	ownerAddr := common.HexToAddress(h.inputs.WorkflowOwner)
 
 	linked, err := h.wrc.IsOwnerLinked(ownerAddr)
@@ -47,7 +48,7 @@ func (h *handler) ensureOwnerLinkedOrFail() error {
 	}
 
 	ui.Dim(fmt.Sprintf("Owner not linked. Attempting auto-link: owner=%s", ownerAddr.Hex()))
-	if err := h.tryAutoLink(); err != nil {
+	if err := h.tryAutoLink(onChain); err != nil {
 		return fmt.Errorf("auto-link attempt failed: %w", err)
 	}
 
@@ -62,7 +63,7 @@ func (h *handler) ensureOwnerLinkedOrFail() error {
 }
 
 // autoLinkMSIGAndExit handles MSIG auto-link and exits if manual intervention is needed
-func (h *handler) autoLinkMSIGAndExit() (halt bool, err error) {
+func (h *handler) autoLinkMSIGAndExit(onChain *settings.OnChainRegistry) (halt bool, err error) {
 	ownerAddr := common.HexToAddress(h.inputs.WorkflowOwner)
 
 	linked, err := h.wrc.IsOwnerLinked(ownerAddr)
@@ -88,7 +89,7 @@ func (h *handler) autoLinkMSIGAndExit() (halt bool, err error) {
 	ui.Dim(fmt.Sprintf("MSIG workflow owner link status: owner=%s, linked=%v", ownerAddr.Hex(), linked))
 	ui.Dim(fmt.Sprintf("MSIG owner: attempting auto-link... owner=%s", ownerAddr.Hex()))
 
-	if err := h.tryAutoLink(); err != nil {
+	if err := h.tryAutoLink(onChain); err != nil {
 		return false, fmt.Errorf("MSIG auto-link attempt failed: %w", err)
 	}
 
@@ -97,7 +98,7 @@ func (h *handler) autoLinkMSIGAndExit() (halt bool, err error) {
 }
 
 // tryAutoLink executes the auto-link process using the link-key command
-func (h *handler) tryAutoLink() error {
+func (h *handler) tryAutoLink(onChain *settings.OnChainRegistry) error {
 	rtx := &runtime.Context{
 		Settings:       h.settings,
 		Credentials:    h.credentials,
@@ -106,13 +107,11 @@ func (h *handler) tryAutoLink() error {
 		EnvironmentSet: h.environmentSet,
 	}
 
-	lkInputs := linkkey.Inputs{
+	return linkkey.Exec(rtx, linkkey.Inputs{
 		WorkflowOwner:                   h.inputs.WorkflowOwner,
-		WorkflowRegistryContractAddress: h.inputs.WorkflowRegistryContractAddress,
+		WorkflowRegistryContractAddress: onChain.Address(),
 		WorkflowOwnerLabel:              h.inputs.OwnerLabel,
-	}
-
-	return linkkey.Exec(rtx, lkInputs)
+	})
 }
 
 // checkLinkStatusViaGraphQL checks if the owner is linked and verified by querying the service

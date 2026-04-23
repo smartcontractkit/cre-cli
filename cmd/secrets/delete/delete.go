@@ -135,10 +135,6 @@ func Execute(h *common.Handler, inputs DeleteSecretsInputs, duration time.Durati
 	if err != nil {
 		return err
 	}
-	// When not using org-owned secrets, canonicalize the address
-	if ethcommon.IsHexAddress(owner) {
-		owner = ethcommon.HexToAddress(owner).Hex()
-	}
 
 	ptrIDs := make([]*vault.SecretIdentifier, len(inputs))
 	for i, item := range inputs {

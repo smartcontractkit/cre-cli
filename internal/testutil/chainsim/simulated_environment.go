@@ -12,14 +12,21 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
-	"github.com/smartcontractkit/cre-cli/internal/settings"
+	settingspkg "github.com/smartcontractkit/cre-cli/internal/settings"
+	"github.com/smartcontractkit/cre-cli/internal/tenantctx"
 	"github.com/smartcontractkit/cre-cli/internal/testutil"
+	"github.com/smartcontractkit/cre-cli/internal/testutil/testjwt"
+	"github.com/smartcontractkit/cre-cli/internal/testutil/testsettings"
 )
 
 type SimulatedEnvironment struct {
 	Chain     *SimulatedChain
 	EthClient *seth.Client
 	Contracts *SimulatedContracts
+
+	tenantID  string
+	donFamily string
+	jwtToken  string
 }
 
 type SimulatedContracts struct {
@@ -45,6 +52,17 @@ func NewSimulatedEnvironment(t *testing.T) *SimulatedEnvironment {
 	return &simulatedEnvironment
 }
 
+func (se *SimulatedEnvironment) WithPrivateRegistry(tenantID, donFamily string) *SimulatedEnvironment {
+	se.tenantID = tenantID
+	se.donFamily = donFamily
+	return se
+}
+
+func (se *SimulatedEnvironment) WithJWT(orgID string) *SimulatedEnvironment {
+	se.jwtToken = testjwt.CreateTestJWT(orgID)
+	return se
+}
+
 func (se *SimulatedEnvironment) NewRuntimeContext() *runtime.Context {
 	logger := testutil.NewTestLogger()
 	return se.createContextWithLogger(logger)
@@ -61,8 +79,8 @@ func (se *SimulatedEnvironment) Close() {
 
 func (se *SimulatedEnvironment) createContextWithLogger(logger *zerolog.Logger) *runtime.Context {
 	v := viper.New()
-	v.Set(settings.EthPrivateKeyEnvVar, TestPrivateKey)
-	settings, err := testutil.NewTestSettings(v, logger)
+	v.Set(settingspkg.EthPrivateKeyEnvVar, TestPrivateKey)
+	settings, err := testsettings.NewTestSettings(v, logger)
 	if err != nil {
 		logger.Warn().Err(err).Msg("failed to create new test settings")
 	}
@@ -79,18 +97,42 @@ func (se *SimulatedEnvironment) createContextWithLogger(logger *zerolog.Logger) 
 		logger.Warn().Err(err).Msg("failed to create new credentials")
 	}
 
+	var resolved settingspkg.ResolvedRegistry
+	if se.tenantID != "" {
+		resolved = settingspkg.NewOffChainRegistry("private", se.donFamily)
+	} else if environmentSet != nil {
+		resolved = settingspkg.NewOnChainRegistry(
+			"",
+			se.Contracts.WorkflowRegistry.Contract.Hex(),
+			environmentSet.WorkflowRegistryChainName,
+			environmentSet.DonFamily,
+			environmentSet.WorkflowRegistryChainExplorerURL,
+		)
+	}
+
 	ctx := &runtime.Context{
-		Logger:         logger,
-		Viper:          v,
-		ClientFactory:  simulatedFactory,
-		Settings:       settings,
-		EnvironmentSet: environmentSet,
-		Credentials:    creds,
+		Logger:           logger,
+		Viper:            v,
+		ClientFactory:    simulatedFactory,
+		Settings:         settings,
+		EnvironmentSet:   environmentSet,
+		Credentials:      creds,
+		ResolvedRegistry: resolved,
+	}
+
+	if se.tenantID != "" {
+		ctx.TenantContext = &tenantctx.EnvironmentContext{TenantID: se.tenantID}
 	}
 
 	// Mark credentials as validated for tests to bypass validation
 	if creds != nil {
 		creds.IsValidated = true
+		if se.jwtToken != "" {
+			if creds.Tokens == nil {
+				creds.Tokens = &credentials.CreLoginTokenSet{}
+			}
+			creds.Tokens.AccessToken = se.jwtToken
+		}
 	}
 
 	return ctx
