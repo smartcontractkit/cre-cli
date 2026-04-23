@@ -12,6 +12,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
+	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
 // New creates and returns the 'secrets update' cobra command.
@@ -22,6 +23,14 @@ func New(ctx *runtime.Context) *cobra.Command {
 		Example: "cre secrets update my-secrets.yaml",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if ctx.Viper.GetBool(settings.Flags.NonInteractive.Name) && !ctx.Viper.GetBool(settings.Flags.SkipConfirmation.Name) {
+				ui.ErrorWithSuggestions(
+					"Non-interactive mode requires all inputs via flags",
+					[]string{"--yes"},
+				)
+				return fmt.Errorf("missing required flags for --non-interactive mode")
+			}
+
 			secretsFilePath := args[0]
 
 			secretsAuth, err := cmd.Flags().GetString("secrets-auth")

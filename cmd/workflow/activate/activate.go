@@ -20,9 +20,11 @@ const (
 )
 
 type Inputs struct {
-	WorkflowName  string `validate:"workflow_name"`
-	WorkflowOwner string `validate:"workflow_owner"`
-	DonFamily     string `validate:"required"`
+	WorkflowName     string `validate:"workflow_name"`
+	WorkflowOwner    string `validate:"workflow_owner"`
+	DonFamily        string `validate:"required"`
+	SkipConfirmation bool
+	NonInteractive   bool
 }
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
@@ -85,9 +87,11 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 	}
 
 	return Inputs{
-		WorkflowName:  h.settings.Workflow.UserWorkflowSettings.WorkflowName,
-		WorkflowOwner: resolvedWorkflowOwner,
-		DonFamily:     h.runtimeContext.ResolvedRegistry.DonFamily(),
+		WorkflowName:     h.settings.Workflow.UserWorkflowSettings.WorkflowName,
+		WorkflowOwner:    resolvedWorkflowOwner,
+		DonFamily:        h.runtimeContext.ResolvedRegistry.DonFamily(),
+		SkipConfirmation: v.GetBool(settings.Flags.SkipConfirmation.Name),
+		NonInteractive:   v.GetBool(settings.Flags.NonInteractive.Name),
 	}, nil
 }
 
@@ -108,6 +112,14 @@ func (h *handler) ValidateInputs() error {
 func (h *handler) Execute() error {
 	if !h.validated {
 		return fmt.Errorf("handler inputs not validated")
+	}
+
+	if h.inputs.NonInteractive && !h.inputs.SkipConfirmation {
+		ui.ErrorWithSuggestions(
+			"Non-interactive mode requires all inputs via flags",
+			[]string{"--yes"},
+		)
+		return fmt.Errorf("missing required flags for --non-interactive mode")
 	}
 
 	h.displayWorkflowDetails()

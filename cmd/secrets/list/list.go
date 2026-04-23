@@ -36,6 +36,14 @@ func New(ctx *runtime.Context) *cobra.Command {
 		Use:   "list",
 		Short: "Lists secret identifiers for the current owner address in the given namespace.",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if ctx.Viper.GetBool(settings.Flags.NonInteractive.Name) && !ctx.Viper.GetBool(settings.Flags.SkipConfirmation.Name) {
+				ui.ErrorWithSuggestions(
+					"Non-interactive mode requires all inputs via flags",
+					[]string{"--yes"},
+				)
+				return fmt.Errorf("missing required flags for --non-interactive mode")
+			}
+
 			secretsAuth, err := cmd.Flags().GetString("secrets-auth")
 			if err != nil {
 				return err
