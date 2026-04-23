@@ -25,6 +25,8 @@ import (
 
 const defaultSentinelPrivateKey = "0000000000000000000000000000000000000000000000000000000000000001"
 
+var sentinelKeyBytes = common.FromHex(defaultSentinelPrivateKey)
+
 func init() {
 	chain.Register(string(corekeys.EVM), func(lggr *zerolog.Logger) chain.ChainType {
 		return &EVMChainType{log: lggr}
@@ -237,18 +239,10 @@ func (ct *EVMChainType) ResolveKey(creSettings *settings.Settings, broadcast boo
 	return pk, nil
 }
 
-// isSentinelKey reports whether pk is the hard-coded default sentinel key.
-// Compares the serialized raw bytes so callers avoid the deprecated
-// *ecdsa.PrivateKey.D field.
+// isSentinelKey reports whether pk matches the hard-coded default sentinel
+// key, without reading the deprecated *ecdsa.PrivateKey.D field.
 func isSentinelKey(pk *ecdsa.PrivateKey) bool {
-	if pk == nil {
-		return false
-	}
-	sentinel, err := crypto.HexToECDSA(defaultSentinelPrivateKey)
-	if err != nil {
-		return false
-	}
-	return bytes.Equal(crypto.FromECDSA(pk), crypto.FromECDSA(sentinel))
+	return pk != nil && bytes.Equal(crypto.FromECDSA(pk), sentinelKeyBytes)
 }
 
 // CLI input keys consumed from chain.TriggerParams.ChainTypeInputs.
