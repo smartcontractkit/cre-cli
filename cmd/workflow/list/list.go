@@ -7,33 +7,41 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/smartcontractkit/cre-cli/internal/client/graphqlclient"
+	"github.com/smartcontractkit/cre-cli/internal/client/workflowdataclient"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/tenantctx"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
-// Handler loads workflows via the list client and prints them.
+// Workflow is a type alias so that print.go and registry.go in this package
+// can use the name without importing workflowdataclient directly.
+type Workflow = workflowdataclient.Workflow
+
+// Handler loads workflows via the WorkflowDataClient and prints them.
 type Handler struct {
 	credentials *credentials.Credentials
 	tenantCtx   *tenantctx.EnvironmentContext
-	gql         Executor
+	wdc         *workflowdataclient.Client
 }
 
-// NewHandler builds a handler with the real GraphQL executor.
+// NewHandler builds a Handler with a real WorkflowDataClient.
 func NewHandler(ctx *runtime.Context) *Handler {
-	return NewHandlerWithClient(ctx, nil)
-}
-
-// NewHandlerWithClient builds a handler with an optional GraphQL executor (nil uses graphqlclient.New).
-func NewHandlerWithClient(ctx *runtime.Context, gql Executor) *Handler {
-	if gql == nil {
-		gql = graphqlclient.New(ctx.Credentials, ctx.EnvironmentSet, ctx.Logger)
-	}
+	gql := graphqlclient.New(ctx.Credentials, ctx.EnvironmentSet, ctx.Logger)
+	wdc := workflowdataclient.New(gql, ctx.Logger)
 	return &Handler{
 		credentials: ctx.Credentials,
 		tenantCtx:   ctx.TenantContext,
-		gql:         gql,
+		wdc:         wdc,
+	}
+}
+
+// NewHandlerWithClient builds a Handler with a pre-built WorkflowDataClient (for testing).
+func NewHandlerWithClient(ctx *runtime.Context, wdc *workflowdataclient.Client) *Handler {
+	return &Handler{
+		credentials: ctx.Credentials,
+		tenantCtx:   ctx.TenantContext,
+		wdc:         wdc,
 	}
 }
 
@@ -57,7 +65,7 @@ func (h *Handler) Execute(ctx context.Context, registryFilter string, includeDel
 
 	spinner := ui.NewSpinner()
 	spinner.Start("Listing workflows...")
-	rows, err := ListAll(ctx, h.gql, DefaultPageSize)
+	rows, err := h.wdc.ListAll(ctx, workflowdataclient.DefaultPageSize)
 	spinner.Stop()
 	if err != nil {
 		return err
