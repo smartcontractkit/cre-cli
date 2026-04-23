@@ -101,9 +101,6 @@ func Execute(h *common.Handler, namespace string, duration time.Duration, secret
 	if err != nil {
 		return err
 	}
-	if ethcommon.IsHexAddress(owner) {
-		owner = ethcommon.HexToAddress(owner).Hex()
-	}
 
 	// Fresh request ID
 	requestID := uuid.New().String()

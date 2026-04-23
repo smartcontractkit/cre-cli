@@ -271,6 +271,10 @@ func newRootCommand() *cobra.Command {
 					return err
 				}
 
+				if err := runtimeContext.FinalizeDeferredWorkflowOwner(cmd); err != nil {
+					return err
+				}
+
 				// Restart spinner for remaining initialization
 				if showSpinner {
 					spinner = ui.NewSpinner()

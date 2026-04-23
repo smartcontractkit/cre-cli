@@ -14,7 +14,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/smartcontractkit/cre-cli/internal/constants"
+	"github.com/smartcontractkit/cre-cli/internal/environments"
+	"github.com/smartcontractkit/cre-cli/internal/ethkeys"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
+	"github.com/smartcontractkit/cre-cli/internal/tenantctx"
 	"github.com/smartcontractkit/cre-cli/internal/testutil"
 )
 
@@ -64,6 +67,15 @@ func copyFile(src, dest string) error {
 	defer destFile.Close()
 	_, err = io.Copy(destFile, srcFile)
 	return err
+}
+
+// workflowSubcommand returns a cobra command that is a child of "workflow", matching
+// how LoadSettingsIntoViper loads workflow.yaml only for workflow commands.
+func workflowSubcommand(use string) *cobra.Command {
+	workflowCmd := &cobra.Command{Use: "workflow"}
+	sub := &cobra.Command{Use: use}
+	workflowCmd.AddCommand(sub)
+	return sub
 }
 
 func TestLoadEnvAndSettingsEmptyTarget(t *testing.T) {
@@ -273,6 +285,136 @@ func TestLoadEnvAndSettingsInvalidTarget(t *testing.T) {
 	assert.Error(t, err, "Expected error due to invalid target")
 	assert.Contains(t, err.Error(), "target not found: nonexistent-target", "Expected target not found error")
 	assert.Nil(t, s, "Settings object should be nil on error")
+}
+
+func TestOffChainDeploymentRegistryUsesDerivedOwnerWithoutPrivateKey(t *testing.T) {
+	t.Setenv(settings.EthPrivateKeyEnvVar, "")
+
+	envVars := map[string]string{
+		settings.CreTargetEnvVar: "staging",
+	}
+
+	workflowTemplatePath, err := filepath.Abs(filepath.Join("testdata", "workflow_storage", "workflow-private-registry.yaml"))
+	require.NoError(t, err)
+
+	projectTemplatePath, err := filepath.Abs(TempProjectSettingsFile)
+	require.NoError(t, err)
+
+	tempDir := t.TempDir()
+	restoreWorkingDirectory, err := testutil.ChangeWorkingDirectory(tempDir)
+	require.NoError(t, err)
+	defer restoreWorkingDirectory()
+
+	v, logger := createTestContext(t, envVars, tempDir)
+
+	setUpTestSettingsFiles(t, v, workflowTemplatePath, projectTemplatePath, tempDir)
+
+	derived, err := ethkeys.FormatWorkflowOwnerAddress("  0x1234567890123456789012345678901234567890  ")
+	require.NoError(t, err)
+	require.NotEmpty(t, derived)
+	tenantCtx := &tenantctx.EnvironmentContext{
+		DefaultDonFamily: "test-don",
+		Registries: []*tenantctx.Registry{
+			{ID: "my-private-registry", Type: "off-chain"},
+		},
+	}
+	envSet := &environments.EnvironmentSet{EnvName: "STAGING"}
+
+	cmd := workflowSubcommand("deploy")
+	s, err := settings.New(logger, v, cmd, "")
+	require.NoError(t, err)
+	require.NotNil(t, s)
+	resolved, err := settings.ResolveRegistry("my-private-registry", tenantCtx, envSet)
+	require.NoError(t, err)
+	err = settings.FinalizeWorkflowOwner(v, cmd, &s.Workflow, s.User.TargetName, resolved, derived)
+	require.NoError(t, err)
+	assert.Equal(t, derived, s.Workflow.UserWorkflowSettings.WorkflowOwnerAddress)
+	assert.Equal(t, constants.WorkflowOwnerTypeOrgDerived, s.Workflow.UserWorkflowSettings.WorkflowOwnerType)
+	assert.Empty(t, s.User.EthPrivateKey)
+}
+
+func TestOffChainDeploymentRegistryMissingDerivedOwnerReturnsError(t *testing.T) {
+	envVars := map[string]string{
+		settings.CreTargetEnvVar: "staging",
+	}
+
+	workflowTemplatePath, err := filepath.Abs(filepath.Join("testdata", "workflow_storage", "workflow-private-registry.yaml"))
+	require.NoError(t, err)
+
+	projectTemplatePath, err := filepath.Abs(TempProjectSettingsFile)
+	require.NoError(t, err)
+
+	tempDir := t.TempDir()
+	restoreWorkingDirectory, err := testutil.ChangeWorkingDirectory(tempDir)
+	require.NoError(t, err)
+	defer restoreWorkingDirectory()
+
+	v, logger := createTestContext(t, envVars, tempDir)
+
+	setUpTestSettingsFiles(t, v, workflowTemplatePath, projectTemplatePath, tempDir)
+
+	tenantCtx := &tenantctx.EnvironmentContext{
+		DefaultDonFamily: "test-don",
+		Registries: []*tenantctx.Registry{
+			{ID: "my-private-registry", Type: "off-chain"},
+		},
+	}
+	envSet := &environments.EnvironmentSet{EnvName: "STAGING"}
+
+	cmd := workflowSubcommand("deploy")
+	s, err := settings.New(logger, v, cmd, "")
+	require.NoError(t, err)
+	resolved, err := settings.ResolveRegistry("my-private-registry", tenantCtx, envSet)
+	require.NoError(t, err)
+	err = settings.FinalizeWorkflowOwner(v, cmd, &s.Workflow, s.User.TargetName, resolved, "")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "derived workflow owner is not available")
+}
+
+func TestOnChainDeploymentRegistryStillRequiresPrivateKey(t *testing.T) {
+	t.Setenv(settings.EthPrivateKeyEnvVar, "")
+
+	envVars := map[string]string{
+		settings.CreTargetEnvVar: "staging",
+	}
+
+	workflowTemplatePath, err := filepath.Abs(filepath.Join("testdata", "workflow_storage", "workflow-onchain-named-registry.yaml"))
+	require.NoError(t, err)
+
+	projectTemplatePath, err := filepath.Abs(TempProjectSettingsFile)
+	require.NoError(t, err)
+
+	tempDir := t.TempDir()
+	restoreWorkingDirectory, err := testutil.ChangeWorkingDirectory(tempDir)
+	require.NoError(t, err)
+	defer restoreWorkingDirectory()
+
+	v, logger := createTestContext(t, envVars, tempDir)
+
+	setUpTestSettingsFiles(t, v, workflowTemplatePath, projectTemplatePath, tempDir)
+
+	chainSel := "16015286601757825753"
+	addr := "0xaE55eB3EDAc48a1163EE2cbb1205bE1e90Ea1135"
+	tenantCtx := &tenantctx.EnvironmentContext{
+		DefaultDonFamily: "zone-a",
+		Registries: []*tenantctx.Registry{
+			{
+				ID:            "onchain:ethereum-testnet-sepolia",
+				Type:          "on-chain",
+				ChainSelector: &chainSel,
+				Address:       &addr,
+			},
+		},
+	}
+	envSet := &environments.EnvironmentSet{EnvName: "STAGING"}
+
+	cmd := workflowSubcommand("deploy")
+	s, err := settings.New(logger, v, cmd, "")
+	require.NoError(t, err)
+	resolved, err := settings.ResolveRegistry("onchain:ethereum-testnet-sepolia", tenantCtx, envSet)
+	require.NoError(t, err)
+	err = settings.FinalizeWorkflowOwner(v, cmd, &s.Workflow, s.User.TargetName, resolved, "1234567890123456789012345678901234567890")
+	require.Error(t, err)
 }
 
 func TestShouldSkipGetOwner(t *testing.T) {

@@ -55,6 +55,23 @@ const (
 	WorkflowStatusPaused      OffchainWorkflowStatus = "WORKFLOW_STATUS_PAUSED"
 )
 
+// FormatStatus returns a short human-readable label for CLI output.
+func FormatStatus(status OffchainWorkflowStatus) string {
+	switch status {
+	case WorkflowStatusActive:
+		return "Active"
+	case WorkflowStatusPaused:
+		return "Paused"
+	case WorkflowStatusUnspecified:
+		return "Unspecified"
+	default:
+		if status == "" {
+			return ""
+		}
+		return string(status)
+	}
+}
+
 const (
 	maxWorkflowNameLength = 64
 	maxBinaryURLLength    = 200

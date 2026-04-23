@@ -15,8 +15,8 @@ import (
 
 	"github.com/smartcontractkit/cre-cli/internal/client/privateregistryclient"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
+	"github.com/smartcontractkit/cre-cli/internal/ethkeys"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
-	"github.com/smartcontractkit/cre-cli/internal/tenantctx"
 	"github.com/smartcontractkit/cre-cli/internal/testutil"
 	"github.com/smartcontractkit/cre-cli/internal/testutil/chainsim"
 )
@@ -117,62 +117,6 @@ func TestBuildPrivateRegistryInput(t *testing.T) {
 		input := h.buildPrivateRegistryInput()
 
 		assert.Nil(t, input.Tag)
-	})
-}
-
-func TestResolveInputs_PreviewPrivateRegistryFlag(t *testing.T) {
-	t.Parallel()
-
-	t.Run("defaults to false", func(t *testing.T) {
-		t.Parallel()
-		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
-		defer simulatedEnvironment.Close()
-
-		ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
-		h := newHandler(ctx, buf)
-		ctx.Settings = createTestSettings(
-			chainsim.TestAddress,
-			"eoa",
-			"test_workflow",
-			"testdata/basic_workflow/main.go",
-			"",
-		)
-		h.settings = ctx.Settings
-
-		inputs, err := h.ResolveInputs(ctx.Viper)
-		require.NoError(t, err)
-		assert.False(t, inputs.PreviewPrivateRegistry)
-	})
-
-	t.Run("set to true via viper", func(t *testing.T) {
-		t.Parallel()
-		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
-		defer simulatedEnvironment.Close()
-
-		ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
-		h := newHandler(ctx, buf)
-		ctx.Settings = createTestSettings(
-			chainsim.TestAddress,
-			"eoa",
-			"test_workflow",
-			"testdata/basic_workflow/main.go",
-			"",
-		)
-		h.settings = ctx.Settings
-
-		h.environmentSet.EnvName = "STAGING"
-		token := makeTestJWT(t, map[string]interface{}{
-			"sub":    "user1",
-			"org_id": "org-test-123",
-		})
-		h.credentials = makeBearerCredentials(t, token)
-		h.runtimeContext.TenantContext = &tenantctx.EnvironmentContext{TenantID: "42"}
-		h.runtimeContext.DerivedWorkflowOwner = "ab12cd34ef56ab12cd34ef56ab12cd34ef56ab12"
-		ctx.Viper.Set("preview-private-registry", true)
-
-		inputs, err := h.ResolveInputs(ctx.Viper)
-		require.NoError(t, err)
-		assert.True(t, inputs.PreviewPrivateRegistry)
 	})
 }
 
@@ -366,7 +310,7 @@ func TestResolveWorkflowOwner(t *testing.T) {
 		)
 		h.settings = ctx.Settings
 
-		owner, err := h.resolveWorkflowOwner(registryTarget{targetType: settings.RegistryTypeOnChain})
+		owner, err := h.resolveWorkflowOwner(settings.RegistryTypeOnChain)
 		require.NoError(t, err)
 		assert.Equal(t, chainsim.TestAddress, owner)
 	})
@@ -376,9 +320,12 @@ func TestResolveWorkflowOwner(t *testing.T) {
 
 		expectedBytes, err := workflowUtils.GenerateWorkflowOwnerAddress("42", "org-test-123")
 		require.NoError(t, err)
-		expectedOwner := "0x" + hex.EncodeToString(expectedBytes)
+		rawOwner := "0x" + hex.EncodeToString(expectedBytes)
+		expectedOwner, err := ethkeys.FormatWorkflowOwnerAddress(rawOwner)
+		require.NoError(t, err)
+		require.NotEmpty(t, expectedOwner)
 
-		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
+		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t).WithPrivateRegistry("42", "test-don")
 		defer simulatedEnvironment.Close()
 
 		ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
@@ -393,37 +340,14 @@ func TestResolveWorkflowOwner(t *testing.T) {
 		h.settings = ctx.Settings
 		h.runtimeContext.DerivedWorkflowOwner = expectedOwner
 
-		owner, err := h.resolveWorkflowOwner(registryTarget{targetType: settings.RegistryTypeOffChain})
+		owner, err := h.resolveWorkflowOwner(settings.RegistryTypeOffChain)
 		require.NoError(t, err)
 		assert.Equal(t, expectedOwner, owner)
 	})
 
-	t.Run("private target adds 0x prefix when missing", func(t *testing.T) {
-		t.Parallel()
-
-		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
-		defer simulatedEnvironment.Close()
-
-		ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
-		h := newHandler(ctx, buf)
-		ctx.Settings = createTestSettings(
-			chainsim.TestAddress,
-			"eoa",
-			"test_workflow",
-			"testdata/basic_workflow/main.go",
-			"",
-		)
-		h.settings = ctx.Settings
-		h.runtimeContext.DerivedWorkflowOwner = "abcdef1234567890"
-
-		owner, err := h.resolveWorkflowOwner(registryTarget{targetType: settings.RegistryTypeOffChain})
-		require.NoError(t, err)
-		assert.Equal(t, "0xabcdef1234567890", owner)
-	})
-
 	t.Run("private target errors when derived workflow owner is empty", func(t *testing.T) {
 		t.Parallel()
-		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
+		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t).WithPrivateRegistry("42", "test-don")
 		defer simulatedEnvironment.Close()
 
 		ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
@@ -438,7 +362,7 @@ func TestResolveWorkflowOwner(t *testing.T) {
 		h.settings = ctx.Settings
 		h.runtimeContext.DerivedWorkflowOwner = ""
 
-		_, err := h.resolveWorkflowOwner(registryTarget{targetType: settings.RegistryTypeOffChain})
+		_, err := h.resolveWorkflowOwner(settings.RegistryTypeOffChain)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "derived workflow owner is not available")
 	})

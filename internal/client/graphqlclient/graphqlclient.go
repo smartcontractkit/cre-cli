@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -62,7 +63,14 @@ func (c *Client) Execute(ctx context.Context, req *graphql.Request, resp any) er
 			req.Header.Set("Authorization", "Bearer "+c.creds.Tokens.AccessToken)
 		}
 	}
-	return c.client.Run(ctx, req, resp)
+	err = c.client.Run(ctx, req, resp)
+	if err != nil {
+		if strings.HasPrefix(err.Error(), "graphql: ") {
+			return errors.New(strings.Replace(err.Error(), "graphql: ", "cre api error: ", 1))
+		}
+		return err
+	}
+	return nil
 }
 
 func (c *Client) refreshTokens(ctx context.Context) error {

@@ -2,10 +2,7 @@ package deploy
 
 import (
 	"errors"
-	"fmt"
-	"strings"
 
-	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 )
 
@@ -32,44 +29,9 @@ type registryDeployStrategy interface {
 	Upsert() error
 }
 
-type registryTarget struct {
-	targetType settings.RegistryType
-}
-
-func (t registryTarget) isPrivate() bool {
-	return t.targetType == settings.RegistryTypeOffChain
-}
-
-// resolveRegistryTarget determines the target workflow registry from inputs and
-// environment. Preview-specific naming (--preview-private-registry, STAGING
-// gate) is confined to this function; the returned target is preview-agnostic.
-func resolveRegistryTarget(previewPrivateRegistry bool, envSet *environments.EnvironmentSet) (registryTarget, error) {
-	if previewPrivateRegistry {
-		if err := validatePrivateRegistryAllowed(envSet); err != nil {
-			return registryTarget{}, err
-		}
-		return registryTarget{targetType: settings.RegistryTypeOffChain}, nil
-	}
-
-	return registryTarget{targetType: settings.RegistryTypeOnChain}, nil
-}
-
-// validatePrivateRegistryAllowed enforces the STAGING-only preview gate.
-func validatePrivateRegistryAllowed(envSet *environments.EnvironmentSet) error {
-	displayEnvName := envSet.EnvName
-	if displayEnvName == "" {
-		displayEnvName = environments.DefaultEnv
-	}
-
-	if !strings.EqualFold(displayEnvName, "STAGING") {
-		return fmt.Errorf("--preview-private-registry is only available in the STAGING environment (current: %s)", displayEnvName)
-	}
-	return nil
-}
-
 // newRegistryDeployStrategy returns the appropriate strategy for the given target.
-func newRegistryDeployStrategy(targetWorkflowRegistry registryTarget, h *handler) (registryDeployStrategy, error) {
-	if targetWorkflowRegistry.isPrivate() {
+func newRegistryDeployStrategy(resolvedRegistry settings.ResolvedRegistry, h *handler) (registryDeployStrategy, error) {
+	if resolvedRegistry.Type() == settings.RegistryTypeOffChain {
 		return newPrivateRegistryDeployStrategy(h), nil
 	}
 	return newOnchainRegistryDeployStrategy(h)
