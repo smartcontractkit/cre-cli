@@ -12,6 +12,8 @@ import (
 	"github.com/smartcontractkit/chainlink/v2/core/capabilities"
 
 	aptosfakes "github.com/smartcontractkit/chainlink-aptos/fakes"
+
+	"github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain"
 )
 
 // AptosChainCapabilities holds the per-selector FakeAptosChain instances
@@ -31,7 +33,7 @@ func NewAptosChainCapabilities(
 	forwarders map[uint64]string,
 	privateKey *crypto.Ed25519PrivateKey,
 	dryRunChainWrite bool,
-	limits AptosChainLimits,
+	limits chain.Limits,
 ) (*AptosChainCapabilities, error) {
 	chains := make(map[uint64]*aptosfakes.FakeAptosChain)
 	for sel, client := range clients {
@@ -48,10 +50,7 @@ func NewAptosChainCapabilities(
 		if err != nil {
 			return nil, fmt.Errorf("new FakeAptosChain for selector %d: %w", sel, err)
 		}
-		var capability aptosserver.ClientCapability = fc
-		if limits != nil {
-			capability = NewLimitedAptosChain(fc, limits)
-		}
+		capability := NewLimitedAptosChain(fc, limits)
 		server := aptosserver.NewClientServer(capability)
 		if err := registry.Add(ctx, server); err != nil {
 			return nil, fmt.Errorf("register aptos capability for selector %d: %w", sel, err)

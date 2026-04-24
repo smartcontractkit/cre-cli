@@ -13,27 +13,21 @@ import (
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain"
 )
 
-// AptosChainLimits extends chain.Limits with the Aptos gas-amount limit.
-type AptosChainLimits interface {
-	chain.Limits
-	ChainWriteAptosMaxGasAmount() uint64
-}
-
 // LimitedAptosChain enforces chain-write size + Aptos max_gas_amount.
 type LimitedAptosChain struct {
 	inner  aptosserver.ClientCapability
-	limits AptosChainLimits
+	limits chain.Limits
 }
 
 var _ aptosserver.ClientCapability = (*LimitedAptosChain)(nil)
 
-func NewLimitedAptosChain(inner aptosserver.ClientCapability, limits AptosChainLimits) *LimitedAptosChain {
+func NewLimitedAptosChain(inner aptosserver.ClientCapability, limits chain.Limits) *LimitedAptosChain {
 	return &LimitedAptosChain{inner: inner, limits: limits}
 }
 
 func (l *LimitedAptosChain) WriteReport(ctx context.Context, metadata commonCap.RequestMetadata, input *aptoscappb.WriteReportRequest) (*commonCap.ResponseAndMetadata[*aptoscappb.WriteReportReply], caperrors.Error) {
 	if input != nil && input.Report != nil {
-		if lim := l.limits.ChainWriteReportSizeLimit(); lim > 0 && len(input.Report.RawReport) > lim {
+		if lim := l.limits.ReportSize; lim > 0 && len(input.Report.RawReport) > lim {
 			return nil, caperrors.NewPublicUserError(
 				fmt.Errorf("simulation limit exceeded: aptos report size %d > %d", len(input.Report.RawReport), lim),
 				caperrors.ResourceExhausted,
@@ -41,7 +35,7 @@ func (l *LimitedAptosChain) WriteReport(ctx context.Context, metadata commonCap.
 		}
 	}
 	if input != nil && input.GasConfig != nil {
-		if gl := l.limits.ChainWriteAptosMaxGasAmount(); gl > 0 && input.GasConfig.MaxGasAmount > gl {
+		if gl := l.limits.GasLimit; gl > 0 && input.GasConfig.MaxGasAmount > gl {
 			return nil, caperrors.NewPublicUserError(
 				fmt.Errorf("simulation limit exceeded: aptos max_gas_amount %d > %d", input.GasConfig.MaxGasAmount, gl),
 				caperrors.ResourceExhausted,

@@ -31,7 +31,6 @@ func TestDefaultLimitsAndExportDefaultLimitsJSON(t *testing.T) {
 	assert.Equal(t, 100_000, limits.ConfHTTPResponseSizeLimit())
 	assert.Equal(t, 100_000, limits.ConsensusObservationSizeLimit())
 	assert.Equal(t, 5_000, limits.ChainWriteReportSizeLimit())
-	assert.Equal(t, uint64(5_000_000), limits.ChainWriteGasLimit())
 	assert.Equal(t, 100_000_000, limits.WASMBinarySize())
 	assert.Equal(t, 20_000_000, limits.WASMCompressedBinarySize())
 	assert.JSONEq(t, string(defaultLimitsJSON), string(ExportDefaultLimitsJSON()))
@@ -46,12 +45,10 @@ func TestLoadLimitsParsesCustomFileAndPreservesDefaultsForUnsetFields(t *testing
 			"ConnectionTimeout": "2s"
 		},
 		"ChainWrite": {
-			"ReportSizeLimit": "9kb",
-			"EVM": {
-				"GasLimit": {
-					"Default": "123"
-				}
-			}
+			"ReportSizeLimit": "9kb"
+		},
+		"CRONTrigger": {
+			"FastestScheduleInterval": "45s"
 		}
 	}`)
 
@@ -61,7 +58,7 @@ func TestLoadLimitsParsesCustomFileAndPreservesDefaultsForUnsetFields(t *testing
 	assert.Equal(t, 7_000, limits.HTTPRequestSizeLimit())
 	assert.Equal(t, 100_000, limits.HTTPResponseSizeLimit(), "unset values should keep embedded defaults")
 	assert.Equal(t, 9_000, limits.ChainWriteReportSizeLimit())
-	assert.Equal(t, uint64(123), limits.ChainWriteGasLimit())
+	assert.Equal(t, 45*time.Second, limits.Workflows.CRONTrigger.FastestScheduleInterval.DefaultValue)
 	assert.Equal(t, 2*time.Second, limits.Workflows.HTTPAction.ConnectionTimeout.DefaultValue)
 }
 
@@ -95,7 +92,7 @@ func TestResolveLimitsHandlesAllSupportedModes(t *testing.T) {
 	baseline, err := DefaultLimits()
 	require.NoError(t, err)
 	assert.Equal(t, baseline.HTTPRequestSizeLimit(), defaultLimits.HTTPRequestSizeLimit())
-	assert.Equal(t, baseline.ChainWriteGasLimit(), defaultLimits.ChainWriteGasLimit())
+	assert.Equal(t, baseline.ChainWriteReportSizeLimit(), defaultLimits.ChainWriteReportSizeLimit())
 
 	path := writeLimitsFile(t, `{"Consensus":{"ObservationSizeLimit":"2kb"}}`)
 	customLimits, err := ResolveLimits(path)

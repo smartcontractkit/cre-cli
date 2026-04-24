@@ -155,16 +155,9 @@ func (ct *EVMChainType) RegisterCapabilities(ctx context.Context, cfg chain.Capa
 
 	dryRun := !cfg.Broadcast
 
-	// cfg.Limits is the generic chain.Limits contract. The EVM chain type
-	// needs the wider EVMChainLimits contract (adds ChainWriteGasLimit). A
-	// nil cfg.Limits disables enforcement entirely.
-	var evmLimits EVMChainLimits
+	var evmLimits chain.Limits
 	if cfg.Limits != nil {
-		el, ok := cfg.Limits.(EVMChainLimits)
-		if !ok {
-			return nil, fmt.Errorf("EVM chain type: limits value does not implement evm.EVMChainLimits (got %T)", cfg.Limits)
-		}
-		evmLimits = el
+		evmLimits = ExtractLimits(cfg.Limits)
 	}
 
 	evmCaps, err := NewEVMChainCapabilities(

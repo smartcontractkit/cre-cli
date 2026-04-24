@@ -151,13 +151,9 @@ func (ct *AptosChainType) RegisterCapabilities(ctx context.Context, cfg chain.Ca
 			return nil, fmt.Errorf("aptos: private key is not *crypto.Ed25519PrivateKey (got %T)", cfg.PrivateKey)
 		}
 	}
-	var lim AptosChainLimits
+	var lim chain.Limits
 	if cfg.Limits != nil {
-		al, ok := cfg.Limits.(AptosChainLimits)
-		if !ok {
-			return nil, fmt.Errorf("aptos: limits does not implement AptosChainLimits (got %T)", cfg.Limits)
-		}
-		lim = al
+		lim = ExtractLimits(cfg.Limits)
 	}
 	caps, err := NewAptosChainCapabilities(ctx, cfg.Logger, cfg.Registry, typedClients, cfg.Forwarders, pk, !cfg.Broadcast, lim)
 	if err != nil {

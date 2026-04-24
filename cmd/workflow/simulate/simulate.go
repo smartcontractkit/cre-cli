@@ -33,6 +33,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain"
 	_ "github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain/aptos" // register Aptos chain family via package init
 	_ "github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain/evm"   // register EVM chain family via package init
+
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
@@ -463,11 +464,10 @@ func run(
 		}
 		srvcs = append(srvcs, manualTriggerCaps.ManualCronTrigger, manualTriggerCaps.ManualHTTPTrigger)
 
-		// Only set Limits when non-nil to avoid the typed-nil interface trap
-		// (a nil *SimulationLimits boxed into chain.Limits compares != nil).
-		var capLimits chain.Limits
+		// nil capLimits disables enforcement.
+		var capLimits *cresettings.Workflows
 		if simLimits != nil {
-			capLimits = simLimits
+			capLimits = &simLimits.Workflows
 		}
 
 		// Register chain-type-specific capabilities

@@ -12,15 +12,10 @@ import (
 	aptoscappb "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/chain-capabilities/aptos"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/core"
 	sdk "github.com/smartcontractkit/chainlink-protos/cre/go/sdk"
+
+	"github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain"
 )
 
-type stubLimits struct {
-	reportSize int
-	maxGas     uint64
-}
-
-func (s stubLimits) ChainWriteReportSizeLimit() int      { return s.reportSize }
-func (s stubLimits) ChainWriteAptosMaxGasAmount() uint64 { return s.maxGas }
 
 type stubCap struct{ writeCalled bool }
 
@@ -54,7 +49,7 @@ func (s *stubCap) Initialise(context.Context, core.StandardCapabilitiesDependenc
 func TestLimitedAptosChain_WriteReport_ReportTooLarge(t *testing.T) {
 	t.Parallel()
 	inner := &stubCap{}
-	l := NewLimitedAptosChain(inner, stubLimits{reportSize: 10, maxGas: 1000})
+	l := NewLimitedAptosChain(inner, chain.Limits{ReportSize: 10, GasLimit: 1000})
 	_, capErr := l.WriteReport(context.Background(), commonCap.RequestMetadata{}, &aptoscappb.WriteReportRequest{
 		Report: &sdk.ReportResponse{RawReport: make([]byte, 11)},
 	})
@@ -65,7 +60,7 @@ func TestLimitedAptosChain_WriteReport_ReportTooLarge(t *testing.T) {
 func TestLimitedAptosChain_WriteReport_MaxGasTooHigh(t *testing.T) {
 	t.Parallel()
 	inner := &stubCap{}
-	l := NewLimitedAptosChain(inner, stubLimits{reportSize: 100, maxGas: 100})
+	l := NewLimitedAptosChain(inner, chain.Limits{ReportSize: 100, GasLimit: 100})
 	_, capErr := l.WriteReport(context.Background(), commonCap.RequestMetadata{}, &aptoscappb.WriteReportRequest{
 		Report:    &sdk.ReportResponse{RawReport: []byte("x")},
 		GasConfig: &aptoscappb.GasConfig{MaxGasAmount: 101},
@@ -77,7 +72,7 @@ func TestLimitedAptosChain_WriteReport_MaxGasTooHigh(t *testing.T) {
 func TestLimitedAptosChain_WriteReport_Delegates(t *testing.T) {
 	t.Parallel()
 	inner := &stubCap{}
-	l := NewLimitedAptosChain(inner, stubLimits{reportSize: 100, maxGas: 1000})
+	l := NewLimitedAptosChain(inner, chain.Limits{ReportSize: 100, GasLimit: 1000})
 	_, capErr := l.WriteReport(context.Background(), commonCap.RequestMetadata{}, &aptoscappb.WriteReportRequest{
 		Report:    &sdk.ReportResponse{RawReport: []byte("x")},
 		GasConfig: &aptoscappb.GasConfig{MaxGasAmount: 50},
