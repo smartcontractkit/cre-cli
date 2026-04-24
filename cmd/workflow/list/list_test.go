@@ -636,7 +636,7 @@ func TestExecute_Pagination(t *testing.T) {
 	}
 }
 
-func TestExecute_JSONOutput_WritesFile(t *testing.T) {
+func TestExecute_JSONOutput_PrintsToStdout(t *testing.T) {
 	logger := zerolog.New(io.Discard)
 	rtCtx := &runtime.Context{
 		Logger:         &logger,
@@ -653,21 +653,15 @@ func TestExecute_JSONOutput_WritesFile(t *testing.T) {
 	defer srv.Close()
 	h := newHandlerWithServer(t, rtCtx, srv)
 
-	outFile := t.TempDir() + "/workflows.json"
-	captureStdout(t, func() {
-		if err := h.Execute(context.Background(), cmdlist.Inputs{OutputPath: outFile}); err != nil {
+	out := captureStdout(t, func() {
+		if err := h.Execute(context.Background(), cmdlist.Inputs{OutputFormat: "json"}); err != nil {
 			t.Fatal(err)
 		}
 	})
 
-	data, err := os.ReadFile(outFile)
-	if err != nil {
-		t.Fatalf("expected JSON file to be written: %v", err)
-	}
-
 	var result []map[string]any
-	if err := json.Unmarshal(data, &result); err != nil {
-		t.Fatalf("invalid JSON written: %v\n%s", err, data)
+	if err := json.Unmarshal([]byte(out), &result); err != nil {
+		t.Fatalf("expected valid JSON on stdout: %v\nstdout: %s", err, out)
 	}
 
 	// Deleted workflow is excluded (includeDeleted=false).
@@ -704,21 +698,15 @@ func TestExecute_JSONOutput_IncludeDeleted(t *testing.T) {
 	defer srv.Close()
 	h := newHandlerWithServer(t, rtCtx, srv)
 
-	outFile := t.TempDir() + "/workflows.json"
-	captureStdout(t, func() {
-		if err := h.Execute(context.Background(), cmdlist.Inputs{IncludeDeleted: true, OutputPath: outFile}); err != nil {
+	out := captureStdout(t, func() {
+		if err := h.Execute(context.Background(), cmdlist.Inputs{IncludeDeleted: true, OutputFormat: "json"}); err != nil {
 			t.Fatal(err)
 		}
 	})
 
-	data, err := os.ReadFile(outFile)
-	if err != nil {
-		t.Fatalf("expected JSON file to be written: %v", err)
-	}
-
 	var result []map[string]any
-	if err := json.Unmarshal(data, &result); err != nil {
-		t.Fatalf("invalid JSON written: %v\n%s", err, data)
+	if err := json.Unmarshal([]byte(out), &result); err != nil {
+		t.Fatalf("expected valid JSON on stdout: %v\nstdout: %s", err, out)
 	}
 
 	if len(result) != 3 {

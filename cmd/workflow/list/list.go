@@ -3,8 +3,6 @@ package list
 import (
 	"context"
 	"fmt"
-	"path/filepath"
-	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -20,34 +18,28 @@ import (
 // can use the name without importing workflowdataclient directly.
 type Workflow = workflowdataclient.Workflow
 
+const outputFormatJSON = "json"
+
 // Inputs holds the resolved and validated flag values for the list command.
 type Inputs struct {
 	RegistryFilter string
 	IncludeDeleted bool
-	// OutputPath is an absolute path to a .json file, or "" if not set.
-	OutputPath string
+	// OutputFormat controls how results are rendered. "" means human-readable table;
+	// "json" prints a JSON array to stdout suitable for piping and scripting.
+	OutputFormat string
 }
 
-// resolveInputs builds Inputs from raw flag values, resolving the output path
-// to an absolute path and validating that it carries a .json extension.
-func resolveInputs(registryFilter string, includeDeleted bool, outputPath string) (Inputs, error) {
-	resolved := Inputs{
+// resolveInputs builds Inputs from raw flag values, validating that the
+// output format (if provided) is a recognised value.
+func resolveInputs(registryFilter string, includeDeleted bool, outputFormat string) (Inputs, error) {
+	if outputFormat != "" && outputFormat != outputFormatJSON {
+		return Inputs{}, fmt.Errorf("--output %q is not supported; only %q is accepted", outputFormat, outputFormatJSON)
+	}
+	return Inputs{
 		RegistryFilter: registryFilter,
 		IncludeDeleted: includeDeleted,
-	}
-
-	if outputPath != "" {
-		if ext := strings.ToLower(filepath.Ext(outputPath)); ext != ".json" {
-			return Inputs{}, fmt.Errorf("--output must use a .json extension, got %q", outputPath)
-		}
-		abs, err := filepath.Abs(outputPath)
-		if err != nil {
-			return Inputs{}, fmt.Errorf("cannot resolve --output path %q: %w", outputPath, err)
-		}
-		resolved.OutputPath = abs
-	}
-
-	return resolved, nil
+		OutputFormat:   outputFormat,
+	}, nil
 }
 
 // Handler loads workflows via the WorkflowDataClient and prints them.
@@ -79,7 +71,8 @@ func NewHandlerWithClient(ctx *runtime.Context, wdc *workflowdataclient.Client) 
 
 // Execute lists workflows applying the filters from inputs.
 // Deleted workflows are omitted unless inputs.IncludeDeleted is true.
-// When inputs.OutputPath is set, results are also written as JSON to that file.
+// When inputs.OutputFormat is "json", a JSON array is written to stdout;
+// otherwise a human-readable table is printed.
 func (h *Handler) Execute(ctx context.Context, inputs Inputs) error {
 	if h.tenantCtx == nil {
 		return fmt.Errorf("user context not available — run `cre login` and retry")
@@ -114,15 +107,11 @@ func (h *Handler) Execute(ctx context.Context, inputs Inputs) error {
 		rows = omitDeleted(rows)
 	}
 
-	printWorkflowTable(rows, h.tenantCtx.Registries, afterRegistryFilter, inputs.IncludeDeleted)
-
-	if inputs.OutputPath != "" {
-		if err := writeWorkflowsJSON(rows, h.tenantCtx.Registries, inputs.OutputPath); err != nil {
-			return fmt.Errorf("write JSON output: %w", err)
-		}
-		ui.Success(fmt.Sprintf("Results written to %s", inputs.OutputPath))
+	if inputs.OutputFormat == outputFormatJSON {
+		return printWorkflowsJSON(rows, h.tenantCtx.Registries)
 	}
 
+	printWorkflowTable(rows, h.tenantCtx.Registries, afterRegistryFilter, inputs.IncludeDeleted)
 	return nil
 }
 
@@ -130,7 +119,7 @@ func (h *Handler) Execute(ctx context.Context, inputs Inputs) error {
 func New(runtimeContext *runtime.Context) *cobra.Command {
 	var registryID string
 	var includeDeleted bool
-	var outputPath string
+	var outputFormat string
 
 	cmd := &cobra.Command{
 		Use:   "list",
@@ -139,10 +128,11 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 		Example: "cre workflow list\n" +
 			"  cre workflow list --registry private\n" +
 			"  cre workflow list --include-deleted\n" +
-			"  cre workflow list --output /path/to/workflows.json",
+			"  cre workflow list --output json\n" +
+			"  cre workflow list --output json > workflows.json",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			inputs, err := resolveInputs(registryID, includeDeleted, outputPath)
+			inputs, err := resolveInputs(registryID, includeDeleted, outputFormat)
 			if err != nil {
 				return err
 			}
@@ -152,6 +142,6 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 
 	cmd.Flags().StringVar(&registryID, "registry", "", "Filter by registry ID from user context")
 	cmd.Flags().BoolVar(&includeDeleted, "include-deleted", false, "Include workflows in DELETED status")
-	cmd.Flags().StringVar(&outputPath, "output", "", "Write results to a .json file at the given path (relative or absolute)")
+	cmd.Flags().StringVar(&outputFormat, "output", "", `Output format: "json" prints a JSON array to stdout`)
 	return cmd
 }

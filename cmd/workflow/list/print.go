@@ -3,14 +3,13 @@ package list
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/smartcontractkit/cre-cli/internal/tenantctx"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
-// workflowJSON is the JSON representation of a workflow for file output.
+// workflowJSON is the JSON representation of a workflow for stdout output.
 type workflowJSON struct {
 	Name            string `json:"name"`
 	WorkflowID      string `json:"workflowId"`
@@ -20,7 +19,7 @@ type workflowJSON struct {
 	ContractAddress string `json:"contractAddress,omitempty"`
 }
 
-func writeWorkflowsJSON(rows []Workflow, registries []*tenantctx.Registry, path string) error {
+func buildWorkflowJSON(rows []Workflow, registries []*tenantctx.Registry) []workflowJSON {
 	out := make([]workflowJSON, 0, len(rows))
 	for _, r := range rows {
 		matched := resolveWorkflowRegistry(r.WorkflowSource, registries)
@@ -38,12 +37,17 @@ func writeWorkflowsJSON(rows []Workflow, registries []*tenantctx.Registry, path 
 		}
 		out = append(out, entry)
 	}
+	return out
+}
 
-	data, err := json.MarshalIndent(out, "", "  ")
+// printWorkflowsJSON marshals workflows as an indented JSON array and writes it to stdout.
+func printWorkflowsJSON(rows []Workflow, registries []*tenantctx.Registry) error {
+	data, err := json.MarshalIndent(buildWorkflowJSON(rows, registries), "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0o600)
+	fmt.Println(string(data))
+	return nil
 }
 
 func omitDeleted(rows []Workflow) []Workflow {
