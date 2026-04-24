@@ -26,7 +26,7 @@
 # In your workflow, reference the chain as <chain-type>:ChainSelector:<chain-selector>@1.0.0
 #
 #   experimental-chains:
-#     - chain-type: evm                             # "evm" (default) or "aptos"
+#     - chain-type: evm                             # Chain family
 #       chain-selector: 12345                       # The chain selector value
 #       rpc-url: "https://rpc.example.com"          # RPC endpoint URL
 #       forwarder: "0x..."                          # Forwarder contract address on the chain

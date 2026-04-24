@@ -12,7 +12,7 @@ import (
 func TestResolveKey_SentinelUnderBroadcastFails(t *testing.T) {
 	t.Parallel()
 	ct := &AptosChainType{}
-	s := &settings.Settings{User: settings.UserSettings{AptosPrivateKey: "0000000000000000000000000000000000000000000000000000000000000001"}}
+	s := &settings.Settings{User: settings.UserSettings{PrivateKeys: map[string]string{settings.Aptos.Name: "0000000000000000000000000000000000000000000000000000000000000001"}}}
 	_, err := ct.ResolveKey(s, true)
 	require.Error(t, err)
 }
@@ -20,7 +20,7 @@ func TestResolveKey_SentinelUnderBroadcastFails(t *testing.T) {
 func TestResolveKey_UnparseableUnderBroadcastFails(t *testing.T) {
 	t.Parallel()
 	ct := &AptosChainType{}
-	s := &settings.Settings{User: settings.UserSettings{AptosPrivateKey: "not-hex"}}
+	s := &settings.Settings{User: settings.UserSettings{PrivateKeys: map[string]string{settings.Aptos.Name: "not-hex"}}}
 	_, err := ct.ResolveKey(s, true)
 	require.Error(t, err)
 }
@@ -28,7 +28,7 @@ func TestResolveKey_UnparseableUnderBroadcastFails(t *testing.T) {
 func TestResolveKey_UnparseableNonBroadcastFallsBackToSentinel(t *testing.T) {
 	t.Parallel()
 	ct := &AptosChainType{}
-	s := &settings.Settings{User: settings.UserSettings{AptosPrivateKey: ""}}
+	s := &settings.Settings{User: settings.UserSettings{PrivateKeys: map[string]string{settings.Aptos.Name: ""}}}
 	k, err := ct.ResolveKey(s, false)
 	require.NoError(t, err)
 	assert.NotNil(t, k)
@@ -37,7 +37,7 @@ func TestResolveKey_UnparseableNonBroadcastFallsBackToSentinel(t *testing.T) {
 func TestResolveKey_ValidKeyBroadcast(t *testing.T) {
 	t.Parallel()
 	ct := &AptosChainType{}
-	s := &settings.Settings{User: settings.UserSettings{AptosPrivateKey: "1111111111111111111111111111111111111111111111111111111111111111"}}
+	s := &settings.Settings{User: settings.UserSettings{PrivateKeys: map[string]string{settings.Aptos.Name: "1111111111111111111111111111111111111111111111111111111111111111"}}}
 	k, err := ct.ResolveKey(s, true)
 	require.NoError(t, err)
 	assert.NotNil(t, k)

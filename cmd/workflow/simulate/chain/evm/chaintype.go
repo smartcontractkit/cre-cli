@@ -225,7 +225,7 @@ func (ct *EVMChainType) RunHealthCheck(resolved chain.ResolvedChains) error {
 // is true, an invalid or default-sentinel key is a hard error. Otherwise a
 // sentinel key is used with a warning so non-broadcast simulations can run.
 func (ct *EVMChainType) ResolveKey(creSettings *settings.Settings, broadcast bool) (interface{}, error) {
-	pk, err := crypto.HexToECDSA(creSettings.User.EthPrivateKey)
+	pk, err := crypto.HexToECDSA(creSettings.User.PrivateKey(settings.EVM))
 	if err != nil {
 		if broadcast {
 			return nil, fmt.Errorf(
