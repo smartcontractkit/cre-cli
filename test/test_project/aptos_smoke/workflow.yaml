@@ -1,6 +1,0 @@
-dev-aptos-testnet:
-  user-workflow:
-    workflow-name: "aptos-smoke"
-  workflow-artifacts:
-    workflow-path: "./main.go"
-    config-path: "./config.json"

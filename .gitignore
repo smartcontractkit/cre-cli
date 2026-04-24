@@ -42,3 +42,7 @@ encrypted.secrets.json
 
 # Output produced by e2e Anvil tests
 test/test.yaml
+
+# Local-only Aptos test scaffolding (untracked)
+test/aptos_cli_scenarios_test.go
+test/test_project/aptos_smoke/

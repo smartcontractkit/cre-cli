@@ -1,4 +1,0 @@
-dev-aptos-testnet:
-  rpcs:
-    - chain-name: aptos-testnet
-      url: https://api.testnet.aptoslabs.com/v1
