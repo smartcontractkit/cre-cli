@@ -123,27 +123,24 @@ func TestMultiCommandHappyPaths(t *testing.T) {
 		multi_command_flows.RunHappyPath3bWorkflow(t, tc)
 	})
 
-	// Run workflow private registry happy path: Deploy with deployment-registry
-	t.Run("WorkflowPrivateRegistry_DeployHappyPath", func(t *testing.T) {
+	// Private registry (off-chain): no CRE_ETH_PRIVATE_KEY; org-derived owner from mock GQL,
+	// settings load + finalize, then full CLI lifecycle (see multi_command_flows.RunPrivateRegistryE2E).
+	t.Run("WorkflowPrivateRegistry_E2E", func(t *testing.T) {
 		anvilProc, testEthUrl := initTestEnv(t, "anvil-state.json")
 		defer StopAnvil(anvilProc)
 
-		// Private registry owner derivation needs bearer auth org_id.
 		t.Setenv(environments.EnvVarEnv, "STAGING")
 
-		// Setup environment variables for pre-baked registries from Anvil state dump
 		t.Setenv(environments.EnvVarWorkflowRegistryAddress, "0x5FbDB2315678afecb367f032d93F642f64180aa3")
 		t.Setenv(environments.EnvVarWorkflowRegistryChainName, chainselectors.ANVIL_DEVNET.Name)
 		t.Setenv(environments.EnvVarDonFamily, "test-don")
 
 		tc := NewTestConfig(t)
 
-		// Use linked Address3 + its key
-		require.NoError(t, createCliEnvFile(tc.EnvFile, constants.TestPrivateKey3), "failed to create env file")
+		require.NoError(t, createCliEnvFile(tc.EnvFile, ""), "failed to create env file without private key")
 		require.NoError(t, createProjectSettingsFile(tc.ProjectDirectory+"project.yaml", "", testEthUrl), "failed to create project.yaml")
 		require.NoError(t, createWorkflowDirectory(tc.ProjectDirectory, "private-registry-happy-path-workflow", "", "blank_workflow"), "failed to create workflow directory")
 
-		// Set deployment-registry to reg-test to trigger private registry path
 		v := viper.New()
 		v.SetConfigFile(filepath.Join(tc.ProjectDirectory, "blank_workflow", constants.DefaultWorkflowSettingsFileName))
 		require.NoError(t, v.ReadInConfig())
@@ -152,8 +149,7 @@ func TestMultiCommandHappyPaths(t *testing.T) {
 
 		t.Cleanup(tc.Cleanup(t))
 
-		multi_command_flows.RunWorkflowPrivateRegistryHappyPath(t, tc)
-		multi_command_flows.RunWorkflowPausePrivateRegistryHappyPath(t, tc)
+		multi_command_flows.RunPrivateRegistryE2E(t, tc, tc.EnvFile, filepath.Join(tc.ProjectDirectory, "blank_workflow"))
 	})
 
 	// Run Account Happy Path: Link -> List -> Unlink -> List (verify unlinked)

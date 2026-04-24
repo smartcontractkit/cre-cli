@@ -20,8 +20,10 @@ const (
 )
 
 type Inputs struct {
-	WorkflowName  string `validate:"workflow_name"`
-	WorkflowOwner string `validate:"workflow_owner"`
+	WorkflowName     string `validate:"workflow_name"`
+	WorkflowOwner    string `validate:"workflow_owner"`
+	SkipConfirmation bool
+	NonInteractive   bool
 }
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
@@ -83,8 +85,10 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 	}
 
 	return Inputs{
-		WorkflowName:  h.settings.Workflow.UserWorkflowSettings.WorkflowName,
-		WorkflowOwner: resolvedWorkflowOwner,
+		WorkflowName:     h.settings.Workflow.UserWorkflowSettings.WorkflowName,
+		WorkflowOwner:    resolvedWorkflowOwner,
+		SkipConfirmation: v.GetBool(settings.Flags.SkipConfirmation.Name),
+		NonInteractive:   v.GetBool(settings.Flags.NonInteractive.Name),
 	}, nil
 }
 
@@ -105,6 +109,14 @@ func (h *handler) ValidateInputs() error {
 func (h *handler) Execute() error {
 	if !h.validated {
 		return fmt.Errorf("handler inputs not validated")
+	}
+
+	if h.inputs.NonInteractive && !h.inputs.SkipConfirmation {
+		ui.ErrorWithSuggestions(
+			"Non-interactive mode requires all inputs via flags",
+			[]string{"--yes"},
+		)
+		return fmt.Errorf("missing required flags for --non-interactive mode")
 	}
 
 	h.displayWorkflowDetails()
@@ -128,10 +140,6 @@ func (h *handler) resolveWorkflowOwner(registryType settings.RegistryType) (stri
 	owner := h.runtimeContext.DerivedWorkflowOwner
 	if owner == "" {
 		return "", fmt.Errorf("derived workflow owner is not available; ensure authentication succeeded")
-	}
-
-	if len(owner) >= 2 && owner[:2] != "0x" {
-		owner = "0x" + owner
 	}
 
 	return owner, nil

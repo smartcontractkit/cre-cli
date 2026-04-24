@@ -11,6 +11,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"sigs.k8s.io/yaml"
+
+	"github.com/smartcontractkit/cre-cli/internal/constants"
 )
 
 // GetWorkflowPathFromFile reads workflow-path from a workflow.yaml file (same value deploy/simulate get from Settings).
@@ -118,18 +120,23 @@ func loadWorkflowSettings(logger *zerolog.Logger, v *viper.Viper, cmd *cobra.Com
 
 	var workflowSettings WorkflowSettings
 
-	// if a command doesn't need private key, skip getting owner here
+	workflowSettings.UserWorkflowSettings.DeploymentRegistry = getSetting(DeploymentRegistrySettingName)
+	deploymentRegistry := workflowSettings.UserWorkflowSettings.DeploymentRegistry
+
+	// If deployment-registry is set, owner depends on how that id resolves; defer to
+	// FinalizeWorkflowOwner (after ResolveRegistry). Otherwise resolve from env/config now.
 	if !ShouldSkipGetOwner(cmd) {
-		ownerAddress, ownerType, err := GetWorkflowOwner(v)
-		if err != nil {
-			return WorkflowSettings{}, err
+		if deploymentRegistry == "" {
+			ownerAddress, ownerType, err := GetWorkflowOwner(v)
+			if err != nil {
+				return WorkflowSettings{}, err
+			}
+			workflowSettings.UserWorkflowSettings.WorkflowOwnerAddress = ownerAddress
+			workflowSettings.UserWorkflowSettings.WorkflowOwnerType = ownerType
 		}
-		workflowSettings.UserWorkflowSettings.WorkflowOwnerAddress = ownerAddress
-		workflowSettings.UserWorkflowSettings.WorkflowOwnerType = ownerType
 	}
 
 	workflowSettings.UserWorkflowSettings.WorkflowName = getSetting(WorkflowNameSettingName)
-	workflowSettings.UserWorkflowSettings.DeploymentRegistry = getSetting(DeploymentRegistrySettingName)
 	workflowSettings.WorkflowArtifactSettings.WorkflowPath = getSetting(WorkflowPathSettingName)
 	workflowSettings.WorkflowArtifactSettings.ConfigPath = getSetting(ConfigPathSettingName)
 	workflowSettings.WorkflowArtifactSettings.SecretsPath = getSetting(SecretsPathSettingName)
@@ -163,19 +170,61 @@ func loadWorkflowSettings(logger *zerolog.Logger, v *viper.Viper, cmd *cobra.Com
 	// This is required because some commands still read values directly out of viper
 	// TODO: Remove this function once all access to settings no longer uses viper
 	// DEVSVCS-1561
-	if err := flattenWorkflowSettingsToViper(v, target); err != nil {
+	if err := flattenWorkflowSettingsToViper(v, target, workflowSettings.UserWorkflowSettings.WorkflowOwnerAddress); err != nil {
 		return WorkflowSettings{}, err
 	}
 
 	return workflowSettings, nil
 }
 
+// FinalizeWorkflowOwner sets workflow owner when loadWorkflowSettings deferred it because
+// user-workflow.deployment-registry was non-empty. Call after ResolveRegistry.
+func FinalizeWorkflowOwner(
+	v *viper.Viper,
+	cmd *cobra.Command,
+	workflow *WorkflowSettings,
+	target string,
+	resolved ResolvedRegistry,
+	derivedWorkflowOwner string,
+) error {
+	if ShouldSkipGetOwner(cmd) {
+		return nil
+	}
+	if workflow.UserWorkflowSettings.DeploymentRegistry == "" {
+		return nil
+	}
+	if resolved == nil {
+		return fmt.Errorf("resolved registry is required to finalize workflow owner")
+	}
+
+	var ownerAddr, ownerType string
+	var err error
+	if resolved.Type() == RegistryTypeOffChain {
+		ownerAddr = derivedWorkflowOwner
+		if ownerAddr == "" {
+			return fmt.Errorf("derived workflow owner is not available; ensure authentication succeeded")
+		}
+		ownerType = constants.WorkflowOwnerTypeOrgDerived
+	} else {
+		ownerAddr, ownerType, err = GetWorkflowOwner(v)
+		if err != nil {
+			return err
+		}
+	}
+	workflow.UserWorkflowSettings.WorkflowOwnerAddress = ownerAddr
+	workflow.UserWorkflowSettings.WorkflowOwnerType = ownerType
+	return flattenWorkflowSettingsToViper(v, target, ownerAddr)
+}
+
 // TODO: Remove this function once all access to settings no longer uses viper
 // DEVSVCS-1561
-func flattenWorkflowSettingsToViper(v *viper.Viper, target string) error {
-	// Manually flatten the workflow owner setting.
+func flattenWorkflowSettingsToViper(v *viper.Viper, target string, effectiveWorkflowOwner string) error {
+	// Manually flatten the workflow owner setting (effective address from settings load,
+	// including org-derived owner when deployment registry is private).
 	ownerKey := fmt.Sprintf("%s.%s", target, WorkflowOwnerSettingName)
-	if v.IsSet(ownerKey) {
+	if effectiveWorkflowOwner != "" {
+		v.Set(WorkflowOwnerSettingName, effectiveWorkflowOwner)
+	} else if v.IsSet(ownerKey) {
 		owner := v.GetString(ownerKey)
 		v.Set(WorkflowOwnerSettingName, owner)
 	}

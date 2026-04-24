@@ -15,6 +15,7 @@ import (
 	settingspkg "github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/tenantctx"
 	"github.com/smartcontractkit/cre-cli/internal/testutil"
+	"github.com/smartcontractkit/cre-cli/internal/testutil/testjwt"
 	"github.com/smartcontractkit/cre-cli/internal/testutil/testsettings"
 )
 
@@ -22,6 +23,10 @@ type SimulatedEnvironment struct {
 	Chain     *SimulatedChain
 	EthClient *seth.Client
 	Contracts *SimulatedContracts
+
+	tenantID  string
+	donFamily string
+	jwtToken  string
 }
 
 type SimulatedContracts struct {
@@ -47,6 +52,17 @@ func NewSimulatedEnvironment(t *testing.T) *SimulatedEnvironment {
 	return &simulatedEnvironment
 }
 
+func (se *SimulatedEnvironment) WithPrivateRegistry(tenantID, donFamily string) *SimulatedEnvironment {
+	se.tenantID = tenantID
+	se.donFamily = donFamily
+	return se
+}
+
+func (se *SimulatedEnvironment) WithJWT(orgID string) *SimulatedEnvironment {
+	se.jwtToken = testjwt.CreateTestJWT(orgID)
+	return se
+}
+
 func (se *SimulatedEnvironment) NewRuntimeContext() *runtime.Context {
 	logger := testutil.NewTestLogger()
 	return se.createContextWithLogger(logger)
@@ -55,20 +71,6 @@ func (se *SimulatedEnvironment) NewRuntimeContext() *runtime.Context {
 func (se *SimulatedEnvironment) NewRuntimeContextWithBufferedOutput() (*runtime.Context, *bytes.Buffer) {
 	logger, buf := testutil.NewBufferedLogger()
 	return se.createContextWithLogger(logger), buf
-}
-
-func (se *SimulatedEnvironment) NewOffChainRuntimeContext(tenantID, donFamily string) *runtime.Context {
-	ctx := se.NewRuntimeContext()
-	ctx.TenantContext = &tenantctx.EnvironmentContext{TenantID: tenantID}
-	ctx.ResolvedRegistry = settingspkg.NewOffChainRegistry("private", donFamily)
-	return ctx
-}
-
-func (se *SimulatedEnvironment) NewOffChainRuntimeContextWithBufferedOutput(tenantID, donFamily string) (*runtime.Context, *bytes.Buffer) {
-	ctx, buf := se.NewRuntimeContextWithBufferedOutput()
-	ctx.TenantContext = &tenantctx.EnvironmentContext{TenantID: tenantID}
-	ctx.ResolvedRegistry = settingspkg.NewOffChainRegistry("private", donFamily)
-	return ctx, buf
 }
 
 func (se *SimulatedEnvironment) Close() {
@@ -96,7 +98,9 @@ func (se *SimulatedEnvironment) createContextWithLogger(logger *zerolog.Logger) 
 	}
 
 	var resolved settingspkg.ResolvedRegistry
-	if environmentSet != nil {
+	if se.tenantID != "" {
+		resolved = settingspkg.NewOffChainRegistry("private", se.donFamily)
+	} else if environmentSet != nil {
 		resolved = settingspkg.NewOnChainRegistry(
 			"",
 			se.Contracts.WorkflowRegistry.Contract.Hex(),
@@ -116,9 +120,19 @@ func (se *SimulatedEnvironment) createContextWithLogger(logger *zerolog.Logger) 
 		ResolvedRegistry: resolved,
 	}
 
+	if se.tenantID != "" {
+		ctx.TenantContext = &tenantctx.EnvironmentContext{TenantID: se.tenantID}
+	}
+
 	// Mark credentials as validated for tests to bypass validation
 	if creds != nil {
 		creds.IsValidated = true
+		if se.jwtToken != "" {
+			if creds.Tokens == nil {
+				creds.Tokens = &credentials.CreLoginTokenSet{}
+			}
+			creds.Tokens.AccessToken = se.jwtToken
+		}
 	}
 
 	return ctx

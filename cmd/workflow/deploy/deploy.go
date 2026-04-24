@@ -38,6 +38,7 @@ type Inputs struct {
 
 	OwnerLabel       string `validate:"omitempty"`
 	SkipConfirmation bool
+	NonInteractive   bool
 	// SkipTypeChecks passes --skip-type-checks to cre-compile for TypeScript workflows.
 	SkipTypeChecks bool
 }
@@ -162,6 +163,7 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 
 		OwnerLabel:       v.GetString("owner-label"),
 		SkipConfirmation: v.GetBool(settings.Flags.SkipConfirmation.Name),
+		NonInteractive:   v.GetBool(settings.Flags.NonInteractive.Name),
 		SkipTypeChecks:   v.GetBool(cmdcommon.SkipTypeChecksCLIFlag),
 	}
 
@@ -238,7 +240,7 @@ func (h *handler) Execute(ctx context.Context) error {
 	}
 	h.existingWorkflowStatus = existingStatus
 	if exists {
-		if err := confirmWorkflowOverwrite(h.inputs.WorkflowName, h.inputs.SkipConfirmation); err != nil {
+		if err := confirmWorkflowOverwrite(h.inputs.WorkflowName, h.inputs.SkipConfirmation, h.inputs.NonInteractive); err != nil {
 			return err
 		}
 	}
@@ -316,10 +318,6 @@ func (h *handler) resolveWorkflowOwner(registryType settings.RegistryType) (stri
 		return "", fmt.Errorf("derived workflow owner is not available; ensure authentication succeeded")
 	}
 
-	if len(owner) >= 2 && owner[:2] != "0x" {
-		owner = "0x" + owner
-	}
-
 	return owner, nil
 }
 
@@ -331,9 +329,17 @@ func (h *handler) displayWorkflowDetails() {
 	ui.Line()
 }
 
-func confirmWorkflowOverwrite(workflowName string, skipConfirmation bool) error {
+func confirmWorkflowOverwrite(workflowName string, skipConfirmation, nonInteractive bool) error {
 	ui.Warning(fmt.Sprintf("Workflow %s already exists", workflowName))
 	ui.Dim("This will update the existing workflow.")
+
+	if nonInteractive && !skipConfirmation {
+		ui.ErrorWithSuggestions(
+			"Non-interactive mode requires all inputs via flags",
+			[]string{"--yes"},
+		)
+		return fmt.Errorf("missing required flags for --non-interactive mode")
+	}
 
 	if !skipConfirmation {
 		confirm, err := ui.Confirm("Are you sure you want to overwrite the workflow?")
