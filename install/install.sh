@@ -3,7 +3,7 @@
 # This is a universal installer script for 'cre'.
 # It detects the OS and architecture, then downloads the correct binary.
 #
-# Usage: curl -sSL https://cre.chain.link/install.sh | bash
+# Usage: curl -sSL https://app.chain.link/install.sh | bash
 
 set -e # Exit immediately if a command exits with a non-zero status.
 
