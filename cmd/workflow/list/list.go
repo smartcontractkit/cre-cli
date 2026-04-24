@@ -15,6 +15,30 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/workflowrender"
 )
 
+const outputFormatJSON = "json"
+
+// Inputs holds the resolved and validated flag values for the list command.
+type Inputs struct {
+	RegistryFilter string
+	IncludeDeleted bool
+	// OutputFormat controls how results are rendered. "" means human-readable table;
+	// "json" prints a JSON array to stdout suitable for piping and scripting.
+	OutputFormat string
+}
+
+// resolveInputs builds Inputs from raw flag values, validating that the
+// output format (if provided) is a recognised value.
+func resolveInputs(registryFilter string, includeDeleted bool, outputFormat string) (Inputs, error) {
+	if outputFormat != "" && outputFormat != outputFormatJSON {
+		return Inputs{}, fmt.Errorf("--output %q is not supported; only %q is accepted", outputFormat, outputFormatJSON)
+	}
+	return Inputs{
+		RegistryFilter: registryFilter,
+		IncludeDeleted: includeDeleted,
+		OutputFormat:   outputFormat,
+	}, nil
+}
+
 // Handler loads workflows via the WorkflowDataClient and prints them.
 type Handler struct {
 	credentials *credentials.Credentials
@@ -42,9 +66,11 @@ func NewHandlerWithClient(ctx *runtime.Context, wdc *workflowdataclient.Client) 
 	}
 }
 
-// Execute lists workflows, optionally filtering by registry ID from user context.
-// Deleted workflows are omitted unless includeDeleted is true.
-func (h *Handler) Execute(ctx context.Context, registryFilter string, includeDeleted bool) error {
+// Execute lists workflows applying the filters from inputs.
+// Deleted workflows are omitted unless inputs.IncludeDeleted is true.
+// When inputs.OutputFormat is "json", a JSON array is written to stdout;
+// otherwise a human-readable table is printed.
+func (h *Handler) Execute(ctx context.Context, inputs Inputs) error {
 	if h.tenantCtx == nil {
 		return fmt.Errorf("user context not available — run `cre login` and retry")
 	}
@@ -53,10 +79,10 @@ func (h *Handler) Execute(ctx context.Context, registryFilter string, includeDel
 		return fmt.Errorf("credentials not available — run `cre login` and retry")
 	}
 
-	if registryFilter != "" {
-		if workflowrender.FindRegistry(h.tenantCtx.Registries, registryFilter) == nil {
+	if inputs.RegistryFilter != "" {
+		if workflowrender.FindRegistry(h.tenantCtx.Registries, inputs.RegistryFilter) == nil {
 			return fmt.Errorf("registry %q not found in user context; available: [%s]",
-				registryFilter, workflowrender.AvailableRegistryIDs(h.tenantCtx.Registries))
+				inputs.RegistryFilter, workflowrender.AvailableRegistryIDs(h.tenantCtx.Registries))
 		}
 	}
 
@@ -68,19 +94,23 @@ func (h *Handler) Execute(ctx context.Context, registryFilter string, includeDel
 		return err
 	}
 
-	if registryFilter != "" {
-		reg := workflowrender.FindRegistry(h.tenantCtx.Registries, registryFilter)
+	if inputs.RegistryFilter != "" {
+		reg := workflowrender.FindRegistry(h.tenantCtx.Registries, inputs.RegistryFilter)
 		rows = workflowrender.FilterRowsByRegistry(rows, reg, h.tenantCtx.Registries)
 	}
 
 	afterRegistryFilter := len(rows)
-	if !includeDeleted {
+	if !inputs.IncludeDeleted {
 		rows = workflowrender.OmitDeleted(rows)
+	}
+
+	if inputs.OutputFormat == outputFormatJSON {
+		return workflowrender.PrintWorkflowsJSON(rows, h.tenantCtx.Registries)
 	}
 
 	workflowrender.PrintWorkflowTable(rows, h.tenantCtx.Registries, workflowrender.TableOptions{
 		CountBeforeDeletedFilter: afterRegistryFilter,
-		IncludeDeleted:           includeDeleted,
+		IncludeDeleted:           inputs.IncludeDeleted,
 	})
 	return nil
 }
@@ -89,19 +119,29 @@ func (h *Handler) Execute(ctx context.Context, registryFilter string, includeDel
 func New(runtimeContext *runtime.Context) *cobra.Command {
 	var registryID string
 	var includeDeleted bool
+	var outputFormat string
 
 	cmd := &cobra.Command{
-		Use:     "list",
-		Short:   "Lists workflows deployed for your organization",
-		Long:    `Lists workflows across registries in your organization. Requires authentication and user context. Deleted workflows are hidden by default.`,
-		Example: "cre workflow list\n  cre workflow list --registry private\n  cre workflow list --include-deleted",
-		Args:    cobra.NoArgs,
+		Use:   "list",
+		Short: "Lists workflows deployed for your organization",
+		Long:  `Lists workflows across registries in your organization. Requires authentication and user context. Deleted workflows are hidden by default.`,
+		Example: "cre workflow list\n" +
+			"  cre workflow list --registry private\n" +
+			"  cre workflow list --include-deleted\n" +
+			"  cre workflow list --output json\n" +
+			"  cre workflow list --output json > workflows.json",
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return NewHandler(runtimeContext).Execute(cmd.Context(), registryID, includeDeleted)
+			inputs, err := resolveInputs(registryID, includeDeleted, outputFormat)
+			if err != nil {
+				return err
+			}
+			return NewHandler(runtimeContext).Execute(cmd.Context(), inputs)
 		},
 	}
 
 	cmd.Flags().StringVar(&registryID, "registry", "", "Filter by registry ID from user context")
 	cmd.Flags().BoolVar(&includeDeleted, "include-deleted", false, "Include workflows in DELETED status")
+	cmd.Flags().StringVar(&outputFormat, "output", "", `Output format: "json" prints a JSON array to stdout`)
 	return cmd
 }
