@@ -11,6 +11,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/spf13/viper"
 
+	corekeys "github.com/smartcontractkit/chainlink-common/keystore/corekeys"
 	"github.com/smartcontractkit/chainlink-common/pkg/services"
 
 	aptosfakes "github.com/smartcontractkit/chainlink-aptos/fakes"
@@ -23,7 +24,7 @@ import (
 const defaultSentinelAptosSeed = "0000000000000000000000000000000000000000000000000000000000000001"
 
 func init() {
-	chain.Register("aptos", func(lggr *zerolog.Logger) chain.ChainType {
+	chain.Register(string(corekeys.Aptos), func(lggr *zerolog.Logger) chain.ChainType {
 		return &AptosChainType{log: lggr}
 	}, nil)
 }
@@ -36,12 +37,13 @@ type AptosChainType struct {
 
 var _ chain.ChainType = (*AptosChainType)(nil)
 
-func (ct *AptosChainType) Name() string                         { return "aptos" }
+func (ct *AptosChainType) Name() string                         { return string(corekeys.Aptos) }
 func (ct *AptosChainType) SupportedChains() []chain.ChainConfig { return SupportedChains }
 
 func (ct *AptosChainType) ResolveClients(v *viper.Viper) (chain.ResolvedChains, error) {
 	clients := make(map[uint64]chain.ChainClient)
 	forwarders := make(map[uint64]string)
+	experimental := make(map[uint64]bool)
 	for _, c := range SupportedChains {
 		name, err := settings.GetChainNameByChainSelector(c.Selector)
 		if err != nil {
@@ -64,7 +66,44 @@ func (ct *AptosChainType) ResolveClients(v *viper.Viper) (chain.ResolvedChains, 
 			forwarders[c.Selector] = c.Forwarder
 		}
 	}
-	return chain.ResolvedChains{Clients: clients, Forwarders: forwarders}, nil
+
+	expChains, err := settings.GetExperimentalChains(v)
+	if err != nil {
+		return chain.ResolvedChains{}, fmt.Errorf("failed to load experimental chains config: %w", err)
+	}
+	for _, ec := range expChains {
+		if !strings.EqualFold(ec.ChainType, ct.Name()) {
+			continue
+		}
+		if ec.ChainSelector == 0 {
+			return chain.ResolvedChains{}, fmt.Errorf("experimental chain missing chain-selector")
+		}
+		if strings.TrimSpace(ec.RPCURL) == "" {
+			return chain.ResolvedChains{}, fmt.Errorf("experimental aptos chain %d missing rpc-url", ec.ChainSelector)
+		}
+		if strings.TrimSpace(ec.Forwarder) == "" {
+			return chain.ResolvedChains{}, fmt.Errorf("experimental aptos chain %d missing forwarder", ec.ChainSelector)
+		}
+		if _, exists := clients[ec.ChainSelector]; exists {
+			if forwarders[ec.ChainSelector] != ec.Forwarder {
+				ui.Warning(fmt.Sprintf("Warning: experimental aptos chain %d overrides supported chain forwarder (supported: %s, experimental: %s)\n",
+					ec.ChainSelector, forwarders[ec.ChainSelector], ec.Forwarder))
+				forwarders[ec.ChainSelector] = ec.Forwarder
+			}
+			continue
+		}
+		ct.log.Debug().Msgf("Using RPC for experimental aptos chain %d: %s", ec.ChainSelector, chain.RedactURL(ec.RPCURL))
+		client, err := aptosfakes.NewAptosClient(ec.RPCURL)
+		if err != nil {
+			return chain.ResolvedChains{}, fmt.Errorf("failed to create aptos client for experimental chain %d: %w", ec.ChainSelector, err)
+		}
+		clients[ec.ChainSelector] = client
+		forwarders[ec.ChainSelector] = ec.Forwarder
+		experimental[ec.ChainSelector] = true
+		ui.Dim(fmt.Sprintf("Added experimental aptos chain (chain-selector: %d)\n", ec.ChainSelector))
+	}
+
+	return chain.ResolvedChains{Clients: clients, Forwarders: forwarders, ExperimentalSelectors: experimental}, nil
 }
 
 func (ct *AptosChainType) ResolveKey(s *settings.Settings, broadcast bool) (interface{}, error) {

@@ -87,6 +87,10 @@ func (ct *EVMChainType) ResolveClients(v *viper.Viper) (chain.ResolvedChains, er
 	}
 
 	for _, ec := range expChains {
+		// Empty chain-type falls back to this chain type
+		if ec.ChainType != "" && !strings.EqualFold(ec.ChainType, ct.Name()) {
+			continue
+		}
 		if ec.ChainSelector == 0 {
 			return chain.ResolvedChains{}, fmt.Errorf("experimental chain missing chain-selector")
 		}

@@ -7,7 +7,8 @@ import (
 )
 
 // placeholderForwarder is used until canonical platform_mock addresses are
-// published per network. Users override via experimental-chains config.
+// published per network. Users override via experimental-chains config
+// (chain-type: aptos).
 const placeholderForwarder = "0x0000000000000000000000000000000000000000000000000000000000000000"
 
 // SupportedChains lists Aptos networks cre-cli simulate can target.

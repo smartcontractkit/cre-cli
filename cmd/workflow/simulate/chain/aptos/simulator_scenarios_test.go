@@ -107,7 +107,7 @@ func simulatorScenarios() []simScenario {
 			_, capErr := fc.AccountAPTBalance(ctx, meta, &aptoscappb.AccountAPTBalanceRequest{Address: mkAddr(0x01)})
 			require.NotNil(t, capErr)
 		}},
-		{name: "05 View round-trips opaque bytes", run: func(t *testing.T) {
+		{name: "05 View returns JSON-marshaled result array", run: func(t *testing.T) {
 			rpc := mocks.NewAptosRpcClient(t)
 			rpc.EXPECT().View(mock.Anything).Return([]any{"hello"}, nil).Once()
 			fc := newChain(t, rpc, true, 1)
@@ -118,7 +118,7 @@ func simulatorScenarios() []simScenario {
 				},
 			})
 			require.Nil(t, capErr)
-			assert.Equal(t, []byte("hello"), reply.Response.Data)
+			assert.Equal(t, []byte(`["hello"]`), reply.Response.Data)
 		}},
 		{name: "06 View rejects nil payload", run: func(t *testing.T) {
 			fc := newChain(t, mocks.NewAptosRpcClient(t), true, 1)
@@ -252,7 +252,7 @@ func simulatorScenarios() []simScenario {
 			rpc.EXPECT().BuildTransaction(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 				Return(&aptos.RawTransaction{}, nil).Once()
 			rpc.EXPECT().SimulateTransaction(mock.Anything, mock.Anything).
-				Return([]*api.UserTransaction{{Success: false, VmStatus: "Move abort in 0xdead::forwarder: Bad"}}, nil).Once()
+				Return([]*api.UserTransaction{{Success: false, VmStatus: "Move abort in 0xdead::mock_forwarder: Bad"}}, nil).Once()
 			fc := newChain(t, rpc, true, 1)
 			reply, _ := fc.WriteReport(ctx, meta, &aptoscappb.WriteReportRequest{
 				Receiver: mkAddr(0xBB), GasConfig: validGas(), Report: validReport(),
@@ -593,7 +593,7 @@ func simulatorScenarios() []simScenario {
 			require.Nil(t, capErr)
 			assert.Equal(t, ^uint64(0), reply.Response.Value)
 		}},
-		{name: "65 View with empty result returns empty Data", run: func(t *testing.T) {
+		{name: "65 View with empty result returns JSON []", run: func(t *testing.T) {
 			rpc := mocks.NewAptosRpcClient(t)
 			rpc.EXPECT().View(mock.Anything).Return([]any{}, nil).Once()
 			fc := newChain(t, rpc, true, 1)
@@ -601,9 +601,9 @@ func simulatorScenarios() []simScenario {
 				Payload: &aptoscappb.ViewPayload{Module: &aptoscappb.ModuleID{Address: mkAddr(1), Name: "m"}, Function: "f"},
 			})
 			require.Nil(t, capErr)
-			assert.Empty(t, reply.Response.Data)
+			assert.Equal(t, []byte(`[]`), reply.Response.Data)
 		}},
-		{name: "66 View keeps only result[0] when multi-return", run: func(t *testing.T) {
+		{name: "66 View preserves multi-return as JSON array", run: func(t *testing.T) {
 			rpc := mocks.NewAptosRpcClient(t)
 			rpc.EXPECT().View(mock.Anything).Return([]any{"first", "second"}, nil).Once()
 			fc := newChain(t, rpc, true, 1)
@@ -611,9 +611,9 @@ func simulatorScenarios() []simScenario {
 				Payload: &aptoscappb.ViewPayload{Module: &aptoscappb.ModuleID{Address: mkAddr(1), Name: "m"}, Function: "f"},
 			})
 			require.Nil(t, capErr)
-			assert.Equal(t, []byte("first"), reply.Response.Data)
+			assert.Equal(t, []byte(`["first","second"]`), reply.Response.Data)
 		}},
-		{name: "67 View integer return stringifies via %v", run: func(t *testing.T) {
+		{name: "67 View integer return marshaled as JSON", run: func(t *testing.T) {
 			rpc := mocks.NewAptosRpcClient(t)
 			rpc.EXPECT().View(mock.Anything).Return([]any{int64(42)}, nil).Once()
 			fc := newChain(t, rpc, true, 1)
@@ -621,7 +621,7 @@ func simulatorScenarios() []simScenario {
 				Payload: &aptoscappb.ViewPayload{Module: &aptoscappb.ModuleID{Address: mkAddr(1), Name: "m"}, Function: "f"},
 			})
 			require.Nil(t, capErr)
-			assert.Equal(t, []byte("42"), reply.Response.Data)
+			assert.Equal(t, []byte(`[42]`), reply.Response.Data)
 		}},
 		{name: "68 TransactionByHash SDK error without 404 → Unavailable", run: func(t *testing.T) {
 			rpc := mocks.NewAptosRpcClient(t)
@@ -786,19 +786,14 @@ func simulatorScenarios() []simScenario {
 			})
 			require.Nil(t, capErr)
 		}},
-		{name: "82 WriteReport zero MaxGasAmount accepted (default applies)", run: func(t *testing.T) {
-			rpc := mocks.NewAptosRpcClient(t)
-			rpc.EXPECT().BuildTransaction(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
-				Return(&aptos.RawTransaction{}, nil).Once()
-			rpc.EXPECT().SimulateTransaction(mock.Anything, mock.Anything).
-				Return([]*api.UserTransaction{{Success: true}}, nil).Once()
-			fc := newChain(t, rpc, true, 1)
+		{name: "82 WriteReport zero MaxGasAmount rejected", run: func(t *testing.T) {
+			fc := newChain(t, mocks.NewAptosRpcClient(t), true, 1)
 			_, capErr := fc.WriteReport(ctx, meta, &aptoscappb.WriteReportRequest{
 				Receiver:  mkAddr(0xBB),
 				GasConfig: &aptoscappb.GasConfig{MaxGasAmount: 0, GasUnitPrice: 0},
 				Report:    validReport(),
 			})
-			require.Nil(t, capErr)
+			require.NotNil(t, capErr)
 		}},
 
 		// --- LimitedAptosChain edge cases (83-90) ---
@@ -890,7 +885,7 @@ func simulatorScenarios() []simScenario {
 				Payload: &aptoscappb.ViewPayload{Module: &aptoscappb.ModuleID{Address: mkAddr(1), Name: "m"}, Function: "f"},
 			})
 			require.Nil(t, capErr)
-			assert.Equal(t, []byte("x"), reply.Response.Data)
+			assert.Equal(t, []byte(`["x"]`), reply.Response.Data)
 		}},
 		{name: "90 LimitedAptosChain TransactionByHash delegates to inner", run: func(t *testing.T) {
 			rpc := mocks.NewAptosRpcClient(t)

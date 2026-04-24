@@ -38,10 +38,11 @@ type RpcEndpoint struct {
 	Url string `mapstructure:"url" yaml:"url"`
 }
 
-// ExperimentalChain represents an EVM chain not in official chain-selectors.
+// ExperimentalChain represents a chain not in official chain-selectors.
 // Automatically used by the simulator when present in the target's experimental-chains config.
-// The ChainSelector is used as the selector key for EVM clients and forwarders.
+// ChainType selects the chain family ("evm", "aptos"); empty defaults to "evm" for backward compat.
 type ExperimentalChain struct {
+	ChainType     string `mapstructure:"chain-type" yaml:"chain-type"`
 	ChainSelector uint64 `mapstructure:"chain-selector" yaml:"chain-selector"`
 	RPCURL        string `mapstructure:"rpc-url" yaml:"rpc-url"`
 	Forwarder     string `mapstructure:"forwarder" yaml:"forwarder"`
