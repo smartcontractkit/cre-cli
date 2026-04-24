@@ -223,9 +223,24 @@ func (ct *EVMChainType) RunHealthCheck(resolved chain.ResolvedChains) error {
 func (ct *EVMChainType) ResolveKey(creSettings *settings.Settings, broadcast bool) (interface{}, error) {
 	pk, err := crypto.HexToECDSA(creSettings.User.EthPrivateKey)
 	if err != nil {
+		// If the user explicitly set a key that looks like a hex string but is
+		// malformed (wrong length, invalid chars), always error with guidance.
+		// Skip placeholder values like "your-eth-private-key" from the default .env template.
+		if creSettings.User.EthPrivateKey != "" && isHexString(creSettings.User.EthPrivateKey) {
+			return nil, fmt.Errorf(
+				"invalid private key: expected 64 hex characters (256 bits), got %d characters.\n\n"+
+					"The CLI reads CRE_ETH_PRIVATE_KEY from your .env file or system environment.\n"+
+					"The 0x prefix is supported and stripped automatically.\n\n"+
+					"Common issues:\n"+
+					"  • Pasted an Ethereum address (40 chars) instead of a private key (64 chars)\n"+
+					"  • Value has extra quotes — use CRE_ETH_PRIVATE_KEY=abc123... without wrapping quotes\n"+
+					"  • Key was truncated during copy-paste",
+				len(creSettings.User.EthPrivateKey))
+		}
 		if broadcast {
 			return nil, fmt.Errorf(
-				"failed to parse private key, required to broadcast. Please check CRE_ETH_PRIVATE_KEY in your .env file or system environment: %w", err)
+				"a private key is required for --broadcast mode.\n" +
+					"Set CRE_ETH_PRIVATE_KEY in your .env file or system environment")
 		}
 		pk, err = crypto.HexToECDSA(defaultSentinelPrivateKey)
 		if err != nil {
@@ -237,6 +252,16 @@ func (ct *EVMChainType) ResolveKey(creSettings *settings.Settings, broadcast boo
 		return nil, fmt.Errorf("you must configure a valid private key to perform on-chain writes. Please set your private key in the .env file before using the --broadcast flag")
 	}
 	return pk, nil
+}
+
+// isHexString returns true if s contains only hexadecimal characters (0-9, a-f, A-F).
+func isHexString(s string) bool {
+	for _, c := range s {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') && (c < 'A' || c > 'F') {
+			return false
+		}
+	}
+	return len(s) > 0
 }
 
 // CLI input keys consumed from chain.TriggerParams.ChainTypeInputs.
