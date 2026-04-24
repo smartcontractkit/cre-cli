@@ -107,7 +107,7 @@ func (ct *AptosChainType) ResolveClients(v *viper.Viper) (chain.ResolvedChains, 
 }
 
 func (ct *AptosChainType) ResolveKey(s *settings.Settings, broadcast bool) (interface{}, error) {
-	seed := strings.TrimPrefix(strings.ToLower(strings.TrimSpace(s.User.AptosPrivateKey)), "0x")
+	seed := strings.TrimPrefix(strings.ToLower(strings.TrimSpace(s.User.PrivateKey(settings.Aptos))), "0x")
 	bytes, err := hex.DecodeString(seed)
 	if err != nil || len(bytes) != 32 {
 		if broadcast {

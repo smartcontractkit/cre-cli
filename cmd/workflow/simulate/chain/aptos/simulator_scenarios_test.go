@@ -343,13 +343,13 @@ func simulatorScenarios() []simScenario {
 		}},
 		{name: "28 ResolveKey sentinel OK under dry-run", run: func(t *testing.T) {
 			ct := &AptosChainType{}
-			k, err := ct.ResolveKey(&settings.Settings{User: settings.UserSettings{AptosPrivateKey: ""}}, false)
+			k, err := ct.ResolveKey(&settings.Settings{User: settings.UserSettings{PrivateKeys: map[string]string{settings.Aptos.Name: ""}}}, false)
 			require.NoError(t, err)
 			require.NotNil(t, k)
 		}},
 		{name: "29 ResolveKey rejects sentinel under --broadcast", run: func(t *testing.T) {
 			ct := &AptosChainType{}
-			_, err := ct.ResolveKey(&settings.Settings{User: settings.UserSettings{AptosPrivateKey: defaultSentinelAptosSeed}}, true)
+			_, err := ct.ResolveKey(&settings.Settings{User: settings.UserSettings{PrivateKeys: map[string]string{settings.Aptos.Name: defaultSentinelAptosSeed}}}, true)
 			require.Error(t, err)
 		}},
 		// --- chain-type plugin surface (31-45) ---
@@ -417,28 +417,28 @@ func simulatorScenarios() []simScenario {
 		}},
 		{name: "42 ResolveKey parses 0x-prefixed seed", run: func(t *testing.T) {
 			ct := &AptosChainType{}
-			s := &settings.Settings{User: settings.UserSettings{AptosPrivateKey: "0x2222222222222222222222222222222222222222222222222222222222222222"}}
+			s := &settings.Settings{User: settings.UserSettings{PrivateKeys: map[string]string{settings.Aptos.Name: "0x2222222222222222222222222222222222222222222222222222222222222222"}}}
 			k, err := ct.ResolveKey(s, true)
 			require.NoError(t, err)
 			require.NotNil(t, k)
 		}},
 		{name: "43 ResolveKey parses uppercase hex", run: func(t *testing.T) {
 			ct := &AptosChainType{}
-			s := &settings.Settings{User: settings.UserSettings{AptosPrivateKey: "AABBCCDDEEFF00112233445566778899AABBCCDDEEFF00112233445566778899"}}
+			s := &settings.Settings{User: settings.UserSettings{PrivateKeys: map[string]string{settings.Aptos.Name: "AABBCCDDEEFF00112233445566778899AABBCCDDEEFF00112233445566778899"}}}
 			k, err := ct.ResolveKey(s, true)
 			require.NoError(t, err)
 			require.NotNil(t, k)
 		}},
 		{name: "44 ResolveKey trims whitespace", run: func(t *testing.T) {
 			ct := &AptosChainType{}
-			s := &settings.Settings{User: settings.UserSettings{AptosPrivateKey: "  1111111111111111111111111111111111111111111111111111111111111111  "}}
+			s := &settings.Settings{User: settings.UserSettings{PrivateKeys: map[string]string{settings.Aptos.Name: "  1111111111111111111111111111111111111111111111111111111111111111  "}}}
 			k, err := ct.ResolveKey(s, true)
 			require.NoError(t, err)
 			require.NotNil(t, k)
 		}},
 		{name: "45 ResolveKey short seed hard-fails under broadcast", run: func(t *testing.T) {
 			ct := &AptosChainType{}
-			s := &settings.Settings{User: settings.UserSettings{AptosPrivateKey: "0102"}}
+			s := &settings.Settings{User: settings.UserSettings{PrivateKeys: map[string]string{settings.Aptos.Name: "0102"}}}
 			_, err := ct.ResolveKey(s, true)
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), "CRE_APTOS_PRIVATE_KEY")

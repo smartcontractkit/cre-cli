@@ -163,7 +163,7 @@ func TestEVMChainType_ResolveKey(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ct := newEVMChainType()
-			s := &settings.Settings{User: settings.UserSettings{EthPrivateKey: tt.pk}}
+			s := &settings.Settings{User: settings.UserSettings{PrivateKeys: map[string]string{settings.EVM.Name: tt.pk}}}
 
 			var got interface{}
 			var err error

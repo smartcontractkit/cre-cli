@@ -883,7 +883,7 @@ func RunPrivateRegistryAuthAndSettingsFinalize(t *testing.T, envPath, blankWorkf
 	s, err := settings.New(logger, v, cmd, "")
 	require.NoError(t, err)
 	require.NotNil(t, s)
-	require.Empty(t, s.User.EthPrivateKey, "CRE_ETH_PRIVATE_KEY must be absent")
+	require.Empty(t, s.User.PrivateKey(settings.EVM), "CRE_ETH_PRIVATE_KEY must be absent")
 	require.Equal(t, "reg-test", s.Workflow.UserWorkflowSettings.DeploymentRegistry)
 	require.Empty(t, s.Workflow.UserWorkflowSettings.WorkflowOwnerAddress, "owner is deferred until finalize when deployment-registry is set")
 	require.Empty(t, s.Workflow.UserWorkflowSettings.WorkflowOwnerType)
