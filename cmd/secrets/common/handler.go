@@ -73,13 +73,13 @@ type Handler struct {
 func NewHandler(ctx *runtime.Context, secretsFilePath string) (*Handler, error) {
 	var pk *ecdsa.PrivateKey
 	var err error
-	if ctx.Settings.User.EthPrivateKey != "" {
-		pk, err = crypto.HexToECDSA(ctx.Settings.User.EthPrivateKey)
+	if ethKey := ctx.Settings.User.PrivateKey(settings.EVM); ethKey != "" {
+		pk, err = crypto.HexToECDSA(ethKey)
 		if err != nil {
 			return nil, fmt.Errorf("failed to decode the provided private key: %w", err)
 		}
 	} else {
-		ctx.Logger.Debug().Msg("No EthPrivateKey found in settings; assuming a multisig request.")
+		ctx.Logger.Debug().Msg("No EVM private key found in settings; assuming a multisig request.")
 
 	}
 

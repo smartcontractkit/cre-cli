@@ -13,42 +13,30 @@ import (
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain"
 )
 
-// EVMChainLimits is the EVM-scoped limit contract LimitedEVMChain enforces.
-// It extends chain.Limits with EVM-specific accessors (e.g. gas limit) so
-// non-EVM chain types cannot accidentally depend on EVM semantics.
-type EVMChainLimits interface {
-	chain.Limits
-	ChainWriteGasLimit() uint64
-}
-
 // LimitedEVMChain wraps an evmserver.ClientCapability and enforces chain write
-// report size and gas limits.
+// report size and gas limits. Zero-value chain.Limits disables enforcement.
 type LimitedEVMChain struct {
 	inner  evmserver.ClientCapability
-	limits EVMChainLimits
+	limits chain.Limits
 }
 
 var _ evmserver.ClientCapability = (*LimitedEVMChain)(nil)
 
-func NewLimitedEVMChain(inner evmserver.ClientCapability, limits EVMChainLimits) *LimitedEVMChain {
+func NewLimitedEVMChain(inner evmserver.ClientCapability, limits chain.Limits) *LimitedEVMChain {
 	return &LimitedEVMChain{inner: inner, limits: limits}
 }
 
 func (l *LimitedEVMChain) WriteReport(ctx context.Context, metadata commonCap.RequestMetadata, input *evmcappb.WriteReportRequest) (*commonCap.ResponseAndMetadata[*evmcappb.WriteReportReply], caperrors.Error) {
-	// Check report size
-	reportLimit := l.limits.ChainWriteReportSizeLimit()
-	if reportLimit > 0 && input.Report != nil && len(input.Report.RawReport) > reportLimit {
+	if l.limits.ReportSize > 0 && input.Report != nil && len(input.Report.RawReport) > l.limits.ReportSize {
 		return nil, caperrors.NewPublicUserError(
-			fmt.Errorf("simulation limit exceeded: chain write report size %d bytes exceeds limit of %d bytes", len(input.Report.RawReport), reportLimit),
+			fmt.Errorf("simulation limit exceeded: chain write report size %d bytes exceeds limit of %d bytes", len(input.Report.RawReport), l.limits.ReportSize),
 			caperrors.ResourceExhausted,
 		)
 	}
 
-	// Check gas limit
-	gasLimit := l.limits.ChainWriteGasLimit()
-	if gasLimit > 0 && input.GasConfig != nil && input.GasConfig.GasLimit > gasLimit {
+	if l.limits.GasLimit > 0 && input.GasConfig != nil && input.GasConfig.GasLimit > l.limits.GasLimit {
 		return nil, caperrors.NewPublicUserError(
-			fmt.Errorf("simulation limit exceeded: EVM gas limit %d exceeds maximum of %d", input.GasConfig.GasLimit, gasLimit),
+			fmt.Errorf("simulation limit exceeded: EVM gas limit %d exceeds maximum of %d", input.GasConfig.GasLimit, l.limits.GasLimit),
 			caperrors.ResourceExhausted,
 		)
 	}

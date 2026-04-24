@@ -11,6 +11,8 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	"github.com/smartcontractkit/chainlink/v2/core/capabilities"
 	"github.com/smartcontractkit/chainlink/v2/core/capabilities/fakes"
+
+	"github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain"
 )
 
 // EVMChainCapabilities holds the EVM chain capability servers created for simulation.
@@ -29,7 +31,7 @@ func NewEVMChainCapabilities(
 	forwarders map[uint64]string,
 	privateKey *ecdsa.PrivateKey,
 	dryRunChainWrite bool,
-	limits EVMChainLimits,
+	limits chain.Limits,
 ) (*EVMChainCapabilities, error) {
 	evmChains := make(map[uint64]*fakes.FakeEVMChain)
 	for sel, client := range clients {
@@ -48,11 +50,7 @@ func NewEVMChainCapabilities(
 			dryRunChainWrite,
 		)
 
-		// Wrap with limits enforcement if limits are provided
-		var evmCap evmserver.ClientCapability = evm
-		if limits != nil {
-			evmCap = NewLimitedEVMChain(evm, limits)
-		}
+		evmCap := NewLimitedEVMChain(evm, limits)
 
 		evmServer := evmserver.NewClientServer(evmCap)
 		if err := registry.Add(ctx, evmServer); err != nil {

@@ -191,11 +191,6 @@ func (l *SimulationLimits) ChainWriteReportSizeLimit() int {
 	return int(l.Workflows.ChainWrite.ReportSizeLimit.DefaultValue)
 }
 
-// ChainWriteGasLimit returns the default EVM gas limit.
-func (l *SimulationLimits) ChainWriteGasLimit() uint64 {
-	return l.Workflows.ChainWrite.EVM.GasLimit.Default.DefaultValue
-}
-
 // WASMBinarySize returns the WASM binary size limit in bytes.
 func (l *SimulationLimits) WASMBinarySize() int {
 	return int(l.Workflows.WASMBinarySizeLimit.DefaultValue)
@@ -210,7 +205,7 @@ func (l *SimulationLimits) WASMCompressedBinarySize() int {
 func (l *SimulationLimits) LimitsSummary() string {
 	w := &l.Workflows
 	return fmt.Sprintf(
-		"HTTP: req=%s resp=%s timeout=%s | ConfHTTP: req=%s resp=%s timeout=%s | Consensus obs=%s | ChainWrite report=%s gas=%d | WASM binary=%s compressed=%s",
+		"HTTP: req=%s resp=%s timeout=%s | ConfHTTP: req=%s resp=%s timeout=%s | Consensus obs=%s | ChainWrite report=%s evm_gas=%d aptos_gas=%d | WASM binary=%s compressed=%s",
 		w.HTTPAction.RequestSizeLimit.DefaultValue,
 		w.HTTPAction.ResponseSizeLimit.DefaultValue,
 		w.HTTPAction.ConnectionTimeout.DefaultValue,
@@ -220,6 +215,7 @@ func (l *SimulationLimits) LimitsSummary() string {
 		w.Consensus.ObservationSizeLimit.DefaultValue,
 		w.ChainWrite.ReportSizeLimit.DefaultValue,
 		w.ChainWrite.EVM.GasLimit.Default.DefaultValue,
+		w.ChainWrite.Aptos.GasLimit.Default.DefaultValue,
 		w.WASMBinarySizeLimit.DefaultValue,
 		w.WASMCompressedBinarySizeLimit.DefaultValue,
 	)

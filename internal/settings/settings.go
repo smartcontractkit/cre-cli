@@ -12,13 +12,37 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
+	corekeys "github.com/smartcontractkit/chainlink-common/keystore/corekeys"
+
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
-// sensitive information (not in configuration file)
-const (
-	EthPrivateKeyEnvVar = "CRE_ETH_PRIVATE_KEY"
-	CreTargetEnvVar     = "CRE_TARGET"
+const CreTargetEnvVar = "CRE_TARGET"
+
+// ChainType describes a chain family and the per-family settings the CLI
+// loads from the environment. Add a family by appending to AllChainTypes.
+type ChainType struct {
+	Name          string
+	PrivateKeyEnv string
+}
+
+var (
+	EVM = ChainType{
+		Name:          string(corekeys.EVM),
+		PrivateKeyEnv: "CRE_ETH_PRIVATE_KEY",
+	}
+	Aptos = ChainType{
+		Name:          string(corekeys.Aptos),
+		PrivateKeyEnv: "CRE_APTOS_PRIVATE_KEY",
+	}
+
+	AllChainTypes = []ChainType{EVM, Aptos}
+)
+
+// Backwards-compat aliases; prefer EVM.PrivateKeyEnv / Aptos.PrivateKeyEnv.
+var (
+	EthPrivateKeyEnvVar   = EVM.PrivateKeyEnv
+	AptosPrivateKeyEnvVar = Aptos.PrivateKeyEnv
 )
 
 // State tracked by LoadEnv / LoadPublicEnv so downstream code (e.g. build
@@ -56,9 +80,16 @@ type Settings struct {
 
 // UserSettings stores user-specific configurations.
 type UserSettings struct {
-	TargetName    string
-	EthPrivateKey string
-	EthUrl        string
+	TargetName  string
+	PrivateKeys map[string]string // keyed by ChainType.Name
+}
+
+// PrivateKey returns the signing key for the given chain, or "" if unset.
+func (u UserSettings) PrivateKey(f ChainType) string {
+	if u.PrivateKeys == nil {
+		return ""
+	}
+	return u.PrivateKeys[f.Name]
 }
 
 // New initializes and loads settings from YAML config files and the environment.
@@ -101,13 +132,15 @@ func New(logger *zerolog.Logger, v *viper.Viper, cmd *cobra.Command, registryCha
 		return nil, err
 	}
 
-	rawPrivKey := v.GetString(EthPrivateKeyEnvVar)
-	normPrivKey := NormalizeHexKey(rawPrivKey)
+	privateKeys := make(map[string]string, len(AllChainTypes))
+	for _, f := range AllChainTypes {
+		privateKeys[f.Name] = NormalizeHexKey(v.GetString(f.PrivateKeyEnv))
+	}
 
 	return &Settings{
 		User: UserSettings{
-			EthPrivateKey: normPrivKey,
-			TargetName:    target,
+			TargetName:  target,
+			PrivateKeys: privateKeys,
 		},
 		Workflow:        workflowSettings,
 		StorageSettings: storageSettings,
@@ -163,7 +196,11 @@ func LoadEnv(logger *zerolog.Logger, v *viper.Viper, envPath string) {
 	loadedEnvFilePath = ""
 	loadedEnvVars = nil
 	loadedEnvFilePath, loadedEnvVars = loadEnvFile(logger, envPath)
-	bindAllVars(v, loadedEnvVars, EthPrivateKeyEnvVar, CreTargetEnvVar)
+	extras := []string{CreTargetEnvVar}
+	for _, f := range AllChainTypes {
+		extras = append(extras, f.PrivateKeyEnv)
+	}
+	bindAllVars(v, loadedEnvVars, extras...)
 }
 
 // LoadPublicEnv loads variables from envPath into the process environment

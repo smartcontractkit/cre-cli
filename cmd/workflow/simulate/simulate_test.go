@@ -73,7 +73,7 @@ func TestBlankWorkflowSimulation(t *testing.T) {
 			Workflow: workflowSettings,
 			User: settings.UserSettings{
 				TargetName:    "staging-settings",
-				EthPrivateKey: "88888845d8761ca4a8cefb324c89702f12114ffbd0c47222f12aac0ad6538888",
+				PrivateKeys: map[string]string{settings.EVM.Name: "88888845d8761ca4a8cefb324c89702f12114ffbd0c47222f12aac0ad6538888"},
 			},
 		},
 	}
@@ -125,7 +125,7 @@ func createSimulateTestSettings(workflowName, workflowPath, configPath string) *
 			},
 		},
 		User: settings.UserSettings{
-			EthPrivateKey: "88888845d8761ca4a8cefb324c89702f12114ffbd0c47222f12aac0ad6538888",
+			PrivateKeys: map[string]string{settings.EVM.Name: "88888845d8761ca4a8cefb324c89702f12114ffbd0c47222f12aac0ad6538888"},
 		},
 	}
 }
@@ -446,7 +446,7 @@ func TestSimulateConfigFlagsMutuallyExclusive(t *testing.T) {
 		Viper:  viper.New(),
 		Settings: &settings.Settings{
 			User: settings.UserSettings{
-				EthPrivateKey: "88888845d8761ca4a8cefb324c89702f12114ffbd0c47222f12aac0ad6538888",
+				PrivateKeys: map[string]string{settings.EVM.Name: "88888845d8761ca4a8cefb324c89702f12114ffbd0c47222f12aac0ad6538888"},
 			},
 		},
 	}
