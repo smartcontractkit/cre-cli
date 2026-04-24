@@ -43,6 +43,7 @@ type Inputs struct {
 	WorkflowOwnerLabel              string `validate:"omitempty"`
 	WorkflowOwner                   string `validate:"required,workflow_owner"`
 	WorkflowRegistryContractAddress string `validate:"required"`
+	NonInteractive                  bool
 }
 
 type initiateLinkingResponse struct {
@@ -137,6 +138,7 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 		WorkflowOwner:                   h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress,
 		WorkflowRegistryContractAddress: h.environmentSet.WorkflowRegistryAddress,
 		WorkflowOwnerLabel:              v.GetString("owner-label"),
+		NonInteractive:                  v.GetBool(settings.Flags.NonInteractive.Name),
 	}, nil
 }
 
@@ -160,6 +162,13 @@ func (h *handler) Execute(in Inputs) error {
 	h.displayDetails()
 
 	if in.WorkflowOwnerLabel == "" {
+		if in.NonInteractive {
+			ui.ErrorWithSuggestions(
+				"Non-interactive mode requires all inputs via flags",
+				[]string{"--owner-label"},
+			)
+			return fmt.Errorf("missing required flags for --non-interactive mode")
+		}
 		label, err := ui.Input("Provide a label for your owner address")
 		if err != nil {
 			return err
