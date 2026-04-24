@@ -12,11 +12,8 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/tenantctx"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
+	"github.com/smartcontractkit/cre-cli/internal/workflowrender"
 )
-
-// Workflow is a type alias so that print.go and registry.go in this package
-// can use the name without importing workflowdataclient directly.
-type Workflow = workflowdataclient.Workflow
 
 // Handler loads workflows via the WorkflowDataClient and prints them.
 type Handler struct {
@@ -57,9 +54,9 @@ func (h *Handler) Execute(ctx context.Context, registryFilter string, includeDel
 	}
 
 	if registryFilter != "" {
-		if findRegistry(h.tenantCtx.Registries, registryFilter) == nil {
+		if workflowrender.FindRegistry(h.tenantCtx.Registries, registryFilter) == nil {
 			return fmt.Errorf("registry %q not found in user context; available: [%s]",
-				registryFilter, availableRegistryIDs(h.tenantCtx.Registries))
+				registryFilter, workflowrender.AvailableRegistryIDs(h.tenantCtx.Registries))
 		}
 	}
 
@@ -72,16 +69,19 @@ func (h *Handler) Execute(ctx context.Context, registryFilter string, includeDel
 	}
 
 	if registryFilter != "" {
-		reg := findRegistry(h.tenantCtx.Registries, registryFilter)
-		rows = filterRowsByRegistry(rows, reg, h.tenantCtx.Registries)
+		reg := workflowrender.FindRegistry(h.tenantCtx.Registries, registryFilter)
+		rows = workflowrender.FilterRowsByRegistry(rows, reg, h.tenantCtx.Registries)
 	}
 
 	afterRegistryFilter := len(rows)
 	if !includeDeleted {
-		rows = omitDeleted(rows)
+		rows = workflowrender.OmitDeleted(rows)
 	}
 
-	printWorkflowTable(rows, h.tenantCtx.Registries, afterRegistryFilter, includeDeleted)
+	workflowrender.PrintWorkflowTable(rows, h.tenantCtx.Registries, workflowrender.TableOptions{
+		CountBeforeDeletedFilter: afterRegistryFilter,
+		IncludeDeleted:           includeDeleted,
+	})
 	return nil
 }
 
