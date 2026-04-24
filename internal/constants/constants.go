@@ -47,8 +47,9 @@ const (
 	AuthListenAddr  = "localhost:53682"
 	CreUiAuthPath   = "/auth/cli"
 
-	WorkflowOwnerTypeEOA  = "EOA"
-	WorkflowOwnerTypeMSIG = "MSIG"
+	WorkflowOwnerTypeEOA        = "EOA"
+	WorkflowOwnerTypeMSIG       = "MSIG"
+	WorkflowOwnerTypeOrgDerived = "ORG_DERIVED"
 
 	WorkflowRegistryV2TypeAndVersion = "WorkflowRegistry 2.0.0"
 

@@ -56,6 +56,14 @@ func New(ctx *runtime.Context) *cobra.Command {
 		Example: "cre secrets delete my-secrets.yaml",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if ctx.Viper.GetBool(settings.Flags.NonInteractive.Name) && !ctx.Viper.GetBool(settings.Flags.SkipConfirmation.Name) {
+				ui.ErrorWithSuggestions(
+					"Non-interactive mode requires all inputs via flags",
+					[]string{"--yes"},
+				)
+				return fmt.Errorf("missing required flags for --non-interactive mode")
+			}
+
 			secretsFilePath := args[0]
 
 			secretsAuth, err := cmd.Flags().GetString("secrets-auth")
@@ -126,10 +134,6 @@ func Execute(h *common.Handler, inputs DeleteSecretsInputs, duration time.Durati
 	owner, err := h.ResolveEffectiveOwner()
 	if err != nil {
 		return err
-	}
-	// When not using org-owned secrets, canonicalize the address
-	if ethcommon.IsHexAddress(owner) {
-		owner = ethcommon.HexToAddress(owner).Hex()
 	}
 
 	ptrIDs := make([]*vault.SecretIdentifier, len(inputs))

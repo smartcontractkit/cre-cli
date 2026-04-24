@@ -1,10 +1,10 @@
 package evm
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"fmt"
-	"math/big"
 	"strconv"
 	"strings"
 
@@ -24,6 +24,8 @@ import (
 )
 
 const defaultSentinelPrivateKey = "0000000000000000000000000000000000000000000000000000000000000001"
+
+var sentinelKeyBytes = common.FromHex(defaultSentinelPrivateKey)
 
 func init() {
 	chain.Register(string(corekeys.EVM), func(lggr *zerolog.Logger) chain.ChainType {
@@ -199,10 +201,8 @@ func (ct *EVMChainType) ExecuteTrigger(ctx context.Context, selector uint64, reg
 	return evmChain.ManualTrigger(ctx, registrationID, log)
 }
 
-// HasSelector reports whether an EVM chain capability has been initialised
-// for the given selector. Callers use this at trigger-setup time to avoid
-// building a TriggerFunc for a selector the chain type cannot dispatch against.
-func (ct *EVMChainType) HasSelector(selector uint64) bool {
+// Supports reports whether an EVM chain capability is live for the selector.
+func (ct *EVMChainType) Supports(selector uint64) bool {
 	if ct.evmChains == nil {
 		return false
 	}
@@ -210,7 +210,7 @@ func (ct *EVMChainType) HasSelector(selector uint64) bool {
 }
 
 func (ct *EVMChainType) ParseTriggerChainSelector(triggerID string) (uint64, bool) {
-	return ParseTriggerChainSelector(triggerID)
+	return chain.ParseTriggerChainSelector(ct.Name(), triggerID)
 }
 
 func (ct *EVMChainType) RunHealthCheck(resolved chain.ResolvedChains) error {
@@ -233,7 +233,7 @@ func (ct *EVMChainType) ResolveKey(creSettings *settings.Settings, broadcast boo
 		}
 		ui.Warning("Using default private key for chain write simulation. To use your own key, set CRE_ETH_PRIVATE_KEY in your .env file or system environment.")
 	}
-	if broadcast && pk.D.Cmp(big.NewInt(1)) == 0 {
+	if broadcast && bytes.Equal(crypto.FromECDSA(pk), sentinelKeyBytes) {
 		return nil, fmt.Errorf("you must configure a valid private key to perform on-chain writes. Please set your private key in the .env file before using the --broadcast flag")
 	}
 	return pk, nil

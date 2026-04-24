@@ -18,6 +18,28 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/testutil"
 )
 
+func TestFormatStatus(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		status OffchainWorkflowStatus
+		want   string
+	}{
+		{name: "active", status: WorkflowStatusActive, want: "Active"},
+		{name: "paused", status: WorkflowStatusPaused, want: "Paused"},
+		{name: "unspecified", status: WorkflowStatusUnspecified, want: "Unspecified"},
+		{name: "empty", status: "", want: ""},
+		{name: "unknown passthrough", status: OffchainWorkflowStatus("WORKFLOW_STATUS_FUTURE"), want: "WORKFLOW_STATUS_FUTURE"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, tt.want, FormatStatus(tt.status))
+		})
+	}
+}
+
 func TestValidateUpsertWorkflowInput(t *testing.T) {
 	t.Run("valid input", func(t *testing.T) {
 		err := validateUpsertWorkflowInput(OffchainWorkflowInput{
@@ -174,6 +196,8 @@ func TestUpsertWorkflowInRegistry_GQLError(t *testing.T) {
 	})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "upsert workflow in registry")
+	assert.Contains(t, err.Error(), "cre api error: upsert failed")
+	assert.NotContains(t, err.Error(), "graphql:")
 }
 
 func TestGetWorkflowByName(t *testing.T) {
@@ -241,6 +265,8 @@ func TestGetWorkflowByName_GQLError(t *testing.T) {
 	_, err := client.GetWorkflowByName("registry-workflow")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "get workflow by name in registry")
+	assert.Contains(t, err.Error(), "cre api error: workflow not found")
+	assert.NotContains(t, err.Error(), "graphql:")
 }
 
 func TestGetWorkflowByName_EmptyName(t *testing.T) {

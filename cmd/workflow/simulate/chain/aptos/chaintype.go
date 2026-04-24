@@ -139,7 +139,7 @@ func (ct *AptosChainType) ExecuteTrigger(_ context.Context, _ uint64, _ string, 
 	return fmt.Errorf("aptos: no trigger surface")
 }
 
-func (ct *AptosChainType) HasSelector(selector uint64) bool {
+func (ct *AptosChainType) Supports(selector uint64) bool {
 	if ct.aptosChains == nil {
 		return false
 	}

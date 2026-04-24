@@ -1,8 +1,20 @@
 package ui
 
 import (
+	"context"
+
 	"github.com/charmbracelet/huh"
 )
+
+// WaitForEnter displays a styled note prompt and blocks until the user presses
+// Enter or ctx is cancelled (e.g. because a done signal fired).
+// It returns true if Enter was pressed, or false if the context was cancelled.
+func WaitForEnter(ctx context.Context, message string) bool {
+	note := huh.NewNote().Title(message).Next(true)
+	form := huh.NewForm(huh.NewGroup(note)).WithTheme(ChainlinkTheme())
+	err := form.RunWithContext(ctx)
+	return err == nil
+}
 
 // --- Option types for functional options pattern ---
 

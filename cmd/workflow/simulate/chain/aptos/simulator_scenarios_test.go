@@ -367,13 +367,13 @@ func simulatorScenarios() []simScenario {
 			assert.True(t, selectors[chainselectors.APTOS_MAINNET.Selector])
 			assert.True(t, selectors[chainselectors.APTOS_TESTNET.Selector])
 		}},
-		{name: "33 HasSelector false when capabilities unset", run: func(t *testing.T) {
+		{name: "33 Supports false when capabilities unset", run: func(t *testing.T) {
 			ct := &AptosChainType{}
-			assert.False(t, ct.HasSelector(chainselectors.APTOS_TESTNET.Selector))
+			assert.False(t, ct.Supports(chainselectors.APTOS_TESTNET.Selector))
 		}},
-		{name: "34 HasSelector false for evm-shaped selector", run: func(t *testing.T) {
+		{name: "34 Supports false for evm-shaped selector", run: func(t *testing.T) {
 			ct := &AptosChainType{}
-			assert.False(t, ct.HasSelector(1))
+			assert.False(t, ct.Supports(1))
 		}},
 		{name: "35 ParseTriggerChainSelector accepts aptos prefix", run: func(t *testing.T) {
 			ct := &AptosChainType{}
@@ -489,7 +489,7 @@ func simulatorScenarios() []simScenario {
 				Logger:     logger.Test(t),
 			})
 			require.NoError(t, err)
-			assert.True(t, ct.HasSelector(404040))
+			assert.True(t, ct.Supports(404040))
 		}},
 		{name: "50 RegisterCapabilities skips selectors without forwarders", run: func(t *testing.T) {
 			pk := newKey(t)
@@ -504,7 +504,7 @@ func simulatorScenarios() []simScenario {
 			})
 			require.NoError(t, err)
 			assert.Empty(t, services, "no forwarder → no capability wired")
-			assert.False(t, ct.HasSelector(9999))
+			assert.False(t, ct.Supports(9999))
 		}},
 		{name: "51 RegisterCapabilities propagates bad forwarder hex", run: func(t *testing.T) {
 			pk := newKey(t)

@@ -5,12 +5,12 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"io"
-	"math/big"
 	"os"
 	"strings"
 	"sync"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/rs/zerolog"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
@@ -22,8 +22,6 @@ import (
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 )
-
-func bigOne() *big.Int { return big.NewInt(1) }
 
 func nopCommonLogger() logger.Logger {
 	lg := logger.NewWithSync(io.Discard)
@@ -184,7 +182,7 @@ func TestEVMChainType_ResolveKey(t *testing.T) {
 			require.True(t, ok, "expected *ecdsa.PrivateKey, got %T", got)
 			require.NotNil(t, pk)
 			if tt.checkD1 {
-				assert.Equal(t, 0, pk.D.Cmp(bigOne()), "expected sentinel D==1")
+				assert.True(t, bytes.Equal(crypto.FromECDSA(pk), sentinelKeyBytes), "expected sentinel key")
 			}
 			if tt.wantStderr == "" {
 				assert.NotContains(t, stderr, "Using default private key",
@@ -244,11 +242,11 @@ func TestEVMChainType_ExecuteTrigger_UnknownSelector(t *testing.T) {
 	assert.Contains(t, err.Error(), "no EVM chain initialized for selector 999")
 }
 
-func TestEVMChainType_HasSelector_WhenNotRegistered_ReturnsFalse(t *testing.T) {
+func TestEVMChainType_Supports_WhenNotRegistered_ReturnsFalse(t *testing.T) {
 	t.Parallel()
 	ct := newEVMChainType()
-	assert.False(t, ct.HasSelector(1))
-	assert.False(t, ct.HasSelector(0))
+	assert.False(t, ct.Supports(1))
+	assert.False(t, ct.Supports(0))
 }
 
 func TestEVMChainType_RegisterCapabilities_WrongClientType(t *testing.T) {
@@ -279,7 +277,7 @@ func TestEVMChainType_RegisterCapabilities_NoClients_ConstructsEmpty(t *testing.
 		t.Fatalf("unexpected error: %v", err)
 	}
 	assert.Empty(t, srvcs)
-	assert.False(t, ct.HasSelector(1))
+	assert.False(t, ct.Supports(1))
 }
 
 func TestEVMChainType_RunHealthCheck_PropagatesInvalidClientType(t *testing.T) {

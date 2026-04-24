@@ -27,7 +27,10 @@ type ManualTriggers struct {
 // NewManualTriggerCapabilities creates and registers cron and HTTP trigger capabilities.
 // These are chain-agnostic and shared across all chain types.
 func NewManualTriggerCapabilities(ctx context.Context, lggr logger.Logger, registry *capabilities.Registry) (*ManualTriggers, error) {
-	manualCronTrigger := fakes.NewManualCronTriggerService(lggr)
+	manualCronTrigger, err := fakes.NewManualCronTriggerService(lggr)
+	if err != nil {
+		return nil, err
+	}
 	manualCronTriggerServer := crontrigger.NewCronServer(manualCronTrigger)
 	if err := registry.Add(ctx, manualCronTriggerServer); err != nil {
 		return nil, err

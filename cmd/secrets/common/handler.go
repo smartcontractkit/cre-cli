@@ -274,7 +274,7 @@ func (h *Handler) fetchVaultMasterPublicKeyHex() (string, error) {
 
 // ResolveEffectiveOwner returns the owner string to use for vault secret identifiers.
 // When SecretsOrgOwned is enabled, the org ID (from auth validation) is used;
-// otherwise, the workflow owner address is used.
+// otherwise, the workflow owner address is used and must be a valid hex address.
 func (h *Handler) ResolveEffectiveOwner() (string, error) {
 	if h.EnvironmentSet != nil && h.EnvironmentSet.SecretsOrgOwned {
 		if h.Credentials == nil || h.Credentials.OrgID == "" {
@@ -282,7 +282,10 @@ func (h *Handler) ResolveEffectiveOwner() (string, error) {
 		}
 		return h.Credentials.OrgID, nil
 	}
-	return h.OwnerAddress, nil
+	if !common.IsHexAddress(h.OwnerAddress) {
+		return "", fmt.Errorf("owner address %q is not a valid hex address", h.OwnerAddress)
+	}
+	return common.HexToAddress(h.OwnerAddress).Hex(), nil
 }
 
 // EncryptSecrets takes the raw secrets and encrypts them, returning pointers.
@@ -702,7 +705,7 @@ func (h *Handler) ParseVaultGatewayResponse(method string, respBody []byte) erro
 	return nil
 }
 
-// EnsureOwnerLinkedOrFail TODO this reuses the same logic as in autoLink.go which is tied to deploy; consider refactoring to avoid duplication
+// EnsureOwnerLinkedOrFail TODO this reuses the same logic as in auto_link.go which is tied to deploy; consider refactoring to avoid duplication
 func (h *Handler) EnsureOwnerLinkedOrFail() error {
 	ownerAddr := common.HexToAddress(h.OwnerAddress)
 

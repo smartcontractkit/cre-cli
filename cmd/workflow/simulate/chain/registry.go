@@ -53,15 +53,13 @@ type ChainType interface {
 	// Each chain type defines what triggerData looks like.
 	ExecuteTrigger(ctx context.Context, selector uint64, registrationID string, triggerData interface{}) error
 
-	// HasSelector reports whether the chain type has a fully initialised
-	// capability for the given selector after RegisterCapabilities ran.
-	// Used by the trigger-setup loop to fail fast before a TriggerFunc is
-	// assigned for a selector the chain type cannot actually dispatch against.
-	HasSelector(selector uint64) bool
+	// Supports reports whether this chain type has an initialised capability
+	// for the given selector in the current run (supported + RPC configured).
+	Supports(selector uint64) bool
 
-	// ParseTriggerChainSelector extracts a chain selector from a
-	// trigger subscription ID string (e.g., "evm:ChainSelector:123@1.0.0").
-	// Returns 0, false if the trigger doesn't belong to this chain type.
+	// ParseTriggerChainSelector extracts this family's selector from a trigger
+	// subscription ID (e.g. "evm:ChainSelector:123@1.0.0"). Returns 0, false if
+	// the ID does not belong to this chain type.
 	ParseTriggerChainSelector(triggerID string) (uint64, bool)
 
 	// RunHealthCheck validates RPC connectivity for all resolved clients.

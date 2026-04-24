@@ -52,7 +52,7 @@ func (m *mockChainType) ExecuteTrigger(ctx context.Context, selector uint64, reg
 	return args.Error(0)
 }
 
-func (m *mockChainType) HasSelector(selector uint64) bool {
+func (m *mockChainType) Supports(selector uint64) bool {
 	args := m.Called(selector)
 	return args.Bool(0)
 }

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math"
 	"math/big"
-	"regexp"
 	"strconv"
 	"strings"
 
@@ -17,23 +16,6 @@ import (
 
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
-
-// parse "ChainSelector:<digits>" from trigger id, e.g. "evm:ChainSelector:5009297550715157269@1.0.0 LogTrigger"
-var chainSelectorRe = regexp.MustCompile(`(?i)chainselector:(\d+)`)
-
-// ParseTriggerChainSelector extracts a chain selector from a trigger ID string.
-// Returns 0, false if not found.
-func ParseTriggerChainSelector(id string) (uint64, bool) {
-	m := chainSelectorRe.FindStringSubmatch(id)
-	if len(m) < 2 {
-		return 0, false
-	}
-	v, err := strconv.ParseUint(m[1], 10, 64)
-	if err != nil {
-		return 0, false
-	}
-	return v, true
-}
 
 // GetEVMTriggerLog prompts user for EVM trigger data and fetches the log interactively.
 func GetEVMTriggerLog(ctx context.Context, ethClient *ethclient.Client) (*evmpb.Log, error) {

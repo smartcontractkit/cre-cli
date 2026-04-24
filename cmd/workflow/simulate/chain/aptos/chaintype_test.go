@@ -53,8 +53,8 @@ func TestParseTriggerChainSelector(t *testing.T) {
 	assert.False(t, ok)
 }
 
-func TestHasSelector_False(t *testing.T) {
+func TestSupports_False(t *testing.T) {
 	t.Parallel()
 	ct := &AptosChainType{}
-	assert.False(t, ct.HasSelector(1))
+	assert.False(t, ct.Supports(1))
 }
