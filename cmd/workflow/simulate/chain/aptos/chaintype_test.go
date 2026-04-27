@@ -57,16 +57,6 @@ func TestResolveKey_ValidKeyBroadcast(t *testing.T) {
 	assert.NotNil(t, k)
 }
 
-func TestParseTriggerChainSelector(t *testing.T) {
-	t.Parallel()
-	ct := &AptosChainType{}
-	sel, ok := ct.ParseTriggerChainSelector("aptos:ChainSelector:4741433654826277614@1.0.0")
-	require.True(t, ok)
-	assert.Equal(t, uint64(4741433654826277614), sel)
-	_, ok = ct.ParseTriggerChainSelector("evm:ChainSelector:1@1.0.0")
-	assert.False(t, ok)
-}
-
 func TestSupports_False(t *testing.T) {
 	t.Parallel()
 	ct := &AptosChainType{}

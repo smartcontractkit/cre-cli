@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/aptos-labs/aptos-go-sdk/crypto"
@@ -184,17 +183,7 @@ func (ct *AptosChainType) Supports(selector uint64) bool {
 }
 
 func (ct *AptosChainType) ParseTriggerChainSelector(triggerID string) (uint64, bool) {
-	const prefix = "aptos:ChainSelector:"
-	const suffix = "@1.0.0"
-	if !strings.HasPrefix(triggerID, prefix) || !strings.HasSuffix(triggerID, suffix) {
-		return 0, false
-	}
-	mid := triggerID[len(prefix) : len(triggerID)-len(suffix)]
-	sel, err := strconv.ParseUint(mid, 10, 64)
-	if err != nil {
-		return 0, false
-	}
-	return sel, true
+	return chain.ParseTriggerChainSelector(ct.Name(), triggerID)
 }
 
 func (ct *AptosChainType) RunHealthCheck(resolved chain.ResolvedChains) error {
