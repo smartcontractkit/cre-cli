@@ -61,6 +61,7 @@ type Inputs struct {
 	NonInteractive  bool              `validate:"-"`
 	TriggerIndex    int               `validate:"-"`
 	HTTPPayload     string            `validate:"-"` // JSON string or @/path/to/file.json
+	Input           string            `validate:"-"` // --input: JSON string or path to JSON file for HTTP trigger (interactive)
 	ChainTypeInputs map[string]string `validate:"-"` // CLI-supplied chain-type-specific trigger inputs
 	// Limits enforcement
 	LimitsPath string `validate:"-"` // "default" or path to custom limits JSON
@@ -104,6 +105,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	// Non-interactive trigger selection flags
 	simulateCmd.Flags().Int("trigger-index", -1, "Index of the trigger to run (0-based)")
 	simulateCmd.Flags().String("http-payload", "", "HTTP trigger payload as JSON string or path to JSON file (with or without @ prefix)")
+	simulateCmd.Flags().String("input", "", "HTTP trigger input as JSON string or path to JSON file")
 
 	// Register chain-type-specific CLI flags (e.g., --evm-tx-hash).
 	chain.RegisterAllCLIFlags(simulateCmd)
@@ -185,6 +187,7 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 		NonInteractive:    v.GetBool("non-interactive"),
 		TriggerIndex:      v.GetInt("trigger-index"),
 		HTTPPayload:       v.GetString("http-payload"),
+		Input:             v.GetString("input"),
 		ChainTypeInputs:   chain.CollectAllCLIInputs(v),
 		LimitsPath:        v.GetString("limits"),
 		SkipTypeChecks:    v.GetBool(cmdcommon.SkipTypeChecksCLIFlag),
@@ -722,7 +725,7 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 				return manualTriggerCaps.ManualCronTrigger.ManualTrigger(ctx, triggerRegistrationID, skipWaitSignal)
 			}
 		case "http-trigger@1.0.0-alpha":
-			payload, err := getHTTPTriggerPayload(inputs.InvocationDir)
+			payload, err := getHTTPTriggerPayload(inputs.InvocationDir, inputs.Input)
 			if err != nil {
 				ui.Error(fmt.Sprintf("Failed to get HTTP trigger payload: %v", err))
 				os.Exit(1)
@@ -885,19 +888,19 @@ func cleanupBeholder() error {
 // getHTTPTriggerPayload prompts user for HTTP trigger data. Relative paths are
 // resolved against invocationDir so file references work from where the user ran
 // the command even after SetExecutionContext switches cwd to the workflow dir.
-func getHTTPTriggerPayload(invocationDir string) (*httptypedapi.Payload, error) {
+func getHTTPTriggerPayload(invocationDir, input string) (*httptypedapi.Payload, error) {
 	ui.Line()
-	input, err := ui.Input("HTTP Trigger Configuration",
-		ui.WithInputDescription("Enter a file path or JSON directly for the HTTP trigger"),
-		ui.WithPlaceholder(`{"key": "value"} or ./payload.json`),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("HTTP trigger input cancelled: %w", err)
-	}
+	//input, err := ui.Input("HTTP Trigger Configuration",
+	//	ui.WithInputDescription("Enter a file path or JSON directly for the HTTP trigger"),
+	//	ui.WithPlaceholder(`{"key": "value"} or ./payload.json`),
+	//)
+	//if err != nil {
+	//	return nil, fmt.Errorf("HTTP trigger input cancelled: %w", err)
+	//}
 
 	input = strings.TrimSpace(input)
 	if input == "" {
-		return nil, fmt.Errorf("empty input provided")
+		return nil, nil
 	}
 
 	var jsonData map[string]interface{}
