@@ -39,6 +39,14 @@ func TestResolveKey_UnparseableUnderBroadcastFails(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestResolveKey_ShortKeyUnderBroadcastFails(t *testing.T) {
+	t.Parallel()
+	ct := &AptosChainType{}
+	s := &settings.Settings{User: settings.UserSettings{PrivateKeys: map[string]string{settings.Aptos.Name: "1111"}}}
+	_, err := ct.ResolveKey(s, true)
+	require.Error(t, err)
+}
+
 func TestResolveKey_UnparseableNonBroadcastFallsBackToSentinel(t *testing.T) {
 	t.Parallel()
 	ct := &AptosChainType{}
@@ -90,6 +98,20 @@ func TestRegisterCapabilities_WrongClientType(t *testing.T) {
 	_, err := ct.RegisterCapabilities(context.Background(), cfg)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "client for selector 1 is not aptosfakes.AptosClient")
+}
+
+func TestRegisterCapabilities_WrongPrivateKeyType(t *testing.T) {
+	t.Parallel()
+	lg := zerolog.Nop()
+	ct := &AptosChainType{log: &lg}
+	cfg := chain.CapabilityConfig{
+		Clients:    map[uint64]chain.ChainClient{},
+		Forwarders: map[uint64]string{},
+		PrivateKey: "not-an-ed25519-key",
+	}
+	_, err := ct.RegisterCapabilities(context.Background(), cfg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "private key is not *crypto.Ed25519PrivateKey")
 }
 
 func TestRegisterCapabilities_NoClients_ConstructsEmpty(t *testing.T) {

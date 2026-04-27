@@ -80,14 +80,15 @@ func (ct *AptosChainType) ResolveClients(v *viper.Viper) (chain.ResolvedChains, 
 		if strings.TrimSpace(ec.RPCURL) == "" {
 			return chain.ResolvedChains{}, fmt.Errorf("experimental aptos chain %d missing rpc-url", ec.ChainSelector)
 		}
-		if strings.TrimSpace(ec.Forwarder) == "" {
+		forwarder := strings.TrimSpace(ec.Forwarder)
+		if forwarder == "" {
 			return chain.ResolvedChains{}, fmt.Errorf("experimental aptos chain %d missing forwarder", ec.ChainSelector)
 		}
 		if _, exists := clients[ec.ChainSelector]; exists {
-			if forwarders[ec.ChainSelector] != ec.Forwarder {
+			if forwarders[ec.ChainSelector] != forwarder {
 				ui.Warning(fmt.Sprintf("Warning: experimental aptos chain %d overrides supported chain forwarder (supported: %s, experimental: %s)\n",
-					ec.ChainSelector, forwarders[ec.ChainSelector], ec.Forwarder))
-				forwarders[ec.ChainSelector] = ec.Forwarder
+					ec.ChainSelector, forwarders[ec.ChainSelector], forwarder))
+				forwarders[ec.ChainSelector] = forwarder
 			} else {
 				ct.log.Debug().Uint64("chain-selector", ec.ChainSelector).Msg("Experimental chain matches supported chain config")
 			}
@@ -99,7 +100,7 @@ func (ct *AptosChainType) ResolveClients(v *viper.Viper) (chain.ResolvedChains, 
 			return chain.ResolvedChains{}, fmt.Errorf("failed to create aptos client for experimental chain %d: %w", ec.ChainSelector, err)
 		}
 		clients[ec.ChainSelector] = client
-		forwarders[ec.ChainSelector] = ec.Forwarder
+		forwarders[ec.ChainSelector] = forwarder
 		experimental[ec.ChainSelector] = true
 		ui.Dim(fmt.Sprintf("Added experimental aptos chain (chain-selector: %d)\n", ec.ChainSelector))
 	}
@@ -115,14 +116,14 @@ func (ct *AptosChainType) ResolveKey(s *settings.Settings, broadcast bool) (inte
 			if err != nil {
 				return nil, fmt.Errorf("failed to parse private key, required to broadcast. Please check CRE_APTOS_PRIVATE_KEY in your .env file or system environment: %w", err)
 			}
-			return nil, fmt.Errorf("CRE_APTOS_PRIVATE_KEY must be 32 hex bytes (64 chars); got len=%d", len(bytes))
+			return nil, fmt.Errorf("CRE_APTOS_PRIVATE_KEY must be 32 hex bytes (64 chars); got len=%d. Please check CRE_APTOS_PRIVATE_KEY in your .env file or system environment", len(bytes))
 		}
 		bytes, _ = hex.DecodeString(defaultSentinelAptosSeed)
-		ui.Warning("Using default Aptos private key for dry-run simulation. Set CRE_APTOS_PRIVATE_KEY to broadcast.")
+		ui.Warning("Using default Aptos private key for chain write simulation. To use your own key, set CRE_APTOS_PRIVATE_KEY in your .env file or system environment.")
 	}
 	sentinel, _ := hex.DecodeString(defaultSentinelAptosSeed)
 	if broadcast && hex.EncodeToString(bytes) == hex.EncodeToString(sentinel) {
-		return nil, fmt.Errorf("CRE_APTOS_PRIVATE_KEY must not be the sentinel seed under --broadcast")
+		return nil, fmt.Errorf("you must configure a valid Aptos private key to perform on-chain writes. Please set CRE_APTOS_PRIVATE_KEY in your .env file or system environment before using the --broadcast flag")
 	}
 	k := &crypto.Ed25519PrivateKey{}
 	if err := k.FromBytes(bytes); err != nil {
@@ -140,7 +141,7 @@ func (ct *AptosChainType) RegisterCapabilities(ctx context.Context, cfg chain.Ca
 	for sel, c := range cfg.Clients {
 		ac, ok := c.(aptosfakes.AptosClient)
 		if !ok {
-			return nil, fmt.Errorf("aptos: client for selector %d is not aptosfakes.AptosClient (got %T)", sel, c)
+			return nil, fmt.Errorf("aptos: client for selector %d is not aptosfakes.AptosClient", sel)
 		}
 		typedClients[sel] = ac
 	}
@@ -149,7 +150,7 @@ func (ct *AptosChainType) RegisterCapabilities(ctx context.Context, cfg chain.Ca
 		var ok bool
 		pk, ok = cfg.PrivateKey.(*crypto.Ed25519PrivateKey)
 		if !ok {
-			return nil, fmt.Errorf("aptos: private key is not *crypto.Ed25519PrivateKey (got %T)", cfg.PrivateKey)
+			return nil, fmt.Errorf("aptos: private key is not *crypto.Ed25519PrivateKey")
 		}
 	}
 	var lim chain.Limits

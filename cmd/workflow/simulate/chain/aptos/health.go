@@ -14,7 +14,7 @@ import (
 // experimentalSelectors identifies chains sourced from experimental-chains config.
 func RunRPCHealthCheck(clients map[uint64]chain.ChainClient, experimentalSelectors map[uint64]bool) error {
 	if len(clients) == 0 {
-		return fmt.Errorf("no Aptos RPC URLs found for supported or experimental chains")
+		return fmt.Errorf("check your settings: no Aptos RPC URLs found for supported or experimental chains")
 	}
 	var errs []error
 	for sel, c := range clients {

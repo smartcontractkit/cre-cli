@@ -29,7 +29,7 @@ func (l *LimitedAptosChain) WriteReport(ctx context.Context, metadata commonCap.
 	if input.Report != nil {
 		if lim := l.limits.ReportSize; lim > 0 && len(input.Report.RawReport) > lim {
 			return nil, caperrors.NewPublicUserError(
-				fmt.Errorf("simulation limit exceeded: aptos report size %d > %d", len(input.Report.RawReport), lim),
+				fmt.Errorf("simulation limit exceeded: Aptos chain write report size %d bytes exceeds limit of %d bytes", len(input.Report.RawReport), lim),
 				caperrors.ResourceExhausted,
 			)
 		}
@@ -37,7 +37,7 @@ func (l *LimitedAptosChain) WriteReport(ctx context.Context, metadata commonCap.
 	if input.GasConfig != nil {
 		if gl := l.limits.GasLimit; gl > 0 && input.GasConfig.MaxGasAmount > gl {
 			return nil, caperrors.NewPublicUserError(
-				fmt.Errorf("simulation limit exceeded: aptos max_gas_amount %d > %d", input.GasConfig.MaxGasAmount, gl),
+				fmt.Errorf("simulation limit exceeded: Aptos max_gas_amount %d exceeds maximum of %d", input.GasConfig.MaxGasAmount, gl),
 				caperrors.ResourceExhausted,
 			)
 		}

@@ -17,7 +17,7 @@ func TestRunRPCHealthCheck_NoClients(t *testing.T) {
 	t.Parallel()
 	err := RunRPCHealthCheck(map[uint64]chain.ChainClient{}, nil)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "no Aptos RPC URLs")
+	assert.Contains(t, err.Error(), "check your settings: no Aptos RPC URLs")
 }
 
 func TestRunRPCHealthCheck_InvalidClientType(t *testing.T) {

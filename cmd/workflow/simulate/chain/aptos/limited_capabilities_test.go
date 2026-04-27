@@ -2,6 +2,7 @@ package aptos
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -15,7 +16,6 @@ import (
 
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain"
 )
-
 
 type stubCap struct{ writeCalled bool }
 
@@ -54,6 +54,7 @@ func TestLimitedAptosChain_WriteReport_ReportTooLarge(t *testing.T) {
 		Report: &sdk.ReportResponse{RawReport: make([]byte, 11)},
 	})
 	require.NotNil(t, capErr)
+	assert.Contains(t, fmt.Sprint(capErr), "Aptos chain write report size 11 bytes exceeds limit of 10 bytes")
 	assert.False(t, inner.writeCalled)
 }
 
@@ -66,6 +67,7 @@ func TestLimitedAptosChain_WriteReport_MaxGasTooHigh(t *testing.T) {
 		GasConfig: &aptoscappb.GasConfig{MaxGasAmount: 101},
 	})
 	require.NotNil(t, capErr)
+	assert.Contains(t, fmt.Sprint(capErr), "Aptos max_gas_amount 101 exceeds maximum of 100")
 	assert.False(t, inner.writeCalled)
 }
 
