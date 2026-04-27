@@ -206,6 +206,16 @@ func (l *SimulationLimits) AptosChainWriteReportSizeLimit() int {
 	return int(l.Workflows.ChainWrite.Aptos.ReportSizeLimit.DefaultValue)
 }
 
+// EVMChainWriteGasLimit returns the default EVM chain write gas limit.
+func (l *SimulationLimits) EVMChainWriteGasLimit() uint64 {
+	return l.Workflows.ChainWrite.EVM.GasLimit.Default.DefaultValue
+}
+
+// AptosChainWriteGasLimit returns the default Aptos chain write gas limit.
+func (l *SimulationLimits) AptosChainWriteGasLimit() uint64 {
+	return l.Workflows.ChainWrite.Aptos.GasLimit.Default.DefaultValue
+}
+
 // WASMBinarySize returns the WASM binary size limit in bytes.
 func (l *SimulationLimits) WASMBinarySize() int {
 	return int(l.Workflows.WASMBinarySizeLimit.DefaultValue)

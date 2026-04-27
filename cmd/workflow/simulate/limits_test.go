@@ -32,6 +32,8 @@ func TestDefaultLimitsAndExportDefaultLimitsJSON(t *testing.T) {
 	assert.Equal(t, 100_000, limits.ConsensusObservationSizeLimit())
 	assert.Equal(t, 5_000, limits.EVMChainWriteReportSizeLimit())
 	assert.Equal(t, 5_000, limits.AptosChainWriteReportSizeLimit())
+	assert.Equal(t, uint64(5_000_000), limits.EVMChainWriteGasLimit())
+	assert.Equal(t, uint64(2_000_000), limits.AptosChainWriteGasLimit())
 	assert.Equal(t, 100_000_000, limits.WASMBinarySize())
 	assert.Equal(t, 20_000_000, limits.WASMCompressedBinarySize())
 	assert.JSONEq(t, string(defaultLimitsJSON), string(ExportDefaultLimitsJSON()))
@@ -46,8 +48,8 @@ func TestLoadLimitsParsesCustomFileAndPreservesDefaultsForUnsetFields(t *testing
 			"ConnectionTimeout": "2s"
 		},
 		"ChainWrite": {
-			"EVM": {"ReportSizeLimit": "9kb"},
-			"Aptos": {"ReportSizeLimit": "11kb"}
+			"EVM": {"ReportSizeLimit": "9kb", "GasLimit": {"Default": "1234567"}},
+			"Aptos": {"ReportSizeLimit": "11kb", "GasLimit": {"Default": "7654321"}}
 		},
 		"CRONTrigger": {
 			"FastestScheduleInterval": "45s"
@@ -61,6 +63,8 @@ func TestLoadLimitsParsesCustomFileAndPreservesDefaultsForUnsetFields(t *testing
 	assert.Equal(t, 100_000, limits.HTTPResponseSizeLimit(), "unset values should keep embedded defaults")
 	assert.Equal(t, 9_000, limits.EVMChainWriteReportSizeLimit())
 	assert.Equal(t, 11_000, limits.AptosChainWriteReportSizeLimit())
+	assert.Equal(t, uint64(1_234_567), limits.EVMChainWriteGasLimit())
+	assert.Equal(t, uint64(7_654_321), limits.AptosChainWriteGasLimit())
 	assert.Equal(t, 45*time.Second, limits.Workflows.CRONTrigger.FastestScheduleInterval.DefaultValue)
 	assert.Equal(t, 2*time.Second, limits.Workflows.HTTPAction.ConnectionTimeout.DefaultValue)
 }
@@ -97,6 +101,8 @@ func TestResolveLimitsHandlesAllSupportedModes(t *testing.T) {
 	assert.Equal(t, baseline.HTTPRequestSizeLimit(), defaultLimits.HTTPRequestSizeLimit())
 	assert.Equal(t, baseline.EVMChainWriteReportSizeLimit(), defaultLimits.EVMChainWriteReportSizeLimit())
 	assert.Equal(t, baseline.AptosChainWriteReportSizeLimit(), defaultLimits.AptosChainWriteReportSizeLimit())
+	assert.Equal(t, baseline.EVMChainWriteGasLimit(), defaultLimits.EVMChainWriteGasLimit())
+	assert.Equal(t, baseline.AptosChainWriteGasLimit(), defaultLimits.AptosChainWriteGasLimit())
 
 	path := writeLimitsFile(t, `{"Consensus":{"ObservationSizeLimit":"2kb"}}`)
 	customLimits, err := ResolveLimits(path)
@@ -131,6 +137,10 @@ func TestApplyEngineLimitsCopiesSupportedFieldsAndPreservesChainAllowed(t *testi
 	limits.Workflows.LogEventLimit.DefaultValue = 25
 	limits.Workflows.ChainRead.CallLimit.DefaultValue = 3
 	limits.Workflows.ChainWrite.TargetsLimit.DefaultValue = 4
+	limits.Workflows.ChainWrite.EVM.ReportSizeLimit.DefaultValue = 9_000
+	limits.Workflows.ChainWrite.EVM.GasLimit.Default.DefaultValue = 1_234_567
+	limits.Workflows.ChainWrite.Aptos.ReportSizeLimit.DefaultValue = 11_000
+	limits.Workflows.ChainWrite.Aptos.GasLimit.Default.DefaultValue = 7_654_321
 	limits.Workflows.Consensus.CallLimit.DefaultValue = 5
 	limits.Workflows.HTTPAction.CallLimit.DefaultValue = 6
 	limits.Workflows.ConfidentialHTTP.CallLimit.DefaultValue = 7
@@ -159,6 +169,10 @@ func TestApplyEngineLimitsCopiesSupportedFieldsAndPreservesChainAllowed(t *testi
 	assert.Equal(t, 25, cfg.LogEventLimit.DefaultValue)
 	assert.Equal(t, 3, cfg.ChainRead.CallLimit.DefaultValue)
 	assert.Equal(t, 4, cfg.ChainWrite.TargetsLimit.DefaultValue)
+	assert.Equal(t, 9_000, int(cfg.ChainWrite.EVM.ReportSizeLimit.DefaultValue))
+	assert.Equal(t, uint64(1_234_567), cfg.ChainWrite.EVM.GasLimit.Default.DefaultValue)
+	assert.Equal(t, 11_000, int(cfg.ChainWrite.Aptos.ReportSizeLimit.DefaultValue))
+	assert.Equal(t, uint64(7_654_321), cfg.ChainWrite.Aptos.GasLimit.Default.DefaultValue)
 	assert.Equal(t, 5, cfg.Consensus.CallLimit.DefaultValue)
 	assert.Equal(t, 6, cfg.HTTPAction.CallLimit.DefaultValue)
 	assert.Equal(t, 7, cfg.ConfidentialHTTP.CallLimit.DefaultValue)
