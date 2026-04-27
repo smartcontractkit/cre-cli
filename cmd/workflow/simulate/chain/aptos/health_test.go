@@ -98,4 +98,26 @@ func TestRunRPCHealthCheck_AggregatesMultiple(t *testing.T) {
 	assert.Contains(t, err.Error(), "zero chain ID")
 }
 
+func TestRunRPCHealthCheck_MixedKnownAndExperimental(t *testing.T) {
+	t.Parallel()
+	healthy := mocks.NewAptosRpcClient(t)
+	healthy.EXPECT().GetChainId().Return(uint8(1), nil).Once()
+	bad := mocks.NewAptosRpcClient(t)
+	bad.EXPECT().GetChainId().Return(uint8(0), errors.New("boom")).Once()
+
+	const expSel uint64 = 99999999
+	err := RunRPCHealthCheck(
+		map[uint64]chain.ChainClient{
+			chainselectors.APTOS_TESTNET.Selector: healthy,
+			expSel:                                bad,
+		},
+		map[uint64]bool{expSel: true},
+	)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "[experimental chain 99999999]")
+	assert.Contains(t, err.Error(), "boom")
+	// healthy named chain must not appear in errors.
+	assert.NotContains(t, err.Error(), "[aptos-testnet]")
+}
+
 type stubNonAptosClient struct{}
