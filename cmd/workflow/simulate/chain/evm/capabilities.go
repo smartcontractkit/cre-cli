@@ -3,6 +3,7 @@ package evm
 import (
 	"context"
 	"crypto/ecdsa"
+	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -54,7 +55,7 @@ func NewEVMChainCapabilities(
 
 		evmServer := evmserver.NewClientServer(evmCap)
 		if err := registry.Add(ctx, evmServer); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("register evm capability for selector %d: %w", sel, err)
 		}
 
 		evmChains[sel] = evm
