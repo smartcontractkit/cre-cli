@@ -3,6 +3,7 @@ package simulate
 import (
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"time"
 
@@ -263,6 +264,19 @@ func (w *telemetryWriter) formatUserLogs(logs *pb.UserLogs) {
 				StyleRed.Render(`empty message payload not allowed; use "\n" within a message for formatting`),
 				StyleRed,
 			)
+			continue
+		}
+
+		// Whitespace-only payloads (e.g. runtime.log("\n")) render as actual
+		// blank line(s) so users can add visual spacing between log sections.
+		if strings.TrimSpace(logLine.Message) == "" {
+			n := strings.Count(logLine.Message, "\n")
+			if n == 0 {
+				n = 1
+			}
+			for i := 0; i < n; i++ {
+				fmt.Println()
+			}
 			continue
 		}
 
