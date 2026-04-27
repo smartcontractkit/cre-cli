@@ -80,3 +80,37 @@ func TestLimitedAptosChain_WriteReport_Delegates(t *testing.T) {
 	require.Nil(t, capErr)
 	assert.True(t, inner.writeCalled)
 }
+
+func TestLimitedAptosChain_WriteReport_ZeroLimitsDelegate(t *testing.T) {
+	t.Parallel()
+	inner := &stubCap{}
+	l := NewLimitedAptosChain(inner, chain.Limits{})
+	_, capErr := l.WriteReport(context.Background(), commonCap.RequestMetadata{}, &aptoscappb.WriteReportRequest{
+		Report:    &sdk.ReportResponse{RawReport: make([]byte, 1_000_000)},
+		GasConfig: &aptoscappb.GasConfig{MaxGasAmount: 1_000_000_000},
+	})
+	require.Nil(t, capErr)
+	assert.True(t, inner.writeCalled)
+}
+
+func TestLimitedAptosChain_WriteReport_NilGasConfigDelegates(t *testing.T) {
+	t.Parallel()
+	inner := &stubCap{}
+	l := NewLimitedAptosChain(inner, chain.Limits{ReportSize: 100, GasLimit: 1000})
+	_, capErr := l.WriteReport(context.Background(), commonCap.RequestMetadata{}, &aptoscappb.WriteReportRequest{
+		Report: &sdk.ReportResponse{RawReport: []byte("x")},
+	})
+	require.Nil(t, capErr)
+	assert.True(t, inner.writeCalled)
+}
+
+func TestLimitedAptosChain_WriteReport_NilReportDelegates(t *testing.T) {
+	t.Parallel()
+	inner := &stubCap{}
+	l := NewLimitedAptosChain(inner, chain.Limits{ReportSize: 100, GasLimit: 1000})
+	_, capErr := l.WriteReport(context.Background(), commonCap.RequestMetadata{}, &aptoscappb.WriteReportRequest{
+		GasConfig: &aptoscappb.GasConfig{MaxGasAmount: 50},
+	})
+	require.Nil(t, capErr)
+	assert.True(t, inner.writeCalled)
+}
