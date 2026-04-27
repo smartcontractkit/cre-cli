@@ -256,6 +256,16 @@ func (w *telemetryWriter) handleCapabilityEvent(telLog TelemetryLog, eventType s
 func (w *telemetryWriter) formatUserLogs(logs *pb.UserLogs) {
 	// Display each log line
 	for _, logLine := range logs.LogLines {
+		if logLine.Message == "" {
+			w.simLogger.PrintTimestampedLog(
+				time.Now().Format("2006-01-02T15:04:05Z"),
+				"USER LOG",
+				StyleRed.Render(`empty message payload not allowed; use "\n" within a message for formatting`),
+				StyleRed,
+			)
+			continue
+		}
+
 		// Format the log message
 		level := GetLogLevel(logLine.Message)
 		msg := CleanLogMessage(logLine.Message)
