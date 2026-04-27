@@ -89,6 +89,8 @@ func (ct *AptosChainType) ResolveClients(v *viper.Viper) (chain.ResolvedChains, 
 				ui.Warning(fmt.Sprintf("Warning: experimental aptos chain %d overrides supported chain forwarder (supported: %s, experimental: %s)\n",
 					ec.ChainSelector, forwarders[ec.ChainSelector], ec.Forwarder))
 				forwarders[ec.ChainSelector] = ec.Forwarder
+			} else {
+				ct.log.Debug().Uint64("chain-selector", ec.ChainSelector).Msg("Experimental chain matches supported chain config")
 			}
 			continue
 		}
