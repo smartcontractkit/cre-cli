@@ -730,6 +730,16 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 				ui.Error(fmt.Sprintf("Failed to get HTTP trigger payload: %v", err))
 				os.Exit(1)
 			}
+			if payload == nil {
+				ui.Line()
+				ui.Step("No input detected for http-trigger. Supply the payload using one of:")
+				ui.Dim(fmt.Sprintf("1. POST JSON to the local trigger server:"))
+				ui.Dim(fmt.Sprintf(`     listening at http://localhost:%d`, httpTriggerServerPort))
+				ui.Dim(fmt.Sprintf("2. Re-run with --input flag:"))
+				ui.Dim(fmt.Sprintf(`     --input '{"key":"value"}'          (inline JSON)`))
+				ui.Dim(fmt.Sprintf(`     --input ./payload.json              (path to a JSON file)`))
+				ui.Line()
+			}
 			holder.TriggerFunc = func() error {
 				return manualTriggerCaps.ManualHTTPTrigger.ManualTrigger(ctx, triggerRegistrationID, payload)
 			}
@@ -889,15 +899,6 @@ func cleanupBeholder() error {
 // resolved against invocationDir so file references work from where the user ran
 // the command even after SetExecutionContext switches cwd to the workflow dir.
 func getHTTPTriggerPayload(invocationDir, input string) (*httptypedapi.Payload, error) {
-	ui.Line()
-	//input, err := ui.Input("HTTP Trigger Configuration",
-	//	ui.WithInputDescription("Enter a file path or JSON directly for the HTTP trigger"),
-	//	ui.WithPlaceholder(`{"key": "value"} or ./payload.json`),
-	//)
-	//if err != nil {
-	//	return nil, fmt.Errorf("HTTP trigger input cancelled: %w", err)
-	//}
-
 	input = strings.TrimSpace(input)
 	if input == "" {
 		return nil, nil

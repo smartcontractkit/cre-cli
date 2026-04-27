@@ -19,9 +19,9 @@ import (
 	"github.com/smartcontractkit/chainlink/v2/core/capabilities/fakes"
 )
 
-const (
-	defaultLocalGatewayPort = 9090
-)
+// httpTriggerServerPort is the port on which the local HTTP server listens
+// when no --input flag is supplied and the user chooses to POST the payload.
+const httpTriggerServerPort = 9090
 
 // ManualTriggers holds chain-agnostic trigger services used in simulation.
 type ManualTriggers struct {
@@ -42,7 +42,7 @@ func NewManualTriggerCapabilities(ctx context.Context, lggr logger.Logger, regis
 	}
 
 	manualHTTPTrigger := fakes.NewManualHTTPTriggerService(lggr, gateway.Config{
-		Port: defaultLocalGatewayPort,
+		Port: httpTriggerServerPort,
 	})
 	manualHTTPTriggerServer := httptrigger.NewHTTPServer(manualHTTPTrigger)
 	if err := registry.Add(ctx, manualHTTPTriggerServer); err != nil {
