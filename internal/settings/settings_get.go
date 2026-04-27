@@ -40,7 +40,7 @@ type RpcEndpoint struct {
 
 // ExperimentalChain represents a chain not in official chain-selectors.
 // Automatically used by the simulator when present in the target's experimental-chains config.
-// ChainType selects the chain family ("evm", "aptos"); empty defaults to "evm" for backward compat.
+// ChainType selects the chain family; empty defaults to "evm" for backward compat.
 type ExperimentalChain struct {
 	ChainType     string `mapstructure:"chain-type" yaml:"chain-type"`
 	ChainSelector uint64 `mapstructure:"chain-selector" yaml:"chain-selector"`

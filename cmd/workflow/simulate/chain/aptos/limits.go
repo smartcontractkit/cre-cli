@@ -8,7 +8,7 @@ import (
 
 func ExtractLimits(w *cresettings.Workflows) chain.Limits {
 	return chain.Limits{
-		ReportSize: int(w.ChainWrite.ReportSizeLimit.DefaultValue),
+		ReportSize: int(w.ChainWrite.Aptos.ReportSizeLimit.DefaultValue),
 		GasLimit:   w.ChainWrite.Aptos.GasLimit.Default.DefaultValue,
 	}
 }
