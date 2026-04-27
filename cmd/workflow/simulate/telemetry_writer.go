@@ -253,6 +253,16 @@ func (w *telemetryWriter) handleCapabilityEvent(telLog TelemetryLog, eventType s
 	}
 }
 
+// trailingNewlines returns the number of consecutive "\n" characters at the
+// end of s.
+func trailingNewlines(s string) int {
+	n := 0
+	for i := len(s) - 1; i >= 0 && s[i] == '\n'; i-- {
+		n++
+	}
+	return n
+}
+
 // formatUserLogs formats and displays user logs in a readable way
 func (w *telemetryWriter) formatUserLogs(logs *pb.UserLogs) {
 	// Display each log line
@@ -269,8 +279,12 @@ func (w *telemetryWriter) formatUserLogs(logs *pb.UserLogs) {
 
 		// Whitespace-only payloads (e.g. runtime.log("\n")) render as actual
 		// blank line(s) so users can add visual spacing between log sections.
+		// Only count *trailing* newlines: counting every "\n" in the message
+		// would over-emit blank lines for content like
+		// "this is \n my error \n details \n more \n" (4 newlines, but the
+		// user only intends 1 blank line of trailing spacing).
 		if strings.TrimSpace(logLine.Message) == "" {
-			n := strings.Count(logLine.Message, "\n")
+			n := trailingNewlines(logLine.Message)
 			if n == 0 {
 				n = 1
 			}
