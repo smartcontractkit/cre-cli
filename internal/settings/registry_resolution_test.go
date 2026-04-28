@@ -20,16 +20,6 @@ func stagingEnvSet() *environments.EnvironmentSet {
 	}
 }
 
-func prodEnvSet() *environments.EnvironmentSet {
-	return &environments.EnvironmentSet{
-		EnvName:                          "PRODUCTION",
-		WorkflowRegistryAddress:          "0x4Ac54353FA4Fa961AfcC5ec4B118596d3305E7e5",
-		WorkflowRegistryChainName:        "ethereum-mainnet",
-		WorkflowRegistryChainExplorerURL: "https://etherscan.io",
-		DonFamily:                        "zone-a",
-	}
-}
-
 func sampleTenantCtx() *tenantctx.EnvironmentContext {
 	return &tenantctx.EnvironmentContext{
 		DefaultDonFamily: "zone-a",
