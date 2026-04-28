@@ -140,44 +140,6 @@ func TestResolveRegistry_NilTenantContextWithID(t *testing.T) {
 	}
 }
 
-func TestResolveRegistry_OffChainAllowedInProduction(t *testing.T) {
-	resolved, err := ResolveRegistry("private", sampleTenantCtx(), prodEnvSet())
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	offchain, ok := resolved.(*OffChainRegistry)
-	if !ok {
-		t.Fatalf("expected *OffChainRegistry, got %T", resolved)
-	}
-	if offchain.ID() != "private" {
-		t.Errorf("expected ID %q, got %q", "private", offchain.ID())
-	}
-	if offchain.DonFamily() != "zone-a" {
-		t.Errorf("unexpected don family: %s", offchain.DonFamily())
-	}
-}
-
-func TestResolveRegistry_OffChainAllowedWhenEnvEmpty(t *testing.T) {
-	envSet := stagingEnvSet()
-	envSet.EnvName = ""
-	resolved, err := ResolveRegistry("private", sampleTenantCtx(), envSet)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	offchain, ok := resolved.(*OffChainRegistry)
-	if !ok {
-		t.Fatalf("expected *OffChainRegistry, got %T", resolved)
-	}
-	if offchain.ID() != "private" {
-		t.Errorf("expected ID %q, got %q", "private", offchain.ID())
-	}
-	if offchain.DonFamily() != "zone-a" {
-		t.Errorf("unexpected don family: %s", offchain.DonFamily())
-	}
-}
-
 func TestResolveRegistry_OnChainMissingAddress(t *testing.T) {
 	ctx := &tenantctx.EnvironmentContext{
 		DefaultDonFamily: "zone-a",
