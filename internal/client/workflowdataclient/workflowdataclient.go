@@ -64,6 +64,16 @@ type listWorkflowsEnvelope struct {
 
 // ListAll pages through the ListWorkflows query and returns all workflows.
 func (c *Client) ListAll(ctx context.Context, pageSize int) ([]Workflow, error) {
+	return c.list(ctx, pageSize, "")
+}
+
+// SearchByName pages through the ListWorkflows query with the given search
+// filter (server-side contains match on workflow name).
+func (c *Client) SearchByName(ctx context.Context, name string, pageSize int) ([]Workflow, error) {
+	return c.list(ctx, pageSize, name)
+}
+
+func (c *Client) list(ctx context.Context, pageSize int, search string) ([]Workflow, error) {
 	if pageSize <= 0 {
 		pageSize = DefaultPageSize
 	}
@@ -73,12 +83,16 @@ func (c *Client) ListAll(ctx context.Context, pageSize int) ([]Workflow, error) 
 
 	for pageNum := 0; ; pageNum++ {
 		req := graphql.NewRequest(listWorkflowsQuery)
-		req.Var("input", map[string]any{
+		input := map[string]any{
 			"page": map[string]any{
 				"number": pageNum,
 				"size":   pageSize,
 			},
-		})
+		}
+		if search != "" {
+			input["search"] = search
+		}
+		req.Var("input", input)
 
 		var env listWorkflowsEnvelope
 		if err := c.graphql.Execute(ctx, req, &env); err != nil {
@@ -99,6 +113,6 @@ func (c *Client) ListAll(ctx context.Context, pageSize int) ([]Workflow, error) 
 		}
 	}
 
-	c.log.Debug().Int("count", len(all)).Msg("Listed workflows from platform")
+	c.log.Debug().Int("count", len(all)).Str("search", search).Msg("Listed workflows from platform")
 	return all, nil
 }

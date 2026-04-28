@@ -1,4 +1,4 @@
-package list
+package workflowrender
 
 import (
 	"encoding/json"
@@ -22,17 +22,17 @@ type workflowJSON struct {
 func buildWorkflowJSON(rows []Workflow, registries []*tenantctx.Registry) []workflowJSON {
 	out := make([]workflowJSON, 0, len(rows))
 	for _, r := range rows {
-		matched := resolveWorkflowRegistry(r.WorkflowSource, registries)
+		matched := ResolveWorkflowRegistry(r.WorkflowSource, registries)
 		entry := workflowJSON{
 			Name:         r.Name,
 			WorkflowID:   r.WorkflowID,
 			OwnerAddress: r.OwnerAddress,
 			Status:       r.Status,
-			Registry:     formatRegistryIDFromResolved(r.WorkflowSource, matched),
+			Registry:     RegistryIDOrSource(r.WorkflowSource, matched),
 		}
-		if matched != nil && registryEligibleForContractRows(matched) && matched.Address != nil {
+		if matched != nil && RegistryEligibleForContractRows(matched) && matched.Address != nil {
 			entry.ContractAddress = strings.TrimSpace(*matched.Address)
-		} else if _, addr, ok := parseContractWorkflowSource(r.WorkflowSource); ok && strings.TrimSpace(addr) != "" {
+		} else if _, addr, ok := ParseContractWorkflowSource(r.WorkflowSource); ok && strings.TrimSpace(addr) != "" {
 			entry.ContractAddress = strings.TrimSpace(addr)
 		}
 		out = append(out, entry)
@@ -40,8 +40,8 @@ func buildWorkflowJSON(rows []Workflow, registries []*tenantctx.Registry) []work
 	return out
 }
 
-// printWorkflowsJSON marshals workflows as an indented JSON array and writes it to stdout.
-func printWorkflowsJSON(rows []Workflow, registries []*tenantctx.Registry) error {
+// PrintWorkflowsJSON marshals workflows as an indented JSON array and writes it to stdout.
+func PrintWorkflowsJSON(rows []Workflow, registries []*tenantctx.Registry) error {
 	data, err := json.MarshalIndent(buildWorkflowJSON(rows, registries), "", "  ")
 	if err != nil {
 		return err
@@ -50,7 +50,8 @@ func printWorkflowsJSON(rows []Workflow, registries []*tenantctx.Registry) error
 	return nil
 }
 
-func omitDeleted(rows []Workflow) []Workflow {
+// OmitDeleted returns rows whose status is not "DELETED" (case-insensitive).
+func OmitDeleted(rows []Workflow) []Workflow {
 	out := make([]Workflow, 0, len(rows))
 	for _, r := range rows {
 		if strings.EqualFold(strings.TrimSpace(r.Status), "DELETED") {
@@ -61,10 +62,22 @@ func omitDeleted(rows []Workflow) []Workflow {
 	return out
 }
 
-func printWorkflowTable(rows []Workflow, registries []*tenantctx.Registry, afterRegistryFilter int, includeDeleted bool) {
+// TableOptions controls the empty-state hint printed by PrintWorkflowTable.
+type TableOptions struct {
+	// CountBeforeDeletedFilter is the number of rows after any registry/search
+	// filtering but before DELETED rows were removed. When it is > 0 and
+	// IncludeDeleted is false, the empty-state message hints at --include-deleted.
+	CountBeforeDeletedFilter int
+	// IncludeDeleted indicates whether the caller is already showing DELETED rows.
+	IncludeDeleted bool
+}
+
+// PrintWorkflowTable renders the workflow rows as a bulleted table using the
+// shared UI helpers.
+func PrintWorkflowTable(rows []Workflow, registries []*tenantctx.Registry, opts TableOptions) {
 	ui.Line()
 	if len(rows) == 0 {
-		if afterRegistryFilter > 0 && !includeDeleted {
+		if opts.CountBeforeDeletedFilter > 0 && !opts.IncludeDeleted {
 			ui.Warning("No workflows found (excluding deleted). Use --include-deleted to list them.")
 		} else {
 			ui.Warning("No workflows found")
@@ -77,16 +90,16 @@ func printWorkflowTable(rows []Workflow, registries []*tenantctx.Registry, after
 	ui.Line()
 
 	for i, r := range rows {
-		matchedReg := resolveWorkflowRegistry(r.WorkflowSource, registries)
-		regIDCol := formatRegistryIDFromResolved(r.WorkflowSource, matchedReg)
+		matchedReg := ResolveWorkflowRegistry(r.WorkflowSource, registries)
+		regIDCol := RegistryIDOrSource(r.WorkflowSource, matchedReg)
 		ui.Bold(fmt.Sprintf("%d. %s", i+1, r.Name))
 		ui.Dim(fmt.Sprintf("   Workflow ID:  %s", r.WorkflowID))
 		ui.Dim(fmt.Sprintf("   Owner:        %s", r.OwnerAddress))
 		ui.Dim(fmt.Sprintf("   Status:       %s", r.Status))
 		ui.Dim(fmt.Sprintf("   Registry:     %s", regIDCol))
-		if matchedReg != nil && registryEligibleForContractRows(matchedReg) && matchedReg.Address != nil {
+		if matchedReg != nil && RegistryEligibleForContractRows(matchedReg) && matchedReg.Address != nil {
 			ui.Dim(fmt.Sprintf("   Address:      %s", strings.TrimSpace(*matchedReg.Address)))
-		} else if _, addr, ok := parseContractWorkflowSource(r.WorkflowSource); ok && strings.TrimSpace(addr) != "" {
+		} else if _, addr, ok := ParseContractWorkflowSource(r.WorkflowSource); ok && strings.TrimSpace(addr) != "" {
 			ui.Dim(fmt.Sprintf("   Address:      %s", strings.TrimSpace(addr)))
 		}
 		ui.Line()

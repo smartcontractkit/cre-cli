@@ -12,11 +12,8 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/tenantctx"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
+	"github.com/smartcontractkit/cre-cli/internal/workflowrender"
 )
-
-// Workflow is a type alias so that print.go and registry.go in this package
-// can use the name without importing workflowdataclient directly.
-type Workflow = workflowdataclient.Workflow
 
 const outputFormatJSON = "json"
 
@@ -83,9 +80,9 @@ func (h *Handler) Execute(ctx context.Context, inputs Inputs) error {
 	}
 
 	if inputs.RegistryFilter != "" {
-		if findRegistry(h.tenantCtx.Registries, inputs.RegistryFilter) == nil {
+		if workflowrender.FindRegistry(h.tenantCtx.Registries, inputs.RegistryFilter) == nil {
 			return fmt.Errorf("registry %q not found in user context; available: [%s]",
-				inputs.RegistryFilter, availableRegistryIDs(h.tenantCtx.Registries))
+				inputs.RegistryFilter, workflowrender.AvailableRegistryIDs(h.tenantCtx.Registries))
 		}
 	}
 
@@ -98,20 +95,23 @@ func (h *Handler) Execute(ctx context.Context, inputs Inputs) error {
 	}
 
 	if inputs.RegistryFilter != "" {
-		reg := findRegistry(h.tenantCtx.Registries, inputs.RegistryFilter)
-		rows = filterRowsByRegistry(rows, reg, h.tenantCtx.Registries)
+		reg := workflowrender.FindRegistry(h.tenantCtx.Registries, inputs.RegistryFilter)
+		rows = workflowrender.FilterRowsByRegistry(rows, reg, h.tenantCtx.Registries)
 	}
 
 	afterRegistryFilter := len(rows)
 	if !inputs.IncludeDeleted {
-		rows = omitDeleted(rows)
+		rows = workflowrender.OmitDeleted(rows)
 	}
 
 	if inputs.OutputFormat == outputFormatJSON {
-		return printWorkflowsJSON(rows, h.tenantCtx.Registries)
+		return workflowrender.PrintWorkflowsJSON(rows, h.tenantCtx.Registries)
 	}
 
-	printWorkflowTable(rows, h.tenantCtx.Registries, afterRegistryFilter, inputs.IncludeDeleted)
+	workflowrender.PrintWorkflowTable(rows, h.tenantCtx.Registries, workflowrender.TableOptions{
+		CountBeforeDeletedFilter: afterRegistryFilter,
+		IncludeDeleted:           inputs.IncludeDeleted,
+	})
 	return nil
 }
 
