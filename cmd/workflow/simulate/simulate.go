@@ -732,9 +732,9 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 				ui.Step("No input detected for http-trigger. Supply the payload using one of:")
 				ui.Dim("1. POST JSON to the local trigger server:")
 				ui.Dim(fmt.Sprintf(`     listening at http://localhost:%d`, httpTriggerServerPort))
-				ui.Dim("2. Re-run with --input flag:")
-				ui.Dim(`     --input '{"key":"value"}'          (inline JSON)`)
-				ui.Dim(`     --input ./payload.json              (path to a JSON file)`)
+				ui.Dim("2. Re-run with --http-payload flag:")
+				ui.Dim(`     --http-payload '{"key":"value"}'          (inline JSON)`)
+				ui.Dim(`     --http-payload ./payload.json             (path to a JSON file)`)
 				ui.Line()
 			}
 			holder.TriggerFunc = func() error {
