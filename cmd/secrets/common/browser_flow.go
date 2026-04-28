@@ -55,7 +55,7 @@ func vaultPermissionForMethod(method string) (string, error) {
 }
 
 func digestHexString(digest [32]byte) string {
-	return "0x" + hex.EncodeToString(digest[:])
+	return hex.EncodeToString(digest[:])
 }
 
 // executeBrowserUpsert handles secrets create/update when the user signs in with their organization account.
