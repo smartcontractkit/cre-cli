@@ -140,25 +140,41 @@ func TestResolveRegistry_NilTenantContextWithID(t *testing.T) {
 	}
 }
 
-func TestResolveRegistry_OffChainBlockedInProduction(t *testing.T) {
-	_, err := ResolveRegistry("private", sampleTenantCtx(), prodEnvSet())
-	if err == nil {
-		t.Fatal("expected error for off-chain in production")
+func TestResolveRegistry_OffChainAllowedInProduction(t *testing.T) {
+	resolved, err := ResolveRegistry("private", sampleTenantCtx(), prodEnvSet())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
-	if !strings.Contains(err.Error(), "not yet supported in production") {
-		t.Errorf("unexpected error: %v", err)
+
+	offchain, ok := resolved.(*OffChainRegistry)
+	if !ok {
+		t.Fatalf("expected *OffChainRegistry, got %T", resolved)
+	}
+	if offchain.ID() != "private" {
+		t.Errorf("expected ID %q, got %q", "private", offchain.ID())
+	}
+	if offchain.DonFamily() != "zone-a" {
+		t.Errorf("unexpected don family: %s", offchain.DonFamily())
 	}
 }
 
-func TestResolveRegistry_OffChainBlockedWhenEnvEmpty(t *testing.T) {
+func TestResolveRegistry_OffChainAllowedWhenEnvEmpty(t *testing.T) {
 	envSet := stagingEnvSet()
 	envSet.EnvName = ""
-	_, err := ResolveRegistry("private", sampleTenantCtx(), envSet)
-	if err == nil {
-		t.Fatal("expected error for off-chain when env name is empty (defaults to production)")
+	resolved, err := ResolveRegistry("private", sampleTenantCtx(), envSet)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
-	if !strings.Contains(err.Error(), "not yet supported in production") {
-		t.Errorf("unexpected error: %v", err)
+
+	offchain, ok := resolved.(*OffChainRegistry)
+	if !ok {
+		t.Fatalf("expected *OffChainRegistry, got %T", resolved)
+	}
+	if offchain.ID() != "private" {
+		t.Errorf("expected ID %q, got %q", "private", offchain.ID())
+	}
+	if offchain.DonFamily() != "zone-a" {
+		t.Errorf("unexpected don family: %s", offchain.DonFamily())
 	}
 }
 
