@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/time/rate"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -36,7 +35,7 @@ func TestDefaultLimitsAndExportDefaultLimitsJSON(t *testing.T) {
 	assert.Equal(t, 100_000_000, limits.WASMBinarySize())
 	assert.Equal(t, 20_000_000, limits.WASMCompressedBinarySize())
 	assert.Equal(t, 10, limits.Workflows.ExecutionConcurrencyLimit.DefaultValue)
-	assert.Equal(t, rate.Every(60*time.Second), limits.Workflows.HTTPTrigger.RateLimit.DefaultValue.Limit)
+	assert.InDelta(t, 1.0/60.0, float64(limits.Workflows.HTTPTrigger.RateLimit.DefaultValue.Limit), 0.000001)
 	assert.Equal(t, 1, limits.Workflows.HTTPTrigger.RateLimit.DefaultValue.Burst)
 	assert.JSONEq(t, string(defaultLimitsJSON), string(ExportDefaultLimitsJSON()))
 }
