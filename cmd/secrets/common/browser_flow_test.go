@@ -42,7 +42,7 @@ func TestVaultPermissionForMethod(t *testing.T) {
 func TestDigestHexString(t *testing.T) {
 	var d [32]byte
 	copy(d[:], []byte{1, 2, 3})
-	assert.Equal(t, "0x0102030000000000000000000000000000000000000000000000000000000000", digestHexString(d))
+	assert.Equal(t, "0102030000000000000000000000000000000000000000000000000000000000", digestHexString(d))
 }
 
 // TestBrowserFlowPKCE checks PKCE S256 (RFC 7636) used by the browser secrets authorization step.
