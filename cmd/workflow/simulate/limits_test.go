@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"golang.org/x/time/rate"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
