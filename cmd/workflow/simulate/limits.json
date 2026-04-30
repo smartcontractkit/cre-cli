@@ -7,7 +7,7 @@
 	"CapabilityConcurrencyLimit": "30",
 	"CapabilityCallTimeout": "3m0s",
 	"SecretsConcurrencyLimit": "5",
-	"ExecutionConcurrencyLimit": "5",
+	"ExecutionConcurrencyLimit": "10",
 	"ExecutionTimeout": "5m0s",
 	"ExecutionResponseLimit": "100kb",
 	"ExecutionTimestampsEnabled": "false",
@@ -22,7 +22,7 @@
 		"FastestScheduleInterval": "30s"
 	},
 	"HTTPTrigger": {
-		"RateLimit": "every30s:3"
+		"RateLimit": "every60s:1"
 	},
 	"LogTrigger": {
 		"EventRateLimit": "every6s:10",
@@ -47,7 +47,7 @@
 		"PayloadSizeLimit": "5kb"
 	},
 	"Consensus": {
-		"ObservationSizeLimit": "100kb",
+		"ObservationSizeLimit": "25kb",
 		"CallLimit": "20"
 	},
 	"HTTPAction": {
