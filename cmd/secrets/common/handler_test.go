@@ -1,6 +1,7 @@
 package common
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -20,6 +22,9 @@ import (
 	"github.com/smartcontractkit/chainlink/v2/core/capabilities/vault/vaulttypes"
 
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
+	"github.com/smartcontractkit/cre-cli/internal/environments"
+	"github.com/smartcontractkit/cre-cli/internal/runtime"
+	"github.com/smartcontractkit/cre-cli/internal/settings"
 )
 
 type mockGatewayClient struct {
@@ -334,3 +339,48 @@ func TestPackAllowlistRequestTxData_Success_No0x(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, dataHex)
 }
+
+func TestNewHandler_WorkflowRegistryClient(t *testing.T) {
+	newCtx := func(t *testing.T) (*runtime.Context, *MockClientFactory) {
+		t.Helper()
+		logger := zerolog.New(bytes.NewBufferString(""))
+		cf := new(MockClientFactory)
+		return &runtime.Context{
+			Logger:        &logger,
+			ClientFactory: cf,
+			Settings: &settings.Settings{
+				User:     settings.UserSettings{EthPrivateKey: ""},
+				Workflow: settings.WorkflowSettings{},
+			},
+			EnvironmentSet: &environments.EnvironmentSet{GatewayURL: "http://localhost"},
+			Credentials:    &credentials.Credentials{},
+		}, cf
+	}
+
+	t.Run("browser flow: WorkflowRegistryV2Client is not created", func(t *testing.T) {
+		ctx, cf := newCtx(t)
+		h, err := NewHandler(ctx, "", SecretsAuthBrowser)
+		require.NoError(t, err)
+		require.Nil(t, h.Wrc, "Wrc must be nil for browser flow")
+		cf.AssertNotCalled(t, "NewWorkflowRegistryV2Client")
+	})
+
+	t.Run("owner-key flow: WorkflowRegistryV2Client is created", func(t *testing.T) {
+		ctx, cf := newCtx(t)
+		cf.On("NewWorkflowRegistryV2Client").Return(nil, nil)
+		h, err := NewHandler(ctx, "", SecretsAuthOwnerKeySigning)
+		require.NoError(t, err)
+		// Wrc may be nil if the mock returns nil, but the factory must have been called.
+		_ = h
+		cf.AssertCalled(t, "NewWorkflowRegistryV2Client")
+	})
+
+	t.Run("owner-key flow: factory error is propagated", func(t *testing.T) {
+		ctx, cf := newCtx(t)
+		cf.On("NewWorkflowRegistryV2Client").Return(nil, errors.New("rpc url not found for chain ethereum-mainnet"))
+		_, err := NewHandler(ctx, "", SecretsAuthOwnerKeySigning)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "workflow registry client")
+	})
+}
+
