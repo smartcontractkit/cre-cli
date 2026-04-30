@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -39,7 +40,7 @@ func TestGetEVMTriggerLogFromValues_Validation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			_, err := GetEVMTriggerLogFromValues(context.Background(), nil, tt.hash, 0)
+			_, err := GetEVMTriggerLogFromValues(context.Background(), nil, tt.hash, 0, time.Minute)
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), tt.errSub)
 		})
@@ -156,7 +157,7 @@ func TestGetEVMTriggerLogFromValues_FetchError(t *testing.T) {
 	txHash := "0x" + strings.Repeat("a", 64)
 	m.errFor[strings.ToLower(txHash)] = fmt.Errorf("receipt not found")
 
-	_, err := GetEVMTriggerLogFromValues(context.Background(), c, txHash, 0)
+	_, err := GetEVMTriggerLogFromValues(context.Background(), c, txHash, 0, time.Minute)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to fetch transaction receipt")
 }
@@ -182,7 +183,7 @@ func TestGetEVMTriggerLogFromValues_EventIndexOutOfRange(t *testing.T) {
 	})
 	m.receipts[strings.ToLower(txHash)] = rec
 
-	_, err := GetEVMTriggerLogFromValues(context.Background(), c, txHash, 5)
+	_, err := GetEVMTriggerLogFromValues(context.Background(), c, txHash, 5, time.Minute)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "event index 5 out of range")
 	assert.Contains(t, err.Error(), "transaction has 1 log events")
@@ -197,7 +198,7 @@ func TestGetEVMTriggerLogFromValues_ZeroLogs_OutOfRange(t *testing.T) {
 	txHash := "0x" + strings.Repeat("c", 64)
 	m.receipts[strings.ToLower(txHash)] = mkReceipt(hashFromHex(txHash), nil)
 
-	_, err := GetEVMTriggerLogFromValues(context.Background(), c, txHash, 0)
+	_, err := GetEVMTriggerLogFromValues(context.Background(), c, txHash, 0, time.Minute)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "event index 0 out of range")
 	assert.Contains(t, err.Error(), "transaction has 0 log events")
@@ -229,7 +230,7 @@ func TestGetEVMTriggerLogFromValues_Success(t *testing.T) {
 	})
 	m.receipts[strings.ToLower(txHash)] = rec
 
-	got, err := GetEVMTriggerLogFromValues(context.Background(), c, txHash, 0)
+	got, err := GetEVMTriggerLogFromValues(context.Background(), c, txHash, 0, time.Minute)
 	require.NoError(t, err)
 	require.NotNil(t, got)
 	assert.Equal(t, log0Addr.Bytes(), got.Address)
@@ -262,7 +263,7 @@ func TestGetEVMTriggerLogFromValues_SuccessNoTopicsLeavesEventSigNil(t *testing.
 	})
 	m.receipts[strings.ToLower(txHash)] = rec
 
-	got, err := GetEVMTriggerLogFromValues(context.Background(), c, txHash, 0)
+	got, err := GetEVMTriggerLogFromValues(context.Background(), c, txHash, 0, time.Minute)
 	require.NoError(t, err)
 	assert.Empty(t, got.Topics)
 	assert.Nil(t, got.EventSig)
@@ -271,7 +272,7 @@ func TestGetEVMTriggerLogFromValues_SuccessNoTopicsLeavesEventSigNil(t *testing.
 func TestGetEVMTriggerLogFromValues_NoRPCWhenHashInvalid(t *testing.T) {
 	t.Parallel()
 	// Pass nil client; validation should fire before any RPC attempt.
-	_, err := GetEVMTriggerLogFromValues(context.Background(), nil, "not-a-hash", 0)
+	_, err := GetEVMTriggerLogFromValues(context.Background(), nil, "not-a-hash", 0, time.Minute)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "must start with 0x")
 }
@@ -295,7 +296,7 @@ func TestGetEVMTriggerLogFromValues_ZeroAddressLog(t *testing.T) {
 	})
 	m.receipts[strings.ToLower(txHash)] = rec
 
-	got, err := GetEVMTriggerLogFromValues(context.Background(), c, txHash, 0)
+	got, err := GetEVMTriggerLogFromValues(context.Background(), c, txHash, 0, time.Minute)
 	require.NoError(t, err)
 	assert.Len(t, got.Address, 20) // 20-byte address always
 }
