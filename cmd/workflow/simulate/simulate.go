@@ -60,7 +60,7 @@ type Inputs struct {
 	// Non-interactive mode options
 	NonInteractive  bool              `validate:"-"`
 	TriggerIndex    int               `validate:"-"`
-	HTTPPayload     string            `validate:"-"` // JSON string or @/path/to/file.json
+	HTTPPayload     string            `validate:"-"` // JSON string or /path/to/file.json
 	ChainTypeInputs map[string]string `validate:"-"` // CLI-supplied chain-type-specific trigger inputs
 	// Limits enforcement
 	LimitsPath string `validate:"-"` // "default" or path to custom limits JSON
@@ -103,7 +103,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	simulateCmd.MarkFlagsMutuallyExclusive("config", "no-config", "default-config")
 	// Non-interactive trigger selection flags
 	simulateCmd.Flags().Int("trigger-index", -1, "Index of the trigger to run (0-based)")
-	simulateCmd.Flags().String("http-payload", "", "HTTP trigger payload as JSON string or path to JSON file (with or without @ prefix)")
+	simulateCmd.Flags().String("http-payload", "", "HTTP trigger payload as JSON string or path to JSON file")
 
 	// Register chain-type-specific CLI flags (e.g., --evm-tx-hash).
 	chain.RegisterAllCLIFlags(simulateCmd)
@@ -722,10 +722,20 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 				return manualTriggerCaps.ManualCronTrigger.ManualTrigger(ctx, triggerRegistrationID, skipWaitSignal)
 			}
 		case "http-trigger@1.0.0-alpha":
-			payload, err := getHTTPTriggerPayload(inputs.InvocationDir)
+			payload, err := getHTTPTriggerPayloadFromInput(inputs.InvocationDir, inputs.HTTPPayload)
 			if err != nil {
 				ui.Error(fmt.Sprintf("Failed to get HTTP trigger payload: %v", err))
 				os.Exit(1)
+			}
+			if payload == nil {
+				ui.Line()
+				ui.Step("No input detected for http-trigger. Supply the payload using one of:")
+				ui.Dim("1. POST JSON to the local trigger server:")
+				ui.Dim(fmt.Sprintf(`     listening at http://localhost:%d`, httpTriggerServerPort))
+				ui.Dim("2. Re-run with --http-payload flag:")
+				ui.Dim(`     --http-payload '{"key":"value"}'          (inline JSON)`)
+				ui.Dim(`     --http-payload ./payload.json             (path to a JSON file)`)
+				ui.Line()
 			}
 			holder.TriggerFunc = func() error {
 				return manualTriggerCaps.ManualHTTPTrigger.ManualTrigger(ctx, triggerRegistrationID, payload)
@@ -808,7 +818,7 @@ func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inp
 				ui.Error("--http-payload is required for http-trigger@1.0.0-alpha in non-interactive mode")
 				os.Exit(1)
 			}
-			payload, err := getHTTPTriggerPayloadFromInput(inputs.HTTPPayload, inputs.InvocationDir)
+			payload, err := getHTTPTriggerPayloadFromInput(inputs.InvocationDir, inputs.HTTPPayload)
 			if err != nil {
 				ui.Error(fmt.Sprintf("Failed to parse HTTP trigger payload: %v", err))
 				os.Exit(1)
@@ -882,22 +892,13 @@ func cleanupBeholder() error {
 	return nil
 }
 
-// getHTTPTriggerPayload prompts user for HTTP trigger data. Relative paths are
+// getHTTPTriggerPayloadFromInput prompts user for HTTP trigger data. Relative paths are
 // resolved against invocationDir so file references work from where the user ran
 // the command even after SetExecutionContext switches cwd to the workflow dir.
-func getHTTPTriggerPayload(invocationDir string) (*httptypedapi.Payload, error) {
-	ui.Line()
-	input, err := ui.Input("HTTP Trigger Configuration",
-		ui.WithInputDescription("Enter a file path or JSON directly for the HTTP trigger"),
-		ui.WithPlaceholder(`{"key": "value"} or ./payload.json`),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("HTTP trigger input cancelled: %w", err)
-	}
-
+func getHTTPTriggerPayloadFromInput(invocationDir, input string) (*httptypedapi.Payload, error) {
 	input = strings.TrimSpace(input)
 	if input == "" {
-		return nil, fmt.Errorf("empty input provided")
+		return nil, nil
 	}
 
 	var jsonData map[string]interface{}
@@ -916,12 +917,14 @@ func getHTTPTriggerPayload(invocationDir string) (*httptypedapi.Payload, error) 
 			return nil, fmt.Errorf("failed to parse JSON from file %s: %w", resolvedPath, err)
 		}
 		ui.Success(fmt.Sprintf("Loaded JSON from file: %s", resolvedPath))
-	} else {
+	} else if strings.HasPrefix(input, "{") {
 		// Treat as direct JSON input
 		if err := json.Unmarshal([]byte(input), &jsonData); err != nil {
 			return nil, fmt.Errorf("failed to parse JSON: %w", err)
 		}
 		ui.Success("Parsed JSON input successfully")
+	} else {
+		return nil, fmt.Errorf("invalid JSON input: %s", input)
 	}
 
 	jsonDataBytes, err := json.Marshal(jsonData)
@@ -955,37 +958,4 @@ func resolvePathFromInvocation(path, invocationDir string) string {
 		return path
 	}
 	return filepath.Join(invocationDir, path)
-}
-
-// getHTTPTriggerPayloadFromInput builds an HTTP trigger payload from a JSON string or a file path
-// (optionally prefixed with '@'). invocationDir is used to resolve relative paths against the
-// directory where the user invoked the CLI rather than the current working directory.
-func getHTTPTriggerPayloadFromInput(input, invocationDir string) (*httptypedapi.Payload, error) {
-	trimmed := strings.TrimSpace(input)
-	if trimmed == "" {
-		return nil, fmt.Errorf("empty http payload input")
-	}
-
-	var raw []byte
-	if strings.HasPrefix(trimmed, "@") {
-		path := resolvePathFromInvocation(strings.TrimPrefix(trimmed, "@"), invocationDir)
-		data, err := os.ReadFile(path)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read file %s: %w", path, err)
-		}
-		raw = data
-	} else {
-		resolvedPath := resolvePathFromInvocation(trimmed, invocationDir)
-		if _, err := os.Stat(resolvedPath); err == nil {
-			data, err := os.ReadFile(resolvedPath)
-			if err != nil {
-				return nil, fmt.Errorf("failed to read file %s: %w", resolvedPath, err)
-			}
-			raw = data
-		} else {
-			raw = []byte(trimmed)
-		}
-	}
-
-	return &httptypedapi.Payload{Input: raw}, nil
 }
