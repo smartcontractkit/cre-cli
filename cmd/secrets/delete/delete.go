@@ -121,15 +121,14 @@ func Execute(h *common.Handler, inputs DeleteSecretsInputs, duration time.Durati
 		if err := h.EnsureDeploymentRPCForOwnerKeySecrets(); err != nil {
 			return err
 		}
-	}
-
-	spinner := ui.NewSpinner()
-	spinner.Start("Verifying ownership...")
-	if err := h.EnsureOwnerLinkedOrFail(); err != nil {
+		spinner := ui.NewSpinner()
+		spinner.Start("Verifying ownership...")
+		if err := h.EnsureOwnerLinkedOrFail(); err != nil {
+			spinner.Stop()
+			return err
+		}
 		spinner.Stop()
-		return err
 	}
-	spinner.Stop()
 
 	owner, err := h.ResolveVaultIdentifierOwnerForAuth(secretsAuth)
 	if err != nil {

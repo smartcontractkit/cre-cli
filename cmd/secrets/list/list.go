@@ -91,15 +91,14 @@ func Execute(h *common.Handler, namespace string, duration time.Duration, secret
 		if err := h.EnsureDeploymentRPCForOwnerKeySecrets(); err != nil {
 			return err
 		}
-	}
-
-	spinner := ui.NewSpinner()
-	spinner.Start("Verifying ownership...")
-	if err := h.EnsureOwnerLinkedOrFail(); err != nil {
+		spinner := ui.NewSpinner()
+		spinner.Start("Verifying ownership...")
+		if err := h.EnsureOwnerLinkedOrFail(); err != nil {
+			spinner.Stop()
+			return err
+		}
 		spinner.Stop()
-		return err
 	}
-	spinner.Stop()
 
 	if namespace == "" {
 		namespace = "main"
