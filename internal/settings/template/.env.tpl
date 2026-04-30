@@ -6,6 +6,9 @@
 # Ethereum private key or 1Password reference (e.g. op://vault/item/field)
 CRE_ETH_PRIVATE_KEY={{EthPrivateKey}}
 
+# Aptos private key or 1Password reference (32-byte Ed25519 seed hex)
+CRE_APTOS_PRIVATE_KEY={{AptosPrivateKey}}
+
 # RPC secret keys — referenced in project.yaml via ${VAR_NAME} syntax.
 # Example:
 # CRE_SECRET_RPC_SEPOLIA=my-secret-api-key

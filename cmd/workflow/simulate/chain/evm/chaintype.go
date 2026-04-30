@@ -87,6 +87,10 @@ func (ct *EVMChainType) ResolveClients(v *viper.Viper) (chain.ResolvedChains, er
 	}
 
 	for _, ec := range expChains {
+		// Empty chain-type falls back to this chain type
+		if ec.ChainType != "" && !strings.EqualFold(ec.ChainType, ct.Name()) {
+			continue
+		}
 		if ec.ChainSelector == 0 {
 			return chain.ResolvedChains{}, fmt.Errorf("experimental chain missing chain-selector")
 		}
@@ -151,16 +155,9 @@ func (ct *EVMChainType) RegisterCapabilities(ctx context.Context, cfg chain.Capa
 
 	dryRun := !cfg.Broadcast
 
-	// cfg.Limits is the generic chain.Limits contract. The EVM chain type
-	// needs the wider EVMChainLimits contract (adds ChainWriteGasLimit). A
-	// nil cfg.Limits disables enforcement entirely.
-	var evmLimits EVMChainLimits
+	var evmLimits chain.Limits
 	if cfg.Limits != nil {
-		el, ok := cfg.Limits.(EVMChainLimits)
-		if !ok {
-			return nil, fmt.Errorf("EVM chain type: limits value does not implement evm.EVMChainLimits (got %T)", cfg.Limits)
-		}
-		evmLimits = el
+		evmLimits = ExtractLimits(cfg.Limits)
 	}
 
 	evmCaps, err := NewEVMChainCapabilities(
@@ -221,7 +218,7 @@ func (ct *EVMChainType) RunHealthCheck(resolved chain.ResolvedChains) error {
 // is true, an invalid or default-sentinel key is a hard error. Otherwise a
 // sentinel key is used with a warning so non-broadcast simulations can run.
 func (ct *EVMChainType) ResolveKey(creSettings *settings.Settings, broadcast bool) (interface{}, error) {
-	pk, err := crypto.HexToECDSA(creSettings.User.EthPrivateKey)
+	pk, err := crypto.HexToECDSA(creSettings.User.PrivateKey(settings.EVM))
 	if err != nil {
 		if broadcast {
 			return nil, fmt.Errorf(
