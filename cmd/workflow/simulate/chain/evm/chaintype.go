@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -33,6 +34,7 @@ func init() {
 	}, []chain.CLIFlagDef{
 		{Name: TriggerInputTxHash, Description: "EVM trigger transaction hash (0x...)", FlagType: chain.CLIFlagString},
 		{Name: TriggerInputEventIndex, Description: "EVM trigger log index (0-based)", DefaultValue: "-1", FlagType: chain.CLIFlagInt},
+		{Name: TriggerInputReceiptTimeout, Description: "Timeout for waiting on an EVM transaction receipt (e.g. 30s, 2m)", DefaultValue: "1m", FlagType: chain.CLIFlagString},
 	})
 }
 
@@ -241,8 +243,9 @@ func (ct *EVMChainType) ResolveKey(creSettings *settings.Settings, broadcast boo
 
 // CLI input keys consumed from chain.TriggerParams.ChainTypeInputs.
 const (
-	TriggerInputTxHash     = "evm-tx-hash"
-	TriggerInputEventIndex = "evm-event-index"
+	TriggerInputTxHash         = "evm-tx-hash"
+	TriggerInputEventIndex     = "evm-event-index"
+	TriggerInputReceiptTimeout = "evm-receipt-timeout"
 )
 
 func (ct *EVMChainType) CollectCLIInputs(v *viper.Viper) map[string]string {
@@ -252,6 +255,9 @@ func (ct *EVMChainType) CollectCLIInputs(v *viper.Viper) map[string]string {
 	}
 	if idx := v.GetInt(TriggerInputEventIndex); idx >= 0 {
 		inputs[TriggerInputEventIndex] = strconv.Itoa(idx)
+	}
+	if timeout := strings.TrimSpace(v.GetString(TriggerInputReceiptTimeout)); timeout != "" {
+		inputs[TriggerInputReceiptTimeout] = timeout
 	}
 	return inputs
 }
@@ -268,8 +274,17 @@ func (ct *EVMChainType) ResolveTriggerData(ctx context.Context, selector uint64,
 		return nil, fmt.Errorf("invalid client type for EVM chain selector %d", selector)
 	}
 
+	receiptTimeout := time.Minute // default
+	if raw := strings.TrimSpace(params.ChainTypeInputs[TriggerInputReceiptTimeout]); raw != "" {
+		d, err := time.ParseDuration(raw)
+		if err != nil {
+			return nil, fmt.Errorf("invalid --%s %q: %w", TriggerInputReceiptTimeout, raw, err)
+		}
+		receiptTimeout = d
+	}
+
 	if params.Interactive {
-		return GetEVMTriggerLog(ctx, client)
+		return GetEVMTriggerLog(ctx, client, receiptTimeout)
 	}
 
 	txHash := strings.TrimSpace(params.ChainTypeInputs[TriggerInputTxHash])
@@ -281,5 +296,5 @@ func (ct *EVMChainType) ResolveTriggerData(ctx context.Context, selector uint64,
 	if err != nil {
 		return nil, fmt.Errorf("invalid --evm-event-index %q: %w", eventIndexStr, err)
 	}
-	return GetEVMTriggerLogFromValues(ctx, client, txHash, eventIndex)
+	return GetEVMTriggerLogFromValues(ctx, client, txHash, eventIndex, receiptTimeout)
 }

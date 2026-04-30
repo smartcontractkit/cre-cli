@@ -22,7 +22,8 @@ import (
 )
 
 // GetEVMTriggerLog prompts user for EVM trigger data and fetches the log interactively.
-func GetEVMTriggerLog(ctx context.Context, ethClient *ethclient.Client) (*evmpb.Log, error) {
+// receiptTimeout controls how long to wait for the transaction receipt before giving up.
+func GetEVMTriggerLog(ctx context.Context, ethClient *ethclient.Client, receiptTimeout time.Duration) (*evmpb.Log, error) {
 	var txHashInput string
 	var eventIndexInput string
 
@@ -76,13 +77,14 @@ func GetEVMTriggerLog(ctx context.Context, ethClient *ethclient.Client) (*evmpb.
 		return nil, fmt.Errorf("invalid event index: %w", err)
 	}
 
-	return fetchAndConvertLog(ctx, ethClient, txHash, eventIndex, true)
+	return fetchAndConvertLog(ctx, ethClient, txHash, eventIndex, true, receiptTimeout)
 }
 
 // GetEVMTriggerLogFromValues fetches a log given tx hash string and event index.
 // Unlike GetEVMTriggerLog (interactive), this does not emit ui.Success messages
 // to keep non-interactive/CI output clean.
-func GetEVMTriggerLogFromValues(ctx context.Context, ethClient *ethclient.Client, txHashStr string, eventIndex uint64) (*evmpb.Log, error) {
+// receiptTimeout controls how long to wait for the transaction receipt before giving up.
+func GetEVMTriggerLogFromValues(ctx context.Context, ethClient *ethclient.Client, txHashStr string, eventIndex uint64, receiptTimeout time.Duration) (*evmpb.Log, error) {
 	txHashStr = strings.TrimSpace(txHashStr)
 	if txHashStr == "" {
 		return nil, fmt.Errorf("transaction hash cannot be empty")
@@ -95,16 +97,17 @@ func GetEVMTriggerLogFromValues(ctx context.Context, ethClient *ethclient.Client
 	}
 
 	txHash := common.HexToHash(txHashStr)
-	return fetchAndConvertLog(ctx, ethClient, txHash, eventIndex, false)
+	return fetchAndConvertLog(ctx, ethClient, txHash, eventIndex, false, receiptTimeout)
 }
 
 // fetchAndConvertLog fetches a transaction receipt log and converts it to the protobuf format.
 // When verbose is true (interactive mode), ui.Success messages are emitted.
-func fetchAndConvertLog(ctx context.Context, ethClient *ethclient.Client, txHash common.Hash, eventIndex uint64, verbose bool) (*evmpb.Log, error) {
+// receiptTimeout controls how long to wait for the receipt before the context is cancelled.
+func fetchAndConvertLog(ctx context.Context, ethClient *ethclient.Client, txHash common.Hash, eventIndex uint64, verbose bool, receiptTimeout time.Duration) (*evmpb.Log, error) {
 	receiptSpinner := ui.NewSpinner()
 	receiptSpinner.Start(fmt.Sprintf("Fetching transaction receipt for %s...", txHash.Hex()))
 
-	timeoutCtx, cancel := context.WithTimeout(ctx, time.Minute)
+	timeoutCtx, cancel := context.WithTimeout(ctx, receiptTimeout)
 	txReceipt, err := waitForTransactionReceipt(timeoutCtx, ethClient, txHash)
 	receiptSpinner.Stop()
 	cancel()
