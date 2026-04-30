@@ -68,7 +68,7 @@ func TestDeriveEthAddressFromPrivateKey_InvalidInput(t *testing.T) {
 				t.Fatalf("expected error, got nil (addr=%q)", addr)
 			}
 
-			if !strings.Contains(strings.ToLower(err.Error()), "failed to parse private key") {
+			if !strings.Contains(strings.ToLower(err.Error()), "invalid private key") {
 				t.Fatalf("unexpected error message: %v", err)
 			}
 		})
