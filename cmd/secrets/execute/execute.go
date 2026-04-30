@@ -37,7 +37,7 @@ func New(ctx *runtime.Context) *cobra.Command {
 				return fmt.Errorf("execute expects a bundle .json file; got %q", ext)
 			}
 
-			h, err := common.NewHandler(ctx, bundlePath)
+			h, err := common.NewHandler(ctx, bundlePath, common.SecretsAuthOwnerKeySigning)
 			if err != nil {
 				return err
 			}

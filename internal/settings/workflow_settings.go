@@ -307,6 +307,8 @@ func IsValidChainName(name string) error {
 // For commands that don't need the private key, we skip getting the owner address.
 // ShouldSkipGetOwner returns true if the command is `simulate` and
 // `--broadcast` is false or not set. `cre help` should skip as well.
+// It also returns true for secrets commands using the browser OAuth flow, where
+// the owner is resolved from OAuth credentials rather than an ETH private key.
 func ShouldSkipGetOwner(cmd *cobra.Command) bool {
 	switch cmd.Name() {
 	case "help":
@@ -319,6 +321,11 @@ func ShouldSkipGetOwner(cmd *cobra.Command) bool {
 		b, _ := cmd.Flags().GetBool("broadcast")
 		return !b
 	default:
+		// Browser OAuth flow resolves the owner from credentials, not from
+		// CRE_ETH_PRIVATE_KEY, so skip EOA owner derivation at settings load.
+		if f := cmd.Flags().Lookup("secrets-auth"); f != nil && f.Value.String() == "browser" {
+			return true
+		}
 		return false
 	}
 }

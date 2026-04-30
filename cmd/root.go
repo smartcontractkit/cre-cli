@@ -273,13 +273,19 @@ func newRootCommand() *cobra.Command {
 					spinner.Stop()
 				}
 
-				err := runtimeContext.AttachSettings(cmd, isLoadDeploymentRPC(cmd))
+				err := runtimeContext.AttachSettings(cmd, false)
 				if err != nil {
 					return fmt.Errorf("%w", err)
 				}
 
 				if err := runtimeContext.AttachResolvedRegistry(); err != nil {
 					return err
+				}
+
+				if isRegistryRPCCommand(cmd) {
+					if err := runtimeContext.ValidateOnchainRegistryRPC(); err != nil {
+						return fmt.Errorf("failed to load settings: %w", err)
+					}
 				}
 
 				if err := runtimeContext.FinalizeDeferredWorkflowOwner(cmd); err != nil {
@@ -534,7 +540,11 @@ func isLoadCredentials(cmd *cobra.Command) bool {
 	return !exists
 }
 
-func isLoadDeploymentRPC(cmd *cobra.Command) bool {
+// isRegistryRPCCommand returns true for commands that interact with the workflow
+// registry and require a validated RPC URL when the resolved registry is on-chain.
+// RPC validation is deferred until after registry resolution so that off-chain
+// (private) registry deployments are not forced to supply an on-chain RPC URL.
+func isRegistryRPCCommand(cmd *cobra.Command) bool {
 	var includedCommands = map[string]struct{}{
 		"cre workflow deploy":    {},
 		"cre workflow pause":     {},
