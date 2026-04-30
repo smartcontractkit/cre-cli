@@ -2,13 +2,17 @@ package evm
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 
 	evmpb "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/chain-capabilities/evm"
@@ -18,7 +22,8 @@ import (
 )
 
 // GetEVMTriggerLog prompts user for EVM trigger data and fetches the log interactively.
-func GetEVMTriggerLog(ctx context.Context, ethClient *ethclient.Client) (*evmpb.Log, error) {
+// receiptTimeout controls how long to wait for the transaction receipt before giving up.
+func GetEVMTriggerLog(ctx context.Context, ethClient *ethclient.Client, receiptTimeout time.Duration) (*evmpb.Log, error) {
 	var txHashInput string
 	var eventIndexInput string
 
@@ -72,13 +77,14 @@ func GetEVMTriggerLog(ctx context.Context, ethClient *ethclient.Client) (*evmpb.
 		return nil, fmt.Errorf("invalid event index: %w", err)
 	}
 
-	return fetchAndConvertLog(ctx, ethClient, txHash, eventIndex, true)
+	return fetchAndConvertLog(ctx, ethClient, txHash, eventIndex, true, receiptTimeout)
 }
 
 // GetEVMTriggerLogFromValues fetches a log given tx hash string and event index.
 // Unlike GetEVMTriggerLog (interactive), this does not emit ui.Success messages
 // to keep non-interactive/CI output clean.
-func GetEVMTriggerLogFromValues(ctx context.Context, ethClient *ethclient.Client, txHashStr string, eventIndex uint64) (*evmpb.Log, error) {
+// receiptTimeout controls how long to wait for the transaction receipt before giving up.
+func GetEVMTriggerLogFromValues(ctx context.Context, ethClient *ethclient.Client, txHashStr string, eventIndex uint64, receiptTimeout time.Duration) (*evmpb.Log, error) {
 	txHashStr = strings.TrimSpace(txHashStr)
 	if txHashStr == "" {
 		return nil, fmt.Errorf("transaction hash cannot be empty")
@@ -91,19 +97,24 @@ func GetEVMTriggerLogFromValues(ctx context.Context, ethClient *ethclient.Client
 	}
 
 	txHash := common.HexToHash(txHashStr)
-	return fetchAndConvertLog(ctx, ethClient, txHash, eventIndex, false)
+	return fetchAndConvertLog(ctx, ethClient, txHash, eventIndex, false, receiptTimeout)
 }
 
 // fetchAndConvertLog fetches a transaction receipt log and converts it to the protobuf format.
 // When verbose is true (interactive mode), ui.Success messages are emitted.
-func fetchAndConvertLog(ctx context.Context, ethClient *ethclient.Client, txHash common.Hash, eventIndex uint64, verbose bool) (*evmpb.Log, error) {
+// receiptTimeout controls how long to wait for the receipt before the context is cancelled.
+func fetchAndConvertLog(ctx context.Context, ethClient *ethclient.Client, txHash common.Hash, eventIndex uint64, verbose bool, receiptTimeout time.Duration) (*evmpb.Log, error) {
 	receiptSpinner := ui.NewSpinner()
 	receiptSpinner.Start(fmt.Sprintf("Fetching transaction receipt for %s...", txHash.Hex()))
-	txReceipt, err := ethClient.TransactionReceipt(ctx, txHash)
+
+	timeoutCtx, cancel := context.WithTimeout(ctx, receiptTimeout)
+	txReceipt, err := waitForTransactionReceipt(timeoutCtx, ethClient, txHash)
 	receiptSpinner.Stop()
+	cancel()
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch transaction receipt: %w", err)
 	}
+
 	if eventIndex >= uint64(len(txReceipt.Logs)) {
 		return nil, fmt.Errorf("event index %d out of range, transaction has %d log events", eventIndex, len(txReceipt.Logs))
 	}
@@ -145,4 +156,23 @@ func fetchAndConvertLog(ctx context.Context, ethClient *ethclient.Client, txHash
 		ui.Success(fmt.Sprintf("Created EVM trigger log for transaction %s, event %d", txHash.Hex(), eventIndex))
 	}
 	return pbLog, nil
+}
+
+func waitForTransactionReceipt(ctx context.Context, ethClient *ethclient.Client, txHash common.Hash) (*types.Receipt, error) {
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+		}
+		txReceipt, err := ethClient.TransactionReceipt(ctx, txHash)
+		if err == nil {
+			return txReceipt, nil
+		}
+		if !errors.Is(err, ethereum.NotFound) {
+			return nil, err
+		}
+		// tx not found yet, wait and retry
+		time.Sleep(3 * time.Second)
+	}
 }
