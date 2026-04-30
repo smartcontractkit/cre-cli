@@ -2,13 +2,17 @@ package evm
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
 
 	evmpb "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/chain-capabilities/evm"
@@ -72,7 +76,9 @@ func GetEVMTriggerLog(ctx context.Context, ethClient *ethclient.Client) (*evmpb.
 		return nil, fmt.Errorf("invalid event index: %w", err)
 	}
 
-	return fetchAndConvertLog(ctx, ethClient, txHash, eventIndex, true)
+	timeoutCtx, cancel := context.WithTimeout(ctx, time.Minute)
+	defer cancel()
+	return fetchAndConvertLog(timeoutCtx, ethClient, txHash, eventIndex, true)
 }
 
 // GetEVMTriggerLogFromValues fetches a log given tx hash string and event index.
@@ -99,7 +105,7 @@ func GetEVMTriggerLogFromValues(ctx context.Context, ethClient *ethclient.Client
 func fetchAndConvertLog(ctx context.Context, ethClient *ethclient.Client, txHash common.Hash, eventIndex uint64, verbose bool) (*evmpb.Log, error) {
 	receiptSpinner := ui.NewSpinner()
 	receiptSpinner.Start(fmt.Sprintf("Fetching transaction receipt for %s...", txHash.Hex()))
-	txReceipt, err := ethClient.TransactionReceipt(ctx, txHash)
+	txReceipt, err := waitForTransactionReceipt(ctx, ethClient, txHash)
 	receiptSpinner.Stop()
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch transaction receipt: %w", err)
@@ -145,4 +151,23 @@ func fetchAndConvertLog(ctx context.Context, ethClient *ethclient.Client, txHash
 		ui.Success(fmt.Sprintf("Created EVM trigger log for transaction %s, event %d", txHash.Hex(), eventIndex))
 	}
 	return pbLog, nil
+}
+
+func waitForTransactionReceipt(ctx context.Context, ethClient *ethclient.Client, txHash common.Hash) (*types.Receipt, error) {
+	for {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+		}
+		txReceipt, err := ethClient.TransactionReceipt(ctx, txHash)
+		if err == nil {
+			return txReceipt, nil
+		}
+		if !errors.Is(err, ethereum.NotFound) {
+			return nil, err
+		}
+		// tx not found yet, wait and retry
+		time.Sleep(3 * time.Second)
+	}
 }
