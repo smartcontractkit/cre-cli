@@ -76,9 +76,7 @@ func GetEVMTriggerLog(ctx context.Context, ethClient *ethclient.Client) (*evmpb.
 		return nil, fmt.Errorf("invalid event index: %w", err)
 	}
 
-	timeoutCtx, cancel := context.WithTimeout(ctx, time.Minute)
-	defer cancel()
-	return fetchAndConvertLog(timeoutCtx, ethClient, txHash, eventIndex, true)
+	return fetchAndConvertLog(ctx, ethClient, txHash, eventIndex, true)
 }
 
 // GetEVMTriggerLogFromValues fetches a log given tx hash string and event index.
@@ -105,11 +103,15 @@ func GetEVMTriggerLogFromValues(ctx context.Context, ethClient *ethclient.Client
 func fetchAndConvertLog(ctx context.Context, ethClient *ethclient.Client, txHash common.Hash, eventIndex uint64, verbose bool) (*evmpb.Log, error) {
 	receiptSpinner := ui.NewSpinner()
 	receiptSpinner.Start(fmt.Sprintf("Fetching transaction receipt for %s...", txHash.Hex()))
-	txReceipt, err := waitForTransactionReceipt(ctx, ethClient, txHash)
+
+	timeoutCtx, cancel := context.WithTimeout(ctx, time.Minute)
+	txReceipt, err := waitForTransactionReceipt(timeoutCtx, ethClient, txHash)
 	receiptSpinner.Stop()
+	cancel()
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch transaction receipt: %w", err)
 	}
+
 	if eventIndex >= uint64(len(txReceipt.Logs)) {
 		return nil, fmt.Errorf("event index %d out of range, transaction has %d log events", eventIndex, len(txReceipt.Logs))
 	}
