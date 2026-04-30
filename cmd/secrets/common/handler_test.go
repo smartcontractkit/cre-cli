@@ -18,6 +18,8 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/jsonrpc2"
 	"github.com/smartcontractkit/chainlink-evm/gethwrappers/workflow/generated/workflow_registry_wrapper_v2"
 	"github.com/smartcontractkit/chainlink/v2/core/capabilities/vault/vaulttypes"
+
+	"github.com/smartcontractkit/cre-cli/internal/credentials"
 )
 
 type mockGatewayClient struct {
@@ -177,6 +179,50 @@ func TestResolveEffectiveOwner(t *testing.T) {
 		_, err := h.ResolveEffectiveOwner()
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "org ID required")
+	})
+}
+
+func TestResolveVaultIdentifierOwnerForAuth(t *testing.T) {
+	t.Run("browser returns org ID when SecretsOrgOwned is false", func(t *testing.T) {
+		h, _, _ := newMockHandler(t)
+		h.OwnerAddress = "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
+		h.EnvironmentSet.SecretsOrgOwned = false
+		h.Credentials.AuthType = credentials.AuthTypeBearer
+		h.Credentials.OrgID = "org-browser"
+
+		owner, err := h.ResolveVaultIdentifierOwnerForAuth(SecretsAuthBrowser)
+		require.NoError(t, err)
+		require.Equal(t, "org-browser", owner)
+	})
+
+	t.Run("browser errors on api key auth", func(t *testing.T) {
+		h, _, _ := newMockHandler(t)
+		h.Credentials.AuthType = credentials.AuthTypeApiKey
+		h.Credentials.OrgID = "org-1"
+
+		_, err := h.ResolveVaultIdentifierOwnerForAuth(SecretsAuthBrowser)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "interactive login")
+	})
+
+	t.Run("browser errors when org ID is empty", func(t *testing.T) {
+		h, _, _ := newMockHandler(t)
+		h.Credentials.AuthType = credentials.AuthTypeBearer
+		h.Credentials.OrgID = ""
+
+		_, err := h.ResolveVaultIdentifierOwnerForAuth(SecretsAuthBrowser)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "organization information is missing")
+	})
+
+	t.Run("owner-key delegates to ResolveEffectiveOwner", func(t *testing.T) {
+		h, _, _ := newMockHandler(t)
+		h.OwnerAddress = "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
+		h.EnvironmentSet.SecretsOrgOwned = false
+
+		owner, err := h.ResolveVaultIdentifierOwnerForAuth(SecretsAuthOwnerKeySigning)
+		require.NoError(t, err)
+		require.Equal(t, "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266", owner)
 	})
 }
 

@@ -288,6 +288,26 @@ func (h *Handler) ResolveEffectiveOwner() (string, error) {
 	return common.HexToAddress(h.OwnerAddress).Hex(), nil
 }
 
+// ResolveVaultIdentifierOwnerForAuth returns the owner string used in vault JSON-RPC payloads
+// (SecretIdentifier.Owner and list request Owner). Browser auth always uses the signed-in
+// organization ID so digests and identifiers align with JWT AuthorizedOwner() on the gateway;
+// owner-key auth uses ResolveEffectiveOwner() (workflow address unless CRE_CLI_SECRETS_ORG_OWNED).
+func (h *Handler) ResolveVaultIdentifierOwnerForAuth(secretsAuth string) (string, error) {
+	if IsBrowserFlow(secretsAuth) {
+		if h.Credentials == nil {
+			return "", fmt.Errorf("organization information is missing from your session; sign in again or use owner-key-signing")
+		}
+		if h.Credentials.AuthType == credentials.AuthTypeApiKey {
+			return "", fmt.Errorf("this sign-in flow requires an interactive login; API keys are not supported")
+		}
+		if h.Credentials.OrgID == "" {
+			return "", fmt.Errorf("organization information is missing from your session; sign in again or use owner-key-signing")
+		}
+		return h.Credentials.OrgID, nil
+	}
+	return h.ResolveEffectiveOwner()
+}
+
 // EncryptSecrets takes the raw secrets and encrypts them, returning pointers.
 // When SecretsOrgOwned is enabled, uses SHA256(orgID) as the TDH2 label and orgID as the owner.
 // Otherwise, uses the workflow owner address left-padded to 32 bytes as the TDH2 label.

@@ -131,7 +131,7 @@ func Execute(h *common.Handler, inputs DeleteSecretsInputs, duration time.Durati
 	}
 	spinner.Stop()
 
-	owner, err := h.ResolveEffectiveOwner()
+	owner, err := h.ResolveVaultIdentifierOwnerForAuth(secretsAuth)
 	if err != nil {
 		return err
 	}

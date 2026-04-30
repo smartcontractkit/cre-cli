@@ -105,7 +105,7 @@ func Execute(h *common.Handler, namespace string, duration time.Duration, secret
 		namespace = "main"
 	}
 
-	owner, err := h.ResolveEffectiveOwner()
+	owner, err := h.ResolveVaultIdentifierOwnerForAuth(secretsAuth)
 	if err != nil {
 		return err
 	}
