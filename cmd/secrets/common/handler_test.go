@@ -383,4 +383,3 @@ func TestNewHandler_WorkflowRegistryClient(t *testing.T) {
 		require.Contains(t, err.Error(), "workflow registry client")
 	})
 }
-
