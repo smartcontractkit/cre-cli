@@ -145,6 +145,17 @@ func (ctx *Context) AttachTenantContext(validationCtx context.Context) error {
 	return nil
 }
 
+// ValidateOnchainRegistryRPC validates the deployment RPC URL when the resolved
+// registry is on-chain. It is a no-op for off-chain (private) registries.
+// A nil resolved registry is treated as on-chain (the default).
+// Must be called after AttachResolvedRegistry.
+func (ctx *Context) ValidateOnchainRegistryRPC() error {
+	if ctx.ResolvedRegistry != nil && ctx.ResolvedRegistry.Type() == settings.RegistryTypeOffChain {
+		return nil
+	}
+	return settings.ValidateDeploymentRPC(&ctx.Settings.Workflow, ctx.EnvironmentSet.WorkflowRegistryChainName)
+}
+
 // AttachResolvedRegistry resolves the deployment-registry from workflow
 // settings against the tenant context registries. Must be called after
 // AttachSettings and AttachTenantContext.

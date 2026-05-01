@@ -257,6 +257,16 @@ func makeCmd(use string, defineBroadcast bool, args ...string) *cobra.Command {
 	return cmd
 }
 
+func makeCmdWithSecretsAuth(use, secretsAuthValue string) *cobra.Command {
+	cmd := &cobra.Command{
+		Use: use,
+		Run: func(cmd *cobra.Command, args []string) {},
+	}
+	cmd.Flags().String("secrets-auth", "owner-key-signing", "auth mode")
+	_ = cmd.Flags().Parse([]string{"--secrets-auth=" + secretsAuthValue})
+	return cmd
+}
+
 func TestLoadEnvAndSettingsInvalidTarget(t *testing.T) {
 	envVars := map[string]string{
 		settings.EthPrivateKeyEnvVar: "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
@@ -453,6 +463,21 @@ func TestShouldSkipGetOwner(t *testing.T) {
 		{
 			name:     "non-simulate command with no broadcast → do NOT skip",
 			cmd:      makeCmd("deploy", false),
+			wantSkip: false,
+		},
+		{
+			name:     "secrets create with --secrets-auth=browser → skip",
+			cmd:      makeCmdWithSecretsAuth("create", "browser"),
+			wantSkip: true,
+		},
+		{
+			name:     "secrets create with --secrets-auth=owner-key-signing → do NOT skip",
+			cmd:      makeCmdWithSecretsAuth("create", "owner-key-signing"),
+			wantSkip: false,
+		},
+		{
+			name:     "secrets create with no --secrets-auth flag defined → do NOT skip",
+			cmd:      makeCmd("create", false),
 			wantSkip: false,
 		},
 	}
