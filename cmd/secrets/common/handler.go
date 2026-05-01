@@ -727,6 +727,9 @@ func (h *Handler) ParseVaultGatewayResponse(method string, respBody []byte) erro
 
 // EnsureOwnerLinkedOrFail TODO this reuses the same logic as in auto_link.go which is tied to deploy; consider refactoring to avoid duplication
 func (h *Handler) EnsureOwnerLinkedOrFail() error {
+	if !common.IsHexAddress(h.OwnerAddress) {
+		return fmt.Errorf("owner address %q is not a valid hex EVM address; check your workflow settings", h.OwnerAddress)
+	}
 	ownerAddr := common.HexToAddress(h.OwnerAddress)
 
 	linked, err := h.Wrc.IsOwnerLinked(ownerAddr)
