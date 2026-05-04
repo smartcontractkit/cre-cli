@@ -305,20 +305,23 @@ func IsValidChainName(name string) error {
 }
 
 // For commands that don't need the private key, we skip getting the owner address.
-// ShouldSkipGetOwner returns true if the command is `simulate` and
-// `--broadcast` is false or not set. `cre help` should skip as well.
+// ShouldSkipGetOwner returns true for `cre workflow hash`; for `cre workflow simulate` when
+// `--broadcast` is false or unset; and for any `cre secrets ...` command when `--secrets-auth` is browser.
 func ShouldSkipGetOwner(cmd *cobra.Command) bool {
-	switch cmd.Name() {
-	case "help":
+	path := cmd.CommandPath()
+	switch path {
+	case "cre workflow hash":
 		return true
-	case "hash":
-		return true
-	case "simulate":
+	case "cre workflow simulate":
 		// Treat missing/invalid flag as false (i.e., skip).
 		// If broadcast is explicitly true, don't skip.
 		b, _ := cmd.Flags().GetBool("broadcast")
 		return !b
 	default:
+		if path == "cre secrets" || strings.HasPrefix(path, "cre secrets ") {
+			smethod, _ := cmd.Flags().GetString("secrets-auth")
+			return smethod == "browser"
+		}
 		return false
 	}
 }

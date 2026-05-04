@@ -244,17 +244,39 @@ func TestLoadEnvAndMergedSettings(t *testing.T) {
 	assert.Equal(t, "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80", s.User.EthPrivateKey)
 }
 
-// helper to build a command with optional --broadcast flag and parse args
+// helper to build a leaf workflow subcommand with the same CommandPath shape as the real CLI (cre workflow <use>).
 func makeCmd(use string, defineBroadcast bool, args ...string) *cobra.Command {
-	cmd := &cobra.Command{
+	root := &cobra.Command{Use: "cre"}
+	workflow := &cobra.Command{Use: "workflow"}
+	leaf := &cobra.Command{
 		Use: use,
 		Run: func(cmd *cobra.Command, args []string) {},
 	}
 	if defineBroadcast {
-		cmd.Flags().Bool("broadcast", false, "broadcast the tx")
+		leaf.Flags().Bool("broadcast", false, "broadcast the tx")
 	}
-	_ = cmd.Flags().Parse(args) // parse only the provided flag args
-	return cmd
+	_ = leaf.Flags().Parse(args) // parse only the provided flag args
+	workflow.AddCommand(leaf)
+	root.AddCommand(workflow)
+	return leaf
+}
+
+// secretsCmdPath builds cre secrets <leaf> so CommandPath matches production.
+func secretsCmdPath(leaf, secretsAuth string) *cobra.Command {
+	root := &cobra.Command{Use: "cre"}
+	secrets := &cobra.Command{Use: "secrets"}
+	secrets.PersistentFlags().String("secrets-auth", secretsAuth, "")
+	var leafCmd *cobra.Command
+	if leaf == "" {
+		leafCmd = secrets
+	} else {
+		leafCmd = &cobra.Command{Use: leaf, Run: func(cmd *cobra.Command, args []string) {}}
+		secrets.AddCommand(leafCmd)
+	}
+	root.AddCommand(secrets)
+	// Merge parent persistent flags into Flags() so GetString("secrets-auth") matches real CLI behavior.
+	_ = leafCmd.ParseFlags([]string{})
+	return leafCmd
 }
 
 func TestLoadEnvAndSettingsInvalidTarget(t *testing.T) {
@@ -455,6 +477,21 @@ func TestShouldSkipGetOwner(t *testing.T) {
 			cmd:      makeCmd("deploy", false),
 			wantSkip: false,
 		},
+		{
+			name:     "secrets list with browser auth → skip",
+			cmd:      secretsCmdPath("list", "browser"),
+			wantSkip: true,
+		},
+		{
+			name:     "secrets create with owner-key-signing → do NOT skip",
+			cmd:      secretsCmdPath("create", "owner-key-signing"),
+			wantSkip: false,
+		},
+		{
+			name:     "cre secrets root with browser auth → skip",
+			cmd:      secretsCmdPath("", "browser"),
+			wantSkip: true,
+		},
 	}
 
 	for _, tc := range tests {
@@ -463,7 +500,7 @@ func TestShouldSkipGetOwner(t *testing.T) {
 			t.Parallel()
 			got := settings.ShouldSkipGetOwner(tc.cmd)
 			if got != tc.wantSkip {
-				t.Fatalf("ShouldSkipGetOwner(%q) = %v, want %v", tc.cmd.Name(), got, tc.wantSkip)
+				t.Fatalf("ShouldSkipGetOwner(%q) = %v, want %v", tc.cmd.CommandPath(), got, tc.wantSkip)
 			}
 		})
 	}
