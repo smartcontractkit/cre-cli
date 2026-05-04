@@ -115,8 +115,11 @@ func New(logger *zerolog.Logger, v *viper.Viper, cmd *cobra.Command, registryCha
 	}, nil
 }
 
-// loadEnvFile loads the file at envPath into the process environment via
-// godotenv.Overload and returns the path + parsed vars on success.
+// loadEnvFile loads the file at envPath into the process environment and
+// returns the path + parsed vars on success.
+// Plain values override any pre-existing shell env var (Overload semantics).
+// Values beginning with "op://" are intentionally skipped so that secrets
+// resolved by `op run` are not clobbered by the unresolved reference.
 // If envPath is empty or loading fails, appropriate messages are logged
 // and ("", nil) is returned.
 func loadEnvFile(logger *zerolog.Logger, envPath string) (string, map[string]string) {
@@ -127,7 +130,8 @@ func loadEnvFile(logger *zerolog.Logger, envPath string) (string, map[string]str
 		return "", nil
 	}
 
-	if err := godotenv.Overload(envPath); err != nil {
+	vars, err := godotenv.Read(envPath)
+	if err != nil {
 		logger.Error().Str("path", envPath).Err(err).Msg(
 			"Not able to load configuration from environment file. " +
 				"CLI tool will read and verify individual environment variables (they MUST be exported). " +
@@ -135,7 +139,16 @@ func loadEnvFile(logger *zerolog.Logger, envPath string) (string, map[string]str
 		return "", nil
 	}
 
-	vars, _ := godotenv.Read(envPath)
+	for k, v := range vars {
+		if strings.HasPrefix(v, "op://") {
+			// Leave the value already in the environment (resolved by `op run`) untouched.
+			logger.Debug().Str("key", k).Msg(
+				"Skipping op:// reference in env file; use `op run --env-file .env -- cre ...` to resolve 1Password secrets")
+			continue
+		}
+		os.Setenv(k, v)
+	}
+
 	return envPath, vars
 }
 
