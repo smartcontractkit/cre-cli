@@ -488,6 +488,7 @@ func isLoadSettings(cmd *cobra.Command) bool {
 		"cre workflow limits":           {},
 		"cre workflow limits export":    {},
 		"cre workflow build":            {},
+		"cre workflow list":             {},
 		"cre account":                   {},
 		"cre secrets":                   {},
 		"cre templates":                 {},
