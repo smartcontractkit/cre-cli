@@ -16,6 +16,8 @@ cre workflow list [optional flags]
 cre workflow list
   cre workflow list --registry private
   cre workflow list --include-deleted
+  cre workflow list --output json
+  cre workflow list --output json > workflows.json
 ```
 
 ### Options
@@ -23,6 +25,7 @@ cre workflow list
 ```
   -h, --help              help for list
       --include-deleted   Include workflows in DELETED status
+      --output string     Output format: "json" prints a JSON array to stdout
       --registry string   Filter by registry ID from user context
 ```
 
@@ -30,6 +33,7 @@ cre workflow list
 
 ```
   -e, --env string            Path to .env file which contains sensitive info
+      --non-interactive       Fail instead of prompting; requires all inputs via flags
   -R, --project-root string   Path to the project root
   -E, --public-env string     Path to .env.public file which contains shared, non-sensitive build config
   -T, --target string         Use target settings from YAML config

@@ -101,8 +101,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	simulateCmd.Flags().Bool("no-config", false, "Simulate without a config file")
 	simulateCmd.Flags().Bool("default-config", false, "Use the config path from workflow.yaml settings (default behavior)")
 	simulateCmd.MarkFlagsMutuallyExclusive("config", "no-config", "default-config")
-	// Non-interactive flags
-	simulateCmd.Flags().Bool(settings.Flags.NonInteractive.Name, false, "Run without prompts; requires --trigger-index and inputs for the selected trigger type")
+	// Non-interactive trigger selection flags
 	simulateCmd.Flags().Int("trigger-index", -1, "Index of the trigger to run (0-based)")
 	simulateCmd.Flags().String("http-payload", "", "HTTP trigger payload as JSON string or path to JSON file (with or without @ prefix)")
 

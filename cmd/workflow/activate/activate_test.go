@@ -13,6 +13,61 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/validation"
 )
 
+func TestNonInteractive_WithoutYes_ReturnsError(t *testing.T) {
+	t.Parallel()
+	simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
+	defer simulatedEnvironment.Close()
+	ctx := simulatedEnvironment.NewRuntimeContext()
+	ctx.Settings = &settings.Settings{
+		User: settings.UserSettings{
+			EthPrivateKey: chainsim.TestPrivateKey,
+		},
+	}
+	ctx.Settings.Workflow.UserWorkflowSettings.WorkflowOwnerType = constants.WorkflowOwnerTypeEOA
+
+	handler := newHandler(ctx)
+	handler.inputs = Inputs{
+		WorkflowName:     "test-workflow",
+		WorkflowOwner:    chainsim.TestAddress,
+		DonFamily:        "zone-a",
+		NonInteractive:   true,
+		SkipConfirmation: false,
+	}
+	handler.validated = true
+
+	err := handler.Execute()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "missing required flags for --non-interactive mode")
+}
+
+func TestNonInteractive_WithYes_PassesGuard(t *testing.T) {
+	t.Parallel()
+	simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
+	defer simulatedEnvironment.Close()
+	ctx := simulatedEnvironment.NewRuntimeContext()
+	ctx.Settings = &settings.Settings{
+		User: settings.UserSettings{
+			EthPrivateKey: chainsim.TestPrivateKey,
+		},
+	}
+	ctx.Settings.Workflow.UserWorkflowSettings.WorkflowOwnerType = constants.WorkflowOwnerTypeEOA
+
+	handler := newHandler(ctx)
+	handler.inputs = Inputs{
+		WorkflowName:     "test-workflow",
+		WorkflowOwner:    chainsim.TestAddress,
+		DonFamily:        "zone-a",
+		NonInteractive:   true,
+		SkipConfirmation: true,
+	}
+	handler.validated = true
+
+	err := handler.Execute()
+	// Guard passes; error comes from WRC (no matching workflow), not the guard
+	require.Error(t, err)
+	require.NotContains(t, err.Error(), "missing required flags for --non-interactive mode")
+}
+
 func TestWorkflowActivateCommand(t *testing.T) {
 	t.Run("validation errors", func(t *testing.T) {
 		t.Parallel()

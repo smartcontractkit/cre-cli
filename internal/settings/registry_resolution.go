@@ -72,7 +72,6 @@ func (r *OffChainRegistry) DonFamily() string  { return r.donFamily }
 // ResolvedRegistry. When deploymentRegistry is empty the static EnvironmentSet
 // values are used (backwards-compatible default). When set, it is looked up in
 // tenantCtx.Registries. On-chain entries must have a non-empty address.
-// Off-chain registries are rejected in production environments.
 func ResolveRegistry(
 	deploymentRegistry string,
 	tenantCtx *tenantctx.EnvironmentContext,
@@ -93,9 +92,6 @@ func ResolveRegistry(
 	}
 
 	if ParseRegistryType(reg.Type) == RegistryTypeOffChain {
-		if isProduction(envSet) {
-			return nil, fmt.Errorf("off-chain (private) registries are not yet supported in production")
-		}
 		return NewOffChainRegistry(reg.ID, tenantCtx.DefaultDonFamily), nil
 	}
 
@@ -154,10 +150,6 @@ func availableIDs(registries []*tenantctx.Registry) string {
 		ids = append(ids, r.ID)
 	}
 	return strings.Join(ids, ", ")
-}
-
-func isProduction(envSet *environments.EnvironmentSet) bool {
-	return envSet.EnvName == "" || envSet.EnvName == environments.DefaultEnv
 }
 
 // AsOnChain asserts that r is an *OnChainRegistry. If it is not, it returns a

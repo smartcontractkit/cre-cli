@@ -20,16 +20,6 @@ func stagingEnvSet() *environments.EnvironmentSet {
 	}
 }
 
-func prodEnvSet() *environments.EnvironmentSet {
-	return &environments.EnvironmentSet{
-		EnvName:                          "PRODUCTION",
-		WorkflowRegistryAddress:          "0x4Ac54353FA4Fa961AfcC5ec4B118596d3305E7e5",
-		WorkflowRegistryChainName:        "ethereum-mainnet",
-		WorkflowRegistryChainExplorerURL: "https://etherscan.io",
-		DonFamily:                        "zone-a",
-	}
-}
-
 func sampleTenantCtx() *tenantctx.EnvironmentContext {
 	return &tenantctx.EnvironmentContext{
 		DefaultDonFamily: "zone-a",
@@ -136,28 +126,6 @@ func TestResolveRegistry_NilTenantContextWithID(t *testing.T) {
 		t.Fatal("expected error when TenantContext is nil with a registry ID set")
 	}
 	if !strings.Contains(err.Error(), "user context is not available") {
-		t.Errorf("unexpected error: %v", err)
-	}
-}
-
-func TestResolveRegistry_OffChainBlockedInProduction(t *testing.T) {
-	_, err := ResolveRegistry("private", sampleTenantCtx(), prodEnvSet())
-	if err == nil {
-		t.Fatal("expected error for off-chain in production")
-	}
-	if !strings.Contains(err.Error(), "not yet supported in production") {
-		t.Errorf("unexpected error: %v", err)
-	}
-}
-
-func TestResolveRegistry_OffChainBlockedWhenEnvEmpty(t *testing.T) {
-	envSet := stagingEnvSet()
-	envSet.EnvName = ""
-	_, err := ResolveRegistry("private", sampleTenantCtx(), envSet)
-	if err == nil {
-		t.Fatal("expected error for off-chain when env name is empty (defaults to production)")
-	}
-	if !strings.Contains(err.Error(), "not yet supported in production") {
 		t.Errorf("unexpected error: %v", err)
 	}
 }

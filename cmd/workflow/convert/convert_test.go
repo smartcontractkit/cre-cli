@@ -219,6 +219,70 @@ production-settings:
 	require.FileExists(t, filepath.Join(dir, "Makefile"))
 }
 
+func TestConvert_NonInteractive_WithoutForce_ReturnsError(t *testing.T) {
+	dir := t.TempDir()
+	workflowYAML := filepath.Join(dir, constants.DefaultWorkflowSettingsFileName)
+	mainGo := filepath.Join(dir, "main.go")
+	yamlContent := `staging-settings:
+  user-workflow:
+    workflow-name: "wf-staging"
+  workflow-artifacts:
+    workflow-path: "."
+    config-path: "./config.staging.json"
+production-settings:
+  user-workflow:
+    workflow-name: "wf-production"
+  workflow-artifacts:
+    workflow-path: "."
+    config-path: "./config.production.json"
+`
+	require.NoError(t, os.WriteFile(workflowYAML, []byte(yamlContent), 0600))
+	require.NoError(t, os.WriteFile(mainGo, []byte("package main\n"), 0600))
+
+	h := newHandler(nil)
+	err := h.Execute(Inputs{WorkflowFolder: dir, Force: false, NonInteractive: true})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "missing required flags for --non-interactive mode")
+
+	// Verify no conversion happened
+	data, err := os.ReadFile(workflowYAML)
+	require.NoError(t, err)
+	require.Contains(t, string(data), "workflow-path: \".\"")
+	require.NotContains(t, string(data), wasmWorkflowPath)
+	require.NoFileExists(t, filepath.Join(dir, "Makefile"))
+}
+
+func TestConvert_NonInteractive_WithForce_Proceeds(t *testing.T) {
+	dir := t.TempDir()
+	workflowYAML := filepath.Join(dir, constants.DefaultWorkflowSettingsFileName)
+	mainGo := filepath.Join(dir, "main.go")
+	yamlContent := `staging-settings:
+  user-workflow:
+    workflow-name: "wf-staging"
+  workflow-artifacts:
+    workflow-path: "."
+    config-path: "./config.staging.json"
+production-settings:
+  user-workflow:
+    workflow-name: "wf-production"
+  workflow-artifacts:
+    workflow-path: "."
+    config-path: "./config.production.json"
+`
+	require.NoError(t, os.WriteFile(workflowYAML, []byte(yamlContent), 0600))
+	require.NoError(t, os.WriteFile(mainGo, []byte("package main\n"), 0600))
+
+	h := newHandler(nil)
+	err := h.Execute(Inputs{WorkflowFolder: dir, Force: true, NonInteractive: true})
+	require.NoError(t, err)
+
+	data, err := os.ReadFile(workflowYAML)
+	require.NoError(t, err)
+	require.Contains(t, string(data), wasmWorkflowPath)
+	require.FileExists(t, filepath.Join(dir, "Makefile"))
+	require.DirExists(t, filepath.Join(dir, "wasm"))
+}
+
 func TestConvert_TS_InstallsDepsIfNoNodeModules(t *testing.T) {
 	dir := t.TempDir()
 	workflowYAML := filepath.Join(dir, constants.DefaultWorkflowSettingsFileName)
@@ -239,7 +303,7 @@ production-settings:
 `
 	require.NoError(t, os.WriteFile(workflowYAML, []byte(yamlContent), 0600))
 	require.NoError(t, os.WriteFile(mainTS, []byte("export default function run() { return Promise.resolve({ result: \"ok\" }); }\n"), 0600))
-	require.NoError(t, os.WriteFile(packageJSON, []byte(`{"name":"test","private":true,"dependencies":{"@chainlink/cre-sdk":"^1.5.0"}}`), 0600))
+	require.NoError(t, os.WriteFile(packageJSON, []byte(`{"name":"test","private":true,"dependencies":{"@chainlink/cre-sdk":"^1.6.0"}}`), 0600))
 
 	h := newHandler(nil)
 	err := h.Execute(Inputs{WorkflowFolder: dir, Force: true})
