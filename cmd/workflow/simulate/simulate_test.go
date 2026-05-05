@@ -111,6 +111,7 @@ func createSimulateTestSettings(workflowName, workflowPath, configPath string) *
 				WorkflowOwnerAddress string `mapstructure:"workflow-owner-address" yaml:"workflow-owner-address"`
 				WorkflowOwnerType    string `mapstructure:"workflow-owner-type" yaml:"workflow-owner-type"`
 				WorkflowName         string `mapstructure:"workflow-name" yaml:"workflow-name"`
+				DeploymentRegistry   string `mapstructure:"deployment-registry" yaml:"deployment-registry"`
 			}{
 				WorkflowName: workflowName,
 			},
@@ -274,6 +275,167 @@ func TestSimulateWasmFormatHandling(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, raw, result)
 	})
+}
+
+func TestResolvePathFromInvocation(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name          string
+		path          string
+		invocationDir string
+		want          string
+	}{
+		{
+			name:          "absolute path returned unchanged regardless of invocationDir",
+			path:          "/absolute/path/file.json",
+			invocationDir: "/some/other/dir",
+			want:          "/absolute/path/file.json",
+		},
+		{
+			name:          "relative path with empty invocationDir returned unchanged",
+			path:          "relative/file.json",
+			invocationDir: "",
+			want:          "relative/file.json",
+		},
+		{
+			name:          "relative path joined with invocationDir",
+			path:          "file.json",
+			invocationDir: "/invocation/dir",
+			want:          "/invocation/dir/file.json",
+		},
+		{
+			name:          "relative path with subdirs joined with invocationDir",
+			path:          "sub/dir/file.json",
+			invocationDir: "/invocation/dir",
+			want:          "/invocation/dir/sub/dir/file.json",
+		},
+		{
+			name:          "dot-slash relative path joined with invocationDir",
+			path:          "./file.json",
+			invocationDir: "/invocation/dir",
+			want:          "/invocation/dir/file.json",
+		},
+		{
+			name:          "absolute path with empty invocationDir returned unchanged",
+			path:          "/abs/path.json",
+			invocationDir: "",
+			want:          "/abs/path.json",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := resolvePathFromInvocation(tt.path, tt.invocationDir)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestGetHTTPTriggerPayloadFromInput(t *testing.T) {
+	t.Parallel()
+
+	// Create a temp dir with a payload file for file-based tests.
+	tmpDir := t.TempDir()
+	payloadJSON := `{"method":"GET","path":"/hello"}`
+	payloadFile := filepath.Join(tmpDir, "payload.json")
+	require.NoError(t, os.WriteFile(payloadFile, []byte(payloadJSON), 0600))
+
+	t.Run("empty input returns error", func(t *testing.T) {
+		t.Parallel()
+		_, err := getHTTPTriggerPayloadFromInput("", "")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "empty http payload input")
+	})
+
+	t.Run("whitespace-only input returns error", func(t *testing.T) {
+		t.Parallel()
+		_, err := getHTTPTriggerPayloadFromInput("   ", "")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "empty http payload input")
+	})
+
+	t.Run("at-prefix with absolute file path reads file", func(t *testing.T) {
+		t.Parallel()
+		payload, err := getHTTPTriggerPayloadFromInput("@"+payloadFile, "")
+		require.NoError(t, err)
+		assert.Equal(t, []byte(payloadJSON), payload.Input)
+	})
+
+	t.Run("at-prefix with relative path resolved against invocationDir", func(t *testing.T) {
+		t.Parallel()
+		payload, err := getHTTPTriggerPayloadFromInput("@payload.json", tmpDir)
+		require.NoError(t, err)
+		assert.Equal(t, []byte(payloadJSON), payload.Input)
+	})
+
+	t.Run("at-prefix with nonexistent file returns error", func(t *testing.T) {
+		t.Parallel()
+		_, err := getHTTPTriggerPayloadFromInput("@/nonexistent/no-such-file.json", "")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to read file")
+	})
+
+	t.Run("absolute file path without at-prefix reads file", func(t *testing.T) {
+		t.Parallel()
+		payload, err := getHTTPTriggerPayloadFromInput(payloadFile, "")
+		require.NoError(t, err)
+		assert.Equal(t, []byte(payloadJSON), payload.Input)
+	})
+
+	t.Run("relative file path resolved against invocationDir reads file", func(t *testing.T) {
+		t.Parallel()
+		payload, err := getHTTPTriggerPayloadFromInput("payload.json", tmpDir)
+		require.NoError(t, err)
+		assert.Equal(t, []byte(payloadJSON), payload.Input)
+	})
+
+	t.Run("inline JSON string used as raw bytes", func(t *testing.T) {
+		t.Parallel()
+		inlineJSON := `{"method":"POST","path":"/api"}`
+		payload, err := getHTTPTriggerPayloadFromInput(inlineJSON, "")
+		require.NoError(t, err)
+		assert.Equal(t, []byte(inlineJSON), payload.Input)
+	})
+
+	t.Run("nonexistent relative path with empty invocationDir treated as raw bytes", func(t *testing.T) {
+		t.Parallel()
+		// A path that doesn't exist is treated as raw bytes (no error).
+		input := "no-such-file-or-json"
+		payload, err := getHTTPTriggerPayloadFromInput(input, "")
+		require.NoError(t, err)
+		assert.Equal(t, []byte(input), payload.Input)
+	})
+
+	t.Run("relative path not found in invocationDir treated as raw bytes", func(t *testing.T) {
+		t.Parallel()
+		// A relative path that resolves to a nonexistent file is used as raw bytes.
+		input := "does-not-exist.json"
+		payload, err := getHTTPTriggerPayloadFromInput(input, tmpDir)
+		require.NoError(t, err)
+		assert.Equal(t, []byte(input), payload.Input)
+	})
+}
+
+func TestSimulateResolveInputs_InvocationDir(t *testing.T) {
+	t.Parallel()
+
+	invocationDir := "/some/invocation/dir"
+	v := createSimulateTestViper(t)
+	creSettings := createSimulateTestSettings("test-workflow", "main.go", "config.json")
+
+	runtimeCtx := &runtime.Context{
+		Logger:        testutil.NewTestLogger(),
+		Viper:         v,
+		Settings:      creSettings,
+		InvocationDir: invocationDir,
+	}
+	h := newHandler(runtimeCtx)
+
+	inputs, err := h.ResolveInputs(v, creSettings)
+	require.NoError(t, err)
+	assert.Equal(t, invocationDir, inputs.InvocationDir)
 }
 
 func TestSimulateConfigFlagsMutuallyExclusive(t *testing.T) {

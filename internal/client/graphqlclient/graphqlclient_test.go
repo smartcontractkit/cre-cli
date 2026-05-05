@@ -1,7 +1,16 @@
 package graphqlclient
 
 import (
+	"context"
+	"net/http"
+	"net/http/httptest"
 	"testing"
+
+	"github.com/machinebox/graphql"
+	"github.com/rs/zerolog"
+
+	"github.com/smartcontractkit/cre-cli/internal/credentials"
+	"github.com/smartcontractkit/cre-cli/internal/environments"
 )
 
 func TestRedactSensitiveHeaders(t *testing.T) {
@@ -49,5 +58,37 @@ func TestRedactSensitiveHeaders(t *testing.T) {
 				t.Errorf("redactSensitiveHeaders(%q) = %q, want %q", tt.input, result, tt.expected)
 			}
 		})
+	}
+}
+
+func TestExecute_ErrorPrefixReplacement(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		// This will cause the machinebox/graphql client to return an error starting with "graphql: "
+		_, _ = w.Write([]byte(`{"errors": [{"message": "DON family \"zone-a\" is not supported"}]}`))
+	}))
+	defer srv.Close()
+
+	creds := &credentials.Credentials{
+		AuthType: credentials.AuthTypeApiKey,
+		APIKey:   "test-api-key",
+	}
+	envSet := &environments.EnvironmentSet{GraphQLURL: srv.URL}
+	logger := zerolog.Nop()
+
+	client := New(creds, envSet, &logger)
+
+	req := graphql.NewRequest(`query { test }`)
+	var resp interface{}
+
+	err := client.Execute(context.Background(), req, &resp)
+
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+
+	expectedErr := "cre api error: DON family \"zone-a\" is not supported"
+	if err.Error() != expectedErr {
+		t.Errorf("expected error %q, got %q", expectedErr, err.Error())
 	}
 }

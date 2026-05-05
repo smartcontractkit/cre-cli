@@ -272,9 +272,54 @@ func (h *Handler) fetchVaultMasterPublicKeyHex() (string, error) {
 	return rpcResp.Result.PublicKey, nil
 }
 
+// ResolveEffectiveOwner returns the owner string to use for vault secret identifiers.
+// When SecretsOrgOwned is enabled, the org ID (from auth validation) is used;
+// otherwise, the workflow owner address is used and must be a valid hex address.
+func (h *Handler) ResolveEffectiveOwner() (string, error) {
+	if h.EnvironmentSet != nil && h.EnvironmentSet.SecretsOrgOwned {
+		if h.Credentials == nil || h.Credentials.OrgID == "" {
+			return "", fmt.Errorf("org ID required when CRE_CLI_SECRETS_ORG_OWNED is enabled; ensure auth validation succeeds")
+		}
+		return h.Credentials.OrgID, nil
+	}
+	if !common.IsHexAddress(h.OwnerAddress) {
+		return "", fmt.Errorf("owner address %q is not a valid hex address", h.OwnerAddress)
+	}
+	return common.HexToAddress(h.OwnerAddress).Hex(), nil
+}
+
+// ResolveVaultIdentifierOwnerForAuth returns the owner string used in vault JSON-RPC payloads
+// (SecretIdentifier.Owner and list request Owner). Browser auth always uses the signed-in
+// organization ID so digests and identifiers align with JWT AuthorizedOwner() on the gateway;
+// owner-key auth uses ResolveEffectiveOwner() (workflow address unless CRE_CLI_SECRETS_ORG_OWNED).
+func (h *Handler) ResolveVaultIdentifierOwnerForAuth(secretsAuth string) (string, error) {
+	if IsBrowserFlow(secretsAuth) {
+		if h.Credentials == nil {
+			return "", fmt.Errorf("organization information is missing from your session; sign in again or use owner-key-signing")
+		}
+		if h.Credentials.AuthType == credentials.AuthTypeApiKey {
+			return "", fmt.Errorf("this sign-in flow requires an interactive login; API keys are not supported")
+		}
+		if h.Credentials.OrgID == "" {
+			return "", fmt.Errorf("organization information is missing from your session; sign in again or use owner-key-signing")
+		}
+		return h.Credentials.OrgID, nil
+	}
+	return h.ResolveEffectiveOwner()
+}
+
 // EncryptSecrets takes the raw secrets and encrypts them, returning pointers.
-// Owner-key flow: TDH2 label is the workflow owner address left-padded to 32 bytes; SecretIdentifier.Owner is the same hex address string.
+// When SecretsOrgOwned is enabled, uses SHA256(orgID) as the TDH2 label and orgID as the owner.
+// Otherwise, uses the workflow owner address left-padded to 32 bytes as the TDH2 label.
 func (h *Handler) EncryptSecrets(rawSecrets UpsertSecretsInputs) ([]*vault.EncryptedSecret, error) {
+	if h.EnvironmentSet != nil && h.EnvironmentSet.SecretsOrgOwned {
+		owner, err := h.ResolveEffectiveOwner()
+		if err != nil {
+			return nil, err
+		}
+		return h.EncryptSecretsForBrowserOrg(rawSecrets, owner)
+	}
+
 	pubKeyHex, err := h.fetchVaultMasterPublicKeyHex()
 	if err != nil {
 		return nil, err
@@ -680,8 +725,11 @@ func (h *Handler) ParseVaultGatewayResponse(method string, respBody []byte) erro
 	return nil
 }
 
-// EnsureOwnerLinkedOrFail TODO this reuses the same logic as in autoLink.go which is tied to deploy; consider refactoring to avoid duplication
+// EnsureOwnerLinkedOrFail TODO this reuses the same logic as in auto_link.go which is tied to deploy; consider refactoring to avoid duplication
 func (h *Handler) EnsureOwnerLinkedOrFail() error {
+	if !common.IsHexAddress(h.OwnerAddress) {
+		return fmt.Errorf("owner address %q is not a valid hex EVM address; check your workflow settings", h.OwnerAddress)
+	}
 	ownerAddr := common.HexToAddress(h.OwnerAddress)
 
 	linked, err := h.Wrc.IsOwnerLinked(ownerAddr)

@@ -14,7 +14,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
-func (h *handler) upsert() error {
+func (h *handler) upsert(onChain *settings.OnChainRegistry) error {
 	if !h.validated {
 		return fmt.Errorf("handler inputs not validated")
 	}
@@ -23,11 +23,7 @@ func (h *handler) upsert() error {
 	if err != nil {
 		return err
 	}
-	return h.submitWorkflow(params)
-}
-
-func (h *handler) submitWorkflow(params client.RegisterWorkflowV2Parameters) error {
-	return h.handleUpsert(params)
+	return h.handleUpsert(params, onChain)
 }
 
 func (h *handler) prepareUpsertParams() (client.RegisterWorkflowV2Parameters, error) {
@@ -57,7 +53,7 @@ func (h *handler) prepareUpsertParams() (client.RegisterWorkflowV2Parameters, er
 	}, nil
 }
 
-func (h *handler) handleUpsert(params client.RegisterWorkflowV2Parameters) error {
+func (h *handler) handleUpsert(params client.RegisterWorkflowV2Parameters, onChain *settings.OnChainRegistry) error {
 	workflowName := h.inputs.WorkflowName
 	workflowTag := h.inputs.WorkflowTag
 	h.log.Debug().Interface("Workflow parameters", params).Msg("Registering workflow...")
@@ -68,12 +64,13 @@ func (h *handler) handleUpsert(params client.RegisterWorkflowV2Parameters) error
 	switch txOut.Type {
 	case client.Regular:
 		ui.Success("Transaction confirmed")
-		ui.URL(fmt.Sprintf("%s/tx/%s", h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash))
+		ui.URL(fmt.Sprintf("%s/tx/%s", onChain.ExplorerURL(), txOut.Hash))
 		ui.Line()
 		ui.Success("Workflow deployed successfully")
 		ui.Line()
 		ui.Bold("Details:")
-		ui.Dim(fmt.Sprintf("   Contract address: %s", h.environmentSet.WorkflowRegistryAddress))
+		ui.Dim(fmt.Sprintf("   Registry:         %s", h.runtimeContext.ResolvedRegistry.ID()))
+		ui.Dim(fmt.Sprintf("   Contract address: %s", onChain.Address()))
 		ui.Dim(fmt.Sprintf("   Transaction hash: %s", txOut.Hash))
 		ui.Dim(fmt.Sprintf("   Workflow Name:    %s", workflowName))
 		ui.Dim(fmt.Sprintf("   Workflow ID:      %s", h.workflowArtifact.WorkflowID))
@@ -90,7 +87,7 @@ func (h *handler) handleUpsert(params client.RegisterWorkflowV2Parameters) error
 		ui.Bold("Next steps:")
 		ui.Line()
 		ui.Print("   1. Submit the following transaction on the target chain:")
-		ui.Dim(fmt.Sprintf("      Chain:            %s", h.inputs.WorkflowRegistryContractChainName))
+		ui.Dim(fmt.Sprintf("      Chain:            %s", onChain.ChainName()))
 		ui.Dim(fmt.Sprintf("      Contract Address: %s", txOut.RawTx.To))
 		ui.Line()
 		ui.Print("   2. Use the following transaction data:")
@@ -99,9 +96,9 @@ func (h *handler) handleUpsert(params client.RegisterWorkflowV2Parameters) error
 		ui.Line()
 
 	case client.Changeset:
-		chainSelector, err := settings.GetChainSelectorByChainName(h.environmentSet.WorkflowRegistryChainName)
+		chainSelector, err := settings.GetChainSelectorByChainName(onChain.ChainName())
 		if err != nil {
-			return fmt.Errorf("failed to get chain selector for chain %q: %w", h.environmentSet.WorkflowRegistryChainName, err)
+			return fmt.Errorf("failed to get chain selector for chain %q: %w", onChain.ChainName(), err)
 		}
 		mcmsConfig, err := settings.GetMCMSConfig(h.settings, chainSelector)
 		if err != nil {

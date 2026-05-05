@@ -20,24 +20,20 @@ import (
 )
 
 type Client struct {
-	graphql                 *graphqlclient.Client
-	workflowRegistryAddress string
-	workflowOwnerAddress    string
-	chainSelector           uint64
-	log                     *zerolog.Logger
-	serviceTimeout          time.Duration
-	httpTimeout             time.Duration
+	graphql              *graphqlclient.Client
+	workflowOwnerAddress string
+	log                  *zerolog.Logger
+	serviceTimeout       time.Duration
+	httpTimeout          time.Duration
 }
 
-func New(graphql *graphqlclient.Client, workflowRegistryAddress string, workflowOwnerAddress string, chainSelector uint64, log *zerolog.Logger) *Client {
+func New(graphql *graphqlclient.Client, workflowOwnerAddress string, log *zerolog.Logger) *Client {
 	return &Client{
-		graphql:                 graphql,
-		workflowRegistryAddress: workflowRegistryAddress,
-		workflowOwnerAddress:    workflowOwnerAddress,
-		chainSelector:           chainSelector,
-		log:                     log,
-		serviceTimeout:          time.Minute * 2,
-		httpTimeout:             time.Minute * 1,
+		graphql:              graphql,
+		workflowOwnerAddress: workflowOwnerAddress,
+		log:                  log,
+		serviceTimeout:       time.Minute * 2,
+		httpTimeout:          time.Minute * 1,
 	}
 }
 
@@ -95,12 +91,10 @@ mutation GeneratePresignedPostUrlForArtifact($artifact: GeneratePresignedPostUrl
 	contentHash := calculateContentHash(content)
 	req := graphql.NewRequest(mutation)
 	reqVariables := map[string]any{
-		"workflowId":              workflowId,
-		"artifactType":            artifactType,
-		"contentHash":             contentHash,
-		"workflowOwnerAddress":    c.workflowOwnerAddress,
-		"workflowRegistryAddress": c.workflowRegistryAddress,
-		"chainSelector":           fmt.Sprintf("%v", c.chainSelector),
+		"workflowId":           workflowId,
+		"artifactType":         artifactType,
+		"contentHash":          contentHash,
+		"workflowOwnerAddress": c.workflowOwnerAddress,
 	}
 	req.Var("artifact", reqVariables)
 
@@ -131,10 +125,8 @@ mutation GenerateUnsignedGetUrlForArtifact($artifact: GenerateUnsignedGetUrlRequ
 }`
 	req := graphql.NewRequest(mutation)
 	reqVariables := map[string]any{
-		"workflowId":              workflowId,
-		"artifactType":            artifactType,
-		"workflowRegistryAddress": c.workflowRegistryAddress,
-		"chainSelector":           fmt.Sprintf("%v", c.chainSelector),
+		"workflowId":   workflowId,
+		"artifactType": artifactType,
 	}
 	req.Var("artifact", reqVariables)
 

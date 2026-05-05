@@ -18,6 +18,8 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/jsonrpc2"
 	"github.com/smartcontractkit/chainlink-evm/gethwrappers/workflow/generated/workflow_registry_wrapper_v2"
 	"github.com/smartcontractkit/chainlink/v2/core/capabilities/vault/vaulttypes"
+
+	"github.com/smartcontractkit/cre-cli/internal/credentials"
 )
 
 type mockGatewayClient struct {
@@ -25,6 +27,10 @@ type mockGatewayClient struct {
 }
 
 func (m *mockGatewayClient) Post(b []byte) ([]byte, int, error) {
+	return m.post(b)
+}
+
+func (m *mockGatewayClient) PostWithBearer(b []byte, _ string) ([]byte, int, error) {
 	return m.post(b)
 }
 
@@ -119,6 +125,150 @@ func TestEncryptSecrets(t *testing.T) {
 		require.Error(t, err)
 		require.Nil(t, enc)
 		require.Contains(t, err.Error(), "vault public key fetch error")
+	})
+}
+
+func TestResolveEffectiveOwner(t *testing.T) {
+	t.Run("returns canonicalized address when SecretsOrgOwned is false", func(t *testing.T) {
+		h, _, _ := newMockHandler(t)
+		h.OwnerAddress = "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
+		h.EnvironmentSet.SecretsOrgOwned = false
+
+		owner, err := h.ResolveEffectiveOwner()
+		require.NoError(t, err)
+		require.Equal(t, "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266", owner)
+	})
+
+	t.Run("errors when SecretsOrgOwned is false and owner address is empty", func(t *testing.T) {
+		h, _, _ := newMockHandler(t)
+		h.OwnerAddress = ""
+		h.EnvironmentSet.SecretsOrgOwned = false
+
+		_, err := h.ResolveEffectiveOwner()
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "not a valid hex address")
+	})
+
+	t.Run("errors when SecretsOrgOwned is false and owner address is malformed", func(t *testing.T) {
+		h, _, _ := newMockHandler(t)
+		h.OwnerAddress = "not-an-address"
+		h.EnvironmentSet.SecretsOrgOwned = false
+
+		_, err := h.ResolveEffectiveOwner()
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "not a valid hex address")
+	})
+
+	t.Run("returns org ID when SecretsOrgOwned is true and org ID is set", func(t *testing.T) {
+		h, _, _ := newMockHandler(t)
+		h.OwnerAddress = "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
+		h.EnvironmentSet.SecretsOrgOwned = true
+		h.Credentials.OrgID = "org-123"
+
+		owner, err := h.ResolveEffectiveOwner()
+		require.NoError(t, err)
+		require.Equal(t, "org-123", owner)
+	})
+
+	t.Run("errors when SecretsOrgOwned is true but org ID is empty", func(t *testing.T) {
+		h, _, _ := newMockHandler(t)
+		h.OwnerAddress = "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
+		h.EnvironmentSet.SecretsOrgOwned = true
+		h.Credentials.OrgID = ""
+
+		_, err := h.ResolveEffectiveOwner()
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "org ID required")
+	})
+}
+
+func TestResolveVaultIdentifierOwnerForAuth(t *testing.T) {
+	t.Run("browser returns org ID when SecretsOrgOwned is false", func(t *testing.T) {
+		h, _, _ := newMockHandler(t)
+		h.OwnerAddress = "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
+		h.EnvironmentSet.SecretsOrgOwned = false
+		h.Credentials.AuthType = credentials.AuthTypeBearer
+		h.Credentials.OrgID = "org-browser"
+
+		owner, err := h.ResolveVaultIdentifierOwnerForAuth(SecretsAuthBrowser)
+		require.NoError(t, err)
+		require.Equal(t, "org-browser", owner)
+	})
+
+	t.Run("browser errors on api key auth", func(t *testing.T) {
+		h, _, _ := newMockHandler(t)
+		h.Credentials.AuthType = credentials.AuthTypeApiKey
+		h.Credentials.OrgID = "org-1"
+
+		_, err := h.ResolveVaultIdentifierOwnerForAuth(SecretsAuthBrowser)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "interactive login")
+	})
+
+	t.Run("browser errors when org ID is empty", func(t *testing.T) {
+		h, _, _ := newMockHandler(t)
+		h.Credentials.AuthType = credentials.AuthTypeBearer
+		h.Credentials.OrgID = ""
+
+		_, err := h.ResolveVaultIdentifierOwnerForAuth(SecretsAuthBrowser)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "organization information is missing")
+	})
+
+	t.Run("owner-key delegates to ResolveEffectiveOwner", func(t *testing.T) {
+		h, _, _ := newMockHandler(t)
+		h.OwnerAddress = "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
+		h.EnvironmentSet.SecretsOrgOwned = false
+
+		owner, err := h.ResolveVaultIdentifierOwnerForAuth(SecretsAuthOwnerKeySigning)
+		require.NoError(t, err)
+		require.Equal(t, "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266", owner)
+	})
+}
+
+func TestEncryptSecrets_OrgOwned(t *testing.T) {
+	mockGw := &mockGatewayClient{
+		post: func(body []byte) ([]byte, int, error) {
+			var req jsonrpc2.Request[vaultcommon.GetPublicKeyRequest]
+			_ = json.Unmarshal(body, &req)
+			resp := jsonrpc2.Response[vaultcommon.GetPublicKeyResponse]{
+				Version: jsonrpc2.JsonRpcVersion,
+				ID:      req.ID,
+				Method:  vaulttypes.MethodPublicKeyGet,
+				Result:  &vaultcommon.GetPublicKeyResponse{PublicKey: vaultPublicKeyHex},
+			}
+			b, _ := json.Marshal(resp)
+			return b, http.StatusOK, nil
+		},
+	}
+
+	raw := UpsertSecretsInputs{
+		{ID: "secret-1", Value: "val1", Namespace: "main"},
+	}
+
+	t.Run("uses orgID as owner when SecretsOrgOwned is true", func(t *testing.T) {
+		h, _, _ := newMockHandler(t)
+		h.Gw = mockGw
+		h.EnvironmentSet.SecretsOrgOwned = true
+		h.Credentials.OrgID = "org-456"
+
+		enc, err := h.EncryptSecrets(raw)
+		require.NoError(t, err)
+		require.Len(t, enc, 1)
+		require.Equal(t, "org-456", enc[0].Id.Owner)
+		require.Equal(t, "secret-1", enc[0].Id.Key)
+	})
+
+	t.Run("uses address as owner when SecretsOrgOwned is false", func(t *testing.T) {
+		h, _, _ := newMockHandler(t)
+		h.Gw = mockGw
+		h.OwnerAddress = "0xabc"
+		h.EnvironmentSet.SecretsOrgOwned = false
+
+		enc, err := h.EncryptSecrets(raw)
+		require.NoError(t, err)
+		require.Len(t, enc, 1)
+		require.Equal(t, "0xabc", enc[0].Id.Owner)
 	})
 }
 

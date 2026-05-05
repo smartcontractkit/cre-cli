@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
+	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/testutil/chainsim"
 )
 
@@ -348,21 +349,22 @@ func TestWaitForBackendLinkProcessing(t *testing.T) {
 	}
 }
 
-// TestTryAutoLink tests the auto-link execution setup
-func TestTryAutoLink(t *testing.T) {
+func TestTryAutoLinkUsesOnChainRegistry(t *testing.T) {
 	t.Parallel()
 
-	t.Run("sets up linkkey inputs correctly", func(t *testing.T) {
+	t.Run("contract address comes from resolved on-chain registry", func(t *testing.T) {
 		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
 		defer simulatedEnvironment.Close()
 
 		ctx, _ := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
 		h := newHandler(ctx, nil)
 		h.inputs.WorkflowOwner = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
-		h.inputs.WorkflowRegistryContractAddress = "0x1234567890123456789012345678901234567890"
+		h.inputs.OwnerLabel = "my-label"
 
-		// Verify the handler is set up correctly
+		onChain, err := settings.AsOnChain(ctx.ResolvedRegistry, "test")
+		assert.NoError(t, err)
+		assert.Equal(t, simulatedEnvironment.Contracts.WorkflowRegistry.Contract.Hex(), onChain.Address())
 		assert.Equal(t, "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266", h.inputs.WorkflowOwner)
-		assert.Equal(t, "0x1234567890123456789012345678901234567890", h.inputs.WorkflowRegistryContractAddress)
+		assert.Equal(t, "my-label", h.inputs.OwnerLabel)
 	})
 }

@@ -12,6 +12,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 
 	"github.com/smartcontractkit/cre-cli/internal/client/graphqlclient"
 	"github.com/smartcontractkit/cre-cli/internal/constants"
@@ -19,6 +20,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/oauth"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
+	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/tenantctx"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
@@ -34,9 +36,32 @@ func New(runtimeCtx *runtime.Context) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "login",
 		Short: "Start authentication flow",
-		Long:  "Opens browser for user login and saves credentials.",
-		Args:  cobra.NoArgs,
+		Long: `Opens a browser for interactive login and saves credentials.
+
+For non-interactive environments (CI/CD, automation, AI agents), set the
+CRE_API_KEY environment variable instead:
+
+  export CRE_API_KEY=<your-api-key>
+
+API keys can be created at https://app.chain.link (see Account Settings).
+When CRE_API_KEY is set, all commands that require authentication will use
+it automatically — no login needed.`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			v := viper.New()
+			if err := v.BindPFlags(cmd.Flags()); err != nil {
+				return err
+			}
+			if v.GetBool(settings.Flags.NonInteractive.Name) {
+				ui.ErrorWithSuggestions(
+					"Login requires a browser and is not available in non-interactive mode",
+					[]string{
+						"Set CRE_API_KEY environment variable instead: export CRE_API_KEY=<your-api-key>",
+						"API keys can be created at https://app.chain.link (Account Settings)",
+					},
+				)
+				return fmt.Errorf("login is not supported in non-interactive mode, use CRE_API_KEY instead")
+			}
 			h := newHandler(runtimeCtx)
 			return h.execute()
 		},

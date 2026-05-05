@@ -56,6 +56,14 @@ func New(ctx *runtime.Context) *cobra.Command {
 		Example: "cre secrets delete my-secrets.yaml",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if ctx.Viper.GetBool(settings.Flags.NonInteractive.Name) && !ctx.Viper.GetBool(settings.Flags.SkipConfirmation.Name) {
+				ui.ErrorWithSuggestions(
+					"Non-interactive mode requires all inputs via flags",
+					[]string{"--yes"},
+				)
+				return fmt.Errorf("missing required flags for --non-interactive mode")
+			}
+
 			secretsFilePath := args[0]
 
 			secretsAuth, err := cmd.Flags().GetString("secrets-auth")
@@ -113,24 +121,20 @@ func Execute(h *common.Handler, inputs DeleteSecretsInputs, duration time.Durati
 		if err := h.EnsureDeploymentRPCForOwnerKeySecrets(); err != nil {
 			return err
 		}
+		spinner := ui.NewSpinner()
+		spinner.Start("Verifying ownership...")
+		if err := h.EnsureOwnerLinkedOrFail(); err != nil {
+			spinner.Stop()
+			return err
+		}
+		spinner.Stop()
 	}
 
-	spinner := ui.NewSpinner()
-	spinner.Start("Verifying ownership...")
-	if err := h.EnsureOwnerLinkedOrFail(); err != nil {
-		spinner.Stop()
+	owner, err := h.ResolveVaultIdentifierOwnerForAuth(secretsAuth)
+	if err != nil {
 		return err
 	}
-	spinner.Stop()
 
-	// Validate and canonicalize owner address
-	owner := strings.TrimSpace(h.OwnerAddress)
-	if !ethcommon.IsHexAddress(owner) {
-		return fmt.Errorf("invalid owner address: %q", h.OwnerAddress)
-	}
-	owner = ethcommon.HexToAddress(owner).Hex() // checksummed string
-
-	// Prepare the list of SecretIdentifiers to be deleted.
 	ptrIDs := make([]*vault.SecretIdentifier, len(inputs))
 	for i, item := range inputs {
 		ptrIDs[i] = &vault.SecretIdentifier{
@@ -167,7 +171,7 @@ func Execute(h *common.Handler, inputs DeleteSecretsInputs, duration time.Durati
 
 	if common.IsBrowserFlow(secretsAuth) {
 		ui.Dim("Using your account to authorize vault access for this delete request...")
-		return h.ExecuteBrowserVaultAuthorization(context.Background(), vaulttypes.MethodSecretsDelete, digest)
+		return h.ExecuteBrowserVaultAuthorization(context.Background(), vaulttypes.MethodSecretsDelete, digest, requestBody)
 	}
 
 	gatewayPost := func() error {
@@ -181,7 +185,7 @@ func Execute(h *common.Handler, inputs DeleteSecretsInputs, duration time.Durati
 		return h.ParseVaultGatewayResponse(vaulttypes.MethodSecretsDelete, respBody)
 	}
 
-	ownerAddr := ethcommon.HexToAddress(h.OwnerAddress)
+	ownerAddr := ethcommon.HexToAddress(owner)
 
 	allowlisted, err := h.Wrc.IsRequestAllowlisted(ownerAddr, digest)
 	if err != nil {

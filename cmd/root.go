@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
+	"golang.org/x/term"
 
 	"github.com/smartcontractkit/cre-cli/cmd/account"
 	"github.com/smartcontractkit/cre-cli/cmd/client"
@@ -19,6 +20,7 @@ import (
 	generatebindings "github.com/smartcontractkit/cre-cli/cmd/generate-bindings"
 	"github.com/smartcontractkit/cre-cli/cmd/login"
 	"github.com/smartcontractkit/cre-cli/cmd/logout"
+	"github.com/smartcontractkit/cre-cli/cmd/registry"
 	"github.com/smartcontractkit/cre-cli/cmd/secrets"
 	"github.com/smartcontractkit/cre-cli/cmd/templates"
 	"github.com/smartcontractkit/cre-cli/cmd/update"
@@ -125,13 +127,7 @@ func newRootCommand() *cobra.Command {
 				return fmt.Errorf("failed to bind flags: %w", err)
 			}
 
-			settings.ResolveAndLoadBothEnvFiles(
-				log, v,
-				settings.Flags.CliEnvFile.Name, constants.DefaultEnvFileName,
-				settings.Flags.CliPublicEnvFile.Name, constants.DefaultPublicEnvFileName,
-			)
-
-			// Update log level if verbose flag is set — must happen before spinner starts
+			// Update log level if verbose flag is set — must happen before everything else
 			if verbose := v.GetBool(settings.Flags.Verbose.Name); verbose {
 				ui.SetVerbose(true)
 				newLogger := log.Level(zerolog.DebugLevel)
@@ -141,6 +137,14 @@ func newRootCommand() *cobra.Command {
 				runtimeContext.Logger = &newLogger
 				runtimeContext.ClientFactory = client.NewFactory(&newLogger, v)
 			}
+
+			log = runtimeContext.Logger
+
+			settings.ResolveAndLoadBothEnvFiles(
+				log, v,
+				settings.Flags.CliEnvFile.Name, constants.DefaultEnvFileName,
+				settings.Flags.CliPublicEnvFile.Name, constants.DefaultPublicEnvFileName,
+			)
 
 			// Start the global spinner for commands that do initialization work
 			spinner := ui.GlobalSpinner()
@@ -194,6 +198,16 @@ func newRootCommand() *cobra.Command {
 					ui.EnvContext(runtimeContext.EnvironmentSet.EnvLabel())
 					ui.Line()
 
+					// In non-TTY environments (CI/CD, piped stdin, AI agents),
+					// skip the interactive prompt and return an actionable error.
+					if !term.IsTerminal(int(os.Stdin.Fd())) { //nolint:gosec // os.Stdin.Fd() is always 0; overflow is impossible
+						ui.ErrorWithSuggestions("Authentication required: not logged in and no CRE_API_KEY set", []string{
+							"Run 'cre login' interactively, or",
+							"Set CRE_API_KEY environment variable for non-interactive use",
+						})
+						return fmt.Errorf("authentication required: %w", err)
+					}
+
 					runLogin, formErr := ui.Confirm("Would you like to login now?",
 						ui.WithLabels("Yes, login", "No, cancel"),
 					)
@@ -222,7 +236,7 @@ func newRootCommand() *cobra.Command {
 					spinner.Update("Loading user context...")
 				}
 				if err := runtimeContext.AttachTenantContext(cmd.Context()); err != nil {
-					runtimeContext.Logger.Warn().Err(err).Msg("failed to load user context — context.yaml not available")
+					runtimeContext.Logger.Warn().Err(err).Msg("failed to load user context")
 				}
 
 				// Check if organization is ungated for commands that require it
@@ -242,6 +256,11 @@ func newRootCommand() *cobra.Command {
 				if showSpinner {
 					spinner.Update("Loading settings...")
 				}
+				// Capture the invocation directory before SetExecutionContext changes it.
+				if invocationDir, err := os.Getwd(); err == nil {
+					runtimeContext.InvocationDir = invocationDir
+				}
+
 				// Set execution context (project root + workflow directory if applicable)
 				projectRootFlag := runtimeContext.Viper.GetString(settings.Flags.ProjectRoot.Name)
 				if err := context.SetExecutionContext(cmd, args, projectRootFlag, rootLogger); err != nil {
@@ -259,6 +278,14 @@ func newRootCommand() *cobra.Command {
 				err := runtimeContext.AttachSettings(cmd, isLoadDeploymentRPC(cmd))
 				if err != nil {
 					return fmt.Errorf("%w", err)
+				}
+
+				if err := runtimeContext.AttachResolvedRegistry(); err != nil {
+					return err
+				}
+
+				if err := runtimeContext.FinalizeDeferredWorkflowOwner(cmd); err != nil {
+					return err
 				}
 
 				// Restart spinner for remaining initialization
@@ -376,6 +403,12 @@ func newRootCommand() *cobra.Command {
 		"",
 		"Use target settings from YAML config",
 	)
+	// non-interactive flag is present for every subcommand
+	rootCmd.PersistentFlags().Bool(
+		settings.Flags.NonInteractive.Name,
+		false,
+		"Fail instead of prompting; requires all inputs via flags",
+	)
 	rootCmd.CompletionOptions.HiddenDefaultCmd = true
 
 	secretsCmd := secrets.New(runtimeContext)
@@ -389,17 +422,20 @@ func newRootCommand() *cobra.Command {
 	whoamiCmd := whoami.New(runtimeContext)
 	updateCmd := update.New(runtimeContext)
 	templatesCmd := templates.New(runtimeContext)
+	registryCmd := registry.New(runtimeContext)
 
 	secretsCmd.RunE = helpRunE
 	workflowCmd.RunE = helpRunE
 	accountCmd.RunE = helpRunE
 	templatesCmd.RunE = helpRunE
+	registryCmd.RunE = helpRunE
 
 	// Define groups (order controls display order)
 	rootCmd.AddGroup(&cobra.Group{ID: "getting-started", Title: "Getting Started"})
 	rootCmd.AddGroup(&cobra.Group{ID: "account", Title: "Account"})
 	rootCmd.AddGroup(&cobra.Group{ID: "workflow", Title: "Workflow"})
 	rootCmd.AddGroup(&cobra.Group{ID: "secret", Title: "Secret"})
+	rootCmd.AddGroup(&cobra.Group{ID: "registry", Title: "Registry"})
 
 	initCmd.GroupID = "getting-started"
 	templatesCmd.GroupID = "getting-started"
@@ -411,6 +447,7 @@ func newRootCommand() *cobra.Command {
 
 	secretsCmd.GroupID = "secret"
 	workflowCmd.GroupID = "workflow"
+	registryCmd.GroupID = "registry"
 
 	rootCmd.AddCommand(
 		initCmd,
@@ -421,6 +458,7 @@ func newRootCommand() *cobra.Command {
 		whoamiCmd,
 		secretsCmd,
 		workflowCmd,
+		registryCmd,
 		genBindingsCmd,
 		updateCmd,
 		templatesCmd,
@@ -451,12 +489,15 @@ func isLoadSettings(cmd *cobra.Command) bool {
 		"cre workflow limits":        {},
 		"cre workflow limits export": {},
 		"cre workflow build":         {},
+		"cre workflow list":          {},
 		"cre account":                {},
 		"cre secrets":                {},
 		"cre templates":              {},
 		"cre templates list":         {},
 		"cre templates add":          {},
 		"cre templates remove":       {},
+		"cre registry":               {},
+		"cre registry list":          {},
 		"cre":                        {},
 	}
 

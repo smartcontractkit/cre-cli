@@ -74,3 +74,58 @@ func TestDeriveEthAddressFromPrivateKey_InvalidInput(t *testing.T) {
 		})
 	}
 }
+
+func TestFormatWorkflowOwnerAddress(t *testing.T) {
+	t.Parallel()
+
+	addr := "0x1234567890123456789012345678901234567890"
+	want := common.HexToAddress(addr).Hex()
+
+	t.Run("trims and checksums", func(t *testing.T) {
+		t.Parallel()
+		got, err := FormatWorkflowOwnerAddress("  " + addr + "  ")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != want {
+			t.Fatalf("got %q want %q", got, want)
+		}
+	})
+
+	t.Run("adds 0x when missing", func(t *testing.T) {
+		t.Parallel()
+		got, err := FormatWorkflowOwnerAddress(strings.TrimPrefix(addr, "0x"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != want {
+			t.Fatalf("got %q want %q", got, want)
+		}
+	})
+
+	t.Run("empty", func(t *testing.T) {
+		t.Parallel()
+		got, err := FormatWorkflowOwnerAddress("")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != "" {
+			t.Fatalf("got %q want empty", got)
+		}
+		got, err = FormatWorkflowOwnerAddress("   ")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != "" {
+			t.Fatalf("got %q want empty", got)
+		}
+	})
+
+	t.Run("invalid", func(t *testing.T) {
+		t.Parallel()
+		_, err := FormatWorkflowOwnerAddress("not-an-address")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+}

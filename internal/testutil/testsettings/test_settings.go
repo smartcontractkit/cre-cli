@@ -1,4 +1,4 @@
-package testutil
+package testsettings
 
 import (
 	_ "embed"

@@ -25,6 +25,7 @@ cre workflow hash <workflow-folder-path> [optional flags]
   -h, --help                help for hash
       --no-config           Hash without a config file
       --public_key string   Owner address to use for computing the workflow hash. Required when CRE_ETH_PRIVATE_KEY is not set and no workflow-owner-address is configured. Defaults to the address derived from CRE_ETH_PRIVATE_KEY or the workflow-owner-address in project settings.
+      --skip-type-checks    Skip TypeScript project typecheck during compilation (passes --skip-type-checks to cre-compile)
       --wasm string         Path or URL to a pre-built WASM binary (skips compilation)
 ```
 
@@ -32,6 +33,7 @@ cre workflow hash <workflow-folder-path> [optional flags]
 
 ```
   -e, --env string            Path to .env file which contains sensitive info
+      --non-interactive       Fail instead of prompting; requires all inputs via flags
   -R, --project-root string   Path to the project root
   -E, --public-env string     Path to .env.public file which contains shared, non-sensitive build config
   -T, --target string         Use target settings from YAML config

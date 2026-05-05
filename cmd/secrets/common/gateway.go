@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/avast/retry-go/v4"
@@ -14,6 +15,8 @@ import (
 
 type GatewayClient interface {
 	Post(body []byte) (respBody []byte, status int, err error)
+	// PostWithBearer sends the JSON-RPC body with Authorization: Bearer for the browser OAuth flow (no allowlist retries).
+	PostWithBearer(body []byte, bearerToken string) (respBody []byte, status int, err error)
 }
 
 type HTTPClient struct {
@@ -74,6 +77,48 @@ func (g *HTTPClient) Post(body []byte) ([]byte, int, error) {
 	return respBody, status, nil
 }
 
+func (g *HTTPClient) PostWithBearer(body []byte, bearerToken string) ([]byte, int, error) {
+	if strings.TrimSpace(bearerToken) == "" {
+		return nil, 0, fmt.Errorf("empty bearer token")
+	}
+	attempts := g.RetryAttempts
+	if attempts == 0 {
+		attempts = 3
+	}
+	delay := g.RetryDelay
+	if delay == 0 {
+		delay = 4 * time.Second
+	}
+
+	var respBody []byte
+	var status int
+
+	err := retry.Do(
+		func() error {
+			b, s, e := g.postOnceWithBearer(body, bearerToken)
+			respBody, status = b, s
+			if e != nil {
+				return fmt.Errorf("gateway request failed: %w", e)
+			}
+			if s != http.StatusOK {
+				return retry.Unrecoverable(fmt.Errorf("gateway returned non-200: status_code=%d, body=%s", s, string(respBody)))
+			}
+			return nil
+		},
+		retry.Attempts(uint(attempts)),
+		retry.Delay(delay),
+		retry.LastErrorOnly(true),
+		retry.OnRetry(func(n uint, err error) {
+			ui.Dim(fmt.Sprintf("Retrying vault gateway request... (attempt %d/%d): %v", n+1, attempts, err))
+		}),
+	)
+
+	if err != nil {
+		return respBody, status, fmt.Errorf("gateway POST failed: %w", err)
+	}
+	return respBody, status, nil
+}
+
 func (g *HTTPClient) postOnce(body []byte) ([]byte, int, error) {
 	req, err := http.NewRequest("POST", g.URL, bytes.NewBuffer(body))
 	if err != nil {
@@ -81,6 +126,32 @@ func (g *HTTPClient) postOnce(body []byte) ([]byte, int, error) {
 	}
 	req.Header.Set("Content-Type", "application/jsonrpc")
 	req.Header.Set("Accept", "application/json")
+
+	if g.Client == nil {
+		return nil, 0, fmt.Errorf("HTTP client is not initialized")
+	}
+
+	resp, err := g.Client.Do(req) // #nosec G704 -- URL is from trusted CLI configuration
+	if err != nil {
+		return nil, 0, fmt.Errorf("HTTP request to gateway failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	b, rerr := io.ReadAll(resp.Body)
+	if rerr != nil {
+		return nil, resp.StatusCode, fmt.Errorf("read response body: %w", rerr)
+	}
+	return b, resp.StatusCode, nil
+}
+
+func (g *HTTPClient) postOnceWithBearer(body []byte, bearerToken string) ([]byte, int, error) {
+	req, err := http.NewRequest("POST", g.URL, bytes.NewBuffer(body))
+	if err != nil {
+		return nil, 0, fmt.Errorf("create HTTP request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/jsonrpc")
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Authorization", "Bearer "+bearerToken)
 
 	if g.Client == nil {
 		return nil, 0, fmt.Errorf("HTTP client is not initialized")

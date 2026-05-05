@@ -11,8 +11,8 @@ import (
 )
 
 // NewGraphQLMockServerGetOrganization starts an httptest.Server that responds to
-// getOrganization with a fixed organizationId. It sets EnvVarGraphQLURL so CLI
-// commands use this server. Caller must defer srv.Close().
+// getCreOrganizationInfo with a fixed orgId and derivedWorkflowOwners.
+// It sets EnvVarGraphQLURL so CLI commands use this server. Caller must defer srv.Close().
 func NewGraphQLMockServerGetOrganization(t *testing.T) *httptest.Server {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -23,10 +23,13 @@ func NewGraphQLMockServerGetOrganization(t *testing.T) *httptest.Server {
 			}
 			_ = json.NewDecoder(r.Body).Decode(&req)
 			w.Header().Set("Content-Type", "application/json")
-			if strings.Contains(req.Query, "getOrganization") {
+			if strings.Contains(req.Query, "getCreOrganizationInfo") {
 				_ = json.NewEncoder(w).Encode(map[string]any{
 					"data": map[string]any{
-						"getOrganization": map[string]any{"organizationId": "test-org-id"},
+						"getCreOrganizationInfo": map[string]any{
+							"orgId":                 "test-org-id",
+							"derivedWorkflowOwners": []string{"ab12cd34ef56ab12cd34ef56ab12cd34ef56ab12"},
+						},
 					},
 				})
 				return

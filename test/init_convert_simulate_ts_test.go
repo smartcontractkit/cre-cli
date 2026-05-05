@@ -67,13 +67,19 @@ func TestE2EInit_ConvertToCustomBuild_TS(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, string(mainBefore), `return "Hello world!";`, "convert must not modify workflow source")
 
-	// Test-only: copy compile-to-js and workflow-wrapper from SDK, then patch to add define (so FLAG env drives the build).
+	// Test-only: copy all SDK script sources from cre-sdk (compile-to-js may import helpers like compile-cli-args).
 	scriptsDir := filepath.Join(workflowDirectory, "scripts")
 	require.NoError(t, os.MkdirAll(scriptsDir, 0755))
 	srcDir := filepath.Join(workflowDirectory, "node_modules", "@chainlink", "cre-sdk", "scripts", "src")
-	for _, name := range []string{"compile-to-js.ts", "workflow-wrapper.ts", "validate-workflow-runtime-compat.ts"} {
-		b, err := os.ReadFile(filepath.Join(srcDir, name))
-		require.NoError(t, err)
+	entries, err := os.ReadDir(srcDir)
+	require.NoError(t, err)
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".ts") {
+			continue
+		}
+		name := e.Name()
+		b, readErr := os.ReadFile(filepath.Join(srcDir, name))
+		require.NoError(t, readErr)
 		require.NoError(t, os.WriteFile(filepath.Join(scriptsDir, name), b, 0600)) //nolint:gosec // G703 -- test paths in temp dir
 	}
 	compileToJSPath := filepath.Join(scriptsDir, "compile-to-js.ts")
