@@ -73,3 +73,21 @@ Evidence required:
 
 - Fill checklist summary and final verdict.
 - Confirm PASS/FAIL/SKIP/BLOCKED totals align with section statuses.
+
+## Phase 7: Staging Off-Chain Validation (optional)
+
+Run only when validating the private (off-chain) registry feature in staging. Requires Tailscale VPN and a staging org with appropriate permissions.
+
+Sub-phases:
+- 7a. Private Registry — delegate to `$cre-private-registry-testing`
+- 7b. Off-Chain Secrets — delegate to `$cre-offchain-secrets-testing`
+
+Prerequisites beyond normal preflight:
+- `CRE_CLI_ENV=STAGING` set
+- Authenticated to staging: `CRE_CLI_ENV=STAGING cre login`
+- For 7b only: org must have `claim_vault_secret_management_enabled` (request in #cre-accounts)
+
+Evidence required:
+- Per-case PASS/FAIL/SKIP/BLOCKED table from each sub-skill.
+- Set/unset status for `CRE_ETH_PRIVATE_KEY` (must be unset for positive-path cases).
+- Known-issue ticket references (DEVSVCS-4808, DEVSVCS-4861) noted where applicable.
