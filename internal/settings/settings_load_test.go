@@ -236,6 +236,32 @@ func TestLoadEnvOverridesExistingEnv(t *testing.T) {
 	assert.Equal(t, "staging", v.GetString("CRE_TARGET"))
 }
 
+func TestLoadEnvSkipsOpURIButPreservesResolvedEnvVar(t *testing.T) {
+	// Simulate `op run` having already resolved the secret into the process env.
+	os.Setenv("MY_SECRET", "resolved-value")
+	t.Cleanup(func() { os.Unsetenv("MY_SECRET"); os.Unsetenv("PLAIN_VAR") })
+
+	tempDir := t.TempDir()
+	envFilePath := filepath.Join(tempDir, ".env")
+	require.NoError(t, godotenv.Write(map[string]string{
+		"MY_SECRET": "op://vault/item/field",
+		"PLAIN_VAR": "plain-value",
+	}, envFilePath))
+
+	logger := testutil.NewTestLogger()
+	v := viper.New()
+	settings.LoadEnv(logger, v, envFilePath)
+
+	// op:// reference must not clobber the value injected by op run.
+	assert.Equal(t, "resolved-value", os.Getenv("MY_SECRET"),
+		"op:// reference in .env should not overwrite the value resolved by op run")
+	// Plain values still override the shell env (Overload semantics preserved).
+	assert.Equal(t, "plain-value", os.Getenv("PLAIN_VAR"))
+	// loadedEnvVars still reflects the raw file content.
+	require.NotNil(t, settings.LoadedEnvVars())
+	assert.Equal(t, "op://vault/item/field", settings.LoadedEnvVars()["MY_SECRET"])
+}
+
 func TestLoadEnvStateResetsBetweenCalls(t *testing.T) {
 	tempDir := t.TempDir()
 	envFilePath := filepath.Join(tempDir, ".env")

@@ -127,13 +127,7 @@ func newRootCommand() *cobra.Command {
 				return fmt.Errorf("failed to bind flags: %w", err)
 			}
 
-			settings.ResolveAndLoadBothEnvFiles(
-				log, v,
-				settings.Flags.CliEnvFile.Name, constants.DefaultEnvFileName,
-				settings.Flags.CliPublicEnvFile.Name, constants.DefaultPublicEnvFileName,
-			)
-
-			// Update log level if verbose flag is set — must happen before spinner starts
+			// Update log level if verbose flag is set — must happen before everything else
 			if verbose := v.GetBool(settings.Flags.Verbose.Name); verbose {
 				ui.SetVerbose(true)
 				newLogger := log.Level(zerolog.DebugLevel)
@@ -143,6 +137,14 @@ func newRootCommand() *cobra.Command {
 				runtimeContext.Logger = &newLogger
 				runtimeContext.ClientFactory = client.NewFactory(&newLogger, v)
 			}
+
+			log = runtimeContext.Logger
+
+			settings.ResolveAndLoadBothEnvFiles(
+				log, v,
+				settings.Flags.CliEnvFile.Name, constants.DefaultEnvFileName,
+				settings.Flags.CliPublicEnvFile.Name, constants.DefaultPublicEnvFileName,
+			)
 
 			// Start the global spinner for commands that do initialization work
 			spinner := ui.GlobalSpinner()
