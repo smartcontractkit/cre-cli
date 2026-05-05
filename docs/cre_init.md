@@ -18,12 +18,13 @@ cre init [optional flags]
 ### Options
 
 ```
-  -h, --help                   help for init
-  -p, --project-name string    Name for the new project
-      --refresh                Bypass template cache and fetch fresh data
-      --rpc-url stringArray    RPC URL for a network (format: chain-name=url, repeatable)
-  -t, --template string        Name of the template to use (e.g., kv-store-go)
-  -w, --workflow-name string   Name for the new workflow
+      --deployment-registry string   Registry ID to deploy workflows to (e.g. my-private-registry or onchain:ethereum-testnet-sepolia)
+  -h, --help                         help for init
+  -p, --project-name string          Name for the new project
+      --refresh                      Bypass template cache and fetch fresh data
+      --rpc-url stringArray          RPC URL for a network (format: chain-name=url, repeatable)
+  -t, --template string              Name of the template to use (e.g., kv-store-go)
+  -w, --workflow-name string         Name for the new workflow
 ```
 
 ### Options inherited from parent commands

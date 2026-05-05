@@ -919,10 +919,11 @@ func TestNonInteractiveAllFlagsProvided(t *testing.T) {
 	defer restoreCwd()
 
 	inputs := Inputs{
-		ProjectName:    "niProj",
-		TemplateName:   "hello-world-go",
-		WorkflowName:   "my-wf",
-		NonInteractive: true,
+		ProjectName:        "niProj",
+		TemplateName:       "hello-world-go",
+		WorkflowName:       "my-wf",
+		DeploymentRegistry: "onchain:ethereum-testnet-sepolia",
+		NonInteractive:     true,
 	}
 
 	h := newHandlerWithRegistry(sim.NewRuntimeContext(), newMockRegistry())
