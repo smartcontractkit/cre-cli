@@ -143,10 +143,15 @@ func loadEnvFile(logger *zerolog.Logger, envPath string) (string, map[string]str
 		if strings.HasPrefix(v, "op://") {
 			// Leave the value already in the environment (resolved by `op run`) untouched.
 			logger.Debug().Str("key", k).Msg(
-				"Skipping op:// reference in env file; use `op run --env-file .env -- cre ...` to resolve 1Password secrets")
+				fmt.Sprintf("Skipping op:// reference in env file; use `op run --env-file %s -- cre ...` to resolve 1Password secrets", envPath))
 			continue
 		}
-		os.Setenv(k, v)
+		err = os.Setenv(k, v)
+		if err != nil {
+			logger.Error().Str("key", k).Str("value", v).Err(err).Msg(
+				"Failed to set environment variable; CLI tool will read and verify individual environment variables (they MUST be exported). " +
+					"If the file is present, please check that it follows the correct format: https://dotenvx.com/docs/env-file")
+		}
 	}
 
 	return envPath, vars
