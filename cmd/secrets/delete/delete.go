@@ -185,7 +185,7 @@ func Execute(h *common.Handler, inputs DeleteSecretsInputs, duration time.Durati
 		return h.ParseVaultGatewayResponse(vaulttypes.MethodSecretsDelete, respBody)
 	}
 
-	ownerAddr := ethcommon.HexToAddress(h.OwnerAddress)
+	ownerAddr := ethcommon.HexToAddress(owner)
 
 	allowlisted, err := h.Wrc.IsRequestAllowlisted(ownerAddr, digest)
 	if err != nil {
