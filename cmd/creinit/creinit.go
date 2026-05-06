@@ -255,9 +255,6 @@ func (h *handler) Execute(inputs Inputs) error {
 		if inputs.TemplateName == "" {
 			missingFlags = append(missingFlags, "--template")
 		}
-		if inputs.DeploymentRegistry == "" {
-			missingFlags = append(missingFlags, "--deployment-registry")
-		}
 		if selectedTemplate != nil {
 			missing := MissingNetworks(selectedTemplate, inputs.RpcURLs)
 			for _, network := range missing {
@@ -277,6 +274,10 @@ func (h *handler) Execute(inputs Inputs) error {
 	}
 
 	// Run the interactive wizard
+	if inputs.NonInteractive && inputs.DeploymentRegistry == "" {
+		ui.Warning("No --deployment-registry specified, defaulting to on-chain registry. Add --deployment-registry to make this explicit.")
+	}
+
 	var registries []*tenantctx.Registry
 	if h.runtimeContext.TenantContext != nil {
 		registries = h.runtimeContext.TenantContext.Registries
