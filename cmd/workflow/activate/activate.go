@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/smartcontractkit/cre-cli/cmd/client"
+	workflowcommon "github.com/smartcontractkit/cre-cli/cmd/workflow/common"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
@@ -122,7 +123,13 @@ func (h *handler) Execute() error {
 		return fmt.Errorf("missing required flags for --non-interactive mode")
 	}
 
-	h.displayWorkflowDetails()
+	workflowcommon.DisplayWorkflowDetails(
+		h.settings,
+		h.runtimeContext,
+		"Activating",
+		h.inputs.WorkflowName,
+		h.inputs.WorkflowOwner,
+	)
 
 	strategy, err := newRegistryActivateStrategy(h.runtimeContext.ResolvedRegistry, h)
 	if err != nil {
@@ -148,11 +155,3 @@ func (h *handler) resolveWorkflowOwner(registryType settings.RegistryType) (stri
 	return owner, nil
 }
 
-func (h *handler) displayWorkflowDetails() {
-	ui.Line()
-	ui.Title(fmt.Sprintf("Activating Workflow: %s", h.inputs.WorkflowName))
-	ui.Dim(fmt.Sprintf("Registry:      %s", h.runtimeContext.ResolvedRegistry.ID()))
-	ui.Dim(fmt.Sprintf("Target:        %s", h.settings.User.TargetName))
-	ui.Dim(fmt.Sprintf("Owner Address: %s", h.inputs.WorkflowOwner))
-	ui.Line()
-}

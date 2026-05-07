@@ -12,6 +12,7 @@ import (
 
 	"github.com/smartcontractkit/cre-cli/cmd/client"
 	cmdcommon "github.com/smartcontractkit/cre-cli/cmd/common"
+	workflowcommon "github.com/smartcontractkit/cre-cli/cmd/workflow/common"
 	"github.com/smartcontractkit/cre-cli/internal/accessrequest"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
@@ -262,7 +263,13 @@ func (h *handler) Execute(ctx context.Context) error {
 // Artifact upload is deferred to the deploy service so it runs after any
 // existing-workflow update confirmation.
 func (h *handler) prepareArtifacts() error {
-	h.displayWorkflowDetails()
+	workflowcommon.DisplayWorkflowDetails(
+		h.settings,
+		h.runtimeContext,
+		"Deploying",
+		h.inputs.WorkflowName,
+		h.inputs.WorkflowOwner,
+	)
 
 	if cmdcommon.IsURL(h.inputs.WasmPath) {
 		h.inputs.BinaryURL = h.inputs.WasmPath
@@ -319,15 +326,6 @@ func (h *handler) resolveWorkflowOwner(registryType settings.RegistryType) (stri
 	}
 
 	return owner, nil
-}
-
-func (h *handler) displayWorkflowDetails() {
-	ui.Line()
-	ui.Title(fmt.Sprintf("Deploying Workflow: %s", h.inputs.WorkflowName))
-	ui.Dim(fmt.Sprintf("Registry:      %s", h.runtimeContext.ResolvedRegistry.ID()))
-	ui.Dim(fmt.Sprintf("Target:        %s", h.settings.User.TargetName))
-	ui.Dim(fmt.Sprintf("Owner Address: %s", h.inputs.WorkflowOwner))
-	ui.Line()
 }
 
 func confirmWorkflowOverwrite(workflowName string, skipConfirmation, nonInteractive bool) error {

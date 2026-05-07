@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/smartcontractkit/cre-cli/cmd/client"
+	workflowcommon "github.com/smartcontractkit/cre-cli/cmd/workflow/common"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
@@ -133,7 +134,13 @@ func (h *handler) Execute() error {
 		return err
 	}
 
-	h.displayWorkflowDetails()
+	workflowcommon.DisplayWorkflowDetails(
+		h.settings,
+		h.runtimeContext,
+		"Deleting",
+		h.inputs.WorkflowName,
+		h.inputs.WorkflowOwner,
+	)
 
 	workflows, err := adapter.FetchWorkflows()
 	if err != nil {
@@ -211,13 +218,4 @@ func (h *handler) askForWorkflowDeletionConfirmation(expectedWorkflowName string
 	}
 
 	return result == expectedWorkflowName, nil
-}
-
-func (h *handler) displayWorkflowDetails() {
-	ui.Line()
-	ui.Title(fmt.Sprintf("Deleting Workflow: %s", h.inputs.WorkflowName))
-	ui.Dim(fmt.Sprintf("Registry:      %s", h.runtimeContext.ResolvedRegistry.ID()))
-	ui.Dim(fmt.Sprintf("Target:        %s", h.settings.User.TargetName))
-	ui.Dim(fmt.Sprintf("Owner Address: %s", h.inputs.WorkflowOwner))
-	ui.Line()
 }
