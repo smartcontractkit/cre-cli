@@ -151,6 +151,7 @@ func (h *handler) resolveWorkflowOwner(registryType settings.RegistryType) (stri
 func (h *handler) displayWorkflowDetails() {
 	ui.Line()
 	ui.Title(fmt.Sprintf("Activating Workflow: %s", h.inputs.WorkflowName))
+	ui.Dim(fmt.Sprintf("Registry:      %s", h.runtimeContext.ResolvedRegistry.ID()))
 	ui.Dim(fmt.Sprintf("Target:        %s", h.settings.User.TargetName))
 	ui.Dim(fmt.Sprintf("Owner Address: %s", h.inputs.WorkflowOwner))
 	ui.Line()

@@ -216,6 +216,7 @@ func (h *handler) askForWorkflowDeletionConfirmation(expectedWorkflowName string
 func (h *handler) displayWorkflowDetails() {
 	ui.Line()
 	ui.Title(fmt.Sprintf("Deleting Workflow: %s", h.inputs.WorkflowName))
+	ui.Dim(fmt.Sprintf("Registry:      %s", h.runtimeContext.ResolvedRegistry.ID()))
 	ui.Dim(fmt.Sprintf("Target:        %s", h.settings.User.TargetName))
 	ui.Dim(fmt.Sprintf("Owner Address: %s", h.inputs.WorkflowOwner))
 	ui.Line()
