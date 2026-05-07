@@ -127,7 +127,7 @@ func ParseRegistryType(raw string) RegistryType {
 
 func defaultFromEnvironmentSet(envSet *environments.EnvironmentSet) *OnChainRegistry {
 	return NewOnChainRegistry(
-		"",
+		fmt.Sprintf("onchain:%s", envSet.WorkflowRegistryChainName),
 		envSet.WorkflowRegistryAddress,
 		envSet.WorkflowRegistryChainName,
 		envSet.DonFamily,
