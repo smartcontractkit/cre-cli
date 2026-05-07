@@ -137,12 +137,9 @@ func NewEnvironmentSet(ff *fileFormat, envName string) *EnvironmentSet {
 
 	newEnvironmentSetWarningsOnce.Do(func() {
 		switch envName {
-		case DevelopmentEnv:
-			ui.Warning(fmt.Sprintf("%s set, using %s environment", EnvVarEnv, DevelopmentEnv))
-		case StagingEnv:
-			ui.Warning(fmt.Sprintf("%s set, using %s environment", EnvVarEnv, StagingEnv))
 		case DefaultEnv:
-			break
+		case DevelopmentEnv, StagingEnv:
+			ui.Warning(fmt.Sprintf("%s set, using %s environment", EnvVarEnv, envName))
 		default:
 			ui.Warning(fmt.Sprintf("Environment %s not found, defaulting to %s", envName, DefaultEnv))
 		}
