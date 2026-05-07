@@ -54,7 +54,7 @@ under the ` + "`deployment-registry`" + ` key to target that registry, e.g.:
 			ui.Line()
 			ui.Code("  <target-name>:")
 			ui.Code("    user-workflow:")
-			ui.Code("      deployment-registry: \"private\"")
+			ui.Code(fmt.Sprintf("      deployment-registry: %q", registries[0].ID))
 			ui.Line()
 
 			return nil
