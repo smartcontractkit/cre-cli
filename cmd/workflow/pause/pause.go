@@ -151,4 +151,3 @@ func (h *handler) resolveWorkflowOwner(registryType settings.RegistryType) (stri
 
 	return owner, nil
 }
-
