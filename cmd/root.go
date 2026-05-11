@@ -415,6 +415,16 @@ func newRootCommand() *cobra.Command {
 		false,
 		"Fail instead of prompting; requires all inputs via flags",
 	)
+	// allow-unknown-chains skips chain-name validation against the chain-selectors
+	// registry so experimental chains can be configured and tested before they are
+	// added upstream. The chain name is still passed through verbatim to RPC and
+	// selector lookups, which will surface their own errors if the chain is truly
+	// unknown to downstream callers.
+	rootCmd.PersistentFlags().Bool(
+		settings.Flags.AllowUnknownChains.Name,
+		false,
+		"Skip chain-name validation against the chain-selectors registry (for experimental chains)",
+	)
 	rootCmd.CompletionOptions.HiddenDefaultCmd = true
 
 	secretsCmd := secrets.New(runtimeContext)
