@@ -72,7 +72,7 @@ func TestBlankWorkflowSimulation(t *testing.T) {
 		Settings: &settings.Settings{
 			Workflow: workflowSettings,
 			User: settings.UserSettings{
-				TargetName:    "staging-settings",
+				TargetName:  "staging-settings",
 				PrivateKeys: map[string]string{settings.EVM.Name: "88888845d8761ca4a8cefb324c89702f12114ffbd0c47222f12aac0ad6538888"},
 			},
 		},

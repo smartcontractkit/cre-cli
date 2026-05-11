@@ -7,11 +7,10 @@ import (
 	"github.com/aptos-labs/aptos-go-sdk"
 	"github.com/aptos-labs/aptos-go-sdk/crypto"
 
+	aptosfakes "github.com/smartcontractkit/chainlink-aptos/fakes"
 	aptosserver "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/chain-capabilities/aptos/server"
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	"github.com/smartcontractkit/chainlink/v2/core/capabilities"
-
-	aptosfakes "github.com/smartcontractkit/chainlink-aptos/fakes"
 
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain"
 )
