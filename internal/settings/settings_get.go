@@ -280,5 +280,5 @@ func GetChainSelectorByChainName(name string) (uint64, error) {
 			return selector, nil
 		}
 	}
-	return 0, fmt.Errorf("failed to get chain ID from name %q: chain not found", name)
+	return 0, fmt.Errorf("failed to get chain ID from name %q: chain not found\n  Run 'cre workflow supported-chains' to see all valid chain names", name)
 }

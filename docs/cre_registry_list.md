@@ -6,6 +6,14 @@ Lists available workflow registries for the current environment
 
 Displays the registries configured for your organization, including type and address.
 
+The ID shown for each registry is the value you set in workflow.yaml
+under the `deployment-registry` key to target that registry, e.g.:
+
+  <target-name>:
+    user-workflow:
+      workflow-name: "my-workflow"
+      deployment-registry: "private"
+
 ```
 cre registry list [optional flags]
 ```

@@ -74,7 +74,7 @@ func New(ctx *runtime.Context) *cobra.Command {
 				return err
 			}
 
-			h, err := common.NewHandler(ctx, secretsFilePath)
+			h, err := common.NewHandler(ctx, secretsFilePath, secretsAuth)
 			if err != nil {
 				return err
 			}
@@ -121,17 +121,16 @@ func Execute(h *common.Handler, inputs DeleteSecretsInputs, duration time.Durati
 		if err := h.EnsureDeploymentRPCForOwnerKeySecrets(); err != nil {
 			return err
 		}
-	}
-
-	spinner := ui.NewSpinner()
-	spinner.Start("Verifying ownership...")
-	if err := h.EnsureOwnerLinkedOrFail(); err != nil {
+		spinner := ui.NewSpinner()
+		spinner.Start("Verifying ownership...")
+		if err := h.EnsureOwnerLinkedOrFail(); err != nil {
+			spinner.Stop()
+			return err
+		}
 		spinner.Stop()
-		return err
 	}
-	spinner.Stop()
 
-	owner, err := h.ResolveEffectiveOwner()
+	owner, err := h.ResolveVaultIdentifierOwnerForAuth(secretsAuth)
 	if err != nil {
 		return err
 	}
@@ -186,7 +185,7 @@ func Execute(h *common.Handler, inputs DeleteSecretsInputs, duration time.Durati
 		return h.ParseVaultGatewayResponse(vaulttypes.MethodSecretsDelete, respBody)
 	}
 
-	ownerAddr := ethcommon.HexToAddress(h.OwnerAddress)
+	ownerAddr := ethcommon.HexToAddress(owner)
 
 	allowlisted, err := h.Wrc.IsRequestAllowlisted(ownerAddr, digest)
 	if err != nil {

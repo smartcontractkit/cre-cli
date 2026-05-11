@@ -1,6 +1,7 @@
 package common
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -18,6 +20,11 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/jsonrpc2"
 	"github.com/smartcontractkit/chainlink-evm/gethwrappers/workflow/generated/workflow_registry_wrapper_v2"
 	"github.com/smartcontractkit/chainlink/v2/core/capabilities/vault/vaulttypes"
+
+	"github.com/smartcontractkit/cre-cli/internal/credentials"
+	"github.com/smartcontractkit/cre-cli/internal/environments"
+	"github.com/smartcontractkit/cre-cli/internal/runtime"
+	"github.com/smartcontractkit/cre-cli/internal/settings"
 )
 
 type mockGatewayClient struct {
@@ -180,6 +187,50 @@ func TestResolveEffectiveOwner(t *testing.T) {
 	})
 }
 
+func TestResolveVaultIdentifierOwnerForAuth(t *testing.T) {
+	t.Run("browser returns org ID when SecretsOrgOwned is false", func(t *testing.T) {
+		h, _, _ := newMockHandler(t)
+		h.OwnerAddress = "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
+		h.EnvironmentSet.SecretsOrgOwned = false
+		h.Credentials.AuthType = credentials.AuthTypeBearer
+		h.Credentials.OrgID = "org-browser"
+
+		owner, err := h.ResolveVaultIdentifierOwnerForAuth(SecretsAuthBrowser)
+		require.NoError(t, err)
+		require.Equal(t, "org-browser", owner)
+	})
+
+	t.Run("browser errors on api key auth", func(t *testing.T) {
+		h, _, _ := newMockHandler(t)
+		h.Credentials.AuthType = credentials.AuthTypeApiKey
+		h.Credentials.OrgID = "org-1"
+
+		_, err := h.ResolveVaultIdentifierOwnerForAuth(SecretsAuthBrowser)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "interactive login")
+	})
+
+	t.Run("browser errors when org ID is empty", func(t *testing.T) {
+		h, _, _ := newMockHandler(t)
+		h.Credentials.AuthType = credentials.AuthTypeBearer
+		h.Credentials.OrgID = ""
+
+		_, err := h.ResolveVaultIdentifierOwnerForAuth(SecretsAuthBrowser)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "organization information is missing")
+	})
+
+	t.Run("owner-key delegates to ResolveEffectiveOwner", func(t *testing.T) {
+		h, _, _ := newMockHandler(t)
+		h.OwnerAddress = "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
+		h.EnvironmentSet.SecretsOrgOwned = false
+
+		owner, err := h.ResolveVaultIdentifierOwnerForAuth(SecretsAuthOwnerKeySigning)
+		require.NoError(t, err)
+		require.Equal(t, "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266", owner)
+	})
+}
+
 func TestEncryptSecrets_OrgOwned(t *testing.T) {
 	mockGw := &mockGatewayClient{
 		post: func(body []byte) ([]byte, int, error) {
@@ -287,4 +338,48 @@ func TestPackAllowlistRequestTxData_Success_No0x(t *testing.T) {
 	dataHex, err := h.PackAllowlistRequestTxData(d, 1*time.Minute)
 	require.NoError(t, err)
 	require.NotEmpty(t, dataHex)
+}
+
+func TestNewHandler_WorkflowRegistryClient(t *testing.T) {
+	newCtx := func(t *testing.T) (*runtime.Context, *MockClientFactory) {
+		t.Helper()
+		logger := zerolog.New(bytes.NewBufferString(""))
+		cf := new(MockClientFactory)
+		return &runtime.Context{
+			Logger:        &logger,
+			ClientFactory: cf,
+			Settings: &settings.Settings{
+				User:     settings.UserSettings{EthPrivateKey: ""},
+				Workflow: settings.WorkflowSettings{},
+			},
+			EnvironmentSet: &environments.EnvironmentSet{GatewayURL: "http://localhost"},
+			Credentials:    &credentials.Credentials{},
+		}, cf
+	}
+
+	t.Run("browser flow: WorkflowRegistryV2Client is not created", func(t *testing.T) {
+		ctx, cf := newCtx(t)
+		h, err := NewHandler(ctx, "", SecretsAuthBrowser)
+		require.NoError(t, err)
+		require.Nil(t, h.Wrc, "Wrc must be nil for browser flow")
+		cf.AssertNotCalled(t, "NewWorkflowRegistryV2Client")
+	})
+
+	t.Run("owner-key flow: WorkflowRegistryV2Client is created", func(t *testing.T) {
+		ctx, cf := newCtx(t)
+		cf.On("NewWorkflowRegistryV2Client").Return(nil, nil)
+		h, err := NewHandler(ctx, "", SecretsAuthOwnerKeySigning)
+		require.NoError(t, err)
+		// Wrc may be nil if the mock returns nil, but the factory must have been called.
+		_ = h
+		cf.AssertCalled(t, "NewWorkflowRegistryV2Client")
+	})
+
+	t.Run("owner-key flow: factory error is propagated", func(t *testing.T) {
+		ctx, cf := newCtx(t)
+		cf.On("NewWorkflowRegistryV2Client").Return(nil, errors.New("rpc url not found for chain ethereum-mainnet"))
+		_, err := NewHandler(ctx, "", SecretsAuthOwnerKeySigning)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "workflow registry client")
+	})
 }

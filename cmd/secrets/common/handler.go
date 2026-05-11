@@ -70,7 +70,10 @@ type Handler struct {
 }
 
 // NewHandler creates a new handler instance.
-func NewHandler(ctx *runtime.Context, secretsFilePath string) (*Handler, error) {
+// secretsAuth is the value of the --secrets-auth flag (e.g. "owner-key-signing" or "browser").
+// For the browser OAuth flow the on-chain WorkflowRegistryV2Client is not needed and is
+// intentionally skipped to avoid requiring an ethereum-mainnet RPC URL.
+func NewHandler(ctx *runtime.Context, secretsFilePath, secretsAuth string) (*Handler, error) {
 	var pk *ecdsa.PrivateKey
 	var err error
 	if ethKey := ctx.Settings.User.PrivateKey(settings.EVM); ethKey != "" {
@@ -95,11 +98,13 @@ func NewHandler(ctx *runtime.Context, secretsFilePath string) (*Handler, error) 
 	}
 	h.Gw = &HTTPClient{URL: h.EnvironmentSet.GatewayURL, Client: &http.Client{Timeout: 90 * time.Second}}
 
-	wrc, err := h.ClientFactory.NewWorkflowRegistryV2Client()
-	if err != nil {
-		return nil, fmt.Errorf("failed to create workflow registry client: %w", err)
+	if !IsBrowserFlow(secretsAuth) {
+		wrc, err := h.ClientFactory.NewWorkflowRegistryV2Client()
+		if err != nil {
+			return nil, fmt.Errorf("failed to create workflow registry client: %w", err)
+		}
+		h.Wrc = wrc
 	}
-	h.Wrc = wrc
 
 	return h, nil
 }
@@ -286,6 +291,26 @@ func (h *Handler) ResolveEffectiveOwner() (string, error) {
 		return "", fmt.Errorf("owner address %q is not a valid hex address", h.OwnerAddress)
 	}
 	return common.HexToAddress(h.OwnerAddress).Hex(), nil
+}
+
+// ResolveVaultIdentifierOwnerForAuth returns the owner string used in vault JSON-RPC payloads
+// (SecretIdentifier.Owner and list request Owner). Browser auth always uses the signed-in
+// organization ID so digests and identifiers align with JWT AuthorizedOwner() on the gateway;
+// owner-key auth uses ResolveEffectiveOwner() (workflow address unless CRE_CLI_SECRETS_ORG_OWNED).
+func (h *Handler) ResolveVaultIdentifierOwnerForAuth(secretsAuth string) (string, error) {
+	if IsBrowserFlow(secretsAuth) {
+		if h.Credentials == nil {
+			return "", fmt.Errorf("organization information is missing from your session; sign in again or use owner-key-signing")
+		}
+		if h.Credentials.AuthType == credentials.AuthTypeApiKey {
+			return "", fmt.Errorf("this sign-in flow requires an interactive login; API keys are not supported")
+		}
+		if h.Credentials.OrgID == "" {
+			return "", fmt.Errorf("organization information is missing from your session; sign in again or use owner-key-signing")
+		}
+		return h.Credentials.OrgID, nil
+	}
+	return h.ResolveEffectiveOwner()
 }
 
 // EncryptSecrets takes the raw secrets and encrypts them, returning pointers.
@@ -707,6 +732,9 @@ func (h *Handler) ParseVaultGatewayResponse(method string, respBody []byte) erro
 
 // EnsureOwnerLinkedOrFail TODO this reuses the same logic as in auto_link.go which is tied to deploy; consider refactoring to avoid duplication
 func (h *Handler) EnsureOwnerLinkedOrFail() error {
+	if !common.IsHexAddress(h.OwnerAddress) {
+		return fmt.Errorf("owner address %q is not a valid hex EVM address; check your workflow settings", h.OwnerAddress)
+	}
 	ownerAddr := common.HexToAddress(h.OwnerAddress)
 
 	linked, err := h.Wrc.IsOwnerLinked(ownerAddr)

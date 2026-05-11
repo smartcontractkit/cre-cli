@@ -46,7 +46,16 @@ func getBuildCmd(workflowRootFolder, mainFile, language string, opts WorkflowCom
 		return func() ([]byte, error) {
 			out, err := cmd.CombinedOutput()
 			if err != nil {
-				return nil, fmt.Errorf("%w\nbuild output:\n%s", err, strings.TrimSpace(string(out)))
+				outStr := strings.TrimSpace(string(out))
+				if strings.Contains(outStr, "Script not found") && strings.Contains(outStr, "cre-compile") {
+					return nil, fmt.Errorf("TypeScript compilation failed: 'cre-compile' command not found.\n\n" +
+						"The 'cre-compile' tool is provided by the @chainlink/cre-sdk package.\n\n" +
+						"To fix:\n" +
+						"  • Run 'bun install' in your project to install dependencies\n" +
+						"  • Update your project dependencies with 'cre update <workflow-folder>'\n" +
+						"  • If starting fresh, use 'cre workflow init' to scaffold a properly configured workflow")
+				}
+				return nil, fmt.Errorf("%w\nbuild output:\n%s", err, outStr)
 			}
 			b, err := os.ReadFile(tmpPath)
 			_ = os.Remove(tmpPath)

@@ -303,7 +303,7 @@ production-settings:
 `
 	require.NoError(t, os.WriteFile(workflowYAML, []byte(yamlContent), 0600))
 	require.NoError(t, os.WriteFile(mainTS, []byte("export default function run() { return Promise.resolve({ result: \"ok\" }); }\n"), 0600))
-	require.NoError(t, os.WriteFile(packageJSON, []byte(`{"name":"test","private":true,"dependencies":{"@chainlink/cre-sdk":"^1.5.0"}}`), 0600))
+	require.NoError(t, os.WriteFile(packageJSON, []byte(`{"name":"test","private":true,"dependencies":{"@chainlink/cre-sdk":"^1.6.0"}}`), 0600))
 
 	h := newHandler(nil)
 	err := h.Execute(Inputs{WorkflowFolder: dir, Force: true})

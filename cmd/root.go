@@ -127,13 +127,7 @@ func newRootCommand() *cobra.Command {
 				return fmt.Errorf("failed to bind flags: %w", err)
 			}
 
-			settings.ResolveAndLoadBothEnvFiles(
-				log, v,
-				settings.Flags.CliEnvFile.Name, constants.DefaultEnvFileName,
-				settings.Flags.CliPublicEnvFile.Name, constants.DefaultPublicEnvFileName,
-			)
-
-			// Update log level if verbose flag is set — must happen before spinner starts
+			// Update log level if verbose flag is set — must happen before everything else
 			if verbose := v.GetBool(settings.Flags.Verbose.Name); verbose {
 				ui.SetVerbose(true)
 				newLogger := log.Level(zerolog.DebugLevel)
@@ -143,6 +137,14 @@ func newRootCommand() *cobra.Command {
 				runtimeContext.Logger = &newLogger
 				runtimeContext.ClientFactory = client.NewFactory(&newLogger, v)
 			}
+
+			log = runtimeContext.Logger
+
+			settings.ResolveAndLoadBothEnvFiles(
+				log, v,
+				settings.Flags.CliEnvFile.Name, constants.DefaultEnvFileName,
+				settings.Flags.CliPublicEnvFile.Name, constants.DefaultPublicEnvFileName,
+			)
 
 			// Start the global spinner for commands that do initialization work
 			spinner := ui.GlobalSpinner()
@@ -273,13 +275,19 @@ func newRootCommand() *cobra.Command {
 					spinner.Stop()
 				}
 
-				err := runtimeContext.AttachSettings(cmd, isLoadDeploymentRPC(cmd))
+				err := runtimeContext.AttachSettings(cmd, false)
 				if err != nil {
 					return fmt.Errorf("%w", err)
 				}
 
 				if err := runtimeContext.AttachResolvedRegistry(); err != nil {
 					return err
+				}
+
+				if isRegistryRPCCommand(cmd) {
+					if err := runtimeContext.ValidateOnchainRegistryRPC(); err != nil {
+						return fmt.Errorf("failed to load settings: %w", err)
+					}
 				}
 
 				if err := runtimeContext.FinalizeDeferredWorkflowOwner(cmd); err != nil {
@@ -468,35 +476,36 @@ func newRootCommand() *cobra.Command {
 func isLoadSettings(cmd *cobra.Command) bool {
 	// It is not expected to have the settings file when running the following commands
 	var excludedCommands = map[string]struct{}{
-		"cre version":                {},
-		"cre login":                  {},
-		"cre logout":                 {},
-		"cre whoami":                 {},
-		"cre account access":         {},
-		"cre account list-key":       {},
-		"cre init":                   {},
-		"cre generate-bindings":      {},
-		"cre completion bash":        {},
-		"cre completion fish":        {},
-		"cre completion powershell":  {},
-		"cre completion zsh":         {},
-		"cre help":                   {},
-		"cre update":                 {},
-		"cre workflow":               {},
-		"cre workflow custom-build":  {},
-		"cre workflow limits":        {},
-		"cre workflow limits export": {},
-		"cre workflow build":         {},
-		"cre workflow list":          {},
-		"cre account":                {},
-		"cre secrets":                {},
-		"cre templates":              {},
-		"cre templates list":         {},
-		"cre templates add":          {},
-		"cre templates remove":       {},
-		"cre registry":               {},
-		"cre registry list":          {},
-		"cre":                        {},
+		"cre version":                   {},
+		"cre login":                     {},
+		"cre logout":                    {},
+		"cre whoami":                    {},
+		"cre account access":            {},
+		"cre account list-key":          {},
+		"cre init":                      {},
+		"cre generate-bindings":         {},
+		"cre completion bash":           {},
+		"cre completion fish":           {},
+		"cre completion powershell":     {},
+		"cre completion zsh":            {},
+		"cre help":                      {},
+		"cre update":                    {},
+		"cre workflow":                  {},
+		"cre workflow supported-chains": {},
+		"cre workflow custom-build":     {},
+		"cre workflow limits":           {},
+		"cre workflow limits export":    {},
+		"cre workflow build":            {},
+		"cre workflow list":             {},
+		"cre account":                   {},
+		"cre secrets":                   {},
+		"cre templates":                 {},
+		"cre templates list":            {},
+		"cre templates add":             {},
+		"cre templates remove":          {},
+		"cre registry":                  {},
+		"cre registry list":             {},
+		"cre":                           {},
 	}
 
 	_, exists := excludedCommands[cmd.CommandPath()]
@@ -534,7 +543,11 @@ func isLoadCredentials(cmd *cobra.Command) bool {
 	return !exists
 }
 
-func isLoadDeploymentRPC(cmd *cobra.Command) bool {
+// isRegistryRPCCommand returns true for commands that interact with the workflow
+// registry and require a validated RPC URL when the resolved registry is on-chain.
+// RPC validation is deferred until after registry resolution so that off-chain
+// (private) registry deployments are not forced to supply an on-chain RPC URL.
+func isRegistryRPCCommand(cmd *cobra.Command) bool {
 	var includedCommands = map[string]struct{}{
 		"cre workflow deploy":    {},
 		"cre workflow pause":     {},

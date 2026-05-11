@@ -1,10 +1,28 @@
 package evm
 
 import (
+	"sort"
+
 	chainselectors "github.com/smartcontractkit/chain-selectors"
 
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain"
+	"github.com/smartcontractkit/cre-cli/internal/settings"
 )
+
+// SupportedChainNames returns the human-readable names of all supported EVM chains,
+// sorted alphabetically.
+func SupportedChainNames() []string {
+	var names []string
+	for _, c := range SupportedChains {
+		name, err := settings.GetChainNameByChainSelector(c.Selector)
+		if err != nil {
+			continue
+		}
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
 
 // SupportedChains is the canonical list of EVM chains supported for simulation.
 var SupportedChains = []chain.ChainConfig{

@@ -8,11 +8,13 @@ import (
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/convert"
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/delete"
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/deploy"
+	workflowget "github.com/smartcontractkit/cre-cli/cmd/workflow/get"
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/hash"
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/limits"
 	workflowlist "github.com/smartcontractkit/cre-cli/cmd/workflow/list"
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/pause"
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/simulate"
+	supported_chains "github.com/smartcontractkit/cre-cli/cmd/workflow/supported_chains"
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/test"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 )
@@ -24,6 +26,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 		Long:  `The workflow command allows you to register and manage existing workflows.`,
 	}
 
+	workflowCmd.AddCommand(supported_chains.New())
 	workflowCmd.AddCommand(activate.New(runtimeContext))
 	workflowCmd.AddCommand(build.New(runtimeContext))
 	workflowCmd.AddCommand(convert.New(runtimeContext))
@@ -35,6 +38,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	workflowCmd.AddCommand(simulate.New(runtimeContext))
 	workflowCmd.AddCommand(limits.New())
 	workflowCmd.AddCommand(workflowlist.New(runtimeContext))
+	workflowCmd.AddCommand(workflowget.New(runtimeContext))
 
 	return workflowCmd
 }

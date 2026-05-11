@@ -29,13 +29,16 @@ func TestDefaultLimitsAndExportDefaultLimitsJSON(t *testing.T) {
 	assert.Equal(t, 100_000, limits.HTTPResponseSizeLimit())
 	assert.Equal(t, 10_000, limits.ConfHTTPRequestSizeLimit())
 	assert.Equal(t, 100_000, limits.ConfHTTPResponseSizeLimit())
-	assert.Equal(t, 100_000, limits.ConsensusObservationSizeLimit())
+	assert.Equal(t, 25_000, limits.ConsensusObservationSizeLimit())
 	assert.Equal(t, 5_000, limits.EVMChainWriteReportSizeLimit())
 	assert.Equal(t, 5_000, limits.AptosChainWriteReportSizeLimit())
 	assert.Equal(t, uint64(5_000_000), limits.EVMChainWriteGasLimit())
 	assert.Equal(t, uint64(2_000_000), limits.AptosChainWriteGasLimit())
 	assert.Equal(t, 100_000_000, limits.WASMBinarySize())
 	assert.Equal(t, 20_000_000, limits.WASMCompressedBinarySize())
+	assert.Equal(t, 10, limits.Workflows.ExecutionConcurrencyLimit.DefaultValue)
+	assert.InDelta(t, 1.0/60.0, float64(limits.Workflows.HTTPTrigger.RateLimit.DefaultValue.Limit), 0.000001)
+	assert.Equal(t, 1, limits.Workflows.HTTPTrigger.RateLimit.DefaultValue.Burst)
 	assert.JSONEq(t, string(defaultLimitsJSON), string(ExportDefaultLimitsJSON()))
 }
 
@@ -187,7 +190,7 @@ func TestSimulationLimitsSummaryIncludesKeyLimitValues(t *testing.T) {
 	summary := newTestLimits(t).LimitsSummary()
 	assert.Contains(t, summary, "HTTP: req=10kb resp=100kb timeout=10s")
 	assert.Contains(t, summary, "ConfHTTP: req=10kb resp=100kb timeout=10s")
-	assert.Contains(t, summary, "Consensus obs=100kb")
+	assert.Contains(t, summary, "Consensus obs=25kb")
 	assert.Contains(t, summary, "ChainWrite evm_report=5kb evm_gas=5000000 aptos_report=5kb aptos_gas=2000000")
 	assert.Contains(t, summary, "WASM binary=100mb compressed=20mb")
 }
