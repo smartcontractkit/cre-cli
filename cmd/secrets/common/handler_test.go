@@ -349,7 +349,7 @@ func TestNewHandler_WorkflowRegistryClient(t *testing.T) {
 			Logger:        &logger,
 			ClientFactory: cf,
 			Settings: &settings.Settings{
-				User:     settings.UserSettings{EthPrivateKey: ""},
+				User:     settings.UserSettings{PrivateKeys: map[string]string{settings.EVM.Name: ""}},
 				Workflow: settings.WorkflowSettings{},
 			},
 			EnvironmentSet: &environments.EnvironmentSet{GatewayURL: "http://localhost"},
