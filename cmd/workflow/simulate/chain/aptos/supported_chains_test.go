@@ -4,9 +4,10 @@ import (
 	"regexp"
 	"testing"
 
-	chainselectors "github.com/smartcontractkit/chain-selectors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	chainselectors "github.com/smartcontractkit/chain-selectors"
 )
 
 // Aptos forwarders are 32-byte object addresses encoded as 64 hex chars.
