@@ -3,6 +3,7 @@ package settings
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -66,6 +67,21 @@ func TestGetReplacementsWithNetworks(t *testing.T) {
 	assert.Contains(t, repl["RPCsList"], "chain-name: ethereum-testnet-sepolia")
 	// Should still have all default replacements
 	assert.Contains(t, repl, "ConfigPathStaging")
+}
+
+func TestProjectEnvironmentTemplateIncludesAptosPrivateKey(t *testing.T) {
+	replacements := map[string]string{
+		"EthPrivateKey":   "eth-key",
+		"AptosPrivateKey": "aptos-key",
+	}
+
+	content := ProjectEnvironmentTemplateContent
+	for key, value := range replacements {
+		content = strings.ReplaceAll(content, "{{"+key+"}}", value)
+	}
+
+	assert.Contains(t, content, "CRE_ETH_PRIVATE_KEY=eth-key")
+	assert.Contains(t, content, "CRE_APTOS_PRIVATE_KEY=aptos-key")
 }
 
 func TestPatchProjectRPCs(t *testing.T) {

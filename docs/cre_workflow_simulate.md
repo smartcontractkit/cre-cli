@@ -19,7 +19,7 @@ cre workflow simulate ./my-workflow
 ### Options
 
 ```
-      --broadcast             Broadcast transactions to the EVM (default: false)
+      --broadcast             Broadcast transactions to configured chains (default: false)
       --config string         Override the config file path from workflow.yaml
       --default-config        Use the config path from workflow.yaml settings (default behavior)
   -g, --engine-logs           Enable non-fatal engine logging
