@@ -32,11 +32,17 @@
 	},
 	"ChainWrite": {
 		"TargetsLimit": "10",
-		"ReportSizeLimit": "5kb",
 		"EVM": {
-			"TransactionGasLimit": "5000000",
+			"ReportSizeLimit": "5kb",
 			"GasLimit": {
 				"Default": "5000000",
+				"Values": {}
+			}
+		},
+		"Aptos": {
+			"ReportSizeLimit": "5kb",
+			"GasLimit": {
+				"Default": "2000000",
 				"Values": {}
 			}
 		}
