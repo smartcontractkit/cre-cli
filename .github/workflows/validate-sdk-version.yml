@@ -1,0 +1,71 @@
+name: Validate cre-sdk-go version
+
+on:
+  push:
+    branches:
+      - capabilities-development
+  pull_request:
+    branches:
+      - capabilities-development
+
+jobs:
+  validate-sdk-version:
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Checkout cre-sdk-go
+        uses: actions/checkout@v6
+        with:
+          repository: smartcontractkit/cre-sdk-go
+          ref: capabilities-development
+          path: .cre-sdk-go
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Validate cre-sdk-go versions are from capabilities-development
+        run: |
+          failed=0
+          found=0
+
+          # Find all lines in the root go.mod that depend on any cre-sdk-go module.
+          while IFS= read -r line; do
+            mod=$(echo "$line" | awk '{print $1}')
+            echo "  parsed module: $mod"
+            version=$(echo "$line" | awk '{print $2}')
+            echo "  parsed version: $version"
+
+            found=1
+
+            # Go pseudo-versions end with a commit hash after the last "-".
+            # e.g. "v0.0.0-20260420204255-a3f3bdd56877" -> "a3f3bdd56877"
+            commit=${version##*-}
+            echo "  parsed commit: $commit"
+
+            echo "Checking module=$mod version=$version commit=$commit"
+
+            # Verify the commit is reachable from capabilities-development.
+            if ! git -C .cre-sdk-go merge-base --is-ancestor "$commit" capabilities-development 2>/dev/null; then
+              echo "::error::$mod commit $commit is NOT on the capabilities-development branch of cre-sdk-go"
+              failed=1
+            else
+              echo "OK: $mod commit $commit is on capabilities-development"
+            fi
+          done < <(grep 'github.com/smartcontractkit/cre-sdk-go' go.mod | grep -v '^//')
+
+          if [[ "$found" -eq 0 ]]; then
+            echo "::error::No cre-sdk-go dependencies found in go.mod"
+            exit 1
+          fi
+
+          if [[ "$failed" -eq 1 ]]; then
+            echo ""
+            echo "One or more cre-sdk-go dependencies reference a commit not on capabilities-development."
+            exit 1
+          fi
+
+          echo ""
+          echo "All cre-sdk-go versions are from capabilities-development."
