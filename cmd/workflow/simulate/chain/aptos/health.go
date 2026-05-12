@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	aptosfakes "github.com/smartcontractkit/chainlink-aptos/fakes"
+	aptosfakes "github.com/smartcontractkit/chainlink-aptos/capabilities/fakes"
 
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain"
 	"github.com/smartcontractkit/cre-cli/internal/settings"

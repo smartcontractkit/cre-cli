@@ -10,7 +10,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/spf13/viper"
 
-	aptosfakes "github.com/smartcontractkit/chainlink-aptos/fakes"
+	aptosfakes "github.com/smartcontractkit/chainlink-aptos/capabilities/fakes"
 	corekeys "github.com/smartcontractkit/chainlink-common/keystore/corekeys"
 	"github.com/smartcontractkit/chainlink-common/pkg/services"
 
