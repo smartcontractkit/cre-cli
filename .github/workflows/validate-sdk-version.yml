@@ -40,10 +40,36 @@ jobs:
 
             found=1
 
-            # Go pseudo-versions end with a commit hash after the last "-".
+            # Pseudo-versions have 3 parts separated by "-" and end with a 12-char hex commit hash.
             # e.g. "v0.0.0-20260420204255-a3f3bdd56877" -> "a3f3bdd56877"
-            commit=${version##*-}
-            echo "  parsed commit: $commit"
+            # Tagged versions like "v1.9.0-capdev.1" don't match this pattern.
+            suffix=${version##*-}
+            if [[ "$suffix" =~ ^[0-9a-f]{12}$ ]]; then
+              # Pseudo-version: use the commit hash directly.
+              commit="$suffix"
+              echo "  parsed commit (pseudo-version): $commit"
+            else
+              # Tagged version: resolve the tag to a commit.
+              # The module path prefix (github.com/smartcontractkit/cre-sdk-go) maps to the
+              # repo root; any sub-module suffix becomes a tag prefix.
+              # e.g. module "github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm"
+              #   with version "v1.0.0-beta.10-capdev.1" -> tag "capabilities/blockchain/evm/v1.0.0-beta.10-capdev.1"
+              subpath=${mod#github.com/smartcontractkit/cre-sdk-go}
+              subpath=${subpath#/}
+              if [[ -n "$subpath" ]]; then
+                tag="${subpath}/${version}"
+              else
+                tag="${version}"
+              fi
+              echo "  resolved tag: $tag"
+              commit=$(git -C .cre-sdk-go rev-list -n1 "$tag" 2>/dev/null || true)
+              if [[ -z "$commit" ]]; then
+                echo "::error::$mod tag $tag not found in cre-sdk-go"
+                failed=1
+                continue
+              fi
+              echo "  resolved commit: $commit"
+            fi
 
             echo "Checking module=$mod version=$version commit=$commit"
 
