@@ -53,3 +53,26 @@ func TestIsRegistryRPCCommand(t *testing.T) {
 		})
 	}
 }
+
+func TestIsLoadCredentials(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		path     []string
+		wantLoad bool
+	}{
+		{"workflow hash", []string{"cre", "workflow", "hash"}, true},
+		{"workflow deploy", []string{"cre", "workflow", "deploy"}, true},
+		{"login", []string{"cre", "login"}, false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			cmd := buildCommandPath(tc.path...)
+			assert.Equal(t, tc.wantLoad, isLoadCredentials(cmd),
+				"isLoadCredentials(%q)", cmd.CommandPath())
+		})
+	}
+}
