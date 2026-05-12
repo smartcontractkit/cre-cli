@@ -1,6 +1,7 @@
 package common
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -15,10 +16,10 @@ func TestValidateSecretsAuthFlow(t *testing.T) {
 		wantErr bool
 		errMsg  string
 	}{
-		{"owner-key-signing in production", SecretsAuthOwnerKeySigning, "PRODUCTION", false, ""},
-		{"owner-key-signing in staging", SecretsAuthOwnerKeySigning, "STAGING", false, ""},
-		{"owner-key-signing in dev", SecretsAuthOwnerKeySigning, "DEVELOPMENT", false, ""},
-		{"owner-key-signing empty env defaults safe", SecretsAuthOwnerKeySigning, "", false, ""},
+		{"onchain in production", SecretsAuthOnchain, "PRODUCTION", false, ""},
+		{"onchain in staging", SecretsAuthOnchain, "STAGING", false, ""},
+		{"onchain in dev", SecretsAuthOnchain, "DEVELOPMENT", false, ""},
+		{"onchain empty env defaults safe", SecretsAuthOnchain, "", false, ""},
 		{"browser in staging", SecretsAuthBrowser, "STAGING", false, ""},
 		{"browser in dev", SecretsAuthBrowser, "DEVELOPMENT", false, ""},
 		{"browser in production blocked", SecretsAuthBrowser, "PRODUCTION", true, "not yet available in production"},
@@ -35,6 +36,9 @@ func TestValidateSecretsAuthFlow(t *testing.T) {
 				if tt.errMsg != "" {
 					require.Contains(t, err.Error(), tt.errMsg)
 				}
+				if strings.Contains(tt.name, "browser") && strings.Contains(tt.name, "production") {
+					require.Contains(t, err.Error(), "use --secrets-auth=onchain")
+				}
 			} else {
 				require.NoError(t, err)
 			}
@@ -43,7 +47,7 @@ func TestValidateSecretsAuthFlow(t *testing.T) {
 }
 
 func TestIsBrowserFlow(t *testing.T) {
-	assert.False(t, IsBrowserFlow(SecretsAuthOwnerKeySigning), "owner-key-signing should not be browser flow")
+	assert.False(t, IsBrowserFlow(SecretsAuthOnchain), "onchain should not be browser flow")
 	assert.True(t, IsBrowserFlow(SecretsAuthBrowser), "browser should be browser flow")
 	assert.False(t, IsBrowserFlow("unknown"), "unknown should not be browser flow")
 }

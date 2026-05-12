@@ -68,7 +68,7 @@ func (h *Handler) executeBrowserUpsert(ctx context.Context, inputs UpsertSecrets
 	}
 	orgID := h.Credentials.OrgID
 	if orgID == "" {
-		return fmt.Errorf("organization information is missing from your session; sign in again or use owner-key-signing")
+		return fmt.Errorf("organization information is missing from your session; sign in again or use --secrets-auth=onchain")
 	}
 
 	ui.Dim("Using your account to authorize vault access for your organization...")

@@ -225,7 +225,7 @@ func TestResolveVaultIdentifierOwnerForAuth(t *testing.T) {
 		h.OwnerAddress = "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
 		h.EnvironmentSet.SecretsOrgOwned = false
 
-		owner, err := h.ResolveVaultIdentifierOwnerForAuth(SecretsAuthOwnerKeySigning)
+		owner, err := h.ResolveVaultIdentifierOwnerForAuth(SecretsAuthOnchain)
 		require.NoError(t, err)
 		require.Equal(t, "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266", owner)
 	})
@@ -368,7 +368,7 @@ func TestNewHandler_WorkflowRegistryClient(t *testing.T) {
 	t.Run("owner-key flow: WorkflowRegistryV2Client is created", func(t *testing.T) {
 		ctx, cf := newCtx(t)
 		cf.On("NewWorkflowRegistryV2Client").Return(nil, nil)
-		h, err := NewHandler(ctx, "", SecretsAuthOwnerKeySigning)
+		h, err := NewHandler(ctx, "", SecretsAuthOnchain)
 		require.NoError(t, err)
 		// Wrc may be nil if the mock returns nil, but the factory must have been called.
 		_ = h
@@ -378,7 +378,7 @@ func TestNewHandler_WorkflowRegistryClient(t *testing.T) {
 	t.Run("owner-key flow: factory error is propagated", func(t *testing.T) {
 		ctx, cf := newCtx(t)
 		cf.On("NewWorkflowRegistryV2Client").Return(nil, errors.New("rpc url not found for chain ethereum-mainnet"))
-		_, err := NewHandler(ctx, "", SecretsAuthOwnerKeySigning)
+		_, err := NewHandler(ctx, "", SecretsAuthOnchain)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "workflow registry client")
 	})
