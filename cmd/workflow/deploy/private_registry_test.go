@@ -52,6 +52,52 @@ func TestBuildPrivateRegistryInput(t *testing.T) {
 		assert.Equal(t, "v1-tag", *input.Tag)
 	})
 
+	t.Run("preserves paused status if existing workflow is paused", func(t *testing.T) {
+		t.Parallel()
+		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
+		defer simulatedEnvironment.Close()
+
+		ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
+		h := newHandler(ctx, buf)
+		h.inputs = Inputs{
+			WorkflowName: "my-workflow",
+			BinaryURL:    "https://storage.example.com/binary.wasm",
+			DonFamily:    "zone-a",
+		}
+		h.workflowArtifact = &workflowArtifact{
+			WorkflowID: "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+		}
+		status := workflowStatusPaused
+		h.existingWorkflowStatus = &status
+
+		input := h.buildPrivateRegistryInput()
+
+		assert.Equal(t, privateregistryclient.WorkflowStatusPaused, input.Status)
+	})
+
+	t.Run("sets active status if existing workflow is active", func(t *testing.T) {
+		t.Parallel()
+		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
+		defer simulatedEnvironment.Close()
+
+		ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
+		h := newHandler(ctx, buf)
+		h.inputs = Inputs{
+			WorkflowName: "my-workflow",
+			BinaryURL:    "https://storage.example.com/binary.wasm",
+			DonFamily:    "zone-a",
+		}
+		h.workflowArtifact = &workflowArtifact{
+			WorkflowID: "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+		}
+		status := workflowStatusActive
+		h.existingWorkflowStatus = &status
+
+		input := h.buildPrivateRegistryInput()
+
+		assert.Equal(t, privateregistryclient.WorkflowStatusActive, input.Status)
+	})
+
 	t.Run("includes config URL when present", func(t *testing.T) {
 		t.Parallel()
 		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
