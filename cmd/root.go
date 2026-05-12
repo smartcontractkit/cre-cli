@@ -531,7 +531,6 @@ func isLoadCredentials(cmd *cobra.Command) bool {
 		"cre account":                {},
 		"cre secrets":                {},
 		"cre workflow build":         {},
-		"cre workflow hash":          {},
 		"cre templates":              {},
 		"cre templates list":         {},
 		"cre templates add":          {},
