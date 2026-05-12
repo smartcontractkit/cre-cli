@@ -24,14 +24,14 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/rs/zerolog v1.34.0
 	github.com/smartcontractkit/chain-selectors v1.0.98
-	github.com/smartcontractkit/chainlink-common v0.11.2-0.20260505124104-72181f5345ce
+	github.com/smartcontractkit/chainlink-common v0.11.2-0.20260511150245-5602d25bae66
 	github.com/smartcontractkit/chainlink-common/keystore v1.1.0
 	github.com/smartcontractkit/chainlink-evm/gethwrappers v0.0.0-20260119171452-39c98c3b33cd
-	github.com/smartcontractkit/chainlink-protos/cre/go v0.0.0-20260511222622-3dae6143f38a
+	github.com/smartcontractkit/chainlink-protos/cre/go v0.0.0-20260511144132-ea4edd48a577
 	github.com/smartcontractkit/chainlink-protos/workflows/go v0.0.0-20260323124644-faea187e6997
 	github.com/smartcontractkit/chainlink-testing-framework/seth v1.51.5
 	github.com/smartcontractkit/chainlink/deployment v0.0.0-20260422181348-efa818697ce5
-	github.com/smartcontractkit/chainlink/v2 v2.29.1-cre-beta.0.0.20260422181348-efa818697ce5
+	github.com/smartcontractkit/chainlink/v2 v2.29.1-cre-beta.0.0.20260512190159-c0189dcc0ac9
 	github.com/smartcontractkit/cre-sdk-go v1.9.0-capdev.1
 	github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm v1.0.0-beta.10-capdev.1
 	github.com/smartcontractkit/mcms v0.41.1
@@ -400,7 +400,6 @@ require (
 	go.opentelemetry.io/otel/sdk/metric v1.43.0 // indirect
 	go.opentelemetry.io/otel/trace v1.43.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.10.0 // indirect
-	go.uber.org/goleak v1.3.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/ratelimit v0.3.1 // indirect
 	go.yaml.in/yaml/v2 v2.4.4 // indirect
