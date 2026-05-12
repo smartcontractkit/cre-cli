@@ -31,11 +31,14 @@ func (a *privateRegistryDeployStrategy) RunPreDeployChecks() error {
 	return nil
 }
 
-func (a *privateRegistryDeployStrategy) CheckWorkflowExists(_, workflowName, _, _ string) (bool, *uint8, error) {
+func (a *privateRegistryDeployStrategy) CheckWorkflowExists(_, workflowName, _, workflowID string) (bool, *uint8, error) {
 	a.ensureClient()
 
 	workflow, err := a.prc.GetWorkflowByName(workflowName)
 	if err == nil {
+		if workflow.WorkflowID == workflowID {
+			return false, nil, fmt.Errorf("workflow with id %s already exists", workflowID)
+		}
 		return true, offchainStatusToUint8(workflow.Status), nil
 	}
 	if isWorkflowNotFoundError(err) {
@@ -78,9 +81,14 @@ func (a *privateRegistryDeployStrategy) Upsert() error {
 }
 
 func (h *handler) buildPrivateRegistryInput() privateregistryclient.OffchainWorkflowInput {
+	status := privateregistryclient.WorkflowStatusActive
+	if h.existingWorkflowStatus != nil && *h.existingWorkflowStatus == workflowStatusPaused {
+		status = privateregistryclient.WorkflowStatusPaused
+	}
+
 	input := privateregistryclient.OffchainWorkflowInput{
 		WorkflowID:   h.workflowArtifact.WorkflowID,
-		Status:       privateregistryclient.WorkflowStatusActive,
+		Status:       status,
 		WorkflowName: h.inputs.WorkflowName,
 		BinaryURL:    h.inputs.BinaryURL,
 		DonFamily:    h.inputs.DonFamily,
