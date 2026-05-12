@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	aptosfakes "github.com/smartcontractkit/chainlink-aptos/capabilities/fakes"
+	"github.com/aptos-labs/aptos-go-sdk"
 
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
@@ -22,7 +22,7 @@ func RunRPCHealthCheck(clients map[uint64]chain.ChainClient, experimentalSelecto
 			errs = append(errs, fmt.Errorf("[%d] nil client", sel))
 			continue
 		}
-		ac, ok := c.(aptosfakes.AptosClient)
+		ac, ok := c.(aptos.AptosRpcClient)
 		if !ok {
 			errs = append(errs, fmt.Errorf("[%d] invalid client type for Aptos chain type", sel))
 			continue

@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/aptos-labs/aptos-go-sdk"
 	"github.com/aptos-labs/aptos-go-sdk/crypto"
 	"github.com/rs/zerolog"
 	"github.com/spf13/viper"
 
-	aptosfakes "github.com/smartcontractkit/chainlink-aptos/capabilities/fakes"
 	corekeys "github.com/smartcontractkit/chainlink-common/keystore/corekeys"
 	"github.com/smartcontractkit/chainlink-common/pkg/services"
 
@@ -54,7 +54,7 @@ func (ct *AptosChainType) ResolveClients(v *viper.Viper) (chain.ResolvedChains, 
 			continue
 		}
 		ct.log.Debug().Msgf("Using RPC for %s: %s", name, chain.RedactURL(rpcURL))
-		client, err := aptosfakes.NewAptosClient(rpcURL)
+		client, err := aptos.NewClient(aptos.NetworkConfig{NodeUrl: rpcURL})
 		if err != nil {
 			ui.Warning(fmt.Sprintf("Failed to build Aptos client for %s: %v", name, err))
 			continue
@@ -94,7 +94,7 @@ func (ct *AptosChainType) ResolveClients(v *viper.Viper) (chain.ResolvedChains, 
 			continue
 		}
 		ct.log.Debug().Msgf("Using RPC for experimental aptos chain %d: %s", ec.ChainSelector, chain.RedactURL(ec.RPCURL))
-		client, err := aptosfakes.NewAptosClient(ec.RPCURL)
+		client, err := aptos.NewClient(aptos.NetworkConfig{NodeUrl: ec.RPCURL})
 		if err != nil {
 			return chain.ResolvedChains{}, fmt.Errorf("failed to create aptos client for experimental chain %d: %w", ec.ChainSelector, err)
 		}
@@ -136,11 +136,11 @@ func (ct *AptosChainType) ResolveTriggerData(_ context.Context, _ uint64, _ chai
 }
 
 func (ct *AptosChainType) RegisterCapabilities(ctx context.Context, cfg chain.CapabilityConfig) ([]services.Service, error) {
-	typedClients := make(map[uint64]aptosfakes.AptosClient, len(cfg.Clients))
+	typedClients := make(map[uint64]aptos.AptosRpcClient, len(cfg.Clients))
 	for sel, c := range cfg.Clients {
-		ac, ok := c.(aptosfakes.AptosClient)
+		ac, ok := c.(aptos.AptosRpcClient)
 		if !ok {
-			return nil, fmt.Errorf("aptos: client for selector %d is not aptosfakes.AptosClient", sel)
+			return nil, fmt.Errorf("aptos: client for selector %d is not aptos.AptosRpcClient", sel)
 		}
 		typedClients[sel] = ac
 	}

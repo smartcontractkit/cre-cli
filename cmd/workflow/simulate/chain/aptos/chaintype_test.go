@@ -97,7 +97,7 @@ func TestRegisterCapabilities_WrongClientType(t *testing.T) {
 	}
 	_, err := ct.RegisterCapabilities(context.Background(), cfg)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "client for selector 1 is not aptosfakes.AptosClient")
+	assert.Contains(t, err.Error(), "client for selector 1 is not aptos.AptosRpcClient")
 }
 
 func TestRegisterCapabilities_WrongPrivateKeyType(t *testing.T) {

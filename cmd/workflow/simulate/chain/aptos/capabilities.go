@@ -28,7 +28,7 @@ func NewAptosChainCapabilities(
 	ctx context.Context,
 	lggr logger.Logger,
 	registry *capabilities.Registry,
-	clients map[uint64]aptosfakes.AptosClient,
+	clients map[uint64]aptos.AptosRpcClient,
 	forwarders map[uint64]string,
 	privateKey *crypto.Ed25519PrivateKey,
 	dryRunChainWrite bool,
