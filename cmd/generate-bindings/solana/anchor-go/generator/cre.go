@@ -110,8 +110,8 @@ func creWriteReportFromStructs(exportedAccountName string, g *Generator) Code {
 				Op("&").Qual(PkgPbSdk, "ReportRequest").Values(Dict{
 					Id("EncodedPayload"): Id("encodedFwdReport"),
 					Id("EncoderName"):    Lit("solana"),
-					Id("SigningAlgo"):    Lit("ed25519"),
-					Id("HashingAlgo"):    Lit("sha256"),
+					Id("SigningAlgo"):    Lit("ecdsa"),
+					Id("HashingAlgo"):    Lit("keccak256"),
 				}),
 			).Line()
 
