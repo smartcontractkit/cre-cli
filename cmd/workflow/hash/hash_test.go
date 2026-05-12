@@ -15,6 +15,7 @@ import (
 	workflowUtils "github.com/smartcontractkit/chainlink-common/pkg/workflows"
 
 	cmdcommon "github.com/smartcontractkit/cre-cli/cmd/common"
+	"github.com/smartcontractkit/cre-cli/internal/settings"
 )
 
 // Well-known test private key (never use on a real network).
@@ -25,14 +26,20 @@ const testDerivedAddress = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
 
 func TestResolveOwner_WithForUser(t *testing.T) {
 	t.Parallel()
-	addr, err := ResolveOwner("0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF", "", "")
+	inputs := resolveInputs()
+	inputs.ForUser = "0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF"
+	addr, err := ResolveOwner(inputs)
 	require.NoError(t, err)
 	assert.Equal(t, "0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF", addr)
 }
 
 func TestResolveOwner_WithForUserOverridesAll(t *testing.T) {
 	t.Parallel()
-	addr, err := ResolveOwner("0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF", "0xOtherAddress", testPrivateKey)
+	inputs := resolveInputs()
+	inputs.ForUser = "0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF"
+	inputs.OwnerFromSettings = "0xOtherAddress"
+	inputs.PrivateKey = testPrivateKey
+	addr, err := ResolveOwner(inputs)
 	require.NoError(t, err)
 	assert.Equal(t, "0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF", addr,
 		"--public_key should take priority over settings and private key")
@@ -40,30 +47,56 @@ func TestResolveOwner_WithForUserOverridesAll(t *testing.T) {
 
 func TestResolveOwner_FromSettings(t *testing.T) {
 	t.Parallel()
-	addr, err := ResolveOwner("", "0xSettingsOwner", "")
+	inputs := resolveInputs()
+	inputs.OwnerFromSettings = "0xSettingsOwner"
+	addr, err := ResolveOwner(inputs)
 	require.NoError(t, err)
 	assert.Equal(t, "0xSettingsOwner", addr)
 }
 
 func TestResolveOwner_FromPrivateKey(t *testing.T) {
 	t.Parallel()
-	addr, err := ResolveOwner("", "", testPrivateKey)
+	inputs := resolveInputs()
+	inputs.PrivateKey = testPrivateKey
+	addr, err := ResolveOwner(inputs)
 	require.NoError(t, err)
 	assert.Equal(t, testDerivedAddress, addr)
 }
 
 func TestResolveOwner_NothingProvided(t *testing.T) {
 	t.Parallel()
-	_, err := ResolveOwner("", "", "")
+	_, err := ResolveOwner(resolveInputs())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "--public_key")
 }
 
 func TestResolveOwner_InvalidPrivateKey(t *testing.T) {
 	t.Parallel()
-	_, err := ResolveOwner("", "", "not-a-valid-key")
+	inputs := resolveInputs()
+	inputs.PrivateKey = "not-a-valid-key"
+	_, err := ResolveOwner(inputs)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to derive owner")
+}
+
+func TestResolveOwner_OffChainUsesDerivedOwner(t *testing.T) {
+	t.Parallel()
+	inputs := resolveInputs()
+	inputs.RegistryType = settings.RegistryTypeOffChain
+	inputs.DerivedOwner = "0xDerivedOwner"
+	inputs.ForUser = "0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF"
+	addr, err := ResolveOwner(inputs)
+	require.NoError(t, err)
+	assert.Equal(t, "0xDerivedOwner", addr)
+}
+
+func TestResolveOwner_OffChainMissingDerivedOwner(t *testing.T) {
+	t.Parallel()
+	inputs := resolveInputs()
+	inputs.RegistryType = settings.RegistryTypeOffChain
+	_, err := ResolveOwner(inputs)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "derived workflow owner is not available")
 }
 
 func TestExecute_WithForUser(t *testing.T) {
@@ -228,6 +261,12 @@ func TestHashCommandFlags(t *testing.T) {
 
 	f = cmd.Flags().Lookup("no-config")
 	require.NotNil(t, f, "no-config flag should exist")
+}
+
+func resolveInputs() Inputs {
+	return Inputs{
+		RegistryType: settings.RegistryTypeOnChain,
+	}
 }
 
 // setupTestArtifacts creates a minimal WASM file and config file in a temp directory.

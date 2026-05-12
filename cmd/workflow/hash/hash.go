@@ -24,6 +24,8 @@ type Inputs struct {
 	OwnerFromSettings string
 	PrivateKey        string
 	SkipTypeChecks    bool
+	RegistryType      settings.RegistryType
+	DerivedOwner      string
 }
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
@@ -41,6 +43,10 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 			v := runtimeContext.Viper
 
 			rawPrivKey := v.GetString(settings.EthPrivateKeyEnvVar)
+			registryType := settings.RegistryTypeOnChain
+			if runtimeContext.ResolvedRegistry != nil {
+				registryType = runtimeContext.ResolvedRegistry.Type()
+			}
 
 			inputs := Inputs{
 				ForUser:           forUser,
@@ -51,6 +57,8 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 				OwnerFromSettings: s.Workflow.UserWorkflowSettings.WorkflowOwnerAddress,
 				PrivateKey:        settings.NormalizeHexKey(rawPrivKey),
 				SkipTypeChecks:    v.GetBool(cmdcommon.SkipTypeChecksCLIFlag),
+				RegistryType:      registryType,
+				DerivedOwner:      runtimeContext.DerivedWorkflowOwner,
 			}
 
 			return Execute(inputs)
@@ -87,7 +95,7 @@ func Execute(inputs Inputs) error {
 		return err
 	}
 
-	ownerAddress, err := ResolveOwner(inputs.ForUser, inputs.OwnerFromSettings, inputs.PrivateKey)
+	ownerAddress, err := ResolveOwner(inputs)
 	if err != nil {
 		return err
 	}
@@ -107,17 +115,24 @@ func Execute(inputs Inputs) error {
 	return nil
 }
 
-func ResolveOwner(forUser, ownerFromSettings, privateKey string) (string, error) {
-	if forUser != "" {
-		return forUser, nil
+func ResolveOwner(inputs Inputs) (string, error) {
+	if inputs.RegistryType == settings.RegistryTypeOffChain {
+		if inputs.DerivedOwner == "" {
+			return "", fmt.Errorf("derived workflow owner is not available; ensure authentication succeeded")
+		}
+		return inputs.DerivedOwner, nil
 	}
 
-	if ownerFromSettings != "" {
-		return ownerFromSettings, nil
+	if inputs.ForUser != "" {
+		return inputs.ForUser, nil
 	}
 
-	if privateKey != "" {
-		addr, err := ethkeys.DeriveEthAddressFromPrivateKey(privateKey)
+	if inputs.OwnerFromSettings != "" {
+		return inputs.OwnerFromSettings, nil
+	}
+
+	if inputs.PrivateKey != "" {
+		addr, err := ethkeys.DeriveEthAddressFromPrivateKey(inputs.PrivateKey)
 		if err != nil {
 			return "", fmt.Errorf("failed to derive owner from private key: %w", err)
 		}
