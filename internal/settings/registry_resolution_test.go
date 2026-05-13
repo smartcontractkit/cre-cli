@@ -1,8 +1,9 @@
 package settings
 
 import (
-	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/tenantctx"
@@ -42,63 +43,35 @@ func sampleTenantCtx() *tenantctx.EnvironmentContext {
 func TestResolveRegistry_Empty_AddressAndChainFromEnvSet_NoDonWithoutTenantOrEnv(t *testing.T) {
 	envSet := stagingEnvSet()
 	resolved, err := ResolveRegistry("", nil, envSet)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	assert.NoError(t, err)
 
 	onchain, ok := resolved.(*OnChainRegistry)
-	if !ok {
-		t.Fatalf("expected *OnChainRegistry, got %T", resolved)
-	}
-	if onchain.Address() != envSet.WorkflowRegistryAddress {
-		t.Errorf("expected address %s, got %s", envSet.WorkflowRegistryAddress, onchain.Address())
-	}
-	if onchain.ChainName() != envSet.WorkflowRegistryChainName {
-		t.Errorf("expected chain %s, got %s", envSet.WorkflowRegistryChainName, onchain.ChainName())
-	}
-	if onchain.DonFamily() != "" {
-		t.Errorf("expected empty DON family without tenant or CRE_CLI_DON_FAMILY, got %q", onchain.DonFamily())
-	}
-	if onchain.ExplorerURL() != envSet.WorkflowRegistryChainExplorerURL {
-		t.Errorf("expected explorer %s, got %s", envSet.WorkflowRegistryChainExplorerURL, onchain.ExplorerURL())
-	}
+	assert.True(t, ok, "expected *OnChainRegistry, got %T", resolved)
+	assert.Equal(t, envSet.WorkflowRegistryAddress, onchain.Address())
+	assert.Equal(t, envSet.WorkflowRegistryChainName, onchain.ChainName())
+	assert.Equal(t, "", onchain.DonFamily())
+	assert.Equal(t, envSet.WorkflowRegistryChainExplorerURL, onchain.ExplorerURL())
 }
 
 func TestResolveRegistry_DefaultRegistry_UsesTenantDonFamily(t *testing.T) {
 	envSet := stagingEnvSet()
 	tenantCtx := &tenantctx.EnvironmentContext{DefaultDonFamily: "tenant-zone"}
 	resolved, err := ResolveRegistry("", tenantCtx, envSet)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	assert.NoError(t, err)
 	onchain, ok := resolved.(*OnChainRegistry)
-	if !ok {
-		t.Fatalf("expected *OnChainRegistry, got %T", resolved)
-	}
-	if onchain.DonFamily() != "tenant-zone" {
-		t.Errorf("expected DON family from tenant context, got %q", onchain.DonFamily())
-	}
+	assert.True(t, ok, "expected *OnChainRegistry, got %T", resolved)
+	assert.Equal(t, "tenant-zone", onchain.DonFamily())
 }
 
 func TestResolveRegistry_OnChainFromContext(t *testing.T) {
 	resolved, err := ResolveRegistry("onchain:ethereum-testnet-sepolia", sampleTenantCtx(), stagingEnvSet())
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	assert.NoError(t, err)
 
 	onchain, ok := resolved.(*OnChainRegistry)
-	if !ok {
-		t.Fatalf("expected *OnChainRegistry, got %T", resolved)
-	}
-	if onchain.Address() != "0xaE55eB3EDAc48a1163EE2cbb1205bE1e90Ea1135" {
-		t.Errorf("unexpected address: %s", onchain.Address())
-	}
-	if onchain.ChainName() != "ethereum-testnet-sepolia" {
-		t.Errorf("unexpected chain name: %s", onchain.ChainName())
-	}
-	if onchain.DonFamily() != "zone-a" {
-		t.Errorf("unexpected don family: %s", onchain.DonFamily())
-	}
+	assert.True(t, ok, "expected *OnChainRegistry, got %T", resolved)
+	assert.Equal(t, "0xaE55eB3EDAc48a1163EE2cbb1205bE1e90Ea1135", onchain.Address())
+	assert.Equal(t, "ethereum-testnet-sepolia", onchain.ChainName())
+	assert.Equal(t, "zone-a", onchain.DonFamily())
 }
 
 func TestResolveRegistry_NamedRegistry_EnvOverridesTenantDonFamily(t *testing.T) {
@@ -109,30 +82,18 @@ func TestResolveRegistry_NamedRegistry_EnvOverridesTenantDonFamily(t *testing.T)
 
 	t.Run("on-chain named", func(t *testing.T) {
 		resolved, err := ResolveRegistry("onchain:ethereum-testnet-sepolia", tenantCtx, envSet)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
+		assert.NoError(t, err)
 		onchain, ok := resolved.(*OnChainRegistry)
-		if !ok {
-			t.Fatalf("expected *OnChainRegistry, got %T", resolved)
-		}
-		if onchain.DonFamily() != "from-env-var" {
-			t.Errorf("DON family: got %q, want from-env-var", onchain.DonFamily())
-		}
+		assert.True(t, ok, "expected *OnChainRegistry, got %T", resolved)
+		assert.Equal(t, "from-env-var", onchain.DonFamily())
 	})
 
 	t.Run("private", func(t *testing.T) {
 		resolved, err := ResolveRegistry("private", tenantCtx, envSet)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
+		assert.NoError(t, err)
 		offchain, ok := resolved.(*OffChainRegistry)
-		if !ok {
-			t.Fatalf("expected *OffChainRegistry, got %T", resolved)
-		}
-		if offchain.DonFamily() != "from-env-var" {
-			t.Errorf("DON family: got %q, want from-env-var", offchain.DonFamily())
-		}
+		assert.True(t, ok, "expected *OffChainRegistry, got %T", resolved)
+		assert.Equal(t, "from-env-var", offchain.DonFamily())
 	})
 }
 
@@ -141,60 +102,34 @@ func TestResolveRegistry_DefaultRegistry_EnvOverridesTenantDonFamily(t *testing.
 	envSet.DonFamily = "from-env-var"
 	tenantCtx := &tenantctx.EnvironmentContext{DefaultDonFamily: "tenant-zone"}
 	resolved, err := ResolveRegistry("", tenantCtx, envSet)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	assert.NoError(t, err)
 	onchain, ok := resolved.(*OnChainRegistry)
-	if !ok {
-		t.Fatalf("expected *OnChainRegistry, got %T", resolved)
-	}
-	if onchain.DonFamily() != "from-env-var" {
-		t.Errorf("expected CRE_CLI_DON_FAMILY to override tenant, got %q", onchain.DonFamily())
-	}
+	assert.True(t, ok, "expected *OnChainRegistry, got %T", resolved)
+	assert.Equal(t, "from-env-var", onchain.DonFamily())
 }
 
 func TestResolveRegistry_OffChainFromContext(t *testing.T) {
 	resolved, err := ResolveRegistry("private", sampleTenantCtx(), stagingEnvSet())
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	assert.NoError(t, err)
 
 	offchain, ok := resolved.(*OffChainRegistry)
-	if !ok {
-		t.Fatalf("expected *OffChainRegistry, got %T", resolved)
-	}
-	if offchain.ID() != "private" {
-		t.Errorf("expected ID %q, got %q", "private", offchain.ID())
-	}
-	if offchain.DonFamily() != "zone-a" {
-		t.Errorf("unexpected don family: %s", offchain.DonFamily())
-	}
-	if resolved.Type() != RegistryTypeOffChain {
-		t.Errorf("expected type %s, got %s", RegistryTypeOffChain, resolved.Type())
-	}
+	assert.True(t, ok, "expected *OffChainRegistry, got %T", resolved)
+	assert.Equal(t, "private", offchain.ID())
+	assert.Equal(t, "zone-a", offchain.DonFamily())
+	assert.Equal(t, RegistryTypeOffChain, resolved.Type())
 }
 
 func TestResolveRegistry_UnknownID(t *testing.T) {
 	_, err := ResolveRegistry("does-not-exist", sampleTenantCtx(), stagingEnvSet())
-	if err == nil {
-		t.Fatal("expected error for unknown registry ID")
-	}
-	if !strings.Contains(err.Error(), "not found in user context") {
-		t.Errorf("unexpected error: %v", err)
-	}
-	if !strings.Contains(err.Error(), "onchain:ethereum-testnet-sepolia") {
-		t.Errorf("error should list available IDs: %v", err)
-	}
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "not found in user context")
+	assert.Contains(t, err.Error(), "onchain:ethereum-testnet-sepolia")
 }
 
 func TestResolveRegistry_NilTenantContextWithID(t *testing.T) {
 	_, err := ResolveRegistry("private", nil, stagingEnvSet())
-	if err == nil {
-		t.Fatal("expected error when TenantContext is nil with a registry ID set")
-	}
-	if !strings.Contains(err.Error(), "user context is not available") {
-		t.Errorf("unexpected error: %v", err)
-	}
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "user context is not available")
 }
 
 func TestResolveRegistry_OnChainMissingAddress(t *testing.T) {
@@ -209,12 +144,8 @@ func TestResolveRegistry_OnChainMissingAddress(t *testing.T) {
 		},
 	}
 	_, err := ResolveRegistry("onchain:no-addr", ctx, stagingEnvSet())
-	if err == nil {
-		t.Fatal("expected error for on-chain registry without address")
-	}
-	if !strings.Contains(err.Error(), "has no address") {
-		t.Errorf("unexpected error: %v", err)
-	}
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "has no address")
 }
 
 func TestResolveRegistry_OnChainMissingChainSelector(t *testing.T) {
@@ -229,12 +160,8 @@ func TestResolveRegistry_OnChainMissingChainSelector(t *testing.T) {
 		},
 	}
 	_, err := ResolveRegistry("onchain:no-chain", ctx, stagingEnvSet())
-	if err == nil {
-		t.Fatal("expected error for on-chain registry without chain selector")
-	}
-	if !strings.Contains(err.Error(), "has no chain_selector") {
-		t.Errorf("unexpected error: %v", err)
-	}
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "has no chain_selector")
 }
 
 func TestParseRegistryType(t *testing.T) {
@@ -250,32 +177,20 @@ func TestParseRegistryType(t *testing.T) {
 		{"unknown", RegistryTypeOnChain},
 	}
 	for _, tt := range tests {
-		if got := ParseRegistryType(tt.input); got != tt.want {
-			t.Errorf("ParseRegistryType(%q) = %q, want %q", tt.input, got, tt.want)
-		}
+		t.Run(tt.input, func(t *testing.T) {
+			assert.Equal(t, tt.want, ParseRegistryType(tt.input))
+		})
 	}
 }
 
 func TestInterfaceMethods(t *testing.T) {
 	onchain := NewOnChainRegistry("oc-1", "0x1234", "sepolia", "zone-a", "https://etherscan.io")
-	if onchain.Type() != RegistryTypeOnChain {
-		t.Errorf("expected on-chain type")
-	}
-	if onchain.ID() != "oc-1" {
-		t.Errorf("expected ID oc-1, got %s", onchain.ID())
-	}
-	if onchain.DonFamily() != "zone-a" {
-		t.Errorf("expected don zone-a, got %s", onchain.DonFamily())
-	}
+	assert.Equal(t, RegistryTypeOnChain, onchain.Type())
+	assert.Equal(t, "oc-1", onchain.ID())
+	assert.Equal(t, "zone-a", onchain.DonFamily())
 
 	offchain := NewOffChainRegistry("private", "zone-b")
-	if offchain.Type() != RegistryTypeOffChain {
-		t.Errorf("expected off-chain type")
-	}
-	if offchain.ID() != "private" {
-		t.Errorf("expected ID private, got %s", offchain.ID())
-	}
-	if offchain.DonFamily() != "zone-b" {
-		t.Errorf("expected don zone-b, got %s", offchain.DonFamily())
-	}
+	assert.Equal(t, RegistryTypeOffChain, offchain.Type())
+	assert.Equal(t, "private", offchain.ID())
+	assert.Equal(t, "zone-b", offchain.DonFamily())
 }
