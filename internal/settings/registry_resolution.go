@@ -67,7 +67,7 @@ func NewOffChainRegistry(id, donFamily string) *OffChainRegistry {
 
 func (r *OffChainRegistry) ID() string         { return r.id }
 func (r *OffChainRegistry) Type() RegistryType { return RegistryTypeOffChain }
-func (r *OffChainRegistry) DonFamily() string { return r.donFamily }
+func (r *OffChainRegistry) DonFamily() string  { return r.donFamily }
 
 // EffectiveDonFamily resolves the DON family label for workflow registry operations.
 // Baked-in environment YAML does not define DON family; authenticated users get
