@@ -26,6 +26,7 @@ type Inputs struct {
 	PrivateKey        string
 	SkipTypeChecks    bool
 	RegistryType      settings.RegistryType
+	DerivedOwner      string
 }
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
@@ -58,6 +59,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 				PrivateKey:        settings.NormalizeHexKey(rawPrivKey),
 				SkipTypeChecks:    v.GetBool(cmdcommon.SkipTypeChecksCLIFlag),
 				RegistryType:      registryType,
+				DerivedOwner:      runtimeContext.DerivedWorkflowOwner,
 			}
 
 			return Execute(inputs)
@@ -66,8 +68,9 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 
 	hashCmd.Flags().String("public_key", "",
 		"Owner address to use for computing the workflow hash. "+
-			"Required for off-chain registries. For on-chain registries, defaults to the address derived from CRE_ETH_PRIVATE_KEY "+
-			"or the workflow-owner-address in project settings.")
+			"Required when the owner cannot be automatically derived. "+
+			"Auto-derivation uses workflow-owner-address/CRE_ETH_PRIVATE_KEY for on-chain or login-derived owner for off-chain. "+
+			"If provided, overrides the owner derived from credentials or settings.")
 	hashCmd.Flags().String("wasm", "", "Path or URL to a pre-built WASM binary (skips compilation)")
 	hashCmd.Flags().String("config", "", "Override the config file path from workflow.yaml")
 	hashCmd.Flags().Bool("no-config", false, "Hash without a config file")
@@ -99,6 +102,7 @@ func Execute(inputs Inputs) error {
 		inputs.ForUser,
 		inputs.OwnerFromSettings,
 		inputs.PrivateKey,
+		inputs.DerivedOwner,
 	)
 	if err != nil {
 		return err
@@ -139,12 +143,15 @@ func ResolveOwner(forUser, ownerFromSettings, privateKey string) (string, error)
 	return "", fmt.Errorf("cannot determine workflow owner: provide --public_key or ensure CRE_ETH_PRIVATE_KEY is set")
 }
 
-func ResolveOwnerForRegistry(registryType settings.RegistryType, forUser, ownerFromSettings, privateKey string) (string, error) {
+func ResolveOwnerForRegistry(registryType settings.RegistryType, forUser, ownerFromSettings, privateKey, derivedOwner string) (string, error) {
 	if registryType == settings.RegistryTypeOffChain {
-		if forUser == "" {
+		if forUser != "" {
+			return forUser, nil
+		}
+		if derivedOwner == "" {
 			return "", fmt.Errorf("cannot determine workflow owner for off-chain registry: provide --public_key")
 		}
-		return forUser, nil
+		return derivedOwner, nil
 	}
 
 	return ResolveOwner(forUser, ownerFromSettings, privateKey)

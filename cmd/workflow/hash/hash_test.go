@@ -25,6 +25,8 @@ const testPrivateKey = "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7b
 // Address derived from testPrivateKey.
 const testDerivedAddress = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
 
+const testDerivedOwner = "0x1111111111111111111111111111111111111111"
+
 func TestResolveOwner_WithForUser(t *testing.T) {
 	t.Parallel()
 	addr, err := ResolveOwner("0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF", "", "")
@@ -112,21 +114,28 @@ func TestExecute_WithoutForUser_NoKey_Errors(t *testing.T) {
 
 func TestResolveOwnerForRegistry_OffChainRequiresPublicKey(t *testing.T) {
 	t.Parallel()
-	_, err := ResolveOwnerForRegistry(settings.RegistryTypeOffChain, "", "0xSettingsOwner", testPrivateKey)
+	_, err := ResolveOwnerForRegistry(settings.RegistryTypeOffChain, "", "0xSettingsOwner", testPrivateKey, "")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "--public_key")
 }
 
 func TestResolveOwnerForRegistry_OffChainUsesPublicKey(t *testing.T) {
 	t.Parallel()
-	addr, err := ResolveOwnerForRegistry(settings.RegistryTypeOffChain, "0xOwner", "0xSettingsOwner", testPrivateKey)
+	addr, err := ResolveOwnerForRegistry(settings.RegistryTypeOffChain, "0xOwner", "0xSettingsOwner", testPrivateKey, testDerivedOwner)
 	require.NoError(t, err)
 	assert.Equal(t, "0xOwner", addr)
 }
 
+func TestResolveOwnerForRegistry_OffChainUsesDerivedOwner(t *testing.T) {
+	t.Parallel()
+	addr, err := ResolveOwnerForRegistry(settings.RegistryTypeOffChain, "", "0xSettingsOwner", testPrivateKey, testDerivedOwner)
+	require.NoError(t, err)
+	assert.Equal(t, testDerivedOwner, addr)
+}
+
 func TestResolveOwnerForRegistry_OnChainUsesDefaults(t *testing.T) {
 	t.Parallel()
-	addr, err := ResolveOwnerForRegistry(settings.RegistryTypeOnChain, "", "0xSettingsOwner", "")
+	addr, err := ResolveOwnerForRegistry(settings.RegistryTypeOnChain, "", "0xSettingsOwner", "", testDerivedOwner)
 	require.NoError(t, err)
 	assert.Equal(t, "0xSettingsOwner", addr)
 }
@@ -206,6 +215,22 @@ func TestExecute_OffChainUsesPublicKey(t *testing.T) {
 		ConfigPath:   configFile,
 		WorkflowName: "test-workflow",
 		RegistryType: settings.RegistryTypeOffChain,
+		DerivedOwner: testDerivedOwner,
+	}
+
+	err := Execute(inputs)
+	require.NoError(t, err)
+}
+
+func TestExecute_OffChainUsesDerivedOwner(t *testing.T) {
+	wasmFile, configFile := setupTestArtifacts(t)
+
+	inputs := Inputs{
+		WasmPath:     wasmFile,
+		ConfigPath:   configFile,
+		WorkflowName: "test-workflow",
+		RegistryType: settings.RegistryTypeOffChain,
+		DerivedOwner: testDerivedOwner,
 	}
 
 	err := Execute(inputs)
@@ -270,8 +295,8 @@ func TestHashCommandFlags(t *testing.T) {
 	f := cmd.Flags().Lookup("public_key")
 	require.NotNil(t, f, "public_key flag should exist")
 	assert.Equal(t, "", f.DefValue)
-	assert.Contains(t, f.Usage, "Required for off-chain registries")
-	assert.Contains(t, f.Usage, "defaults to the address")
+	assert.Contains(t, f.Usage, "Required when the owner cannot be automatically derived")
+	assert.Contains(t, f.Usage, "overrides the owner derived")
 
 	f = cmd.Flags().Lookup("wasm")
 	require.NotNil(t, f, "wasm flag should exist")
