@@ -16,6 +16,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
+	"github.com/smartcontractkit/cre-cli/internal/testutil"
 )
 
 // TestConfig represents test configuration
@@ -70,6 +71,9 @@ func workflowDeployEoaWithMockStorage(t *testing.T, tc TestConfig) (output strin
 						},
 					},
 				})
+				return
+			}
+			if testutil.RespondGetTenantConfigMock(w, req.Query) {
 				return
 			}
 

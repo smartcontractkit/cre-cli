@@ -10,6 +10,28 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 )
 
+// RespondGetTenantConfigMock writes mock getTenantConfig (with defaultDonFamily) when the query matches; returns whether it handled the request.
+func RespondGetTenantConfigMock(w http.ResponseWriter, query string) bool {
+	if !strings.Contains(query, "getTenantConfig") && !strings.Contains(query, "GetTenantConfig") {
+		return false
+	}
+	_ = json.NewEncoder(w).Encode(mockGetTenantConfigData())
+	return true
+}
+
+func mockGetTenantConfigData() map[string]any {
+	return map[string]any{
+		"data": map[string]any{
+			"getTenantConfig": map[string]any{
+				"tenantId":         "test-tenant",
+				"defaultDonFamily": "test-don",
+				"vaultGatewayUrl":  "https://vault.mock.invalid",
+				"registries":       []map[string]any{},
+			},
+		},
+	}
+}
+
 // NewGraphQLMockServerGetOrganization starts an httptest.Server that responds to
 // getCreOrganizationInfo with a fixed orgId and derivedWorkflowOwners.
 // It sets EnvVarGraphQLURL so CLI commands use this server. Caller must defer srv.Close().
@@ -32,6 +54,9 @@ func NewGraphQLMockServerGetOrganization(t *testing.T) *httptest.Server {
 						},
 					},
 				})
+				return
+			}
+			if RespondGetTenantConfigMock(w, req.Query) {
 				return
 			}
 			w.WriteHeader(http.StatusBadRequest)

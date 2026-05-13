@@ -68,6 +68,9 @@ func RunAccountHappyPath(t *testing.T, tc TestConfig, testEthURL, chainName stri
 			})
 			return
 		}
+		if testutil.RespondGetTenantConfigMock(w, req.Query) {
+			return
+		}
 
 		registryAddr := os.Getenv(environments.EnvVarWorkflowRegistryAddress)
 
