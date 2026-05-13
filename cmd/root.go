@@ -236,7 +236,7 @@ func newRootCommand() *cobra.Command {
 					spinner.Update("Loading user context...")
 				}
 				if err := runtimeContext.AttachTenantContext(cmd.Context()); err != nil {
-					runtimeContext.Logger.Warn().Err(err).Msg("failed to load user context")
+					ui.Warning("Failed to load user context")
 				}
 
 				// Check if organization is ungated for commands that require it
@@ -289,13 +289,13 @@ func newRootCommand() *cobra.Command {
 					}
 					err := runtimeContext.AttachCredentials(cmd.Context(), shouldSkipValidation(cmd))
 					if err != nil {
-						runtimeContext.Logger.Warn().Err(err).Msg("failed to load credentials for workflow hash")
+						ui.Warning("Failed to load credentials for workflow hash")
 					} else {
 						if showSpinner {
 							spinner.Update("Loading user context...")
 						}
 						if err := runtimeContext.AttachTenantContext(cmd.Context()); err != nil {
-							runtimeContext.Logger.Warn().Err(err).Msg("failed to load user context")
+							ui.Warning("Failed to load user context")
 						}
 					}
 				}
