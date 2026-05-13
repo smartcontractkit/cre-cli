@@ -2,9 +2,11 @@ package tenantctx
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/machinebox/graphql"
@@ -29,19 +31,31 @@ type Registry struct {
 	SecretsAuthFlows []string `yaml:"secrets_auth_flows" json:"secretsAuthFlows"`
 }
 
+// Forwarder is a chain selector and mock forwarder contract address for the tenant.
+type Forwarder struct {
+	ChainSelector uint64 `yaml:"chain_selector" json:"chainSelector"`
+	Address       string `yaml:"address" json:"address"`
+}
+
 // EnvironmentContext holds user context for a single CLI environment.
 type EnvironmentContext struct {
 	TenantID         string      `yaml:"tenant_id"`
 	DefaultDonFamily string      `yaml:"default_don_family"`
 	VaultGatewayURL  string      `yaml:"vault_gateway_url"`
 	Registries       []*Registry `yaml:"registries"`
+	Forwarders       []Forwarder `yaml:"forwarders,omitempty"`
+}
+
+type gqlForwarder struct {
+	ChainSelector json.RawMessage `json:"chainSelector"`
+	Address       string          `json:"address"`
 }
 
 type getTenantConfigResponse struct {
 	GetTenantConfig struct {
-		TenantID         string `json:"tenantId"`
-		DefaultDonFamily string `json:"defaultDonFamily"`
-		VaultGatewayURL  string `json:"vaultGatewayUrl"`
+		TenantID         string         `json:"tenantId"`
+		DefaultDonFamily string         `json:"defaultDonFamily"`
+		VaultGatewayURL  string         `json:"vaultGatewayUrl"`
 		Registries       []struct {
 			ID               string   `json:"id"`
 			Label            string   `json:"label"`
@@ -50,6 +64,7 @@ type getTenantConfigResponse struct {
 			Address          *string  `json:"address"`
 			SecretsAuthFlows []string `json:"secretsAuthFlows"`
 		} `json:"registries"`
+		Forwarders []gqlForwarder `json:"forwarders"`
 	} `json:"getTenantConfig"`
 }
 
@@ -65,6 +80,10 @@ const getTenantConfigQuery = `query GetTenantConfig {
       chainSelector
       address
       secretsAuthFlows
+    }
+    forwarders {
+      chainSelector
+      address
     }
   }
 }`
@@ -104,11 +123,27 @@ func FetchAndWriteContext(ctx context.Context, gqlClient *graphqlclient.Client, 
 		})
 	}
 
+	forwarders := make([]Forwarder, 0, len(tc.Forwarders))
+	for _, f := range tc.Forwarders {
+		sel, err := parseChainSelectorJSON(f.ChainSelector)
+		if err != nil {
+			log.Warn().Err(err).Str("address", f.Address).Msg("skipping forwarder with invalid chainSelector")
+			continue
+		}
+		addr := strings.TrimSpace(f.Address)
+		if addr == "" {
+			log.Warn().Uint64("chainSelector", sel).Msg("skipping forwarder with empty address")
+			continue
+		}
+		forwarders = append(forwarders, Forwarder{ChainSelector: sel, Address: addr})
+	}
+
 	envCtx := &EnvironmentContext{
 		TenantID:         tc.TenantID,
 		DefaultDonFamily: tc.DefaultDonFamily,
 		VaultGatewayURL:  tc.VaultGatewayURL,
 		Registries:       registries,
+		Forwarders:       forwarders,
 	}
 
 	contextMap := map[string]*EnvironmentContext{
@@ -149,6 +184,23 @@ func abbreviateAddress(addr string) string {
 		return addr
 	}
 	return addr[:6] + "..." + addr[len(addr)-4:]
+}
+
+// parseChainSelectorJSON decodes chainSelector from GraphQL JSON (string or number).
+// Prefer string values in the API response to avoid loss of precision for large selectors.
+func parseChainSelectorJSON(raw []byte) (uint64, error) {
+	if len(raw) == 0 || string(raw) == "null" {
+		return 0, fmt.Errorf("empty chain selector")
+	}
+	var s string
+	if err := json.Unmarshal(raw, &s); err == nil {
+		return strconv.ParseUint(strings.TrimSpace(s), 10, 64)
+	}
+	var n json.Number
+	if err := json.Unmarshal(raw, &n); err == nil {
+		return strconv.ParseUint(string(n), 10, 64)
+	}
+	return 0, fmt.Errorf("chain selector must be a decimal string or integer JSON value: %s", string(raw))
 }
 
 // LoadContext reads the registry manifest from ~/.cre/<ContextFile>
