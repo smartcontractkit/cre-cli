@@ -120,6 +120,7 @@ func workflowDeployPrivateRegistry(t *testing.T, tc TestConfig) string {
 									"secretsAuthFlows": []string{"BROWSER"},
 								},
 							},
+							"forwarders": []any{},
 						},
 					},
 				})
@@ -334,6 +335,7 @@ func workflowPausePrivateRegistry(t *testing.T, tc TestConfig) string {
 									"secretsAuthFlows": []string{"BROWSER"},
 								},
 							},
+							"forwarders": []any{},
 						},
 					},
 				})
@@ -503,6 +505,7 @@ func workflowActivatePrivateRegistry(t *testing.T, tc TestConfig) string {
 									"secretsAuthFlows": []string{"BROWSER"},
 								},
 							},
+							"forwarders": []any{},
 						},
 					},
 				})
@@ -672,6 +675,7 @@ func workflowDeletePrivateRegistry(t *testing.T, tc TestConfig) string {
 									"secretsAuthFlows": []string{"BROWSER"},
 								},
 							},
+							"forwarders": []any{},
 						},
 					},
 				})
