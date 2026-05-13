@@ -2,6 +2,7 @@ package settings
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/smartcontractkit/cre-cli/internal/environments"
@@ -66,7 +67,34 @@ func NewOffChainRegistry(id, donFamily string) *OffChainRegistry {
 
 func (r *OffChainRegistry) ID() string         { return r.id }
 func (r *OffChainRegistry) Type() RegistryType { return RegistryTypeOffChain }
-func (r *OffChainRegistry) DonFamily() string  { return r.donFamily }
+func (r *OffChainRegistry) DonFamily() string { return r.donFamily }
+
+// EffectiveDonFamily resolves the DON family label for workflow registry operations.
+// Baked-in environment YAML does not define DON family; authenticated users get
+// defaults from tenant context (context.yaml after login).
+//
+// Precedence:
+//  1. CRE_CLI_DON_FAMILY — from envSet.DonFamily (filled by environments.NewEnvironmentSet when the
+//     variable is set) or, when that is empty, os.Getenv directly.
+//  2. Tenant session — tenantCtx.DefaultDonFamily from context.yaml / GraphQL.
+func EffectiveDonFamily(envSet *environments.EnvironmentSet, tenantCtx *tenantctx.EnvironmentContext) string {
+	don := ""
+	if envSet != nil {
+		don = strings.TrimSpace(envSet.DonFamily)
+	}
+	if don == "" {
+		don = strings.TrimSpace(os.Getenv(environments.EnvVarDonFamily))
+	}
+	if don != "" {
+		return don
+	}
+	if tenantCtx != nil {
+		if v := strings.TrimSpace(tenantCtx.DefaultDonFamily); v != "" {
+			return v
+		}
+	}
+	return ""
+}
 
 // ResolveRegistry maps an optional deployment-registry value to a concrete
 // ResolvedRegistry. When deploymentRegistry is empty the static EnvironmentSet
@@ -78,7 +106,7 @@ func ResolveRegistry(
 	envSet *environments.EnvironmentSet,
 ) (ResolvedRegistry, error) {
 	if deploymentRegistry == "" {
-		return defaultFromEnvironmentSet(envSet), nil
+		return defaultFromEnvironmentSet(envSet, tenantCtx), nil
 	}
 
 	if tenantCtx == nil {
@@ -92,7 +120,7 @@ func ResolveRegistry(
 	}
 
 	if ParseRegistryType(reg.Type) == RegistryTypeOffChain {
-		return NewOffChainRegistry(reg.ID, tenantCtx.DefaultDonFamily), nil
+		return NewOffChainRegistry(reg.ID, EffectiveDonFamily(envSet, tenantCtx)), nil
 	}
 
 	if reg.Address == nil || *reg.Address == "" {
@@ -111,7 +139,7 @@ func ResolveRegistry(
 		reg.ID,
 		*reg.Address,
 		chainName,
-		tenantCtx.DefaultDonFamily,
+		EffectiveDonFamily(envSet, tenantCtx),
 		envSet.WorkflowRegistryChainExplorerURL,
 	), nil
 }
@@ -125,12 +153,12 @@ func ParseRegistryType(raw string) RegistryType {
 	return RegistryTypeOnChain
 }
 
-func defaultFromEnvironmentSet(envSet *environments.EnvironmentSet) *OnChainRegistry {
+func defaultFromEnvironmentSet(envSet *environments.EnvironmentSet, tenantCtx *tenantctx.EnvironmentContext) *OnChainRegistry {
 	return NewOnChainRegistry(
 		fmt.Sprintf("onchain:%s", envSet.WorkflowRegistryChainName),
 		envSet.WorkflowRegistryAddress,
 		envSet.WorkflowRegistryChainName,
-		envSet.DonFamily,
+		EffectiveDonFamily(envSet, tenantCtx),
 		envSet.WorkflowRegistryChainExplorerURL,
 	)
 }

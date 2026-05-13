@@ -16,7 +16,6 @@ func stagingEnvSet() *environments.EnvironmentSet {
 		WorkflowRegistryAddress:          "0xaE55eB3EDAc48a1163EE2cbb1205bE1e90Ea1135",
 		WorkflowRegistryChainName:        "ethereum-testnet-sepolia",
 		WorkflowRegistryChainExplorerURL: "https://sepolia.etherscan.io",
-		DonFamily:                        "zone-a",
 	}
 }
 
@@ -40,7 +39,7 @@ func sampleTenantCtx() *tenantctx.EnvironmentContext {
 	}
 }
 
-func TestResolveRegistry_EmptyFallsBackToEnvSet(t *testing.T) {
+func TestResolveRegistry_Empty_AddressAndChainFromEnvSet_NoDonWithoutTenantOrEnv(t *testing.T) {
 	envSet := stagingEnvSet()
 	resolved, err := ResolveRegistry("", nil, envSet)
 	if err != nil {
@@ -57,11 +56,27 @@ func TestResolveRegistry_EmptyFallsBackToEnvSet(t *testing.T) {
 	if onchain.ChainName() != envSet.WorkflowRegistryChainName {
 		t.Errorf("expected chain %s, got %s", envSet.WorkflowRegistryChainName, onchain.ChainName())
 	}
-	if onchain.DonFamily() != envSet.DonFamily {
-		t.Errorf("expected don %s, got %s", envSet.DonFamily, onchain.DonFamily())
+	if onchain.DonFamily() != "" {
+		t.Errorf("expected empty DON family without tenant or CRE_CLI_DON_FAMILY, got %q", onchain.DonFamily())
 	}
 	if onchain.ExplorerURL() != envSet.WorkflowRegistryChainExplorerURL {
 		t.Errorf("expected explorer %s, got %s", envSet.WorkflowRegistryChainExplorerURL, onchain.ExplorerURL())
+	}
+}
+
+func TestResolveRegistry_DefaultRegistry_UsesTenantDonFamily(t *testing.T) {
+	envSet := stagingEnvSet()
+	tenantCtx := &tenantctx.EnvironmentContext{DefaultDonFamily: "tenant-zone"}
+	resolved, err := ResolveRegistry("", tenantCtx, envSet)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	onchain, ok := resolved.(*OnChainRegistry)
+	if !ok {
+		t.Fatalf("expected *OnChainRegistry, got %T", resolved)
+	}
+	if onchain.DonFamily() != "tenant-zone" {
+		t.Errorf("expected DON family from tenant context, got %q", onchain.DonFamily())
 	}
 }
 
@@ -83,6 +98,58 @@ func TestResolveRegistry_OnChainFromContext(t *testing.T) {
 	}
 	if onchain.DonFamily() != "zone-a" {
 		t.Errorf("unexpected don family: %s", onchain.DonFamily())
+	}
+}
+
+func TestResolveRegistry_NamedRegistry_EnvOverridesTenantDonFamily(t *testing.T) {
+	t.Setenv(environments.EnvVarDonFamily, "from-env-var")
+	envSet := stagingEnvSet()
+	tenantCtx := sampleTenantCtx()
+	tenantCtx.DefaultDonFamily = "from-tenant"
+
+	t.Run("on-chain named", func(t *testing.T) {
+		resolved, err := ResolveRegistry("onchain:ethereum-testnet-sepolia", tenantCtx, envSet)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		onchain, ok := resolved.(*OnChainRegistry)
+		if !ok {
+			t.Fatalf("expected *OnChainRegistry, got %T", resolved)
+		}
+		if onchain.DonFamily() != "from-env-var" {
+			t.Errorf("DON family: got %q, want from-env-var", onchain.DonFamily())
+		}
+	})
+
+	t.Run("private", func(t *testing.T) {
+		resolved, err := ResolveRegistry("private", tenantCtx, envSet)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		offchain, ok := resolved.(*OffChainRegistry)
+		if !ok {
+			t.Fatalf("expected *OffChainRegistry, got %T", resolved)
+		}
+		if offchain.DonFamily() != "from-env-var" {
+			t.Errorf("DON family: got %q, want from-env-var", offchain.DonFamily())
+		}
+	})
+}
+
+func TestResolveRegistry_DefaultRegistry_EnvOverridesTenantDonFamily(t *testing.T) {
+	t.Setenv(environments.EnvVarDonFamily, "from-env-var")
+	envSet := stagingEnvSet()
+	tenantCtx := &tenantctx.EnvironmentContext{DefaultDonFamily: "tenant-zone"}
+	resolved, err := ResolveRegistry("", tenantCtx, envSet)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	onchain, ok := resolved.(*OnChainRegistry)
+	if !ok {
+		t.Fatalf("expected *OnChainRegistry, got %T", resolved)
+	}
+	if onchain.DonFamily() != "from-env-var" {
+		t.Errorf("expected CRE_CLI_DON_FAMILY to override tenant, got %q", onchain.DonFamily())
 	}
 }
 
