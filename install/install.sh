@@ -145,7 +145,8 @@ fi
 
 # 3. Determine the Latest Version from GitHub Releases
 check_command "curl"
-LATEST_TAG=$(curl -s "https://api.github.com/repos/$github_repo/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+check_command "jq"
+LATEST_TAG=$(curl -s "https://api.github.com/repos/$github_repo/releases/latest" | jq '.tag_name' | sed -E 's/.*"([^"]+)".*/\1/')
 if [ -z "$LATEST_TAG" ]; then
   fail "Could not fetch the latest release version from GitHub."
 fi
