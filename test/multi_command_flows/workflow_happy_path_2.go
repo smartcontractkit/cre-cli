@@ -17,7 +17,6 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
-	"github.com/smartcontractkit/cre-cli/internal/testutil"
 )
 
 // workflowDeployEoa deploys a workflow via CLI, mocking GraphQL + Origin.
@@ -44,9 +43,6 @@ func workflowDeployEoa(t *testing.T, tc TestConfig) string {
 						},
 					},
 				})
-				return
-			}
-			if testutil.RespondGetTenantConfigMock(w, req.Query) {
 				return
 			}
 
@@ -168,9 +164,6 @@ func workflowDeployUpdateWithConfig(t *testing.T, tc TestConfig) string {
 						},
 					},
 				})
-				return
-			}
-			if testutil.RespondGetTenantConfigMock(w, req.Query) {
 				return
 			}
 

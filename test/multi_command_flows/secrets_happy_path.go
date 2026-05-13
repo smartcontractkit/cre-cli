@@ -24,7 +24,6 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
-	"github.com/smartcontractkit/cre-cli/internal/testutil"
 )
 
 // Hex-encoded tdh2easy.PublicKey blob returned by the gateway
@@ -72,10 +71,6 @@ func RunSecretsHappyPath(t *testing.T, tc TestConfig, chainName string) {
 						},
 					},
 				})
-				return
-			}
-
-			if testutil.RespondGetTenantConfigMock(w, req.Query) {
 				return
 			}
 
@@ -271,10 +266,6 @@ func RunSecretsListMsig(t *testing.T, tc TestConfig, chainName string) {
 						},
 					},
 				})
-				return
-			}
-
-			if testutil.RespondGetTenantConfigMock(w, req.Query) {
 				return
 			}
 

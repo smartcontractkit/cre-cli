@@ -16,7 +16,6 @@ import (
 
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
-	"github.com/smartcontractkit/cre-cli/internal/testutil"
 )
 
 // workflowInit runs cre init to initialize a new workflow project from scratch
@@ -41,9 +40,6 @@ func workflowInit(t *testing.T, projectRootFlag, projectName, workflowName strin
 						},
 					},
 				})
-				return
-			}
-			if testutil.RespondGetTenantConfigMock(w, req.Query) {
 				return
 			}
 
@@ -113,9 +109,6 @@ func workflowDeployUnsigned(t *testing.T, tc TestConfig, projectRootFlag, workfl
 						},
 					},
 				})
-				return
-			}
-			if testutil.RespondGetTenantConfigMock(w, req.Query) {
 				return
 			}
 
@@ -235,9 +228,6 @@ func workflowDeployWithConfigAndLinkedKey(t *testing.T, tc TestConfig, projectRo
 						},
 					},
 				})
-				return
-			}
-			if testutil.RespondGetTenantConfigMock(w, req.Query) {
 				return
 			}
 
