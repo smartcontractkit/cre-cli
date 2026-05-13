@@ -262,7 +262,7 @@ func makeCmdWithSecretsAuth(use, secretsAuthValue string) *cobra.Command {
 		Use: use,
 		Run: func(cmd *cobra.Command, args []string) {},
 	}
-	cmd.Flags().String("secrets-auth", "owner-key-signing", "auth mode")
+	cmd.Flags().String("secrets-auth", "onchain", "auth mode")
 	_ = cmd.Flags().Parse([]string{"--secrets-auth=" + secretsAuthValue})
 	return cmd
 }
@@ -471,8 +471,8 @@ func TestShouldSkipGetOwner(t *testing.T) {
 			wantSkip: true,
 		},
 		{
-			name:     "secrets create with --secrets-auth=owner-key-signing → do NOT skip",
-			cmd:      makeCmdWithSecretsAuth("create", "owner-key-signing"),
+			name:     "secrets create with --secrets-auth=onchain → do NOT skip",
+			cmd:      makeCmdWithSecretsAuth("create", "onchain"),
 			wantSkip: false,
 		},
 		{

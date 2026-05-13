@@ -70,7 +70,7 @@ type Handler struct {
 }
 
 // NewHandler creates a new handler instance.
-// secretsAuth is the value of the --secrets-auth flag (e.g. "owner-key-signing" or "browser").
+// secretsAuth is the value of the --secrets-auth flag (e.g. "onchain" or "browser").
 // For the browser OAuth flow the on-chain WorkflowRegistryV2Client is not needed and is
 // intentionally skipped to avoid requiring an ethereum-mainnet RPC URL.
 func NewHandler(ctx *runtime.Context, secretsFilePath, secretsAuth string) (*Handler, error) {
@@ -300,13 +300,13 @@ func (h *Handler) ResolveEffectiveOwner() (string, error) {
 func (h *Handler) ResolveVaultIdentifierOwnerForAuth(secretsAuth string) (string, error) {
 	if IsBrowserFlow(secretsAuth) {
 		if h.Credentials == nil {
-			return "", fmt.Errorf("organization information is missing from your session; sign in again or use owner-key-signing")
+			return "", fmt.Errorf("organization information is missing from your session; sign in again or use --secrets-auth=onchain")
 		}
 		if h.Credentials.AuthType == credentials.AuthTypeApiKey {
 			return "", fmt.Errorf("this sign-in flow requires an interactive login; API keys are not supported")
 		}
 		if h.Credentials.OrgID == "" {
-			return "", fmt.Errorf("organization information is missing from your session; sign in again or use owner-key-signing")
+			return "", fmt.Errorf("organization information is missing from your session; sign in again or use --secrets-auth=onchain")
 		}
 		return h.Credentials.OrgID, nil
 	}

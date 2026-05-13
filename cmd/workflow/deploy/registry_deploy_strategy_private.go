@@ -81,9 +81,14 @@ func (a *privateRegistryDeployStrategy) Upsert() error {
 }
 
 func (h *handler) buildPrivateRegistryInput() privateregistryclient.OffchainWorkflowInput {
+	status := privateregistryclient.WorkflowStatusActive
+	if h.existingWorkflowStatus != nil && *h.existingWorkflowStatus == workflowStatusPaused {
+		status = privateregistryclient.WorkflowStatusPaused
+	}
+
 	input := privateregistryclient.OffchainWorkflowInput{
 		WorkflowID:   h.workflowArtifact.WorkflowID,
-		Status:       privateregistryclient.WorkflowStatusActive,
+		Status:       status,
 		WorkflowName: h.inputs.WorkflowName,
 		BinaryURL:    h.inputs.BinaryURL,
 		DonFamily:    h.inputs.DonFamily,
