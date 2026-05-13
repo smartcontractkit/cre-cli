@@ -33,8 +33,6 @@ type SimulatedContracts struct {
 	WorkflowRegistry SimulatedWorkflowRegistry
 }
 
-const DefaultSimTenantDonFamily = "test_label"
-
 func NewSimulatedEnvironment(t *testing.T) *SimulatedEnvironment {
 	logger := testutil.NewTestLogger()
 
@@ -99,26 +97,15 @@ func (se *SimulatedEnvironment) createContextWithLogger(logger *zerolog.Logger) 
 		logger.Warn().Err(err).Msg("failed to create new credentials")
 	}
 
-	var simTenant *tenantctx.EnvironmentContext
 	var resolved settingspkg.ResolvedRegistry
-	switch {
-	case se.tenantID != "":
-		simTenant = &tenantctx.EnvironmentContext{
-			TenantID:         se.tenantID,
-			DefaultDonFamily: se.donFamily,
-		}
-		resolved = settingspkg.NewOffChainRegistry("private",
-			settingspkg.EffectiveDonFamily(environmentSet, simTenant))
-
-	case environmentSet != nil:
-		simTenant = &tenantctx.EnvironmentContext{
-			DefaultDonFamily: DefaultSimTenantDonFamily,
-		}
+	if se.tenantID != "" {
+		resolved = settingspkg.NewOffChainRegistry("private", se.donFamily)
+	} else if environmentSet != nil {
 		resolved = settingspkg.NewOnChainRegistry(
 			"",
 			se.Contracts.WorkflowRegistry.Contract.Hex(),
 			environmentSet.WorkflowRegistryChainName,
-			settingspkg.EffectiveDonFamily(environmentSet, simTenant),
+			environmentSet.DonFamily,
 			environmentSet.WorkflowRegistryChainExplorerURL,
 		)
 	}
@@ -131,7 +118,10 @@ func (se *SimulatedEnvironment) createContextWithLogger(logger *zerolog.Logger) 
 		EnvironmentSet:   environmentSet,
 		Credentials:      creds,
 		ResolvedRegistry: resolved,
-		TenantContext:    simTenant,
+	}
+
+	if se.tenantID != "" {
+		ctx.TenantContext = &tenantctx.EnvironmentContext{TenantID: se.tenantID}
 	}
 
 	// Mark credentials as validated for tests to bypass validation
