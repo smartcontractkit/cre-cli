@@ -53,9 +53,9 @@ type gqlForwarder struct {
 
 type getTenantConfigResponse struct {
 	GetTenantConfig struct {
-		TenantID         string         `json:"tenantId"`
-		DefaultDonFamily string         `json:"defaultDonFamily"`
-		VaultGatewayURL  string         `json:"vaultGatewayUrl"`
+		TenantID         string `json:"tenantId"`
+		DefaultDonFamily string `json:"defaultDonFamily"`
+		VaultGatewayURL  string `json:"vaultGatewayUrl"`
 		Registries       []struct {
 			ID               string   `json:"id"`
 			Label            string   `json:"label"`
