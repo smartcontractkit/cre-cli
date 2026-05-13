@@ -3,6 +3,7 @@ package hash
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -24,6 +25,7 @@ type Inputs struct {
 	OwnerFromSettings string
 	PrivateKey        string
 	SkipTypeChecks    bool
+	RegistryType      settings.RegistryType
 }
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
@@ -41,6 +43,10 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 			v := runtimeContext.Viper
 
 			rawPrivKey := v.GetString(settings.EthPrivateKeyEnvVar)
+			registryType, err := resolveRegistryType(runtimeContext)
+			if err != nil {
+				return err
+			}
 
 			inputs := Inputs{
 				ForUser:           forUser,
@@ -51,6 +57,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 				OwnerFromSettings: s.Workflow.UserWorkflowSettings.WorkflowOwnerAddress,
 				PrivateKey:        settings.NormalizeHexKey(rawPrivKey),
 				SkipTypeChecks:    v.GetBool(cmdcommon.SkipTypeChecksCLIFlag),
+				RegistryType:      registryType,
 			}
 
 			return Execute(inputs)
@@ -59,8 +66,8 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 
 	hashCmd.Flags().String("public_key", "",
 		"Owner address to use for computing the workflow hash. "+
-			"Required when CRE_ETH_PRIVATE_KEY is not set and no workflow-owner-address is configured. "+
-			"Defaults to the address derived from CRE_ETH_PRIVATE_KEY or the workflow-owner-address in project settings.")
+			"Required for off-chain registries. For on-chain registries, defaults to the address derived from CRE_ETH_PRIVATE_KEY "+
+			"or the workflow-owner-address in project settings.")
 	hashCmd.Flags().String("wasm", "", "Path or URL to a pre-built WASM binary (skips compilation)")
 	hashCmd.Flags().String("config", "", "Override the config file path from workflow.yaml")
 	hashCmd.Flags().Bool("no-config", false, "Hash without a config file")
@@ -87,7 +94,12 @@ func Execute(inputs Inputs) error {
 		return err
 	}
 
-	ownerAddress, err := ResolveOwner(inputs.ForUser, inputs.OwnerFromSettings, inputs.PrivateKey)
+	ownerAddress, err := ResolveOwnerForRegistry(
+		inputs.RegistryType,
+		inputs.ForUser,
+		inputs.OwnerFromSettings,
+		inputs.PrivateKey,
+	)
 	if err != nil {
 		return err
 	}
@@ -125,6 +137,50 @@ func ResolveOwner(forUser, ownerFromSettings, privateKey string) (string, error)
 	}
 
 	return "", fmt.Errorf("cannot determine workflow owner: provide --public_key or ensure CRE_ETH_PRIVATE_KEY is set")
+}
+
+func ResolveOwnerForRegistry(registryType settings.RegistryType, forUser, ownerFromSettings, privateKey string) (string, error) {
+	if registryType == settings.RegistryTypeOffChain {
+		if forUser == "" {
+			return "", fmt.Errorf("cannot determine workflow owner for off-chain registry: provide --public_key")
+		}
+		return forUser, nil
+	}
+
+	return ResolveOwner(forUser, ownerFromSettings, privateKey)
+}
+
+func resolveRegistryType(runtimeContext *runtime.Context) (settings.RegistryType, error) {
+	if runtimeContext.ResolvedRegistry != nil {
+		return runtimeContext.ResolvedRegistry.Type(), nil
+	}
+
+	deploymentRegistry := runtimeContext.Settings.Workflow.UserWorkflowSettings.DeploymentRegistry
+	if deploymentRegistry == "" {
+		return settings.RegistryTypeOnChain, nil
+	}
+
+	if runtimeContext.TenantContext != nil {
+		resolved, err := settings.ResolveRegistry(
+			deploymentRegistry,
+			runtimeContext.TenantContext,
+			runtimeContext.EnvironmentSet,
+		)
+		if err != nil {
+			return "", err
+		}
+		return resolved.Type(), nil
+	}
+
+	if isPrivateRegistryID(deploymentRegistry) {
+		return settings.RegistryTypeOffChain, nil
+	}
+
+	return settings.RegistryTypeOnChain, nil
+}
+
+func isPrivateRegistryID(deploymentRegistry string) bool {
+	return strings.EqualFold(deploymentRegistry, "private")
 }
 
 func loadBinary(wasmFlag, workflowPathFromSettings string, skipTypeChecks bool) ([]byte, error) {

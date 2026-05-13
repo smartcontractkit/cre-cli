@@ -280,8 +280,18 @@ func newRootCommand() *cobra.Command {
 					return fmt.Errorf("%w", err)
 				}
 
-				if err := runtimeContext.AttachResolvedRegistry(); err != nil {
-					return err
+				shouldResolveRegistry := true
+				if cmd.Name() == "hash" &&
+					runtimeContext.TenantContext == nil &&
+					runtimeContext.Settings != nil &&
+					runtimeContext.Settings.Workflow.UserWorkflowSettings.DeploymentRegistry != "" {
+					shouldResolveRegistry = false
+				}
+
+				if shouldResolveRegistry {
+					if err := runtimeContext.AttachResolvedRegistry(); err != nil {
+						return err
+					}
 				}
 
 				if isRegistryRPCCommand(cmd) {

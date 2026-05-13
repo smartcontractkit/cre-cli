@@ -15,6 +15,8 @@ import (
 	workflowUtils "github.com/smartcontractkit/chainlink-common/pkg/workflows"
 
 	cmdcommon "github.com/smartcontractkit/cre-cli/cmd/common"
+	"github.com/smartcontractkit/cre-cli/internal/runtime"
+	"github.com/smartcontractkit/cre-cli/internal/settings"
 )
 
 // Well-known test private key (never use on a real network).
@@ -108,6 +110,27 @@ func TestExecute_WithoutForUser_NoKey_Errors(t *testing.T) {
 	assert.Contains(t, err.Error(), "--public_key")
 }
 
+func TestResolveOwnerForRegistry_OffChainRequiresPublicKey(t *testing.T) {
+	t.Parallel()
+	_, err := ResolveOwnerForRegistry(settings.RegistryTypeOffChain, "", "0xSettingsOwner", testPrivateKey)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "--public_key")
+}
+
+func TestResolveOwnerForRegistry_OffChainUsesPublicKey(t *testing.T) {
+	t.Parallel()
+	addr, err := ResolveOwnerForRegistry(settings.RegistryTypeOffChain, "0xOwner", "0xSettingsOwner", testPrivateKey)
+	require.NoError(t, err)
+	assert.Equal(t, "0xOwner", addr)
+}
+
+func TestResolveOwnerForRegistry_OnChainUsesDefaults(t *testing.T) {
+	t.Parallel()
+	addr, err := ResolveOwnerForRegistry(settings.RegistryTypeOnChain, "", "0xSettingsOwner", "")
+	require.NoError(t, err)
+	assert.Equal(t, "0xSettingsOwner", addr)
+}
+
 func TestExecute_HashesAreDeterministic(t *testing.T) {
 	wasmFile, configFile := setupTestArtifacts(t)
 
@@ -153,6 +176,36 @@ func TestExecute_EmptyConfig(t *testing.T) {
 		WasmPath:     wasmFile,
 		ConfigPath:   "",
 		WorkflowName: "test-workflow",
+	}
+
+	err := Execute(inputs)
+	require.NoError(t, err)
+}
+
+func TestExecute_OffChainRequiresPublicKey(t *testing.T) {
+	wasmFile, configFile := setupTestArtifacts(t)
+
+	inputs := Inputs{
+		WasmPath:     wasmFile,
+		ConfigPath:   configFile,
+		WorkflowName: "test-workflow",
+		RegistryType: settings.RegistryTypeOffChain,
+	}
+
+	err := Execute(inputs)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "--public_key")
+}
+
+func TestExecute_OffChainUsesPublicKey(t *testing.T) {
+	wasmFile, configFile := setupTestArtifacts(t)
+
+	inputs := Inputs{
+		ForUser:      "0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF",
+		WasmPath:     wasmFile,
+		ConfigPath:   configFile,
+		WorkflowName: "test-workflow",
+		RegistryType: settings.RegistryTypeOffChain,
 	}
 
 	err := Execute(inputs)
@@ -217,8 +270,8 @@ func TestHashCommandFlags(t *testing.T) {
 	f := cmd.Flags().Lookup("public_key")
 	require.NotNil(t, f, "public_key flag should exist")
 	assert.Equal(t, "", f.DefValue)
-	assert.Contains(t, f.Usage, "Required when CRE_ETH_PRIVATE_KEY is not set")
-	assert.Contains(t, f.Usage, "Defaults to")
+	assert.Contains(t, f.Usage, "Required for off-chain registries")
+	assert.Contains(t, f.Usage, "defaults to the address")
 
 	f = cmd.Flags().Lookup("wasm")
 	require.NotNil(t, f, "wasm flag should exist")
@@ -228,6 +281,34 @@ func TestHashCommandFlags(t *testing.T) {
 
 	f = cmd.Flags().Lookup("no-config")
 	require.NotNil(t, f, "no-config flag should exist")
+}
+
+func TestResolveRegistryType(t *testing.T) {
+	t.Parallel()
+
+	runtimeContext := &runtime.Context{
+		Settings: &settings.Settings{
+			Workflow: settings.WorkflowSettings{
+				UserWorkflowSettings: struct {
+					WorkflowOwnerAddress string `mapstructure:"workflow-owner-address" yaml:"workflow-owner-address"`
+					WorkflowOwnerType    string `mapstructure:"workflow-owner-type" yaml:"workflow-owner-type"`
+					WorkflowName         string `mapstructure:"workflow-name" yaml:"workflow-name"`
+					DeploymentRegistry   string `mapstructure:"deployment-registry" yaml:"deployment-registry"`
+				}{
+					DeploymentRegistry: "private",
+				},
+			},
+		},
+	}
+
+	registryType, err := resolveRegistryType(runtimeContext)
+	require.NoError(t, err)
+	assert.Equal(t, settings.RegistryTypeOffChain, registryType)
+
+	runtimeContext.Settings.Workflow.UserWorkflowSettings.DeploymentRegistry = "mainnet"
+	registryType, err = resolveRegistryType(runtimeContext)
+	require.NoError(t, err)
+	assert.Equal(t, settings.RegistryTypeOnChain, registryType)
 }
 
 // setupTestArtifacts creates a minimal WASM file and config file in a temp directory.
