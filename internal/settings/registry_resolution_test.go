@@ -102,8 +102,8 @@ func TestResolveRegistry_OnChainFromContext(t *testing.T) {
 }
 
 func TestResolveRegistry_NamedRegistry_EnvOverridesTenantDonFamily(t *testing.T) {
-	t.Setenv(environments.EnvVarDonFamily, "from-env-var")
 	envSet := stagingEnvSet()
+	envSet.DonFamily = "from-env-var"
 	tenantCtx := sampleTenantCtx()
 	tenantCtx.DefaultDonFamily = "from-tenant"
 
@@ -137,8 +137,8 @@ func TestResolveRegistry_NamedRegistry_EnvOverridesTenantDonFamily(t *testing.T)
 }
 
 func TestResolveRegistry_DefaultRegistry_EnvOverridesTenantDonFamily(t *testing.T) {
-	t.Setenv(environments.EnvVarDonFamily, "from-env-var")
 	envSet := stagingEnvSet()
+	envSet.DonFamily = "from-env-var"
 	tenantCtx := &tenantctx.EnvironmentContext{DefaultDonFamily: "tenant-zone"}
 	resolved, err := ResolveRegistry("", tenantCtx, envSet)
 	if err != nil {

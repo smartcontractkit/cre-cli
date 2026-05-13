@@ -2,7 +2,6 @@ package settings
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/smartcontractkit/cre-cli/internal/environments"
@@ -69,29 +68,15 @@ func (r *OffChainRegistry) ID() string         { return r.id }
 func (r *OffChainRegistry) Type() RegistryType { return RegistryTypeOffChain }
 func (r *OffChainRegistry) DonFamily() string  { return r.donFamily }
 
-// EffectiveDonFamily resolves the DON family label for workflow registry operations.
-// Baked-in environment YAML does not define DON family; authenticated users get
-// defaults from tenant context (context.yaml after login).
-//
-// Precedence:
-//  1. CRE_CLI_DON_FAMILY — from envSet.DonFamily (filled by environments.NewEnvironmentSet when the
-//     variable is set) or, when that is empty, os.Getenv directly.
-//  2. Tenant session — tenantCtx.DefaultDonFamily from context.yaml / GraphQL.
+// EffectiveDonFamily prefers envSet.DonFamily (CRE_CLI_DON_FAMILY at load); otherwise tenantCtx.DefaultDonFamily.
 func EffectiveDonFamily(envSet *environments.EnvironmentSet, tenantCtx *tenantctx.EnvironmentContext) string {
-	don := ""
 	if envSet != nil {
-		don = strings.TrimSpace(envSet.DonFamily)
-	}
-	if don == "" {
-		don = strings.TrimSpace(os.Getenv(environments.EnvVarDonFamily))
-	}
-	if don != "" {
-		return don
-	}
-	if tenantCtx != nil {
-		if v := strings.TrimSpace(tenantCtx.DefaultDonFamily); v != "" {
+		if v := strings.TrimSpace(envSet.DonFamily); v != "" {
 			return v
 		}
+	}
+	if tenantCtx != nil {
+		return strings.TrimSpace(tenantCtx.DefaultDonFamily)
 	}
 	return ""
 }
