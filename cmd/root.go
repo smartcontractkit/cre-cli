@@ -164,22 +164,7 @@ func newRootCommand() *cobra.Command {
 				return fmt.Errorf("failed to load environment details: %w", err)
 			}
 
-			if cmd.CommandPath() == "cre workflow hash" {
-				if showSpinner {
-					spinner.Update("Loading credentials...")
-				}
-				err := runtimeContext.AttachCredentials(cmd.Context(), shouldSkipValidation(cmd))
-				if err != nil {
-					runtimeContext.Logger.Warn().Err(err).Msg("failed to load credentials for workflow hash")
-				} else {
-					if showSpinner {
-						spinner.Update("Loading user context...")
-					}
-					if err := runtimeContext.AttachTenantContext(cmd.Context()); err != nil {
-						runtimeContext.Logger.Warn().Err(err).Msg("failed to load user context")
-					}
-				}
-			} else if isLoadCredentials(cmd) {
+			if isLoadCredentials(cmd) {
 				if showSpinner {
 					spinner.Update("Validating credentials...")
 				}
@@ -293,6 +278,26 @@ func newRootCommand() *cobra.Command {
 				err := runtimeContext.AttachSettings(cmd, false)
 				if err != nil {
 					return fmt.Errorf("%w", err)
+				}
+
+				if cmd.CommandPath() == "cre workflow hash" &&
+					runtimeContext.Settings != nil &&
+					strings.EqualFold(runtimeContext.Settings.Workflow.UserWorkflowSettings.DeploymentRegistry, "private") &&
+					runtimeContext.TenantContext == nil {
+					if showSpinner {
+						spinner.Update("Loading credentials...")
+					}
+					err := runtimeContext.AttachCredentials(cmd.Context(), shouldSkipValidation(cmd))
+					if err != nil {
+						runtimeContext.Logger.Warn().Err(err).Msg("failed to load credentials for workflow hash")
+					} else {
+						if showSpinner {
+							spinner.Update("Loading user context...")
+						}
+						if err := runtimeContext.AttachTenantContext(cmd.Context()); err != nil {
+							runtimeContext.Logger.Warn().Err(err).Msg("failed to load user context")
+						}
+					}
 				}
 
 				shouldResolveRegistry := true
