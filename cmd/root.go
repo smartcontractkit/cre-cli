@@ -236,7 +236,7 @@ func newRootCommand() *cobra.Command {
 					spinner.Update("Loading user context...")
 				}
 				if err := runtimeContext.AttachTenantContext(cmd.Context()); err != nil {
-					runtimeContext.Logger.Warn().Err(err).Msg("failed to load user context")
+					ui.Warning("Failed to load user context")
 				}
 
 				// Check if organization is ungated for commands that require it
@@ -280,8 +280,38 @@ func newRootCommand() *cobra.Command {
 					return fmt.Errorf("%w", err)
 				}
 
-				if err := runtimeContext.AttachResolvedRegistry(); err != nil {
-					return err
+				if cmd.CommandPath() == "cre workflow hash" &&
+					runtimeContext.Settings != nil &&
+					strings.EqualFold(runtimeContext.Settings.Workflow.UserWorkflowSettings.DeploymentRegistry, "private") &&
+					runtimeContext.TenantContext == nil {
+					if showSpinner {
+						spinner.Update("Loading credentials...")
+					}
+					err := runtimeContext.AttachCredentials(cmd.Context(), shouldSkipValidation(cmd))
+					if err != nil {
+						ui.Warning("Failed to load credentials for workflow hash")
+					} else {
+						if showSpinner {
+							spinner.Update("Loading user context...")
+						}
+						if err := runtimeContext.AttachTenantContext(cmd.Context()); err != nil {
+							ui.Warning("Failed to load user context")
+						}
+					}
+				}
+
+				shouldResolveRegistry := true
+				if cmd.Name() == "hash" &&
+					runtimeContext.TenantContext == nil &&
+					runtimeContext.Settings != nil &&
+					runtimeContext.Settings.Workflow.UserWorkflowSettings.DeploymentRegistry != "" {
+					shouldResolveRegistry = false
+				}
+
+				if shouldResolveRegistry {
+					if err := runtimeContext.AttachResolvedRegistry(); err != nil {
+						return err
+					}
 				}
 
 				if isRegistryRPCCommand(cmd) {
