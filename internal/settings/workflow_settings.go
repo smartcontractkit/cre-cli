@@ -163,7 +163,7 @@ func loadWorkflowSettings(logger *zerolog.Logger, v *viper.Viper, cmd *cobra.Com
 		return WorkflowSettings{}, errors.Wrap(err, "for target "+target)
 	}
 
-	if err := validateSettings(&workflowSettings); err != nil {
+	if err := validateSettings(&workflowSettings, v.GetBool(Flags.AllowUnknownChains.Name)); err != nil {
 		return WorkflowSettings{}, errors.Wrap(err, "for target "+target)
 	}
 
@@ -260,11 +260,14 @@ func flattenWorkflowSettingsToViper(v *viper.Viper, target string, effectiveWork
 	return nil
 }
 
-func validateSettings(config *WorkflowSettings) error {
+func validateSettings(config *WorkflowSettings, allowUnknownChains bool) error {
 	// TODO validate that all chain names mentioned for the contracts above have a matching URL specified
 	for _, rpc := range config.RPCs {
 		if err := isValidRpcUrl(rpc.Url); err != nil {
 			return errors.Wrap(err, "invalid rpc url for "+rpc.ChainName)
+		}
+		if allowUnknownChains {
+			continue
 		}
 		if err := IsValidChainName(rpc.ChainName); err != nil {
 			return err
