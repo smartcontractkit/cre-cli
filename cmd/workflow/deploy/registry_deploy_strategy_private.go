@@ -34,7 +34,7 @@ func (a *privateRegistryDeployStrategy) RunPreDeployChecks() error {
 func (a *privateRegistryDeployStrategy) CheckWorkflowExists(_, workflowName, _, workflowID string) (bool, *uint8, error) {
 	a.ensureClient()
 
-	workflow, err := a.prc.GetWorkflowByName(workflowName)
+	workflow, err := a.prc.GetWorkflowByName(a.h.execCtx, workflowName)
 	if err == nil {
 		if workflow.WorkflowID == workflowID {
 			return false, nil, fmt.Errorf("workflow with id %s already exists", workflowID)
@@ -57,7 +57,7 @@ func (a *privateRegistryDeployStrategy) Upsert() error {
 	ui.Line()
 	ui.Dim(fmt.Sprintf("Registering workflow in private registry (workflowID: %s)...", input.WorkflowID))
 
-	result, err := a.prc.UpsertWorkflowInRegistry(input)
+	result, err := a.prc.UpsertWorkflowInRegistry(a.h.execCtx, input)
 	if err != nil {
 		return fmt.Errorf("failed to register workflow in private registry: %w", err)
 	}
