@@ -1,6 +1,7 @@
 package client
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -119,7 +120,7 @@ type RawTx struct {
 //	return txOpts, nil
 //}
 
-func (c *TxClient) executeTransactionByTxType(txFn func(opts *bind.TransactOpts) (*types.Transaction, error), funName string, validationEvent string, args ...any) (TxOutput, error) {
+func (c *TxClient) executeTransactionByTxType(ctx context.Context, txFn func(opts *bind.TransactOpts) (*types.Transaction, error), funName string, validationEvent string, args ...any) (TxOutput, error) {
 	switch c.config.TxType {
 	case Regular:
 		simulateTx, err := txFn(cmdCommon.SimTransactOpts())
@@ -138,7 +139,7 @@ func (c *TxClient) executeTransactionByTxType(txFn func(opts *bind.TransactOpts)
 			Value:    simulateTx.Value(),
 			Data:     simulateTx.Data(),
 		}
-		estimatedGas, gasErr := c.EthClient.Client.EstimateGas(c.EthClient.Context, msg)
+		estimatedGas, gasErr := c.EthClient.Client.EstimateGas(ctx, msg)
 		if gasErr != nil {
 			c.Logger.Warn().Err(gasErr).Msg("Failed to estimate gas usage")
 		}
@@ -159,7 +160,7 @@ func (c *TxClient) executeTransactionByTxType(txFn func(opts *bind.TransactOpts)
 
 		// Calculate and print total cost for sending the transaction on-chain
 		if gasErr == nil {
-			gasPriceWei, gasPriceErr := c.EthClient.Client.SuggestGasPrice(c.EthClient.Context)
+			gasPriceWei, gasPriceErr := c.EthClient.Client.SuggestGasPrice(ctx)
 			if gasPriceErr != nil {
 				c.Logger.Warn().Err(gasPriceErr).Msg("Failed to fetch gas price")
 			} else {

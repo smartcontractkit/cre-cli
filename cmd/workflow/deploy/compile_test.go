@@ -1,6 +1,7 @@
 package deploy
 
 import (
+	"context"
 	"encoding/base64"
 	"errors"
 	"io"
@@ -271,7 +272,7 @@ func runCompile(simulatedEnvironment *chainsim.SimulatedEnvironment, inputs Inpu
 		return err
 	}
 
-	return handler.Compile()
+	return handler.Compile(context.Background())
 }
 
 // outputPathWithExtensions returns the path with .wasm.br.b64 appended as in Compile().
@@ -286,7 +287,7 @@ func outputPathWithExtensions(path string) string {
 // file content equals CompileWorkflowToWasm(workflowPath) + brotli + base64.
 func assertCompileOutputMatchesUnderlying(t *testing.T, simulatedEnvironment *chainsim.SimulatedEnvironment, inputs Inputs, ownerType string) {
 	t.Helper()
-	wasm, err := cmdcommon.CompileWorkflowToWasm(inputs.WorkflowPath, cmdcommon.WorkflowCompileOptions{
+	wasm, err := cmdcommon.CompileWorkflowToWasm(context.Background(), inputs.WorkflowPath, cmdcommon.WorkflowCompileOptions{
 		StripSymbols:   true,
 		SkipTypeChecks: inputs.SkipTypeChecks,
 	})
@@ -435,7 +436,7 @@ func TestCompileWithWasmPath(t *testing.T) {
 		handler.validated = true
 
 		// Compile() with URL wasm should return nil (skips compile entirely).
-		err := handler.Compile()
+		err := handler.Compile(context.Background())
 		require.NoError(t, err)
 	})
 

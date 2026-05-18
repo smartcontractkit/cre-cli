@@ -1,6 +1,7 @@
 package deploy
 
 import (
+	"context"
 	"fmt"
 	"math/big"
 
@@ -16,7 +17,7 @@ const (
 )
 
 type workflowNameLookupClient interface {
-	GetWorkflowListByOwnerAndName(owner common.Address, workflowName string, start, limit *big.Int) ([]workflow_registry_v2_wrapper.WorkflowRegistryWorkflowMetadataView, error)
+	GetWorkflowListByOwnerAndName(ctx context.Context, owner common.Address, workflowName string, start, limit *big.Int) ([]workflow_registry_v2_wrapper.WorkflowRegistryWorkflowMetadataView, error)
 }
 
 type userDonLimitChecker interface {
@@ -24,6 +25,7 @@ type userDonLimitChecker interface {
 }
 
 func checkUserDonLimitBeforeDeploy(
+	ctx context.Context,
 	limitChecker userDonLimitChecker,
 	nameLookup workflowNameLookupClient,
 	owner common.Address,
@@ -38,7 +40,7 @@ func checkUserDonLimitBeforeDeploy(
 
 	pending := uint32(1)
 	if !keepAlive {
-		activeSameName, err := countActiveWorkflowsByOwnerNameAndDON(nameLookup, owner, workflowName, donFamily)
+		activeSameName, err := countActiveWorkflowsByOwnerNameAndDON(ctx, nameLookup, owner, workflowName, donFamily)
 		if err != nil {
 			return fmt.Errorf("failed to check active workflows for %s on DON %s: %w", workflowName, donFamily, err)
 		}
@@ -57,6 +59,7 @@ func checkUserDonLimitBeforeDeploy(
 }
 
 func countActiveWorkflowsByOwnerNameAndDON(
+	ctx context.Context,
 	wrc workflowNameLookupClient,
 	owner common.Address,
 	workflowName string,
@@ -67,7 +70,7 @@ func countActiveWorkflowsByOwnerNameAndDON(
 	limit := big.NewInt(workflowListPageSize)
 
 	for {
-		list, err := wrc.GetWorkflowListByOwnerAndName(owner, workflowName, start, limit)
+		list, err := wrc.GetWorkflowListByOwnerAndName(ctx, owner, workflowName, start, limit)
 		if err != nil {
 			return 0, err
 		}

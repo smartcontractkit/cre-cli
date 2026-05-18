@@ -1,6 +1,7 @@
 package deploy
 
 import (
+	"context"
 	"encoding/hex"
 	"fmt"
 	"time"
@@ -14,7 +15,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
-func (h *handler) upsert(onChain *settings.OnChainRegistry) error {
+func (h *handler) upsert(ctx context.Context, onChain *settings.OnChainRegistry) error {
 	if !h.validated {
 		return fmt.Errorf("handler inputs not validated")
 	}
@@ -23,7 +24,7 @@ func (h *handler) upsert(onChain *settings.OnChainRegistry) error {
 	if err != nil {
 		return err
 	}
-	return h.handleUpsert(params, onChain)
+	return h.handleUpsert(ctx, params, onChain)
 }
 
 func (h *handler) prepareUpsertParams() (client.RegisterWorkflowV2Parameters, error) {
@@ -53,11 +54,11 @@ func (h *handler) prepareUpsertParams() (client.RegisterWorkflowV2Parameters, er
 	}, nil
 }
 
-func (h *handler) handleUpsert(params client.RegisterWorkflowV2Parameters, onChain *settings.OnChainRegistry) error {
+func (h *handler) handleUpsert(ctx context.Context, params client.RegisterWorkflowV2Parameters, onChain *settings.OnChainRegistry) error {
 	workflowName := h.inputs.WorkflowName
 	workflowTag := h.inputs.WorkflowTag
 	h.log.Debug().Interface("Workflow parameters", params).Msg("Registering workflow...")
-	txOut, err := h.wrc.UpsertWorkflow(params)
+	txOut, err := h.wrc.UpsertWorkflow(ctx, params)
 	if err != nil {
 		return fmt.Errorf("failed to register workflow: %w", err)
 	}

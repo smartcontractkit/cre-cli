@@ -737,7 +737,7 @@ func (h *Handler) EnsureOwnerLinkedOrFail() error {
 	}
 	ownerAddr := common.HexToAddress(h.OwnerAddress)
 
-	linked, err := h.Wrc.IsOwnerLinked(ownerAddr)
+	linked, err := h.Wrc.IsOwnerLinked(context.Background(), ownerAddr)
 	if err != nil {
 		return fmt.Errorf("failed to check owner link status: %w", err)
 	}

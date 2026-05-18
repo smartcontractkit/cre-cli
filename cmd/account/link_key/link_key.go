@@ -388,7 +388,7 @@ func (h *handler) checkIfAlreadyLinked() (bool, error) {
 	ownerAddr := common.HexToAddress(h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress)
 	ui.Dim("Checking existing registrations...")
 
-	linked, err := h.wrc.IsOwnerLinked(ownerAddr)
+	linked, err := h.wrc.IsOwnerLinked(context.Background(), ownerAddr)
 	if err != nil {
 		return false, fmt.Errorf("failed to check owner link status: %w", err)
 	}

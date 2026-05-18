@@ -1,6 +1,7 @@
 package common
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -33,7 +34,7 @@ type WorkflowCompileOptions struct {
 }
 
 // getBuildCmd returns a single step that builds the workflow and returns the WASM bytes.
-func getBuildCmd(workflowRootFolder, mainFile, language string, opts WorkflowCompileOptions) (func() ([]byte, error), error) {
+func getBuildCmd(ctx context.Context, workflowRootFolder, mainFile, language string, opts WorkflowCompileOptions) (func() ([]byte, error), error) {
 	tmpPath := filepath.Join(workflowRootFolder, ".cre_build_tmp.wasm")
 	switch language {
 	case constants.WorkflowLanguageTypeScript:
@@ -41,7 +42,7 @@ func getBuildCmd(workflowRootFolder, mainFile, language string, opts WorkflowCom
 		if opts.SkipTypeChecks {
 			args = append(args, SkipTypeChecksFlag)
 		}
-		cmd := exec.Command("bun", args...)
+		cmd := exec.CommandContext(ctx, "bun", args...)
 		cmd.Dir = workflowRootFolder
 		return func() ([]byte, error) {
 			out, err := cmd.CombinedOutput()
@@ -67,7 +68,7 @@ func getBuildCmd(workflowRootFolder, mainFile, language string, opts WorkflowCom
 		if opts.StripSymbols {
 			ldflags = "-buildid= -w -s"
 		}
-		cmd := exec.Command(
+		cmd := exec.CommandContext(ctx,
 			"go", "build",
 			"-o", tmpPath,
 			"-trimpath",
@@ -92,7 +93,7 @@ func getBuildCmd(workflowRootFolder, mainFile, language string, opts WorkflowCom
 		if err != nil {
 			return nil, err
 		}
-		makeCmd := exec.Command("make", "build")
+		makeCmd := exec.CommandContext(ctx, "make", "build")
 		makeCmd.Dir = makeRoot
 		builtPath := filepath.Join(makeRoot, defaultWasmOutput)
 		return func() ([]byte, error) {
@@ -108,7 +109,7 @@ func getBuildCmd(workflowRootFolder, mainFile, language string, opts WorkflowCom
 		if opts.StripSymbols {
 			ldflags = "-buildid= -w -s"
 		}
-		cmd := exec.Command(
+		cmd := exec.CommandContext(ctx,
 			"go", "build",
 			"-o", tmpPath,
 			"-trimpath",
@@ -135,7 +136,7 @@ func getBuildCmd(workflowRootFolder, mainFile, language string, opts WorkflowCom
 // opts.StripSymbols: for Go builds, true strips debug symbols (deploy); false keeps them (simulate).
 // opts.SkipTypeChecks: for TypeScript, passes SkipTypeChecksFlag to cre-compile.
 // For custom Makefile WASM builds, StripSymbols and SkipTypeChecks have no effect.
-func CompileWorkflowToWasm(workflowPath string, opts WorkflowCompileOptions) ([]byte, error) {
+func CompileWorkflowToWasm(ctx context.Context, workflowPath string, opts WorkflowCompileOptions) ([]byte, error) {
 	workflowRootFolder, workflowMainFile, err := WorkflowPathRootAndMain(workflowPath)
 	if err != nil {
 		return nil, fmt.Errorf("workflow path: %w", err)
@@ -167,7 +168,7 @@ func CompileWorkflowToWasm(workflowPath string, opts WorkflowCompileOptions) ([]
 		return nil, fmt.Errorf("unsupported workflow language for file %s", workflowMainFile)
 	}
 
-	buildStep, err := getBuildCmd(workflowRootFolder, workflowMainFile, language, opts)
+	buildStep, err := getBuildCmd(ctx, workflowRootFolder, workflowMainFile, language, opts)
 	if err != nil {
 		return nil, err
 	}

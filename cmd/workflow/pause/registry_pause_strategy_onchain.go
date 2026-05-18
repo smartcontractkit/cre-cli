@@ -1,6 +1,7 @@
 package pause
 
 import (
+	"context"
 	"encoding/hex"
 	"fmt"
 	"math/big"
@@ -164,7 +165,7 @@ func (a *onchainRegistryPauseStrategy) Pause() error {
 
 func fetchAllWorkflows(
 	wrc interface {
-		GetWorkflowListByOwnerAndName(owner common.Address, workflowName string, start, limit *big.Int) ([]workflow_registry_v2_wrapper.WorkflowRegistryWorkflowMetadataView, error)
+		GetWorkflowListByOwnerAndName(ctx context.Context, owner common.Address, workflowName string, start, limit *big.Int) ([]workflow_registry_v2_wrapper.WorkflowRegistryWorkflowMetadataView, error)
 	},
 	owner common.Address,
 	name string,
@@ -177,7 +178,7 @@ func fetchAllWorkflows(
 	)
 
 	for {
-		list, err := wrc.GetWorkflowListByOwnerAndName(owner, name, start, limit)
+		list, err := wrc.GetWorkflowListByOwnerAndName(context.Background(), owner, name, start, limit)
 		if err != nil {
 			return nil, err
 		}

@@ -1,6 +1,7 @@
 package delete
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/smartcontractkit/cre-cli/internal/client/graphqlclient"
@@ -32,7 +33,7 @@ func (a *privateRegistryDeleteStrategy) FetchWorkflows() ([]WorkflowToDelete, er
 
 	ui.Dim(fmt.Sprintf("Fetching workflow to delete... Name=%s", workflowName))
 
-	workflow, err := a.prc.GetWorkflowByName(workflowName)
+	workflow, err := a.prc.GetWorkflowByName(context.Background(), workflowName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get workflow: %w", err)
 	}

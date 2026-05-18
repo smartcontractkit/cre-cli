@@ -1,6 +1,7 @@
 package activate
 
 import (
+	"context"
 	"encoding/hex"
 	"fmt"
 	"math/big"
@@ -59,7 +60,7 @@ func (a *onchainRegistryActivateStrategy) Activate() error {
 	ownerAddr := common.HexToAddress(workflowOwner)
 
 	const pageLimit = 200
-	workflows, err := a.wrc.GetWorkflowListByOwnerAndName(ownerAddr, workflowName, big.NewInt(0), big.NewInt(pageLimit))
+	workflows, err := a.wrc.GetWorkflowListByOwnerAndName(context.Background(), ownerAddr, workflowName, big.NewInt(0), big.NewInt(pageLimit))
 	if err != nil {
 		return fmt.Errorf("failed to get workflow list: %w", err)
 	}

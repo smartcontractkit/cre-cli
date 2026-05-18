@@ -1,6 +1,7 @@
 package delete
 
 import (
+	"context"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -56,7 +57,7 @@ func (a *onchainRegistryDeleteStrategy) FetchWorkflows() ([]WorkflowToDelete, er
 	workflowName := h.inputs.WorkflowName
 	workflowOwner := common.HexToAddress(h.inputs.WorkflowOwner)
 
-	allWorkflows, err := a.wrc.GetWorkflowListByOwnerAndName(workflowOwner, workflowName, big.NewInt(0), big.NewInt(100))
+	allWorkflows, err := a.wrc.GetWorkflowListByOwnerAndName(context.Background(), workflowOwner, workflowName, big.NewInt(0), big.NewInt(100))
 	if err != nil {
 		return nil, fmt.Errorf("failed to get workflow list: %w", err)
 	}

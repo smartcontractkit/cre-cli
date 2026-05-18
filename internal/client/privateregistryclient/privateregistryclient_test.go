@@ -1,6 +1,7 @@
 package privateregistryclient
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -147,7 +148,7 @@ func TestUpsertWorkflowInRegistry(t *testing.T) {
 	configURL := "s3://config"
 	tag := "v1"
 	attributes := "{\"region\":\"us-east-1\"}"
-	result, err := client.UpsertWorkflowInRegistry(OffchainWorkflowInput{
+	result, err := client.UpsertWorkflowInRegistry(context.Background(), OffchainWorkflowInput{
 		WorkflowID:   "wf-123",
 		Status:       WorkflowStatusActive,
 		WorkflowName: "registry-workflow",
@@ -187,7 +188,7 @@ func TestUpsertWorkflowInRegistry_GQLError(t *testing.T) {
 	defer srv.Close()
 
 	client := newTestPrivateRegistryClient(t, srv.URL)
-	_, err := client.UpsertWorkflowInRegistry(OffchainWorkflowInput{
+	_, err := client.UpsertWorkflowInRegistry(context.Background(), OffchainWorkflowInput{
 		WorkflowID:   "wf-123",
 		Status:       WorkflowStatusActive,
 		WorkflowName: "registry-workflow",
@@ -236,7 +237,7 @@ func TestGetWorkflowByName(t *testing.T) {
 	defer srv.Close()
 
 	client := newTestPrivateRegistryClient(t, srv.URL)
-	result, err := client.GetWorkflowByName("registry-workflow")
+	result, err := client.GetWorkflowByName(context.Background(), "registry-workflow")
 
 	require.NoError(t, err)
 	assert.Contains(t, capturedQuery, "query GetOffchainWorkflowByName")
@@ -262,7 +263,7 @@ func TestGetWorkflowByName_GQLError(t *testing.T) {
 	defer srv.Close()
 
 	client := newTestPrivateRegistryClient(t, srv.URL)
-	_, err := client.GetWorkflowByName("registry-workflow")
+		_, err := client.GetWorkflowByName(context.Background(), "registry-workflow")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "get workflow by name in registry")
 	assert.Contains(t, err.Error(), "cre api error: workflow not found")
@@ -273,7 +274,7 @@ func TestGetWorkflowByName_EmptyName(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	client := New(nil, logger)
 
-	_, err := client.GetWorkflowByName("")
+	_, err := client.GetWorkflowByName(context.Background(), "")
 	require.EqualError(t, err, "workflowName is required")
 }
 
@@ -414,7 +415,7 @@ func TestCreateServiceContextWithTimeout(t *testing.T) {
 	client := New(nil, &logger)
 	client.SetServiceTimeout(150 * time.Millisecond)
 
-	ctx, cancel := client.CreateServiceContextWithTimeout()
+	ctx, cancel := client.CreateServiceContextWithTimeout(context.Background())
 	defer cancel()
 
 	deadline, ok := ctx.Deadline()
