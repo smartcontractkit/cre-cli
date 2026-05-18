@@ -205,6 +205,10 @@ func (h *handler) ValidateInputs() error {
 }
 
 func (h *handler) Execute(ctx context.Context) error {
+	if !h.validated {
+		return fmt.Errorf("handler inputs not validated")
+	}
+
 	deployAccess, err := h.credentials.GetDeploymentAccessStatus()
 	if err != nil {
 		return fmt.Errorf("failed to check deployment access: %w", err)
