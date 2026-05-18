@@ -263,7 +263,7 @@ func TestGetWorkflowByName_GQLError(t *testing.T) {
 	defer srv.Close()
 
 	client := newTestPrivateRegistryClient(t, srv.URL)
-		_, err := client.GetWorkflowByName(context.Background(), "registry-workflow")
+	_, err := client.GetWorkflowByName(context.Background(), "registry-workflow")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "get workflow by name in registry")
 	assert.Contains(t, err.Error(), "cre api error: workflow not found")

@@ -1,6 +1,7 @@
 package deploy
 
 import (
+	"context"
 	"path/filepath"
 	"testing"
 
@@ -65,7 +66,7 @@ func TestWorkflowUpsert(t *testing.T) {
 
 				onChain, err := settings.AsOnChain(ctx.ResolvedRegistry, "test")
 				require.NoError(t, err)
-				err = handler.upsert(onChain)
+				err = handler.upsert(context.Background(), onChain)
 				require.NoError(t, err)
 			})
 		}
