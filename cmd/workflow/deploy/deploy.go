@@ -237,6 +237,9 @@ func (h *handler) Execute(ctx context.Context) error {
 		h.workflowArtifact.WorkflowID,
 	)
 	if err != nil {
+		if errors.Is(err, errWorkflowUnchanged) {
+			return err
+		}
 		return fmt.Errorf("failed to check if workflow exists: %w", err)
 	}
 	h.existingWorkflowStatus = existingStatus
