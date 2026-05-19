@@ -32,7 +32,7 @@ func (a *privateRegistryDeleteStrategy) FetchWorkflows() ([]WorkflowToDelete, er
 
 	ui.Dim(fmt.Sprintf("Fetching workflow to delete... Name=%s", workflowName))
 
-	workflow, err := a.prc.GetWorkflowByName(workflowName)
+	workflow, err := a.prc.GetWorkflowByName(a.h.execCtx, workflowName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get workflow: %w", err)
 	}
@@ -55,7 +55,7 @@ func (a *privateRegistryDeleteStrategy) DeleteWorkflows(workflows []WorkflowToDe
 
 	for _, wf := range workflows {
 		workflowID := wf.RawID.(string)
-		deletedID, err := a.prc.DeleteWorkflowInRegistry(workflowID)
+		deletedID, err := a.prc.DeleteWorkflowInRegistry(a.h.execCtx, workflowID)
 		if err != nil {
 			h.log.Error().
 				Err(err).

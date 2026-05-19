@@ -29,8 +29,8 @@ func (c *Client) SetServiceTimeout(timeout time.Duration) {
 	c.serviceTimeout = timeout
 }
 
-func (c *Client) CreateServiceContextWithTimeout() (context.Context, context.CancelFunc) {
-	return context.WithTimeout(context.Background(), c.serviceTimeout) //nolint:gosec // G118 -- cancel is deferred by callers
+func (c *Client) CreateServiceContextWithTimeout(parent context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(parent, c.serviceTimeout) //nolint:gosec // G118 -- cancel is deferred by callers
 }
 
 type OffchainWorkflow struct {
@@ -131,7 +131,7 @@ type GetOffchainWorkflowByNameResponse struct {
 	Workflow OffchainWorkflow `json:"workflow"`
 }
 
-func (c *Client) GetWorkflowByName(workflowName string) (OffchainWorkflow, error) {
+func (c *Client) GetWorkflowByName(ctx context.Context, workflowName string) (OffchainWorkflow, error) {
 	if workflowName == "" {
 		return OffchainWorkflow{}, fmt.Errorf("workflowName is required")
 	}
@@ -165,10 +165,10 @@ query GetOffchainWorkflowByName($request: GetOffchainWorkflowByNameRequest!) {
 		GetOffchainWorkflowByName GetOffchainWorkflowByNameResponse `json:"getOffchainWorkflowByName"`
 	}
 
-	ctx, cancel := c.CreateServiceContextWithTimeout()
+	callCtx, cancel := c.CreateServiceContextWithTimeout(ctx)
 	defer cancel()
 
-	if err := c.graphql.Execute(ctx, req, &container); err != nil {
+	if err := c.graphql.Execute(callCtx, req, &container); err != nil {
 		return OffchainWorkflow{}, fmt.Errorf("get workflow by name in registry: %w", err)
 	}
 
@@ -178,7 +178,7 @@ query GetOffchainWorkflowByName($request: GetOffchainWorkflowByNameRequest!) {
 	return container.GetOffchainWorkflowByName.Workflow, nil
 }
 
-func (c *Client) UpsertWorkflowInRegistry(workflow OffchainWorkflowInput) (OffchainWorkflow, error) {
+func (c *Client) UpsertWorkflowInRegistry(ctx context.Context, workflow OffchainWorkflowInput) (OffchainWorkflow, error) {
 	if err := validateUpsertWorkflowInput(workflow); err != nil {
 		return OffchainWorkflow{}, err
 	}
@@ -209,10 +209,10 @@ mutation UpsertOffchainWorkflow($request: UpsertOffchainWorkflowRequest!) {
 		UpsertOffchainWorkflow UpsertOffchainWorkflowResponse `json:"upsertOffchainWorkflow"`
 	}
 
-	ctx, cancel := c.CreateServiceContextWithTimeout()
+	callCtx, cancel := c.CreateServiceContextWithTimeout(ctx)
 	defer cancel()
 
-	if err := c.graphql.Execute(ctx, req, &container); err != nil {
+	if err := c.graphql.Execute(callCtx, req, &container); err != nil {
 		return OffchainWorkflow{}, fmt.Errorf("upsert workflow in registry: %w", err)
 	}
 
@@ -222,7 +222,7 @@ mutation UpsertOffchainWorkflow($request: UpsertOffchainWorkflowRequest!) {
 	return container.UpsertOffchainWorkflow.Workflow, nil
 }
 
-func (c *Client) PauseWorkflowInRegistry(workflowID string) (OffchainWorkflow, error) {
+func (c *Client) PauseWorkflowInRegistry(ctx context.Context, workflowID string) (OffchainWorkflow, error) {
 	if workflowID == "" {
 		return OffchainWorkflow{}, fmt.Errorf("workflowId is required")
 	}
@@ -253,10 +253,10 @@ mutation PauseOffchainWorkflow($request: PauseOffchainWorkflowRequest!) {
 		PauseOffchainWorkflow PauseOffchainWorkflowResponse `json:"pauseOffchainWorkflow"`
 	}
 
-	ctx, cancel := c.CreateServiceContextWithTimeout()
+	callCtx, cancel := c.CreateServiceContextWithTimeout(ctx)
 	defer cancel()
 
-	if err := c.graphql.Execute(ctx, req, &container); err != nil {
+	if err := c.graphql.Execute(callCtx, req, &container); err != nil {
 		return OffchainWorkflow{}, fmt.Errorf("pause workflow in registry: %w", err)
 	}
 
@@ -266,7 +266,7 @@ mutation PauseOffchainWorkflow($request: PauseOffchainWorkflowRequest!) {
 	return container.PauseOffchainWorkflow.Workflow, nil
 }
 
-func (c *Client) ActivateWorkflowInRegistry(workflowID string) (OffchainWorkflow, error) {
+func (c *Client) ActivateWorkflowInRegistry(ctx context.Context, workflowID string) (OffchainWorkflow, error) {
 	if workflowID == "" {
 		return OffchainWorkflow{}, fmt.Errorf("workflowId is required")
 	}
@@ -297,10 +297,10 @@ mutation ActivateOffchainWorkflow($request: ActivateOffchainWorkflowRequest!) {
 		ActivateOffchainWorkflow ActivateOffchainWorkflowResponse `json:"activateOffchainWorkflow"`
 	}
 
-	ctx, cancel := c.CreateServiceContextWithTimeout()
+	callCtx, cancel := c.CreateServiceContextWithTimeout(ctx)
 	defer cancel()
 
-	if err := c.graphql.Execute(ctx, req, &container); err != nil {
+	if err := c.graphql.Execute(callCtx, req, &container); err != nil {
 		return OffchainWorkflow{}, fmt.Errorf("activate workflow in registry: %w", err)
 	}
 
@@ -310,7 +310,7 @@ mutation ActivateOffchainWorkflow($request: ActivateOffchainWorkflowRequest!) {
 	return container.ActivateOffchainWorkflow.Workflow, nil
 }
 
-func (c *Client) DeleteWorkflowInRegistry(workflowID string) (string, error) {
+func (c *Client) DeleteWorkflowInRegistry(ctx context.Context, workflowID string) (string, error) {
 	if workflowID == "" {
 		return "", fmt.Errorf("workflowId is required")
 	}
@@ -329,10 +329,10 @@ mutation DeleteOffchainWorkflow($request: DeleteOffchainWorkflowRequest!) {
 		DeleteOffchainWorkflow DeleteOffchainWorkflowResponse `json:"deleteOffchainWorkflow"`
 	}
 
-	ctx, cancel := c.CreateServiceContextWithTimeout()
+	callCtx, cancel := c.CreateServiceContextWithTimeout(ctx)
 	defer cancel()
 
-	if err := c.graphql.Execute(ctx, req, &container); err != nil {
+	if err := c.graphql.Execute(callCtx, req, &container); err != nil {
 		return "", fmt.Errorf("delete workflow in registry: %w", err)
 	}
 
