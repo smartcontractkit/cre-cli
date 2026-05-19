@@ -67,8 +67,8 @@ func TestEncryptSecrets(t *testing.T) {
 		}
 
 		raw := UpsertSecretsInputs{
-			{ID: "test-secret-1", Value: "value1", Namespace: "ns1"},
-			{ID: "test-secret-2", Value: "another-value", Namespace: "ns2"},
+			{ID: "test-secret-1", Value: []byte("value1"), Namespace: "ns1"},
+			{ID: "test-secret-2", Value: []byte("another-value"), Namespace: "ns2"},
 		}
 
 		enc, err := h.EncryptSecrets(raw)
@@ -100,7 +100,7 @@ func TestEncryptSecrets(t *testing.T) {
 			},
 		}
 
-		enc, err := h.EncryptSecrets(UpsertSecretsInputs{{ID: "s", Value: "v", Namespace: "n"}})
+		enc, err := h.EncryptSecrets(UpsertSecretsInputs{{ID: "s", Value: []byte("v"), Namespace: "n"}})
 		require.Error(t, err)
 		require.Nil(t, enc)
 		require.Contains(t, err.Error(), "gateway POST failed")
@@ -126,7 +126,7 @@ func TestEncryptSecrets(t *testing.T) {
 			},
 		}
 
-		enc, err := h.EncryptSecrets(UpsertSecretsInputs{{ID: "s", Value: "v", Namespace: "n"}})
+		enc, err := h.EncryptSecrets(UpsertSecretsInputs{{ID: "s", Value: []byte("v"), Namespace: "n"}})
 		require.Error(t, err)
 		require.Nil(t, enc)
 		require.Contains(t, err.Error(), "vault public key fetch error")
@@ -248,7 +248,7 @@ func TestEncryptSecrets_OrgOwned(t *testing.T) {
 	}
 
 	raw := UpsertSecretsInputs{
-		{ID: "secret-1", Value: "val1", Namespace: "main"},
+		{ID: "secret-1", Value: []byte("val1"), Namespace: "main"},
 	}
 
 	t.Run("uses orgID as owner when SecretsOrgOwned is true", func(t *testing.T) {

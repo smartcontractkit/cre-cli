@@ -48,8 +48,15 @@ type UpsertSecretsInputs []SecretItem
 // SecretItem represents a single secret with its ID, value, and optional namespace.
 type SecretItem struct {
 	ID        string `json:"id" validate:"required"`
-	Value     string `json:"value" validate:"required"`
+	Value     []byte `json:"value" validate:"required"`
 	Namespace string `json:"namespace"`
+}
+
+// ZeroUpsertSecretValues overwrites secret payloads in memory.
+func ZeroUpsertSecretValues(inputs UpsertSecretsInputs) {
+	for i := range inputs {
+		clear(inputs[i].Value)
+	}
 }
 
 type SecretsYamlConfig struct {
@@ -157,13 +164,13 @@ func (h *Handler) ResolveInputs() (UpsertSecretsInputs, error) {
 		if !ok {
 			return nil, fmt.Errorf("environment variable %q for secret %q not found; please export it", envName, id)
 		}
-		if !utf8.ValidString(envVal) {
+		if !utf8.Valid([]byte(envVal)) {
 			return nil, fmt.Errorf("value for secret %q (env %q) contains invalid UTF-8", id, envName)
 		}
 
 		out = append(out, SecretItem{
 			ID:        id,
-			Value:     envVal,
+			Value:     []byte(envVal),
 			Namespace: "main",
 		})
 
@@ -331,8 +338,10 @@ func (h *Handler) EncryptSecrets(rawSecrets UpsertSecretsInputs) ([]*vault.Encry
 	}
 
 	encryptedSecrets := make([]*vault.EncryptedSecret, 0, len(rawSecrets))
-	for _, item := range rawSecrets {
+	for i := range rawSecrets {
+		item := &rawSecrets[i]
 		cipherHex, err := EncryptSecret(item.Value, pubKeyHex, h.OwnerAddress)
+		clear(item.Value)
 		if err != nil {
 			return nil, fmt.Errorf("failed to encrypt secret (key=%s ns=%s): %w", item.ID, item.Namespace, err)
 		}
@@ -361,8 +370,10 @@ func (h *Handler) EncryptSecretsForBrowserOrg(rawSecrets UpsertSecretsInputs, or
 	label := sha256.Sum256([]byte(orgID))
 
 	encryptedSecrets := make([]*vault.EncryptedSecret, 0, len(rawSecrets))
-	for _, item := range rawSecrets {
+	for i := range rawSecrets {
+		item := &rawSecrets[i]
 		cipherHex, err := encryptSecretWithLabel(item.Value, pubKeyHex, label)
+		clear(item.Value)
 		if err != nil {
 			return nil, fmt.Errorf("failed to encrypt secret (key=%s ns=%s): %w", item.ID, item.Namespace, err)
 		}
@@ -380,7 +391,7 @@ func (h *Handler) EncryptSecretsForBrowserOrg(rawSecrets UpsertSecretsInputs, or
 }
 
 // encryptSecretWithLabel encrypts a secret using the vault master public key and the given label.
-func encryptSecretWithLabel(secret, masterPublicKeyHex string, label [32]byte) (string, error) {
+func encryptSecretWithLabel(secret []byte, masterPublicKeyHex string, label [32]byte) (string, error) {
 	masterPublicKey := tdh2easy.PublicKey{}
 	masterPublicKeyBytes, err := hex.DecodeString(masterPublicKeyHex)
 	if err != nil {
@@ -390,7 +401,7 @@ func encryptSecretWithLabel(secret, masterPublicKeyHex string, label [32]byte) (
 		return "", fmt.Errorf("failed to unmarshal master public key: %w", err)
 	}
 
-	cipher, err := tdh2easy.EncryptWithLabel(&masterPublicKey, []byte(secret), label)
+	cipher, err := tdh2easy.EncryptWithLabel(&masterPublicKey, secret, label)
 	if err != nil {
 		return "", fmt.Errorf("failed to encrypt secret: %w", err)
 	}
@@ -402,7 +413,7 @@ func encryptSecretWithLabel(secret, masterPublicKeyHex string, label [32]byte) (
 }
 
 // EncryptSecret encrypts for the owner-key / web3 flow using a 32-byte label derived from the EOA (12 zero bytes + 20-byte address).
-func EncryptSecret(secret, masterPublicKeyHex string, ownerAddress string) (string, error) {
+func EncryptSecret(secret []byte, masterPublicKeyHex string, ownerAddress string) (string, error) {
 	addr := common.HexToAddress(ownerAddress) // canonical 20-byte address
 	var label [32]byte
 	copy(label[12:], addr.Bytes()) // left-pad with 12 zero bytes
@@ -452,6 +463,8 @@ func (h *Handler) Execute(
 	duration time.Duration,
 	secretsAuth string,
 ) error {
+	defer ZeroUpsertSecretValues(inputs)
+
 	if IsBrowserFlow(secretsAuth) {
 		return h.executeBrowserUpsert(context.Background(), inputs, method)
 	}
