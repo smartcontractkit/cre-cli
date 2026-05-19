@@ -5,8 +5,11 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 
 	"gopkg.in/yaml.v2"
+
+	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
 const (
@@ -24,7 +27,9 @@ const (
 	EnvVarDonFamily                        = "CRE_CLI_DON_FAMILY"
 	EnvVarSecretsOrgOwned                  = "CRE_CLI_SECRETS_ORG_OWNED"
 
-	DefaultEnv = "PRODUCTION"
+	DefaultEnv     = "PRODUCTION"
+	StagingEnv     = "STAGING"
+	DevelopmentEnv = "DEVELOPMENT"
 )
 
 //go:embed environments.yaml
@@ -78,46 +83,97 @@ func loadEmbeddedEnvironmentFile() (*fileFormat, error) {
 	return &ff, nil
 }
 
+var newEnvironmentSetWarningsOnce sync.Once
+
 func NewEnvironmentSet(ff *fileFormat, envName string) *EnvironmentSet {
 	set, ok := ff.Envs[envName]
 	if !ok {
 		set = ff.Envs[DefaultEnv]
 	}
+
+	authBase := os.Getenv(EnvVarAuthBase)
+	clientID := os.Getenv(EnvVarClientID)
+	graphqlURL := os.Getenv(EnvVarGraphQLURL)
+	audience := os.Getenv(EnvVarAudience)
+	gatewayURL := os.Getenv(EnvVarVaultGatewayURL)
+	wrChainExplorerURL := os.Getenv(EnvVarWorkflowRegistryChainExplorerURL)
+	// TODO for workflow registry contract - check if it's really a contract, not an EOA
+	wrAddress := os.Getenv(EnvVarWorkflowRegistryAddress)
+	wrChainName := os.Getenv(EnvVarWorkflowRegistryChainName)
+	donFamily := os.Getenv(EnvVarDonFamily)
+	secretsOrgOwned := os.Getenv(EnvVarSecretsOrgOwned)
+
 	set.EnvName = envName
-	if v := os.Getenv(EnvVarAuthBase); v != "" {
-		set.AuthBase = v
+	if authBase != "" {
+		set.AuthBase = authBase
 	}
-	if v := os.Getenv(EnvVarClientID); v != "" {
-		set.ClientID = v
+	if clientID != "" {
+		set.ClientID = clientID
 	}
-	if v := os.Getenv(EnvVarGraphQLURL); v != "" {
-		set.GraphQLURL = v
+	if graphqlURL != "" {
+		set.GraphQLURL = graphqlURL
 	}
-	if v := os.Getenv(EnvVarAudience); v != "" {
-		set.Audience = v
+	if audience != "" {
+		set.Audience = audience
 	}
-	if v := os.Getenv(EnvVarVaultGatewayURL); v != "" {
-		set.GatewayURL = v
+	if gatewayURL != "" {
+		set.GatewayURL = gatewayURL
 	}
-	if v := os.Getenv(EnvVarWorkflowRegistryChainExplorerURL); v != "" {
-		set.WorkflowRegistryChainExplorerURL = v
+	if wrChainExplorerURL != "" {
+		set.WorkflowRegistryChainExplorerURL = wrChainExplorerURL
 	}
-	// TODO for each contract - check if it's really a contract, not an EOA
-	if v := os.Getenv(EnvVarWorkflowRegistryAddress); v != "" {
-		set.WorkflowRegistryAddress = v
+	if wrAddress != "" {
+		set.WorkflowRegistryAddress = wrAddress
+	}
+	if wrChainName != "" {
+		set.WorkflowRegistryChainName = wrChainName
+	}
+	if donFamily != "" {
+		set.DonFamily = donFamily
+	}
+	if secretsOrgOwned != "" {
+		set.SecretsOrgOwned = strings.EqualFold(secretsOrgOwned, "true")
 	}
 
-	if v := os.Getenv(EnvVarWorkflowRegistryChainName); v != "" {
-		set.WorkflowRegistryChainName = v
-	}
-
-	if v := os.Getenv(EnvVarDonFamily); v != "" {
-		set.DonFamily = v
-	}
-
-	if v := os.Getenv(EnvVarSecretsOrgOwned); v != "" {
-		set.SecretsOrgOwned = strings.EqualFold(v, "true")
-	}
+	newEnvironmentSetWarningsOnce.Do(func() {
+		switch envName {
+		case DefaultEnv:
+		case DevelopmentEnv, StagingEnv:
+			ui.Warning(fmt.Sprintf("%s set, using %s environment", EnvVarEnv, envName))
+		default:
+			ui.Warning(fmt.Sprintf("Environment %s not found, defaulting to %s", envName, DefaultEnv))
+		}
+		if authBase != "" {
+			ui.Warning(fmt.Sprintf("%s set, using %s", EnvVarAuthBase, authBase))
+		}
+		if clientID != "" {
+			ui.Warning(fmt.Sprintf("%s set, using %s", EnvVarClientID, clientID))
+		}
+		if graphqlURL != "" {
+			ui.Warning(fmt.Sprintf("%s set, using %s", EnvVarGraphQLURL, graphqlURL))
+		}
+		if audience != "" {
+			ui.Warning(fmt.Sprintf("%s set, using %s", EnvVarAudience, audience))
+		}
+		if gatewayURL != "" {
+			ui.Warning(fmt.Sprintf("%s set, using %s", EnvVarVaultGatewayURL, gatewayURL))
+		}
+		if wrChainExplorerURL != "" {
+			ui.Warning(fmt.Sprintf("%s set, using %s", EnvVarWorkflowRegistryChainExplorerURL, wrChainExplorerURL))
+		}
+		if wrAddress != "" {
+			ui.Warning(fmt.Sprintf("%s set, using %s", EnvVarWorkflowRegistryAddress, wrAddress))
+		}
+		if wrChainName != "" {
+			ui.Warning(fmt.Sprintf("%s set, using %s", EnvVarWorkflowRegistryChainName, wrChainName))
+		}
+		if donFamily != "" {
+			ui.Warning(fmt.Sprintf("%s set, using %s", EnvVarDonFamily, donFamily))
+		}
+		if secretsOrgOwned != "" {
+			ui.Warning(fmt.Sprintf("%s set, using %s", EnvVarSecretsOrgOwned, secretsOrgOwned))
+		}
+	})
 
 	return &set
 }

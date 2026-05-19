@@ -52,7 +52,7 @@ func New(ctx *runtime.Context) *cobra.Command {
 				return err
 			}
 
-			h, err := common.NewHandler(ctx, "")
+			h, err := common.NewHandler(ctx, "", secretsAuth)
 			if err != nil {
 				return err
 			}

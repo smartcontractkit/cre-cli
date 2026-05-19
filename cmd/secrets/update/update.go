@@ -41,7 +41,7 @@ func New(ctx *runtime.Context) *cobra.Command {
 				return err
 			}
 
-			h, err := common.NewHandler(ctx, secretsFilePath)
+			h, err := common.NewHandler(ctx, secretsFilePath, secretsAuth)
 			if err != nil {
 				return err
 			}

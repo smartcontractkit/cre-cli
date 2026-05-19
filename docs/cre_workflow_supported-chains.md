@@ -1,19 +1,27 @@
-## cre registry
+## cre workflow supported-chains
 
-Manages workflow registries
+List chains and mock forwarder addresses for your tenant
 
 ### Synopsis
 
-The registry command lets you view and inspect the workflow registries available for your organization.
+Lists chain selectors and mock Keystone forwarder contract addresses returned by the platform for the current tenant (from cre login / CRE_API_KEY). Chains are those enabled for your tenant.
 
 ```
-cre registry [optional flags]
+cre workflow supported-chains [optional flags]
+```
+
+### Examples
+
+```
+cre workflow supported-chains
+  cre workflow supported-chains --output json
 ```
 
 ### Options
 
 ```
-  -h, --help   help for registry
+  -h, --help            help for supported-chains
+      --output string   Output format: "json" prints a JSON array to stdout
 ```
 
 ### Options inherited from parent commands
@@ -30,6 +38,5 @@ cre registry [optional flags]
 
 ### SEE ALSO
 
-* [cre](cre.md)	 - CRE CLI tool
-* [cre registry list](cre_registry_list.md)	 - Lists available workflow registries for the current environment
+* [cre workflow](cre_workflow.md)	 - Manages workflows
 

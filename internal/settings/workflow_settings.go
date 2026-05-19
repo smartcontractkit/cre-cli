@@ -163,7 +163,7 @@ func loadWorkflowSettings(logger *zerolog.Logger, v *viper.Viper, cmd *cobra.Com
 		return WorkflowSettings{}, errors.Wrap(err, "for target "+target)
 	}
 
-	if err := validateSettings(&workflowSettings); err != nil {
+	if err := validateSettings(&workflowSettings, v.GetBool(Flags.AllowUnknownChains.Name)); err != nil {
 		return WorkflowSettings{}, errors.Wrap(err, "for target "+target)
 	}
 
@@ -260,11 +260,14 @@ func flattenWorkflowSettingsToViper(v *viper.Viper, target string, effectiveWork
 	return nil
 }
 
-func validateSettings(config *WorkflowSettings) error {
+func validateSettings(config *WorkflowSettings, allowUnknownChains bool) error {
 	// TODO validate that all chain names mentioned for the contracts above have a matching URL specified
 	for _, rpc := range config.RPCs {
 		if err := isValidRpcUrl(rpc.Url); err != nil {
 			return errors.Wrap(err, "invalid rpc url for "+rpc.ChainName)
+		}
+		if allowUnknownChains {
+			continue
 		}
 		if err := IsValidChainName(rpc.ChainName); err != nil {
 			return err
@@ -307,6 +310,8 @@ func IsValidChainName(name string) error {
 // For commands that don't need the private key, we skip getting the owner address.
 // ShouldSkipGetOwner returns true if the command is `simulate` and
 // `--broadcast` is false or not set. `cre help` should skip as well.
+// It also returns true for secrets commands using the browser OAuth flow, where
+// the owner is resolved from OAuth credentials rather than an ETH private key.
 func ShouldSkipGetOwner(cmd *cobra.Command) bool {
 	switch cmd.Name() {
 	case "help":
@@ -319,6 +324,11 @@ func ShouldSkipGetOwner(cmd *cobra.Command) bool {
 		b, _ := cmd.Flags().GetBool("broadcast")
 		return !b
 	default:
+		// Browser OAuth flow resolves the owner from credentials, not from
+		// CRE_ETH_PRIVATE_KEY, so skip EOA owner derivation at settings load.
+		if f := cmd.Flags().Lookup("secrets-auth"); f != nil && f.Value.String() == "browser" {
+			return true
+		}
 		return false
 	}
 }

@@ -236,7 +236,7 @@ func newRootCommand() *cobra.Command {
 					spinner.Update("Loading user context...")
 				}
 				if err := runtimeContext.AttachTenantContext(cmd.Context()); err != nil {
-					runtimeContext.Logger.Warn().Err(err).Msg("failed to load user context")
+					ui.Warning("Failed to load user context")
 				}
 
 				// Check if organization is ungated for commands that require it
@@ -275,13 +275,49 @@ func newRootCommand() *cobra.Command {
 					spinner.Stop()
 				}
 
-				err := runtimeContext.AttachSettings(cmd, isLoadDeploymentRPC(cmd))
+				err := runtimeContext.AttachSettings(cmd, false)
 				if err != nil {
 					return fmt.Errorf("%w", err)
 				}
 
-				if err := runtimeContext.AttachResolvedRegistry(); err != nil {
-					return err
+				if cmd.CommandPath() == "cre workflow hash" &&
+					runtimeContext.Settings != nil &&
+					strings.EqualFold(runtimeContext.Settings.Workflow.UserWorkflowSettings.DeploymentRegistry, "private") &&
+					runtimeContext.TenantContext == nil {
+					if showSpinner {
+						spinner.Update("Loading credentials...")
+					}
+					err := runtimeContext.AttachCredentials(cmd.Context(), shouldSkipValidation(cmd))
+					if err != nil {
+						ui.Warning("Failed to load credentials for workflow hash")
+					} else {
+						if showSpinner {
+							spinner.Update("Loading user context...")
+						}
+						if err := runtimeContext.AttachTenantContext(cmd.Context()); err != nil {
+							ui.Warning("Failed to load user context")
+						}
+					}
+				}
+
+				shouldResolveRegistry := true
+				if cmd.Name() == "hash" &&
+					runtimeContext.TenantContext == nil &&
+					runtimeContext.Settings != nil &&
+					runtimeContext.Settings.Workflow.UserWorkflowSettings.DeploymentRegistry != "" {
+					shouldResolveRegistry = false
+				}
+
+				if shouldResolveRegistry {
+					if err := runtimeContext.AttachResolvedRegistry(); err != nil {
+						return err
+					}
+				}
+
+				if isRegistryRPCCommand(cmd) {
+					if err := runtimeContext.ValidateOnchainRegistryRPC(); err != nil {
+						return fmt.Errorf("failed to load settings: %w", err)
+					}
 				}
 
 				if err := runtimeContext.FinalizeDeferredWorkflowOwner(cmd); err != nil {
@@ -409,6 +445,16 @@ func newRootCommand() *cobra.Command {
 		false,
 		"Fail instead of prompting; requires all inputs via flags",
 	)
+	// allow-unknown-chains skips chain-name validation against the chain-selectors
+	// registry so experimental chains can be configured and tested before they are
+	// added upstream. The chain name is still passed through verbatim to RPC and
+	// selector lookups, which will surface their own errors if the chain is truly
+	// unknown to downstream callers.
+	rootCmd.PersistentFlags().Bool(
+		settings.Flags.AllowUnknownChains.Name,
+		false,
+		"Skip chain-name validation against the chain-selectors registry (for experimental chains)",
+	)
 	rootCmd.CompletionOptions.HiddenDefaultCmd = true
 
 	secretsCmd := secrets.New(runtimeContext)
@@ -470,35 +516,36 @@ func newRootCommand() *cobra.Command {
 func isLoadSettings(cmd *cobra.Command) bool {
 	// It is not expected to have the settings file when running the following commands
 	var excludedCommands = map[string]struct{}{
-		"cre version":                {},
-		"cre login":                  {},
-		"cre logout":                 {},
-		"cre whoami":                 {},
-		"cre account access":         {},
-		"cre account list-key":       {},
-		"cre init":                   {},
-		"cre generate-bindings":      {},
-		"cre completion bash":        {},
-		"cre completion fish":        {},
-		"cre completion powershell":  {},
-		"cre completion zsh":         {},
-		"cre help":                   {},
-		"cre update":                 {},
-		"cre workflow":               {},
-		"cre workflow custom-build":  {},
-		"cre workflow limits":        {},
-		"cre workflow limits export": {},
-		"cre workflow build":         {},
-		"cre workflow list":          {},
-		"cre account":                {},
-		"cre secrets":                {},
-		"cre templates":              {},
-		"cre templates list":         {},
-		"cre templates add":          {},
-		"cre templates remove":       {},
-		"cre registry":               {},
-		"cre registry list":          {},
-		"cre":                        {},
+		"cre version":                   {},
+		"cre login":                     {},
+		"cre logout":                    {},
+		"cre whoami":                    {},
+		"cre account access":            {},
+		"cre account list-key":          {},
+		"cre init":                      {},
+		"cre generate-bindings":         {},
+		"cre completion bash":           {},
+		"cre completion fish":           {},
+		"cre completion powershell":     {},
+		"cre completion zsh":            {},
+		"cre help":                      {},
+		"cre update":                    {},
+		"cre workflow":                  {},
+		"cre workflow supported-chains": {},
+		"cre workflow custom-build":     {},
+		"cre workflow limits":           {},
+		"cre workflow limits export":    {},
+		"cre workflow build":            {},
+		"cre workflow list":             {},
+		"cre account":                   {},
+		"cre secrets":                   {},
+		"cre templates":                 {},
+		"cre templates list":            {},
+		"cre templates add":             {},
+		"cre templates remove":          {},
+		"cre registry":                  {},
+		"cre registry list":             {},
+		"cre":                           {},
 	}
 
 	_, exists := excludedCommands[cmd.CommandPath()]
@@ -536,7 +583,11 @@ func isLoadCredentials(cmd *cobra.Command) bool {
 	return !exists
 }
 
-func isLoadDeploymentRPC(cmd *cobra.Command) bool {
+// isRegistryRPCCommand returns true for commands that interact with the workflow
+// registry and require a validated RPC URL when the resolved registry is on-chain.
+// RPC validation is deferred until after registry resolution so that off-chain
+// (private) registry deployments are not forced to supply an on-chain RPC URL.
+func isRegistryRPCCommand(cmd *cobra.Command) bool {
 	var includedCommands = map[string]struct{}{
 		"cre workflow deploy":    {},
 		"cre workflow pause":     {},

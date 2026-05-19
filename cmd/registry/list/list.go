@@ -11,9 +11,17 @@ import (
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
 	return &cobra.Command{
-		Use:     "list",
-		Short:   "Lists available workflow registries for the current environment",
-		Long:    `Displays the registries configured for your organization, including type and address.`,
+		Use:   "list",
+		Short: "Lists available workflow registries for the current environment",
+		Long: `Displays the registries configured for your organization, including type and address.
+
+The ID shown for each registry is the value you set in workflow.yaml
+under the ` + "`deployment-registry`" + ` key to target that registry, e.g.:
+
+  <target-name>:
+    user-workflow:
+      workflow-name: "my-workflow"
+      deployment-registry: "private"`,
 		Example: `cre registry list`,
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -40,6 +48,14 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 				}
 				ui.Line()
 			}
+
+			ui.Bold("Targeting a registry")
+			ui.Dim("Set `deployment-registry` in your workflow.yaml to one of the IDs above:")
+			ui.Line()
+			ui.Code("  <target-name>:")
+			ui.Code("    user-workflow:")
+			ui.Code(fmt.Sprintf("      deployment-registry: %q", registries[0].ID))
+			ui.Line()
 
 			return nil
 		},

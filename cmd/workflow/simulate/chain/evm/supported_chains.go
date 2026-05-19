@@ -1,10 +1,28 @@
 package evm
 
 import (
+	"sort"
+
 	chainselectors "github.com/smartcontractkit/chain-selectors"
 
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain"
+	"github.com/smartcontractkit/cre-cli/internal/settings"
 )
+
+// SupportedChainNames returns the human-readable names of all supported EVM chains,
+// sorted alphabetically.
+func SupportedChainNames() []string {
+	var names []string
+	for _, c := range SupportedChains {
+		name, err := settings.GetChainNameByChainSelector(c.Selector)
+		if err != nil {
+			continue
+		}
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
 
 // SupportedChains is the canonical list of EVM chains supported for simulation.
 var SupportedChains = []chain.ChainConfig{
@@ -86,7 +104,7 @@ var SupportedChains = []chain.ChainConfig{
 	{Selector: chainselectors.MEGAETH_MAINNET.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
 
 	// Celo
-	// {Selector: chainselectors.CELO_SEPOLIA.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
+	{Selector: chainselectors.CELO_SEPOLIA.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
 	{Selector: chainselectors.CELO_MAINNET.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
 
 	// Gnosis
@@ -116,4 +134,7 @@ var SupportedChains = []chain.ChainConfig{
 
 	// DTCC
 	{Selector: chainselectors.DTCC_TESTNET_ANDESITE.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
+
+	// ADI
+	{Selector: chainselectors.ADI_TESTNET.Selector, Forwarder: "0x9eF6468C5f37b976E57d52054c693269479A784d"},
 }

@@ -68,6 +68,19 @@ func (r *OffChainRegistry) ID() string         { return r.id }
 func (r *OffChainRegistry) Type() RegistryType { return RegistryTypeOffChain }
 func (r *OffChainRegistry) DonFamily() string  { return r.donFamily }
 
+// EffectiveDonFamily prefers envSet.DonFamily (CRE_CLI_DON_FAMILY at load); otherwise tenantCtx.DefaultDonFamily.
+func EffectiveDonFamily(envSet *environments.EnvironmentSet, tenantCtx *tenantctx.EnvironmentContext) string {
+	if envSet != nil {
+		if v := strings.TrimSpace(envSet.DonFamily); v != "" {
+			return v
+		}
+	}
+	if tenantCtx != nil {
+		return strings.TrimSpace(tenantCtx.DefaultDonFamily)
+	}
+	return ""
+}
+
 // ResolveRegistry maps an optional deployment-registry value to a concrete
 // ResolvedRegistry. When deploymentRegistry is empty the static EnvironmentSet
 // values are used (backwards-compatible default). When set, it is looked up in
@@ -78,7 +91,7 @@ func ResolveRegistry(
 	envSet *environments.EnvironmentSet,
 ) (ResolvedRegistry, error) {
 	if deploymentRegistry == "" {
-		return defaultFromEnvironmentSet(envSet), nil
+		return defaultFromEnvironmentSet(envSet, tenantCtx), nil
 	}
 
 	if tenantCtx == nil {
@@ -92,7 +105,7 @@ func ResolveRegistry(
 	}
 
 	if ParseRegistryType(reg.Type) == RegistryTypeOffChain {
-		return NewOffChainRegistry(reg.ID, tenantCtx.DefaultDonFamily), nil
+		return NewOffChainRegistry(reg.ID, EffectiveDonFamily(envSet, tenantCtx)), nil
 	}
 
 	if reg.Address == nil || *reg.Address == "" {
@@ -111,7 +124,7 @@ func ResolveRegistry(
 		reg.ID,
 		*reg.Address,
 		chainName,
-		tenantCtx.DefaultDonFamily,
+		EffectiveDonFamily(envSet, tenantCtx),
 		envSet.WorkflowRegistryChainExplorerURL,
 	), nil
 }
@@ -125,12 +138,12 @@ func ParseRegistryType(raw string) RegistryType {
 	return RegistryTypeOnChain
 }
 
-func defaultFromEnvironmentSet(envSet *environments.EnvironmentSet) *OnChainRegistry {
+func defaultFromEnvironmentSet(envSet *environments.EnvironmentSet, tenantCtx *tenantctx.EnvironmentContext) *OnChainRegistry {
 	return NewOnChainRegistry(
-		"",
+		fmt.Sprintf("onchain:%s", envSet.WorkflowRegistryChainName),
 		envSet.WorkflowRegistryAddress,
 		envSet.WorkflowRegistryChainName,
-		envSet.DonFamily,
+		EffectiveDonFamily(envSet, tenantCtx),
 		envSet.WorkflowRegistryChainExplorerURL,
 	)
 }

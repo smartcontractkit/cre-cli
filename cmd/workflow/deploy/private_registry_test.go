@@ -52,6 +52,52 @@ func TestBuildPrivateRegistryInput(t *testing.T) {
 		assert.Equal(t, "v1-tag", *input.Tag)
 	})
 
+	t.Run("preserves paused status if existing workflow is paused", func(t *testing.T) {
+		t.Parallel()
+		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
+		defer simulatedEnvironment.Close()
+
+		ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
+		h := newHandler(ctx, buf)
+		h.inputs = Inputs{
+			WorkflowName: "my-workflow",
+			BinaryURL:    "https://storage.example.com/binary.wasm",
+			DonFamily:    "zone-a",
+		}
+		h.workflowArtifact = &workflowArtifact{
+			WorkflowID: "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+		}
+		status := workflowStatusPaused
+		h.existingWorkflowStatus = &status
+
+		input := h.buildPrivateRegistryInput()
+
+		assert.Equal(t, privateregistryclient.WorkflowStatusPaused, input.Status)
+	})
+
+	t.Run("sets active status if existing workflow is active", func(t *testing.T) {
+		t.Parallel()
+		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
+		defer simulatedEnvironment.Close()
+
+		ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
+		h := newHandler(ctx, buf)
+		h.inputs = Inputs{
+			WorkflowName: "my-workflow",
+			BinaryURL:    "https://storage.example.com/binary.wasm",
+			DonFamily:    "zone-a",
+		}
+		h.workflowArtifact = &workflowArtifact{
+			WorkflowID: "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+		}
+		status := workflowStatusActive
+		h.existingWorkflowStatus = &status
+
+		input := h.buildPrivateRegistryInput()
+
+		assert.Equal(t, privateregistryclient.WorkflowStatusActive, input.Status)
+	})
+
 	t.Run("includes config URL when present", func(t *testing.T) {
 		t.Parallel()
 		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
@@ -125,9 +171,11 @@ func TestCheckWorkflowExists_PrivateRegistry(t *testing.T) {
 		name         string
 		serverStatus int
 		response     map[string]any
+		workflowID   string
 		wantExists   bool
 		wantStatus   *uint8
 		wantErr      bool
+		errMsg       string
 	}{
 		{
 			name:         "found active workflow returns active status",
@@ -151,6 +199,7 @@ func TestCheckWorkflowExists_PrivateRegistry(t *testing.T) {
 					},
 				},
 			},
+			workflowID: "different-workflow-id",
 			wantExists: true,
 			wantStatus: uint8Ptr(0),
 			wantErr:    false,
@@ -177,9 +226,38 @@ func TestCheckWorkflowExists_PrivateRegistry(t *testing.T) {
 					},
 				},
 			},
+			workflowID: "different-workflow-id",
 			wantExists: true,
 			wantStatus: uint8Ptr(1),
 			wantErr:    false,
+		},
+		{
+			name:         "found workflow with same ID returns error",
+			serverStatus: http.StatusOK,
+			response: map[string]any{
+				"data": map[string]any{
+					"getOffchainWorkflowByName": map[string]any{
+						"workflow": map[string]any{
+							"workflowId":     "00a2b96d2f06961c3e0cf6fbba5cfa30d3b577026de094e5202d5fc3e3aabb87",
+							"owner":          "6028e8bd8759240ffe7bd80bdd5c99ca662f3363",
+							"createdAt":      "2026-04-10T14:07:25Z",
+							"status":         "WORKFLOW_STATUS_ACTIVE",
+							"workflowName":   "jnowak-workflow-test-v5",
+							"binaryUrl":      "https://storage.cre.stage.external.griddle.sh/artifacts/00a2b96d2f06961c3e0cf6fbba5cfa30d3b577026de094e5202d5fc3e3aabb87/binary.wasm",
+							"configUrl":      "https://storage.cre.stage.external.griddle.sh/artifacts/00a2b96d2f06961c3e0cf6fbba5cfa30d3b577026de094e5202d5fc3e3aabb87/config",
+							"tag":            "",
+							"attributes":     "{\"app\": \"test\"}",
+							"donFamily":      "zone-a",
+							"organizationId": "org_meoybOR7KEkNhEFf",
+						},
+					},
+				},
+			},
+			workflowID: "00a2b96d2f06961c3e0cf6fbba5cfa30d3b577026de094e5202d5fc3e3aabb87",
+			wantExists: false,
+			wantStatus: nil,
+			wantErr:    true,
+			errMsg:     "workflow with id 00a2b96d2f06961c3e0cf6fbba5cfa30d3b577026de094e5202d5fc3e3aabb87 already exists",
 		},
 		{
 			name:         "not found returns no error and no status",
@@ -196,6 +274,7 @@ func TestCheckWorkflowExists_PrivateRegistry(t *testing.T) {
 				},
 				"data": nil,
 			},
+			workflowID: "different-workflow-id",
 			wantExists: false,
 			wantStatus: nil,
 			wantErr:    false,
@@ -210,6 +289,7 @@ func TestCheckWorkflowExists_PrivateRegistry(t *testing.T) {
 					},
 				},
 			},
+			workflowID: "different-workflow-id",
 			wantExists: false,
 			wantStatus: nil,
 			wantErr:    true,
@@ -234,9 +314,12 @@ func TestCheckWorkflowExists_PrivateRegistry(t *testing.T) {
 			h.environmentSet.GraphQLURL = gqlServer.URL
 			strategy := newPrivateRegistryDeployStrategy(h)
 
-			exists, status, err := strategy.CheckWorkflowExists("", "jnowak-workflow-test-v5", "", "")
+			exists, status, err := strategy.CheckWorkflowExists("", "jnowak-workflow-test-v5", "", tt.workflowID)
 			if tt.wantErr {
 				require.Error(t, err)
+				if tt.errMsg != "" {
+					assert.Equal(t, tt.errMsg, err.Error())
+				}
 			} else {
 				require.NoError(t, err)
 			}

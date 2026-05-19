@@ -59,6 +59,12 @@ func gqlResponseOnChainAndPrivate() map[string]any {
 						"secretsAuthFlows": []any{"BROWSER"},
 					},
 				},
+				"forwarders": []any{
+					map[string]any{
+						"chainSelector": "16015286601757825753",
+						"address":       "0x15fC6ae953E024d975e77382eEeC56A9101f9F88",
+					},
+				},
 			},
 		},
 	}
@@ -79,6 +85,7 @@ func gqlResponsePrivateOnly() map[string]any {
 						"secretsAuthFlows": []any{"BROWSER"},
 					},
 				},
+				"forwarders": []any{},
 			},
 		},
 	}
@@ -159,6 +166,17 @@ func TestFetchAndWriteContext_OnChainAndPrivate(t *testing.T) {
 	if len(private.SecretsAuthFlows) != 1 || private.SecretsAuthFlows[0] != "browser" {
 		t.Errorf("private SecretsAuthFlows = %v, want [browser]", private.SecretsAuthFlows)
 	}
+
+	if len(envCtx.Forwarders) != 1 {
+		t.Fatalf("expected 1 forwarder, got %d", len(envCtx.Forwarders))
+	}
+	f := envCtx.Forwarders[0]
+	if f.ChainSelector != 16015286601757825753 {
+		t.Errorf("forwarder chain selector = %d, want %d", f.ChainSelector, uint64(16015286601757825753))
+	}
+	if f.Address != "0x15fC6ae953E024d975e77382eEeC56A9101f9F88" {
+		t.Errorf("forwarder address = %q, want Sepolia mock forwarder", f.Address)
+	}
 }
 
 func TestFetchAndWriteContext_PrivateOnly(t *testing.T) {
@@ -183,6 +201,35 @@ func TestFetchAndWriteContext_PrivateOnly(t *testing.T) {
 	}
 	if envCtx.Registries[0].ID != "private" {
 		t.Errorf("ID = %q, want %q", envCtx.Registries[0].ID, "private")
+	}
+	if len(envCtx.Forwarders) != 0 {
+		t.Errorf("expected 0 forwarders, got %d", len(envCtx.Forwarders))
+	}
+}
+
+func TestParseChainSelectorJSON(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		raw     string
+		want    uint64
+		wantErr bool
+	}{
+		{`"16015286601757825753"`, 16015286601757825753, false},
+		{`16015286601757825753`, 16015286601757825753, false},
+		{`null`, 0, true},
+		{`"not-a-number"`, 0, true},
+	}
+	for _, tc := range cases {
+		got, err := parseChainSelectorJSON([]byte(tc.raw))
+		if tc.wantErr {
+			if err == nil {
+				t.Errorf("raw %q: wanted error", tc.raw)
+			}
+			continue
+		}
+		if err != nil || got != tc.want {
+			t.Errorf("raw %q: got (%d, %v), want %d", tc.raw, got, err, tc.want)
+		}
 	}
 }
 
