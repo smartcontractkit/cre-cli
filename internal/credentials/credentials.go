@@ -106,6 +106,41 @@ func SaveCredentials(tokenSet *CreLoginTokenSet) error {
 	return nil
 }
 
+// SecureRemove overwrites a file with zeroes before deleting it.
+func SecureRemove(path string) error {
+	f, err := os.OpenFile(path, os.O_RDWR, 0)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+
+	info, err := f.Stat()
+	if err != nil {
+		_ = f.Close()
+		return err
+	}
+
+	size := info.Size()
+	if size > 0 {
+		zeros := make([]byte, size)
+		if _, err := f.WriteAt(zeros, 0); err != nil {
+			_ = f.Close()
+			return err
+		}
+		if err := f.Sync(); err != nil {
+			_ = f.Close()
+			return err
+		}
+	}
+
+	if err := f.Close(); err != nil {
+		return err
+	}
+	return os.Remove(path)
+}
+
 // decodeJWTClaims extracts the claims map from the access token JWT payload.
 func (c *Credentials) decodeJWTClaims() (map[string]interface{}, error) {
 	if c.Tokens == nil || c.Tokens.AccessToken == "" {
