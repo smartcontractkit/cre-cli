@@ -88,7 +88,7 @@ func (h *handler) execute() error {
 		}
 	}
 
-	if err := os.Remove(credPath); err != nil && !os.IsNotExist(err) {
+	if err := credentials.SecureRemove(credPath); err != nil {
 		spinner.Stop()
 		return fmt.Errorf("failed to delete credentials file: %w", err)
 	}
