@@ -210,8 +210,8 @@ func (h *handler) Execute(ctx context.Context) error {
 	if !h.validated {
 		return fmt.Errorf("handler inputs not validated")
 	}
-  
-  h.execCtx = ctx
+
+	h.execCtx = ctx
 
 	deployAccess, err := h.credentials.GetDeploymentAccessStatus()
 	if err != nil {
