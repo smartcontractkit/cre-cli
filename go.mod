@@ -23,17 +23,17 @@ require (
 	github.com/machinebox/graphql v0.2.2
 	github.com/pkg/errors v0.9.1
 	github.com/rs/zerolog v1.34.0
-	github.com/smartcontractkit/chain-selectors v1.0.98
+	github.com/smartcontractkit/chain-selectors v1.0.100
 	github.com/smartcontractkit/chainlink-common v0.11.2-0.20260421191147-d10b9943ac71
 	github.com/smartcontractkit/chainlink-common/keystore v1.0.2
 	github.com/smartcontractkit/chainlink-evm/gethwrappers v0.0.0-20260119171452-39c98c3b33cd
-	github.com/smartcontractkit/chainlink-protos/cre/go v0.0.0-20260520185909-e3aaa299df11
+	github.com/smartcontractkit/chainlink-protos/cre/go v0.0.0-20260521152427-d3f6dc93de42
 	github.com/smartcontractkit/chainlink-protos/workflows/go v0.0.0-20260323124644-faea187e6997
 	github.com/smartcontractkit/chainlink-testing-framework/seth v1.51.5
 	github.com/smartcontractkit/chainlink/deployment v0.0.0-20260422181348-efa818697ce5
 	github.com/smartcontractkit/chainlink/v2 v2.29.1-cre-beta.0.0.20260422181348-efa818697ce5
-	github.com/smartcontractkit/cre-sdk-go v1.10.0
-	github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm v1.0.0-beta.11
+	github.com/smartcontractkit/cre-sdk-go v1.11.0
+	github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm v1.0.0-beta.12
 	github.com/smartcontractkit/mcms v0.41.1
 	github.com/smartcontractkit/tdh2/go/tdh2 v0.0.0-20251120172354-e8ec0386b06c
 	github.com/spf13/cobra v1.10.2
