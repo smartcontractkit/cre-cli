@@ -73,6 +73,8 @@ type handler struct {
 	// existingWorkflowStatus stores the status of an existing workflow when updating.
 	// nil means this is a new workflow, otherwise it contains the current status (0=active, 1=paused).
 	existingWorkflowStatus *uint8
+
+	execCtx context.Context
 }
 
 var defaultOutputPath = "./binary.wasm.br.b64"
@@ -208,6 +210,8 @@ func (h *handler) Execute(ctx context.Context) error {
 	if !h.validated {
 		return fmt.Errorf("handler inputs not validated")
 	}
+
+	h.execCtx = ctx
 
 	deployAccess, err := h.credentials.GetDeploymentAccessStatus()
 	if err != nil {

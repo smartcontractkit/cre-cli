@@ -1,6 +1,7 @@
 package deploy
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -312,6 +313,7 @@ func TestCheckWorkflowExists_PrivateRegistry(t *testing.T) {
 			defer gqlServer.Close()
 
 			h.environmentSet.GraphQLURL = gqlServer.URL
+			h.execCtx = context.Background()
 			strategy := newPrivateRegistryDeployStrategy(h)
 
 			exists, status, err := strategy.CheckWorkflowExists("", "jnowak-workflow-test-v5", "", tt.workflowID)

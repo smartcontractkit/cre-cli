@@ -1,6 +1,7 @@
 package delete
 
 import (
+	"context"
 	"fmt"
 	"io"
 
@@ -44,7 +45,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return handler.Execute()
+			return handler.Execute(cmd.Context())
 		},
 	}
 
@@ -66,6 +67,7 @@ type handler struct {
 	runtimeContext *runtime.Context
 
 	validated bool
+	execCtx   context.Context
 }
 
 func newHandler(ctx *runtime.Context, stdin io.Reader) *handler {
@@ -128,10 +130,12 @@ func (h *handler) ValidateInputs() error {
 	return nil
 }
 
-func (h *handler) Execute() error {
+func (h *handler) Execute(ctx context.Context) error {
 	if !h.validated {
 		return fmt.Errorf("handler inputs not validated")
 	}
+
+	h.execCtx = ctx
 
 	adapter, err := newRegistryDeleteStrategy(h.runtimeContext.ResolvedRegistry, h)
 	if err != nil {
