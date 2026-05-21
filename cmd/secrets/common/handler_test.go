@@ -21,10 +21,12 @@ import (
 	"github.com/smartcontractkit/chainlink-evm/gethwrappers/workflow/generated/workflow_registry_wrapper_v2"
 	"github.com/smartcontractkit/chainlink/v2/core/capabilities/vault/vaulttypes"
 
+	"github.com/smartcontractkit/cre-cli/cmd/secrets/common/gateway"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
+	"github.com/smartcontractkit/cre-cli/internal/tenantctx"
 )
 
 type mockGatewayClient struct {
@@ -337,5 +339,43 @@ func TestNewHandler_WorkflowRegistryClient(t *testing.T) {
 		_, err := NewHandler(ctx, "", SecretsAuthOnchain)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "workflow registry client")
+	})
+}
+
+func TestNewHandler_GatewayURL(t *testing.T) {
+	logger := zerolog.New(bytes.NewBufferString(""))
+	cf := new(MockClientFactory)
+	baseCtx := &runtime.Context{
+		Logger:        &logger,
+		ClientFactory: cf,
+		Settings: &settings.Settings{
+			User:     settings.UserSettings{EthPrivateKey: ""},
+			Workflow: settings.WorkflowSettings{},
+		},
+		EnvironmentSet: &environments.EnvironmentSet{GatewayURL: "https://embedded.example.com/"},
+		Credentials:    &credentials.Credentials{},
+		TenantContext:  &tenantctx.EnvironmentContext{VaultGatewayURL: "https://context.example.com/"},
+	}
+
+	t.Run("uses context URL when env var unset", func(t *testing.T) {
+		t.Setenv(environments.EnvVarVaultGatewayURL, "")
+		h, err := NewHandler(baseCtx, "", SecretsAuthBrowser)
+		require.NoError(t, err)
+		require.Equal(t, "https://context.example.com/", h.GatewayURL)
+		gw, ok := h.Gw.(*gateway.HTTPClient)
+		require.True(t, ok)
+		require.Equal(t, "https://context.example.com/", gw.URL)
+	})
+
+	t.Run("env var wins over context URL", func(t *testing.T) {
+		t.Setenv(environments.EnvVarVaultGatewayURL, "https://env-override.example.com/")
+		envCtx := *baseCtx
+		envCtx.EnvironmentSet = &environments.EnvironmentSet{GatewayURL: "https://env-override.example.com/"}
+		h, err := NewHandler(&envCtx, "", SecretsAuthBrowser)
+		require.NoError(t, err)
+		require.Equal(t, "https://env-override.example.com/", h.GatewayURL)
+		gw, ok := h.Gw.(*gateway.HTTPClient)
+		require.True(t, ok)
+		require.Equal(t, "https://env-override.example.com/", gw.URL)
 	})
 }
