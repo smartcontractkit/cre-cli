@@ -137,4 +137,5 @@ var SupportedChains = []chain.ChainConfig{
 
 	// ADI
 	{Selector: chainselectors.ADI_TESTNET.Selector, Forwarder: "0x9eF6468C5f37b976E57d52054c693269479A784d"},
+	{Selector: chainselectors.ADI_MAINNET.Selector, Forwarder: "0x6Aa382fb8762E1232936478DD9DbC04F637028f1"},
 }
