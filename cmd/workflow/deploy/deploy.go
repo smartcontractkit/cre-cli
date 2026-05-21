@@ -207,7 +207,11 @@ func (h *handler) ValidateInputs() error {
 }
 
 func (h *handler) Execute(ctx context.Context) error {
-	h.execCtx = ctx
+	if !h.validated {
+		return fmt.Errorf("handler inputs not validated")
+	}
+  
+  h.execCtx = ctx
 
 	deployAccess, err := h.credentials.GetDeploymentAccessStatus()
 	if err != nil {
@@ -241,6 +245,9 @@ func (h *handler) Execute(ctx context.Context) error {
 		h.workflowArtifact.WorkflowID,
 	)
 	if err != nil {
+		if errors.Is(err, errWorkflowUnchanged) {
+			return err
+		}
 		return fmt.Errorf("failed to check if workflow exists: %w", err)
 	}
 	h.existingWorkflowStatus = existingStatus

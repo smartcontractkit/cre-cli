@@ -131,7 +131,11 @@ func (h *handler) ValidateInputs() error {
 }
 
 func (h *handler) Execute(ctx context.Context) error {
-	h.execCtx = ctx
+	if !h.validated {
+		return fmt.Errorf("handler inputs not validated")
+	}
+  
+  h.execCtx = ctx
 
 	adapter, err := newRegistryDeleteStrategy(h.runtimeContext.ResolvedRegistry, h)
 	if err != nil {

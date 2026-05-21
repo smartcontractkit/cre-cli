@@ -233,7 +233,7 @@ func TestCheckWorkflowExists_PrivateRegistry(t *testing.T) {
 			wantErr:    false,
 		},
 		{
-			name:         "found workflow with same ID returns error",
+			name:         "found workflow with same ID returns unchanged error",
 			serverStatus: http.StatusOK,
 			response: map[string]any{
 				"data": map[string]any{
@@ -255,10 +255,10 @@ func TestCheckWorkflowExists_PrivateRegistry(t *testing.T) {
 				},
 			},
 			workflowID: "00a2b96d2f06961c3e0cf6fbba5cfa30d3b577026de094e5202d5fc3e3aabb87",
-			wantExists: false,
-			wantStatus: nil,
+			wantExists: true,
+			wantStatus: uint8Ptr(0),
 			wantErr:    true,
-			errMsg:     "workflow with id 00a2b96d2f06961c3e0cf6fbba5cfa30d3b577026de094e5202d5fc3e3aabb87 already exists",
+			errMsg:     "workflow with id 00a2b96d2f06961c3e0cf6fbba5cfa30d3b577026de094e5202d5fc3e3aabb87 is already registered and unchanged; re-deployment skipped: workflow unchanged",
 		},
 		{
 			name:         "not found returns no error and no status",
@@ -321,6 +321,9 @@ func TestCheckWorkflowExists_PrivateRegistry(t *testing.T) {
 				require.Error(t, err)
 				if tt.errMsg != "" {
 					assert.Equal(t, tt.errMsg, err.Error())
+				}
+				if tt.wantExists {
+					assert.ErrorIs(t, err, errWorkflowUnchanged)
 				}
 			} else {
 				require.NoError(t, err)

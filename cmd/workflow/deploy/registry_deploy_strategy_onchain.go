@@ -77,7 +77,8 @@ func (a *onchainRegistryDeployStrategy) CheckWorkflowExists(workflowOwner, workf
 		return false, nil, err
 	}
 	if workflow.WorkflowId == [32]byte(common.Hex2Bytes(workflowID)) {
-		return false, nil, fmt.Errorf("workflow with id %s already exists", workflowID)
+		status := workflow.Status
+		return true, &status, fmt.Errorf("workflow with id %s is already registered and unchanged; re-deployment skipped: %w", workflowID, errWorkflowUnchanged)
 	}
 	if workflow.WorkflowName == workflowName {
 		status := workflow.Status
