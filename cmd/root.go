@@ -221,7 +221,7 @@ func newRootCommand() *cobra.Command {
 
 					// Run login flow
 					ui.Line()
-					if loginErr := login.Run(runtimeContext); loginErr != nil {
+					if loginErr := login.Run(cmd.Context(), runtimeContext); loginErr != nil {
 						return fmt.Errorf("login failed: %w", loginErr)
 					}
 
