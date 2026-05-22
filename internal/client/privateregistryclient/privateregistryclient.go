@@ -21,7 +21,7 @@ func New(gql *graphqlclient.Client, log *zerolog.Logger) *Client {
 	return &Client{
 		graphql:        gql,
 		log:            log,
-		serviceTimeout: 2 * time.Minute,
+		serviceTimeout: time.Minute,
 	}
 }
 
