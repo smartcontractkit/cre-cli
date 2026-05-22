@@ -58,13 +58,13 @@ type initiateLinkingResponse struct {
 	FunctionArgs       []string `json:"functionArgs"`
 }
 
-func Exec(ctx *runtime.Context, in Inputs) error {
+func Exec(parentCtx context.Context, ctx *runtime.Context, in Inputs) error {
 	h := newHandler(ctx, nil)
 
 	if err := h.ValidateInputs(in); err != nil {
 		return err
 	}
-	return h.Execute(in)
+	return h.Execute(parentCtx, in)
 }
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
@@ -83,7 +83,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 				return err
 			}
 
-			return h.Execute(inputs)
+			return h.Execute(cmd.Context(), inputs)
 		},
 	}
 	settings.AddTxnTypeFlags(cmd)
@@ -101,6 +101,7 @@ type handler struct {
 	stdin          io.Reader
 	environmentSet *environments.EnvironmentSet
 	wrc            *client.WorkflowRegistryV2Client
+	execCtx        context.Context
 
 	validated bool
 
@@ -109,28 +110,28 @@ type handler struct {
 }
 
 func newHandler(ctx *runtime.Context, stdin io.Reader) *handler {
-	h := handler{
+	return &handler{
 		settings:       ctx.Settings,
 		credentials:    ctx.Credentials,
 		clientFactory:  ctx.ClientFactory,
 		log:            ctx.Logger,
 		environmentSet: ctx.EnvironmentSet,
 		stdin:          stdin,
-		wg:             sync.WaitGroup{},
-		wrcErr:         nil,
 	}
+}
+
+func (h *handler) initWorkflowRegistryClient() error {
 	h.wg.Add(1)
 	go func() {
 		defer h.wg.Done()
-		wrc, err := h.clientFactory.NewWorkflowRegistryV2Client()
+		wrc, err := h.clientFactory.NewWorkflowRegistryV2Client(h.execCtx)
 		if err != nil {
 			h.wrcErr = fmt.Errorf("failed to create workflow registry client: %w", err)
 			return
 		}
 		h.wrc = wrc
 	}()
-
-	return &h
+	return nil
 }
 
 func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
@@ -154,9 +155,14 @@ func (h *handler) ValidateInputs(in Inputs) error {
 	return nil
 }
 
-func (h *handler) Execute(in Inputs) error {
+func (h *handler) Execute(ctx context.Context, in Inputs) error {
 	if !h.validated {
 		return fmt.Errorf("inputs not validated")
+	}
+
+	h.execCtx = ctx
+	if err := h.initWorkflowRegistryClient(); err != nil {
+		return err
 	}
 
 	h.displayDetails()
@@ -191,7 +197,7 @@ func (h *handler) Execute(in Inputs) error {
 
 	ui.Dim(fmt.Sprintf("Starting linking: owner=%s, label=%s", in.WorkflowOwner, in.WorkflowOwnerLabel))
 
-	resp, err := h.callInitiateLinking(context.Background(), in)
+	resp, err := h.callInitiateLinking(h.execCtx, in)
 	if err != nil {
 		return err
 	}
@@ -296,10 +302,10 @@ func (h *handler) linkOwner(resp initiateLinkingResponse) error {
 	}
 
 	ownerAddr := common.HexToAddress(h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress)
-	if err := h.wrc.CanLinkOwner(ownerAddr, ts, proofBytes, sigBytes); err != nil {
+	if err := h.wrc.CanLinkOwner(h.execCtx, ownerAddr, ts, proofBytes, sigBytes); err != nil {
 		return fmt.Errorf("link request verification failed: %w", err)
 	}
-	txOut, err := h.wrc.LinkOwner(ts, proofBytes, sigBytes)
+	txOut, err := h.wrc.LinkOwner(h.execCtx, ts, proofBytes, sigBytes)
 	if err != nil {
 		return fmt.Errorf("LinkOwner failed: %w", err)
 	}
@@ -388,7 +394,7 @@ func (h *handler) checkIfAlreadyLinked() (bool, error) {
 	ownerAddr := common.HexToAddress(h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress)
 	ui.Dim("Checking existing registrations...")
 
-	linked, err := h.wrc.IsOwnerLinked(ownerAddr)
+	linked, err := h.wrc.IsOwnerLinked(h.execCtx, ownerAddr)
 	if err != nil {
 		return false, fmt.Errorf("failed to check owner link status: %w", err)
 	}

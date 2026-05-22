@@ -68,13 +68,14 @@ type Handler struct {
 	Wrc                  *client.WorkflowRegistryV2Client
 	Credentials          *credentials.Credentials
 	Settings             *settings.Settings
+	execCtx              context.Context
 }
 
 // NewHandler creates a new handler instance.
 // secretsAuth is the value of the --secrets-auth flag (e.g. "onchain" or "browser").
 // For the browser OAuth flow the on-chain WorkflowRegistryV2Client is not needed and is
 // intentionally skipped to avoid requiring an ethereum-mainnet RPC URL.
-func NewHandler(ctx *runtime.Context, secretsFilePath, secretsAuth string) (*Handler, error) {
+func NewHandler(execCtx context.Context, ctx *runtime.Context, secretsFilePath, secretsAuth string) (*Handler, error) {
 	var pk *ecdsa.PrivateKey
 	var err error
 	if ctx.Settings.User.EthPrivateKey != "" {
@@ -97,11 +98,12 @@ func NewHandler(ctx *runtime.Context, secretsFilePath, secretsAuth string) (*Han
 		EnvironmentSet:       ctx.EnvironmentSet,
 		Credentials:          ctx.Credentials,
 		Settings:             ctx.Settings,
+		execCtx:              execCtx,
 	}
 	h.Gw = &HTTPClient{URL: h.EnvironmentSet.GatewayURL, Client: &http.Client{Timeout: 90 * time.Second}}
 
 	if !IsBrowserFlow(secretsAuth) {
-		wrc, err := h.ClientFactory.NewWorkflowRegistryV2Client()
+		wrc, err := h.ClientFactory.NewWorkflowRegistryV2Client(execCtx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create workflow registry client: %w", err)
 		}
@@ -402,13 +404,15 @@ func HexToBytes32(h string) ([32]byte, error) {
 
 // Execute implements secrets create and update from YAML (multisig bundle, owner-key with allowlist, or interactive org sign-in).
 func (h *Handler) Execute(
+	ctx context.Context,
 	inputs UpsertSecretsInputs,
 	method string,
 	duration time.Duration,
 	secretsAuth string,
 ) error {
+	h.execCtx = ctx
 	if IsBrowserFlow(secretsAuth) {
-		return h.executeBrowserUpsert(context.Background(), inputs, method)
+		return h.executeBrowserUpsert(ctx, inputs, method)
 	}
 
 	if err := h.EnsureDeploymentRPCForOwnerKeySecrets(); err != nil {
@@ -416,7 +420,7 @@ func (h *Handler) Execute(
 	}
 
 	ui.Dim("Verifying ownership...")
-	if err := h.EnsureOwnerLinkedOrFail(); err != nil {
+	if err := h.EnsureOwnerLinkedOrFail(ctx); err != nil {
 		return err
 	}
 
@@ -478,13 +482,13 @@ func (h *Handler) Execute(
 
 	ownerAddr := common.HexToAddress(owner)
 
-	allowlisted, err := h.Wrc.IsRequestAllowlisted(ownerAddr, digest)
+	allowlisted, err := h.Wrc.IsRequestAllowlisted(ctx, ownerAddr, digest)
 	if err != nil {
 		return fmt.Errorf("allowlist check failed: %w", err)
 	}
 	var txOut *client.TxOutput
 	if !allowlisted {
-		if txOut, err = h.Wrc.AllowlistRequest(digest, duration); err != nil {
+		if txOut, err = h.Wrc.AllowlistRequest(ctx, digest, duration); err != nil {
 			return fmt.Errorf("allowlist request failed: %w", err)
 		}
 	}
@@ -691,13 +695,13 @@ func (h *Handler) ParseVaultGatewayResponse(method string, respBody []byte) erro
 }
 
 // EnsureOwnerLinkedOrFail TODO this reuses the same logic as in auto_link.go which is tied to deploy; consider refactoring to avoid duplication
-func (h *Handler) EnsureOwnerLinkedOrFail() error {
+func (h *Handler) EnsureOwnerLinkedOrFail(ctx context.Context) error {
 	if !common.IsHexAddress(h.OwnerAddress) {
 		return fmt.Errorf("owner address %q is not a valid hex EVM address; check your workflow settings", h.OwnerAddress)
 	}
 	ownerAddr := common.HexToAddress(h.OwnerAddress)
 
-	linked, err := h.Wrc.IsOwnerLinked(ownerAddr)
+	linked, err := h.Wrc.IsOwnerLinked(ctx, ownerAddr)
 	if err != nil {
 		return fmt.Errorf("failed to check owner link status: %w", err)
 	}

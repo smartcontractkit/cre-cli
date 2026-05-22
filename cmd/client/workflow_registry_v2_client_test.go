@@ -1,6 +1,7 @@
 package client
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -59,7 +60,7 @@ func TestIsRequestAllowlisted_Success(t *testing.T) {
 		reqDigest,
 	).Return(true, nil).Once()
 
-	ok, err := wrc.IsRequestAllowlisted(owner, reqDigest)
+	ok, err := wrc.IsRequestAllowlisted(context.Background(), owner, reqDigest)
 	assert.NoError(t, err)
 	assert.True(t, ok)
 
@@ -81,7 +82,7 @@ func TestIsRequestAllowlisted_ContractError(t *testing.T) {
 		reqDigest,
 	).Return(false, errors.New("revert: not allowed")).Once()
 
-	ok, err := wrc.IsRequestAllowlisted(owner, reqDigest)
+	ok, err := wrc.IsRequestAllowlisted(context.Background(), owner, reqDigest)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "not allowed")
 	assert.False(t, ok)

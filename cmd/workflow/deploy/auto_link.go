@@ -25,7 +25,7 @@ const (
 func (h *handler) ensureOwnerLinkedOrFail(onChain *settings.OnChainRegistry) error {
 	ownerAddr := common.HexToAddress(h.inputs.WorkflowOwner)
 
-	linked, err := h.wrc.IsOwnerLinked(ownerAddr)
+	linked, err := h.wrc.IsOwnerLinked(h.execCtx, ownerAddr)
 	if err != nil {
 		return fmt.Errorf("failed to check owner link status: %w", err)
 	}
@@ -66,7 +66,7 @@ func (h *handler) ensureOwnerLinkedOrFail(onChain *settings.OnChainRegistry) err
 func (h *handler) autoLinkMSIGAndExit(onChain *settings.OnChainRegistry) (halt bool, err error) {
 	ownerAddr := common.HexToAddress(h.inputs.WorkflowOwner)
 
-	linked, err := h.wrc.IsOwnerLinked(ownerAddr)
+	linked, err := h.wrc.IsOwnerLinked(h.execCtx, ownerAddr)
 	if err != nil {
 		return false, fmt.Errorf("failed to check owner link status: %w", err)
 	}
@@ -107,7 +107,7 @@ func (h *handler) tryAutoLink(onChain *settings.OnChainRegistry) error {
 		EnvironmentSet: h.environmentSet,
 	}
 
-	return linkkey.Exec(rtx, linkkey.Inputs{
+	return linkkey.Exec(h.execCtx, rtx, linkkey.Inputs{
 		WorkflowOwner:                   h.inputs.WorkflowOwner,
 		WorkflowRegistryContractAddress: onChain.Address(),
 		WorkflowOwnerLabel:              h.inputs.OwnerLabel,

@@ -34,7 +34,7 @@ func newOnchainRegistryPauseStrategy(h *handler) (*onchainRegistryPauseStrategy,
 	a.wg.Add(1)
 	go func() {
 		defer a.wg.Done()
-		wrc, err := h.clientFactory.NewWorkflowRegistryV2Client()
+		wrc, err := h.clientFactory.NewWorkflowRegistryV2Client(h.execCtx)
 		if err != nil {
 			a.initErr = fmt.Errorf("failed to create workflow registry client: %w", err)
 			return
@@ -57,7 +57,7 @@ func (a *onchainRegistryPauseStrategy) Pause() error {
 
 	ui.Dim(fmt.Sprintf("Fetching workflows to pause... Name=%s, Owner=%s", workflowName, workflowOwner.Hex()))
 
-	workflows, err := workflowcommon.FetchAllWorkflowsByOwnerAndName(a.wrc, workflowOwner, workflowName)
+	workflows, err := workflowcommon.FetchAllWorkflowsByOwnerAndName(h.execCtx, a.wrc, workflowOwner, workflowName)
 	if err != nil {
 		return fmt.Errorf("failed to list workflows: %w", err)
 	}
@@ -82,7 +82,7 @@ func (a *onchainRegistryPauseStrategy) Pause() error {
 
 	ui.Dim(fmt.Sprintf("Processing batch pause... count=%d", len(activeWorkflowIDs)))
 
-	txOut, err := a.wrc.BatchPauseWorkflows(activeWorkflowIDs)
+	txOut, err := a.wrc.BatchPauseWorkflows(h.execCtx, activeWorkflowIDs)
 	if err != nil {
 		return fmt.Errorf("failed to batch pause workflows: %w", err)
 	}
