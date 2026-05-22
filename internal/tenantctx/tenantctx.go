@@ -106,7 +106,7 @@ func FetchAndWriteContext(ctx context.Context, gqlClient *graphqlclient.Client, 
 
 	registries := make([]*Registry, 0, len(tc.Registries))
 	for _, r := range tc.Registries {
-		regType := mapRegistryType(r.Type)
+		regType := mapRegistryType(r.Type, log)
 		id := r.ID
 		label := r.Label
 
@@ -157,14 +157,15 @@ func FetchAndWriteContext(ctx context.Context, gqlClient *graphqlclient.Client, 
 	return writeContextFile(contextMap, log)
 }
 
-func mapRegistryType(gqlType string) string {
+func mapRegistryType(gqlType string, log *zerolog.Logger) string {
 	switch gqlType {
 	case "ON_CHAIN":
 		return "on-chain"
 	case "OFF_CHAIN":
 		return "off-chain"
 	default:
-		return strings.ToLower(gqlType)
+		log.Warn().Str("type", gqlType).Msg("unknown registry type, skipping")
+		return "unknown"
 	}
 }
 
