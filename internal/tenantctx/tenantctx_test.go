@@ -433,7 +433,7 @@ func TestMapRegistryType(t *testing.T) {
 		{"UNKNOWN", "unknown"},
 	}
 	for _, tt := range tests {
-		if got := mapRegistryType(tt.input, nil); got != tt.want {
+		if got := mapRegistryType(tt.input, testutil.NewTestLogger()); got != tt.want {
 			t.Errorf("mapRegistryType(%q) = %q, want %q", tt.input, got, tt.want)
 		}
 	}
