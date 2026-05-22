@@ -3,7 +3,6 @@ package common
 import (
 	"context"
 	"crypto/ecdsa"
-	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -35,6 +34,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
+	"github.com/smartcontractkit/cre-cli/internal/ethkeys"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/types"
@@ -57,17 +57,18 @@ type SecretsYamlConfig struct {
 }
 
 type Handler struct {
-	Log             *zerolog.Logger
-	ClientFactory   client.Factory
-	SecretsFilePath string
-	PrivateKey      *ecdsa.PrivateKey
-	OwnerAddress    string
-	EnvironmentSet  *environments.EnvironmentSet
-	Gw              GatewayClient
-	Wrc             *client.WorkflowRegistryV2Client
-	Credentials     *credentials.Credentials
-	Settings        *settings.Settings
-	execCtx         context.Context
+	Log                  *zerolog.Logger
+	ClientFactory        client.Factory
+	SecretsFilePath      string
+	PrivateKey           *ecdsa.PrivateKey
+	OwnerAddress         string
+	DerivedWorkflowOwner string
+	EnvironmentSet       *environments.EnvironmentSet
+	Gw                   GatewayClient
+	Wrc                  *client.WorkflowRegistryV2Client
+	Credentials          *credentials.Credentials
+	Settings             *settings.Settings
+	execCtx              context.Context
 }
 
 // NewHandler creates a new handler instance.
@@ -88,15 +89,16 @@ func NewHandler(execCtx context.Context, ctx *runtime.Context, secretsFilePath, 
 	}
 
 	h := &Handler{
-		Log:             ctx.Logger,
-		ClientFactory:   ctx.ClientFactory,
-		SecretsFilePath: secretsFilePath,
-		PrivateKey:      pk,
-		OwnerAddress:    ctx.Settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress,
-		EnvironmentSet:  ctx.EnvironmentSet,
-		Credentials:     ctx.Credentials,
-		Settings:        ctx.Settings,
-		execCtx:         execCtx,
+		Log:                  ctx.Logger,
+		ClientFactory:        ctx.ClientFactory,
+		SecretsFilePath:      secretsFilePath,
+		PrivateKey:           pk,
+		OwnerAddress:         ctx.Settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress,
+		DerivedWorkflowOwner: ctx.DerivedWorkflowOwner,
+		EnvironmentSet:       ctx.EnvironmentSet,
+		Credentials:          ctx.Credentials,
+		Settings:             ctx.Settings,
+		execCtx:              execCtx,
 	}
 	h.Gw = &HTTPClient{URL: h.EnvironmentSet.GatewayURL, Client: &http.Client{Timeout: 90 * time.Second}}
 
@@ -287,29 +289,29 @@ func (h *Handler) ResolveEffectiveOwner() (string, error) {
 	return common.HexToAddress(h.OwnerAddress).Hex(), nil
 }
 
-// ResolveVaultIdentifierOwnerForAuth returns the owner string used in vault JSON-RPC payloads
-// (SecretIdentifier.Owner and list request Owner). Browser auth always uses the signed-in
-// organization ID so digests and identifiers align with JWT AuthorizedOwner() on the gateway;
-// onchain auth uses ResolveEffectiveOwner() (linked workflow owner address).
+// ResolveVaultIdentifierOwnerForAuth returns the owner used in vault JSON-RPC payloads
+// (SecretIdentifier.Owner, list Owner, TDH2 labels). Onchain auth uses the linked EOA from
+// settings; browser auth uses DerivedWorkflowOwner from runtime.Context (getCreOrganizationInfo at login).
 func (h *Handler) ResolveVaultIdentifierOwnerForAuth(secretsAuth string) (string, error) {
-	if IsBrowserFlow(secretsAuth) {
-		if h.Credentials == nil {
-			return "", fmt.Errorf("organization information is missing from your session; sign in again or use --secrets-auth=onchain")
-		}
-		if h.Credentials.AuthType == credentials.AuthTypeApiKey {
-			return "", fmt.Errorf("this sign-in flow requires an interactive login; API keys are not supported")
-		}
-		if h.Credentials.OrgID == "" {
-			return "", fmt.Errorf("organization information is missing from your session; sign in again or use --secrets-auth=onchain")
-		}
-		return h.Credentials.OrgID, nil
+	if !IsBrowserFlow(secretsAuth) {
+		return h.ResolveEffectiveOwner()
 	}
-	return h.ResolveEffectiveOwner()
+	if h.Credentials == nil {
+		return "", fmt.Errorf("organization information is missing from your session; sign in again or use --secrets-auth=onchain")
+	}
+	if h.Credentials.AuthType == credentials.AuthTypeApiKey {
+		return "", fmt.Errorf("this sign-in flow requires an interactive login; API keys are not supported")
+	}
+	owner := strings.TrimSpace(h.DerivedWorkflowOwner)
+	if owner == "" {
+		return "", fmt.Errorf("derived workflow owner is not available; sign in again with cre login")
+	}
+	return ethkeys.FormatWorkflowOwnerAddress(owner)
 }
 
-// EncryptSecrets takes the raw secrets and encrypts them for the owner-key (onchain) flow.
+// EncryptSecrets encrypts secrets for the given workflow owner address.
 // TDH2 label is the workflow owner address left-padded to 32 bytes; SecretIdentifier.Owner is the same hex address string.
-func (h *Handler) EncryptSecrets(rawSecrets UpsertSecretsInputs) ([]*vault.EncryptedSecret, error) {
+func (h *Handler) EncryptSecrets(rawSecrets UpsertSecretsInputs, owner string) ([]*vault.EncryptedSecret, error) {
 	pubKeyHex, err := h.fetchVaultMasterPublicKeyHex()
 	if err != nil {
 		return nil, err
@@ -317,44 +319,14 @@ func (h *Handler) EncryptSecrets(rawSecrets UpsertSecretsInputs) ([]*vault.Encry
 
 	encryptedSecrets := make([]*vault.EncryptedSecret, 0, len(rawSecrets))
 	for _, item := range rawSecrets {
-		cipherHex, err := EncryptSecret(item.Value, pubKeyHex, h.OwnerAddress)
+		cipherHex, err := EncryptSecret(item.Value, pubKeyHex, owner)
 		if err != nil {
 			return nil, fmt.Errorf("failed to encrypt secret (key=%s ns=%s): %w", item.ID, item.Namespace, err)
 		}
 		secID := &vault.SecretIdentifier{
 			Key:       item.ID,
 			Namespace: item.Namespace,
-			Owner:     h.OwnerAddress,
-		}
-		encryptedSecrets = append(encryptedSecrets, &vault.EncryptedSecret{
-			Id:             secID,
-			EncryptedValue: cipherHex,
-		})
-	}
-	return encryptedSecrets, nil
-}
-
-// EncryptSecretsForBrowserOrg encrypts secrets scoped to the signed-in organization (interactive sign-in flow).
-// TDH2 label is SHA256(orgID); SecretIdentifier.Owner is the org id string. This is a separate binding from the
-// owner-key path (EOA left-padded label + workflow owner address); both remain supported via their respective entrypoints.
-func (h *Handler) EncryptSecretsForBrowserOrg(rawSecrets UpsertSecretsInputs, orgID string) ([]*vault.EncryptedSecret, error) {
-	pubKeyHex, err := h.fetchVaultMasterPublicKeyHex()
-	if err != nil {
-		return nil, err
-	}
-
-	label := sha256.Sum256([]byte(orgID))
-
-	encryptedSecrets := make([]*vault.EncryptedSecret, 0, len(rawSecrets))
-	for _, item := range rawSecrets {
-		cipherHex, err := encryptSecretWithLabel(item.Value, pubKeyHex, label)
-		if err != nil {
-			return nil, fmt.Errorf("failed to encrypt secret (key=%s ns=%s): %w", item.ID, item.Namespace, err)
-		}
-		secID := &vault.SecretIdentifier{
-			Key:       item.ID,
-			Namespace: item.Namespace,
-			Owner:     orgID,
+			Owner:     owner,
 		}
 		encryptedSecrets = append(encryptedSecrets, &vault.EncryptedSecret{
 			Id:             secID,
@@ -452,8 +424,13 @@ func (h *Handler) Execute(
 		return err
 	}
 
+	owner, err := h.ResolveVaultIdentifierOwnerForAuth(secretsAuth)
+	if err != nil {
+		return err
+	}
+
 	// Build from YAML inputs
-	encSecrets, err := h.EncryptSecrets(inputs)
+	encSecrets, err := h.EncryptSecrets(inputs, owner)
 	if err != nil {
 		return fmt.Errorf("failed to encrypt secrets: %w", err)
 	}
@@ -503,7 +480,7 @@ func (h *Handler) Execute(
 		return fmt.Errorf("unsupported method %q (expected %q or %q)", method, vaulttypes.MethodSecretsCreate, vaulttypes.MethodSecretsUpdate)
 	}
 
-	ownerAddr := common.HexToAddress(h.OwnerAddress)
+	ownerAddr := common.HexToAddress(owner)
 
 	allowlisted, err := h.Wrc.IsRequestAllowlisted(ctx, ownerAddr, digest)
 	if err != nil {

@@ -135,7 +135,7 @@ func Execute(ctx context.Context, h *common.Handler, namespace string, duration 
 
 	if common.IsBrowserFlow(secretsAuth) {
 		ui.Dim("Using your account to authorize vault access for this list request...")
-		return h.ExecuteBrowserVaultAuthorization(context.Background(), vaulttypes.MethodSecretsList, digest, body)
+		return h.ExecuteBrowserVaultAuthorization(context.Background(), vaulttypes.MethodSecretsList, digest, body, owner)
 	}
 
 	ownerAddr := ethcommon.HexToAddress(owner)

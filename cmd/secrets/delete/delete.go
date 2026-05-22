@@ -171,7 +171,7 @@ func Execute(ctx context.Context, h *common.Handler, inputs DeleteSecretsInputs,
 
 	if common.IsBrowserFlow(secretsAuth) {
 		ui.Dim("Using your account to authorize vault access for this delete request...")
-		return h.ExecuteBrowserVaultAuthorization(context.Background(), vaulttypes.MethodSecretsDelete, digest, requestBody)
+		return h.ExecuteBrowserVaultAuthorization(context.Background(), vaulttypes.MethodSecretsDelete, digest, requestBody, owner)
 	}
 
 	gatewayPost := func() error {
