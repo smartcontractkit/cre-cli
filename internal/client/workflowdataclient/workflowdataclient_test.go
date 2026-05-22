@@ -7,7 +7,9 @@ import (
 	"net/http/httptest"
 	"sync/atomic"
 	"testing"
+	"time"
 
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -27,6 +29,20 @@ func newTestClient(t *testing.T, serverURL string) *Client {
 	envSet := &environments.EnvironmentSet{GraphQLURL: serverURL}
 	gql := graphqlclient.New(creds, envSet, logger)
 	return New(gql, logger)
+}
+
+func TestCreateServiceContextWithTimeout(t *testing.T) {
+	logger := zerolog.Nop()
+	client := New(nil, &logger)
+	client.SetServiceTimeout(150 * time.Millisecond)
+
+	parent := context.Background()
+	callCtx, cancel := client.CreateServiceContextWithTimeout(parent)
+	defer cancel()
+
+	deadline, ok := callCtx.Deadline()
+	require.True(t, ok)
+	assert.WithinDuration(t, time.Now().Add(150*time.Millisecond), deadline, 100*time.Millisecond)
 }
 
 func TestListAll_SinglePage(t *testing.T) {
