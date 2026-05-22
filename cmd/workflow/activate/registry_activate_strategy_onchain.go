@@ -3,7 +3,6 @@ package activate
 import (
 	"encoding/hex"
 	"fmt"
-	"math/big"
 	"sort"
 	"sync"
 	"time"
@@ -12,6 +11,7 @@ import (
 
 	"github.com/smartcontractkit/cre-cli/cmd/client"
 	cmdCommon "github.com/smartcontractkit/cre-cli/cmd/common"
+	workflowcommon "github.com/smartcontractkit/cre-cli/cmd/workflow/common"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/types"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
@@ -58,8 +58,7 @@ func (a *onchainRegistryActivateStrategy) Activate() error {
 
 	ownerAddr := common.HexToAddress(workflowOwner)
 
-	const pageLimit = 200
-	workflows, err := a.wrc.GetWorkflowListByOwnerAndName(h.execCtx, ownerAddr, workflowName, big.NewInt(0), big.NewInt(pageLimit))
+	workflows, err := workflowcommon.FetchAllWorkflowsByOwnerAndName(h.execCtx, a.wrc, ownerAddr, workflowName)
 	if err != nil {
 		return fmt.Errorf("failed to get workflow list: %w", err)
 	}

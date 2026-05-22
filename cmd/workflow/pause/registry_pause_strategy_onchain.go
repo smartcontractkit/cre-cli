@@ -1,19 +1,16 @@
 package pause
 
 import (
-	"context"
 	"encoding/hex"
 	"fmt"
-	"math/big"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 
-	workflow_registry_v2_wrapper "github.com/smartcontractkit/chainlink-evm/gethwrappers/workflow/generated/workflow_registry_wrapper_v2"
-
 	"github.com/smartcontractkit/cre-cli/cmd/client"
 	cmdCommon "github.com/smartcontractkit/cre-cli/cmd/common"
+	workflowcommon "github.com/smartcontractkit/cre-cli/cmd/workflow/common"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/types"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
@@ -60,7 +57,7 @@ func (a *onchainRegistryPauseStrategy) Pause() error {
 
 	ui.Dim(fmt.Sprintf("Fetching workflows to pause... Name=%s, Owner=%s", workflowName, workflowOwner.Hex()))
 
-	workflows, err := fetchAllWorkflows(h.execCtx, a.wrc, workflowOwner, workflowName)
+	workflows, err := workflowcommon.FetchAllWorkflowsByOwnerAndName(h.execCtx, a.wrc, workflowOwner, workflowName)
 	if err != nil {
 		return fmt.Errorf("failed to list workflows: %w", err)
 	}
@@ -161,39 +158,4 @@ func (a *onchainRegistryPauseStrategy) Pause() error {
 		h.log.Warn().Msgf("Unsupported transaction type: %s", txOut.Type)
 	}
 	return nil
-}
-
-func fetchAllWorkflows(
-	ctx context.Context,
-	wrc interface {
-		GetWorkflowListByOwnerAndName(ctx context.Context, owner common.Address, workflowName string, start, limit *big.Int) ([]workflow_registry_v2_wrapper.WorkflowRegistryWorkflowMetadataView, error)
-	},
-	owner common.Address,
-	name string,
-) ([]workflow_registry_v2_wrapper.WorkflowRegistryWorkflowMetadataView, error) {
-	const pageSize = int64(200)
-	var (
-		start     = big.NewInt(0)
-		limit     = big.NewInt(pageSize)
-		workflows = make([]workflow_registry_v2_wrapper.WorkflowRegistryWorkflowMetadataView, 0, pageSize)
-	)
-
-	for {
-		list, err := wrc.GetWorkflowListByOwnerAndName(ctx, owner, name, start, limit)
-		if err != nil {
-			return nil, err
-		}
-		if len(list) == 0 {
-			break
-		}
-
-		workflows = append(workflows, list...)
-
-		start = big.NewInt(start.Int64() + int64(len(list)))
-		if int64(len(list)) < pageSize {
-			break
-		}
-	}
-
-	return workflows, nil
 }
