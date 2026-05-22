@@ -71,7 +71,7 @@ func TestEncryptSecrets(t *testing.T) {
 			{ID: "test-secret-2", Value: "another-value", Namespace: "ns2"},
 		}
 
-		enc, err := h.EncryptSecrets(raw)
+		enc, err := h.EncryptSecrets(raw, "0xabc")
 		require.NoError(t, err)
 		require.Len(t, enc, 2)
 
@@ -100,7 +100,7 @@ func TestEncryptSecrets(t *testing.T) {
 			},
 		}
 
-		enc, err := h.EncryptSecrets(UpsertSecretsInputs{{ID: "s", Value: "v", Namespace: "n"}})
+		enc, err := h.EncryptSecrets(UpsertSecretsInputs{{ID: "s", Value: "v", Namespace: "n"}}, "0xabc")
 		require.Error(t, err)
 		require.Nil(t, enc)
 		require.Contains(t, err.Error(), "gateway POST failed")
@@ -126,7 +126,7 @@ func TestEncryptSecrets(t *testing.T) {
 			},
 		}
 
-		enc, err := h.EncryptSecrets(UpsertSecretsInputs{{ID: "s", Value: "v", Namespace: "n"}})
+		enc, err := h.EncryptSecrets(UpsertSecretsInputs{{ID: "s", Value: "v", Namespace: "n"}}, "0xabc")
 		require.Error(t, err)
 		require.Nil(t, enc)
 		require.Contains(t, err.Error(), "vault public key fetch error")
@@ -163,15 +163,15 @@ func TestResolveEffectiveOwner(t *testing.T) {
 }
 
 func TestResolveVaultIdentifierOwnerForAuth(t *testing.T) {
-	t.Run("browser returns org ID", func(t *testing.T) {
+	t.Run("browser returns derived workflow owner from session", func(t *testing.T) {
 		h, _, _ := newMockHandler(t)
-		h.OwnerAddress = "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
 		h.Credentials.AuthType = credentials.AuthTypeBearer
 		h.Credentials.OrgID = "org-browser"
+		h.DerivedWorkflowOwner = "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
 
 		owner, err := h.ResolveVaultIdentifierOwnerForAuth(SecretsAuthBrowser)
 		require.NoError(t, err)
-		require.Equal(t, "org-browser", owner)
+		require.Equal(t, "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266", owner)
 	})
 
 	t.Run("browser errors on api key auth", func(t *testing.T) {
@@ -184,14 +184,14 @@ func TestResolveVaultIdentifierOwnerForAuth(t *testing.T) {
 		require.Contains(t, err.Error(), "interactive login")
 	})
 
-	t.Run("browser errors when org ID is empty", func(t *testing.T) {
+	t.Run("browser errors when derived workflow owner is empty", func(t *testing.T) {
 		h, _, _ := newMockHandler(t)
 		h.Credentials.AuthType = credentials.AuthTypeBearer
-		h.Credentials.OrgID = ""
+		h.Credentials.OrgID = "org-1"
 
 		_, err := h.ResolveVaultIdentifierOwnerForAuth(SecretsAuthBrowser)
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "organization information is missing")
+		require.Contains(t, err.Error(), "derived workflow owner is not available")
 	})
 
 	t.Run("onchain delegates to ResolveEffectiveOwner", func(t *testing.T) {
@@ -226,7 +226,7 @@ func TestEncryptSecrets_UsesWorkflowOwnerAddress(t *testing.T) {
 
 	enc, err := h.EncryptSecrets(UpsertSecretsInputs{
 		{ID: "secret-1", Value: "val1", Namespace: "main"},
-	})
+	}, "0xabc")
 	require.NoError(t, err)
 	require.Len(t, enc, 1)
 	require.Equal(t, "0xabc", enc[0].Id.Owner)
