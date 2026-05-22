@@ -54,7 +54,10 @@ func (a *privateRegistryDeleteStrategy) DeleteWorkflows(workflows []WorkflowToDe
 	h := a.h
 
 	for _, wf := range workflows {
-		workflowID := wf.RawID.(string)
+		workflowID, ok := wf.RawID.(string)
+		if !ok {
+			return fmt.Errorf("unexpected RawID type for workflow %s: %T", wf.ID, wf.RawID)
+		}
 		deletedID, err := a.prc.DeleteWorkflowInRegistry(a.h.execCtx, workflowID)
 		if err != nil {
 			h.log.Error().
