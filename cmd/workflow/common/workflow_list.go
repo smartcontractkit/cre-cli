@@ -1,6 +1,7 @@
 package common
 
 import (
+	"context"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -12,11 +13,12 @@ const workflowListPageSize = int64(200)
 
 // WorkflowListByOwnerAndNameClient fetches workflow metadata pages from the registry.
 type WorkflowListByOwnerAndNameClient interface {
-	GetWorkflowListByOwnerAndName(owner common.Address, workflowName string, start, limit *big.Int) ([]workflow_registry_v2_wrapper.WorkflowRegistryWorkflowMetadataView, error)
+	GetWorkflowListByOwnerAndName(ctx context.Context, owner common.Address, workflowName string, start, limit *big.Int) ([]workflow_registry_v2_wrapper.WorkflowRegistryWorkflowMetadataView, error)
 }
 
 // FetchAllWorkflowsByOwnerAndName returns every workflow version for owner+name, paginating until exhausted.
 func FetchAllWorkflowsByOwnerAndName(
+	ctx context.Context,
 	wrc WorkflowListByOwnerAndNameClient,
 	owner common.Address,
 	name string,
@@ -28,7 +30,7 @@ func FetchAllWorkflowsByOwnerAndName(
 	)
 
 	for {
-		list, err := wrc.GetWorkflowListByOwnerAndName(owner, name, start, limit)
+		list, err := wrc.GetWorkflowListByOwnerAndName(ctx, owner, name, start, limit)
 		if err != nil {
 			return nil, err
 		}
