@@ -11,6 +11,10 @@ import (
 // re-running the command).
 var errDeployHalted = errors.New("deploy halted")
 
+// errWorkflowUnchanged is a sentinel returned by CheckWorkflowExists when a
+// registered workflow has the same ID as the artifact being deployed.
+var errWorkflowUnchanged = errors.New("workflow unchanged")
+
 // registryDeployStrategy encapsulates target-specific deployment logic.
 // The orchestrator calls these methods in a fixed sequence with common steps
 // (artifact upload) between RunPreDeployChecks and Upsert.
@@ -22,6 +26,8 @@ type registryDeployStrategy interface {
 
 	// CheckWorkflowExists returns whether a same-name workflow exists for this
 	// registry target and includes the existing workflow status for updates.
+	// When the existing workflow ID matches workflowID, exists is true and
+	// errWorkflowUnchanged is returned to block redeployment of identical artifacts.
 	CheckWorkflowExists(workflowOwner, workflowName, workflowTag, workflowID string) (bool, *uint8, error)
 
 	// Upsert registers or updates the workflow in the target registry

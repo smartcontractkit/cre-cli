@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/machinebox/graphql"
 	"github.com/rs/zerolog"
@@ -91,6 +92,9 @@ const getTenantConfigQuery = `query GetTenantConfig {
 // FetchAndWriteContext fetches the user context from the service
 // and writes the registry manifest to ~/.cre/<ContextFile>.
 func FetchAndWriteContext(ctx context.Context, gqlClient *graphqlclient.Client, envName string, log *zerolog.Logger) error {
+	ctx, cancel := context.WithTimeout(ctx, time.Minute)
+	defer cancel()
+
 	req := graphql.NewRequest(getTenantConfigQuery)
 
 	var resp getTenantConfigResponse

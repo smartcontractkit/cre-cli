@@ -32,8 +32,8 @@ func New(graphql *graphqlclient.Client, workflowOwnerAddress string, log *zerolo
 		graphql:              graphql,
 		workflowOwnerAddress: workflowOwnerAddress,
 		log:                  log,
-		serviceTimeout:       time.Minute * 2,
-		httpTimeout:          time.Minute * 1,
+		serviceTimeout:       time.Minute,
+		httpTimeout:          time.Minute,
 	}
 }
 

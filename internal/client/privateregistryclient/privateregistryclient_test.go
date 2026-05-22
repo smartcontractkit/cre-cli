@@ -1,6 +1,7 @@
 package privateregistryclient
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -147,7 +148,7 @@ func TestUpsertWorkflowInRegistry(t *testing.T) {
 	configURL := "s3://config"
 	tag := "v1"
 	attributes := "{\"region\":\"us-east-1\"}"
-	result, err := client.UpsertWorkflowInRegistry(OffchainWorkflowInput{
+	result, err := client.UpsertWorkflowInRegistry(context.Background(), OffchainWorkflowInput{
 		WorkflowID:   "wf-123",
 		Status:       WorkflowStatusActive,
 		WorkflowName: "registry-workflow",
@@ -187,7 +188,7 @@ func TestUpsertWorkflowInRegistry_GQLError(t *testing.T) {
 	defer srv.Close()
 
 	client := newTestPrivateRegistryClient(t, srv.URL)
-	_, err := client.UpsertWorkflowInRegistry(OffchainWorkflowInput{
+	_, err := client.UpsertWorkflowInRegistry(context.Background(), OffchainWorkflowInput{
 		WorkflowID:   "wf-123",
 		Status:       WorkflowStatusActive,
 		WorkflowName: "registry-workflow",
@@ -236,7 +237,7 @@ func TestGetWorkflowByName(t *testing.T) {
 	defer srv.Close()
 
 	client := newTestPrivateRegistryClient(t, srv.URL)
-	result, err := client.GetWorkflowByName("registry-workflow")
+	result, err := client.GetWorkflowByName(context.Background(), "registry-workflow")
 
 	require.NoError(t, err)
 	assert.Contains(t, capturedQuery, "query GetOffchainWorkflowByName")
@@ -262,7 +263,7 @@ func TestGetWorkflowByName_GQLError(t *testing.T) {
 	defer srv.Close()
 
 	client := newTestPrivateRegistryClient(t, srv.URL)
-	_, err := client.GetWorkflowByName("registry-workflow")
+	_, err := client.GetWorkflowByName(context.Background(), "registry-workflow")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "get workflow by name in registry")
 	assert.Contains(t, err.Error(), "cre api error: workflow not found")
@@ -273,7 +274,7 @@ func TestGetWorkflowByName_EmptyName(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	client := New(nil, logger)
 
-	_, err := client.GetWorkflowByName("")
+	_, err := client.GetWorkflowByName(context.Background(), "")
 	require.EqualError(t, err, "workflowName is required")
 }
 
@@ -306,7 +307,7 @@ func TestPauseWorkflowInRegistry(t *testing.T) {
 	defer srv.Close()
 
 	client := newTestPrivateRegistryClient(t, srv.URL)
-	result, err := client.PauseWorkflowInRegistry("wf-123")
+	result, err := client.PauseWorkflowInRegistry(context.Background(), "wf-123")
 	require.NoError(t, err)
 	assert.Equal(t, "wf-123", result.WorkflowID)
 	assert.Equal(t, WorkflowStatusPaused, result.Status)
@@ -344,7 +345,7 @@ func TestActivateWorkflowInRegistry(t *testing.T) {
 	defer srv.Close()
 
 	client := newTestPrivateRegistryClient(t, srv.URL)
-	result, err := client.ActivateWorkflowInRegistry("wf-123")
+	result, err := client.ActivateWorkflowInRegistry(context.Background(), "wf-123")
 	require.NoError(t, err)
 	assert.Equal(t, WorkflowStatusActive, result.Status)
 
@@ -374,7 +375,7 @@ func TestDeleteWorkflowInRegistry(t *testing.T) {
 	defer srv.Close()
 
 	client := newTestPrivateRegistryClient(t, srv.URL)
-	deletedWorkflowID, err := client.DeleteWorkflowInRegistry("wf-123")
+	deletedWorkflowID, err := client.DeleteWorkflowInRegistry(context.Background(), "wf-123")
 	require.NoError(t, err)
 	assert.Equal(t, "wf-123", deletedWorkflowID)
 
@@ -387,13 +388,13 @@ func TestWorkflowMutations_RequireWorkflowID(t *testing.T) {
 	logger := testutil.NewTestLogger()
 	client := New(nil, logger)
 
-	_, pauseErr := client.PauseWorkflowInRegistry("")
+	_, pauseErr := client.PauseWorkflowInRegistry(context.Background(), "")
 	require.EqualError(t, pauseErr, "workflowId is required")
 
-	_, activateErr := client.ActivateWorkflowInRegistry("")
+	_, activateErr := client.ActivateWorkflowInRegistry(context.Background(), "")
 	require.EqualError(t, activateErr, "workflowId is required")
 
-	_, deleteErr := client.DeleteWorkflowInRegistry("")
+	_, deleteErr := client.DeleteWorkflowInRegistry(context.Background(), "")
 	require.EqualError(t, deleteErr, "workflowId is required")
 }
 
@@ -414,10 +415,11 @@ func TestCreateServiceContextWithTimeout(t *testing.T) {
 	client := New(nil, &logger)
 	client.SetServiceTimeout(150 * time.Millisecond)
 
-	ctx, cancel := client.CreateServiceContextWithTimeout()
+	parent := context.Background()
+	callCtx, cancel := client.CreateServiceContextWithTimeout(parent)
 	defer cancel()
 
-	deadline, ok := ctx.Deadline()
+	deadline, ok := callCtx.Deadline()
 	require.True(t, ok)
 	assert.WithinDuration(t, time.Now().Add(150*time.Millisecond), deadline, 100*time.Millisecond)
 }
