@@ -349,10 +349,8 @@ func validateUpsertWorkflowInput(input OffchainWorkflowInput) error {
 	if input.Status == "" {
 		return fmt.Errorf("status is required")
 	}
-	if input.Status != WorkflowStatusUnspecified &&
-		input.Status != WorkflowStatusActive &&
-		input.Status != WorkflowStatusPaused {
-		return fmt.Errorf("status must be one of %q, %q, %q", WorkflowStatusUnspecified, WorkflowStatusActive, WorkflowStatusPaused)
+	if input.Status != WorkflowStatusActive && input.Status != WorkflowStatusPaused {
+		return fmt.Errorf("status must be one of %q, %q", WorkflowStatusActive, WorkflowStatusPaused)
 	}
 	if input.WorkflowName == "" {
 		return fmt.Errorf("workflowName is required")
