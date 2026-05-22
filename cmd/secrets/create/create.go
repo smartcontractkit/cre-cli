@@ -41,7 +41,7 @@ func New(ctx *runtime.Context) *cobra.Command {
 				return err
 			}
 
-			h, err := common.NewHandler(ctx, secretsFilePath, secretsAuth)
+			h, err := common.NewHandler(cmd.Context(), ctx, secretsFilePath, secretsAuth)
 			if err != nil {
 				return err
 			}
@@ -71,7 +71,7 @@ func New(ctx *runtime.Context) *cobra.Command {
 				return err
 			}
 
-			return h.Execute(inputs, vaulttypes.MethodSecretsCreate, duration, secretsAuth)
+			return h.Execute(cmd.Context(), inputs, vaulttypes.MethodSecretsCreate, duration, secretsAuth)
 		},
 	}
 

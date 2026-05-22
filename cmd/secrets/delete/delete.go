@@ -74,7 +74,7 @@ func New(ctx *runtime.Context) *cobra.Command {
 				return err
 			}
 
-			h, err := common.NewHandler(ctx, secretsFilePath, secretsAuth)
+			h, err := common.NewHandler(cmd.Context(), ctx, secretsFilePath, secretsAuth)
 			if err != nil {
 				return err
 			}
@@ -103,7 +103,7 @@ func New(ctx *runtime.Context) *cobra.Command {
 				return err
 			}
 
-			return Execute(h, inputs, duration, secretsAuth)
+			return Execute(cmd.Context(), h, inputs, duration, secretsAuth)
 		},
 	}
 
@@ -116,14 +116,14 @@ func New(ctx *runtime.Context) *cobra.Command {
 // Two paths:
 //   - MSIG step 1: build request, compute digest, write bundle, print steps
 //   - EOA: allowlist if needed, then POST to gateway
-func Execute(h *common.Handler, inputs DeleteSecretsInputs, duration time.Duration, secretsAuth string) error {
+func Execute(ctx context.Context, h *common.Handler, inputs DeleteSecretsInputs, duration time.Duration, secretsAuth string) error {
 	if !common.IsBrowserFlow(secretsAuth) {
 		if err := h.EnsureDeploymentRPCForOwnerKeySecrets(); err != nil {
 			return err
 		}
 		spinner := ui.NewSpinner()
 		spinner.Start("Verifying ownership...")
-		if err := h.EnsureOwnerLinkedOrFail(); err != nil {
+		if err := h.EnsureOwnerLinkedOrFail(ctx); err != nil {
 			spinner.Stop()
 			return err
 		}
@@ -187,13 +187,13 @@ func Execute(h *common.Handler, inputs DeleteSecretsInputs, duration time.Durati
 
 	ownerAddr := ethcommon.HexToAddress(owner)
 
-	allowlisted, err := h.Wrc.IsRequestAllowlisted(ownerAddr, digest)
+	allowlisted, err := h.Wrc.IsRequestAllowlisted(ctx, ownerAddr, digest)
 	if err != nil {
 		return fmt.Errorf("allowlist check failed: %w", err)
 	}
 	var txOut *client.TxOutput
 	if !allowlisted {
-		if txOut, err = h.Wrc.AllowlistRequest(digest, duration); err != nil {
+		if txOut, err = h.Wrc.AllowlistRequest(ctx, digest, duration); err != nil {
 			return fmt.Errorf("allowlist request failed: %w", err)
 		}
 	} else {

@@ -1,6 +1,7 @@
 package pause
 
 import (
+	"context"
 	"encoding/hex"
 	"fmt"
 	"math/big"
@@ -36,7 +37,7 @@ func newOnchainRegistryPauseStrategy(h *handler) (*onchainRegistryPauseStrategy,
 	a.wg.Add(1)
 	go func() {
 		defer a.wg.Done()
-		wrc, err := h.clientFactory.NewWorkflowRegistryV2Client()
+		wrc, err := h.clientFactory.NewWorkflowRegistryV2Client(h.execCtx)
 		if err != nil {
 			a.initErr = fmt.Errorf("failed to create workflow registry client: %w", err)
 			return
@@ -59,7 +60,7 @@ func (a *onchainRegistryPauseStrategy) Pause() error {
 
 	ui.Dim(fmt.Sprintf("Fetching workflows to pause... Name=%s, Owner=%s", workflowName, workflowOwner.Hex()))
 
-	workflows, err := fetchAllWorkflows(a.wrc, workflowOwner, workflowName)
+	workflows, err := fetchAllWorkflows(h.execCtx, a.wrc, workflowOwner, workflowName)
 	if err != nil {
 		return fmt.Errorf("failed to list workflows: %w", err)
 	}
@@ -84,7 +85,7 @@ func (a *onchainRegistryPauseStrategy) Pause() error {
 
 	ui.Dim(fmt.Sprintf("Processing batch pause... count=%d", len(activeWorkflowIDs)))
 
-	txOut, err := a.wrc.BatchPauseWorkflows(activeWorkflowIDs)
+	txOut, err := a.wrc.BatchPauseWorkflows(h.execCtx, activeWorkflowIDs)
 	if err != nil {
 		return fmt.Errorf("failed to batch pause workflows: %w", err)
 	}
@@ -163,8 +164,9 @@ func (a *onchainRegistryPauseStrategy) Pause() error {
 }
 
 func fetchAllWorkflows(
+	ctx context.Context,
 	wrc interface {
-		GetWorkflowListByOwnerAndName(owner common.Address, workflowName string, start, limit *big.Int) ([]workflow_registry_v2_wrapper.WorkflowRegistryWorkflowMetadataView, error)
+		GetWorkflowListByOwnerAndName(ctx context.Context, owner common.Address, workflowName string, start, limit *big.Int) ([]workflow_registry_v2_wrapper.WorkflowRegistryWorkflowMetadataView, error)
 	},
 	owner common.Address,
 	name string,
@@ -177,7 +179,7 @@ func fetchAllWorkflows(
 	)
 
 	for {
-		list, err := wrc.GetWorkflowListByOwnerAndName(owner, name, start, limit)
+		list, err := wrc.GetWorkflowListByOwnerAndName(ctx, owner, name, start, limit)
 		if err != nil {
 			return nil, err
 		}
