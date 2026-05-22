@@ -68,14 +68,15 @@ func (h *Handler) executeBrowserUpsert(ctx context.Context, inputs UpsertSecrets
 	if h.Credentials.AuthType == credentials.AuthTypeApiKey {
 		return fmt.Errorf("this sign-in flow requires an interactive login; API keys are not supported")
 	}
-	orgID := h.Credentials.OrgID
-	if orgID == "" {
-		return fmt.Errorf("organization information is missing from your session; sign in again or use --secrets-auth=onchain")
+
+	owner, err := h.ResolveVaultIdentifierOwnerForAuth(SecretsAuthBrowser)
+	if err != nil {
+		return err
 	}
 
 	ui.Dim("Using your account to authorize vault access for your organization...")
 
-	encSecrets, err := h.EncryptSecretsForBrowserOrg(inputs, orgID)
+	encSecrets, err := h.EncryptSecrets(inputs, owner)
 	if err != nil {
 		return fmt.Errorf("failed to encrypt secrets: %w", err)
 	}
@@ -129,12 +130,12 @@ func (h *Handler) executeBrowserUpsert(ctx context.Context, inputs UpsertSecrets
 		return fmt.Errorf("unsupported method %q (expected %q or %q)", method, vaulttypes.MethodSecretsCreate, vaulttypes.MethodSecretsUpdate)
 	}
 
-	return h.ExecuteBrowserVaultAuthorization(ctx, method, digest, requestBody)
+	return h.ExecuteBrowserVaultAuthorization(ctx, method, digest, requestBody, owner)
 }
 
 // ExecuteBrowserVaultAuthorization completes platform OAuth for a vault JSON-RPC digest (create/update/delete/list),
 // then POSTs the same request body to the gateway with the vault JWT in the Authorization header.
-func (h *Handler) ExecuteBrowserVaultAuthorization(ctx context.Context, method string, digest [32]byte, requestBody []byte) error {
+func (h *Handler) ExecuteBrowserVaultAuthorization(ctx context.Context, method string, digest [32]byte, requestBody []byte, workflowOwner string) error {
 	if h.Credentials.AuthType == credentials.AuthTypeApiKey {
 		return fmt.Errorf("this sign-in flow requires an interactive login; API keys are not supported")
 	}
@@ -160,8 +161,8 @@ func (h *Handler) ExecuteBrowserVaultAuthorization(ctx context.Context, method s
 		"requestDigest": digestHexString(digest),
 		"permission":    perm,
 	}
-	// Optional: bind authorization to workflow owner when configured (omit if unset).
-	if w := strings.TrimSpace(h.OwnerAddress); w != "" {
+	// Bind authorization to the JWT-derived workflow owner so digests align with gateway validation.
+	if w := strings.TrimSpace(workflowOwner); w != "" {
 		reqVars["workflowOwnerAddress"] = w
 	}
 	gqlReq.Var("request", reqVars)

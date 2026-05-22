@@ -411,3 +411,28 @@ func TestCheckIsUngatedOrganization_InvalidJWTFormat(t *testing.T) {
 		})
 	}
 }
+
+func TestSecureRemove(t *testing.T) {
+	t.Run("missing file is no-op", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "missing.yaml")
+		if err := SecureRemove(path); err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+	})
+
+	t.Run("overwrites with zeroes before delete", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), ConfigFile)
+		secret := []byte("AccessToken: super-secret-token\n")
+		if err := os.WriteFile(path, secret, 0o600); err != nil {
+			t.Fatalf("write file: %v", err)
+		}
+
+		if err := SecureRemove(path); err != nil {
+			t.Fatalf("SecureRemove: %v", err)
+		}
+
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatal("expected file to be removed")
+		}
+	})
+}
