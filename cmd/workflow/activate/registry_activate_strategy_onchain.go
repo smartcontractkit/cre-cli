@@ -3,7 +3,6 @@ package activate
 import (
 	"encoding/hex"
 	"fmt"
-	"math/big"
 	"sort"
 	"sync"
 	"time"
@@ -12,6 +11,7 @@ import (
 
 	"github.com/smartcontractkit/cre-cli/cmd/client"
 	cmdCommon "github.com/smartcontractkit/cre-cli/cmd/common"
+	workflowcommon "github.com/smartcontractkit/cre-cli/cmd/workflow/common"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/types"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
@@ -35,7 +35,7 @@ func newOnchainRegistryActivateStrategy(h *handler) (*onchainRegistryActivateStr
 	a.wg.Add(1)
 	go func() {
 		defer a.wg.Done()
-		wrc, err := h.clientFactory.NewWorkflowRegistryV2Client()
+		wrc, err := h.clientFactory.NewWorkflowRegistryV2Client(h.execCtx)
 		if err != nil {
 			a.initErr = fmt.Errorf("failed to create workflow registry client: %w", err)
 			return
@@ -58,8 +58,7 @@ func (a *onchainRegistryActivateStrategy) Activate() error {
 
 	ownerAddr := common.HexToAddress(workflowOwner)
 
-	const pageLimit = 200
-	workflows, err := a.wrc.GetWorkflowListByOwnerAndName(ownerAddr, workflowName, big.NewInt(0), big.NewInt(pageLimit))
+	workflows, err := workflowcommon.FetchAllWorkflowsByOwnerAndName(h.execCtx, a.wrc, ownerAddr, workflowName)
 	if err != nil {
 		return fmt.Errorf("failed to get workflow list: %w", err)
 	}
@@ -81,13 +80,13 @@ func (a *onchainRegistryActivateStrategy) Activate() error {
 		return fmt.Errorf("workflow is already active, cancelling transaction")
 	}
 
-	if err := a.wrc.CheckUserDonLimit(ownerAddr, h.inputs.DonFamily, 1); err != nil {
+	if err := a.wrc.CheckUserDonLimit(h.execCtx, ownerAddr, h.inputs.DonFamily, 1); err != nil {
 		return err
 	}
 
 	ui.Dim(fmt.Sprintf("Activating workflow: Name=%s, Owner=%s, WorkflowID=%s", workflowName, workflowOwner, hex.EncodeToString(latest.WorkflowId[:])))
 
-	txOut, err := a.wrc.ActivateWorkflow(latest.WorkflowId, h.inputs.DonFamily)
+	txOut, err := a.wrc.ActivateWorkflow(h.execCtx, latest.WorkflowId, h.inputs.DonFamily)
 	if err != nil {
 		return fmt.Errorf("failed to activate workflow: %w", err)
 	}

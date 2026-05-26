@@ -807,12 +807,9 @@ func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inp
 		case "cron-trigger@1.0.0":
 			holder.TriggerFunc = func() error {
 				skipWaitSignal := make(chan struct{}, 1)
-				if err := manualTriggerCaps.ManualCronTrigger.ManualTrigger(ctx, triggerRegistrationID, skipWaitSignal); err != nil {
-					return err
-				}
 				// With cron schedule on non-interactive mode
 				skipWaitSignal <- struct{}{}
-				return nil
+				return manualTriggerCaps.ManualCronTrigger.ManualTrigger(ctx, triggerRegistrationID, skipWaitSignal)
 			}
 		case "http-trigger@1.0.0-alpha":
 			if strings.TrimSpace(inputs.HTTPPayload) == "" {

@@ -33,7 +33,7 @@ func newOnchainRegistryDeployStrategy(h *handler) (*onchainRegistryDeployStrateg
 	a.wg.Add(1)
 	go func() {
 		defer a.wg.Done()
-		wrc, err := h.clientFactory.NewWorkflowRegistryV2Client()
+		wrc, err := h.clientFactory.NewWorkflowRegistryV2Client(h.execCtx)
 		if err != nil {
 			a.initErr = fmt.Errorf("failed to create workflow registry client: %w", err)
 			return
@@ -72,12 +72,13 @@ func (a *onchainRegistryDeployStrategy) RunPreDeployChecks() error {
 }
 
 func (a *onchainRegistryDeployStrategy) CheckWorkflowExists(workflowOwner, workflowName, workflowTag, workflowID string) (bool, *uint8, error) {
-	workflow, err := a.wrc.GetWorkflow(common.HexToAddress(workflowOwner), workflowName, workflowTag)
+	workflow, err := a.wrc.GetWorkflow(a.h.execCtx, common.HexToAddress(workflowOwner), workflowName, workflowTag)
 	if err != nil {
 		return false, nil, err
 	}
 	if workflow.WorkflowId == [32]byte(common.Hex2Bytes(workflowID)) {
-		return false, nil, fmt.Errorf("workflow with id %s already exists", workflowID)
+		status := workflow.Status
+		return true, &status, fmt.Errorf("workflow with id %s is already registered and unchanged; re-deployment skipped: %w", workflowID, errWorkflowUnchanged)
 	}
 	if workflow.WorkflowName == workflowName {
 		status := workflow.Status
@@ -91,6 +92,7 @@ func (a *onchainRegistryDeployStrategy) Upsert() error {
 	h := a.h
 
 	if err := checkUserDonLimitBeforeDeploy(
+		h.execCtx,
 		a.wrc,
 		a.wrc,
 		common.HexToAddress(h.inputs.WorkflowOwner),
