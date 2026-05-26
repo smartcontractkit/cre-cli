@@ -1,13 +1,13 @@
 package list
 
 import (
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
@@ -25,6 +25,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/types"
+	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
 // cre secrets list --timeout 1h
@@ -35,7 +36,23 @@ func New(ctx *runtime.Context) *cobra.Command {
 		Use:   "list",
 		Short: "Lists secret identifiers for the current owner address in the given namespace.",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			h, err := common.NewHandler(ctx, "")
+			if ctx.Viper.GetBool(settings.Flags.NonInteractive.Name) && !ctx.Viper.GetBool(settings.Flags.SkipConfirmation.Name) {
+				ui.ErrorWithSuggestions(
+					"Non-interactive mode requires all inputs via flags",
+					[]string{"--yes"},
+				)
+				return fmt.Errorf("missing required flags for --non-interactive mode")
+			}
+
+			secretsAuth, err := cmd.Flags().GetString("secrets-auth")
+			if err != nil {
+				return err
+			}
+			if err := common.ValidateSecretsAuthFlow(secretsAuth, ctx.EnvironmentSet.EnvName); err != nil {
+				return err
+			}
+
+			h, err := common.NewHandler(ctx, "", secretsAuth)
 			if err != nil {
 				return err
 			}
@@ -57,12 +74,7 @@ func New(ctx *runtime.Context) *cobra.Command {
 				return fmt.Errorf("invalid --timeout: must be greater than 0 and less than %dh (%dd)", maxHours, maxDays)
 			}
 
-			return Execute(
-				h,
-				namespace,
-				duration,
-				ctx.Settings.Workflow.UserWorkflowSettings.WorkflowOwnerType,
-			)
+			return Execute(h, namespace, duration, secretsAuth)
 		},
 	}
 
@@ -74,22 +86,28 @@ func New(ctx *runtime.Context) *cobra.Command {
 }
 
 // Execute performs: build request → (MSIG step 1 bundle OR EOA allowlist+post) → parse.
-func Execute(h *common.Handler, namespace string, duration time.Duration, ownerType string) error {
-	fmt.Println("Verifying ownership...")
-	if err := h.EnsureOwnerLinkedOrFail(); err != nil {
-		return err
+func Execute(h *common.Handler, namespace string, duration time.Duration, secretsAuth string) error {
+	if !common.IsBrowserFlow(secretsAuth) {
+		if err := h.EnsureDeploymentRPCForOwnerKeySecrets(); err != nil {
+			return err
+		}
+		spinner := ui.NewSpinner()
+		spinner.Start("Verifying ownership...")
+		if err := h.EnsureOwnerLinkedOrFail(); err != nil {
+			spinner.Stop()
+			return err
+		}
+		spinner.Stop()
 	}
 
 	if namespace == "" {
 		namespace = "main"
 	}
 
-	// Validate and canonicalize owner address (checksummed)
-	owner := strings.TrimSpace(h.OwnerAddress)
-	if !ethcommon.IsHexAddress(owner) {
-		return fmt.Errorf("invalid owner address: %q", h.OwnerAddress)
+	owner, err := h.ResolveVaultIdentifierOwnerForAuth(secretsAuth)
+	if err != nil {
+		return err
 	}
-	owner = ethcommon.HexToAddress(owner).Hex()
 
 	// Fresh request ID
 	requestID := uuid.New().String()
@@ -113,6 +131,11 @@ func Execute(h *common.Handler, namespace string, duration time.Duration, ownerT
 	body, err := json.Marshal(req)
 	if err != nil {
 		return fmt.Errorf("failed to marshal JSON-RPC request: %w", err)
+	}
+
+	if common.IsBrowserFlow(secretsAuth) {
+		ui.Dim("Using your account to authorize vault access for this list request...")
+		return h.ExecuteBrowserVaultAuthorization(context.Background(), vaulttypes.MethodSecretsList, digest, body)
 	}
 
 	ownerAddr := ethcommon.HexToAddress(owner)
@@ -140,7 +163,7 @@ func Execute(h *common.Handler, namespace string, duration time.Duration, ownerT
 	}
 
 	if txOut == nil && allowlisted {
-		fmt.Printf("Digest already allowlisted; proceeding to gateway POST: owner=%s, digest=0x%x\n", ownerAddr.Hex(), digest)
+		ui.Dim(fmt.Sprintf("Digest already allowlisted; proceeding to gateway POST: owner=%s, digest=0x%x", ownerAddr.Hex(), digest))
 		return gatewayPost()
 	}
 
@@ -162,9 +185,9 @@ func Execute(h *common.Handler, namespace string, duration time.Duration, ownerT
 
 	switch txOut.Type {
 	case client.Regular:
-		fmt.Println("Transaction confirmed")
-		fmt.Printf("Digest allowlisted; proceeding to gateway POST: owner=%s, digest=0x%x\n", ownerAddr.Hex(), digest)
-		fmt.Printf("View on explorer: \033]8;;%s/tx/%s\033\\%s/tx/%s\033]8;;\033\\\n", h.EnvironmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash, h.EnvironmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash)
+		ui.Success("Transaction confirmed")
+		ui.Dim(fmt.Sprintf("Digest allowlisted; proceeding to gateway POST: owner=%s, digest=0x%x", ownerAddr.Hex(), digest))
+		ui.URL(fmt.Sprintf("%s/tx/%s", h.EnvironmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash))
 		return gatewayPost()
 	case client.Raw:
 
@@ -184,7 +207,7 @@ func Execute(h *common.Handler, namespace string, duration time.Duration, ownerT
 		}
 		mcmsConfig, err := settings.GetMCMSConfig(h.Settings, chainSelector)
 		if err != nil {
-			fmt.Println("\nMCMS config not found or is incorrect, skipping MCMS config in changeset")
+			ui.Warning("MCMS config not found or is incorrect, skipping MCMS config in changeset")
 		}
 		cldSettings := h.Settings.CLDSettings
 		changesets := []types.Changeset{

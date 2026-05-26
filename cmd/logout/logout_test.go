@@ -31,7 +31,7 @@ func setupCredentialFile(t *testing.T, home string, token string) {
 		TokenType:    "Bearer",
 	}
 
-	data, err := yaml.Marshal(&tokens)
+	data, err := yaml.Marshal(&tokens) //nolint:gosec // G117 -- test data, not real credentials
 	if err != nil {
 		t.Fatalf("failed to marshal token set: %v", err)
 	}
@@ -71,6 +71,7 @@ func TestExecute_SuccessRevocationAndRemoval(t *testing.T) {
 	var received bool
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		received = true
+		r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 		if err := r.ParseForm(); err != nil {
 			t.Errorf("failed to parse form: %v", err)
 		}

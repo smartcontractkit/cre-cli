@@ -37,7 +37,7 @@ func New(ctx *runtime.Context) *cobra.Command {
 				return fmt.Errorf("execute expects a bundle .json file; got %q", ext)
 			}
 
-			h, err := common.NewHandler(ctx, bundlePath)
+			h, err := common.NewHandler(ctx, bundlePath, common.SecretsAuthOnchain)
 			if err != nil {
 				return err
 			}
@@ -63,6 +63,10 @@ func New(ctx *runtime.Context) *cobra.Command {
 			digest, err := common.HexToBytes32(b.DigestHex)
 			if err != nil {
 				return fmt.Errorf("invalid bundle digest: %w", err)
+			}
+
+			if err := h.EnsureDeploymentRPCForOwnerKeySecrets(); err != nil {
+				return err
 			}
 
 			ownerAddr := ethcommon.HexToAddress(h.OwnerAddress)

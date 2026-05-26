@@ -20,24 +20,20 @@ import (
 )
 
 type Client struct {
-	graphql                 *graphqlclient.Client
-	workflowRegistryAddress string
-	workflowOwnerAddress    string
-	chainSelector           uint64
-	log                     *zerolog.Logger
-	serviceTimeout          time.Duration
-	httpTimeout             time.Duration
+	graphql              *graphqlclient.Client
+	workflowOwnerAddress string
+	log                  *zerolog.Logger
+	serviceTimeout       time.Duration
+	httpTimeout          time.Duration
 }
 
-func New(graphql *graphqlclient.Client, workflowRegistryAddress string, workflowOwnerAddress string, chainSelector uint64, log *zerolog.Logger) *Client {
+func New(graphql *graphqlclient.Client, workflowOwnerAddress string, log *zerolog.Logger) *Client {
 	return &Client{
-		graphql:                 graphql,
-		workflowRegistryAddress: workflowRegistryAddress,
-		workflowOwnerAddress:    workflowOwnerAddress,
-		chainSelector:           chainSelector,
-		log:                     log,
-		serviceTimeout:          time.Minute * 2,
-		httpTimeout:             time.Minute * 1,
+		graphql:              graphql,
+		workflowOwnerAddress: workflowOwnerAddress,
+		log:                  log,
+		serviceTimeout:       time.Minute * 2,
+		httpTimeout:          time.Minute * 1,
 	}
 }
 
@@ -74,11 +70,11 @@ func (c *Client) SetHTTPTimeout(timeout time.Duration) {
 }
 
 func (c *Client) CreateServiceContextWithTimeout() (context.Context, context.CancelFunc) {
-	return context.WithTimeout(context.Background(), c.serviceTimeout)
+	return context.WithTimeout(context.Background(), c.serviceTimeout) //nolint:gosec // G118 -- cancel is deferred by all callers
 }
 
 func (c *Client) CreateHttpContextWithTimeout() (context.Context, context.CancelFunc) {
-	return context.WithTimeout(context.Background(), c.httpTimeout)
+	return context.WithTimeout(context.Background(), c.httpTimeout) //nolint:gosec // G118 -- cancel is deferred by all callers
 }
 
 func (c *Client) GeneratePostUrlForArtifact(workflowId string, artifactType ArtifactType, content []byte) (GeneratePresignedPostUrlForArtifactResponse, error) {
@@ -95,12 +91,10 @@ mutation GeneratePresignedPostUrlForArtifact($artifact: GeneratePresignedPostUrl
 	contentHash := calculateContentHash(content)
 	req := graphql.NewRequest(mutation)
 	reqVariables := map[string]any{
-		"workflowId":              workflowId,
-		"artifactType":            artifactType,
-		"contentHash":             contentHash,
-		"workflowOwnerAddress":    c.workflowOwnerAddress,
-		"workflowRegistryAddress": c.workflowRegistryAddress,
-		"chainSelector":           fmt.Sprintf("%v", c.chainSelector),
+		"workflowId":           workflowId,
+		"artifactType":         artifactType,
+		"contentHash":          contentHash,
+		"workflowOwnerAddress": c.workflowOwnerAddress,
 	}
 	req.Var("artifact", reqVariables)
 
@@ -131,10 +125,8 @@ mutation GenerateUnsignedGetUrlForArtifact($artifact: GenerateUnsignedGetUrlRequ
 }`
 	req := graphql.NewRequest(mutation)
 	reqVariables := map[string]any{
-		"workflowId":              workflowId,
-		"artifactType":            artifactType,
-		"workflowRegistryAddress": c.workflowRegistryAddress,
-		"chainSelector":           fmt.Sprintf("%v", c.chainSelector),
+		"workflowId":   workflowId,
+		"artifactType": artifactType,
 	}
 	req.Var("artifact", reqVariables)
 
@@ -216,7 +208,7 @@ func (c *Client) UploadToOrigin(g GeneratePresignedPostUrlForArtifactResponse, c
 	httpReq.Header.Set("Content-Type", w.FormDataContentType())
 
 	httpClient := &http.Client{Timeout: c.httpTimeout}
-	httpResp, err := httpClient.Do(httpReq)
+	httpResp, err := httpClient.Do(httpReq) // #nosec G704 -- URL is from trusted CLI configuration
 	if err != nil {
 		c.log.Error().Err(err).Msg("HTTP request to origin failed")
 		return err

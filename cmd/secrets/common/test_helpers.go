@@ -11,6 +11,8 @@ import (
 	"github.com/test-go/testify/mock"
 
 	"github.com/smartcontractkit/cre-cli/cmd/client"
+	"github.com/smartcontractkit/cre-cli/internal/credentials"
+	"github.com/smartcontractkit/cre-cli/internal/environments"
 )
 
 func newMockHandler(t *testing.T) (*Handler, *MockClientFactory, *ecdsa.PrivateKey) {
@@ -21,10 +23,12 @@ func newMockHandler(t *testing.T) (*Handler, *MockClientFactory, *ecdsa.PrivateK
 		t.Fatalf("failed to generate private key: %v", err)
 	}
 	h := &Handler{
-		Log:           &logger,
-		ClientFactory: mockClientFactory,
-		PrivateKey:    privateKey,
-		OwnerAddress:  "0xabc",
+		Log:            &logger,
+		ClientFactory:  mockClientFactory,
+		PrivateKey:     privateKey,
+		OwnerAddress:   "0xabc",
+		EnvironmentSet: &environments.EnvironmentSet{},
+		Credentials:    &credentials.Credentials{},
 	}
 	return h, mockClientFactory, privateKey
 }

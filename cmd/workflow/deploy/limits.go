@@ -11,6 +11,7 @@ import (
 
 const (
 	workflowStatusActive = uint8(0)
+	workflowStatusPaused = uint8(1)
 	workflowListPageSize = int64(200)
 )
 

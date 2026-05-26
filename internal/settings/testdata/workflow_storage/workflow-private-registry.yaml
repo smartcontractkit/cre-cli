@@ -1,0 +1,9 @@
+# staging target with private deployment-registry (no workflow-owner-address; owner comes from auth)
+staging:
+  user-workflow:
+    workflow-name: "workflowTest"
+    deployment-registry: "my-private-registry"
+  workflow-artifacts:
+    workflow-language: "go"
+    workflow-path: "./main.go"
+    config-path: "./config.json"
