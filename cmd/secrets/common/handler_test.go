@@ -361,7 +361,7 @@ func TestNewHandler_GatewayURL(t *testing.T) {
 
 	t.Run("uses context URL when env var unset", func(t *testing.T) {
 		t.Setenv(environments.EnvVarVaultGatewayURL, "")
-		h, err := NewHandler(baseCtx, "", SecretsAuthBrowser)
+		h, err := NewHandler(context.Background(), baseCtx, "", SecretsAuthBrowser)
 		require.NoError(t, err)
 		require.Equal(t, "https://context.example.com/", h.GatewayURL)
 		gw, ok := h.Gw.(*gateway.HTTPClient)
@@ -373,7 +373,7 @@ func TestNewHandler_GatewayURL(t *testing.T) {
 		t.Setenv(environments.EnvVarVaultGatewayURL, "https://env-override.example.com/")
 		envCtx := *baseCtx
 		envCtx.EnvironmentSet = &environments.EnvironmentSet{GatewayURL: "https://env-override.example.com/"}
-		h, err := NewHandler(&envCtx, "", SecretsAuthBrowser)
+		h, err := NewHandler(context.Background(), &envCtx, "", SecretsAuthBrowser)
 		require.NoError(t, err)
 		require.Equal(t, "https://env-override.example.com/", h.GatewayURL)
 		gw, ok := h.Gw.(*gateway.HTTPClient)
