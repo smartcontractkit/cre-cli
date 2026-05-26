@@ -2,6 +2,7 @@ package common
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -14,6 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	vaultcommon "github.com/smartcontractkit/chainlink-common/pkg/capabilities/actions/vault"
@@ -317,7 +319,7 @@ func TestNewHandler_WorkflowRegistryClient(t *testing.T) {
 
 	t.Run("browser flow: WorkflowRegistryV2Client is not created", func(t *testing.T) {
 		ctx, cf := newCtx(t)
-		h, err := NewHandler(ctx, "", SecretsAuthBrowser)
+		h, err := NewHandler(context.Background(), ctx, "", SecretsAuthBrowser)
 		require.NoError(t, err)
 		require.Nil(t, h.Wrc, "Wrc must be nil for browser flow")
 		cf.AssertNotCalled(t, "NewWorkflowRegistryV2Client")
@@ -325,18 +327,18 @@ func TestNewHandler_WorkflowRegistryClient(t *testing.T) {
 
 	t.Run("owner-key flow: WorkflowRegistryV2Client is created", func(t *testing.T) {
 		ctx, cf := newCtx(t)
-		cf.On("NewWorkflowRegistryV2Client").Return(nil, nil)
-		h, err := NewHandler(ctx, "", SecretsAuthOnchain)
+		cf.On("NewWorkflowRegistryV2Client", mock.Anything).Return(nil, nil)
+		h, err := NewHandler(context.Background(), ctx, "", SecretsAuthOnchain)
 		require.NoError(t, err)
 		// Wrc may be nil if the mock returns nil, but the factory must have been called.
 		_ = h
-		cf.AssertCalled(t, "NewWorkflowRegistryV2Client")
+		cf.AssertCalled(t, "NewWorkflowRegistryV2Client", mock.Anything)
 	})
 
 	t.Run("owner-key flow: factory error is propagated", func(t *testing.T) {
 		ctx, cf := newCtx(t)
-		cf.On("NewWorkflowRegistryV2Client").Return(nil, errors.New("rpc url not found for chain ethereum-mainnet"))
-		_, err := NewHandler(ctx, "", SecretsAuthOnchain)
+		cf.On("NewWorkflowRegistryV2Client", mock.Anything).Return(nil, errors.New("rpc url not found for chain ethereum-mainnet"))
+		_, err := NewHandler(context.Background(), ctx, "", SecretsAuthOnchain)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "workflow registry client")
 	})
