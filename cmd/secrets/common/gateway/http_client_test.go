@@ -1,4 +1,4 @@
-package common
+package gateway
 
 import (
 	"bytes"
@@ -51,8 +51,6 @@ func makeResp(code int, body string) *http.Response {
 }
 
 func TestPostToGateway(t *testing.T) {
-	h, _, _ := newMockHandler(t)
-
 	t.Run("success (single attempt)", func(t *testing.T) {
 		body := `{"jsonrpc":"2.0","id":"abc","result":{"ok":true}}`
 
@@ -62,14 +60,14 @@ func TestPostToGateway(t *testing.T) {
 			},
 		}
 		mockedHTTP := &http.Client{Transport: rt}
-		h.Gw = &HTTPClient{
+		gw := &HTTPClient{
 			URL:           "https://unit-test.gw",
 			Client:        mockedHTTP,
 			RetryAttempts: 3,
 			RetryDelay:    0, // fast tests
 		}
 
-		respBytes, status, err := h.Gw.Post([]byte(`{"x":1}`))
+		respBytes, status, err := gw.Post([]byte(`{"x":1}`))
 		assert.NoError(t, err)
 		assert.Equal(t, 200, status)
 		assert.Equal(t, body, string(respBytes))
@@ -84,14 +82,14 @@ func TestPostToGateway(t *testing.T) {
 			},
 		}
 		mockedHTTP := &http.Client{Transport: rt}
-		h.Gw = &HTTPClient{
+		gw := &HTTPClient{
 			URL:           "https://unit-test.gw",
 			Client:        mockedHTTP,
 			RetryAttempts: 2,
 			RetryDelay:    0,
 		}
 
-		_, status, err := h.Gw.Post([]byte(`{}`))
+		_, status, err := gw.Post([]byte(`{}`))
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "gateway request failed")
 		assert.Equal(t, 0, status)   // last attempt was a transport error -> status 0
@@ -106,14 +104,14 @@ func TestPostToGateway(t *testing.T) {
 			},
 		}
 		mockedHTTP := &http.Client{Transport: rt}
-		h.Gw = &HTTPClient{
+		gw := &HTTPClient{
 			URL:           "https://unit-test.gw",
 			Client:        mockedHTTP,
 			RetryAttempts: 2,
 			RetryDelay:    0,
 		}
 
-		_, status, err := h.Gw.Post([]byte(`{}`))
+		_, status, err := gw.Post([]byte(`{}`))
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "read response body: read error")
 		assert.Equal(t, 200, status) // postOnce had a resp with 200 but read failed
@@ -129,14 +127,14 @@ func TestPostToGateway(t *testing.T) {
 			},
 		}
 		mockedHTTP := &http.Client{Transport: rt}
-		h.Gw = &HTTPClient{
+		gw := &HTTPClient{
 			URL:           "https://unit-test.gw",
 			Client:        mockedHTTP,
 			RetryAttempts: 3,
 			RetryDelay:    0,
 		}
 
-		respBytes, status, err := h.Gw.Post([]byte(`{}`))
+		respBytes, status, err := gw.Post([]byte(`{}`))
 		assert.NoError(t, err)
 		assert.Equal(t, 200, status)
 		assert.Equal(t, successBody, string(respBytes))
@@ -152,14 +150,14 @@ func TestPostToGateway(t *testing.T) {
 			},
 		}
 		mockedHTTP := &http.Client{Transport: rt}
-		h.Gw = &HTTPClient{
+		gw := &HTTPClient{
 			URL:           "https://unit-test.gw",
 			Client:        mockedHTTP,
 			RetryAttempts: 3,
 			RetryDelay:    0,
 		}
 
-		_, status, err := h.Gw.Post([]byte(`{}`))
+		_, status, err := gw.Post([]byte(`{}`))
 		assert.Error(t, err)
 		assert.Equal(t, 429, status) // from last attempt
 		assert.Contains(t, err.Error(), "gateway POST failed")
@@ -175,14 +173,14 @@ func TestPostToGateway(t *testing.T) {
 			},
 		}
 		mockedHTTP := &http.Client{Transport: rt}
-		h.Gw = &HTTPClient{
+		gw := &HTTPClient{
 			URL:           "https://unit-test.gw",
 			Client:        mockedHTTP,
 			RetryAttempts: 5,
 			RetryDelay:    0,
 		}
 
-		respBytes, status, err := h.Gw.Post([]byte(`{}`))
+		respBytes, status, err := gw.Post([]byte(`{}`))
 		assert.NoError(t, err)
 		assert.Equal(t, 200, status)
 		assert.Equal(t, body, string(respBytes))
