@@ -93,7 +93,7 @@ func fetchLatestVersionFromGitHub(logger *zerolog.Logger) (string, error) {
 	req.Header.Set("User-Agent", "cre-cli-update-check")
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
 
-	resp, err := client.Do(req)
+	resp, err := client.Do(req) // #nosec G704 -- URL is a constant GitHub API endpoint
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch latest release: %w", err)
 	}

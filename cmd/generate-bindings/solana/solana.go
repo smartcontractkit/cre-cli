@@ -10,7 +10,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/smartcontractkit/cre-cli/cmd/creinit"
+	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/validation"
 )
@@ -89,8 +89,11 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 		idlPath = filepath.Join(projectRoot, "contracts", "solana", "src", "idl")
 	}
 
-	// Output path is contracts/{chainFamily}/src/generated/ under projectRoot
-	outPath := filepath.Join(projectRoot, "contracts", "solana", "src", "generated")
+	// Resolve output path with fallback to contracts/solana/src/generated/
+	outPath := v.GetString("out")
+	if outPath == "" {
+		outPath = filepath.Join(projectRoot, "contracts", "solana", "src", "generated")
+	}
 
 	return Inputs{
 		ProjectRoot: projectRoot,
@@ -225,11 +228,11 @@ func (h *handler) Execute(inputs Inputs) error {
 		}
 	}
 
-	err = runCommand(inputs.ProjectRoot, "go", "get", "github.com/smartcontractkit/cre-sdk-go@"+creinit.SdkVersion)
+	err = runCommand(inputs.ProjectRoot, "go", "get", "github.com/smartcontractkit/cre-sdk-go@"+constants.SdkVersion)
 	if err != nil {
 		return err
 	}
-	err = runCommand(inputs.ProjectRoot, "go", "get", "github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/solana@"+creinit.SolanaCapabilitiesVersion)
+	err = runCommand(inputs.ProjectRoot, "go", "get", "github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/solana@"+constants.SolanaCapabilitiesVersion)
 	if err != nil {
 		return err
 	}

@@ -5,9 +5,11 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // errReadCloser simulates a failure while reading the body.
@@ -186,4 +188,74 @@ func TestPostToGateway(t *testing.T) {
 		assert.Equal(t, body, string(respBytes))
 		assert.Equal(t, 2, rt.Calls) // retried and succeeded
 	})
+}
+
+func TestPostWithBearer(t *testing.T) {
+	var sawAuth string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sawAuth = r.Header.Get("Authorization")
+		assert.Equal(t, "application/jsonrpc", r.Header.Get("Content-Type"))
+		_, _ = io.Copy(io.Discard, r.Body)
+		_, _ = w.Write([]byte(`{"jsonrpc":"2.0","id":"x","result":{}}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	g := &HTTPClient{
+		URL:           srv.URL,
+		Client:        srv.Client(),
+		RetryAttempts: 1,
+		RetryDelay:    0,
+	}
+	body := []byte(`{"jsonrpc":"2.0","id":"1","method":"test","params":{}}`)
+	resp, status, err := g.PostWithBearer(body, "my-jwt")
+	require.NoError(t, err)
+	assert.Equal(t, 200, status)
+	assert.Contains(t, string(resp), "jsonrpc")
+	assert.Equal(t, "Bearer my-jwt", sawAuth)
+}
+
+func TestPostWithBearer_EmptyToken(t *testing.T) {
+	g := &HTTPClient{URL: "http://example.com", Client: http.DefaultClient}
+	_, _, err := g.PostWithBearer([]byte(`{}`), "   ")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "empty bearer token")
+}
+
+func TestPostWithBearer_Non200(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+	}))
+	t.Cleanup(srv.Close)
+
+	g := &HTTPClient{
+		URL:           srv.URL,
+		Client:        srv.Client(),
+		RetryAttempts: 3,
+		RetryDelay:    0,
+	}
+	_, status, err := g.PostWithBearer([]byte(`{}`), "tok")
+	assert.Error(t, err)
+	assert.Equal(t, http.StatusUnauthorized, status)
+	assert.Contains(t, err.Error(), "non-200")
+}
+
+func TestPostWithBearer_TransportErrorThenSuccess(t *testing.T) {
+	body := `{"ok":true}`
+	rt := &SeqRoundTripper{
+		Seq: []RTResponse{
+			{Err: errors.New("connection reset")},
+			{Response: makeResp(200, body)},
+		},
+	}
+	g := &HTTPClient{
+		URL:           "https://unit-test.gw",
+		Client:        &http.Client{Transport: rt},
+		RetryAttempts: 3,
+		RetryDelay:    0,
+	}
+	respBytes, status, err := g.PostWithBearer([]byte(`{}`), "jwt")
+	assert.NoError(t, err)
+	assert.Equal(t, 200, status)
+	assert.Equal(t, body, string(respBytes))
+	assert.Equal(t, 2, rt.Calls)
 }

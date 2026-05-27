@@ -154,7 +154,7 @@ func (g *Generator) gen_IDLTypeDefTyStruct(
 
 					// TODO: optionality for complex enums is a nil interface.
 					uniqueFieldName := uniqueFieldNames[field.Name]
-					fieldsGroup.Add(genFieldWithName(field, uniqueFieldName, optionality)).
+					fieldsGroup.Add(g.genFieldWithName(field, uniqueFieldName, optionality)).
 						Add(func() Code {
 							tagMap := map[string]string{}
 							if IsOption(field.Ty) {
@@ -180,7 +180,7 @@ func (g *Generator) gen_IDLTypeDefTyStruct(
 					fieldsGroup.Line()
 					optionality := IsOption(field) || IsCOption(field)
 
-					fieldsGroup.Add(genFieldNamed(
+					fieldsGroup.Add(g.genFieldNamed(
 						FormatTupleItemName(fieldIndex),
 						field,
 						optionality,
@@ -223,7 +223,7 @@ func (g *Generator) gen_IDLTypeDefTyStruct(
 			// Declare MarshalWithEncoder:
 			// TODO:
 			code.Line().Line().Add(
-				gen_MarshalWithEncoder_struct(
+				g.gen_MarshalWithEncoder_struct(
 					g.idl,
 					withDiscriminator,
 					exportedAccountName,
@@ -234,7 +234,7 @@ func (g *Generator) gen_IDLTypeDefTyStruct(
 
 			// Declare UnmarshalWithDecoder
 			code.Line().Line().Add(
-				gen_UnmarshalWithDecoder_struct(
+				g.gen_UnmarshalWithDecoder_struct(
 					g.idl,
 					withDiscriminator,
 					exportedAccountName,
@@ -254,6 +254,8 @@ func (g *Generator) gen_IDLTypeDefTyStruct(
 		// TODO: should i exclude events here ? currently it does accounts/structs/events
 		code := Empty()
 		code.Add(creWriteReportFromStructs(exportedAccountName, g))
+		code.Line().Line()
+		code.Add(creWriteReportFromStructsSlice(exportedAccountName, g))
 		st.Add(code.Line().Line())
 	}
 	return st, nil
@@ -284,20 +286,19 @@ func generateUniqueFieldNames(fields []idl.IdlField) map[string]string {
 	return fieldNameMap
 }
 
-func genField(field idl.IdlField, pointer bool) Code {
-	return genFieldNamed(field.Name, field.Ty, pointer)
+func (g *Generator) genField(field idl.IdlField, pointer bool) Code {
+	return g.genFieldNamed(field.Name, field.Ty, pointer)
 }
 
-// genFieldWithName generates a field with a custom field name (for handling duplicates)
-func genFieldWithName(field idl.IdlField, fieldName string, pointer bool) Code {
-	return genFieldNamed(fieldName, field.Ty, pointer)
+func (g *Generator) genFieldWithName(field idl.IdlField, fieldName string, pointer bool) Code {
+	return g.genFieldNamed(fieldName, field.Ty, pointer)
 }
 
-func genFieldNamed(name string, typ idltype.IdlType, pointer bool) Code {
+func (g *Generator) genFieldNamed(name string, typ idltype.IdlType, pointer bool) Code {
 	st := newStatement()
 	st.Id(tools.ToCamelUpper(name)).
 		Add(func() Code {
-			if isComplexEnum(typ) {
+			if g.isComplexEnum(typ) {
 				return nil
 			}
 			if pointer {
@@ -389,6 +390,10 @@ func IDLTypeKind_ToTypeDeclCode(ts idltype.IdlType) *Statement {
 		stat.Qual(PkgBinary, "Uint128")
 	case *idltype.I128:
 		stat.Qual(PkgBinary, "Int128")
+	case *idltype.U256:
+		stat.Index(Lit(32)).Byte()
+	case *idltype.I256:
+		stat.Index(Lit(32)).Byte()
 	case *idltype.Bytes:
 		stat.Index().Byte()
 	case *idltype.String:
