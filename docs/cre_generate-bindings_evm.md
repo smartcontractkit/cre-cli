@@ -15,7 +15,7 @@ Both raw ABI files (*.abi) and JSON artifact files (*.json) are supported.
 For JSON files the ABI is read from the top-level "abi" field.
 
 ```
-cre generate-bindings evm [flags]
+cre generate-bindings evm [optional flags]
 ```
 
 ### Examples

@@ -10,7 +10,7 @@ Each contract gets its own package subdirectory to avoid naming conflicts.
 For example, data_storage.json generates bindings in generated/data_storage/ package.
 
 ```
-cre generate-bindings solana [flags]
+cre generate-bindings solana [optional flags]
 ```
 
 ### Examples
