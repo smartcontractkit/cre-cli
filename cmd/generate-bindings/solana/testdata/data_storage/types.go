@@ -83,6 +83,7 @@ func (c *DataStorage) WriteReportFromAccessLogged(
 	runtime cre.Runtime,
 	input AccessLogged,
 	remainingAccounts []*solana.AccountMeta,
+	computeConfig *solana.ComputeConfig,
 ) cre.Promise[*solana.WriteReportReply] {
 	encodedInput, err := c.Codec.EncodeAccessLoggedStruct(input)
 	if err != nil {
@@ -103,17 +104,35 @@ func (c *DataStorage) WriteReportFromAccessLogged(
 	promise := runtime.GenerateReport(&sdk.ReportRequest{
 		EncodedPayload: encodedFwdReport,
 		EncoderName:    "solana",
-		HashingAlgo:    "sha256",
-		SigningAlgo:    "ed25519",
+		HashingAlgo:    "keccak256",
+		SigningAlgo:    "ecdsa",
 	})
 
 	return cre.ThenPromise(promise, func(report *cre.Report) cre.Promise[*solana.WriteReportReply] {
 		return c.client.WriteReport(runtime, &solana.WriteCreReportRequest{
+			ComputeConfig:     computeConfig,
 			Receiver:          ProgramID.Bytes(),
 			RemainingAccounts: remainingAccounts,
 			Report:            report,
 		})
 	})
+}
+
+func (c *DataStorage) WriteReportFromAccessLoggeds(
+	runtime cre.Runtime,
+	inputs []AccessLogged,
+	remainingAccounts []*solana.AccountMeta,
+	computeConfig *solana.ComputeConfig,
+) cre.Promise[*solana.WriteReportReply] {
+	elements := make([][]byte, len(inputs))
+	for i, input := range inputs {
+		encoded, err := c.Codec.EncodeAccessLoggedStruct(input)
+		if err != nil {
+			return cre.PromiseFromResult[*solana.WriteReportReply](nil, err)
+		}
+		elements[i] = encoded
+	}
+	return c.WriteReportFromBorshEncodedVec(runtime, elements, remainingAccounts, computeConfig)
 }
 
 type DataAccount struct {
@@ -195,6 +214,7 @@ func (c *DataStorage) WriteReportFromDataAccount(
 	runtime cre.Runtime,
 	input DataAccount,
 	remainingAccounts []*solana.AccountMeta,
+	computeConfig *solana.ComputeConfig,
 ) cre.Promise[*solana.WriteReportReply] {
 	encodedInput, err := c.Codec.EncodeDataAccountStruct(input)
 	if err != nil {
@@ -215,17 +235,35 @@ func (c *DataStorage) WriteReportFromDataAccount(
 	promise := runtime.GenerateReport(&sdk.ReportRequest{
 		EncodedPayload: encodedFwdReport,
 		EncoderName:    "solana",
-		HashingAlgo:    "sha256",
-		SigningAlgo:    "ed25519",
+		HashingAlgo:    "keccak256",
+		SigningAlgo:    "ecdsa",
 	})
 
 	return cre.ThenPromise(promise, func(report *cre.Report) cre.Promise[*solana.WriteReportReply] {
 		return c.client.WriteReport(runtime, &solana.WriteCreReportRequest{
+			ComputeConfig:     computeConfig,
 			Receiver:          ProgramID.Bytes(),
 			RemainingAccounts: remainingAccounts,
 			Report:            report,
 		})
 	})
+}
+
+func (c *DataStorage) WriteReportFromDataAccounts(
+	runtime cre.Runtime,
+	inputs []DataAccount,
+	remainingAccounts []*solana.AccountMeta,
+	computeConfig *solana.ComputeConfig,
+) cre.Promise[*solana.WriteReportReply] {
+	elements := make([][]byte, len(inputs))
+	for i, input := range inputs {
+		encoded, err := c.Codec.EncodeDataAccountStruct(input)
+		if err != nil {
+			return cre.PromiseFromResult[*solana.WriteReportReply](nil, err)
+		}
+		elements[i] = encoded
+	}
+	return c.WriteReportFromBorshEncodedVec(runtime, elements, remainingAccounts, computeConfig)
 }
 
 type DynamicEvent struct {
@@ -329,6 +367,7 @@ func (c *DataStorage) WriteReportFromDynamicEvent(
 	runtime cre.Runtime,
 	input DynamicEvent,
 	remainingAccounts []*solana.AccountMeta,
+	computeConfig *solana.ComputeConfig,
 ) cre.Promise[*solana.WriteReportReply] {
 	encodedInput, err := c.Codec.EncodeDynamicEventStruct(input)
 	if err != nil {
@@ -349,17 +388,35 @@ func (c *DataStorage) WriteReportFromDynamicEvent(
 	promise := runtime.GenerateReport(&sdk.ReportRequest{
 		EncodedPayload: encodedFwdReport,
 		EncoderName:    "solana",
-		HashingAlgo:    "sha256",
-		SigningAlgo:    "ed25519",
+		HashingAlgo:    "keccak256",
+		SigningAlgo:    "ecdsa",
 	})
 
 	return cre.ThenPromise(promise, func(report *cre.Report) cre.Promise[*solana.WriteReportReply] {
 		return c.client.WriteReport(runtime, &solana.WriteCreReportRequest{
+			ComputeConfig:     computeConfig,
 			Receiver:          ProgramID.Bytes(),
 			RemainingAccounts: remainingAccounts,
 			Report:            report,
 		})
 	})
+}
+
+func (c *DataStorage) WriteReportFromDynamicEvents(
+	runtime cre.Runtime,
+	inputs []DynamicEvent,
+	remainingAccounts []*solana.AccountMeta,
+	computeConfig *solana.ComputeConfig,
+) cre.Promise[*solana.WriteReportReply] {
+	elements := make([][]byte, len(inputs))
+	for i, input := range inputs {
+		encoded, err := c.Codec.EncodeDynamicEventStruct(input)
+		if err != nil {
+			return cre.PromiseFromResult[*solana.WriteReportReply](nil, err)
+		}
+		elements[i] = encoded
+	}
+	return c.WriteReportFromBorshEncodedVec(runtime, elements, remainingAccounts, computeConfig)
 }
 
 type NoFields struct{}
@@ -407,6 +464,7 @@ func (c *DataStorage) WriteReportFromNoFields(
 	runtime cre.Runtime,
 	input NoFields,
 	remainingAccounts []*solana.AccountMeta,
+	computeConfig *solana.ComputeConfig,
 ) cre.Promise[*solana.WriteReportReply] {
 	encodedInput, err := c.Codec.EncodeNoFieldsStruct(input)
 	if err != nil {
@@ -427,17 +485,35 @@ func (c *DataStorage) WriteReportFromNoFields(
 	promise := runtime.GenerateReport(&sdk.ReportRequest{
 		EncodedPayload: encodedFwdReport,
 		EncoderName:    "solana",
-		HashingAlgo:    "sha256",
-		SigningAlgo:    "ed25519",
+		HashingAlgo:    "keccak256",
+		SigningAlgo:    "ecdsa",
 	})
 
 	return cre.ThenPromise(promise, func(report *cre.Report) cre.Promise[*solana.WriteReportReply] {
 		return c.client.WriteReport(runtime, &solana.WriteCreReportRequest{
+			ComputeConfig:     computeConfig,
 			Receiver:          ProgramID.Bytes(),
 			RemainingAccounts: remainingAccounts,
 			Report:            report,
 		})
 	})
+}
+
+func (c *DataStorage) WriteReportFromNoFieldss(
+	runtime cre.Runtime,
+	inputs []NoFields,
+	remainingAccounts []*solana.AccountMeta,
+	computeConfig *solana.ComputeConfig,
+) cre.Promise[*solana.WriteReportReply] {
+	elements := make([][]byte, len(inputs))
+	for i, input := range inputs {
+		encoded, err := c.Codec.EncodeNoFieldsStruct(input)
+		if err != nil {
+			return cre.PromiseFromResult[*solana.WriteReportReply](nil, err)
+		}
+		elements[i] = encoded
+	}
+	return c.WriteReportFromBorshEncodedVec(runtime, elements, remainingAccounts, computeConfig)
 }
 
 type UpdateReserves struct {
@@ -508,6 +584,7 @@ func (c *DataStorage) WriteReportFromUpdateReserves(
 	runtime cre.Runtime,
 	input UpdateReserves,
 	remainingAccounts []*solana.AccountMeta,
+	computeConfig *solana.ComputeConfig,
 ) cre.Promise[*solana.WriteReportReply] {
 	encodedInput, err := c.Codec.EncodeUpdateReservesStruct(input)
 	if err != nil {
@@ -528,17 +605,35 @@ func (c *DataStorage) WriteReportFromUpdateReserves(
 	promise := runtime.GenerateReport(&sdk.ReportRequest{
 		EncodedPayload: encodedFwdReport,
 		EncoderName:    "solana",
-		HashingAlgo:    "sha256",
-		SigningAlgo:    "ed25519",
+		HashingAlgo:    "keccak256",
+		SigningAlgo:    "ecdsa",
 	})
 
 	return cre.ThenPromise(promise, func(report *cre.Report) cre.Promise[*solana.WriteReportReply] {
 		return c.client.WriteReport(runtime, &solana.WriteCreReportRequest{
+			ComputeConfig:     computeConfig,
 			Receiver:          ProgramID.Bytes(),
 			RemainingAccounts: remainingAccounts,
 			Report:            report,
 		})
 	})
+}
+
+func (c *DataStorage) WriteReportFromUpdateReservess(
+	runtime cre.Runtime,
+	inputs []UpdateReserves,
+	remainingAccounts []*solana.AccountMeta,
+	computeConfig *solana.ComputeConfig,
+) cre.Promise[*solana.WriteReportReply] {
+	elements := make([][]byte, len(inputs))
+	for i, input := range inputs {
+		encoded, err := c.Codec.EncodeUpdateReservesStruct(input)
+		if err != nil {
+			return cre.PromiseFromResult[*solana.WriteReportReply](nil, err)
+		}
+		elements[i] = encoded
+	}
+	return c.WriteReportFromBorshEncodedVec(runtime, elements, remainingAccounts, computeConfig)
 }
 
 type UserData struct {
@@ -609,6 +704,7 @@ func (c *DataStorage) WriteReportFromUserData(
 	runtime cre.Runtime,
 	input UserData,
 	remainingAccounts []*solana.AccountMeta,
+	computeConfig *solana.ComputeConfig,
 ) cre.Promise[*solana.WriteReportReply] {
 	encodedInput, err := c.Codec.EncodeUserDataStruct(input)
 	if err != nil {
@@ -629,15 +725,33 @@ func (c *DataStorage) WriteReportFromUserData(
 	promise := runtime.GenerateReport(&sdk.ReportRequest{
 		EncodedPayload: encodedFwdReport,
 		EncoderName:    "solana",
-		HashingAlgo:    "sha256",
-		SigningAlgo:    "ed25519",
+		HashingAlgo:    "keccak256",
+		SigningAlgo:    "ecdsa",
 	})
 
 	return cre.ThenPromise(promise, func(report *cre.Report) cre.Promise[*solana.WriteReportReply] {
 		return c.client.WriteReport(runtime, &solana.WriteCreReportRequest{
+			ComputeConfig:     computeConfig,
 			Receiver:          ProgramID.Bytes(),
 			RemainingAccounts: remainingAccounts,
 			Report:            report,
 		})
 	})
+}
+
+func (c *DataStorage) WriteReportFromUserDatas(
+	runtime cre.Runtime,
+	inputs []UserData,
+	remainingAccounts []*solana.AccountMeta,
+	computeConfig *solana.ComputeConfig,
+) cre.Promise[*solana.WriteReportReply] {
+	elements := make([][]byte, len(inputs))
+	for i, input := range inputs {
+		encoded, err := c.Codec.EncodeUserDataStruct(input)
+		if err != nil {
+			return cre.PromiseFromResult[*solana.WriteReportReply](nil, err)
+		}
+		elements[i] = encoded
+	}
+	return c.WriteReportFromBorshEncodedVec(runtime, elements, remainingAccounts, computeConfig)
 }
