@@ -10,11 +10,38 @@ import (
 	"testing"
 
 	"github.com/rs/zerolog"
+	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
+	"github.com/smartcontractkit/cre-cli/internal/oauth"
+	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
+
+func TestLogin_NonInteractive_ReturnsError(t *testing.T) {
+	// Create a parent command with the global --non-interactive persistent flag,
+	// since in production this flag is defined on the root command.
+	root := &cobra.Command{Use: "cre"}
+	root.PersistentFlags().Bool("non-interactive", false, "")
+	loginCmd := New(nil)
+	root.AddCommand(loginCmd)
+
+	root.SetArgs([]string{"login", "--non-interactive"})
+	root.SetOut(io.Discard)
+	root.SetErr(io.Discard)
+
+	err := root.Execute()
+	if err == nil {
+		t.Fatal("expected error when --non-interactive is set")
+	}
+	if !strings.Contains(err.Error(), "non-interactive mode") {
+		t.Errorf("expected error to mention non-interactive mode, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "CRE_API_KEY") {
+		t.Errorf("expected error to mention CRE_API_KEY, got: %v", err)
+	}
+}
 
 func TestSaveCredentials_WritesYAML(t *testing.T) {
 	tmp := t.TempDir()
@@ -50,9 +77,9 @@ func TestSaveCredentials_WritesYAML(t *testing.T) {
 }
 
 func TestGeneratePKCE_ReturnsValidChallenge(t *testing.T) {
-	verifier, challenge, err := generatePKCE()
+	verifier, challenge, err := oauth.GeneratePKCE()
 	if err != nil {
-		t.Fatalf("generatePKCE error: %v", err)
+		t.Fatalf("GeneratePKCE error: %v", err)
 	}
 	if verifier == "" || challenge == "" {
 		t.Error("PKCE verifier or challenge is empty")
@@ -60,8 +87,14 @@ func TestGeneratePKCE_ReturnsValidChallenge(t *testing.T) {
 }
 
 func TestRandomState_IsRandomAndNonEmpty(t *testing.T) {
-	state1 := randomState()
-	state2 := randomState()
+	state1, err := oauth.RandomState()
+	if err != nil {
+		t.Fatalf("RandomState: %v", err)
+	}
+	state2, err := oauth.RandomState()
+	if err != nil {
+		t.Fatalf("RandomState: %v", err)
+	}
 	if state1 == "" || state2 == "" {
 		t.Error("randomState returned empty string")
 	}
@@ -71,16 +104,16 @@ func TestRandomState_IsRandomAndNonEmpty(t *testing.T) {
 }
 
 func TestOpenBrowser_UnsupportedOS(t *testing.T) {
-	err := openBrowser("http://example.com", "plan9")
+	err := oauth.OpenBrowser("http://example.com", "plan9")
 	if err == nil || !strings.Contains(err.Error(), "unsupported OS") {
 		t.Errorf("expected unsupported OS error, got %v", err)
 	}
 }
 
 func TestServeEmbeddedHTML_ErrorOnMissingFile(t *testing.T) {
-	h := &handler{log: &zerolog.Logger{}}
+	log := zerolog.Nop()
 	w := httptest.NewRecorder()
-	h.serveEmbeddedHTML(w, "htmlPages/doesnotexist.html", http.StatusOK)
+	oauth.ServeEmbeddedHTML(&log, w, "htmlPages/doesnotexist.html", http.StatusOK)
 	resp := w.Result()
 	if resp.StatusCode != http.StatusInternalServerError {
 		t.Errorf("expected 500 error, got %d", resp.StatusCode)
@@ -143,6 +176,7 @@ func TestCallbackHandler_OrgMembershipError(t *testing.T) {
 		log:        &logger,
 		lastState:  "test-state",
 		retryCount: 0,
+		spinner:    ui.NewSpinner(),
 		environmentSet: &environments.EnvironmentSet{
 			ClientID: "test-client-id",
 			AuthBase: "https://auth.example.com",
@@ -195,6 +229,7 @@ func TestCallbackHandler_OrgMembershipError_MaxRetries(t *testing.T) {
 		log:        &logger,
 		lastState:  "test-state",
 		retryCount: maxOrgNotFoundRetries, // Already at max retries
+		spinner:    ui.NewSpinner(),
 		environmentSet: &environments.EnvironmentSet{
 			ClientID: "test-client-id",
 			AuthBase: "https://auth.example.com",
@@ -234,6 +269,7 @@ func TestCallbackHandler_GenericAuth0Error(t *testing.T) {
 	h := &handler{
 		log:       &logger,
 		lastState: "test-state",
+		spinner:   ui.NewSpinner(),
 		environmentSet: &environments.EnvironmentSet{
 			ClientID: "test-client-id",
 			AuthBase: "https://auth.example.com",
@@ -270,12 +306,11 @@ func TestCallbackHandler_GenericAuth0Error(t *testing.T) {
 
 func TestServeWaitingPage(t *testing.T) {
 	logger := zerolog.Nop()
-	h := &handler{log: &logger}
 
 	w := httptest.NewRecorder()
 	redirectURL := "https://auth.example.com/authorize?client_id=test&state=abc123"
 
-	h.serveWaitingPage(w, redirectURL)
+	oauth.ServeWaitingPage(&logger, w, redirectURL)
 
 	resp := w.Result()
 	body, _ := io.ReadAll(resp.Body)

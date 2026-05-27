@@ -1,6 +1,8 @@
 package chainsim
 
 import (
+	"context"
+
 	"github.com/rs/zerolog"
 
 	"github.com/smartcontractkit/chainlink-testing-framework/seth"
@@ -22,7 +24,7 @@ func NewSimulatedClientFactory(logger *zerolog.Logger, ethClient *seth.Client, s
 	}
 }
 
-func (f *testFactoryImpl) NewWorkflowRegistryV2Client() (*client.WorkflowRegistryV2Client, error) {
+func (f *testFactoryImpl) NewWorkflowRegistryV2Client(ctx context.Context) (*client.WorkflowRegistryV2Client, error) {
 	txcConfig := client.TxClientConfig{
 		TxType:       client.Regular,
 		LedgerConfig: &client.LedgerConfig{LedgerEnabled: false},

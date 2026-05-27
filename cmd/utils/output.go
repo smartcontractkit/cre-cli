@@ -12,6 +12,8 @@ import (
 	"gopkg.in/yaml.v2"
 
 	workflow_registry_wrapper "github.com/smartcontractkit/chainlink-evm/gethwrappers/workflow/generated/workflow_registry_wrapper_v2"
+
+	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
 const (
@@ -82,7 +84,10 @@ func HandleJsonOrYamlFormat(
 	}
 
 	if outputPath == "" {
-		fmt.Printf("\n# Workflow metadata in %s format:\n\n%s\n", strings.ToUpper(format), string(out))
+		ui.Line()
+		ui.Title(fmt.Sprintf("Workflow metadata in %s format:", strings.ToUpper(format)))
+		ui.Line()
+		ui.Print(string(out))
 		return nil
 	}
 
