@@ -1,9 +1,12 @@
 package test
 
 import (
+	"fmt"
+	"path/filepath"
 	"sync"
 	"testing"
 
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 
 	chainselectors "github.com/smartcontractkit/chain-selectors"
@@ -118,6 +121,35 @@ func TestMultiCommandHappyPaths(t *testing.T) {
 
 		// Run happy path 3b - deploy with linked key + config
 		multi_command_flows.RunHappyPath3bWorkflow(t, tc)
+	})
+
+	// Private registry (off-chain): no CRE_ETH_PRIVATE_KEY; org-derived owner from mock GQL,
+	// settings load + finalize, then full CLI lifecycle (see multi_command_flows.RunPrivateRegistryE2E).
+	t.Run("WorkflowPrivateRegistry_E2E", func(t *testing.T) {
+		anvilProc, testEthUrl := initTestEnv(t, "anvil-state.json")
+		defer StopAnvil(anvilProc)
+
+		t.Setenv(environments.EnvVarEnv, "STAGING")
+
+		t.Setenv(environments.EnvVarWorkflowRegistryAddress, "0x5FbDB2315678afecb367f032d93F642f64180aa3")
+		t.Setenv(environments.EnvVarWorkflowRegistryChainName, chainselectors.ANVIL_DEVNET.Name)
+		t.Setenv(environments.EnvVarDonFamily, "test-don")
+
+		tc := NewTestConfig(t)
+
+		require.NoError(t, createCliEnvFile(tc.EnvFile, ""), "failed to create env file without private key")
+		require.NoError(t, createProjectSettingsFile(tc.ProjectDirectory+"project.yaml", "", testEthUrl), "failed to create project.yaml")
+		require.NoError(t, createWorkflowDirectory(tc.ProjectDirectory, "private-registry-happy-path-workflow", "", "blank_workflow"), "failed to create workflow directory")
+
+		v := viper.New()
+		v.SetConfigFile(filepath.Join(tc.ProjectDirectory, "blank_workflow", constants.DefaultWorkflowSettingsFileName))
+		require.NoError(t, v.ReadInConfig())
+		v.Set(fmt.Sprintf("%s.user-workflow.deployment-registry", SettingsTarget), "reg-test")
+		require.NoError(t, v.WriteConfig())
+
+		t.Cleanup(tc.Cleanup(t))
+
+		multi_command_flows.RunPrivateRegistryE2E(t, tc, tc.EnvFile, filepath.Join(tc.ProjectDirectory, "blank_workflow"))
 	})
 
 	// Run Account Happy Path: Link -> List -> Unlink -> List (verify unlinked)

@@ -77,7 +77,14 @@ func SetProjectContext(projectPath string) error {
 		}
 
 		if !found {
-			return fmt.Errorf("no project settings file found in current directory or parent directories")
+			return fmt.Errorf(
+				"no CRE project found (could not locate '%s' in '%s' or any parent directory)\n\n"+
+					"To fix:\n"+
+					"  • Run this command from inside a CRE project directory\n"+
+					"  • Or run 'cre init' to create a new project here\n"+
+					"  • Or use '--%s <path>' to specify the project location",
+				constants.DefaultProjectSettingsFileName, cwd, "project-root",
+			)
 		}
 
 		// Get the directory containing the project settings file (this is the project root)

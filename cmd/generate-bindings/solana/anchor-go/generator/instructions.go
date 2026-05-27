@@ -17,6 +17,7 @@ func (g *Generator) gen_instructions() (*OutputFile, error) {
 	file.HeaderComment("This file contains instructions and instruction parsers.")
 	{
 		for _, instruction := range g.idl.Instructions {
+			uniqueParamNames := generateUniqueParamNames(instruction.Args)
 			ixCode := Empty()
 			{
 				declarerName := newInstructionFuncName(instruction.Name)
@@ -47,7 +48,7 @@ func (g *Generator) gen_instructions() (*OutputFile, error) {
 												if IsOption(param.Ty) || IsCOption(param.Ty) {
 													paramType = Op("*").Add(paramType)
 												}
-												paramsCode.Id(formatParamName(param.Name)).Add(paramType)
+												paramsCode.Id(uniqueParamNames[param.Name]).Add(paramType)
 											}
 										},
 									),
@@ -134,18 +135,18 @@ func (g *Generator) gen_instructions() (*OutputFile, error) {
 						// 	)
 						// }
 						checkNil := true
-						body.BlockFunc(func(g *Group) {
-							gen_marshal_DefinedFieldsNamed(
-								g,
+						body.BlockFunc(func(grp *Group) {
+							g.gen_marshal_DefinedFieldsNamed(
+								grp,
 								instruction.Args,
 								checkNil,
 								func(param idl.IdlField) *Statement {
-									return Id(formatParamName(param.Name))
+									return Id(uniqueParamNames[param.Name])
 								},
 								"enc__",
 								true, // returnNilErr
 								func(param idl.IdlField) string {
-									return formatParamName(param.Name)
+									return uniqueParamNames[param.Name]
 								},
 							)
 						})
@@ -306,6 +307,30 @@ func formatParamName(paramName string) string {
 	return tools.ToCamelLower(paramName)
 }
 
+// generateUniqueParamNames creates unique Go parameter names for instruction arguments,
+// mirroring generateUniqueFieldNames but using formatParamName as the base identifier
+// (builder params use a different convention than struct field names).
+func generateUniqueParamNames(fields []idl.IdlField) map[string]string {
+	fieldNameMap := make(map[string]string)
+	usedNames := make(map[string]int)
+
+	for _, field := range fields {
+		baseName := formatParamName(field.Name)
+		finalName := baseName
+
+		if count, exists := usedNames[baseName]; exists {
+			finalName = baseName + fmt.Sprintf("%d", count+1)
+			usedNames[baseName] = count + 1
+		} else {
+			usedNames[baseName] = 0
+		}
+
+		fieldNameMap[field.Name] = finalName
+	}
+
+	return fieldNameMap
+}
+
 func newInstructionFuncName(instructionName string) string {
 	// Check if the instruction name already ends with "instruction" (case-insensitive)
 	instructionNameLower := strings.ToLower(instructionName)
@@ -385,9 +410,8 @@ func (g *Generator) gen_instructionParser(typeNames []string, discriminatorNames
 				Return(Nil(), Qual("fmt", "Errorf").Call(Lit("instruction data too short: expected at least 8 bytes, got %d"), Len(Id("instructionData")))),
 			)
 
-			block.Comment("Extract discriminator")
-			block.Id("discriminator").Op(":=").Index(Lit(8)).Byte().Values()
-			block.Copy(Id("discriminator").Index(Op(":")), Id("instructionData").Index(Lit(0), Lit(8)))
+			block.Comment("Extract discriminator (TypeID for consistent equality with generated constants)")
+			block.Id("discriminator").Op(":=").Qual(PkgBinary, "TypeIDFromBytes").Call(Id("instructionData").Index(Lit(0), Lit(8)))
 
 			block.Comment("Parse based on discriminator")
 			block.Switch(Id("discriminator")).BlockFunc(func(switchBlock *Group) {
@@ -477,6 +501,8 @@ func (g *Generator) gen_instructionParser(typeNames []string, discriminatorNames
 func (g *Generator) gen_instructionType(instruction idl.IdlInstruction) (Code, error) {
 	code := Empty()
 
+	uniqueArgFieldNames := generateUniqueFieldNames(instruction.Args)
+
 	// Check if the instruction name already ends with "instruction" (case-insensitive)
 	instructionNameLower := strings.ToLower(instruction.Name)
 	var typeName string
@@ -496,7 +522,7 @@ func (g *Generator) gen_instructionType(instruction idl.IdlInstruction) (Code, e
 			if IsOption(arg.Ty) || IsCOption(arg.Ty) {
 				fieldType = Op("*").Add(fieldType)
 			}
-			structGroup.Id(tools.ToCamelUpper(arg.Name)).Add(fieldType).Tag(map[string]string{
+			structGroup.Id(uniqueArgFieldNames[arg.Name]).Add(fieldType).Tag(map[string]string{
 				"json": arg.Name,
 			})
 		}
@@ -581,7 +607,7 @@ func (g *Generator) gen_instructionType(instruction idl.IdlInstruction) (Code, e
 				)
 			}
 			for _, arg := range instruction.Args {
-				fieldName := tools.ToCamelUpper(arg.Name)
+				fieldName := uniqueArgFieldNames[arg.Name]
 				block.Commentf("Deserialize `%s`:", fieldName)
 
 				if IsOption(arg.Ty) || IsCOption(arg.Ty) {

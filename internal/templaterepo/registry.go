@@ -1,0 +1,298 @@
+package templaterepo
+
+import (
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+
+	"github.com/rs/zerolog"
+)
+
+// Registry aggregates templates from multiple repos and provides lookup/scaffolding.
+type Registry struct {
+	logger  *zerolog.Logger
+	client  *Client
+	cache   *Cache
+	sources []RepoSource
+}
+
+// NewRegistry creates a new Registry with the given sources.
+func NewRegistry(logger *zerolog.Logger, sources []RepoSource) (*Registry, error) {
+	cache, err := NewCache(logger)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create cache: %w", err)
+	}
+
+	return &Registry{
+		logger:  logger,
+		client:  NewClient(logger),
+		cache:   cache,
+		sources: sources,
+	}, nil
+}
+
+// NewRegistryWithCache creates a Registry with an injected cache (for testing).
+func NewRegistryWithCache(logger *zerolog.Logger, client *Client, cache *Cache, sources []RepoSource) *Registry {
+	return &Registry{
+		logger:  logger,
+		client:  client,
+		cache:   cache,
+		sources: sources,
+	}
+}
+
+// ListTemplates discovers and returns all templates from configured sources.
+// The built-in hello-world template is always included first.
+// If refresh is true, the cache is bypassed.
+func (r *Registry) ListTemplates(refresh bool) ([]TemplateSummary, error) {
+	// Always include the built-in templates first
+	allTemplates := append([]TemplateSummary{}, BuiltInTemplates()...)
+
+	for _, source := range r.sources {
+		templates, err := r.listFromSource(source, refresh)
+		if err != nil {
+			r.logger.Warn().Err(err).Msgf("Failed to list templates from %s", source)
+			continue
+		}
+		allTemplates = append(allTemplates, templates...)
+	}
+
+	return allTemplates, nil
+}
+
+// GetTemplate looks up a template by name from all sources.
+func (r *Registry) GetTemplate(name string, refresh bool) (*TemplateSummary, error) {
+	templates, err := r.ListTemplates(refresh)
+	if err != nil {
+		return nil, err
+	}
+
+	for i := range templates {
+		if templates[i].Name == name {
+			return &templates[i], nil
+		}
+	}
+
+	return nil, fmt.Errorf("template %q not found", name)
+}
+
+// ScaffoldTemplate downloads and extracts a template into destDir,
+// then renames the template's workflow directory to the user's workflow name.
+func (r *Registry) ScaffoldTemplate(tmpl *TemplateSummary, destDir, workflowName string, onProgress func(string)) error {
+	// Handle built-in templates directly from embedded FS
+	if tmpl.BuiltIn {
+		if onProgress != nil {
+			onProgress("Scaffolding built-in template...")
+		}
+		return ScaffoldBuiltIn(r.logger, tmpl.Name, destDir, workflowName)
+	}
+
+	if onProgress != nil {
+		onProgress("Downloading template...")
+	}
+
+	// Try to use cached tarball
+	treeSHA := r.getTreeSHA(tmpl.Source)
+	if treeSHA != "" && r.cache.IsTarballCached(tmpl.Source, treeSHA) {
+		r.logger.Debug().Msg("Using cached tarball")
+		tarballPath := r.cache.TarballPath(tmpl.Source, treeSHA)
+		err := r.client.DownloadAndExtractTemplateFromCache(tarballPath, tmpl.Path, destDir, tmpl.Exclude)
+		if err == nil {
+			return r.maybeRenameWorkflowDir(tmpl, destDir, workflowName)
+		}
+		r.logger.Warn().Err(err).Msg("Failed to extract from cached tarball, re-downloading")
+	}
+
+	// Download and cache tarball
+	if treeSHA == "" {
+		treeSHA = "latest"
+	}
+	tarballPath := r.cache.TarballPath(tmpl.Source, treeSHA)
+	if err := r.client.DownloadTarball(tmpl.Source, tarballPath); err != nil {
+		// Fall back to streaming download without caching
+		r.logger.Debug().Msg("Falling back to streaming download")
+		err = r.client.DownloadAndExtractTemplate(tmpl.Source, tmpl.Path, destDir, tmpl.Exclude, onProgress)
+		if err != nil {
+			return fmt.Errorf("failed to download template: %w", err)
+		}
+		return r.maybeRenameWorkflowDir(tmpl, destDir, workflowName)
+	}
+
+	if onProgress != nil {
+		onProgress("Extracting template files...")
+	}
+
+	err := r.client.DownloadAndExtractTemplateFromCache(tarballPath, tmpl.Path, destDir, tmpl.Exclude)
+	if err != nil {
+		return fmt.Errorf("failed to extract template: %w", err)
+	}
+
+	return r.maybeRenameWorkflowDir(tmpl, destDir, workflowName)
+}
+
+// maybeRenameWorkflowDir handles workflow directory renaming after extraction.
+// For templates with projectDir set, only single-workflow templates get their
+// workflow directory renamed to match the user's chosen name.
+func (r *Registry) maybeRenameWorkflowDir(tmpl *TemplateSummary, destDir, workflowName string) error {
+	if tmpl.ProjectDir != "" {
+		// projectDir templates are extracted as-is, but we still rename the
+		// workflow directory when there's exactly one workflow and the user
+		// specified a different name.
+		if len(tmpl.Workflows) == 1 && workflowName != "" && tmpl.Workflows[0].Dir != workflowName {
+			src := filepath.Join(destDir, tmpl.Workflows[0].Dir)
+			dst := filepath.Join(destDir, workflowName)
+			if _, err := os.Stat(src); err != nil {
+				return nil // source dir doesn't exist, nothing to rename
+			}
+			r.logger.Debug().Msgf("Renaming workflow dir %s -> %s", tmpl.Workflows[0].Dir, workflowName)
+			return os.Rename(src, dst)
+		}
+		return nil
+	}
+	return r.renameWorkflowDir(tmpl, destDir, workflowName)
+}
+
+// renameWorkflowDir renames or organizes workflow directories after extraction.
+// Only used for built-in templates (no projectDir).
+func (r *Registry) renameWorkflowDir(tmpl *TemplateSummary, destDir, workflowName string) error {
+	workflows := tmpl.Workflows
+
+	// Multi-workflow: no renaming — directory names are semantically meaningful
+	if len(workflows) > 1 {
+		return nil
+	}
+
+	// Single workflow with known dir name from template.yaml
+	if len(workflows) == 1 {
+		srcName := workflows[0].Dir
+		if srcName == workflowName {
+			return nil
+		}
+		src := filepath.Join(destDir, srcName)
+		dst := filepath.Join(destDir, workflowName)
+		if _, err := os.Stat(src); err != nil {
+			return fmt.Errorf("workflow directory %q not found in template: %w", srcName, err)
+		}
+		r.logger.Debug().Msgf("Renaming workflow dir %s -> %s", srcName, workflowName)
+		return os.Rename(src, dst)
+	}
+
+	// len(workflows) == 0: no workflows field (backwards compat)
+	// Fall back to existing heuristic
+	entries, err := os.ReadDir(destDir)
+	if err != nil {
+		return nil // No renaming needed if we can't read the dir
+	}
+
+	// Find candidate workflow directory - look for a directory containing workflow files
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+
+		dirPath := filepath.Join(destDir, entry.Name())
+
+		// Check if this dir has workflow-like files
+		if hasWorkflowFiles(dirPath) {
+			if entry.Name() == workflowName {
+				return nil // Already correctly named
+			}
+			targetPath := filepath.Join(destDir, workflowName)
+			r.logger.Debug().Msgf("Renaming workflow dir %s -> %s", entry.Name(), workflowName)
+			return os.Rename(dirPath, targetPath)
+		}
+	}
+
+	// If no workflow subdirectory found, the template files are in the root.
+	// Move everything into a workflow subdirectory.
+	workflowDir := filepath.Join(destDir, workflowName)
+	if err := os.MkdirAll(workflowDir, 0755); err != nil {
+		return fmt.Errorf("failed to create workflow directory: %w", err)
+	}
+
+	for _, entry := range entries {
+		if entry.Name() == workflowName {
+			continue // Skip the directory we just created
+		}
+		src := filepath.Join(destDir, entry.Name())
+		dst := filepath.Join(workflowDir, entry.Name())
+
+		// Skip project-level files that should stay at root
+		if isProjectLevelFile(entry.Name()) {
+			continue
+		}
+
+		if err := os.Rename(src, dst); err != nil {
+			return fmt.Errorf("failed to move %s to workflow dir: %w", entry.Name(), err)
+		}
+	}
+
+	return nil
+}
+
+// hasWorkflowFiles checks if a directory contains typical workflow source files.
+func hasWorkflowFiles(dir string) bool {
+	markers := []string{"main.go", "main.ts", "workflow.yaml"}
+	for _, m := range markers {
+		if _, err := os.Stat(filepath.Join(dir, m)); err == nil {
+			return true
+		}
+	}
+	return false
+}
+
+// isProjectLevelFile returns true for files that should stay at the project root.
+func isProjectLevelFile(name string) bool {
+	projectFiles := map[string]bool{
+		"project.yaml": true,
+		"secrets.yaml": true,
+		"go.mod":       true,
+		"go.sum":       true,
+		".env":         true,
+		".gitignore":   true,
+		"contracts":    true,
+	}
+	return projectFiles[name]
+}
+
+func (r *Registry) listFromSource(source RepoSource, refresh bool) ([]TemplateSummary, error) {
+	// Check cache first (unless refresh is forced)
+	if !refresh {
+		templates, fresh := r.cache.LoadTemplateList(source)
+		if fresh && templates != nil {
+			return templates, nil
+		}
+	}
+
+	// Discover from GitHub
+	result, err := r.client.DiscoverTemplatesWithSHA(source)
+	if err != nil {
+		// Try stale cache as fallback
+		if stale := r.cache.LoadStaleTemplateList(source); stale != nil {
+			r.logger.Warn().Msg("Using stale cached template list (network unavailable)")
+			return stale, nil
+		}
+		return nil, err
+	}
+
+	// Save to cache
+	if saveErr := r.cache.SaveTemplateList(source, result.Templates, result.TreeSHA); saveErr != nil {
+		r.logger.Warn().Err(saveErr).Msg("Failed to save template list to cache")
+	}
+
+	return result.Templates, nil
+}
+
+func (r *Registry) getTreeSHA(source RepoSource) string {
+	path := r.cache.templateListPath(source)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	var cache templateListCache
+	if err := json.Unmarshal(data, &cache); err != nil {
+		return ""
+	}
+	return cache.TreeSHA
+}
