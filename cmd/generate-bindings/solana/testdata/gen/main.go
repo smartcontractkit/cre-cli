@@ -1,16 +1,17 @@
 package main
 
 import (
+	"log"
+
 	"github.com/smartcontractkit/cre-cli/cmd/generate-bindings/solana"
 )
 
 func main() {
 	if err := solana.GenerateBindings(
-		"./testdata/data_storage",
+		"./testdata/contracts/idl/data_storage.json",
 		"data_storage",
-		"./testdata/data_storage.json",
-		"ECL8142j2YQAvs9R9geSsRnkVH2wLEi7soJCRyJ74cfL",
+		"./testdata/data_storage",
 	); err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 }

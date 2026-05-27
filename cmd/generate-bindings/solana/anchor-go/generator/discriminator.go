@@ -30,11 +30,13 @@ func (g *Generator) gen_discriminators() (*OutputFile, error) {
 
 					discriminatorName := FormatAccountDiscriminatorName(account.Name)
 					{
-						code.Id(discriminatorName).Op("=").Index(Lit(8)).Byte().Op("{").ListFunc(func(byteGroup *Group) {
+						// binary.TypeID (not [8]byte) matches ReadDiscriminator's return type; mixing
+						// types breaks equality checks on wasm/wasip1 (runtime.memequal pointer types).
+						code.Id(discriminatorName).Op("=").Qual(PkgBinary, "TypeID").ValuesFunc(func(byteGroup *Group) {
 							for _, byteVal := range discriminator[:] {
 								byteGroup.Lit(int(byteVal))
 							}
-						}).Op("}")
+						})
 					}
 					code.Line()
 				}
@@ -62,11 +64,11 @@ func (g *Generator) gen_discriminators() (*OutputFile, error) {
 
 					discriminatorName := FormatEventDiscriminatorName(event.Name)
 					{
-						code.Id(discriminatorName).Op("=").Index(Lit(8)).Byte().Op("{").ListFunc(func(byteGroup *Group) {
+						code.Id(discriminatorName).Op("=").Qual(PkgBinary, "TypeID").ValuesFunc(func(byteGroup *Group) {
 							for _, byteVal := range discriminator[:] {
 								byteGroup.Lit(int(byteVal))
 							}
-						}).Op("}")
+						})
 					}
 					code.Line()
 				}
@@ -95,11 +97,11 @@ func (g *Generator) gen_discriminators() (*OutputFile, error) {
 
 						discriminatorName := FormatInstructionDiscriminatorName(instruction.Name)
 						{
-							code.Id(discriminatorName).Op("=").Index(Lit(8)).Byte().Op("{").ListFunc(func(byteGroup *Group) {
+							code.Id(discriminatorName).Op("=").Qual(PkgBinary, "TypeID").ValuesFunc(func(byteGroup *Group) {
 								for _, byteVal := range discriminator[:] {
 									byteGroup.Lit(int(byteVal))
 								}
-							}).Op("}")
+							})
 						}
 						code.Line()
 					}
