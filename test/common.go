@@ -152,15 +152,14 @@ func copyDir(src, dst string) error {
 		return err
 	}
 
-	return filepath.WalkDir(src, func(path string, d fs.DirEntry, walkErr error) error {
+	// Use os.DirFS to prevent symlink TOCTOU traversal
+	fsys := os.DirFS(src)
+	return fs.WalkDir(fsys, ".", func(rel string, d fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
-		rel, err := filepath.Rel(src, path)
-		if err != nil {
-			return err
-		}
 		target := filepath.Join(dst, rel)
+		path := filepath.Join(src, rel)
 
 		// Skip the root (already created)
 		if rel == "." {
@@ -181,7 +180,7 @@ func copyDir(src, dst string) error {
 				return err
 			}
 			_ = os.RemoveAll(target)
-			return os.Symlink(linkTarget, target)
+			return os.Symlink(linkTarget, target) //nolint:gosec // G122 -- test helper copying known directory trees
 
 		default:
 			return copyFile(path, target)

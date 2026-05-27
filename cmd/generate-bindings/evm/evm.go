@@ -5,23 +5,27 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
+	"strings"
 
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/smartcontractkit/cre-cli/cmd/creinit"
+	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
+	"github.com/smartcontractkit/cre-cli/internal/ui"
 	"github.com/smartcontractkit/cre-cli/internal/validation"
 )
 
 type Inputs struct {
 	ProjectRoot string `validate:"required,dir" cli:"--project-root"`
-	Language    string `validate:"required,oneof=go" cli:"--language"`
-	// just keeping it simple for now
-	AbiPath string `validate:"required,path_read" cli:"--abi"`
-	PkgName string `validate:"required" cli:"--pkg"`
-	OutPath string `validate:"required" cli:"--out"`
+	GoLang      bool
+	TypeScript  bool
+	AbiPath     string `validate:"required,path_read" cli:"--abi"`
+	PkgName     string `validate:"required" cli:"--pkg"`
+	GoOutPath   string // contracts/evm/src/generated — set when GoLang is true
+	TSOutPath   string // contracts/evm/ts/generated — set when TypeScript is true
 }
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
@@ -29,10 +33,15 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 		Use:   "evm",
 		Short: "Generate bindings from contract ABI",
 		Long: `This command generates bindings from contract ABI files.
-Supports EVM chain family and Go language.
+Supports EVM chain family with Go and TypeScript languages.
+The target language is auto-detected from project files, or can be
+specified explicitly with --language.
 Each contract gets its own package subdirectory to avoid naming conflicts.
-For example, IERC20.abi generates bindings in generated/ierc20/ package.`,
-		Example: "  cre generate-bindings-evm",
+For example, IERC20.abi generates bindings in generated/ierc20/ package.
+
+Both raw ABI files (*.abi) and JSON artifact files (*.json) are supported.
+For JSON files the ABI is read from the top-level "abi" field.`,
+		Example: "  cre generate-bindings evm",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			handler := newHandler(runtimeContext)
 
@@ -40,8 +49,7 @@ For example, IERC20.abi generates bindings in generated/ierc20/ package.`,
 			if err != nil {
 				return err
 			}
-			err = handler.ValidateInputs(inputs)
-			if err != nil {
+			if err := handler.ValidateInputs(inputs); err != nil {
 				return err
 			}
 			return handler.Execute(inputs)
@@ -49,8 +57,8 @@ For example, IERC20.abi generates bindings in generated/ierc20/ package.`,
 	}
 
 	generateBindingsCmd.Flags().StringP("project-root", "p", "", "Path to project root directory (defaults to current directory)")
-	generateBindingsCmd.Flags().StringP("language", "l", "go", "Target language (go)")
-	generateBindingsCmd.Flags().StringP("abi", "a", "", "Path to ABI directory (defaults to contracts/evm/src/abi/)")
+	generateBindingsCmd.Flags().StringP("language", "l", "", "Target language: go, typescript (auto-detected from project files when omitted)")
+	generateBindingsCmd.Flags().StringP("abi", "a", "", "Path to ABI directory (defaults to contracts/evm/src/abi/). Supports *.abi and *.json files")
 	generateBindingsCmd.Flags().StringP("pkg", "k", "bindings", "Base package name (each contract gets its own subdirectory)")
 
 	return generateBindingsCmd
@@ -68,14 +76,35 @@ func newHandler(ctx *runtime.Context) *handler {
 	}
 }
 
+func detectLanguages(projectRoot string) (goLang, typescript bool) {
+	_ = filepath.WalkDir(projectRoot, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			if d.Name() == "node_modules" || d.Name() == ".git" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		base := filepath.Base(path)
+		if strings.HasSuffix(base, ".go") {
+			goLang = true
+		}
+		if strings.HasSuffix(base, ".ts") && !strings.HasSuffix(base, ".d.ts") {
+			typescript = true
+		}
+		return nil
+	})
+	return goLang, typescript
+}
+
 func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
-	// Get current working directory as default project root
 	currentDir, err := os.Getwd()
 	if err != nil {
 		return Inputs{}, fmt.Errorf("failed to get current working directory: %w", err)
 	}
 
-	// Resolve project root with fallback to current directory
 	projectRoot := v.GetString("project-root")
 	if projectRoot == "" {
 		projectRoot = currentDir
@@ -86,28 +115,75 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 		return Inputs{}, fmt.Errorf("contracts folder not found in project root: %s", contractsPath)
 	}
 
-	// Language defaults are handled by StringP
-	language := v.GetString("language")
+	// Resolve languages: --language flag takes precedence, else auto-detect
+	var goLang, typescript bool
+	langFlag := strings.ToLower(strings.TrimSpace(v.GetString("language")))
+	switch langFlag {
+	case "":
+		goLang, typescript = detectLanguages(projectRoot)
+		if !goLang && !typescript {
+			return Inputs{}, fmt.Errorf("no target language detected (use --language go or --language typescript, or ensure project contains .go or .ts files)")
+		}
+	case constants.WorkflowLanguageGolang:
+		goLang = true
+	case constants.WorkflowLanguageTypeScript:
+		typescript = true
+	default:
+		return Inputs{}, fmt.Errorf("unsupported language %q (supported: go, typescript)", langFlag)
+	}
 
-	// Resolve ABI path with fallback to contracts/{chainFamily}/src/abi/
+	// Unified ABI path for both languages: contracts/evm/src/abi
 	abiPath := v.GetString("abi")
 	if abiPath == "" {
 		abiPath = filepath.Join(projectRoot, "contracts", "evm", "src", "abi")
 	}
 
-	// Package name defaults are handled by StringP
 	pkgName := v.GetString("pkg")
 
-	// Output path is contracts/{chainFamily}/src/generated/ under projectRoot
-	outPath := filepath.Join(projectRoot, "contracts", "evm", "src", "generated")
+	// Separate output paths: Go uses src/, TS uses ts/ (typescript convention)
+	var goOutPath, tsOutPath string
+	if goLang {
+		goOutPath = filepath.Join(projectRoot, "contracts", "evm", "src", "generated")
+	}
+	if typescript {
+		tsOutPath = filepath.Join(projectRoot, "contracts", "evm", "ts", "generated")
+	}
 
 	return Inputs{
 		ProjectRoot: projectRoot,
-		Language:    language,
+		GoLang:      goLang,
+		TypeScript:  typescript,
 		AbiPath:     abiPath,
 		PkgName:     pkgName,
-		OutPath:     outPath,
+		GoOutPath:   goOutPath,
+		TSOutPath:   tsOutPath,
 	}, nil
+}
+
+// findAbiFiles returns all supported ABI files (*.abi and *.json) found in dir.
+func findAbiFiles(dir string) ([]string, error) {
+	abiFiles, err := filepath.Glob(filepath.Join(dir, "*.abi"))
+	if err != nil {
+		return nil, err
+	}
+	jsonFiles, err := filepath.Glob(filepath.Join(dir, "*.json"))
+	if err != nil {
+		return nil, err
+	}
+	all := append(abiFiles, jsonFiles...)
+	sort.Strings(all)
+	return all, nil
+}
+
+// contractNameFromFile returns the contract name by stripping the .abi or .json
+// extension from the base filename.
+func contractNameFromFile(path string) string {
+	name := filepath.Base(path)
+	ext := filepath.Ext(name)
+	if ext != "" {
+		name = name[:len(name)-len(ext)]
+	}
+	return name
 }
 
 func (h *handler) ValidateInputs(inputs Inputs) error {
@@ -120,7 +196,6 @@ func (h *handler) ValidateInputs(inputs Inputs) error {
 		return validate.ParseValidationErrors(err)
 	}
 
-	// Additional validation for ABI path
 	if _, err := os.Stat(inputs.AbiPath); err != nil {
 		if os.IsNotExist(err) {
 			return fmt.Errorf("ABI path does not exist: %s", inputs.AbiPath)
@@ -128,17 +203,24 @@ func (h *handler) ValidateInputs(inputs Inputs) error {
 		return fmt.Errorf("failed to access ABI path: %w", err)
 	}
 
-	// Validate that if AbiPath is a directory, it contains .abi files
 	if info, err := os.Stat(inputs.AbiPath); err == nil && info.IsDir() {
-		files, err := filepath.Glob(filepath.Join(inputs.AbiPath, "*.abi"))
+		files, err := findAbiFiles(inputs.AbiPath)
 		if err != nil {
 			return fmt.Errorf("failed to check for ABI files in directory: %w", err)
 		}
 		if len(files) == 0 {
-			return fmt.Errorf("no .abi files found in directory: %s", inputs.AbiPath)
+			return fmt.Errorf("no *.abi or *.json files found in directory: %s", inputs.AbiPath)
 		}
 	}
 
+	if inputs.GoLang && inputs.GoOutPath == "" {
+		return fmt.Errorf("go output path is required when language is go")
+	}
+	if inputs.TypeScript && inputs.TSOutPath == "" {
+		return fmt.Errorf("typescript output path is required when language is typescript")
+	}
+
+	h.validated = true
 	return nil
 }
 
@@ -153,7 +235,6 @@ func contractNameToPackage(contractName string) string {
 	runes := []rune(contractName)
 
 	for i, r := range runes {
-		// Convert to lowercase
 		if r >= 'A' && r <= 'Z' {
 			lower := r - 'A' + 'a'
 
@@ -165,9 +246,6 @@ func contractNameToPackage(contractName string) string {
 				prevIsUpper := runes[i-1] >= 'A' && runes[i-1] <= 'Z'
 				nextIsLower := i+1 < len(runes) && runes[i+1] >= 'a' && runes[i+1] <= 'z'
 
-				// Add underscore if:
-				// - Previous char was lowercase (CamelCase boundary)
-				// - Previous char was uppercase but this char is followed by lowercase (end of acronym)
 				if !prevIsUpper || (prevIsUpper && nextIsLower && i > 1) {
 					result = append(result, '_')
 				}
@@ -183,56 +261,92 @@ func contractNameToPackage(contractName string) string {
 }
 
 func (h *handler) processAbiDirectory(inputs Inputs) error {
-	// Read all .abi files in the directory
-	files, err := filepath.Glob(filepath.Join(inputs.AbiPath, "*.abi"))
+	files, err := findAbiFiles(inputs.AbiPath)
 	if err != nil {
 		return fmt.Errorf("failed to find ABI files: %w", err)
 	}
 
 	if len(files) == 0 {
-		return fmt.Errorf("no .abi files found in directory: %s", inputs.AbiPath)
+		return fmt.Errorf("no *.abi or *.json files found in directory: %s", inputs.AbiPath)
 	}
 
-	packageNames := make(map[string]bool)
-	for _, abiFile := range files {
-		contractName := filepath.Base(abiFile)
-		contractName = contractName[:len(contractName)-4]
-		packageName := contractNameToPackage(contractName)
-		if _, exists := packageNames[packageName]; exists {
-			return fmt.Errorf("package name collision: multiple contracts would generate the same package name '%s' (contracts are converted to snake_case for package names). Please rename one of your contract files to avoid this conflict", packageName)
+	// Detect duplicate contract names across extensions (e.g. Foo.abi and Foo.json)
+	contractNames := make(map[string]string) // contract name -> originating file
+	for _, f := range files {
+		name := contractNameFromFile(f)
+		if prev, exists := contractNames[name]; exists {
+			return fmt.Errorf("duplicate contract name %q: found in both %s and %s", name, filepath.Base(prev), filepath.Base(f))
 		}
-		packageNames[packageName] = true
+		contractNames[name] = f
 	}
 
-	// Process each ABI file
+	if inputs.GoLang {
+		packageNames := make(map[string]bool)
+		for _, abiFile := range files {
+			contractName := contractNameFromFile(abiFile)
+			packageName := contractNameToPackage(contractName)
+			if _, exists := packageNames[packageName]; exists {
+				return fmt.Errorf("package name collision: multiple contracts would generate the same package name '%s' (contracts are converted to snake_case for package names). Please rename one of your contract files to avoid this conflict", packageName)
+			}
+			packageNames[packageName] = true
+		}
+	}
+
+	var generatedContracts []string
+
 	for _, abiFile := range files {
-		// Extract contract name from filename (remove .abi extension)
-		contractName := filepath.Base(abiFile)
-		contractName = contractName[:len(contractName)-4] // Remove .abi extension
+		contractName := contractNameFromFile(abiFile)
 
-		// Convert contract name to package name
-		packageName := contractNameToPackage(contractName)
+		if inputs.TypeScript {
+			outputFile := filepath.Join(inputs.TSOutPath, contractName+".ts")
+			ui.Dim(fmt.Sprintf("Processing: %s -> %s", contractName, outputFile))
 
-		// Create per-contract output directory
-		contractOutDir := filepath.Join(inputs.OutPath, packageName)
-		if err := os.MkdirAll(contractOutDir, 0o755); err != nil {
-			return fmt.Errorf("failed to create contract output directory %s: %w", contractOutDir, err)
+			err = GenerateBindingsTS(
+				abiFile,
+				contractName,
+				outputFile,
+			)
+			if err != nil {
+				return fmt.Errorf("failed to generate TypeScript bindings for %s: %w", contractName, err)
+			}
+			generatedContracts = append(generatedContracts, contractName)
 		}
 
-		// Create output file path in contract-specific directory
-		outputFile := filepath.Join(contractOutDir, contractName+".go")
+		if inputs.GoLang {
+			packageName := contractNameToPackage(contractName)
 
-		fmt.Printf("Processing ABI file: %s, contract: %s, package: %s, output: %s\n", abiFile, contractName, packageName, outputFile)
+			contractOutDir := filepath.Join(inputs.GoOutPath, packageName)
+			if err := os.MkdirAll(contractOutDir, 0o755); err != nil {
+				return fmt.Errorf("failed to create contract output directory %s: %w", contractOutDir, err)
+			}
 
-		err = GenerateBindings(
-			"", // combinedJSONPath - empty for now
-			abiFile,
-			packageName,  // Use contract-specific package name
-			contractName, // Use contract name as type name
-			outputFile,
-		)
-		if err != nil {
-			return fmt.Errorf("failed to generate bindings for %s: %w", contractName, err)
+			outputFile := filepath.Join(contractOutDir, contractName+".go")
+			ui.Dim(fmt.Sprintf("Processing: %s -> %s", contractName, outputFile))
+
+			err = GenerateBindings(
+				"",
+				abiFile,
+				packageName,
+				contractName,
+				outputFile,
+			)
+			if err != nil {
+				return fmt.Errorf("failed to generate bindings for %s: %w", contractName, err)
+			}
+		}
+	}
+
+	// Generate barrel index.ts for TypeScript
+	if inputs.TypeScript && len(generatedContracts) > 0 {
+		indexPath := filepath.Join(inputs.TSOutPath, "index.ts")
+		var indexContent string
+		indexContent += "// Code generated — DO NOT EDIT.\n"
+		for _, name := range generatedContracts {
+			indexContent += fmt.Sprintf("export * from './%s'\n", name)
+			indexContent += fmt.Sprintf("export * from './%s_mock'\n", name)
+		}
+		if err := os.WriteFile(indexPath, []byte(indexContent), 0o600); err != nil {
+			return fmt.Errorf("failed to write index.ts: %w", err)
 		}
 	}
 
@@ -240,51 +354,67 @@ func (h *handler) processAbiDirectory(inputs Inputs) error {
 }
 
 func (h *handler) processSingleAbi(inputs Inputs) error {
-	// Extract contract name from ABI file path
-	contractName := filepath.Base(inputs.AbiPath)
-	if filepath.Ext(contractName) == ".abi" {
-		contractName = contractName[:len(contractName)-4] // Remove .abi extension
+	contractName := contractNameFromFile(inputs.AbiPath)
+
+	if inputs.TypeScript {
+		outputFile := filepath.Join(inputs.TSOutPath, contractName+".ts")
+		ui.Dim(fmt.Sprintf("Processing: %s -> %s", contractName, outputFile))
+
+		if err := GenerateBindingsTS(
+			inputs.AbiPath,
+			contractName,
+			outputFile,
+		); err != nil {
+			return err
+		}
 	}
 
-	// Convert contract name to package name
-	packageName := contractNameToPackage(contractName)
+	if inputs.GoLang {
+		packageName := contractNameToPackage(contractName)
 
-	// Create per-contract output directory
-	contractOutDir := filepath.Join(inputs.OutPath, packageName)
-	if err := os.MkdirAll(contractOutDir, 0o755); err != nil {
-		return fmt.Errorf("failed to create contract output directory %s: %w", contractOutDir, err)
+		contractOutDir := filepath.Join(inputs.GoOutPath, packageName)
+		if err := os.MkdirAll(contractOutDir, 0o755); err != nil {
+			return fmt.Errorf("failed to create contract output directory %s: %w", contractOutDir, err)
+		}
+
+		outputFile := filepath.Join(contractOutDir, contractName+".go")
+		ui.Dim(fmt.Sprintf("Processing: %s -> %s", contractName, outputFile))
+
+		if err := GenerateBindings(
+			"",
+			inputs.AbiPath,
+			packageName,
+			contractName,
+			outputFile,
+		); err != nil {
+			return err
+		}
 	}
 
-	// Create output file path in contract-specific directory
-	outputFile := filepath.Join(contractOutDir, contractName+".go")
-
-	fmt.Printf("Processing single ABI file: %s, contract: %s, package: %s, output: %s\n", inputs.AbiPath, contractName, packageName, outputFile)
-
-	return GenerateBindings(
-		"", // combinedJSONPath - empty for now
-		inputs.AbiPath,
-		packageName,  // Use contract-specific package name
-		contractName, // Use contract name as type name
-		outputFile,
-	)
+	return nil
 }
 
 func (h *handler) Execute(inputs Inputs) error {
-	// Validate language
-	switch inputs.Language {
-	case "go":
-		// Language supported, continue
-	default:
-		return fmt.Errorf("unsupported language: %s", inputs.Language)
+	langs := []string{}
+	if inputs.GoLang {
+		langs = append(langs, "go")
+	}
+	if inputs.TypeScript {
+		langs = append(langs, "typescript")
+	}
+	ui.Dim(fmt.Sprintf("Project: %s, Chain: evm, Languages: %v", inputs.ProjectRoot, langs))
+
+	if inputs.GoLang {
+		if err := os.MkdirAll(inputs.GoOutPath, 0o755); err != nil {
+			return fmt.Errorf("failed to create Go output directory: %w", err)
+		}
+	}
+	if inputs.TypeScript {
+		if err := os.MkdirAll(inputs.TSOutPath, 0o755); err != nil {
+			return fmt.Errorf("failed to create TypeScript output directory: %w", err)
+		}
 	}
 
-	// Validate chain family and handle accordingly
-	// Create output directory if it doesn't exist
-	if err := os.MkdirAll(inputs.OutPath, 0o755); err != nil {
-		return fmt.Errorf("failed to create output directory: %w", err)
-	}
-
-	// Check if ABI path is a directory or file
 	info, err := os.Stat(inputs.AbiPath)
 	if err != nil {
 		return fmt.Errorf("failed to access ABI path: %w", err)
@@ -300,22 +430,32 @@ func (h *handler) Execute(inputs Inputs) error {
 		}
 	}
 
-	err = runCommand(inputs.ProjectRoot, "go", "get", "github.com/smartcontractkit/cre-sdk-go@"+creinit.SdkVersion)
-	if err != nil {
-		return err
+	if inputs.GoLang {
+		spinner := ui.NewSpinner()
+		spinner.Start("Installing dependencies...")
+
+		err = runCommand(inputs.ProjectRoot, "go", "get", "github.com/smartcontractkit/cre-sdk-go@"+constants.SdkVersion)
+		if err != nil {
+			spinner.Stop()
+			return err
+		}
+		err = runCommand(inputs.ProjectRoot, "go", "get", "github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm@"+constants.EVMCapabilitiesVersion)
+		if err != nil {
+			spinner.Stop()
+			return err
+		}
+		if err = runCommand(inputs.ProjectRoot, "go", "mod", "tidy"); err != nil {
+			spinner.Stop()
+			return err
+		}
+
+		spinner.Stop()
 	}
-	err = runCommand(inputs.ProjectRoot, "go", "get", "github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm@"+creinit.EVMCapabilitiesVersion)
-	if err != nil {
-		return err
-	}
-	err = runCommand(inputs.ProjectRoot, "go", "mod", "tidy")
-	if err != nil {
-		return err
-	}
+
+	ui.Success("Bindings generated successfully")
 	return nil
 }
 
-// runCommand executes a command in a specified directory
 func runCommand(dir string, command string, args ...string) error {
 	cmd := exec.Command(command, args...)
 	cmd.Dir = dir

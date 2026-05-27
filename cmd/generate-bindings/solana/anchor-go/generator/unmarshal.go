@@ -72,7 +72,7 @@ func formatEnumEncoderName(enumTypeName string) string {
 	return "Encode" + enumTypeName
 }
 
-func gen_UnmarshalWithDecoder_struct(
+func (g *Generator) gen_UnmarshalWithDecoder_struct(
 	idl_ *idl.Idl,
 	withDiscriminator bool,
 	receiverTypeName string,
@@ -118,10 +118,10 @@ func gen_UnmarshalWithDecoder_struct(
 
 				switch fields := fields.(type) {
 				case idl.IdlDefinedFieldsNamed:
-					gen_unmarshal_DefinedFieldsNamed(body, fields)
+					g.gen_unmarshal_DefinedFieldsNamed(body, fields, generateUniqueFieldNames(fields))
 				case idl.IdlDefinedFieldsTuple:
 					convertedFields := tupleToFieldsNamed(fields)
-					gen_unmarshal_DefinedFieldsNamed(body, convertedFields)
+					g.gen_unmarshal_DefinedFieldsNamed(body, convertedFields, generateUniqueFieldNames(convertedFields))
 				case nil:
 					// No fields, just an empty struct.
 					// TODO: should we panic here?
@@ -226,21 +226,21 @@ func tupleToFieldsNamed(
 	return fields
 }
 
-func gen_unmarshal_DefinedFieldsNamed(
+func (g *Generator) gen_unmarshal_DefinedFieldsNamed(
 	body *Group,
 	fields idl.IdlDefinedFieldsNamed,
+	uniqueFieldNames map[string]string,
 ) {
 	for _, field := range fields {
-		exportedArgName := tools.ToCamelUpper(field.Name)
+		goFieldName := uniqueFieldNames[field.Name]
+		exportedArgName := goFieldName
 		if IsOption(field.Ty) || IsCOption(field.Ty) {
 			body.Commentf("Deserialize `%s` (optional):", exportedArgName)
 		} else {
 			body.Commentf("Deserialize `%s`:", exportedArgName)
 		}
 
-		if isComplexEnum(field.Ty) || (IsArray(field.Ty) && isComplexEnum(field.Ty.(*idltype.Array).Type)) || (IsVec(field.Ty) && isComplexEnum(field.Ty.(*idltype.Vec).Vec)) {
-			// TODO: this assumes this cannot be an option;
-			// - check whether this is an option?
+		if g.isComplexEnum(field.Ty) || (IsArray(field.Ty) && g.isComplexEnum(field.Ty.(*idltype.Array).Type)) || (IsVec(field.Ty) && g.isComplexEnum(field.Ty.(*idltype.Vec).Vec)) || g.isOptionalComplexEnum(field.Ty) {
 			switch field.Ty.(type) {
 			case *idltype.Defined:
 				enumName := field.Ty.(*idltype.Defined).Name
@@ -248,7 +248,7 @@ func gen_unmarshal_DefinedFieldsNamed(
 					{
 						argBody.Var().Err().Error()
 						argBody.List(
-							Id("obj").Dot(exportedArgName),
+							Id("obj").Dot(goFieldName),
 							Err(),
 						).Op("=").Id(formatEnumParserName(enumName)).Call(Id("decoder"))
 					}
@@ -264,11 +264,11 @@ func gen_unmarshal_DefinedFieldsNamed(
 					// Read the array items:
 					argBody.For(
 						Id("i").Op(":=").Lit(0),
-						Id("i").Op("<").Len(Id("obj").Dot(exportedArgName)),
+						Id("i").Op("<").Len(Id("obj").Dot(goFieldName)),
 						Id("i").Op("++"),
 					).BlockFunc(func(forBody *Group) {
 						forBody.List(
-							Id("obj").Dot(exportedArgName).Index(Id("i")),
+							Id("obj").Dot(goFieldName).Index(Id("i")),
 							Err(),
 						).Op("=").Id(formatEnumParserName(enumTypeName)).Call(Id("decoder"))
 						forBody.If(Err().Op("!=").Nil()).Block(
@@ -313,7 +313,7 @@ func gen_unmarshal_DefinedFieldsNamed(
 						),
 					)
 					// Create the vector:
-					argBody.Id("obj").Dot(exportedArgName).Op("=").Make(Index().Id(enumTypeName), Id("vecLen"))
+					argBody.Id("obj").Dot(goFieldName).Op("=").Make(Index().Id(enumTypeName), Id("vecLen"))
 					// Read the vector items:
 					argBody.For(
 						Id("i").Op(":=").Lit(0),
@@ -321,7 +321,7 @@ func gen_unmarshal_DefinedFieldsNamed(
 						Id("i").Op("++"),
 					).BlockFunc(func(forBody *Group) {
 						forBody.List(
-							Id("obj").Dot(exportedArgName).Index(Id("i")),
+							Id("obj").Dot(goFieldName).Index(Id("i")),
 							Err(),
 						).Op("=").Id(formatEnumParserName(enumTypeName)).Call(Id("decoder"))
 						forBody.If(Err().Op("!=").Nil()).Block(
@@ -337,6 +337,12 @@ func gen_unmarshal_DefinedFieldsNamed(
 						)
 					})
 				})
+			case *idltype.Option:
+				enumTypeName := field.Ty.(*idltype.Option).Option.(*idltype.Defined).Name
+				gen_unmarshal_optionalComplexEnum(body, "ReadOption", enumTypeName, exportedArgName)
+			case *idltype.COption:
+				enumTypeName := field.Ty.(*idltype.COption).COption.(*idltype.Defined).Name
+				gen_unmarshal_optionalComplexEnum(body, "ReadCOption", enumTypeName, exportedArgName)
 			}
 		} else {
 			if IsOption(field.Ty) || IsCOption(field.Ty) {
@@ -363,7 +369,7 @@ func gen_unmarshal_DefinedFieldsNamed(
 						),
 					)
 					optGroup.If(Id("ok")).Block(
-						Err().Op("=").Id("decoder").Dot("Decode").Call(Op("&").Id("obj").Dot(exportedArgName)),
+						Err().Op("=").Id("decoder").Dot("Decode").Call(Op("&").Id("obj").Dot(goFieldName)),
 						If(Err().Op("!=").Nil()).Block(
 							Return(
 								Qual(PkgAnchorGoErrors, "NewField").Call(
@@ -375,7 +381,7 @@ func gen_unmarshal_DefinedFieldsNamed(
 					)
 				})
 			} else {
-				body.Err().Op("=").Id("decoder").Dot("Decode").Call(Op("&").Id("obj").Dot(exportedArgName))
+				body.Err().Op("=").Id("decoder").Dot("Decode").Call(Op("&").Id("obj").Dot(goFieldName))
 				body.If(Err().Op("!=").Nil()).Block(
 					Return(
 						Qual(PkgAnchorGoErrors, "NewField").Call(
@@ -387,4 +393,40 @@ func gen_unmarshal_DefinedFieldsNamed(
 			}
 		}
 	}
+}
+
+func gen_unmarshal_optionalComplexEnum(
+	body *Group,
+	optionalityReaderName string,
+	enumTypeName string,
+	exportedArgName string,
+) {
+	body.BlockFunc(func(optGroup *Group) {
+		optGroup.List(Id("ok"), Err()).Op(":=").Id("decoder").Dot(optionalityReaderName).Call()
+		optGroup.If(Err().Op("!=").Nil()).Block(
+			Return(
+				Qual(PkgAnchorGoErrors, "NewOption").Call(
+					Lit(exportedArgName),
+					Qual("fmt", "Errorf").Call(
+						Lit("error while reading optionality: %w"),
+						Err(),
+					),
+				),
+			),
+		)
+		optGroup.If(Id("ok")).Block(
+			List(
+				Id("obj").Dot(exportedArgName),
+				Err(),
+			).Op("=").Id(formatEnumParserName(enumTypeName)).Call(Id("decoder")),
+			If(Err().Op("!=").Nil()).Block(
+				Return(
+					Qual(PkgAnchorGoErrors, "NewField").Call(
+						Lit(exportedArgName),
+						Err(),
+					),
+				),
+			),
+		)
+	})
 }
