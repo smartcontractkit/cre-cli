@@ -12,6 +12,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
+	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
 func New(runtimeCtx *runtime.Context) *cobra.Command {
@@ -78,19 +79,44 @@ func (h *Handler) Execute(ctx context.Context) error {
 		} `json:"getOrganization"`
 	}
 
-	if err := client.Execute(ctx, req, &respEnvelope); err != nil {
+	spinner := ui.GlobalSpinner()
+	spinner.Start("Fetching account details...")
+	err := client.Execute(ctx, req, &respEnvelope)
+	spinner.Stop()
+
+	if err != nil {
 		return fmt.Errorf("graphql request failed: %w", err)
 	}
 
-	fmt.Println("")
-	fmt.Println("Account details retrieved:")
-	fmt.Println("")
-	if respEnvelope.GetAccountDetails != nil {
-		fmt.Printf("\tEmail:             %s\n", respEnvelope.GetAccountDetails.EmailAddress)
+	// Get deployment access status
+	deployAccess, err := h.credentials.GetDeploymentAccessStatus()
+	if err != nil {
+		h.log.Debug().Err(err).Msg("failed to get deployment access status")
 	}
-	fmt.Printf("\tOrganization ID:   %s\n", respEnvelope.GetOrganization.OrganizationID)
-	fmt.Printf("\tOrganization Name: %s\n", respEnvelope.GetOrganization.DisplayName)
-	fmt.Println("")
+
+	ui.Line()
+	ui.Title("Account Details")
+	ui.EnvContext(h.environmentSet.EnvLabel())
+
+	details := fmt.Sprintf("Organization ID:   %s\nOrganization Name: %s",
+		respEnvelope.GetOrganization.OrganizationID,
+		respEnvelope.GetOrganization.DisplayName)
+
+	if respEnvelope.GetAccountDetails != nil {
+		details = fmt.Sprintf("Email:             %s\n%s",
+			respEnvelope.GetAccountDetails.EmailAddress,
+			details)
+	}
+
+	// Add deployment access status
+	if deployAccess != nil && deployAccess.HasAccess {
+		details = fmt.Sprintf("%s\nDeploy Access:     Enabled", details)
+	} else {
+		details = fmt.Sprintf("%s\nDeploy Access:     Not enabled", details)
+	}
+
+	ui.Box(details)
+	ui.Line()
 
 	return nil
 }

@@ -37,7 +37,7 @@ func New(ctx *runtime.Context) *cobra.Command {
 				return fmt.Errorf("execute expects a bundle .json file; got %q", ext)
 			}
 
-			h, err := common.NewHandler(ctx, bundlePath)
+			h, err := common.NewHandler(cmd.Context(), ctx, bundlePath, common.SecretsAuthOnchain)
 			if err != nil {
 				return err
 			}
@@ -65,9 +65,13 @@ func New(ctx *runtime.Context) *cobra.Command {
 				return fmt.Errorf("invalid bundle digest: %w", err)
 			}
 
+			if err := h.EnsureDeploymentRPCForOwnerKeySecrets(); err != nil {
+				return err
+			}
+
 			ownerAddr := ethcommon.HexToAddress(h.OwnerAddress)
 
-			allowlisted, err := h.Wrc.IsRequestAllowlisted(ownerAddr, digest)
+			allowlisted, err := h.Wrc.IsRequestAllowlisted(cmd.Context(), ownerAddr, digest)
 			if err != nil {
 				return fmt.Errorf("allowlist check failed: %w", err)
 			}

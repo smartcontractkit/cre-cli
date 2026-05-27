@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/rs/zerolog"
@@ -12,17 +13,32 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/authvalidation"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
+	"github.com/smartcontractkit/cre-cli/internal/ethkeys"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
+	"github.com/smartcontractkit/cre-cli/internal/tenantctx"
+)
+
+var (
+	ErrNoCredentials    = errors.New("no credentials found")
+	ErrValidationFailed = errors.New("credential validation failed")
 )
 
 type Context struct {
-	Logger         *zerolog.Logger
-	Viper          *viper.Viper
-	ClientFactory  client.Factory
-	Settings       *settings.Settings
-	Credentials    *credentials.Credentials
-	EnvironmentSet *environments.EnvironmentSet
-	Workflow       WorkflowRuntime
+	Logger           *zerolog.Logger
+	Viper            *viper.Viper
+	ClientFactory    client.Factory
+	Settings         *settings.Settings
+	Credentials      *credentials.Credentials
+	EnvironmentSet   *environments.EnvironmentSet
+	TenantContext    *tenantctx.EnvironmentContext
+	ResolvedRegistry settings.ResolvedRegistry
+	Workflow         WorkflowRuntime
+
+	OrgID                string
+	DerivedWorkflowOwner string
+	// InvocationDir is the working directory at the time the CLI was invoked,
+	// before any os.Chdir calls made by SetExecutionContext.
+	InvocationDir string
 }
 
 type WorkflowRuntime struct {
@@ -56,26 +72,105 @@ func (ctx *Context) AttachSettings(cmd *cobra.Command, validateDeployRPC bool) e
 	return nil
 }
 
+// FinalizeDeferredWorkflowOwner fills workflow owner when settings load deferred it
+// (non-empty deployment-registry). Call after AttachResolvedRegistry.
+func (ctx *Context) FinalizeDeferredWorkflowOwner(cmd *cobra.Command) error {
+	if ctx.Settings == nil {
+		return nil
+	}
+	return settings.FinalizeWorkflowOwner(
+		ctx.Viper,
+		cmd,
+		&ctx.Settings.Workflow,
+		ctx.Settings.User.TargetName,
+		ctx.ResolvedRegistry,
+		ctx.DerivedWorkflowOwner,
+	)
+}
+
 func (ctx *Context) AttachCredentials(validationCtx context.Context, skipValidation bool) error {
 	var err error
 
 	ctx.Credentials, err = credentials.New(ctx.Logger)
 	if err != nil {
-		return fmt.Errorf("%w", err)
+		return fmt.Errorf("%w: %w", ErrNoCredentials, err)
 	}
 
-	// Validate credentials immediately after loading (unless skipped)
 	if !skipValidation {
 		if ctx.EnvironmentSet == nil {
-			return fmt.Errorf("failed to load environment")
+			return fmt.Errorf("%w: failed to load environment", ErrValidationFailed)
 		}
 
 		validator := authvalidation.NewValidator(ctx.Credentials, ctx.EnvironmentSet, ctx.Logger)
-		if err := validator.ValidateCredentials(validationCtx, ctx.Credentials); err != nil {
-			return fmt.Errorf("authentication validation failed: %w", err)
+		result, err := validator.ValidateCredentials(validationCtx, ctx.Credentials)
+		if err != nil {
+			return fmt.Errorf("%w: %w", ErrValidationFailed, err)
+		}
+
+		if result != nil {
+			ctx.OrgID = result.OrgID
+			formatted, err := ethkeys.FormatWorkflowOwnerAddress(result.DerivedWorkflowOwner)
+			if err != nil {
+				return fmt.Errorf("%w: %w", ErrValidationFailed, err)
+			}
+			ctx.DerivedWorkflowOwner = formatted
 		}
 	}
 
+	return nil
+}
+
+// AttachTenantContext loads the user context for the current environment.
+// If the manifest is missing, it is fetched from the service first.
+func (ctx *Context) AttachTenantContext(validationCtx context.Context) error {
+	if ctx.Credentials == nil || ctx.EnvironmentSet == nil {
+		return fmt.Errorf("credentials and environment must be loaded before user context")
+	}
+
+	if err := tenantctx.EnsureContext(validationCtx, ctx.Credentials, ctx.EnvironmentSet, ctx.Logger); err != nil {
+		return fmt.Errorf("failed to ensure user context: %w", err)
+	}
+
+	envName := ctx.EnvironmentSet.EnvName
+	if envName == "" {
+		envName = environments.DefaultEnv
+	}
+
+	envCtx, err := tenantctx.LoadContext(envName)
+	if err != nil {
+		return fmt.Errorf("failed to load user context: %w", err)
+	}
+
+	ctx.TenantContext = envCtx
+	return nil
+}
+
+// ValidateOnchainRegistryRPC validates the deployment RPC URL when the resolved
+// registry is on-chain. It is a no-op for off-chain (private) registries.
+// A nil resolved registry is treated as on-chain (the default).
+// Must be called after AttachResolvedRegistry.
+func (ctx *Context) ValidateOnchainRegistryRPC() error {
+	if ctx.ResolvedRegistry != nil && ctx.ResolvedRegistry.Type() == settings.RegistryTypeOffChain {
+		return nil
+	}
+	return settings.ValidateDeploymentRPC(&ctx.Settings.Workflow, ctx.EnvironmentSet.WorkflowRegistryChainName)
+}
+
+// AttachResolvedRegistry resolves the deployment-registry from workflow
+// settings against the tenant context registries. Must be called after
+// AttachSettings and AttachTenantContext.
+func (ctx *Context) AttachResolvedRegistry() error {
+	deploymentRegistry := ""
+	if ctx.Settings != nil {
+		deploymentRegistry = ctx.Settings.Workflow.UserWorkflowSettings.DeploymentRegistry
+	}
+
+	resolved, err := settings.ResolveRegistry(deploymentRegistry, ctx.TenantContext, ctx.EnvironmentSet)
+	if err != nil {
+		return fmt.Errorf("failed to resolve deployment registry: %w", err)
+	}
+
+	ctx.ResolvedRegistry = resolved
 	return nil
 }
 

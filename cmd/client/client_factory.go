@@ -1,6 +1,7 @@
 package client
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -15,7 +16,7 @@ import (
 )
 
 type Factory interface {
-	NewWorkflowRegistryV2Client() (*WorkflowRegistryV2Client, error)
+	NewWorkflowRegistryV2Client(ctx context.Context) (*WorkflowRegistryV2Client, error)
 	GetTxType() TxType
 	GetSkipConfirmation() bool
 }
@@ -32,7 +33,7 @@ func NewFactory(logger *zerolog.Logger, viper *viper.Viper) Factory {
 	}
 }
 
-func (f *factoryImpl) NewWorkflowRegistryV2Client() (*WorkflowRegistryV2Client, error) {
+func (f *factoryImpl) NewWorkflowRegistryV2Client(ctx context.Context) (*WorkflowRegistryV2Client, error) {
 	environmentSet, err := environments.New()
 	if err != nil {
 		return nil, fmt.Errorf("failed to load environment details: %w", err)
@@ -60,7 +61,7 @@ func (f *factoryImpl) NewWorkflowRegistryV2Client() (*WorkflowRegistryV2Client, 
 		txcConfig,
 	)
 
-	typeAndVersion, err := workflowRegistryV2Client.TypeAndVersion()
+	typeAndVersion, err := workflowRegistryV2Client.TypeAndVersion(ctx)
 	if err != nil {
 		return workflowRegistryV2Client, fmt.Errorf("failed to get type and version of workflow registry contract at %s: %w", environmentSet.WorkflowRegistryAddress, err)
 	}
