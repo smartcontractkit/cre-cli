@@ -1,28 +1,21 @@
 package delete
 
 import (
-	"encoding/hex"
-	"errors"
+	"context"
 	"fmt"
 	"io"
-	"math/big"
-	"sync"
-	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/jedib0t/go-pretty/v6/text"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
 	"github.com/smartcontractkit/cre-cli/cmd/client"
-	cmdCommon "github.com/smartcontractkit/cre-cli/cmd/common"
+	workflowcommon "github.com/smartcontractkit/cre-cli/cmd/workflow/common"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
-	"github.com/smartcontractkit/cre-cli/internal/prompt"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
-	"github.com/smartcontractkit/cre-cli/internal/types"
+	"github.com/smartcontractkit/cre-cli/internal/ui"
 	"github.com/smartcontractkit/cre-cli/internal/validation"
 )
 
@@ -30,9 +23,7 @@ type Inputs struct {
 	WorkflowName     string `validate:"workflow_name"`
 	WorkflowOwner    string `validate:"workflow_owner"`
 	SkipConfirmation bool
-
-	WorkflowRegistryContractAddress   string `validate:"required"`
-	WorkflowRegistryContractChainName string `validate:"required"`
+	NonInteractive   bool
 }
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
@@ -54,7 +45,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return handler.Execute()
+			return handler.Execute(cmd.Context())
 		},
 	}
 
@@ -73,13 +64,10 @@ type handler struct {
 	credentials    *credentials.Credentials
 	environmentSet *environments.EnvironmentSet
 	inputs         Inputs
-	wrc            *client.WorkflowRegistryV2Client
 	runtimeContext *runtime.Context
 
 	validated bool
-
-	wg     sync.WaitGroup
-	wrcErr error
+	execCtx   context.Context
 }
 
 func newHandler(ctx *runtime.Context, stdin io.Reader) *handler {
@@ -93,31 +81,39 @@ func newHandler(ctx *runtime.Context, stdin io.Reader) *handler {
 		environmentSet: ctx.EnvironmentSet,
 		runtimeContext: ctx,
 		validated:      false,
-		wg:             sync.WaitGroup{},
-		wrcErr:         nil,
 	}
-	h.wg.Add(1)
-	go func() {
-		defer h.wg.Done()
-		wrc, err := h.clientFactory.NewWorkflowRegistryV2Client()
-		if err != nil {
-			h.wrcErr = fmt.Errorf("failed to create workflow registry client: %w", err)
-			return
-		}
-		h.wrc = wrc
-	}()
 
 	return &h
 }
 
 func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
+	resolvedWorkflowOwner, err := h.resolveWorkflowOwner()
+	if err != nil {
+		return Inputs{}, fmt.Errorf("failed to resolve workflow owner: %w", err)
+	}
+
 	return Inputs{
-		WorkflowName:                      h.settings.Workflow.UserWorkflowSettings.WorkflowName,
-		WorkflowOwner:                     h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress,
-		SkipConfirmation:                  v.GetBool(settings.Flags.SkipConfirmation.Name),
-		WorkflowRegistryContractChainName: h.environmentSet.WorkflowRegistryChainName,
-		WorkflowRegistryContractAddress:   h.environmentSet.WorkflowRegistryAddress,
+		WorkflowName:     h.settings.Workflow.UserWorkflowSettings.WorkflowName,
+		WorkflowOwner:    resolvedWorkflowOwner,
+		SkipConfirmation: v.GetBool(settings.Flags.SkipConfirmation.Name),
+		NonInteractive:   v.GetBool(settings.Flags.NonInteractive.Name),
 	}, nil
+}
+
+// resolveWorkflowOwner returns the effective owner address for workflow ID computation.
+// For private registry deploys, the derived workflow owner from the runtime context is used.
+// For onchain deploys, the configured WorkflowOwner address is used directly.
+func (h *handler) resolveWorkflowOwner() (string, error) {
+	if h.runtimeContext.ResolvedRegistry.Type() != settings.RegistryTypeOffChain {
+		return h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress, nil
+	}
+
+	owner := h.runtimeContext.DerivedWorkflowOwner
+	if owner == "" {
+		return "", fmt.Errorf("derived workflow owner is not available; ensure authentication succeeded")
+	}
+
+	return owner, nil
 }
 
 func (h *handler) ValidateInputs() error {
@@ -134,132 +130,80 @@ func (h *handler) ValidateInputs() error {
 	return nil
 }
 
-func (h *handler) Execute() error {
-	workflowName := h.inputs.WorkflowName
-	workflowOwner := common.HexToAddress(h.inputs.WorkflowOwner)
-
-	h.displayWorkflowDetails()
-
-	h.wg.Wait()
-	if h.wrcErr != nil {
-		return h.wrcErr
+func (h *handler) Execute(ctx context.Context) error {
+	if !h.validated {
+		return fmt.Errorf("handler inputs not validated")
 	}
 
-	allWorkflows, err := h.wrc.GetWorkflowListByOwnerAndName(workflowOwner, workflowName, big.NewInt(0), big.NewInt(100))
+	h.execCtx = ctx
+
+	adapter, err := newRegistryDeleteStrategy(h.runtimeContext.ResolvedRegistry, h)
 	if err != nil {
-		return fmt.Errorf("failed to get workflow list: %w", err)
+		return err
 	}
-	if len(allWorkflows) == 0 {
-		fmt.Printf("No workflows found for name: %s\n", workflowName)
+
+	workflowcommon.DisplayWorkflowDetails(
+		h.settings,
+		h.runtimeContext,
+		"Deleting",
+		h.inputs.WorkflowName,
+		h.inputs.WorkflowOwner,
+	)
+
+	workflows, err := adapter.FetchWorkflows()
+	if err != nil {
+		return err
+	}
+
+	if len(workflows) == 0 {
+		ui.Warning(fmt.Sprintf("No workflows found for name: %s", h.inputs.WorkflowName))
 		return nil
 	}
 
 	// Note: The way deploy is set up, there will only ever be one workflow in the command for now
-	h.runtimeContext.Workflow.ID = hex.EncodeToString(allWorkflows[0].WorkflowId[:])
+	h.runtimeContext.Workflow.ID = workflows[0].ID
 
-	fmt.Printf("Found %d workflow(s) to delete for name: %s\n", len(allWorkflows), workflowName)
-	for i, wf := range allWorkflows {
-		status := map[uint8]string{0: "ACTIVE", 1: "PAUSED"}[wf.Status]
-		fmt.Printf("   %d. Workflow\n", i+1)
-		fmt.Printf("      ID:              %s\n", hex.EncodeToString(wf.WorkflowId[:]))
-		fmt.Printf("      Owner:           %s\n", wf.Owner.Hex())
-		fmt.Printf("      DON Family:      %s\n", wf.DonFamily)
-		fmt.Printf("      Tag:             %s\n", wf.Tag)
-		fmt.Printf("      Binary URL:      %s\n", wf.BinaryUrl)
-		fmt.Printf("      Workflow Status: %s\n", status)
-		fmt.Println("")
+	ui.Bold(fmt.Sprintf("Found %d workflow(s) to delete for name: %s", len(workflows), h.inputs.WorkflowName))
+	for i, wf := range workflows {
+		ui.Print(fmt.Sprintf("   %d. Workflow", i+1))
+		ui.Dim(fmt.Sprintf("      Registry:         %s", h.runtimeContext.ResolvedRegistry.ID()))
+		ui.Dim(fmt.Sprintf("      ID:               %s", wf.ID))
+		ui.Dim(fmt.Sprintf("      Owner:            %s", wf.Owner))
+		ui.Dim(fmt.Sprintf("      DON Family:       %s", wf.DonFamily))
+		ui.Dim(fmt.Sprintf("      Tag:              %s", wf.Tag))
+		ui.Dim(fmt.Sprintf("      Binary URL:       %s", wf.BinaryURL))
+		ui.Dim(fmt.Sprintf("      Workflow Status:  %s", wf.Status))
+		ui.Line()
 	}
 
-	shouldDeleteWorkflow, err := h.shouldDeleteWorkflow(h.inputs.SkipConfirmation, workflowName)
+	shouldDeleteWorkflow, err := h.shouldDeleteWorkflow(h.inputs.SkipConfirmation, h.inputs.WorkflowName)
 	if err != nil {
 		return err
 	}
 	if !shouldDeleteWorkflow {
-		fmt.Println("Workflow deletion canceled")
+		ui.Warning("Workflow deletion canceled")
 		return nil
 	}
 
-	fmt.Printf("Deleting %d workflow(s)...\n", len(allWorkflows))
-	var errs []error
-	for _, wf := range allWorkflows {
-		txOut, err := h.wrc.DeleteWorkflow(wf.WorkflowId)
-		if err != nil {
-			h.log.Error().
-				Err(err).
-				Str("workflowId", hex.EncodeToString(wf.WorkflowId[:])).
-				Msg("Failed to delete workflow")
-			errs = append(errs, err)
-			continue
-		}
-		switch txOut.Type {
-		case client.Regular:
-			fmt.Println("Transaction confirmed")
-			fmt.Printf("View on explorer: \033]8;;%s/tx/%s\033\\%s/tx/%s\033]8;;\033\\\n", h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash, h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash)
-			fmt.Printf("[OK] Deleted workflow ID: %s\n", hex.EncodeToString(wf.WorkflowId[:]))
+	ui.Dim(fmt.Sprintf("Deleting %d workflow(s)...", len(workflows)))
 
-		case client.Raw:
-			fmt.Println("")
-			fmt.Println("MSIG workflow deletion transaction prepared!")
-			fmt.Println("")
-			fmt.Println("Next steps:")
-			fmt.Println("")
-			fmt.Println("   1. Submit the following transaction on the target chain:")
-			fmt.Printf("      Chain:   %s\n", h.inputs.WorkflowRegistryContractChainName)
-			fmt.Printf("      Contract Address: %s\n", txOut.RawTx.To)
-			fmt.Println("")
-			fmt.Println("   2. Use the following transaction data:")
-			fmt.Println("")
-			fmt.Printf("      %x\n", txOut.RawTx.Data)
-			fmt.Println("")
-
-		case client.Changeset:
-			chainSelector, err := settings.GetChainSelectorByChainName(h.environmentSet.WorkflowRegistryChainName)
-			if err != nil {
-				return fmt.Errorf("failed to get chain selector for chain %q: %w", h.environmentSet.WorkflowRegistryChainName, err)
-			}
-			mcmsConfig, err := settings.GetMCMSConfig(h.settings, chainSelector)
-			if err != nil {
-				fmt.Println("\nMCMS config not found or is incorrect, skipping MCMS config in changeset")
-			}
-			cldSettings := h.settings.CLDSettings
-			changesets := []types.Changeset{
-				{
-					DeleteWorkflow: &types.DeleteWorkflow{
-						Payload: types.UserWorkflowDeleteInput{
-							WorkflowID: h.runtimeContext.Workflow.ID,
-
-							ChainSelector:             chainSelector,
-							MCMSConfig:                mcmsConfig,
-							WorkflowRegistryQualifier: cldSettings.WorkflowRegistryQualifier,
-						},
-					},
-				},
-			}
-			csFile := types.NewChangesetFile(cldSettings.Environment, cldSettings.Domain, cldSettings.MergeProposals, changesets)
-
-			var fileName string
-			if cldSettings.ChangesetFile != "" {
-				fileName = cldSettings.ChangesetFile
-			} else {
-				fileName = fmt.Sprintf("DeleteWorkflow_%s_%s.yaml", workflowName, time.Now().Format("20060102_150405"))
-			}
-
-			return cmdCommon.WriteChangesetFile(fileName, csFile, h.settings)
-
-		default:
-			h.log.Warn().Msgf("Unsupported transaction type: %s", txOut.Type)
-		}
-
-		// Workflow artifacts deletion will be handled by a background cleanup process.
+	err = adapter.DeleteWorkflows(workflows)
+	if err != nil {
+		return err
 	}
-	if len(errs) > 0 {
-		return fmt.Errorf("failed to delete some workflows: %w", errors.Join(errs...))
-	}
-	fmt.Println("Workflows deleted successfully.")
+
+	ui.Success("Workflows deleted successfully")
 	return nil
 }
 
 func (h *handler) shouldDeleteWorkflow(skipConfirmation bool, workflowName string) (bool, error) {
+	if h.inputs.NonInteractive && !skipConfirmation {
+		ui.ErrorWithSuggestions(
+			"Non-interactive mode requires all inputs via flags",
+			[]string{"--yes"},
+		)
+		return false, fmt.Errorf("missing required flags for --non-interactive mode")
+	}
 	if skipConfirmation {
 		return true, nil
 	}
@@ -272,24 +216,14 @@ func (h *handler) shouldDeleteWorkflow(skipConfirmation bool, workflowName strin
 }
 
 func (h *handler) askForWorkflowDeletionConfirmation(expectedWorkflowName string) (bool, error) {
-	promptWarning := fmt.Sprintf("Are you sure you want to delete the workflow '%s'?\n%s\n", expectedWorkflowName, text.FgRed.Sprint("This action cannot be undone."))
-	fmt.Println(promptWarning)
+	ui.Warning(fmt.Sprintf("Are you sure you want to delete the workflow '%s'?", expectedWorkflowName))
+	ui.Error("This action cannot be undone.")
+	ui.Line()
 
-	promptText := fmt.Sprintf("To confirm, type the workflow name: %s", expectedWorkflowName)
-	var result string
-	err := prompt.SimplePrompt(h.stdin, promptText, func(input string) error {
-		result = input
-		return nil
-	})
+	result, err := ui.Input(fmt.Sprintf("To confirm, type the workflow name: %s", expectedWorkflowName))
 	if err != nil {
 		return false, fmt.Errorf("failed to get workflow name confirmation: %w", err)
 	}
 
 	return result == expectedWorkflowName, nil
-}
-
-func (h *handler) displayWorkflowDetails() {
-	fmt.Printf("\nDeleting Workflow : \t %s\n", h.inputs.WorkflowName)
-	fmt.Printf("Target : \t\t %s\n", h.settings.User.TargetName)
-	fmt.Printf("Owner Address : \t %s\n\n", h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress)
 }

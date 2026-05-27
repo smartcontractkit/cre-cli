@@ -3,19 +3,90 @@ package settings
 import (
 	"fmt"
 	"net/url"
+	"os"
 	"strings"
 
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"sigs.k8s.io/yaml"
+
+	"github.com/smartcontractkit/cre-cli/internal/constants"
 )
+
+// GetWorkflowPathFromFile reads workflow-path from a workflow.yaml file (same value deploy/simulate get from Settings).
+func GetWorkflowPathFromFile(workflowYAMLPath string) (string, error) {
+	data, err := os.ReadFile(workflowYAMLPath)
+	if err != nil {
+		return "", fmt.Errorf("read workflow settings: %w", err)
+	}
+	var raw map[string]interface{}
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		return "", fmt.Errorf("parse workflow settings: %w", err)
+	}
+	return workflowPathFromRaw(raw)
+}
+
+// SetWorkflowPathInFile sets workflow-path in workflow.yaml (both staging-settings and production-settings) and writes the file.
+func SetWorkflowPathInFile(workflowYAMLPath, newPath string) error {
+	data, err := os.ReadFile(workflowYAMLPath)
+	if err != nil {
+		return fmt.Errorf("read workflow settings: %w", err)
+	}
+	var raw map[string]interface{}
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		return fmt.Errorf("parse workflow settings: %w", err)
+	}
+	setWorkflowPathInRaw(raw, newPath)
+	out, err := yaml.Marshal(raw)
+	if err != nil {
+		return fmt.Errorf("marshal workflow settings: %w", err)
+	}
+	if err := os.WriteFile(workflowYAMLPath, out, 0600); err != nil {
+		return fmt.Errorf("write workflow settings: %w", err)
+	}
+	return nil
+}
+
+func workflowPathFromRaw(raw map[string]interface{}) (string, error) {
+	for key := range raw {
+		target, _ := raw[key].(map[string]interface{})
+		if target == nil {
+			continue
+		}
+		artifacts, _ := target["workflow-artifacts"].(map[string]interface{})
+		if artifacts == nil {
+			continue
+		}
+		p, ok := artifacts["workflow-path"].(string)
+		if ok && p != "" {
+			return p, nil
+		}
+	}
+	return "", fmt.Errorf("workflow-path not found in workflow settings")
+}
+
+func setWorkflowPathInRaw(raw map[string]interface{}, path string) {
+	for _, key := range []string{"staging-settings", "production-settings"} {
+		target, _ := raw[key].(map[string]interface{})
+		if target == nil {
+			continue
+		}
+		artifacts, _ := target["workflow-artifacts"].(map[string]interface{})
+		if artifacts == nil {
+			continue
+		}
+		artifacts["workflow-path"] = path
+	}
+}
 
 type WorkflowSettings struct {
 	UserWorkflowSettings struct {
 		WorkflowOwnerAddress string `mapstructure:"workflow-owner-address" yaml:"workflow-owner-address"`
 		WorkflowOwnerType    string `mapstructure:"workflow-owner-type" yaml:"workflow-owner-type"`
 		WorkflowName         string `mapstructure:"workflow-name" yaml:"workflow-name"`
+		DeploymentRegistry   string `mapstructure:"deployment-registry" yaml:"deployment-registry"`
 	} `mapstructure:"user-workflow" yaml:"user-workflow"`
 	WorkflowArtifactSettings struct {
 		WorkflowPath string `mapstructure:"workflow-path" yaml:"workflow-path"`
@@ -49,14 +120,20 @@ func loadWorkflowSettings(logger *zerolog.Logger, v *viper.Viper, cmd *cobra.Com
 
 	var workflowSettings WorkflowSettings
 
-	// if a command doesn't need private key, skip getting owner here
+	workflowSettings.UserWorkflowSettings.DeploymentRegistry = getSetting(DeploymentRegistrySettingName)
+	deploymentRegistry := workflowSettings.UserWorkflowSettings.DeploymentRegistry
+
+	// If deployment-registry is set, owner depends on how that id resolves; defer to
+	// FinalizeWorkflowOwner (after ResolveRegistry). Otherwise resolve from env/config now.
 	if !ShouldSkipGetOwner(cmd) {
-		ownerAddress, ownerType, err := GetWorkflowOwner(v)
-		if err != nil {
-			return WorkflowSettings{}, err
+		if deploymentRegistry == "" {
+			ownerAddress, ownerType, err := GetWorkflowOwner(v)
+			if err != nil {
+				return WorkflowSettings{}, err
+			}
+			workflowSettings.UserWorkflowSettings.WorkflowOwnerAddress = ownerAddress
+			workflowSettings.UserWorkflowSettings.WorkflowOwnerType = ownerType
 		}
-		workflowSettings.UserWorkflowSettings.WorkflowOwnerAddress = ownerAddress
-		workflowSettings.UserWorkflowSettings.WorkflowOwnerType = ownerType
 	}
 
 	workflowSettings.UserWorkflowSettings.WorkflowName = getSetting(WorkflowNameSettingName)
@@ -73,32 +150,81 @@ func loadWorkflowSettings(logger *zerolog.Logger, v *viper.Viper, cmd *cobra.Com
 		logger.Debug().Msgf("rpcs settings not found in target %q", target)
 	}
 
-	if registryChainName != "" {
-		if err := validateDeploymentRPC(&workflowSettings, registryChainName); err != nil {
-			return WorkflowSettings{}, errors.Wrap(err, "for target "+target)
+	for i := range workflowSettings.RPCs {
+		resolved, err := ResolveEnvVars(workflowSettings.RPCs[i].Url)
+		if err != nil {
+			return WorkflowSettings{}, fmt.Errorf("rpc url for chain %q: %w",
+				workflowSettings.RPCs[i].ChainName, err)
 		}
+		workflowSettings.RPCs[i].Url = resolved
 	}
 
-	if err := validateSettings(&workflowSettings); err != nil {
+	if err := ValidateDeploymentRPC(&workflowSettings, registryChainName); err != nil {
+		return WorkflowSettings{}, errors.Wrap(err, "for target "+target)
+	}
+
+	if err := validateSettings(&workflowSettings, v.GetBool(Flags.AllowUnknownChains.Name)); err != nil {
 		return WorkflowSettings{}, errors.Wrap(err, "for target "+target)
 	}
 
 	// This is required because some commands still read values directly out of viper
 	// TODO: Remove this function once all access to settings no longer uses viper
 	// DEVSVCS-1561
-	if err := flattenWorkflowSettingsToViper(v, target); err != nil {
+	if err := flattenWorkflowSettingsToViper(v, target, workflowSettings.UserWorkflowSettings.WorkflowOwnerAddress); err != nil {
 		return WorkflowSettings{}, err
 	}
 
 	return workflowSettings, nil
 }
 
+// FinalizeWorkflowOwner sets workflow owner when loadWorkflowSettings deferred it because
+// user-workflow.deployment-registry was non-empty. Call after ResolveRegistry.
+func FinalizeWorkflowOwner(
+	v *viper.Viper,
+	cmd *cobra.Command,
+	workflow *WorkflowSettings,
+	target string,
+	resolved ResolvedRegistry,
+	derivedWorkflowOwner string,
+) error {
+	if ShouldSkipGetOwner(cmd) {
+		return nil
+	}
+	if workflow.UserWorkflowSettings.DeploymentRegistry == "" {
+		return nil
+	}
+	if resolved == nil {
+		return fmt.Errorf("resolved registry is required to finalize workflow owner")
+	}
+
+	var ownerAddr, ownerType string
+	var err error
+	if resolved.Type() == RegistryTypeOffChain {
+		ownerAddr = derivedWorkflowOwner
+		if ownerAddr == "" {
+			return fmt.Errorf("derived workflow owner is not available; ensure authentication succeeded")
+		}
+		ownerType = constants.WorkflowOwnerTypeOrgDerived
+	} else {
+		ownerAddr, ownerType, err = GetWorkflowOwner(v)
+		if err != nil {
+			return err
+		}
+	}
+	workflow.UserWorkflowSettings.WorkflowOwnerAddress = ownerAddr
+	workflow.UserWorkflowSettings.WorkflowOwnerType = ownerType
+	return flattenWorkflowSettingsToViper(v, target, ownerAddr)
+}
+
 // TODO: Remove this function once all access to settings no longer uses viper
 // DEVSVCS-1561
-func flattenWorkflowSettingsToViper(v *viper.Viper, target string) error {
-	// Manually flatten the workflow owner setting.
+func flattenWorkflowSettingsToViper(v *viper.Viper, target string, effectiveWorkflowOwner string) error {
+	// Manually flatten the workflow owner setting (effective address from settings load,
+	// including org-derived owner when deployment registry is private).
 	ownerKey := fmt.Sprintf("%s.%s", target, WorkflowOwnerSettingName)
-	if v.IsSet(ownerKey) {
+	if effectiveWorkflowOwner != "" {
+		v.Set(WorkflowOwnerSettingName, effectiveWorkflowOwner)
+	} else if v.IsSet(ownerKey) {
 		owner := v.GetString(ownerKey)
 		v.Set(WorkflowOwnerSettingName, owner)
 	}
@@ -134,11 +260,14 @@ func flattenWorkflowSettingsToViper(v *viper.Viper, target string) error {
 	return nil
 }
 
-func validateSettings(config *WorkflowSettings) error {
+func validateSettings(config *WorkflowSettings, allowUnknownChains bool) error {
 	// TODO validate that all chain names mentioned for the contracts above have a matching URL specified
 	for _, rpc := range config.RPCs {
 		if err := isValidRpcUrl(rpc.Url); err != nil {
 			return errors.Wrap(err, "invalid rpc url for "+rpc.ChainName)
+		}
+		if allowUnknownChains {
+			continue
 		}
 		if err := IsValidChainName(rpc.ChainName); err != nil {
 			return err
@@ -181,9 +310,13 @@ func IsValidChainName(name string) error {
 // For commands that don't need the private key, we skip getting the owner address.
 // ShouldSkipGetOwner returns true if the command is `simulate` and
 // `--broadcast` is false or not set. `cre help` should skip as well.
+// It also returns true for secrets commands using the browser OAuth flow, where
+// the owner is resolved from OAuth credentials rather than an ETH private key.
 func ShouldSkipGetOwner(cmd *cobra.Command) bool {
 	switch cmd.Name() {
 	case "help":
+		return true
+	case "hash":
 		return true
 	case "simulate":
 		// Treat missing/invalid flag as false (i.e., skip).
@@ -191,11 +324,21 @@ func ShouldSkipGetOwner(cmd *cobra.Command) bool {
 		b, _ := cmd.Flags().GetBool("broadcast")
 		return !b
 	default:
+		// Browser OAuth flow resolves the owner from credentials, not from
+		// CRE_ETH_PRIVATE_KEY, so skip EOA owner derivation at settings load.
+		if f := cmd.Flags().Lookup("secrets-auth"); f != nil && f.Value.String() == "browser" {
+			return true
+		}
 		return false
 	}
 }
 
-func validateDeploymentRPC(config *WorkflowSettings, chainName string) error {
+// ValidateDeploymentRPC ensures project settings define a valid RPC URL for chainName (e.g. the workflow
+// registry chain). It is a no-op when chainName is empty. Used during settings load and from secrets owner-key flows.
+func ValidateDeploymentRPC(config *WorkflowSettings, chainName string) error {
+	if chainName == "" {
+		return nil
+	}
 	deploymentRPCFound := false
 	deploymentRPCURL := ""
 	commonError := " - required to deploy CRE workflows"
