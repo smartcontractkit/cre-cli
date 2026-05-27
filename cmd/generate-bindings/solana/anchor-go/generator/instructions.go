@@ -385,9 +385,8 @@ func (g *Generator) gen_instructionParser(typeNames []string, discriminatorNames
 				Return(Nil(), Qual("fmt", "Errorf").Call(Lit("instruction data too short: expected at least 8 bytes, got %d"), Len(Id("instructionData")))),
 			)
 
-			block.Comment("Extract discriminator")
-			block.Id("discriminator").Op(":=").Index(Lit(8)).Byte().Values()
-			block.Copy(Id("discriminator").Index(Op(":")), Id("instructionData").Index(Lit(0), Lit(8)))
+			block.Comment("Extract discriminator (TypeID for consistent equality with generated constants)")
+			block.Id("discriminator").Op(":=").Qual(PkgBinary, "TypeIDFromBytes").Call(Id("instructionData").Index(Lit(0), Lit(8)))
 
 			block.Comment("Parse based on discriminator")
 			block.Switch(Id("discriminator")).BlockFunc(func(switchBlock *Group) {
