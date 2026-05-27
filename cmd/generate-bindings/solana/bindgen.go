@@ -118,7 +118,7 @@ func GenerateBindings(
 			"name", file.Name,
 			"modPath", options.ModPath,
 		)
-		if err := os.WriteFile(assetFilepath, buf.Bytes(), 0o644); err != nil {
+		if err := os.WriteFile(assetFilepath, buf.Bytes(), 0o600); err != nil {
 			return fmt.Errorf("failed to write file %q: %w", assetFilepath, err)
 		}
 	}
