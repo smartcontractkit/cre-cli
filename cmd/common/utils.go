@@ -1,9 +1,7 @@
 package common
 
 import (
-	"bufio"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -26,6 +24,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/logger"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	inttypes "github.com/smartcontractkit/cre-cli/internal/types"
+	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
 func ValidateEventSignature(l *zerolog.Logger, tx *seth.DecodedTransaction, e abi.Event) (bool, int) {
@@ -74,27 +73,6 @@ func GetDirectoryName() (string, error) {
 		return "", fmt.Errorf("failed to get working directory: %w", err)
 	}
 	return filepath.Base(wd), nil
-}
-
-func MustGetUserInputWithPrompt(l *zerolog.Logger, prompt string) (string, error) {
-	reader := bufio.NewReader(os.Stdin)
-	l.Info().Msg(prompt)
-	var input string
-
-	for attempt := 0; attempt < 5; attempt++ {
-		var err error
-		input, err = reader.ReadString('\n')
-		if err != nil {
-			l.Info().Msg("✋ Failed to read user input, please try again.")
-		}
-		if input != "\n" {
-			return strings.TrimRight(input, "\n"), nil
-		}
-		l.Info().Msg("✋ Invalid input, please try again")
-	}
-
-	l.Info().Msg("✋ Maximum number of attempts reached, aborting")
-	return "", errors.New("maximum attempts reached")
 }
 
 func AddTimeStampToFileName(fileName string) string {
@@ -167,13 +145,50 @@ func ToStringSlice(args []any) []string {
 }
 
 // GetWorkflowLanguage determines the workflow language based on the file extension
-// Note: inputFile can be a file path (e.g., "main.ts" or "main.go") or a directory (for Go workflows, e.g., ".")
-// Returns constants.WorkflowLanguageTypeScript for .ts or .tsx files, constants.WorkflowLanguageGolang otherwise
+// Note: inputFile can be a file path (e.g., "main.ts", "main.go", or "workflow.wasm") or a directory (for Go workflows, e.g., ".")
+// Returns constants.WorkflowLanguageTypeScript for .ts or .tsx files, constants.WorkflowLanguageWasm for .wasm files, constants.WorkflowLanguageGolang otherwise
 func GetWorkflowLanguage(inputFile string) string {
 	if strings.HasSuffix(inputFile, ".ts") || strings.HasSuffix(inputFile, ".tsx") {
 		return constants.WorkflowLanguageTypeScript
 	}
+	if strings.HasSuffix(inputFile, ".wasm") {
+		return constants.WorkflowLanguageWasm
+	}
 	return constants.WorkflowLanguageGolang
+}
+
+// ResolveWorkflowPath turns a workflow-path value from YAML (e.g. "." or "main.ts") into an
+// absolute path to the main file. When pathFromYAML is "." or "", looks for main.go then main.ts
+// under workflowDir. Callers can use GetWorkflowLanguage on the result to get the language.
+func ResolveWorkflowPath(workflowDir, pathFromYAML string) (absPath string, err error) {
+	workflowDir, err = filepath.Abs(workflowDir)
+	if err != nil {
+		return "", fmt.Errorf("workflow directory: %w", err)
+	}
+	if pathFromYAML == "" || pathFromYAML == "." {
+		mainGo := filepath.Join(workflowDir, "main.go")
+		mainTS := filepath.Join(workflowDir, "main.ts")
+		if _, err := os.Stat(mainGo); err == nil {
+			return mainGo, nil
+		}
+		if _, err := os.Stat(mainTS); err == nil {
+			return mainTS, nil
+		}
+		return "", fmt.Errorf("no main.go or main.ts in %s", workflowDir)
+	}
+	joined := filepath.Join(workflowDir, pathFromYAML)
+	return filepath.Abs(joined)
+}
+
+// WorkflowPathRootAndMain returns the absolute root directory and main file name for a workflow
+// path (e.g. "workflowName/main.go" -> rootDir, "main.go"). Use with GetWorkflowLanguage(mainFile)
+// for consistent language detection.
+func WorkflowPathRootAndMain(workflowPath string) (rootDir, mainFile string, err error) {
+	abs, err := filepath.Abs(workflowPath)
+	if err != nil {
+		return "", "", fmt.Errorf("workflow path: %w", err)
+	}
+	return filepath.Dir(abs), filepath.Base(abs), nil
 }
 
 // EnsureTool checks that the binary exists on PATH
@@ -184,46 +199,9 @@ func EnsureTool(bin string) error {
 	return nil
 }
 
-// Gets a build command for either Golang or Typescript based on the filename
-func GetBuildCmd(inputFile string, outputFile string, rootFolder string) *exec.Cmd {
-	isTypescriptWorkflow := strings.HasSuffix(inputFile, ".ts") || strings.HasSuffix(inputFile, ".tsx")
-
-	var buildCmd *exec.Cmd
-	if isTypescriptWorkflow {
-		buildCmd = exec.Command(
-			"bun",
-			"cre-compile",
-			inputFile,
-			outputFile,
-		)
-	} else {
-		// The build command for reproducible and trimmed binaries.
-		// -trimpath removes all file system paths from the compiled binary.
-		// -ldflags="-buildid= -w -s" further reduces the binary size:
-		//   -buildid= removes the build ID, ensuring reproducibility.
-		//   -w disables DWARF debugging information.
-		//   -s removes the symbol table.
-		buildCmd = exec.Command(
-			"go",
-			"build",
-			"-o", outputFile,
-			"-trimpath",
-			"-ldflags=-buildid= -w -s",
-			inputFile,
-		)
-		buildCmd.Env = append(os.Environ(), "GOOS=wasip1", "GOARCH=wasm", "CGO_ENABLED=0")
-	}
-
-	buildCmd.Dir = rootFolder
-
-	return buildCmd
-}
-
 func WriteChangesetFile(fileName string, changesetFile *inttypes.ChangesetFile, settings *settings.Settings) error {
-	// Set project context to ensure we're in the correct directory for writing the changeset file
-	// This is needed because workflow commands set the workflow directory as the context, but path for changeset file is relative to the project root
-	err := context.SetProjectContext("")
-	if err != nil {
+	// Set project context so the changeset path is resolved from project root
+	if err := context.SetProjectContext(""); err != nil {
 		return err
 	}
 
@@ -263,9 +241,9 @@ func WriteChangesetFile(fileName string, changesetFile *inttypes.ChangesetFile, 
 		return fmt.Errorf("failed to write changeset yaml file: %w", err)
 	}
 
-	fmt.Println("")
-	fmt.Println("Changeset YAML file generated!")
-	fmt.Printf("File: %s\n", fullFilePath)
-	fmt.Println("")
+	ui.Line()
+	ui.Success("Changeset YAML file generated!")
+	ui.Code(fullFilePath)
+	ui.Line()
 	return nil
 }

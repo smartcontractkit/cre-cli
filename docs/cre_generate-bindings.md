@@ -15,10 +15,12 @@ The generate-bindings command allows you to generate bindings for contracts.
 ### Options inherited from parent commands
 
 ```
-  -e, --env string            Path to .env file which contains sensitive info (default ".env")
-  -R, --project-root string   Path to the project root
-  -T, --target string         Use target settings from YAML config
-  -v, --verbose               Run command in VERBOSE mode
+      --allow-unknown-chains   Skip chain-name validation against the chain-selectors registry (for experimental chains)
+  -e, --env string             Path to .env file which contains sensitive info
+      --non-interactive        Fail instead of prompting; requires all inputs via flags
+  -E, --public-env string      Path to .env.public file which contains shared, non-sensitive build config
+  -T, --target string          Use target settings from YAML config
+  -v, --verbose                Run command in VERBOSE mode
 ```
 
 ### SEE ALSO
