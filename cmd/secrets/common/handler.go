@@ -34,9 +34,11 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
+	"github.com/smartcontractkit/cre-cli/internal/ethkeys"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/types"
+	"github.com/smartcontractkit/cre-cli/internal/ui"
 	"github.com/smartcontractkit/cre-cli/internal/validation"
 )
 
@@ -55,20 +57,25 @@ type SecretsYamlConfig struct {
 }
 
 type Handler struct {
-	Log             *zerolog.Logger
-	ClientFactory   client.Factory
-	SecretsFilePath string
-	PrivateKey      *ecdsa.PrivateKey
-	OwnerAddress    string
-	EnvironmentSet  *environments.EnvironmentSet
-	Gw              GatewayClient
-	Wrc             *client.WorkflowRegistryV2Client
-	Credentials     *credentials.Credentials
-	Settings        *settings.Settings
+	Log                  *zerolog.Logger
+	ClientFactory        client.Factory
+	SecretsFilePath      string
+	PrivateKey           *ecdsa.PrivateKey
+	OwnerAddress         string
+	DerivedWorkflowOwner string
+	EnvironmentSet       *environments.EnvironmentSet
+	Gw                   GatewayClient
+	Wrc                  *client.WorkflowRegistryV2Client
+	Credentials          *credentials.Credentials
+	Settings             *settings.Settings
+	execCtx              context.Context
 }
 
 // NewHandler creates a new handler instance.
-func NewHandler(ctx *runtime.Context, secretsFilePath string) (*Handler, error) {
+// secretsAuth is the value of the --secrets-auth flag (e.g. "onchain" or "browser").
+// For the browser OAuth flow the on-chain WorkflowRegistryV2Client is not needed and is
+// intentionally skipped to avoid requiring an ethereum-mainnet RPC URL.
+func NewHandler(execCtx context.Context, ctx *runtime.Context, secretsFilePath, secretsAuth string) (*Handler, error) {
 	var pk *ecdsa.PrivateKey
 	var err error
 	if ctx.Settings.User.EthPrivateKey != "" {
@@ -82,24 +89,33 @@ func NewHandler(ctx *runtime.Context, secretsFilePath string) (*Handler, error) 
 	}
 
 	h := &Handler{
-		Log:             ctx.Logger,
-		ClientFactory:   ctx.ClientFactory,
-		SecretsFilePath: secretsFilePath,
-		PrivateKey:      pk,
-		OwnerAddress:    ctx.Settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress,
-		EnvironmentSet:  ctx.EnvironmentSet,
-		Credentials:     ctx.Credentials,
-		Settings:        ctx.Settings,
+		Log:                  ctx.Logger,
+		ClientFactory:        ctx.ClientFactory,
+		SecretsFilePath:      secretsFilePath,
+		PrivateKey:           pk,
+		OwnerAddress:         ctx.Settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress,
+		DerivedWorkflowOwner: ctx.DerivedWorkflowOwner,
+		EnvironmentSet:       ctx.EnvironmentSet,
+		Credentials:          ctx.Credentials,
+		Settings:             ctx.Settings,
+		execCtx:              execCtx,
 	}
 	h.Gw = &HTTPClient{URL: h.EnvironmentSet.GatewayURL, Client: &http.Client{Timeout: 90 * time.Second}}
 
-	wrc, err := h.ClientFactory.NewWorkflowRegistryV2Client()
-	if err != nil {
-		return nil, fmt.Errorf("failed to create workflow registry client: %w", err)
+	if !IsBrowserFlow(secretsAuth) {
+		wrc, err := h.ClientFactory.NewWorkflowRegistryV2Client(execCtx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create workflow registry client: %w", err)
+		}
+		h.Wrc = wrc
 	}
-	h.Wrc = wrc
 
 	return h, nil
+}
+
+// EnsureDeploymentRPCForOwnerKeySecrets checks project settings for an RPC URL on the workflow registry chain (owner-key / allowlist flows only).
+func (h *Handler) EnsureDeploymentRPCForOwnerKeySecrets() error {
+	return settings.ValidateDeploymentRPC(&h.Settings.Workflow, h.EnvironmentSet.WorkflowRegistryChainName)
 }
 
 // ResolveInputs loads secrets from a YAML file.
@@ -195,32 +211,32 @@ func (h *Handler) PackAllowlistRequestTxData(reqDigest [32]byte, duration time.D
 }
 
 func (h *Handler) LogMSIGNextSteps(txData string, digest [32]byte, bundlePath string) error {
-	fmt.Println("")
-	fmt.Println("MSIG transaction prepared!")
-	fmt.Println("")
-	fmt.Println("Next steps:")
-	fmt.Println("")
-	fmt.Println("   1. Submit the following transaction on the target chain:")
-	fmt.Printf("      Chain:            %s\n", h.EnvironmentSet.WorkflowRegistryChainName)
-	fmt.Printf("      Contract Address: %s\n", h.EnvironmentSet.WorkflowRegistryAddress)
-	fmt.Println("")
-	fmt.Println("   2. Use the following transaction data:")
-	fmt.Println("")
-	fmt.Printf("      %s\n", txData)
-	fmt.Println("")
-	fmt.Println("   3. Save this bundle file; you will need it on the second run:")
-	fmt.Printf("      Bundle Path: %s\n", bundlePath)
-	fmt.Printf("      Digest:      0x%s\n", hex.EncodeToString(digest[:]))
-	fmt.Println("")
-	fmt.Println("   4. After the transaction is finalized on-chain, run:")
-	fmt.Println("")
-	fmt.Println("      cre secrets execute", bundlePath, "--unsigned")
-	fmt.Println("")
+	ui.Line()
+	ui.Success("MSIG transaction prepared!")
+	ui.Line()
+	ui.Bold("Next steps:")
+	ui.Line()
+	ui.Print("   1. Submit the following transaction on the target chain:")
+	ui.Printf("      Chain:            %s\n", h.EnvironmentSet.WorkflowRegistryChainName)
+	ui.Printf("      Contract Address: %s\n", h.EnvironmentSet.WorkflowRegistryAddress)
+	ui.Line()
+	ui.Print("   2. Use the following transaction data:")
+	ui.Line()
+	ui.Code(txData)
+	ui.Line()
+	ui.Print("   3. Save this bundle file; you will need it on the second run:")
+	ui.Printf("      Bundle Path: %s\n", bundlePath)
+	ui.Printf("      Digest:      0x%s\n", hex.EncodeToString(digest[:]))
+	ui.Line()
+	ui.Print("   4. After the transaction is finalized on-chain, run:")
+	ui.Line()
+	ui.Code(fmt.Sprintf("cre secrets execute %s --unsigned", bundlePath))
+	ui.Line()
 	return nil
 }
 
-// EncryptSecrets takes the raw secrets and encrypts them, returning pointers.
-func (h *Handler) EncryptSecrets(rawSecrets UpsertSecretsInputs) ([]*vault.EncryptedSecret, error) {
+// fetchVaultMasterPublicKeyHex loads the vault master public key from the gateway (publicKey/get).
+func (h *Handler) fetchVaultMasterPublicKeyHex() (string, error) {
 	requestID := uuid.New().String()
 	getPublicKeyRequest := jsonrpc2.Request[vault.GetPublicKeyRequest]{
 		Version: jsonrpc2.JsonRpcVersion,
@@ -231,49 +247,86 @@ func (h *Handler) EncryptSecrets(rawSecrets UpsertSecretsInputs) ([]*vault.Encry
 
 	reqBody, err := json.Marshal(getPublicKeyRequest)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal public key request: %w", err)
+		return "", fmt.Errorf("failed to marshal public key request: %w", err)
 	}
 
 	respBody, status, err := h.Gw.Post(reqBody)
 	if err != nil {
-		return nil, fmt.Errorf("gateway POST failed: %w", err)
+		return "", fmt.Errorf("gateway POST failed: %w", err)
 	}
 	if status != http.StatusOK {
-		return nil, fmt.Errorf("gateway returned non-200: %d body=%s", status, string(respBody))
+		return "", fmt.Errorf("gateway returned non-200: %d body=%s", status, string(respBody))
 	}
 
 	var rpcResp jsonrpc2.Response[vault.GetPublicKeyResponse]
 	if err := json.Unmarshal(respBody, &rpcResp); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal public key response: %w", err)
+		return "", fmt.Errorf("failed to unmarshal public key response: %w", err)
 	}
 	if rpcResp.Error != nil {
-		return nil, fmt.Errorf("vault public key fetch error: %s", rpcResp.Error.Error())
+		return "", fmt.Errorf("vault public key fetch error: %s", rpcResp.Error.Error())
 	}
 	if rpcResp.Version != jsonrpc2.JsonRpcVersion {
-		return nil, fmt.Errorf("jsonrpc version mismatch: got %q", rpcResp.Version)
+		return "", fmt.Errorf("jsonrpc version mismatch: got %q", rpcResp.Version)
 	}
 	if rpcResp.ID != requestID {
-		return nil, fmt.Errorf("jsonrpc id mismatch: got %q want %q", rpcResp.ID, requestID)
+		return "", fmt.Errorf("jsonrpc id mismatch: got %q want %q", rpcResp.ID, requestID)
 	}
 	if rpcResp.Method != vaulttypes.MethodPublicKeyGet {
-		return nil, fmt.Errorf("jsonrpc method mismatch: got %q", rpcResp.Method)
+		return "", fmt.Errorf("jsonrpc method mismatch: got %q", rpcResp.Method)
 	}
 	if rpcResp.Result == nil || rpcResp.Result.PublicKey == "" {
-		return nil, fmt.Errorf("empty result in public key response")
+		return "", fmt.Errorf("empty result in public key response")
 	}
 
-	pubKeyHex := rpcResp.Result.PublicKey
+	return rpcResp.Result.PublicKey, nil
+}
+
+// ResolveEffectiveOwner returns the checksummed workflow owner address for owner-key vault operations.
+func (h *Handler) ResolveEffectiveOwner() (string, error) {
+	if !common.IsHexAddress(h.OwnerAddress) {
+		return "", fmt.Errorf("owner address %q is not a valid hex address", h.OwnerAddress)
+	}
+	return common.HexToAddress(h.OwnerAddress).Hex(), nil
+}
+
+// ResolveVaultIdentifierOwnerForAuth returns the owner used in vault JSON-RPC payloads
+// (SecretIdentifier.Owner, list Owner, TDH2 labels). Onchain auth uses the linked EOA from
+// settings; browser auth uses DerivedWorkflowOwner from runtime.Context (getCreOrganizationInfo at login).
+func (h *Handler) ResolveVaultIdentifierOwnerForAuth(secretsAuth string) (string, error) {
+	if !IsBrowserFlow(secretsAuth) {
+		return h.ResolveEffectiveOwner()
+	}
+	if h.Credentials == nil {
+		return "", fmt.Errorf("organization information is missing from your session; sign in again or use --secrets-auth=onchain")
+	}
+	if h.Credentials.AuthType == credentials.AuthTypeApiKey {
+		return "", fmt.Errorf("this sign-in flow requires an interactive login; API keys are not supported")
+	}
+	owner := strings.TrimSpace(h.DerivedWorkflowOwner)
+	if owner == "" {
+		return "", fmt.Errorf("derived workflow owner is not available; sign in again with cre login")
+	}
+	return ethkeys.FormatWorkflowOwnerAddress(owner)
+}
+
+// EncryptSecrets encrypts secrets for the given workflow owner address.
+// TDH2 label is the workflow owner address left-padded to 32 bytes; SecretIdentifier.Owner is the same hex address string.
+func (h *Handler) EncryptSecrets(rawSecrets UpsertSecretsInputs, owner string) ([]*vault.EncryptedSecret, error) {
+	pubKeyHex, err := h.fetchVaultMasterPublicKeyHex()
+	if err != nil {
+		return nil, err
+	}
 
 	encryptedSecrets := make([]*vault.EncryptedSecret, 0, len(rawSecrets))
 	for _, item := range rawSecrets {
-		cipherHex, err := EncryptSecret(item.Value, pubKeyHex, h.OwnerAddress)
+		cipherHex, err := EncryptSecret(item.Value, pubKeyHex, owner)
 		if err != nil {
 			return nil, fmt.Errorf("failed to encrypt secret (key=%s ns=%s): %w", item.ID, item.Namespace, err)
 		}
 		secID := &vault.SecretIdentifier{
 			Key:       item.ID,
 			Namespace: item.Namespace,
-			Owner:     h.OwnerAddress,
+			Owner:     owner,
 		}
 		encryptedSecrets = append(encryptedSecrets, &vault.EncryptedSecret{
 			Id:             secID,
@@ -283,7 +336,8 @@ func (h *Handler) EncryptSecrets(rawSecrets UpsertSecretsInputs) ([]*vault.Encry
 	return encryptedSecrets, nil
 }
 
-func EncryptSecret(secret, masterPublicKeyHex string, ownerAddress string) (string, error) {
+// encryptSecretWithLabel encrypts a secret using the vault master public key and the given label.
+func encryptSecretWithLabel(secret, masterPublicKeyHex string, label [32]byte) (string, error) {
 	masterPublicKey := tdh2easy.PublicKey{}
 	masterPublicKeyBytes, err := hex.DecodeString(masterPublicKeyHex)
 	if err != nil {
@@ -293,9 +347,6 @@ func EncryptSecret(secret, masterPublicKeyHex string, ownerAddress string) (stri
 		return "", fmt.Errorf("failed to unmarshal master public key: %w", err)
 	}
 
-	addr := common.HexToAddress(ownerAddress) // canonical 20-byte address
-	var label [32]byte
-	copy(label[12:], addr.Bytes()) // left-pad with 12 zero bytes
 	cipher, err := tdh2easy.EncryptWithLabel(&masterPublicKey, []byte(secret), label)
 	if err != nil {
 		return "", fmt.Errorf("failed to encrypt secret: %w", err)
@@ -305,6 +356,14 @@ func EncryptSecret(secret, masterPublicKeyHex string, ownerAddress string) (stri
 		return "", fmt.Errorf("failed to marshal encrypted secrets to bytes: %w", err)
 	}
 	return hex.EncodeToString(cipherBytes), nil
+}
+
+// EncryptSecret encrypts for the owner-key / web3 flow using a 32-byte label derived from the EOA (12 zero bytes + 20-byte address).
+func EncryptSecret(secret, masterPublicKeyHex string, ownerAddress string) (string, error) {
+	addr := common.HexToAddress(ownerAddress) // canonical 20-byte address
+	var label [32]byte
+	copy(label[12:], addr.Bytes()) // left-pad with 12 zero bytes
+	return encryptSecretWithLabel(secret, masterPublicKeyHex, label)
 }
 
 func CalculateDigest[I any](r jsonrpc2.Request[I]) ([32]byte, error) {
@@ -343,22 +402,35 @@ func HexToBytes32(h string) ([32]byte, error) {
 	return out, nil
 }
 
-// Execute is shared for 'create' and 'update' (YAML-only).
-// - MSIG => step 1: build request, save bundle, print instructions
-// - EOA  => build request, allowlist if needed, POST
+// Execute implements secrets create and update from YAML (multisig bundle, owner-key with allowlist, or interactive org sign-in).
 func (h *Handler) Execute(
+	ctx context.Context,
 	inputs UpsertSecretsInputs,
 	method string,
 	duration time.Duration,
-	ownerType string,
+	secretsAuth string,
 ) error {
-	fmt.Println("Verifying ownership...")
-	if err := h.EnsureOwnerLinkedOrFail(); err != nil {
+	h.execCtx = ctx
+	if IsBrowserFlow(secretsAuth) {
+		return h.executeBrowserUpsert(ctx, inputs, method)
+	}
+
+	if err := h.EnsureDeploymentRPCForOwnerKeySecrets(); err != nil {
+		return err
+	}
+
+	ui.Dim("Verifying ownership...")
+	if err := h.EnsureOwnerLinkedOrFail(ctx); err != nil {
+		return err
+	}
+
+	owner, err := h.ResolveVaultIdentifierOwnerForAuth(secretsAuth)
+	if err != nil {
 		return err
 	}
 
 	// Build from YAML inputs
-	encSecrets, err := h.EncryptSecrets(inputs)
+	encSecrets, err := h.EncryptSecrets(inputs, owner)
 	if err != nil {
 		return fmt.Errorf("failed to encrypt secrets: %w", err)
 	}
@@ -408,15 +480,15 @@ func (h *Handler) Execute(
 		return fmt.Errorf("unsupported method %q (expected %q or %q)", method, vaulttypes.MethodSecretsCreate, vaulttypes.MethodSecretsUpdate)
 	}
 
-	ownerAddr := common.HexToAddress(h.OwnerAddress)
+	ownerAddr := common.HexToAddress(owner)
 
-	allowlisted, err := h.Wrc.IsRequestAllowlisted(ownerAddr, digest)
+	allowlisted, err := h.Wrc.IsRequestAllowlisted(ctx, ownerAddr, digest)
 	if err != nil {
 		return fmt.Errorf("allowlist check failed: %w", err)
 	}
 	var txOut *client.TxOutput
 	if !allowlisted {
-		if txOut, err = h.Wrc.AllowlistRequest(digest, duration); err != nil {
+		if txOut, err = h.Wrc.AllowlistRequest(ctx, digest, duration); err != nil {
 			return fmt.Errorf("allowlist request failed: %w", err)
 		}
 	}
@@ -433,7 +505,7 @@ func (h *Handler) Execute(
 	}
 
 	if txOut == nil && allowlisted {
-		fmt.Printf("Digest already allowlisted; proceeding to gateway POST: owner=%s, digest=0x%x\n", ownerAddr.Hex(), digest)
+		ui.Dim(fmt.Sprintf("Digest already allowlisted; proceeding to gateway POST: owner=%s, digest=0x%x", ownerAddr.Hex(), digest))
 		return gatewayPost()
 	}
 
@@ -451,9 +523,10 @@ func (h *Handler) Execute(
 
 	switch txOut.Type {
 	case client.Regular:
-		fmt.Println("Transaction confirmed")
-		fmt.Printf("Digest allowlisted; proceeding to gateway POST: owner=%s, digest=0x%x\n", ownerAddr.Hex(), digest)
-		fmt.Printf("View on explorer: \033]8;;%s/tx/%s\033\\%s/tx/%s\033]8;;\033\\\n", h.EnvironmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash, h.EnvironmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash)
+		ui.Success("Transaction confirmed")
+		ui.Dim(fmt.Sprintf("Digest allowlisted; proceeding to gateway POST: owner=%s, digest=0x%x", ownerAddr.Hex(), digest))
+		explorerURL := fmt.Sprintf("%s/tx/%s", h.EnvironmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash)
+		ui.URL(explorerURL)
 		return gatewayPost()
 	case client.Raw:
 		if err := SaveBundle(bundlePath, ub); err != nil {
@@ -472,7 +545,7 @@ func (h *Handler) Execute(
 		}
 		mcmsConfig, err := settings.GetMCMSConfig(h.Settings, chainSelector)
 		if err != nil {
-			fmt.Println("\nMCMS config not found or is incorrect, skipping MCMS config in changeset")
+			ui.Warning("MCMS config not found or is incorrect, skipping MCMS config in changeset")
 		}
 		cldSettings := h.Settings.CLDSettings
 		changesets := []types.Changeset{
@@ -546,11 +619,10 @@ func (h *Handler) ParseVaultGatewayResponse(method string, respBody []byte) erro
 				key, owner, ns = id.GetKey(), id.GetOwner(), id.GetNamespace()
 			}
 			if r.GetSuccess() {
-				fmt.Printf("Secret created: secret_id=%s, owner=%s, namespace=%s\n", key, owner, ns)
+				ui.Success(fmt.Sprintf("Secret created: secret_id=%s, owner=%s, namespace=%s", key, owner, ns))
 			} else {
-				fmt.Printf("Secret create failed: secret_id=%s owner=%s namespace=%s success=%t error=%s\n",
-					key, owner, ns, false, r.GetError(),
-				)
+				ui.Error(fmt.Sprintf("Secret create failed: secret_id=%s owner=%s namespace=%s error=%s",
+					key, owner, ns, r.GetError()))
 			}
 		}
 	case vaulttypes.MethodSecretsUpdate:
@@ -565,11 +637,10 @@ func (h *Handler) ParseVaultGatewayResponse(method string, respBody []byte) erro
 				key, owner, ns = id.GetKey(), id.GetOwner(), id.GetNamespace()
 			}
 			if r.GetSuccess() {
-				fmt.Printf("Secret updated: secret_id=%s, owner=%s, namespace=%s\n", key, owner, ns)
+				ui.Success(fmt.Sprintf("Secret updated: secret_id=%s, owner=%s, namespace=%s", key, owner, ns))
 			} else {
-				fmt.Printf("Secret update failed: secret_id=%s owner=%s namespace=%s success=%t error=%s\n",
-					key, owner, ns, false, r.GetError(),
-				)
+				ui.Error(fmt.Sprintf("Secret update failed: secret_id=%s owner=%s namespace=%s error=%s",
+					key, owner, ns, r.GetError()))
 			}
 		}
 	case vaulttypes.MethodSecretsDelete:
@@ -584,11 +655,10 @@ func (h *Handler) ParseVaultGatewayResponse(method string, respBody []byte) erro
 				key, owner, ns = id.GetKey(), id.GetOwner(), id.GetNamespace()
 			}
 			if r.GetSuccess() {
-				fmt.Printf("Secret deleted: secret_id=%s, owner=%s, namespace=%s\n", key, owner, ns)
+				ui.Success(fmt.Sprintf("Secret deleted: secret_id=%s, owner=%s, namespace=%s", key, owner, ns))
 			} else {
-				fmt.Printf("Secret delete failed: secret_id=%s owner=%s namespace=%s success=%t error=%s\n",
-					key, owner, ns, false, r.GetError(),
-				)
+				ui.Error(fmt.Sprintf("Secret delete failed: secret_id=%s owner=%s namespace=%s error=%s",
+					key, owner, ns, r.GetError()))
 			}
 		}
 	case vaulttypes.MethodSecretsList:
@@ -598,15 +668,13 @@ func (h *Handler) ParseVaultGatewayResponse(method string, respBody []byte) erro
 		}
 
 		if !p.GetSuccess() {
-			fmt.Printf("secret list failed: success=%t error=%s\n",
-				false, p.GetError(),
-			)
+			ui.Error(fmt.Sprintf("Secret list failed: error=%s", p.GetError()))
 			break
 		}
 
 		ids := p.GetIdentifiers()
 		if len(ids) == 0 {
-			fmt.Println("No secrets found")
+			ui.Dim("No secrets found")
 			break
 		}
 		for _, id := range ids {
@@ -614,7 +682,7 @@ func (h *Handler) ParseVaultGatewayResponse(method string, respBody []byte) erro
 			if id != nil {
 				key, owner, ns = id.GetKey(), id.GetOwner(), id.GetNamespace()
 			}
-			fmt.Printf("Secret identifier: secret_id=%s, owner=%s, namespace=%s\n", key, owner, ns)
+			ui.Print(fmt.Sprintf("Secret identifier: secret_id=%s, owner=%s, namespace=%s", key, owner, ns))
 		}
 	default:
 		// Unknown/unsupported method — don’t fail, just surface it explicitly
@@ -626,16 +694,19 @@ func (h *Handler) ParseVaultGatewayResponse(method string, respBody []byte) erro
 	return nil
 }
 
-// EnsureOwnerLinkedOrFail TODO this reuses the same logic as in autoLink.go which is tied to deploy; consider refactoring to avoid duplication
-func (h *Handler) EnsureOwnerLinkedOrFail() error {
+// EnsureOwnerLinkedOrFail TODO this reuses the same logic as in auto_link.go which is tied to deploy; consider refactoring to avoid duplication
+func (h *Handler) EnsureOwnerLinkedOrFail(ctx context.Context) error {
+	if !common.IsHexAddress(h.OwnerAddress) {
+		return fmt.Errorf("owner address %q is not a valid hex EVM address; check your workflow settings", h.OwnerAddress)
+	}
 	ownerAddr := common.HexToAddress(h.OwnerAddress)
 
-	linked, err := h.Wrc.IsOwnerLinked(ownerAddr)
+	linked, err := h.Wrc.IsOwnerLinked(ctx, ownerAddr)
 	if err != nil {
 		return fmt.Errorf("failed to check owner link status: %w", err)
 	}
 
-	fmt.Printf("Workflow owner link status: owner=%s, linked=%v\n", ownerAddr.Hex(), linked)
+	ui.Dim(fmt.Sprintf("Workflow owner link status: owner=%s, linked=%v", ownerAddr.Hex(), linked))
 
 	if linked {
 		// Owner is linked on contract, now verify it's linked to the current user's account
@@ -648,7 +719,7 @@ func (h *Handler) EnsureOwnerLinkedOrFail() error {
 			return fmt.Errorf("key %s is linked to another account. Please use a different owner address", ownerAddr.Hex())
 		}
 
-		fmt.Println("Key ownership verified")
+		ui.Success("Key ownership verified")
 		return nil
 	}
 

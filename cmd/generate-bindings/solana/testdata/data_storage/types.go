@@ -79,10 +79,12 @@ func (c *Codec) EncodeAccessLoggedStruct(in AccessLogged) ([]byte, error) {
 	return in.Marshal()
 }
 
+// WriteReportFromAccessLogged encodes the input struct, hashes the provided accounts, // generates a signed report, and submits it via WriteReport. //  // remainingAccounts must follow the keystone-forwarder account layout: //   - Index 0: forwarderState – the forwarder program's state account. //   - Index 1: forwarderAuthority – PDA derived from seeds //     ["forwarder", forwarderState, receiverProgram] under the forwarder program ID. //   - Index 2+: receiver-specific accounts required by the target program. //  // The full slice is hashed (via CalculateAccountsHash) into the report and forwarded // as WriteCreReportRequest.RemainingAccounts. The on-chain forwarder strips indices 0 and 1 // before CPI-ing into the receiver, so they must be present and correctly ordered.
 func (c *DataStorage) WriteReportFromAccessLogged(
 	runtime cre.Runtime,
 	input AccessLogged,
 	remainingAccounts []*solana.AccountMeta,
+	computeConfig *solana.ComputeConfig,
 ) cre.Promise[*solana.WriteReportReply] {
 	encodedInput, err := c.Codec.EncodeAccessLoggedStruct(input)
 	if err != nil {
@@ -109,11 +111,29 @@ func (c *DataStorage) WriteReportFromAccessLogged(
 
 	return cre.ThenPromise(promise, func(report *cre.Report) cre.Promise[*solana.WriteReportReply] {
 		return c.client.WriteReport(runtime, &solana.WriteCreReportRequest{
+			ComputeConfig:     computeConfig,
 			Receiver:          ProgramID.Bytes(),
 			RemainingAccounts: remainingAccounts,
 			Report:            report,
 		})
 	})
+}
+
+func (c *DataStorage) WriteReportFromAccessLoggeds(
+	runtime cre.Runtime,
+	inputs []AccessLogged,
+	remainingAccounts []*solana.AccountMeta,
+	computeConfig *solana.ComputeConfig,
+) cre.Promise[*solana.WriteReportReply] {
+	elements := make([][]byte, len(inputs))
+	for i, input := range inputs {
+		encoded, err := c.Codec.EncodeAccessLoggedStruct(input)
+		if err != nil {
+			return cre.PromiseFromResult[*solana.WriteReportReply](nil, err)
+		}
+		elements[i] = encoded
+	}
+	return c.WriteReportFromBorshEncodedVec(runtime, elements, remainingAccounts, computeConfig)
 }
 
 type DataAccount struct {
@@ -191,10 +211,12 @@ func (c *Codec) EncodeDataAccountStruct(in DataAccount) ([]byte, error) {
 	return in.Marshal()
 }
 
+// WriteReportFromDataAccount encodes the input struct, hashes the provided accounts, // generates a signed report, and submits it via WriteReport. //  // remainingAccounts must follow the keystone-forwarder account layout: //   - Index 0: forwarderState – the forwarder program's state account. //   - Index 1: forwarderAuthority – PDA derived from seeds //     ["forwarder", forwarderState, receiverProgram] under the forwarder program ID. //   - Index 2+: receiver-specific accounts required by the target program. //  // The full slice is hashed (via CalculateAccountsHash) into the report and forwarded // as WriteCreReportRequest.RemainingAccounts. The on-chain forwarder strips indices 0 and 1 // before CPI-ing into the receiver, so they must be present and correctly ordered.
 func (c *DataStorage) WriteReportFromDataAccount(
 	runtime cre.Runtime,
 	input DataAccount,
 	remainingAccounts []*solana.AccountMeta,
+	computeConfig *solana.ComputeConfig,
 ) cre.Promise[*solana.WriteReportReply] {
 	encodedInput, err := c.Codec.EncodeDataAccountStruct(input)
 	if err != nil {
@@ -221,11 +243,29 @@ func (c *DataStorage) WriteReportFromDataAccount(
 
 	return cre.ThenPromise(promise, func(report *cre.Report) cre.Promise[*solana.WriteReportReply] {
 		return c.client.WriteReport(runtime, &solana.WriteCreReportRequest{
+			ComputeConfig:     computeConfig,
 			Receiver:          ProgramID.Bytes(),
 			RemainingAccounts: remainingAccounts,
 			Report:            report,
 		})
 	})
+}
+
+func (c *DataStorage) WriteReportFromDataAccounts(
+	runtime cre.Runtime,
+	inputs []DataAccount,
+	remainingAccounts []*solana.AccountMeta,
+	computeConfig *solana.ComputeConfig,
+) cre.Promise[*solana.WriteReportReply] {
+	elements := make([][]byte, len(inputs))
+	for i, input := range inputs {
+		encoded, err := c.Codec.EncodeDataAccountStruct(input)
+		if err != nil {
+			return cre.PromiseFromResult[*solana.WriteReportReply](nil, err)
+		}
+		elements[i] = encoded
+	}
+	return c.WriteReportFromBorshEncodedVec(runtime, elements, remainingAccounts, computeConfig)
 }
 
 type DynamicEvent struct {
@@ -325,10 +365,12 @@ func (c *Codec) EncodeDynamicEventStruct(in DynamicEvent) ([]byte, error) {
 	return in.Marshal()
 }
 
+// WriteReportFromDynamicEvent encodes the input struct, hashes the provided accounts, // generates a signed report, and submits it via WriteReport. //  // remainingAccounts must follow the keystone-forwarder account layout: //   - Index 0: forwarderState – the forwarder program's state account. //   - Index 1: forwarderAuthority – PDA derived from seeds //     ["forwarder", forwarderState, receiverProgram] under the forwarder program ID. //   - Index 2+: receiver-specific accounts required by the target program. //  // The full slice is hashed (via CalculateAccountsHash) into the report and forwarded // as WriteCreReportRequest.RemainingAccounts. The on-chain forwarder strips indices 0 and 1 // before CPI-ing into the receiver, so they must be present and correctly ordered.
 func (c *DataStorage) WriteReportFromDynamicEvent(
 	runtime cre.Runtime,
 	input DynamicEvent,
 	remainingAccounts []*solana.AccountMeta,
+	computeConfig *solana.ComputeConfig,
 ) cre.Promise[*solana.WriteReportReply] {
 	encodedInput, err := c.Codec.EncodeDynamicEventStruct(input)
 	if err != nil {
@@ -355,11 +397,29 @@ func (c *DataStorage) WriteReportFromDynamicEvent(
 
 	return cre.ThenPromise(promise, func(report *cre.Report) cre.Promise[*solana.WriteReportReply] {
 		return c.client.WriteReport(runtime, &solana.WriteCreReportRequest{
+			ComputeConfig:     computeConfig,
 			Receiver:          ProgramID.Bytes(),
 			RemainingAccounts: remainingAccounts,
 			Report:            report,
 		})
 	})
+}
+
+func (c *DataStorage) WriteReportFromDynamicEvents(
+	runtime cre.Runtime,
+	inputs []DynamicEvent,
+	remainingAccounts []*solana.AccountMeta,
+	computeConfig *solana.ComputeConfig,
+) cre.Promise[*solana.WriteReportReply] {
+	elements := make([][]byte, len(inputs))
+	for i, input := range inputs {
+		encoded, err := c.Codec.EncodeDynamicEventStruct(input)
+		if err != nil {
+			return cre.PromiseFromResult[*solana.WriteReportReply](nil, err)
+		}
+		elements[i] = encoded
+	}
+	return c.WriteReportFromBorshEncodedVec(runtime, elements, remainingAccounts, computeConfig)
 }
 
 type NoFields struct{}
@@ -403,10 +463,12 @@ func (c *Codec) EncodeNoFieldsStruct(in NoFields) ([]byte, error) {
 	return in.Marshal()
 }
 
+// WriteReportFromNoFields encodes the input struct, hashes the provided accounts, // generates a signed report, and submits it via WriteReport. //  // remainingAccounts must follow the keystone-forwarder account layout: //   - Index 0: forwarderState – the forwarder program's state account. //   - Index 1: forwarderAuthority – PDA derived from seeds //     ["forwarder", forwarderState, receiverProgram] under the forwarder program ID. //   - Index 2+: receiver-specific accounts required by the target program. //  // The full slice is hashed (via CalculateAccountsHash) into the report and forwarded // as WriteCreReportRequest.RemainingAccounts. The on-chain forwarder strips indices 0 and 1 // before CPI-ing into the receiver, so they must be present and correctly ordered.
 func (c *DataStorage) WriteReportFromNoFields(
 	runtime cre.Runtime,
 	input NoFields,
 	remainingAccounts []*solana.AccountMeta,
+	computeConfig *solana.ComputeConfig,
 ) cre.Promise[*solana.WriteReportReply] {
 	encodedInput, err := c.Codec.EncodeNoFieldsStruct(input)
 	if err != nil {
@@ -433,11 +495,29 @@ func (c *DataStorage) WriteReportFromNoFields(
 
 	return cre.ThenPromise(promise, func(report *cre.Report) cre.Promise[*solana.WriteReportReply] {
 		return c.client.WriteReport(runtime, &solana.WriteCreReportRequest{
+			ComputeConfig:     computeConfig,
 			Receiver:          ProgramID.Bytes(),
 			RemainingAccounts: remainingAccounts,
 			Report:            report,
 		})
 	})
+}
+
+func (c *DataStorage) WriteReportFromNoFieldss(
+	runtime cre.Runtime,
+	inputs []NoFields,
+	remainingAccounts []*solana.AccountMeta,
+	computeConfig *solana.ComputeConfig,
+) cre.Promise[*solana.WriteReportReply] {
+	elements := make([][]byte, len(inputs))
+	for i, input := range inputs {
+		encoded, err := c.Codec.EncodeNoFieldsStruct(input)
+		if err != nil {
+			return cre.PromiseFromResult[*solana.WriteReportReply](nil, err)
+		}
+		elements[i] = encoded
+	}
+	return c.WriteReportFromBorshEncodedVec(runtime, elements, remainingAccounts, computeConfig)
 }
 
 type UpdateReserves struct {
@@ -504,10 +584,12 @@ func (c *Codec) EncodeUpdateReservesStruct(in UpdateReserves) ([]byte, error) {
 	return in.Marshal()
 }
 
+// WriteReportFromUpdateReserves encodes the input struct, hashes the provided accounts, // generates a signed report, and submits it via WriteReport. //  // remainingAccounts must follow the keystone-forwarder account layout: //   - Index 0: forwarderState – the forwarder program's state account. //   - Index 1: forwarderAuthority – PDA derived from seeds //     ["forwarder", forwarderState, receiverProgram] under the forwarder program ID. //   - Index 2+: receiver-specific accounts required by the target program. //  // The full slice is hashed (via CalculateAccountsHash) into the report and forwarded // as WriteCreReportRequest.RemainingAccounts. The on-chain forwarder strips indices 0 and 1 // before CPI-ing into the receiver, so they must be present and correctly ordered.
 func (c *DataStorage) WriteReportFromUpdateReserves(
 	runtime cre.Runtime,
 	input UpdateReserves,
 	remainingAccounts []*solana.AccountMeta,
+	computeConfig *solana.ComputeConfig,
 ) cre.Promise[*solana.WriteReportReply] {
 	encodedInput, err := c.Codec.EncodeUpdateReservesStruct(input)
 	if err != nil {
@@ -534,11 +616,29 @@ func (c *DataStorage) WriteReportFromUpdateReserves(
 
 	return cre.ThenPromise(promise, func(report *cre.Report) cre.Promise[*solana.WriteReportReply] {
 		return c.client.WriteReport(runtime, &solana.WriteCreReportRequest{
+			ComputeConfig:     computeConfig,
 			Receiver:          ProgramID.Bytes(),
 			RemainingAccounts: remainingAccounts,
 			Report:            report,
 		})
 	})
+}
+
+func (c *DataStorage) WriteReportFromUpdateReservess(
+	runtime cre.Runtime,
+	inputs []UpdateReserves,
+	remainingAccounts []*solana.AccountMeta,
+	computeConfig *solana.ComputeConfig,
+) cre.Promise[*solana.WriteReportReply] {
+	elements := make([][]byte, len(inputs))
+	for i, input := range inputs {
+		encoded, err := c.Codec.EncodeUpdateReservesStruct(input)
+		if err != nil {
+			return cre.PromiseFromResult[*solana.WriteReportReply](nil, err)
+		}
+		elements[i] = encoded
+	}
+	return c.WriteReportFromBorshEncodedVec(runtime, elements, remainingAccounts, computeConfig)
 }
 
 type UserData struct {
@@ -605,10 +705,12 @@ func (c *Codec) EncodeUserDataStruct(in UserData) ([]byte, error) {
 	return in.Marshal()
 }
 
+// WriteReportFromUserData encodes the input struct, hashes the provided accounts, // generates a signed report, and submits it via WriteReport. //  // remainingAccounts must follow the keystone-forwarder account layout: //   - Index 0: forwarderState – the forwarder program's state account. //   - Index 1: forwarderAuthority – PDA derived from seeds //     ["forwarder", forwarderState, receiverProgram] under the forwarder program ID. //   - Index 2+: receiver-specific accounts required by the target program. //  // The full slice is hashed (via CalculateAccountsHash) into the report and forwarded // as WriteCreReportRequest.RemainingAccounts. The on-chain forwarder strips indices 0 and 1 // before CPI-ing into the receiver, so they must be present and correctly ordered.
 func (c *DataStorage) WriteReportFromUserData(
 	runtime cre.Runtime,
 	input UserData,
 	remainingAccounts []*solana.AccountMeta,
+	computeConfig *solana.ComputeConfig,
 ) cre.Promise[*solana.WriteReportReply] {
 	encodedInput, err := c.Codec.EncodeUserDataStruct(input)
 	if err != nil {
@@ -635,9 +737,27 @@ func (c *DataStorage) WriteReportFromUserData(
 
 	return cre.ThenPromise(promise, func(report *cre.Report) cre.Promise[*solana.WriteReportReply] {
 		return c.client.WriteReport(runtime, &solana.WriteCreReportRequest{
+			ComputeConfig:     computeConfig,
 			Receiver:          ProgramID.Bytes(),
 			RemainingAccounts: remainingAccounts,
 			Report:            report,
 		})
 	})
+}
+
+func (c *DataStorage) WriteReportFromUserDatas(
+	runtime cre.Runtime,
+	inputs []UserData,
+	remainingAccounts []*solana.AccountMeta,
+	computeConfig *solana.ComputeConfig,
+) cre.Promise[*solana.WriteReportReply] {
+	elements := make([][]byte, len(inputs))
+	for i, input := range inputs {
+		encoded, err := c.Codec.EncodeUserDataStruct(input)
+		if err != nil {
+			return cre.PromiseFromResult[*solana.WriteReportReply](nil, err)
+		}
+		elements[i] = encoded
+	}
+	return c.WriteReportFromBorshEncodedVec(runtime, elements, remainingAccounts, computeConfig)
 }

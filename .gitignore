@@ -20,6 +20,7 @@
 
 # Dependency directories (remove the comment below to include it)
 # vendor/
+node_modules/
 
 # Build outputs
 bin
@@ -41,3 +42,5 @@ encrypted.secrets.json
 
 # Output produced by e2e Anvil tests
 test/test.yaml
+
+.claude

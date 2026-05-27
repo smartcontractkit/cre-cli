@@ -41,13 +41,11 @@ func TestContractNameToPackage(t *testing.T) {
 	}
 }
 
-func TestResolveEvmInputs_DefaultFallbacks(t *testing.T) {
-	// Create a temporary directory for testing
+func TestResolveInputs_DefaultFallbacks(t *testing.T) {
 	tempDir, err := os.MkdirTemp("", "generate-bindings-test")
 	require.NoError(t, err)
 	defer os.RemoveAll(tempDir)
 
-	// Create required contracts directory and go.mod
 	contractsDir := filepath.Join(tempDir, "contracts")
 	err = os.MkdirAll(contractsDir, 0755)
 	require.NoError(t, err)
@@ -56,7 +54,6 @@ func TestResolveEvmInputs_DefaultFallbacks(t *testing.T) {
 	err = os.WriteFile(goModPath, []byte("module test/contracts\n\ngo 1.20\n"), 0600)
 	require.NoError(t, err)
 
-	// Change to temp directory
 	originalDir, err := os.Getwd()
 	require.NoError(t, err)
 	defer func() {
@@ -71,31 +68,325 @@ func TestResolveEvmInputs_DefaultFallbacks(t *testing.T) {
 	runtimeCtx := &runtime.Context{}
 	handler := newHandler(runtimeCtx)
 
-	// Test with minimal input
 	v := viper.New()
-	v.Set("language", "go")  // Default from StringP
-	v.Set("pkg", "bindings") // Default from StringP
+	v.Set("language", "go")
+	v.Set("pkg", "bindings")
 
 	inputs, err := handler.ResolveInputs(v)
 	require.NoError(t, err)
 
-	// Use filepath.EvalSymlinks to handle macOS /var vs /private/var symlink issues
 	expectedRoot, _ := filepath.EvalSymlinks(tempDir)
 	actualRoot, _ := filepath.EvalSymlinks(inputs.ProjectRoot)
 	assert.Equal(t, expectedRoot, actualRoot)
-	assert.Equal(t, "go", inputs.Language)
+	assert.True(t, inputs.GoLang)
 	expectedAbi, _ := filepath.EvalSymlinks(filepath.Join(tempDir, "contracts", "evm", "src", "abi"))
 	actualAbi, _ := filepath.EvalSymlinks(inputs.AbiPath)
 	assert.Equal(t, expectedAbi, actualAbi)
 	assert.Equal(t, "bindings", inputs.PkgName)
-	expectedOut, _ := filepath.EvalSymlinks(filepath.Join(tempDir, "contracts", "evm", "src", "generated"))
-	actualOut, _ := filepath.EvalSymlinks(inputs.OutPath)
-	assert.Equal(t, expectedOut, actualOut)
+	expectedGoOut, _ := filepath.EvalSymlinks(filepath.Join(tempDir, "contracts", "evm", "src", "generated"))
+	actualGoOut, _ := filepath.EvalSymlinks(inputs.GoOutPath)
+	assert.Equal(t, expectedGoOut, actualGoOut)
+	assert.Empty(t, inputs.TSOutPath)
 }
 
-// command should run in projectRoot which contains contracts directory
+func TestResolveInputs_TypeScriptDefaults(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "generate-bindings-test")
+	require.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	contractsDir := filepath.Join(tempDir, "contracts")
+	err = os.MkdirAll(contractsDir, 0755)
+	require.NoError(t, err)
+
+	originalDir, err := os.Getwd()
+	require.NoError(t, err)
+	defer func() { _ = os.Chdir(originalDir) }()
+	err = os.Chdir(tempDir)
+	require.NoError(t, err)
+
+	runtimeCtx := &runtime.Context{}
+	handler := newHandler(runtimeCtx)
+
+	v := viper.New()
+	v.Set("language", "typescript")
+	v.Set("pkg", "bindings")
+
+	inputs, err := handler.ResolveInputs(v)
+	require.NoError(t, err)
+
+	expectedRoot, _ := filepath.EvalSymlinks(tempDir)
+	actualRoot, _ := filepath.EvalSymlinks(inputs.ProjectRoot)
+	assert.Equal(t, expectedRoot, actualRoot)
+	assert.True(t, inputs.TypeScript)
+
+	expectedAbi, _ := filepath.EvalSymlinks(filepath.Join(tempDir, "contracts", "evm", "src", "abi"))
+	actualAbi, _ := filepath.EvalSymlinks(inputs.AbiPath)
+	assert.Equal(t, expectedAbi, actualAbi)
+
+	expectedTSOut, _ := filepath.EvalSymlinks(filepath.Join(tempDir, "contracts", "evm", "ts", "generated"))
+	actualTSOut, _ := filepath.EvalSymlinks(inputs.TSOutPath)
+	assert.Equal(t, expectedTSOut, actualTSOut)
+	assert.Empty(t, inputs.GoOutPath)
+}
+
+func TestAutoDetect_GoOnly(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "generate-bindings-test")
+	require.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	contractsDir := filepath.Join(tempDir, "contracts")
+	err = os.MkdirAll(contractsDir, 0755)
+	require.NoError(t, err)
+	err = os.WriteFile(filepath.Join(tempDir, "main.go"), []byte("package main\nfunc main() {}"), 0600)
+	require.NoError(t, err)
+
+	originalDir, err := os.Getwd()
+	require.NoError(t, err)
+	defer func() { _ = os.Chdir(originalDir) }()
+	_ = os.Chdir(tempDir)
+
+	runtimeCtx := &runtime.Context{}
+	handler := newHandler(runtimeCtx)
+
+	v := viper.New()
+	inputs, err := handler.ResolveInputs(v)
+	require.NoError(t, err)
+
+	assert.True(t, inputs.GoLang, "Go should be auto-detected")
+	assert.False(t, inputs.TypeScript, "TypeScript should not be detected")
+	assert.NotEmpty(t, inputs.GoOutPath)
+	assert.Empty(t, inputs.TSOutPath)
+}
+
+func TestAutoDetect_TypeScriptOnly(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "generate-bindings-test")
+	require.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	contractsDir := filepath.Join(tempDir, "contracts")
+	err = os.MkdirAll(contractsDir, 0755)
+	require.NoError(t, err)
+	err = os.WriteFile(filepath.Join(tempDir, "main.ts"), []byte("export function main() {}"), 0600)
+	require.NoError(t, err)
+
+	originalDir, err := os.Getwd()
+	require.NoError(t, err)
+	defer func() { _ = os.Chdir(originalDir) }()
+	_ = os.Chdir(tempDir)
+
+	runtimeCtx := &runtime.Context{}
+	handler := newHandler(runtimeCtx)
+
+	v := viper.New()
+	inputs, err := handler.ResolveInputs(v)
+	require.NoError(t, err)
+
+	assert.False(t, inputs.GoLang, "Go should not be detected")
+	assert.True(t, inputs.TypeScript, "TypeScript should be auto-detected")
+	assert.Empty(t, inputs.GoOutPath)
+	assert.NotEmpty(t, inputs.TSOutPath)
+	expectedTSOut, _ := filepath.EvalSymlinks(filepath.Join(tempDir, "contracts", "evm", "ts", "generated"))
+	actualTSOut, _ := filepath.EvalSymlinks(inputs.TSOutPath)
+	assert.Equal(t, expectedTSOut, actualTSOut)
+}
+
+func TestAutoDetect_Both(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "generate-bindings-test")
+	require.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	contractsDir := filepath.Join(tempDir, "contracts")
+	err = os.MkdirAll(contractsDir, 0755)
+	require.NoError(t, err)
+	err = os.WriteFile(filepath.Join(tempDir, "main.go"), []byte("package main\nfunc main() {}"), 0600)
+	require.NoError(t, err)
+	err = os.WriteFile(filepath.Join(tempDir, "main.ts"), []byte("export function main() {}"), 0600)
+	require.NoError(t, err)
+
+	originalDir, err := os.Getwd()
+	require.NoError(t, err)
+	defer func() { _ = os.Chdir(originalDir) }()
+	_ = os.Chdir(tempDir)
+
+	runtimeCtx := &runtime.Context{}
+	handler := newHandler(runtimeCtx)
+
+	v := viper.New()
+	inputs, err := handler.ResolveInputs(v)
+	require.NoError(t, err)
+
+	assert.True(t, inputs.GoLang, "Go should be auto-detected")
+	assert.True(t, inputs.TypeScript, "TypeScript should be auto-detected")
+	assert.NotEmpty(t, inputs.GoOutPath)
+	assert.NotEmpty(t, inputs.TSOutPath)
+}
+
+func TestExplicitGoFlag(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "generate-bindings-test")
+	require.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	err = os.MkdirAll(filepath.Join(tempDir, "contracts"), 0755)
+	require.NoError(t, err)
+
+	originalDir, err := os.Getwd()
+	require.NoError(t, err)
+	defer func() { _ = os.Chdir(originalDir) }()
+	_ = os.Chdir(tempDir)
+
+	runtimeCtx := &runtime.Context{}
+	handler := newHandler(runtimeCtx)
+
+	v := viper.New()
+	v.Set("language", "go")
+	inputs, err := handler.ResolveInputs(v)
+	require.NoError(t, err)
+
+	assert.True(t, inputs.GoLang)
+	assert.False(t, inputs.TypeScript)
+	assert.NotEmpty(t, inputs.GoOutPath)
+	assert.Empty(t, inputs.TSOutPath)
+	expectedGoOut, _ := filepath.EvalSymlinks(filepath.Join(tempDir, "contracts", "evm", "src", "generated"))
+	actualGoOut, _ := filepath.EvalSymlinks(inputs.GoOutPath)
+	assert.Equal(t, expectedGoOut, actualGoOut)
+}
+
+func TestExplicitTypeScriptFlag(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "generate-bindings-test")
+	require.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	err = os.MkdirAll(filepath.Join(tempDir, "contracts"), 0755)
+	require.NoError(t, err)
+
+	originalDir, err := os.Getwd()
+	require.NoError(t, err)
+	defer func() { _ = os.Chdir(originalDir) }()
+	_ = os.Chdir(tempDir)
+
+	runtimeCtx := &runtime.Context{}
+	handler := newHandler(runtimeCtx)
+
+	v := viper.New()
+	v.Set("language", "typescript")
+	inputs, err := handler.ResolveInputs(v)
+	require.NoError(t, err)
+
+	assert.False(t, inputs.GoLang)
+	assert.True(t, inputs.TypeScript)
+	assert.Empty(t, inputs.GoOutPath)
+	assert.NotEmpty(t, inputs.TSOutPath)
+	expectedTSOut, _ := filepath.EvalSymlinks(filepath.Join(tempDir, "contracts", "evm", "ts", "generated"))
+	actualTSOut, _ := filepath.EvalSymlinks(inputs.TSOutPath)
+	assert.Equal(t, expectedTSOut, actualTSOut)
+}
+
+func TestAutoDetectBothLanguages(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "generate-bindings-test")
+	require.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	contractsDir := filepath.Join(tempDir, "contracts")
+	err = os.MkdirAll(contractsDir, 0755)
+	require.NoError(t, err)
+
+	require.NoError(t, os.WriteFile(filepath.Join(tempDir, "main.go"), []byte("package main\n"), 0600))
+	require.NoError(t, os.WriteFile(filepath.Join(tempDir, "main.ts"), []byte("console.log('hi')\n"), 0600))
+
+	originalDir, err := os.Getwd()
+	require.NoError(t, err)
+	defer func() { _ = os.Chdir(originalDir) }()
+	_ = os.Chdir(tempDir)
+
+	runtimeCtx := &runtime.Context{}
+	handler := newHandler(runtimeCtx)
+
+	v := viper.New()
+	inputs, err := handler.ResolveInputs(v)
+	require.NoError(t, err)
+
+	assert.True(t, inputs.GoLang)
+	assert.True(t, inputs.TypeScript)
+	assert.NotEmpty(t, inputs.GoOutPath)
+	assert.NotEmpty(t, inputs.TSOutPath)
+}
+
+func TestOutputPathsSeparation(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "generate-bindings-test")
+	require.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	contractsDir := filepath.Join(tempDir, "contracts")
+	err = os.MkdirAll(contractsDir, 0755)
+	require.NoError(t, err)
+
+	require.NoError(t, os.WriteFile(filepath.Join(tempDir, "main.go"), []byte("package main\n"), 0600))
+	require.NoError(t, os.WriteFile(filepath.Join(tempDir, "main.ts"), []byte("console.log('hi')\n"), 0600))
+
+	originalDir, err := os.Getwd()
+	require.NoError(t, err)
+	defer func() { _ = os.Chdir(originalDir) }()
+	_ = os.Chdir(tempDir)
+
+	runtimeCtx := &runtime.Context{}
+	handler := newHandler(runtimeCtx)
+
+	v := viper.New()
+	inputs, err := handler.ResolveInputs(v)
+	require.NoError(t, err)
+
+	assert.Contains(t, inputs.GoOutPath, "src", "Go output path should contain src")
+	assert.Contains(t, inputs.GoOutPath, "generated", "Go output path should contain generated")
+
+	assert.Contains(t, inputs.TSOutPath, "ts", "TS output path should contain ts")
+	assert.Contains(t, inputs.TSOutPath, "generated", "TS output path should contain generated")
+
+	assert.NotEqual(t, inputs.GoOutPath, inputs.TSOutPath, "Go and TS output paths must be different")
+}
+
+func TestEndToEnd_TypeScriptGeneration(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "generate-bindings-test")
+	require.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	abiDir := filepath.Join(tempDir, "contracts", "evm", "src", "abi")
+	err = os.MkdirAll(abiDir, 0755)
+	require.NoError(t, err)
+
+	abiContent := `[{"type":"function","name":"getValue","inputs":[],"outputs":[{"name":"","type":"uint256"}],"stateMutability":"view"}]`
+	err = os.WriteFile(filepath.Join(abiDir, "SimpleContract.abi"), []byte(abiContent), 0600)
+	require.NoError(t, err)
+
+	jsonContent := `{"abi":[{"type":"function","name":"getBalance","inputs":[],"outputs":[{"name":"","type":"uint256"}],"stateMutability":"view"}]}`
+	err = os.WriteFile(filepath.Join(abiDir, "JsonContract.json"), []byte(jsonContent), 0600)
+	require.NoError(t, err)
+
+	originalDir, err := os.Getwd()
+	require.NoError(t, err)
+	defer func() { _ = os.Chdir(originalDir) }()
+	_ = os.Chdir(tempDir)
+
+	logger := zerolog.New(os.Stderr).With().Timestamp().Logger()
+	runtimeCtx := &runtime.Context{Logger: &logger}
+	handler := newHandler(runtimeCtx)
+
+	v := viper.New()
+	v.Set("language", "typescript")
+	v.Set("pkg", "bindings")
+	inputs, err := handler.ResolveInputs(v)
+	require.NoError(t, err)
+	require.NoError(t, handler.ValidateInputs(inputs))
+	require.NoError(t, handler.Execute(inputs))
+
+	tsOutDir := filepath.Join(tempDir, "contracts", "evm", "ts", "generated")
+	require.FileExists(t, filepath.Join(tsOutDir, "SimpleContract.ts"))
+	require.FileExists(t, filepath.Join(tsOutDir, "SimpleContract_mock.ts"))
+	require.FileExists(t, filepath.Join(tsOutDir, "JsonContract.ts"))
+	require.FileExists(t, filepath.Join(tsOutDir, "JsonContract_mock.ts"))
+	require.FileExists(t, filepath.Join(tsOutDir, "index.ts"))
+}
+
 func TestResolveEvmInputs_CustomProjectRoot(t *testing.T) {
-	// Create a temporary directory for testing
 	tempDir, err := os.MkdirTemp("", "generate-bindings-test")
 	require.NoError(t, err)
 	defer os.RemoveAll(tempDir)
@@ -103,11 +394,10 @@ func TestResolveEvmInputs_CustomProjectRoot(t *testing.T) {
 	runtimeCtx := &runtime.Context{}
 	handler := newHandler(runtimeCtx)
 
-	// Test with custom project root
 	v := viper.New()
 	v.Set("project-root", tempDir)
-	v.Set("language", "go")  // Default from StringP
-	v.Set("pkg", "bindings") // Default from StringP
+	v.Set("language", "go")
+	v.Set("pkg", "bindings")
 
 	_, err = handler.ResolveInputs(v)
 	require.Error(t, err)
@@ -116,14 +406,11 @@ func TestResolveEvmInputs_CustomProjectRoot(t *testing.T) {
 	require.Contains(t, err.Error(), expectedErrMsg)
 }
 
-// Empty project root should default to current directory, and this should contain contracts and go.mod
 func TestResolveEvmInputs_EmptyProjectRoot(t *testing.T) {
-	// Create a temporary directory for testing
 	tempDir, err := os.MkdirTemp("", "generate-bindings-test")
 	require.NoError(t, err)
 	defer os.RemoveAll(tempDir)
 
-	// Create required contracts directory and go.mod
 	contractsDir := filepath.Join(tempDir, "contracts")
 	err = os.MkdirAll(contractsDir, 0755)
 	require.NoError(t, err)
@@ -132,7 +419,6 @@ func TestResolveEvmInputs_EmptyProjectRoot(t *testing.T) {
 	err = os.WriteFile(goModPath, []byte("module test/contracts\n\ngo 1.20\n"), 0600)
 	require.NoError(t, err)
 
-	// Change to temp directory
 	originalDir, err := os.Getwd()
 	require.NoError(t, err)
 	defer func() {
@@ -147,36 +433,32 @@ func TestResolveEvmInputs_EmptyProjectRoot(t *testing.T) {
 	runtimeCtx := &runtime.Context{}
 	handler := newHandler(runtimeCtx)
 
-	// Test with empty project root (should use current directory)
 	v := viper.New()
 	v.Set("project-root", "")
-	v.Set("language", "go")  // Default from StringP
-	v.Set("pkg", "bindings") // Default from StringP
+	v.Set("language", "go")
+	v.Set("pkg", "bindings")
 
 	inputs, err := handler.ResolveInputs(v)
 	require.NoError(t, err)
 
-	// Use filepath.EvalSymlinks to handle macOS /var vs /private/var symlink issues
 	expectedRoot, _ := filepath.EvalSymlinks(tempDir)
 	actualRoot, _ := filepath.EvalSymlinks(inputs.ProjectRoot)
 	assert.Equal(t, expectedRoot, actualRoot)
-	assert.Equal(t, "go", inputs.Language)
+	assert.True(t, inputs.GoLang)
 	expectedAbi, _ := filepath.EvalSymlinks(filepath.Join(tempDir, "contracts", "evm", "src", "abi"))
 	actualAbi, _ := filepath.EvalSymlinks(inputs.AbiPath)
 	assert.Equal(t, expectedAbi, actualAbi)
 	assert.Equal(t, "bindings", inputs.PkgName)
-	expectedOut, _ := filepath.EvalSymlinks(filepath.Join(tempDir, "contracts", "evm", "src", "generated"))
-	actualOut, _ := filepath.EvalSymlinks(inputs.OutPath)
-	assert.Equal(t, expectedOut, actualOut)
+	expectedGoOut, _ := filepath.EvalSymlinks(filepath.Join(tempDir, "contracts", "evm", "src", "generated"))
+	actualGoOut, _ := filepath.EvalSymlinks(inputs.GoOutPath)
+	assert.Equal(t, expectedGoOut, actualGoOut)
 }
 
-func TestValidateEvmInputs_ValidEvmInputs(t *testing.T) {
-	// Create a temporary directory for testing
+func TestValidateInputs_ValidInputs(t *testing.T) {
 	tempDir, err := os.MkdirTemp("", "generate-bindings-test")
 	require.NoError(t, err)
 	defer os.RemoveAll(tempDir)
 
-	// Create a valid ABI file
 	abiContent := `[{"type":"function","name":"test","inputs":[],"outputs":[]}]`
 	abiFile := filepath.Join(tempDir, "test.abi")
 	err = os.WriteFile(abiFile, []byte(abiContent), 0600)
@@ -185,19 +467,18 @@ func TestValidateEvmInputs_ValidEvmInputs(t *testing.T) {
 	runtimeCtx := &runtime.Context{}
 	handler := newHandler(runtimeCtx)
 
-	// Test validation with valid inputs (using single file)
 	inputs := Inputs{
 		ProjectRoot: tempDir,
-		Language:    "go",
+		GoLang:      true,
 		AbiPath:     abiFile,
 		PkgName:     "bindings",
-		OutPath:     tempDir,
+		GoOutPath:   tempDir,
 	}
 
 	err = handler.ValidateInputs(inputs)
 	require.NoError(t, err)
+	assert.True(t, handler.validated)
 
-	// Test validation with directory containing .abi files
 	abiDir := filepath.Join(tempDir, "abi")
 	err = os.MkdirAll(abiDir, 0755)
 	require.NoError(t, err)
@@ -207,29 +488,67 @@ func TestValidateEvmInputs_ValidEvmInputs(t *testing.T) {
 	inputs.AbiPath = abiDir
 	err = handler.ValidateInputs(inputs)
 	require.NoError(t, err)
+	assert.True(t, handler.validated)
+
+	abiDir2 := filepath.Join(tempDir, "abi_ts")
+	err = os.MkdirAll(abiDir2, 0755)
+	require.NoError(t, err)
+	err = os.WriteFile(filepath.Join(abiDir2, "Contract.abi"), []byte(abiContent), 0600)
+	require.NoError(t, err)
+
+	tsInputs := Inputs{
+		ProjectRoot: tempDir,
+		TypeScript:  true,
+		AbiPath:     abiDir2,
+		PkgName:     "bindings",
+		TSOutPath:   tempDir,
+	}
+	handler2 := newHandler(runtimeCtx)
+	err = handler2.ValidateInputs(tsInputs)
+	require.NoError(t, err)
+	assert.True(t, handler2.validated)
+
+	abiDir3 := filepath.Join(tempDir, "abi_json")
+	err = os.MkdirAll(abiDir3, 0755)
+	require.NoError(t, err)
+	jsonContent := `{"abi":[{"type":"function","name":"test","inputs":[],"outputs":[]}]}`
+	err = os.WriteFile(filepath.Join(abiDir3, "Contract.json"), []byte(jsonContent), 0600)
+	require.NoError(t, err)
+
+	jsonInputs := Inputs{
+		ProjectRoot: tempDir,
+		GoLang:      true,
+		AbiPath:     abiDir3,
+		PkgName:     "bindings",
+		GoOutPath:   filepath.Join(tempDir, "out"),
+	}
+	handler3 := newHandler(runtimeCtx)
+	err = handler3.ValidateInputs(jsonInputs)
+	require.NoError(t, err)
+	assert.True(t, handler3.validated)
 }
 
-func TestValidateEvmInputs_InvalidLanguage(t *testing.T) {
-	// Create a temporary directory for testing
+func TestValidateInputs_NoLanguageSpecified(t *testing.T) {
 	tempDir, err := os.MkdirTemp("", "generate-bindings-test")
 	require.NoError(t, err)
 	defer os.RemoveAll(tempDir)
 
+	contractsDir := filepath.Join(tempDir, "contracts")
+	err = os.MkdirAll(contractsDir, 0755)
+	require.NoError(t, err)
+
+	originalDir, err := os.Getwd()
+	require.NoError(t, err)
+	defer func() { _ = os.Chdir(originalDir) }()
+	_ = os.Chdir(tempDir)
+
 	runtimeCtx := &runtime.Context{}
 	handler := newHandler(runtimeCtx)
 
-	// Test validation with invalid language
-	inputs := Inputs{
-		ProjectRoot: tempDir,
-		Language:    "typescript", // No longer supported
-		AbiPath:     tempDir,
-		PkgName:     "bindings",
-		OutPath:     tempDir,
-	}
-
-	err = handler.ValidateInputs(inputs)
+	v := viper.New()
+	_, err = handler.ResolveInputs(v)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "language")
+	assert.Contains(t, err.Error(), "no target language")
 }
 
 func TestValidateEvmInputs_NonExistentDirectory(t *testing.T) {
@@ -238,10 +557,10 @@ func TestValidateEvmInputs_NonExistentDirectory(t *testing.T) {
 
 	inputs := Inputs{
 		ProjectRoot: "/non/existent/path",
-		Language:    "go",
+		GoLang:      true,
 		AbiPath:     "/non/existent/abi",
 		PkgName:     "bindings",
-		OutPath:     "/non/existent/out",
+		GoOutPath:   "/non/existent/out",
 	}
 
 	err := handler.ValidateInputs(inputs)
@@ -250,7 +569,6 @@ func TestValidateEvmInputs_NonExistentDirectory(t *testing.T) {
 }
 
 func TestProcessAbiDirectory_MultipleFiles(t *testing.T) {
-	// Create a temporary directory structure
 	tempDir, err := os.MkdirTemp("", "generate-bindings-test")
 	require.NoError(t, err)
 	defer os.RemoveAll(tempDir)
@@ -261,14 +579,15 @@ func TestProcessAbiDirectory_MultipleFiles(t *testing.T) {
 	err = os.MkdirAll(abiDir, 0755)
 	require.NoError(t, err)
 
-	// Create mock ABI files
 	abiContent := `[{"type":"function","name":"test","inputs":[],"outputs":[]}]`
+	jsonContent := `{"abi":[{"type":"function","name":"test","inputs":[],"outputs":[]}]}`
 	err = os.WriteFile(filepath.Join(abiDir, "Contract1.abi"), []byte(abiContent), 0600)
 	require.NoError(t, err)
 	err = os.WriteFile(filepath.Join(abiDir, "Contract2.abi"), []byte(abiContent), 0600)
 	require.NoError(t, err)
+	err = os.WriteFile(filepath.Join(abiDir, "Contract3.json"), []byte(jsonContent), 0600)
+	require.NoError(t, err)
 
-	// Create a mock logger to prevent nil pointer dereference
 	logger := zerolog.New(os.Stderr).With().Timestamp().Logger()
 	runtimeCtx := &runtime.Context{
 		Logger: &logger,
@@ -277,32 +596,28 @@ func TestProcessAbiDirectory_MultipleFiles(t *testing.T) {
 
 	inputs := Inputs{
 		ProjectRoot: tempDir,
-		Language:    "go",
+		GoLang:      true,
 		AbiPath:     abiDir,
 		PkgName:     "bindings",
-		OutPath:     outDir,
+		GoOutPath:   outDir,
 	}
 
-	// This test will fail because it tries to call the actual bindings.GenerateBindings
-	// but it tests the directory processing logic
 	err = handler.processAbiDirectory(inputs)
-	// We expect an error because the bindings package requires actual ABI format
-	// but we can check that it created the expected directory structure
 	if err == nil {
 		t.Log("Unexpectedly succeeded - bindings generation worked with mock ABI")
 	} else {
 		assert.Contains(t, err.Error(), "Contract1")
 	}
 
-	// Verify that per-contract directories were created
 	contract1Dir := filepath.Join(outDir, "contract1")
 	contract2Dir := filepath.Join(outDir, "contract2")
+	contract3Dir := filepath.Join(outDir, "contract3")
 	assert.DirExists(t, contract1Dir)
 	assert.DirExists(t, contract2Dir)
+	assert.DirExists(t, contract3Dir)
 }
 
 func TestProcessAbiDirectory_CreatesPerContractDirectories(t *testing.T) {
-	// Create a temporary directory structure
 	tempDir, err := os.MkdirTemp("", "generate-bindings-test")
 	require.NoError(t, err)
 	defer os.RemoveAll(tempDir)
@@ -313,8 +628,8 @@ func TestProcessAbiDirectory_CreatesPerContractDirectories(t *testing.T) {
 	err = os.MkdirAll(abiDir, 0755)
 	require.NoError(t, err)
 
-	// Create mock ABI files with different naming patterns
 	abiContent := `[{"type":"function","name":"test","inputs":[],"outputs":[]}]`
+	jsonContent := `{"abi":[{"type":"function","name":"test","inputs":[],"outputs":[]}]}`
 	testCases := []struct {
 		filename        string
 		expectedPackage string
@@ -322,14 +637,18 @@ func TestProcessAbiDirectory_CreatesPerContractDirectories(t *testing.T) {
 		{"IERC20.abi", "ierc20"},
 		{"ReserveManager.abi", "reserve_manager"},
 		{"SimpleERC20.abi", "simple_erc20"},
+		{"MyToken.json", "my_token"},
 	}
 
 	for _, tc := range testCases {
-		err = os.WriteFile(filepath.Join(abiDir, tc.filename), []byte(abiContent), 0600)
+		content := abiContent
+		if filepath.Ext(tc.filename) == ".json" {
+			content = jsonContent
+		}
+		err = os.WriteFile(filepath.Join(abiDir, tc.filename), []byte(content), 0600)
 		require.NoError(t, err)
 	}
 
-	// Create a mock logger
 	logger := zerolog.New(os.Stderr).With().Timestamp().Logger()
 	runtimeCtx := &runtime.Context{
 		Logger: &logger,
@@ -338,19 +657,17 @@ func TestProcessAbiDirectory_CreatesPerContractDirectories(t *testing.T) {
 
 	inputs := Inputs{
 		ProjectRoot: tempDir,
-		Language:    "go",
+		GoLang:      true,
 		AbiPath:     abiDir,
 		PkgName:     "bindings",
-		OutPath:     outDir,
+		GoOutPath:   outDir,
 	}
 
-	// Try to process - the mock ABI content might actually work
 	err = handler.processAbiDirectory(inputs)
 	if err != nil {
 		t.Logf("Expected error occurred: %v", err)
 	}
 
-	// Verify that per-contract directories were created with correct names
 	for _, tc := range testCases {
 		contractDir := filepath.Join(outDir, tc.expectedPackage)
 		assert.DirExists(t, contractDir, "Expected directory %s to be created", contractDir)
@@ -358,7 +675,6 @@ func TestProcessAbiDirectory_CreatesPerContractDirectories(t *testing.T) {
 }
 
 func TestProcessAbiDirectory_NoAbiFiles(t *testing.T) {
-	// Create a temporary directory structure
 	tempDir, err := os.MkdirTemp("", "generate-bindings-test")
 	require.NoError(t, err)
 	defer os.RemoveAll(tempDir)
@@ -377,15 +693,42 @@ func TestProcessAbiDirectory_NoAbiFiles(t *testing.T) {
 
 	inputs := Inputs{
 		ProjectRoot: tempDir,
-		Language:    "go",
+		GoLang:      true,
 		AbiPath:     abiDir,
 		PkgName:     "bindings",
-		OutPath:     outDir,
+		GoOutPath:   outDir,
 	}
 
 	err = handler.processAbiDirectory(inputs)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "no .abi files found")
+	assert.Contains(t, err.Error(), "no *.abi or *.json files found")
+}
+
+func TestProcessAbiDirectory_NoAbiFiles_TypeScript(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "generate-bindings-test")
+	require.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	abiDir := filepath.Join(tempDir, "abi")
+	outDir := filepath.Join(tempDir, "generated")
+	err = os.MkdirAll(abiDir, 0755)
+	require.NoError(t, err)
+
+	logger := zerolog.New(os.Stderr).With().Timestamp().Logger()
+	runtimeCtx := &runtime.Context{Logger: &logger}
+	handler := newHandler(runtimeCtx)
+
+	inputs := Inputs{
+		ProjectRoot: tempDir,
+		TypeScript:  true,
+		AbiPath:     abiDir,
+		PkgName:     "bindings",
+		TSOutPath:   outDir,
+	}
+
+	err = handler.processAbiDirectory(inputs)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no *.abi or *.json files found")
 }
 
 func TestProcessAbiDirectory_PackageNameCollision(t *testing.T) {
@@ -401,8 +744,6 @@ func TestProcessAbiDirectory_PackageNameCollision(t *testing.T) {
 
 	abiContent := `[{"type":"function","name":"test","inputs":[],"outputs":[]}]`
 
-	// "TestContract" -> "test_contract"
-	// "test_contract" -> "test_contract"
 	err = os.WriteFile(filepath.Join(abiDir, "TestContract.abi"), []byte(abiContent), 0600)
 	require.NoError(t, err)
 	err = os.WriteFile(filepath.Join(abiDir, "test_contract.abi"), []byte(abiContent), 0600)
@@ -416,16 +757,50 @@ func TestProcessAbiDirectory_PackageNameCollision(t *testing.T) {
 
 	inputs := Inputs{
 		ProjectRoot: tempDir,
-		Language:    "go",
+		GoLang:      true,
 		AbiPath:     abiDir,
 		PkgName:     "bindings",
-		OutPath:     outDir,
+		GoOutPath:   outDir,
 	}
 
 	err = handler.processAbiDirectory(inputs)
-	fmt.Println(err.Error())
 	require.Error(t, err)
 	require.Equal(t, err.Error(), "package name collision: multiple contracts would generate the same package name 'test_contract' (contracts are converted to snake_case for package names). Please rename one of your contract files to avoid this conflict")
+}
+
+func TestProcessAbiDirectory_DuplicateContractNameAcrossExtensions(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "generate-bindings-test")
+	require.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	abiDir := filepath.Join(tempDir, "abi")
+	outDir := filepath.Join(tempDir, "generated")
+	err = os.MkdirAll(abiDir, 0755)
+	require.NoError(t, err)
+
+	abiContent := `[{"type":"function","name":"test","inputs":[],"outputs":[]}]`
+	jsonContent := `{"abi":[{"type":"function","name":"test","inputs":[],"outputs":[]}]}`
+	err = os.WriteFile(filepath.Join(abiDir, "Token.abi"), []byte(abiContent), 0600)
+	require.NoError(t, err)
+	err = os.WriteFile(filepath.Join(abiDir, "Token.json"), []byte(jsonContent), 0600)
+	require.NoError(t, err)
+
+	logger := zerolog.New(os.Stderr).With().Timestamp().Logger()
+	runtimeCtx := &runtime.Context{Logger: &logger}
+	handler := newHandler(runtimeCtx)
+
+	inputs := Inputs{
+		ProjectRoot: tempDir,
+		GoLang:      true,
+		AbiPath:     abiDir,
+		PkgName:     "bindings",
+		GoOutPath:   outDir,
+	}
+
+	err = handler.processAbiDirectory(inputs)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "duplicate contract name")
+	assert.Contains(t, err.Error(), "Token")
 }
 
 func TestProcessAbiDirectory_NonExistentDirectory(t *testing.T) {
@@ -437,20 +812,20 @@ func TestProcessAbiDirectory_NonExistentDirectory(t *testing.T) {
 
 	inputs := Inputs{
 		ProjectRoot: "/tmp",
-		Language:    "go",
+		GoLang:      true,
 		AbiPath:     "/non/existent/abi",
 		PkgName:     "bindings",
-		OutPath:     "/tmp/out",
+		GoOutPath:   "/tmp/out",
 	}
 
 	err := handler.processAbiDirectory(inputs)
 	require.Error(t, err)
-	// For non-existent directory, filepath.Glob returns empty slice, so we get the "no .abi files found" error
-	assert.Contains(t, err.Error(), "no .abi files found")
+	assert.Contains(t, err.Error(), "no *.abi or *.json files found")
 }
 
 // TestGenerateBindings_UnconventionalNaming tests binding generation for contracts
 // with unconventional naming patterns to verify correct handling or appropriate errors.
+// Each case is run for both .abi (raw array) and .json (artifact with "abi" field) formats.
 func TestGenerateBindings_UnconventionalNaming(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -550,31 +925,98 @@ func TestGenerateBindings_UnconventionalNaming(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			tempDir, err := os.MkdirTemp("", "bindings-unconventional-test")
-			require.NoError(t, err)
-			defer os.RemoveAll(tempDir)
+			for _, ext := range []string{".abi", ".json"} {
+				t.Run(ext, func(t *testing.T) {
+					tempDir, err := os.MkdirTemp("", "bindings-unconventional-test")
+					require.NoError(t, err)
+					defer os.RemoveAll(tempDir)
 
-			abiFile := filepath.Join(tempDir, tc.typeName+".abi")
-			err = os.WriteFile(abiFile, []byte(tc.contractABI), 0600)
-			require.NoError(t, err)
+					var fileContent string
+					if ext == ".json" {
+						fileContent = fmt.Sprintf(`{"abi":%s}`, tc.contractABI)
+					} else {
+						fileContent = tc.contractABI
+					}
 
-			outFile := filepath.Join(tempDir, "bindings.go")
-			err = GenerateBindings("", abiFile, tc.pkgName, tc.typeName, outFile)
+					abiFile := filepath.Join(tempDir, tc.typeName+ext)
+					err = os.WriteFile(abiFile, []byte(fileContent), 0600)
+					require.NoError(t, err)
 
-			if tc.shouldFail {
-				require.Error(t, err, "Expected binding generation to fail for %s", tc.name)
-				if tc.expectedErrMsg != "" {
-					assert.Contains(t, err.Error(), tc.expectedErrMsg, "Error message should contain expected text")
-				}
-			} else {
-				require.NoError(t, err, "Binding generation should succeed for %s", tc.name)
+					outFile := filepath.Join(tempDir, "bindings.go")
+					err = GenerateBindings("", abiFile, tc.pkgName, tc.typeName, outFile)
 
-				content, err := os.ReadFile(outFile)
-				require.NoError(t, err)
-				assert.NotEmpty(t, content, "Generated bindings should not be empty")
+					if tc.shouldFail {
+						require.Error(t, err, "Expected binding generation to fail for %s", tc.name)
+						if tc.expectedErrMsg != "" {
+							assert.Contains(t, err.Error(), tc.expectedErrMsg, "Error message should contain expected text")
+						}
+					} else {
+						require.NoError(t, err, "Binding generation should succeed for %s", tc.name)
 
-				assert.Contains(t, string(content), fmt.Sprintf("package %s", tc.pkgName))
+						content, err := os.ReadFile(outFile)
+						require.NoError(t, err)
+						assert.NotEmpty(t, content, "Generated bindings should not be empty")
+
+						assert.Contains(t, string(content), fmt.Sprintf("package %s", tc.pkgName))
+					}
+				})
 			}
 		})
 	}
+}
+
+func TestGenerateBindings_StructNamePrefixStripping(t *testing.T) {
+	// ABI where internalType embeds the contract name as a namespace prefix
+	// (e.g. "struct MyContract.Config"). go-ethereum folds the dot so the Go
+	// name becomes "MyContractConfig". sanitizeStructNames must strip the
+	// prefix from both struct declarations and field type references.
+	contractABI := `[
+		{
+			"type": "function",
+			"name": "getDON",
+			"inputs": [],
+			"outputs": [{
+				"name": "",
+				"type": "tuple",
+				"internalType": "struct MyContract.DONInfo",
+				"components": [
+					{"name": "id", "type": "uint32"},
+					{
+						"name": "capabilityConfigurations",
+						"type": "tuple[]",
+						"internalType": "struct MyContract.CapabilityConfiguration[]",
+						"components": [
+							{"name": "capabilityId", "type": "string"},
+							{"name": "config", "type": "bytes"}
+						]
+					}
+				]
+			}],
+			"stateMutability": "view"
+		}
+	]`
+
+	tempDir, err := os.MkdirTemp("", "bindings-prefix-test")
+	require.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	abiFile := filepath.Join(tempDir, "MyContract.abi")
+	err = os.WriteFile(abiFile, []byte(contractABI), 0600)
+	require.NoError(t, err)
+
+	outFile := filepath.Join(tempDir, "bindings.go")
+	err = GenerateBindings("", abiFile, "mycontract", "MyContract", outFile)
+	require.NoError(t, err)
+
+	content, err := os.ReadFile(outFile)
+	require.NoError(t, err)
+	src := string(content)
+
+	assert.Contains(t, src, "type DONInfo struct")
+	assert.Contains(t, src, "type CapabilityConfiguration struct")
+	assert.NotContains(t, src, "type MyContractDONInfo struct")
+	assert.NotContains(t, src, "type MyContractCapabilityConfiguration struct")
+
+	assert.Contains(t, src, "[]CapabilityConfiguration")
+	assert.NotContains(t, src, "[]MyContractCapabilityConfiguration")
 }
