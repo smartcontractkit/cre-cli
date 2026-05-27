@@ -117,7 +117,7 @@ func (g *Generator) gen_complexEnum(name string, docs []string, typ idl.IdlTypeD
 	// Add comments for the enum type:
 	addComments(code, docs)
 	{
-		register_TypeName_as_ComplexEnum(name)
+		g.registerComplexEnumType(name)
 		containerName := formatEnumContainerName(enumTypeName)
 		interfaceMethodName := formatInterfaceMethodName(enumTypeName)
 
@@ -171,7 +171,10 @@ func (g *Generator) gen_complexEnum(name string, docs []string, typ idl.IdlTypeD
 
 					argBody.Switch(Id("tmp").Dot("Enum")).
 						BlockFunc(func(switchGroup *Group) {
-							interfaceType := g.idl.Types.ByName(enumName)
+							interfaceType := g.idl.Types.ByName(name)
+							if interfaceType == nil {
+								panic(fmt.Errorf("complex enum type %q not found in IDL types", name))
+							}
 
 							for variantIndex, variant := range interfaceType.Ty.(*idl.IdlTypeDefTyEnum).Variants {
 								variantTypeNameComplex := formatComplexEnumVariantTypeName(enumName, variant.Name)
@@ -233,7 +236,10 @@ func (g *Generator) gen_complexEnum(name string, docs []string, typ idl.IdlTypeD
 									)
 								})
 
-							interfaceType := g.idl.Types.ByName(enumTypeName)
+							interfaceType := g.idl.Types.ByName(name)
+							if interfaceType == nil {
+								panic(fmt.Errorf("complex enum type %q not found in IDL types", name))
+							}
 							for variantIndex, variant := range interfaceType.Ty.(*idl.IdlTypeDefTyEnum).Variants {
 								variantTypeNameStruct := formatComplexEnumVariantTypeName(enumTypeName, variant.Name)
 
@@ -275,7 +281,7 @@ func (g *Generator) gen_complexEnum(name string, docs []string, typ idl.IdlTypeD
 						case idl.IdlDefinedFieldsNamed:
 							for _, variantField := range fields {
 								optionality := IsOption(variantField.Ty) || IsCOption(variantField.Ty)
-								structGroup.Add(genField(variantField, optionality)).
+								structGroup.Add(g.genField(variantField, optionality)).
 									Add(func() Code {
 										tagMap := map[string]string{}
 										if IsOption(variantField.Ty) {
@@ -298,7 +304,7 @@ func (g *Generator) gen_complexEnum(name string, docs []string, typ idl.IdlTypeD
 							for itemIndex, tupleItem := range fields {
 								optionality := IsOption(tupleItem) || IsCOption(tupleItem)
 								tupleItemName := FormatTupleItemName(itemIndex)
-								structGroup.Add(genFieldNamed(tupleItemName, tupleItem, optionality)).
+								structGroup.Add(g.genFieldNamed(tupleItemName, tupleItem, optionality)).
 									Add(func() Code {
 										tagMap := map[string]string{}
 										if IsOption(tupleItem) {
@@ -367,7 +373,7 @@ func (g *Generator) gen_complexEnum(name string, docs []string, typ idl.IdlTypeD
 				case idl.IdlDefinedFieldsNamed:
 					// Declare MarshalWithEncoder:
 					code.Line().Line().Add(
-						gen_MarshalWithEncoder_struct(
+						g.gen_MarshalWithEncoder_struct(
 							g.idl,
 							false,
 							variantTypeNameComplex,
@@ -378,7 +384,7 @@ func (g *Generator) gen_complexEnum(name string, docs []string, typ idl.IdlTypeD
 
 					// Declare UnmarshalWithDecoder
 					code.Line().Line().Add(
-						gen_UnmarshalWithDecoder_struct(
+						g.gen_UnmarshalWithDecoder_struct(
 							g.idl,
 							false,
 							variantTypeNameComplex,
@@ -390,7 +396,7 @@ func (g *Generator) gen_complexEnum(name string, docs []string, typ idl.IdlTypeD
 					// TODO: handle tuples
 					// Declare MarshalWithEncoder:
 					code.Line().Line().Add(
-						gen_MarshalWithEncoder_struct(
+						g.gen_MarshalWithEncoder_struct(
 							g.idl,
 							false,
 							variantTypeNameComplex,
@@ -401,7 +407,7 @@ func (g *Generator) gen_complexEnum(name string, docs []string, typ idl.IdlTypeD
 
 					// Declare UnmarshalWithDecoder
 					code.Line().Line().Add(
-						gen_UnmarshalWithDecoder_struct(
+						g.gen_UnmarshalWithDecoder_struct(
 							g.idl,
 							false,
 							variantTypeNameComplex,

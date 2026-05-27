@@ -5,7 +5,7 @@
 - Source Repository: https://github.com/ethereum/go-ethereum
 - Original Package: accounts/abi/bind
 - Fork Date: 2025-06-18
-- Upstream Version: v1.16.0
+- Upstream Version: v1.17.0
 - Upstream Commit: 4997a248ab4acdb40383f1e1a5d3813a634370a6
 
 ## Modifications
@@ -30,6 +30,7 @@
 ## Sync History
 
 - 2025-06-18: Initial fork from v1.16.0
+- 2026-02-25: Bump metadata version (no changes)
 
 ## Security Patches Applied
 
