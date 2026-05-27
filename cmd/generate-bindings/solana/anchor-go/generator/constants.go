@@ -174,25 +174,57 @@ func (g *Generator) gen_constants() (*OutputFile, error) {
 					Return(Id("val")),
 				).Call()
 				code.Line()
-			case *idltype.I128:
-				_ = ty
-				// "value":"-100_000_000"
-				cleanValue := strings.ReplaceAll(co.Value, "_", "")
-				bigInt := new(big.Int)
-				_, ok := bigInt.SetString(cleanValue, 10)
-				if !ok {
-					return nil, fmt.Errorf("failed to parse i128 constants[%d] %s: invalid format", coi, spew.Sdump(co))
-				}
-				// Generate code that creates a big.Int from string
-				code.Var().Id(co.Name).Op("=").Func().Params().Op("*").Qual("math/big", "Int").Block(
-					Id("val").Op(",").Id("ok").Op(":=").New(Qual("math/big", "Int")).Dot("SetString").Call(Lit(cleanValue), Lit(10)),
-					If(Op("!").Id("ok")).Block(
-						Panic(Lit(fmt.Sprintf("invalid i128 constant %s", co.Name))),
-					),
-					Return(Id("val")),
-				).Call()
-				code.Line()
-			case *idltype.F32:
+		case *idltype.I128:
+			_ = ty
+			// "value":"-100_000_000"
+			cleanValue := strings.ReplaceAll(co.Value, "_", "")
+			bigInt := new(big.Int)
+			_, ok := bigInt.SetString(cleanValue, 10)
+			if !ok {
+				return nil, fmt.Errorf("failed to parse i128 constants[%d] %s: invalid format", coi, spew.Sdump(co))
+			}
+			// Generate code that creates a big.Int from string
+			code.Var().Id(co.Name).Op("=").Func().Params().Op("*").Qual("math/big", "Int").Block(
+				Id("val").Op(",").Id("ok").Op(":=").New(Qual("math/big", "Int")).Dot("SetString").Call(Lit(cleanValue), Lit(10)),
+				If(Op("!").Id("ok")).Block(
+					Panic(Lit(fmt.Sprintf("invalid i128 constant %s", co.Name))),
+				),
+				Return(Id("val")),
+			).Call()
+			code.Line()
+		case *idltype.U256:
+			_ = ty
+			cleanValue := strings.ReplaceAll(co.Value, "_", "")
+			bigInt := new(big.Int)
+			_, ok := bigInt.SetString(cleanValue, 10)
+			if !ok {
+				return nil, fmt.Errorf("failed to parse u256 constants[%d] %s: invalid format", coi, spew.Sdump(co))
+			}
+			code.Var().Id(co.Name).Op("=").Func().Params().Op("*").Qual("math/big", "Int").Block(
+				Id("val").Op(",").Id("ok").Op(":=").New(Qual("math/big", "Int")).Dot("SetString").Call(Lit(cleanValue), Lit(10)),
+				If(Op("!").Id("ok")).Block(
+					Panic(Lit(fmt.Sprintf("invalid u256 constant %s", co.Name))),
+				),
+				Return(Id("val")),
+			).Call()
+			code.Line()
+		case *idltype.I256:
+			_ = ty
+			cleanValue := strings.ReplaceAll(co.Value, "_", "")
+			bigInt := new(big.Int)
+			_, ok := bigInt.SetString(cleanValue, 10)
+			if !ok {
+				return nil, fmt.Errorf("failed to parse i256 constants[%d] %s: invalid format", coi, spew.Sdump(co))
+			}
+			code.Var().Id(co.Name).Op("=").Func().Params().Op("*").Qual("math/big", "Int").Block(
+				Id("val").Op(",").Id("ok").Op(":=").New(Qual("math/big", "Int")).Dot("SetString").Call(Lit(cleanValue), Lit(10)),
+				If(Op("!").Id("ok")).Block(
+					Panic(Lit(fmt.Sprintf("invalid i256 constant %s", co.Name))),
+				),
+				Return(Id("val")),
+			).Call()
+			code.Line()
+		case *idltype.F32:
 				_ = ty
 				// "value":"3.14"
 				cleanValue := strings.ReplaceAll(co.Value, "_", "")
