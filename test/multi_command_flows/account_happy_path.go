@@ -57,11 +57,12 @@ func RunAccountHappyPath(t *testing.T, tc TestConfig, testEthURL, chainName stri
 		w.Header().Set("Content-Type", "application/json")
 
 		// Handle authentication validation query
-		if strings.Contains(req.Query, "getOrganization") {
+		if strings.Contains(req.Query, "getCreOrganizationInfo") {
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"data": map[string]any{
-					"getOrganization": map[string]any{
-						"organizationId": "test-org-id",
+					"getCreOrganizationInfo": map[string]any{
+						"orgId":                 "test-org-id",
+						"derivedWorkflowOwners": []string{"ab12cd34ef56ab12cd34ef56ab12cd34ef56ab12"},
 					},
 				},
 			})
@@ -277,7 +278,7 @@ func RunAccountHappyPath(t *testing.T, tc TestConfig, testEthURL, chainName stri
 
 		// Check for linked owner (if link succeeded) or empty list (if link failed at contract level)
 		if isOwnerLinked {
-			require.Contains(t, out, "Linked Owners:", "should show linked owners section")
+			require.Contains(t, out, "Linked Owners", "should show linked owners section")
 			require.Contains(t, out, "owner-label-1", "should show the owner label")
 			require.Contains(t, out, constants.TestAddress4, "should show owner address")
 			require.Contains(t, out, "Chain Selector:", "should show chain selector")

@@ -1,6 +1,7 @@
 package deploy
 
 import (
+	"context"
 	"fmt"
 	"math/big"
 
@@ -11,18 +12,20 @@ import (
 
 const (
 	workflowStatusActive = uint8(0)
+	workflowStatusPaused = uint8(1)
 	workflowListPageSize = int64(200)
 )
 
 type workflowNameLookupClient interface {
-	GetWorkflowListByOwnerAndName(owner common.Address, workflowName string, start, limit *big.Int) ([]workflow_registry_v2_wrapper.WorkflowRegistryWorkflowMetadataView, error)
+	GetWorkflowListByOwnerAndName(ctx context.Context, owner common.Address, workflowName string, start, limit *big.Int) ([]workflow_registry_v2_wrapper.WorkflowRegistryWorkflowMetadataView, error)
 }
 
 type userDonLimitChecker interface {
-	CheckUserDonLimit(owner common.Address, donFamily string, pending uint32) error
+	CheckUserDonLimit(ctx context.Context, owner common.Address, donFamily string, pending uint32) error
 }
 
 func checkUserDonLimitBeforeDeploy(
+	ctx context.Context,
 	limitChecker userDonLimitChecker,
 	nameLookup workflowNameLookupClient,
 	owner common.Address,
@@ -37,7 +40,7 @@ func checkUserDonLimitBeforeDeploy(
 
 	pending := uint32(1)
 	if !keepAlive {
-		activeSameName, err := countActiveWorkflowsByOwnerNameAndDON(nameLookup, owner, workflowName, donFamily)
+		activeSameName, err := countActiveWorkflowsByOwnerNameAndDON(ctx, nameLookup, owner, workflowName, donFamily)
 		if err != nil {
 			return fmt.Errorf("failed to check active workflows for %s on DON %s: %w", workflowName, donFamily, err)
 		}
@@ -52,10 +55,11 @@ func checkUserDonLimitBeforeDeploy(
 		return nil
 	}
 
-	return limitChecker.CheckUserDonLimit(owner, donFamily, pending)
+	return limitChecker.CheckUserDonLimit(ctx, owner, donFamily, pending)
 }
 
 func countActiveWorkflowsByOwnerNameAndDON(
+	ctx context.Context,
 	wrc workflowNameLookupClient,
 	owner common.Address,
 	workflowName string,
@@ -66,7 +70,7 @@ func countActiveWorkflowsByOwnerNameAndDON(
 	limit := big.NewInt(workflowListPageSize)
 
 	for {
-		list, err := wrc.GetWorkflowListByOwnerAndName(owner, workflowName, start, limit)
+		list, err := wrc.GetWorkflowListByOwnerAndName(ctx, owner, workflowName, start, limit)
 		if err != nil {
 			return 0, err
 		}

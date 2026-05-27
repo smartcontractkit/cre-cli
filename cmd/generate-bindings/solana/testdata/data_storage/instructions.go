@@ -13,37 +13,61 @@ import (
 
 // Builds a "get_multiple_reserves" instruction.
 func NewGetMultipleReservesInstruction() (solanago.Instruction, error) {
+	buf__ := new(bytes.Buffer)
+	enc__ := binary.NewBorshEncoder(buf__)
+
+	// Encode the instruction discriminator.
+	err := enc__.WriteBytes(Instruction_GetMultipleReserves[:], false)
+	if err != nil {
+		return nil, fmt.Errorf("failed to write instruction discriminator: %w", err)
+	}
 	accounts__ := solanago.AccountMetaSlice{}
 
 	// Create the instruction.
 	return solanago.NewInstruction(
 		ProgramID,
 		accounts__,
-		nil,
+		buf__.Bytes(),
 	), nil
 }
 
 // Builds a "get_reserves" instruction.
 func NewGetReservesInstruction() (solanago.Instruction, error) {
+	buf__ := new(bytes.Buffer)
+	enc__ := binary.NewBorshEncoder(buf__)
+
+	// Encode the instruction discriminator.
+	err := enc__.WriteBytes(Instruction_GetReserves[:], false)
+	if err != nil {
+		return nil, fmt.Errorf("failed to write instruction discriminator: %w", err)
+	}
 	accounts__ := solanago.AccountMetaSlice{}
 
 	// Create the instruction.
 	return solanago.NewInstruction(
 		ProgramID,
 		accounts__,
-		nil,
+		buf__.Bytes(),
 	), nil
 }
 
 // Builds a "get_tuple_reserves" instruction.
 func NewGetTupleReservesInstruction() (solanago.Instruction, error) {
+	buf__ := new(bytes.Buffer)
+	enc__ := binary.NewBorshEncoder(buf__)
+
+	// Encode the instruction discriminator.
+	err := enc__.WriteBytes(Instruction_GetTupleReserves[:], false)
+	if err != nil {
+		return nil, fmt.Errorf("failed to write instruction discriminator: %w", err)
+	}
 	accounts__ := solanago.AccountMetaSlice{}
 
 	// Create the instruction.
 	return solanago.NewInstruction(
 		ProgramID,
 		accounts__,
-		nil,
+		buf__.Bytes(),
 	), nil
 }
 
@@ -1003,9 +1027,8 @@ func ParseInstruction(instructionData []byte, accountIndicesData []byte, account
 	if len(instructionData) < 8 {
 		return nil, fmt.Errorf("instruction data too short: expected at least 8 bytes, got %d", len(instructionData))
 	}
-	// Extract discriminator
-	discriminator := [8]byte{}
-	copy(discriminator[:], instructionData[0:8])
+	// Extract discriminator (TypeID for consistent equality with generated constants)
+	discriminator := binary.TypeIDFromBytes(instructionData[0:8])
 	// Parse based on discriminator
 	switch discriminator {
 	case Instruction_GetMultipleReserves:

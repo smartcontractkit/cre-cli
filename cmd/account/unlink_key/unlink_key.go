@@ -24,10 +24,10 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/client/graphqlclient"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
-	"github.com/smartcontractkit/cre-cli/internal/prompt"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/types"
+	"github.com/smartcontractkit/cre-cli/internal/ui"
 	"github.com/smartcontractkit/cre-cli/internal/validation"
 )
 
@@ -39,6 +39,7 @@ type Inputs struct {
 	WorkflowOwner                   string `validate:"workflow_owner"`
 	WorkflowRegistryContractAddress string `validate:"required"`
 	SkipConfirmation                bool
+	NonInteractive                  bool
 }
 
 type initiateUnlinkingResponse struct {
@@ -60,6 +61,7 @@ type handler struct {
 	stdin          io.Reader
 	environmentSet *environments.EnvironmentSet
 	wrc            *client.WorkflowRegistryV2Client
+	execCtx        context.Context
 
 	validated bool
 
@@ -82,7 +84,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 			if err := h.ValidateInputs(in); err != nil {
 				return err
 			}
-			return h.Execute(in)
+			return h.Execute(cmd.Context(), in)
 		},
 	}
 	settings.AddTxnTypeFlags(cmd)
@@ -91,28 +93,28 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 }
 
 func newHandler(ctx *runtime.Context, stdin io.Reader) *handler {
-	h := handler{
+	return &handler{
 		settings:       ctx.Settings,
 		credentials:    ctx.Credentials,
 		clientFactory:  ctx.ClientFactory,
 		log:            ctx.Logger,
 		environmentSet: ctx.EnvironmentSet,
 		stdin:          stdin,
-		wg:             sync.WaitGroup{},
-		wrcErr:         nil,
 	}
+}
+
+func (h *handler) initWorkflowRegistryClient() error {
 	h.wg.Add(1)
 	go func() {
 		defer h.wg.Done()
-		wrc, err := h.clientFactory.NewWorkflowRegistryV2Client()
+		wrc, err := h.clientFactory.NewWorkflowRegistryV2Client(h.execCtx)
 		if err != nil {
 			h.wrcErr = fmt.Errorf("failed to create workflow registry client: %w", err)
 			return
 		}
 		h.wrc = wrc
 	}()
-
-	return &h
+	return nil
 }
 
 func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
@@ -120,6 +122,7 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 		WorkflowOwner:                   h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress,
 		WorkflowRegistryContractAddress: h.environmentSet.WorkflowRegistryAddress,
 		SkipConfirmation:                v.GetBool(settings.Flags.SkipConfirmation.Name),
+		NonInteractive:                  v.GetBool(settings.Flags.NonInteractive.Name),
 	}, nil
 }
 
@@ -135,14 +138,19 @@ func (h *handler) ValidateInputs(in Inputs) error {
 	return nil
 }
 
-func (h *handler) Execute(in Inputs) error {
+func (h *handler) Execute(ctx context.Context, in Inputs) error {
 	if !h.validated {
 		return fmt.Errorf("inputs not validated")
 	}
 
+	h.execCtx = ctx
+	if err := h.initWorkflowRegistryClient(); err != nil {
+		return err
+	}
+
 	h.displayDetails()
 
-	fmt.Printf("Starting unlinking: owner=%s\n", in.WorkflowOwner)
+	ui.Dim(fmt.Sprintf("Starting unlinking: owner=%s", in.WorkflowOwner))
 
 	h.wg.Wait()
 	if h.wrcErr != nil {
@@ -154,25 +162,32 @@ func (h *handler) Execute(in Inputs) error {
 		return err
 	}
 	if !linked {
-		fmt.Println("Your web3 address is not linked, nothing to do")
+		ui.Warning("Your web3 address is not linked, nothing to do")
 		return nil
 	}
 
+	// Check non-interactive mode
+	if in.NonInteractive && !in.SkipConfirmation {
+		ui.ErrorWithSuggestions(
+			"Non-interactive mode requires all inputs via flags",
+			[]string{"--yes"},
+		)
+		return fmt.Errorf("missing required flags for --non-interactive mode")
+	}
 	// Check if confirmation should be skipped
 	if !in.SkipConfirmation {
-		deleteWorkflows, err := prompt.YesNoPrompt(
-			h.stdin,
-			"! Warning: Unlink is a destructive action that will wipe out all workflows registered under your owner address. Do you wish to proceed?",
-		)
+		ui.Warning("Unlink is a destructive action that will wipe out all workflows registered under your owner address.")
+		ui.Line()
+		confirm, err := ui.Confirm("Do you wish to proceed?")
 		if err != nil {
 			return err
 		}
-		if !deleteWorkflows {
+		if !confirm {
 			return fmt.Errorf("unlinking aborted by user")
 		}
 	}
 
-	resp, err := h.callInitiateUnlinking(context.Background(), in)
+	resp, err := h.callInitiateUnlinking(h.execCtx, in)
 	if err != nil {
 		return err
 	}
@@ -186,7 +201,7 @@ func (h *handler) Execute(in Inputs) error {
 	h.log.Debug().Msg("\nRaw linking response payload:\n\n" + string(prettyResp))
 
 	if in.WorkflowRegistryContractAddress == resp.ContractAddress {
-		fmt.Println("Contract address validation passed")
+		ui.Success("Contract address validation passed")
 	} else {
 		return fmt.Errorf("contract address validation failed")
 	}
@@ -246,22 +261,25 @@ func (h *handler) unlinkOwner(owner string, resp initiateUnlinkingResponse) erro
 	}
 
 	addr := common.HexToAddress(owner)
-	if err := h.wrc.CanUnlinkOwner(addr, ts, sigBytes); err != nil {
+	if err := h.wrc.CanUnlinkOwner(h.execCtx, addr, ts, sigBytes); err != nil {
 		return fmt.Errorf("unlink request verification failed: %w", err)
 	}
-	txOut, err := h.wrc.UnlinkOwner(addr, ts, sigBytes)
+	txOut, err := h.wrc.UnlinkOwner(h.execCtx, addr, ts, sigBytes)
 	if err != nil {
 		return fmt.Errorf("UnlinkOwner failed: %w", err)
 	}
 
 	switch txOut.Type {
 	case client.Regular:
-		fmt.Println("Transaction confirmed")
-		fmt.Printf("View on explorer: \033]8;;%s/tx/%s\033\\%s/tx/%s\033]8;;\033\\\n", h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash, h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash)
-		fmt.Println("\n[OK] web3 address unlinked from your CRE organization successfully")
-		fmt.Println("\nNote: Unlinking verification may take up to 60 seconds.")
-		fmt.Println("      You must wait for verification to complete before linking this address again.")
-		fmt.Println("\n→ This address can no longer deploy workflows on behalf of your organization")
+		ui.Success("Transaction confirmed")
+		ui.URL(fmt.Sprintf("%s/tx/%s", h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash))
+		ui.Line()
+		ui.Success("web3 address unlinked from your CRE organization successfully")
+		ui.Line()
+		ui.Dim("Note: Unlinking verification may take up to 60 seconds.")
+		ui.Dim("      You must wait for verification to complete before linking this address again.")
+		ui.Line()
+		ui.Bold("This address can no longer deploy workflows on behalf of your organization")
 
 	case client.Raw:
 		selector, err := strconv.ParseUint(resp.ChainSelector, 10, 64)
@@ -275,20 +293,19 @@ func (h *handler) unlinkOwner(owner string, resp initiateUnlinkingResponse) erro
 			return err
 		}
 
-		fmt.Println("")
-		fmt.Println("Ownership unlinking initialized successfully!")
-		fmt.Println("")
-		fmt.Println("Next steps:")
-		fmt.Println("")
-		fmt.Println("   1. Submit the following transaction on the target chain:")
-		fmt.Println("")
-		fmt.Printf("      Chain:            %s\n", ChainName)
-		fmt.Printf("      Contract Address: %s\n", resp.ContractAddress)
-		fmt.Println("")
-		fmt.Println("   2. Use the following transaction data:")
-		fmt.Println("")
-		fmt.Printf("      %s\n", resp.TransactionData)
-		fmt.Println("")
+		ui.Line()
+		ui.Success("Ownership unlinking initialized successfully!")
+		ui.Line()
+		ui.Bold("Next steps:")
+		ui.Line()
+		ui.Print("   1. Submit the following transaction on the target chain:")
+		ui.Dim(fmt.Sprintf("      Chain:            %s", ChainName))
+		ui.Dim(fmt.Sprintf("      Contract Address: %s", resp.ContractAddress))
+		ui.Line()
+		ui.Print("   2. Use the following transaction data:")
+		ui.Line()
+		ui.Code(fmt.Sprintf("      %s", resp.TransactionData))
+		ui.Line()
 
 	case client.Changeset:
 		chainSelector, err := settings.GetChainSelectorByChainName(h.environmentSet.WorkflowRegistryChainName)
@@ -297,7 +314,7 @@ func (h *handler) unlinkOwner(owner string, resp initiateUnlinkingResponse) erro
 		}
 		mcmsConfig, err := settings.GetMCMSConfig(h.settings, chainSelector)
 		if err != nil {
-			fmt.Println("\nMCMS config not found or is incorrect, skipping MCMS config in changeset")
+			ui.Warning("MCMS config not found or is incorrect, skipping MCMS config in changeset")
 		}
 		cldSettings := h.settings.CLDSettings
 		changesets := []types.Changeset{
@@ -328,14 +345,14 @@ func (h *handler) unlinkOwner(owner string, resp initiateUnlinkingResponse) erro
 		h.log.Warn().Msgf("Unsupported transaction type: %s", txOut.Type)
 	}
 
-	fmt.Println("Unlinked successfully")
+	ui.Success("Unlinked successfully")
 	return nil
 }
 
 func (h *handler) checkIfAlreadyLinked() (bool, error) {
 	ownerAddr := common.HexToAddress(h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress)
 
-	linked, err := h.wrc.IsOwnerLinked(ownerAddr)
+	linked, err := h.wrc.IsOwnerLinked(h.execCtx, ownerAddr)
 	if err != nil {
 		return false, fmt.Errorf("failed to check owner link status: %w", err)
 	}
@@ -344,7 +361,9 @@ func (h *handler) checkIfAlreadyLinked() (bool, error) {
 }
 
 func (h *handler) displayDetails() {
-	fmt.Println("Unlinking web3 key from your CRE organization")
-	fmt.Printf("Target : \t\t %s\n", h.settings.User.TargetName)
-	fmt.Printf("✔ Using Address : \t %s\n\n", h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress)
+	ui.Line()
+	ui.Title("Unlinking web3 key from your CRE organization")
+	ui.Dim(fmt.Sprintf("Target:        %s", h.settings.User.TargetName))
+	ui.Dim(fmt.Sprintf("Owner Address: %s", h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress))
+	ui.Line()
 }

@@ -394,6 +394,94 @@ func TestGenConstantsWithArrays(t *testing.T) {
 	assert.Contains(t, generatedCode, "var BYTE_ARRAY = [3]byte{uint8(0x1), uint8(0x2), uint8(0x3)}")
 }
 
+func TestGenConstantsWithF32Array(t *testing.T) {
+	constants := []idl.IdlConst{
+		{
+			Name: "FLOAT_ARRAY",
+			Ty: &idltype.Array{
+				Type: &idltype.F32{},
+				Size: &idltype.IdlArrayLenValue{Value: 3},
+			},
+			Value: "[1.5, 2.5, 3.5]",
+		},
+	}
+
+	idlData := &idl.Idl{Constants: constants}
+	gen := &Generator{idl: idlData, options: &GeneratorOptions{Package: "test"}}
+
+	outputFile, err := gen.gen_constants()
+	require.NoError(t, err)
+
+	generatedCode := outputFile.File.GoString()
+	assert.Contains(t, generatedCode, "var FLOAT_ARRAY = [3]float32{float32(1.5), float32(2.5), float32(3.5)}")
+}
+
+func TestGenConstantsWithF64Array(t *testing.T) {
+	constants := []idl.IdlConst{
+		{
+			Name: "DOUBLE_ARRAY",
+			Ty: &idltype.Array{
+				Type: &idltype.F64{},
+				Size: &idltype.IdlArrayLenValue{Value: 2},
+			},
+			Value: "[3.14159, 2.71828]",
+		},
+	}
+
+	idlData := &idl.Idl{Constants: constants}
+	gen := &Generator{idl: idlData, options: &GeneratorOptions{Package: "test"}}
+
+	outputFile, err := gen.gen_constants()
+	require.NoError(t, err)
+
+	generatedCode := outputFile.File.GoString()
+	assert.Contains(t, generatedCode, "var DOUBLE_ARRAY = [2]float64{3.14159, 2.71828}")
+}
+
+func TestGenConstantsWithBoolArray(t *testing.T) {
+	constants := []idl.IdlConst{
+		{
+			Name: "BOOL_ARRAY",
+			Ty: &idltype.Array{
+				Type: &idltype.Bool{},
+				Size: &idltype.IdlArrayLenValue{Value: 3},
+			},
+			Value: "[true, false, true]",
+		},
+	}
+
+	idlData := &idl.Idl{Constants: constants}
+	gen := &Generator{idl: idlData, options: &GeneratorOptions{Package: "test"}}
+
+	outputFile, err := gen.gen_constants()
+	require.NoError(t, err)
+
+	generatedCode := outputFile.File.GoString()
+	assert.Contains(t, generatedCode, "var BOOL_ARRAY = [3]bool{true, false, true}")
+}
+
+func TestGenConstantsWithStringArray(t *testing.T) {
+	constants := []idl.IdlConst{
+		{
+			Name: "STRING_ARRAY",
+			Ty: &idltype.Array{
+				Type: &idltype.String{},
+				Size: &idltype.IdlArrayLenValue{Value: 2},
+			},
+			Value: `["hello", "world"]`,
+		},
+	}
+
+	idlData := &idl.Idl{Constants: constants}
+	gen := &Generator{idl: idlData, options: &GeneratorOptions{Package: "test"}}
+
+	outputFile, err := gen.gen_constants()
+	require.NoError(t, err)
+
+	generatedCode := outputFile.File.GoString()
+	assert.Contains(t, generatedCode, `var STRING_ARRAY = [2]string{"hello", "world"}`)
+}
+
 func TestGenConstantsEdgeCases(t *testing.T) {
 	t.Run("No constants", func(t *testing.T) {
 		idlData := &idl.Idl{
@@ -715,6 +803,108 @@ func TestGenConstantsErrorCases(t *testing.T) {
 	})
 }
 
+// TestGenConstantsLargeU64I64ArrayPrecision verifies that u64 and i64 array
+// elements above 2^53 are emitted with full 64-bit precision. json.Unmarshal
+// into []any decodes numbers as float64, which silently rounds integers larger
+// than 2^53. This test catches that: if the generator still uses float64 casts,
+// the expected exact values will not appear in the generated code.
+func TestGenConstantsLargeU64I64ArrayPrecision(t *testing.T) {
+	t.Run("u64 array with values above 2^53", func(t *testing.T) {
+		constants := []idl.IdlConst{
+			{
+				Name: "LARGE_U64_ARRAY",
+				Ty: &idltype.Array{
+					Type: &idltype.U64{},
+					Size: &idltype.IdlArrayLenValue{Value: 4},
+				},
+				// 2^53 = 9007199254740992 is the last integer float64 represents exactly.
+				// 2^53+1 and 2^53+3 are NOT representable in float64 and will be rounded
+				// to 2^53 and 2^53+4 respectively if parsed through float64.
+				Value: "[9007199254740993, 9007199254740995, 18446744073709551615, 9007199254740992]",
+			},
+		}
+
+		idlData := &idl.Idl{Constants: constants}
+		gen := &Generator{idl: idlData, options: &GeneratorOptions{Package: "test"}}
+
+		outputFile, err := gen.gen_constants()
+		require.NoError(t, err)
+
+		generatedCode := outputFile.File.GoString()
+
+		// 2^53+1 = 0x20000000000001 — NOT exactly representable in float64
+		assert.Contains(t, generatedCode, "uint64(0x20000000000001)",
+			"9007199254740993 (2^53+1) was rounded; float64 precision loss in u64 array element")
+		// 2^53+3 = 0x20000000000003 — NOT exactly representable in float64
+		assert.Contains(t, generatedCode, "uint64(0x20000000000003)",
+			"9007199254740995 (2^53+3) was rounded; float64 precision loss in u64 array element")
+		// max u64 = 0xffffffffffffffff
+		assert.Contains(t, generatedCode, "uint64(0xffffffffffffffff)",
+			"18446744073709551615 (max u64) was rounded; float64 precision loss in u64 array element")
+		// 2^53 exactly representable — should always work
+		assert.Contains(t, generatedCode, "uint64(0x20000000000000)",
+			"9007199254740992 (2^53) should be emitted correctly")
+	})
+
+	t.Run("i64 array with values above 2^53", func(t *testing.T) {
+		constants := []idl.IdlConst{
+			{
+				Name: "LARGE_I64_ARRAY",
+				Ty: &idltype.Array{
+					Type: &idltype.I64{},
+					Size: &idltype.IdlArrayLenValue{Value: 4},
+				},
+				Value: "[9007199254740993, -9007199254740993, 9223372036854775807, -9223372036854775808]",
+			},
+		}
+
+		idlData := &idl.Idl{Constants: constants}
+		gen := &Generator{idl: idlData, options: &GeneratorOptions{Package: "test"}}
+
+		outputFile, err := gen.gen_constants()
+		require.NoError(t, err)
+
+		generatedCode := outputFile.File.GoString()
+
+		// 2^53+1 positive
+		assert.Contains(t, generatedCode, "int64(9007199254740993)",
+			"9007199254740993 (2^53+1) was rounded; float64 precision loss in i64 array element")
+		// 2^53+1 negative
+		assert.Contains(t, generatedCode, "int64(-9007199254740993)",
+			"-9007199254740993 was rounded; float64 precision loss in i64 array element")
+		// max i64
+		assert.Contains(t, generatedCode, "int64(9223372036854775807)",
+			"max i64 was rounded; float64 precision loss in i64 array element")
+		// min i64
+		assert.Contains(t, generatedCode, "int64(-9223372036854775808)",
+			"min i64 was rounded; float64 precision loss in i64 array element")
+	})
+
+	t.Run("u32 array is not affected", func(t *testing.T) {
+		// u32 max = 4294967295 < 2^53, so float64 is fine
+		constants := []idl.IdlConst{
+			{
+				Name: "U32_ARRAY",
+				Ty: &idltype.Array{
+					Type: &idltype.U32{},
+					Size: &idltype.IdlArrayLenValue{Value: 2},
+				},
+				Value: "[4294967295, 0]",
+			},
+		}
+
+		idlData := &idl.Idl{Constants: constants}
+		gen := &Generator{idl: idlData, options: &GeneratorOptions{Package: "test"}}
+
+		outputFile, err := gen.gen_constants()
+		require.NoError(t, err)
+
+		generatedCode := outputFile.File.GoString()
+		assert.Contains(t, generatedCode, "uint32(0xffffffff)")
+		assert.Contains(t, generatedCode, "uint32(0x0)")
+	})
+}
+
 // TestGenConstantsRealWorldExamples 测试真实世界的例子
 func TestGenConstantsRealWorldExamples(t *testing.T) {
 	t.Run("Solana program constants", func(t *testing.T) {
@@ -806,4 +996,188 @@ func TestGenConstantsRealWorldExamples(t *testing.T) {
 		assert.Contains(t, generatedCode, "var PROTOCOL_FEE = func() *big.Int")
 		assert.Contains(t, generatedCode, "var SIGNATURE_SEED = [8]byte{uint8(0x73), uint8(0x69), uint8(0x67), uint8(0x6e), uint8(0x61), uint8(0x74), uint8(0x75), uint8(0x72)}")
 	})
+}
+
+func TestGenerateCodecStructMethod_SkipsEnums(t *testing.T) {
+	idlData := &idl.Idl{
+		Types: idl.IdTypeDef_slice{
+			{
+				Name: "MyStruct",
+				Ty: &idl.IdlTypeDefTyStruct{
+					Fields: idl.IdlDefinedFieldsNamed{
+						{Name: "value", Ty: &idltype.U64{}},
+					},
+				},
+			},
+			{
+				Name: "MySimpleEnum",
+				Ty: &idl.IdlTypeDefTyEnum{
+					Variants: idl.VariantSlice{
+						{Name: "VariantA"},
+						{Name: "VariantB"},
+					},
+				},
+			},
+			{
+				Name: "AnotherStruct",
+				Ty: &idl.IdlTypeDefTyStruct{
+					Fields: idl.IdlDefinedFieldsNamed{
+						{Name: "name", Ty: &idltype.String{}},
+					},
+				},
+			},
+		},
+	}
+
+	gen := &Generator{
+		idl:     idlData,
+		options: &GeneratorOptions{Package: "test"},
+	}
+
+	methods, err := gen.generateCodecStructMethod()
+	require.NoError(t, err)
+
+	require.Len(t, methods, 2, "only the two struct types should produce codec methods")
+
+	rendered := make([]string, len(methods))
+	for i, m := range methods {
+		rendered[i] = fmt.Sprintf("%#v", m)
+	}
+
+	assert.Contains(t, rendered[0], "EncodeMyStructStruct")
+	assert.Contains(t, rendered[1], "EncodeAnotherStructStruct")
+
+	for _, r := range rendered {
+		assert.NotContains(t, r, "MySimpleEnum",
+			"enum type should not appear in codec struct methods")
+	}
+}
+
+func TestGenerateCodecMethods_EnumOnlyIDL(t *testing.T) {
+	idlData := &idl.Idl{
+		Types: idl.IdTypeDef_slice{
+			{
+				Name: "Status",
+				Ty: &idl.IdlTypeDefTyEnum{
+					Variants: idl.VariantSlice{
+						{Name: "Active"},
+						{Name: "Inactive"},
+					},
+				},
+			},
+		},
+	}
+
+	gen := &Generator{
+		idl:     idlData,
+		options: &GeneratorOptions{Package: "test"},
+	}
+
+	methods, err := gen.generateCodecMethods()
+	require.NoError(t, err)
+	assert.Empty(t, methods, "codec should have no methods for an enum-only IDL")
+}
+
+func TestGenerateCodecStructMethod_CodecInterfaceMatchesImpl(t *testing.T) {
+	idlData := &idl.Idl{
+		Types: idl.IdTypeDef_slice{
+			{
+				Name: "MyStruct",
+				Ty: &idl.IdlTypeDefTyStruct{
+					Fields: idl.IdlDefinedFieldsNamed{
+						{Name: "value", Ty: &idltype.U64{}},
+					},
+				},
+			},
+			{
+				Name: "MyEnum",
+				Ty: &idl.IdlTypeDefTyEnum{
+					Variants: idl.VariantSlice{
+						{Name: "On"},
+						{Name: "Off"},
+					},
+				},
+			},
+		},
+	}
+
+	gen := &Generator{
+		idl:     idlData,
+		options: &GeneratorOptions{Package: "test"},
+	}
+
+	interfaceMethods, err := gen.generateCodecStructMethod()
+	require.NoError(t, err)
+
+	interfaceMethodNames := make(map[string]bool)
+	for _, m := range interfaceMethods {
+		s := fmt.Sprintf("%#v", m)
+		for _, typ := range idlData.Types {
+			name := "Encode" + typ.Name + "Struct"
+			if strings.Contains(s, name) {
+				interfaceMethodNames[name] = true
+			}
+		}
+	}
+
+	for _, typ := range idlData.Types {
+		name := "Encode" + typ.Name + "Struct"
+		if _, isStruct := typ.Ty.(*idl.IdlTypeDefTyStruct); isStruct {
+			assert.True(t, interfaceMethodNames[name],
+				"struct %q should have codec interface method %s", typ.Name, name)
+
+			implCode := creGenerateCodecEncoderForTypes(typ.Name)
+			implStr := fmt.Sprintf("%#v", implCode)
+			assert.Contains(t, implStr, name,
+				"struct %q should have matching implementation", typ.Name)
+		} else {
+			assert.False(t, interfaceMethodNames[name],
+				"enum %q must not have codec interface method %s", typ.Name, name)
+		}
+	}
+}
+
+func TestGenfileConstructor_WithEnumTypes(t *testing.T) {
+	idlData := &idl.Idl{
+		Metadata: idl.IdlMetadata{
+			Name:    "test_program",
+			Version: "0.1.0",
+			Spec:    "0.1.0",
+		},
+		Types: idl.IdTypeDef_slice{
+			{
+				Name: "Config",
+				Ty: &idl.IdlTypeDefTyStruct{
+					Fields: idl.IdlDefinedFieldsNamed{
+						{Name: "value", Ty: &idltype.U64{}},
+					},
+				},
+			},
+			{
+				Name: "Mode",
+				Ty: &idl.IdlTypeDefTyEnum{
+					Variants: idl.VariantSlice{
+						{Name: "Fast"},
+						{Name: "Slow"},
+					},
+				},
+			},
+		},
+	}
+
+	gen := &Generator{
+		idl:     idlData,
+		options: &GeneratorOptions{Package: "testpkg"},
+	}
+
+	outputFile, err := gen.genfile_constructor()
+	require.NoError(t, err)
+	require.NotNil(t, outputFile)
+
+	code := fmt.Sprintf("%#v", outputFile.File)
+
+	assert.Contains(t, code, "EncodeConfigStruct",
+		"struct type Config should have a codec interface method")
+	assert.NotContains(t, code, "EncodeModeStruct",
+		"enum type Mode should not produce a codec interface method")
 }

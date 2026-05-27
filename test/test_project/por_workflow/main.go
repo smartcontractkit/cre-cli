@@ -9,11 +9,10 @@ import (
 	"fmt"
 	"log/slog"
 	"math/big"
-	"time"
-
 	"por_workflow/contracts/evm/src/generated/balance_reader"
 	"por_workflow/contracts/evm/src/generated/ierc20"
 	"por_workflow/contracts/evm/src/generated/reserve_manager"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/shopspring/decimal"
@@ -105,40 +104,34 @@ func doPOR(config *Config, runtime cre.Runtime, runTime time.Time) (string, erro
 
 	logger.Info("ReserveInfo", "reserveInfo", reserveInfo)
 
-	porResp, err := cre.RunInNodeMode(*config, runtime,
-		func(config Config, nodeRuntime cre.NodeRuntime) (PORResponse, error) {
-			confHttpClient := confidentialhttp.Client{}
-			confOutput, err := confHttpClient.SendRequest(nodeRuntime, &confidentialhttp.ConfidentialHTTPRequest{
-				Request: &confidentialhttp.HTTPRequest{
-					Url:    config.URL,
-					Method: "GET",
-					MultiHeaders: map[string]*confidentialhttp.HeaderValues{
-						"Authorization": {
-							Values: []string{"Basic {{.API_KEY}}"},
-						},
-					},
+	confHttpClient := confidentialhttp.Client{}
+	confOutput, err := confHttpClient.SendRequest(runtime, &confidentialhttp.ConfidentialHTTPRequest{
+		Request: &confidentialhttp.HTTPRequest{
+			Url:    config.URL,
+			Method: "GET",
+			MultiHeaders: map[string]*confidentialhttp.HeaderValues{
+				"Authorization": {
+					Values: []string{"Basic {{.API_KEY}}"},
 				},
-				VaultDonSecrets: []*confidentialhttp.SecretIdentifier{
-					{
-						Key: "API_KEY",
-					},
-				},
-				EncryptOutput: true,
-			}).Await()
-			if err != nil {
-				logger.Error("error fetching conf por", "err", err)
-				return PORResponse{}, err
-			}
-			logger.Info("Conf POR response", "response", confOutput)
+			},
+			EncryptOutput: true,
+		},
+		VaultDonSecrets: []*confidentialhttp.SecretIdentifier{
+			{
+				Key: "API_KEY",
+			},
+		},
+	}).Await()
+	if err != nil {
+		logger.Error("error fetching conf por", "err", err)
+		return "", err
+	}
+	logger.Info("Conf POR response", "response", confOutput)
 
-			porResp := &PORResponse{}
-			if err = json.Unmarshal(confOutput.Body, porResp); err != nil {
-				return PORResponse{}, err
-			}
-
-			return *porResp, nil
-		}, cre.ConsensusIdenticalAggregation[PORResponse](),
-	).Await()
+	porResp := &PORResponse{}
+	if err = json.Unmarshal(confOutput.Body, porResp); err != nil {
+		return "", err
+	}
 
 	if porResp.Ripcord {
 		return "", errors.New("ripcord is true")
@@ -205,7 +198,6 @@ func fetchNativeTokenBalance(runtime cre.Runtime, evmCfg EVMConfig, tokenHolderA
 	balances, err := balanceReader.GetNativeBalances(runtime, balance_reader.GetNativeBalancesInput{
 		Addresses: []common.Address{common.Address(tokenAddress)},
 	}, big.NewInt(4)).Await()
-
 	if err != nil {
 		logger.Error("Could not read from contract", "contract_chain", evmCfg.ChainName, "err", err.Error())
 		return nil, err
@@ -277,7 +269,6 @@ func updateReserves(config *Config, runtime cre.Runtime, totalSupply *big.Int, t
 		TotalMinted:  totalSupply,
 		TotalReserve: totalReserveScaled,
 	}, nil).Await()
-
 	if err != nil {
 		logger.Error("WriteReport await failed", "error", err, "errorType", fmt.Sprintf("%T", err))
 		return fmt.Errorf("failed to write report: %w", err)
@@ -291,8 +282,8 @@ func fetchPOR(config *Config, logger *slog.Logger, sendRequester *http.SendReque
 	httpActionOut, err := sendRequester.SendRequest(&http.Request{
 		Method: "GET",
 		Url:    config.URL,
-		Headers: map[string]string{
-			"Authorization": "Basic test-api", // not secret.
+		MultiHeaders: map[string]*http.HeaderValues{
+			"Authorization": {Values: []string{"Basic test-api"}}, // not secret
 		},
 	}).Await()
 	if err != nil {

@@ -1,14 +1,13 @@
 package credentials
 
 import (
-	"encoding/base64"
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/smartcontractkit/cre-cli/internal/testutil"
+	"github.com/smartcontractkit/cre-cli/internal/testutil/testjwt"
 )
 
 func TestNew_Default(t *testing.T) {
@@ -86,26 +85,115 @@ TokenType:  "file-type"
 	}
 }
 
-// Helper function to create a JWT token with custom claims
-func createTestJWT(t *testing.T, claims map[string]interface{}) string {
-	t.Helper()
+func createTestJWT(claims map[string]interface{}) string {
+	return testjwt.CreateTestJWTWithClaims(claims)
+}
 
-	// JWT header (doesn't matter for our tests)
-	header := map[string]string{"alg": "HS256", "typ": "JWT"}
-	headerJSON, _ := json.Marshal(header)
-	headerEncoded := base64.RawURLEncoding.EncodeToString(headerJSON)
+func TestGetOrgID_BearerWithOrgID(t *testing.T) {
+	logger := testutil.NewTestLogger()
+	token := createTestJWT(map[string]interface{}{
+		"sub":    "user123",
+		"org_id": "org_abc123",
+	})
 
-	// JWT payload with claims
-	claimsJSON, err := json.Marshal(claims)
-	if err != nil {
-		t.Fatalf("failed to marshal claims: %v", err)
+	creds := &Credentials{
+		AuthType: AuthTypeBearer,
+		Tokens:   &CreLoginTokenSet{AccessToken: token},
+		log:      logger,
 	}
-	claimsEncoded := base64.RawURLEncoding.EncodeToString(claimsJSON)
 
-	// JWT signature (doesn't need to be valid for our tests)
-	signature := base64.RawURLEncoding.EncodeToString([]byte("fake-signature"))
+	orgID, err := creds.GetOrgID()
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	if orgID != "org_abc123" {
+		t.Errorf("expected org_id %q, got %q", "org_abc123", orgID)
+	}
+}
 
-	return headerEncoded + "." + claimsEncoded + "." + signature
+func TestGetOrgID_MissingClaim(t *testing.T) {
+	logger := testutil.NewTestLogger()
+	token := createTestJWT(map[string]interface{}{
+		"sub": "user123",
+	})
+
+	creds := &Credentials{
+		AuthType: AuthTypeBearer,
+		Tokens:   &CreLoginTokenSet{AccessToken: token},
+		log:      logger,
+	}
+
+	_, err := creds.GetOrgID()
+	if err == nil {
+		t.Fatal("expected error for missing org_id claim, got nil")
+	}
+	if !strings.Contains(err.Error(), "org_id claim not found") {
+		t.Errorf("expected org_id not found error, got: %v", err)
+	}
+}
+
+func TestGetOrgID_EmptyClaim(t *testing.T) {
+	logger := testutil.NewTestLogger()
+	token := createTestJWT(map[string]interface{}{
+		"sub":    "user123",
+		"org_id": "",
+	})
+
+	creds := &Credentials{
+		AuthType: AuthTypeBearer,
+		Tokens:   &CreLoginTokenSet{AccessToken: token},
+		log:      logger,
+	}
+
+	_, err := creds.GetOrgID()
+	if err == nil {
+		t.Fatal("expected error for empty org_id, got nil")
+	}
+}
+
+func TestGetOrgID_APIKeyReturnsError(t *testing.T) {
+	logger := testutil.NewTestLogger()
+	creds := &Credentials{
+		AuthType: AuthTypeApiKey,
+		APIKey:   "test-key",
+		log:      logger,
+	}
+
+	_, err := creds.GetOrgID()
+	if err == nil {
+		t.Fatal("expected error for API key auth, got nil")
+	}
+	if !strings.Contains(err.Error(), "not available for API key") {
+		t.Errorf("expected API key error, got: %v", err)
+	}
+}
+
+func TestGetOrgID_InvalidJWT(t *testing.T) {
+	logger := testutil.NewTestLogger()
+	creds := &Credentials{
+		AuthType: AuthTypeBearer,
+		Tokens:   &CreLoginTokenSet{AccessToken: "not-a-jwt"},
+		log:      logger,
+	}
+
+	_, err := creds.GetOrgID()
+	if err == nil {
+		t.Fatal("expected error for invalid JWT, got nil")
+	}
+}
+
+func TestGetOrgID_NoToken(t *testing.T) {
+	logger := testutil.NewTestLogger()
+	creds := &Credentials{
+		AuthType: AuthTypeBearer,
+		Tokens:   &CreLoginTokenSet{},
+		log:      logger,
+	}
+
+	_, err := creds.GetOrgID()
+	if err == nil {
+		t.Fatal("expected error for empty token, got nil")
+	}
 }
 
 func TestCheckIsUngatedOrganization_APIKey(t *testing.T) {
@@ -153,7 +241,7 @@ func TestCheckIsUngatedOrganization_JWTWithFullAccess(t *testing.T) {
 				tc.namespace + "organization_roles":  "ROOT",
 			}
 
-			token := createTestJWT(t, claims)
+			token := createTestJWT(claims)
 
 			creds := &Credentials{
 				AuthType: AuthTypeBearer,
@@ -182,7 +270,7 @@ func TestCheckIsUngatedOrganization_JWTWithMissingClaim(t *testing.T) {
 		// organization_status claim is missing
 	}
 
-	token := createTestJWT(t, claims)
+	token := createTestJWT(claims)
 
 	creds := &Credentials{
 		AuthType: AuthTypeBearer,
@@ -210,7 +298,7 @@ func TestCheckIsUngatedOrganization_JWTWithEmptyStatus(t *testing.T) {
 		"https://api.cre.chain.link/organization_status": "",
 	}
 
-	token := createTestJWT(t, claims)
+	token := createTestJWT(claims)
 
 	creds := &Credentials{
 		AuthType: AuthTypeBearer,
@@ -238,7 +326,7 @@ func TestCheckIsUngatedOrganization_JWTWithGatedStatus(t *testing.T) {
 		"https://api.cre.chain.link/organization_status": "GATED",
 	}
 
-	token := createTestJWT(t, claims)
+	token := createTestJWT(claims)
 
 	creds := &Credentials{
 		AuthType: AuthTypeBearer,
@@ -266,7 +354,7 @@ func TestCheckIsUngatedOrganization_JWTWithRestrictedStatus(t *testing.T) {
 		"https://api.cre.chain.link/organization_status": "RESTRICTED",
 	}
 
-	token := createTestJWT(t, claims)
+	token := createTestJWT(claims)
 
 	creds := &Credentials{
 		AuthType: AuthTypeBearer,
@@ -322,4 +410,29 @@ func TestCheckIsUngatedOrganization_InvalidJWTFormat(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestSecureRemove(t *testing.T) {
+	t.Run("missing file is no-op", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "missing.yaml")
+		if err := SecureRemove(path); err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+	})
+
+	t.Run("overwrites with zeroes before delete", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), ConfigFile)
+		secret := []byte("AccessToken: super-secret-token\n")
+		if err := os.WriteFile(path, secret, 0o600); err != nil {
+			t.Fatalf("write file: %v", err)
+		}
+
+		if err := SecureRemove(path); err != nil {
+			t.Fatalf("SecureRemove: %v", err)
+		}
+
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatal("expected file to be removed")
+		}
+	})
 }

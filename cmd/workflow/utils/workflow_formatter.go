@@ -46,17 +46,17 @@ func FormatWorkflow(metadata workflow_registry_wrapper.WorkflowRegistryWorkflowM
 	var sb strings.Builder
 	sb.WriteString("Workflow Metadata:\n")
 
-	sb.WriteString(fmt.Sprintf("  * Name: %s\n", metadata.WorkflowName))
-	sb.WriteString(fmt.Sprintf("  * ID: %s\n", hex.EncodeToString(metadata.WorkflowId[:])))
-	sb.WriteString(fmt.Sprintf("  * Status: %s\n", getStatusString(metadata.Status)))
-	sb.WriteString(fmt.Sprintf("  * DON: %s\n", metadata.DonFamily))
-	sb.WriteString(fmt.Sprintf("  * Owner: %s\n", metadata.Owner.Hex()))
+	fmt.Fprintf(&sb, "  * Name: %s\n", metadata.WorkflowName)
+	fmt.Fprintf(&sb, "  * ID: %s\n", hex.EncodeToString(metadata.WorkflowId[:]))
+	fmt.Fprintf(&sb, "  * Status: %s\n", getStatusString(metadata.Status))
+	fmt.Fprintf(&sb, "  * DON: %s\n", metadata.DonFamily)
+	fmt.Fprintf(&sb, "  * Owner: %s\n", metadata.Owner.Hex())
 
-	sb.WriteString(fmt.Sprintf("  * Binary URL: %s\n", metadata.BinaryUrl))
+	fmt.Fprintf(&sb, "  * Binary URL: %s\n", metadata.BinaryUrl)
 	if metadata.ConfigUrl == "" {
 		sb.WriteString("  * Config URL: (None provided)\n")
 	} else {
-		sb.WriteString(fmt.Sprintf("  * Config URL: %s\n", metadata.ConfigUrl))
+		fmt.Fprintf(&sb, "  * Config URL: %s\n", metadata.ConfigUrl)
 	}
 
 	return sb.String()

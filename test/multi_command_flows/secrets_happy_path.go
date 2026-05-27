@@ -62,11 +62,12 @@ func RunSecretsHappyPath(t *testing.T, tc TestConfig, chainName string) {
 			w.Header().Set("Content-Type", "application/json")
 
 			// Handle authentication validation query
-			if strings.Contains(req.Query, "getOrganization") {
+			if strings.Contains(req.Query, "getCreOrganizationInfo") {
 				_ = json.NewEncoder(w).Encode(map[string]any{
 					"data": map[string]any{
-						"getOrganization": map[string]any{
-							"organizationId": "test-org-id",
+						"getCreOrganizationInfo": map[string]any{
+							"orgId":                 "test-org-id",
+							"derivedWorkflowOwners": []string{"ab12cd34ef56ab12cd34ef56ab12cd34ef56ab12"},
 						},
 					},
 				})
@@ -256,11 +257,12 @@ func RunSecretsListMsig(t *testing.T, tc TestConfig, chainName string) {
 			w.Header().Set("Content-Type", "application/json")
 
 			// Handle authentication validation query
-			if strings.Contains(req.Query, "getOrganization") {
+			if strings.Contains(req.Query, "getCreOrganizationInfo") {
 				_ = json.NewEncoder(w).Encode(map[string]any{
 					"data": map[string]any{
-						"getOrganization": map[string]any{
-							"organizationId": "test-org-id",
+						"getCreOrganizationInfo": map[string]any{
+							"orgId":                 "test-org-id",
+							"derivedWorkflowOwners": []string{"ab12cd34ef56ab12cd34ef56ab12cd34ef56ab12"},
 						},
 					},
 				})
