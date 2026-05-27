@@ -294,78 +294,70 @@ func (g *Generator) gen_constants() (*OutputFile, error) {
 				}).Op("{").ListFunc(func(byteGroup *Group) {
 					for _, val := range b[:] {
 						switch ty.Type.(type) {
-					case *idltype.U8:
-						v, err := strconv.ParseUint(val.(json.Number).String(), 10, 8)
-						if err != nil {
-							panic(fmt.Errorf("failed to parse u8 in constants[%d] %s: %w", coi, spew.Sdump(co), err))
-						}
-						byteGroup.Lit(byte(v))
-					case *idltype.I8:
-						v, err := strconv.ParseInt(val.(json.Number).String(), 10, 8)
-						if err != nil {
-							panic(fmt.Errorf("failed to parse i8 in constants[%d] %s: %w", coi, spew.Sdump(co), err))
-						}
-						byteGroup.Lit(int8(v))
-					case *idltype.U16:
-						v, err := strconv.ParseUint(val.(json.Number).String(), 10, 16)
-						if err != nil {
-							panic(fmt.Errorf("failed to parse u16 in constants[%d] %s: %w", coi, spew.Sdump(co), err))
-						}
-						byteGroup.Lit(uint16(v))
-					case *idltype.I16:
-						v, err := strconv.ParseInt(val.(json.Number).String(), 10, 16)
-						if err != nil {
-							panic(fmt.Errorf("failed to parse i16 in constants[%d] %s: %w", coi, spew.Sdump(co), err))
-						}
-						byteGroup.Lit(int16(v))
-					case *idltype.U32:
-						v, err := strconv.ParseUint(val.(json.Number).String(), 10, 32)
-						if err != nil {
-							panic(fmt.Errorf("failed to parse u32 in constants[%d] %s: %w", coi, spew.Sdump(co), err))
-						}
-						byteGroup.Lit(uint32(v))
-					case *idltype.I32:
-						v, err := strconv.ParseInt(val.(json.Number).String(), 10, 32)
-						if err != nil {
-							panic(fmt.Errorf("failed to parse i32 in constants[%d] %s: %w", coi, spew.Sdump(co), err))
-						}
-						byteGroup.Lit(int32(v))
-					case *idltype.U64:
-						v, err := strconv.ParseUint(val.(json.Number).String(), 10, 64)
-						if err != nil {
-							panic(fmt.Errorf("failed to parse u64 in constants[%d] %s: %w", coi, spew.Sdump(co), err))
-						}
-						byteGroup.Lit(uint64(v))
-					case *idltype.I64:
-						v, err := strconv.ParseInt(val.(json.Number).String(), 10, 64)
-						if err != nil {
-							panic(fmt.Errorf("failed to parse i64 in constants[%d] %s: %w", coi, spew.Sdump(co), err))
-						}
-						byteGroup.Lit(int64(v))
-					case *idltype.F32:
-						v, err := strconv.ParseFloat(val.(json.Number).String(), 32)
-						if err != nil {
-							panic(fmt.Errorf("failed to parse f32 in constants[%d] %s: %w", coi, spew.Sdump(co), err))
-						}
-						byteGroup.Lit(float32(v))
-					case *idltype.F64:
-						v, err := strconv.ParseFloat(val.(json.Number).String(), 64)
-						if err != nil {
-							panic(fmt.Errorf("failed to parse f64 in constants[%d] %s: %w", coi, spew.Sdump(co), err))
-						}
-						byteGroup.Lit(v)
+						case *idltype.U8:
+							v, err := strconv.ParseUint(val.(json.Number).String(), 10, 8)
+							if err != nil {
+								panic(fmt.Errorf("failed to parse u8 in constants[%d] %s: %w", coi, spew.Sdump(co), err))
+							}
+							byteGroup.Lit(byte(v))
+						case *idltype.I8:
+							v, err := strconv.ParseInt(val.(json.Number).String(), 10, 8)
+							if err != nil {
+								panic(fmt.Errorf("failed to parse i8 in constants[%d] %s: %w", coi, spew.Sdump(co), err))
+							}
+							byteGroup.Lit(int8(v))
+						case *idltype.U16:
+							v, err := strconv.ParseUint(val.(json.Number).String(), 10, 16)
+							if err != nil {
+								panic(fmt.Errorf("failed to parse u16 in constants[%d] %s: %w", coi, spew.Sdump(co), err))
+							}
+							byteGroup.Lit(uint16(v))
+						case *idltype.I16:
+							v, err := strconv.ParseInt(val.(json.Number).String(), 10, 16)
+							if err != nil {
+								panic(fmt.Errorf("failed to parse i16 in constants[%d] %s: %w", coi, spew.Sdump(co), err))
+							}
+							byteGroup.Lit(int16(v))
+						case *idltype.U32:
+							v, err := strconv.ParseUint(val.(json.Number).String(), 10, 32)
+							if err != nil {
+								panic(fmt.Errorf("failed to parse u32 in constants[%d] %s: %w", coi, spew.Sdump(co), err))
+							}
+							byteGroup.Lit(uint32(v))
+						case *idltype.I32:
+							v, err := strconv.ParseInt(val.(json.Number).String(), 10, 32)
+							if err != nil {
+								panic(fmt.Errorf("failed to parse i32 in constants[%d] %s: %w", coi, spew.Sdump(co), err))
+							}
+							byteGroup.Lit(int32(v))
+						case *idltype.U64:
+							v, err := strconv.ParseUint(val.(json.Number).String(), 10, 64)
+							if err != nil {
+								panic(fmt.Errorf("failed to parse u64 in constants[%d] %s: %w", coi, spew.Sdump(co), err))
+							}
+							byteGroup.Lit(uint64(v))
+						case *idltype.I64:
+							v, err := strconv.ParseInt(val.(json.Number).String(), 10, 64)
+							if err != nil {
+								panic(fmt.Errorf("failed to parse i64 in constants[%d] %s: %w", coi, spew.Sdump(co), err))
+							}
+							byteGroup.Lit(int64(v))
+						case *idltype.F32:
+							v, err := strconv.ParseFloat(val.(json.Number).String(), 32)
+							if err != nil {
+								panic(fmt.Errorf("failed to parse f32 in constants[%d] %s: %w", coi, spew.Sdump(co), err))
+							}
+							byteGroup.Lit(float32(v))
+						case *idltype.F64:
+							v, err := strconv.ParseFloat(val.(json.Number).String(), 64)
+							if err != nil {
+								panic(fmt.Errorf("failed to parse f64 in constants[%d] %s: %w", coi, spew.Sdump(co), err))
+							}
+							byteGroup.Lit(v)
 						case *idltype.String:
-							v, err := strconv.Unquote(val.(string))
-							if err != nil {
-								panic(fmt.Errorf("failed to unquote string in constants[%d] %s: %w", coi, spew.Sdump(co), err))
-							}
-							byteGroup.Lit(v)
+							byteGroup.Lit(val.(string))
 						case *idltype.Bool:
-							v, err := strconv.ParseBool(val.(string))
-							if err != nil {
-								panic(fmt.Errorf("failed to parse bool in constants[%d] %s: %w", coi, spew.Sdump(co), err))
-							}
-							byteGroup.Lit(v)
+							byteGroup.Lit(val.(bool))
 						default:
 							panic(fmt.Errorf("unsupported array type for constants[%d] %s: %T", coi, spew.Sdump(co), ty.Type))
 						}

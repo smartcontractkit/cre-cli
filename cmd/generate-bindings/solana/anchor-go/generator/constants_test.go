@@ -394,6 +394,94 @@ func TestGenConstantsWithArrays(t *testing.T) {
 	assert.Contains(t, generatedCode, "var BYTE_ARRAY = [3]byte{uint8(0x1), uint8(0x2), uint8(0x3)}")
 }
 
+func TestGenConstantsWithF32Array(t *testing.T) {
+	constants := []idl.IdlConst{
+		{
+			Name: "FLOAT_ARRAY",
+			Ty: &idltype.Array{
+				Type: &idltype.F32{},
+				Size: &idltype.IdlArrayLenValue{Value: 3},
+			},
+			Value: "[1.5, 2.5, 3.5]",
+		},
+	}
+
+	idlData := &idl.Idl{Constants: constants}
+	gen := &Generator{idl: idlData, options: &GeneratorOptions{Package: "test"}}
+
+	outputFile, err := gen.gen_constants()
+	require.NoError(t, err)
+
+	generatedCode := outputFile.File.GoString()
+	assert.Contains(t, generatedCode, "var FLOAT_ARRAY = [3]float32{float32(1.5), float32(2.5), float32(3.5)}")
+}
+
+func TestGenConstantsWithF64Array(t *testing.T) {
+	constants := []idl.IdlConst{
+		{
+			Name: "DOUBLE_ARRAY",
+			Ty: &idltype.Array{
+				Type: &idltype.F64{},
+				Size: &idltype.IdlArrayLenValue{Value: 2},
+			},
+			Value: "[3.14159, 2.71828]",
+		},
+	}
+
+	idlData := &idl.Idl{Constants: constants}
+	gen := &Generator{idl: idlData, options: &GeneratorOptions{Package: "test"}}
+
+	outputFile, err := gen.gen_constants()
+	require.NoError(t, err)
+
+	generatedCode := outputFile.File.GoString()
+	assert.Contains(t, generatedCode, "var DOUBLE_ARRAY = [2]float64{3.14159, 2.71828}")
+}
+
+func TestGenConstantsWithBoolArray(t *testing.T) {
+	constants := []idl.IdlConst{
+		{
+			Name: "BOOL_ARRAY",
+			Ty: &idltype.Array{
+				Type: &idltype.Bool{},
+				Size: &idltype.IdlArrayLenValue{Value: 3},
+			},
+			Value: "[true, false, true]",
+		},
+	}
+
+	idlData := &idl.Idl{Constants: constants}
+	gen := &Generator{idl: idlData, options: &GeneratorOptions{Package: "test"}}
+
+	outputFile, err := gen.gen_constants()
+	require.NoError(t, err)
+
+	generatedCode := outputFile.File.GoString()
+	assert.Contains(t, generatedCode, "var BOOL_ARRAY = [3]bool{true, false, true}")
+}
+
+func TestGenConstantsWithStringArray(t *testing.T) {
+	constants := []idl.IdlConst{
+		{
+			Name: "STRING_ARRAY",
+			Ty: &idltype.Array{
+				Type: &idltype.String{},
+				Size: &idltype.IdlArrayLenValue{Value: 2},
+			},
+			Value: `["hello", "world"]`,
+		},
+	}
+
+	idlData := &idl.Idl{Constants: constants}
+	gen := &Generator{idl: idlData, options: &GeneratorOptions{Package: "test"}}
+
+	outputFile, err := gen.gen_constants()
+	require.NoError(t, err)
+
+	generatedCode := outputFile.File.GoString()
+	assert.Contains(t, generatedCode, `var STRING_ARRAY = [2]string{"hello", "world"}`)
+}
+
 func TestGenConstantsEdgeCases(t *testing.T) {
 	t.Run("No constants", func(t *testing.T) {
 		idlData := &idl.Idl{
