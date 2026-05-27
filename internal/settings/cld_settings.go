@@ -9,7 +9,6 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	commonconfig "github.com/smartcontractkit/chainlink-common/pkg/config"
 	crecontracts "github.com/smartcontractkit/chainlink/deployment/cre/contracts"
 	mcmstypes "github.com/smartcontractkit/mcms/types"
 )
@@ -80,6 +79,7 @@ func GetMCMSConfig(settings *Settings, chainSelector uint64) (*crecontracts.MCMS
 		return nil, fmt.Errorf("failed to parse valid duration: %w", err)
 	}
 	mcmsAction := mcmstypes.TimelockAction(strings.ToLower(settings.CLDSettings.MCMSSettings.MCMSAction))
+	validDur := mcmstypes.NewDuration(validDuration)
 
 	return &crecontracts.MCMSConfig{
 		MinDelay:     minDelay,
@@ -88,6 +88,6 @@ func GetMCMSConfig(settings *Settings, chainSelector uint64) (*crecontracts.MCMS
 		TimelockQualifierPerChain: map[uint64]string{
 			chainSelector: settings.CLDSettings.MCMSSettings.TimelockQualifier,
 		},
-		ValidDuration: commonconfig.MustNewDuration(validDuration),
+		ValidDuration: &validDur,
 	}, nil
 }

@@ -12,8 +12,9 @@ import (
 var Debug = false // Set to true to enable debug logging.
 
 type Generator struct {
-	options *GeneratorOptions
-	idl     *idl.Idl
+	options            *GeneratorOptions
+	idl                *idl.Idl
+	complexEnumRegistry map[string]struct{}
 }
 
 type GeneratorOptions struct {
@@ -62,13 +63,14 @@ func (g *Generator) Generate() (*Output, error) {
 		Files: make([]*OutputFile, 0),
 	}
 
+	g.complexEnumRegistry = make(map[string]struct{})
+
 	{
 		// Register complex enums.
 		{
-			// register complex enums:
 			// TODO: .types is the only place where we can find complex enums? (or enums in general?)
 			for _, typ := range g.idl.Types {
-				registerComplexEnums(typ)
+				g.registerComplexEnums(typ)
 			}
 		}
 		if len(g.idl.Docs) > 0 {
