@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"math/big"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -26,10 +25,10 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
-	"github.com/smartcontractkit/cre-cli/internal/prompt"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/types"
+	"github.com/smartcontractkit/cre-cli/internal/ui"
 	"github.com/smartcontractkit/cre-cli/internal/validation"
 )
 
@@ -44,6 +43,7 @@ type Inputs struct {
 	WorkflowOwnerLabel              string `validate:"omitempty"`
 	WorkflowOwner                   string `validate:"required,workflow_owner"`
 	WorkflowRegistryContractAddress string `validate:"required"`
+	NonInteractive                  bool
 }
 
 type initiateLinkingResponse struct {
@@ -58,13 +58,13 @@ type initiateLinkingResponse struct {
 	FunctionArgs       []string `json:"functionArgs"`
 }
 
-func Exec(ctx *runtime.Context, in Inputs) error {
-	h := newHandler(ctx, os.Stdin)
+func Exec(parentCtx context.Context, ctx *runtime.Context, in Inputs) error {
+	h := newHandler(ctx, nil)
 
 	if err := h.ValidateInputs(in); err != nil {
 		return err
 	}
-	return h.Execute(in)
+	return h.Execute(parentCtx, in)
 }
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
@@ -83,7 +83,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 				return err
 			}
 
-			return h.Execute(inputs)
+			return h.Execute(cmd.Context(), inputs)
 		},
 	}
 	settings.AddTxnTypeFlags(cmd)
@@ -101,6 +101,7 @@ type handler struct {
 	stdin          io.Reader
 	environmentSet *environments.EnvironmentSet
 	wrc            *client.WorkflowRegistryV2Client
+	execCtx        context.Context
 
 	validated bool
 
@@ -109,28 +110,28 @@ type handler struct {
 }
 
 func newHandler(ctx *runtime.Context, stdin io.Reader) *handler {
-	h := handler{
+	return &handler{
 		settings:       ctx.Settings,
 		credentials:    ctx.Credentials,
 		clientFactory:  ctx.ClientFactory,
 		log:            ctx.Logger,
 		environmentSet: ctx.EnvironmentSet,
 		stdin:          stdin,
-		wg:             sync.WaitGroup{},
-		wrcErr:         nil,
 	}
+}
+
+func (h *handler) initWorkflowRegistryClient() error {
 	h.wg.Add(1)
 	go func() {
 		defer h.wg.Done()
-		wrc, err := h.clientFactory.NewWorkflowRegistryV2Client()
+		wrc, err := h.clientFactory.NewWorkflowRegistryV2Client(h.execCtx)
 		if err != nil {
 			h.wrcErr = fmt.Errorf("failed to create workflow registry client: %w", err)
 			return
 		}
 		h.wrc = wrc
 	}()
-
-	return &h
+	return nil
 }
 
 func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
@@ -138,6 +139,7 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 		WorkflowOwner:                   h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress,
 		WorkflowRegistryContractAddress: h.environmentSet.WorkflowRegistryAddress,
 		WorkflowOwnerLabel:              v.GetString("owner-label"),
+		NonInteractive:                  v.GetBool(settings.Flags.NonInteractive.Name),
 	}, nil
 }
 
@@ -153,20 +155,31 @@ func (h *handler) ValidateInputs(in Inputs) error {
 	return nil
 }
 
-func (h *handler) Execute(in Inputs) error {
+func (h *handler) Execute(ctx context.Context, in Inputs) error {
 	if !h.validated {
 		return fmt.Errorf("inputs not validated")
+	}
+
+	h.execCtx = ctx
+	if err := h.initWorkflowRegistryClient(); err != nil {
+		return err
 	}
 
 	h.displayDetails()
 
 	if in.WorkflowOwnerLabel == "" {
-		if err := prompt.SimplePrompt(h.stdin, "Provide a label for your owner address", func(inputLabel string) error {
-			in.WorkflowOwnerLabel = inputLabel
-			return nil
-		}); err != nil {
+		if in.NonInteractive {
+			ui.ErrorWithSuggestions(
+				"Non-interactive mode requires all inputs via flags",
+				[]string{"--owner-label"},
+			)
+			return fmt.Errorf("missing required flags for --non-interactive mode")
+		}
+		label, err := ui.Input("Provide a label for your owner address")
+		if err != nil {
 			return err
 		}
+		in.WorkflowOwnerLabel = label
 	}
 
 	h.wg.Wait()
@@ -182,9 +195,9 @@ func (h *handler) Execute(in Inputs) error {
 		return nil
 	}
 
-	fmt.Printf("Starting linking: owner=%s, label=%s\n", in.WorkflowOwner, in.WorkflowOwnerLabel)
+	ui.Dim(fmt.Sprintf("Starting linking: owner=%s, label=%s", in.WorkflowOwner, in.WorkflowOwnerLabel))
 
-	resp, err := h.callInitiateLinking(context.Background(), in)
+	resp, err := h.callInitiateLinking(h.execCtx, in)
 	if err != nil {
 		return err
 	}
@@ -198,7 +211,7 @@ func (h *handler) Execute(in Inputs) error {
 	h.log.Debug().Msg("\nRaw linking response payload:\n\n" + string(prettyResp))
 
 	if in.WorkflowRegistryContractAddress == resp.ContractAddress {
-		fmt.Println("Contract address validation passed")
+		ui.Success("Contract address validation passed")
 	} else {
 		h.log.Warn().Msg("The workflowRegistryContractAddress in your settings does not match the one returned by the server")
 		return fmt.Errorf("contract address validation failed")
@@ -289,21 +302,24 @@ func (h *handler) linkOwner(resp initiateLinkingResponse) error {
 	}
 
 	ownerAddr := common.HexToAddress(h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress)
-	if err := h.wrc.CanLinkOwner(ownerAddr, ts, proofBytes, sigBytes); err != nil {
+	if err := h.wrc.CanLinkOwner(h.execCtx, ownerAddr, ts, proofBytes, sigBytes); err != nil {
 		return fmt.Errorf("link request verification failed: %w", err)
 	}
-	txOut, err := h.wrc.LinkOwner(ts, proofBytes, sigBytes)
+	txOut, err := h.wrc.LinkOwner(h.execCtx, ts, proofBytes, sigBytes)
 	if err != nil {
 		return fmt.Errorf("LinkOwner failed: %w", err)
 	}
 
 	switch txOut.Type {
 	case client.Regular:
-		fmt.Println("Transaction confirmed")
-		fmt.Printf("View on explorer: \033]8;;%s/tx/%s\033\\%s/tx/%s\033]8;;\033\\\n", h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash, h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash)
-		fmt.Println("\n[OK] web3 address linked to your CRE organization successfully")
-		fmt.Println("\nNote: Linking verification may take up to 60 seconds.")
-		fmt.Println("\n→ You can now deploy workflows using this address")
+		ui.Success("Transaction confirmed")
+		ui.URL(fmt.Sprintf("%s/tx/%s", h.environmentSet.WorkflowRegistryChainExplorerURL, txOut.Hash))
+		ui.Line()
+		ui.Success("web3 address linked to your CRE organization successfully")
+		ui.Line()
+		ui.Dim("Note: Linking verification may take up to 60 seconds.")
+		ui.Line()
+		ui.Bold("You can now deploy workflows using this address")
 
 	case client.Raw:
 		selector, err := strconv.ParseUint(resp.ChainSelector, 10, 64)
@@ -317,19 +333,19 @@ func (h *handler) linkOwner(resp initiateLinkingResponse) error {
 			return err
 		}
 
-		fmt.Println("")
-		fmt.Println("Ownership linking initialized successfully!")
-		fmt.Println("")
-		fmt.Println("Next steps:")
-		fmt.Println("")
-		fmt.Println("   1. Submit the following transaction on the target chain:")
-		fmt.Printf("      Chain:            %s\n", ChainName)
-		fmt.Printf("      Contract Address: %s\n", txOut.RawTx.To)
-		fmt.Println("")
-		fmt.Println("   2. Use the following transaction data:")
-		fmt.Println("")
-		fmt.Printf("      %x\n", txOut.RawTx.Data)
-		fmt.Println("")
+		ui.Line()
+		ui.Success("Ownership linking initialized successfully!")
+		ui.Line()
+		ui.Bold("Next steps:")
+		ui.Line()
+		ui.Print("   1. Submit the following transaction on the target chain:")
+		ui.Dim(fmt.Sprintf("      Chain:            %s", ChainName))
+		ui.Dim(fmt.Sprintf("      Contract Address: %s", txOut.RawTx.To))
+		ui.Line()
+		ui.Print("   2. Use the following transaction data:")
+		ui.Line()
+		ui.Code(fmt.Sprintf("      %x", txOut.RawTx.Data))
+		ui.Line()
 
 	case client.Changeset:
 		chainSelector, err := settings.GetChainSelectorByChainName(h.environmentSet.WorkflowRegistryChainName)
@@ -338,7 +354,7 @@ func (h *handler) linkOwner(resp initiateLinkingResponse) error {
 		}
 		mcmsConfig, err := settings.GetMCMSConfig(h.settings, chainSelector)
 		if err != nil {
-			fmt.Println("\nMCMS config not found or is incorrect, skipping MCMS config in changeset")
+			ui.Warning("MCMS config not found or is incorrect, skipping MCMS config in changeset")
 		}
 		cldSettings := h.settings.CLDSettings
 		changesets := []types.Changeset{
@@ -370,30 +386,32 @@ func (h *handler) linkOwner(resp initiateLinkingResponse) error {
 		h.log.Warn().Msgf("Unsupported transaction type: %s", txOut.Type)
 	}
 
-	fmt.Println("Linked successfully")
+	ui.Success("Linked successfully")
 	return nil
 }
 
 func (h *handler) checkIfAlreadyLinked() (bool, error) {
 	ownerAddr := common.HexToAddress(h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress)
-	fmt.Println("\nChecking existing registrations...")
+	ui.Dim("Checking existing registrations...")
 
-	linked, err := h.wrc.IsOwnerLinked(ownerAddr)
+	linked, err := h.wrc.IsOwnerLinked(h.execCtx, ownerAddr)
 	if err != nil {
 		return false, fmt.Errorf("failed to check owner link status: %w", err)
 	}
 
 	if linked {
-		fmt.Println("web3 address already linked")
+		ui.Success("web3 address already linked")
 		return true, nil
 	}
 
-	fmt.Println("✓ No existing link found for this address")
+	ui.Success("No existing link found for this address")
 	return false, nil
 }
 
 func (h *handler) displayDetails() {
-	fmt.Println("Linking web3 key to your CRE organization")
-	fmt.Printf("Target : \t\t %s\n", h.settings.User.TargetName)
-	fmt.Printf("✔ Using Address : \t %s\n\n", h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress)
+	ui.Line()
+	ui.Title("Linking web3 key to your CRE organization")
+	ui.Dim(fmt.Sprintf("Target:        %s", h.settings.User.TargetName))
+	ui.Dim(fmt.Sprintf("Owner Address: %s", h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress))
+	ui.Line()
 }

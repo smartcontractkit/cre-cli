@@ -3,6 +3,7 @@ package authvalidation
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/machinebox/graphql"
 	"github.com/rs/zerolog"
@@ -12,17 +13,25 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 )
 
-const queryOrganization = `
-query GetOrganizationDetails  {
-	getOrganization {
-		organizationId
+const queryCreOrganizationInfo = `
+query GetCreOrganizationInfo {
+	getCreOrganizationInfo {
+		orgId
+		derivedWorkflowOwners
 	}
 }`
+
+// ValidationResult holds the data returned by credential validation.
+type ValidationResult struct {
+	OrgID                string
+	DerivedWorkflowOwner string
+}
 
 // Validator validates authentication credentials
 type Validator struct {
 	gqlClient *graphqlclient.Client
 	log       *zerolog.Logger
+	timeout   time.Duration
 }
 
 // NewValidator creates a new credential validator
@@ -31,32 +40,58 @@ func NewValidator(creds *credentials.Credentials, environmentSet *environments.E
 	return &Validator{
 		gqlClient: gqlClient,
 		log:       log,
+		timeout:   time.Minute,
 	}
 }
 
+func (v *Validator) SetServiceTimeout(timeout time.Duration) {
+	v.timeout = timeout
+}
+
+func (v *Validator) CreateServiceContextWithTimeout(parent context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(parent, v.timeout) //nolint:gosec // G118 -- cancel is deferred by callers
+}
+
 // ValidateCredentials validates the provided credentials by making a lightweight GraphQL query
-// The GraphQL client automatically handles token refresh if needed
-func (v *Validator) ValidateCredentials(validationCtx context.Context, creds *credentials.Credentials) error {
+// and returns organization info including the derived workflow owner.
+// The GraphQL client automatically handles token refresh if needed.
+func (v *Validator) ValidateCredentials(validationCtx context.Context, creds *credentials.Credentials) (*ValidationResult, error) {
+	ctx, cancel := v.CreateServiceContextWithTimeout(validationCtx)
+	defer cancel()
+
 	if creds == nil {
-		return fmt.Errorf("credentials not provided")
+		return nil, fmt.Errorf("credentials not provided")
 	}
 
-	// Skip validation if already validated
 	if creds.IsValidated {
-		return nil
+		return nil, nil
 	}
 
-	req := graphql.NewRequest(queryOrganization)
+	req := graphql.NewRequest(queryCreOrganizationInfo)
 
 	var respEnvelope struct {
-		GetOrganization struct {
-			OrganizationID string `json:"organizationId"`
-		} `json:"getOrganization"`
+		GetCreOrganizationInfo struct {
+			OrgID                 string   `json:"orgId"`
+			DerivedWorkflowOwners []string `json:"derivedWorkflowOwners"`
+		} `json:"getCreOrganizationInfo"`
 	}
 
-	if err := v.gqlClient.Execute(validationCtx, req, &respEnvelope); err != nil {
-		return fmt.Errorf("authentication validation failed: %w", err)
+	if err := v.gqlClient.Execute(ctx, req, &respEnvelope); err != nil {
+		return nil, fmt.Errorf("authentication failed: unable to retrieve organization info. Your account may not be fully set up yet — please try again in a few minutes: %w", err)
 	}
 
-	return nil
+	info := respEnvelope.GetCreOrganizationInfo
+
+	if info.OrgID == "" || len(info.DerivedWorkflowOwners) == 0 {
+		return nil, fmt.Errorf("authentication failed: unable to retrieve organization info. Your account may not be fully set up yet — please try again in a few minutes")
+	}
+
+	result := &ValidationResult{
+		OrgID:                info.OrgID,
+		DerivedWorkflowOwner: info.DerivedWorkflowOwners[0],
+	}
+
+	creds.OrgID = result.OrgID
+
+	return result, nil
 }

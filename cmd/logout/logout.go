@@ -14,6 +14,8 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
+	"github.com/smartcontractkit/cre-cli/internal/tenantctx"
+	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
 var (
@@ -36,14 +38,12 @@ func New(runtimeCtx *runtime.Context) *cobra.Command {
 
 type handler struct {
 	log            *zerolog.Logger
-	credentials    *credentials.Credentials
 	environmentSet *environments.EnvironmentSet
 }
 
 func newHandler(ctx *runtime.Context) *handler {
 	return &handler{
 		log:            ctx.Logger,
-		credentials:    ctx.Credentials,
 		environmentSet: ctx.EnvironmentSet,
 	}
 }
@@ -55,15 +55,20 @@ func (h *handler) execute() error {
 	}
 	credPath := filepath.Join(home, credentials.ConfigDir, credentials.ConfigFile)
 
-	if h.credentials.Tokens == nil {
-		fmt.Println("user not logged in")
+	// Load credentials directly (logout is excluded from global credential loading)
+	creds, err := credentials.New(h.log)
+	if err != nil || creds == nil || creds.Tokens == nil {
+		ui.Warning("You are not logged in")
 		return nil
 	}
 
-	if h.credentials.AuthType == credentials.AuthTypeBearer && h.credentials.Tokens.RefreshToken != "" {
+	spinner := ui.NewSpinner()
+	spinner.Start("Logging out...")
+
+	if creds.AuthType == credentials.AuthTypeBearer && creds.Tokens.RefreshToken != "" {
 		h.log.Debug().Msg("Revoking refresh token")
 		form := url.Values{}
-		form.Set("token", h.credentials.Tokens.RefreshToken)
+		form.Set("token", creds.Tokens.RefreshToken)
 		form.Set("client_id", h.environmentSet.ClientID)
 
 		if revokeURL == "" {
@@ -83,10 +88,17 @@ func (h *handler) execute() error {
 		}
 	}
 
-	if err := os.Remove(credPath); err != nil && !os.IsNotExist(err) {
+	if err := credentials.SecureRemove(credPath); err != nil {
+		spinner.Stop()
 		return fmt.Errorf("failed to delete credentials file: %w", err)
 	}
 
-	fmt.Println("Logged out successfully")
+	contextPath := filepath.Join(home, credentials.ConfigDir, tenantctx.ContextFile)
+	if err := os.Remove(contextPath); err != nil && !os.IsNotExist(err) {
+		h.log.Warn().Err(err).Msgf("failed to delete %s", tenantctx.ContextFile)
+	}
+
+	spinner.Stop()
+	ui.Success("Logged out successfully")
 	return nil
 }

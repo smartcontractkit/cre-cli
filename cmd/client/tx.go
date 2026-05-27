@@ -1,11 +1,11 @@
 package client
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
-	"os"
 	"strconv"
 	"strings"
 
@@ -21,7 +21,7 @@ import (
 
 	cmdCommon "github.com/smartcontractkit/cre-cli/cmd/common"
 	"github.com/smartcontractkit/cre-cli/internal/constants"
-	"github.com/smartcontractkit/cre-cli/internal/prompt"
+	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
 //go:generate stringer -type=TxType
@@ -120,7 +120,7 @@ type RawTx struct {
 //	return txOpts, nil
 //}
 
-func (c *TxClient) executeTransactionByTxType(txFn func(opts *bind.TransactOpts) (*types.Transaction, error), funName string, validationEvent string, args ...any) (TxOutput, error) {
+func (c *TxClient) executeTransactionByTxType(ctx context.Context, txFn func(opts *bind.TransactOpts) (*types.Transaction, error), funName string, validationEvent string, args ...any) (TxOutput, error) {
 	switch c.config.TxType {
 	case Regular:
 		simulateTx, err := txFn(cmdCommon.SimTransactOpts())
@@ -139,23 +139,28 @@ func (c *TxClient) executeTransactionByTxType(txFn func(opts *bind.TransactOpts)
 			Value:    simulateTx.Value(),
 			Data:     simulateTx.Data(),
 		}
-		estimatedGas, gasErr := c.EthClient.Client.EstimateGas(c.EthClient.Context, msg)
+		estimatedGas, gasErr := c.EthClient.Client.EstimateGas(ctx, msg)
 		if gasErr != nil {
 			c.Logger.Warn().Err(gasErr).Msg("Failed to estimate gas usage")
 		}
 
-		fmt.Println("Transaction details:")
-		fmt.Printf("  Chain Name:\t%s\n", chainDetails.ChainName)
-		fmt.Printf("  To:\t\t%s\n", simulateTx.To().Hex())
-		fmt.Printf("  Function:\t%s\n", funName)
-		fmt.Printf("  Inputs:\n")
+		ui.Line()
+		ui.Title("Transaction details:")
+		ui.Printf("  Chain:    %s\n", ui.RenderBold(chainDetails.ChainName))
+		ui.Printf("  To:       %s\n", ui.RenderCode(simulateTx.To().Hex()))
+		ui.Printf("  Function: %s\n", ui.RenderBold(funName))
+		ui.Print("  Inputs:")
 		for i, arg := range cmdCommon.ToStringSlice(args) {
-			fmt.Printf("    [%d]:\t%s\n", i, arg)
+			ui.Printf("    [%d]: %s\n", i, arg)
 		}
-		fmt.Printf("  Data:\t\t%x\n", simulateTx.Data())
+		ui.Line()
+		ui.Print("  Data (for verification):")
+		ui.Code(fmt.Sprintf("%x", simulateTx.Data()))
+		ui.Line()
+
 		// Calculate and print total cost for sending the transaction on-chain
 		if gasErr == nil {
-			gasPriceWei, gasPriceErr := c.EthClient.Client.SuggestGasPrice(c.EthClient.Context)
+			gasPriceWei, gasPriceErr := c.EthClient.Client.SuggestGasPrice(ctx)
 			if gasPriceErr != nil {
 				c.Logger.Warn().Err(gasPriceErr).Msg("Failed to fetch gas price")
 			} else {
@@ -164,15 +169,16 @@ func (c *TxClient) executeTransactionByTxType(txFn func(opts *bind.TransactOpts)
 				// Convert from wei to ether for display
 				etherValue := new(big.Float).Quo(new(big.Float).SetInt(totalCost), big.NewFloat(1e18))
 
-				fmt.Println("Estimated Cost:")
-				fmt.Printf("  Gas Price:      %s gwei\n", gasPriceGwei.Text('f', 8))
-				fmt.Printf("  Total Cost:     %s ETH\n", etherValue.Text('f', 8))
+				ui.Title("Estimated Cost:")
+				ui.Printf("  Gas Price:  %s gwei\n", gasPriceGwei.Text('f', 8))
+				ui.Printf("  Total Cost: %s\n", ui.RenderBold(etherValue.Text('f', 8)+" ETH"))
 			}
 		}
+		ui.Line()
 
 		// Ask for user confirmation before executing the transaction
 		if !c.config.SkipPrompt {
-			confirm, err := prompt.YesNoPrompt(os.Stdin, "Do you want to execute this transaction?")
+			confirm, err := ui.Confirm("Do you want to execute this transaction?")
 			if err != nil {
 				return TxOutput{}, err
 			}
@@ -181,16 +187,25 @@ func (c *TxClient) executeTransactionByTxType(txFn func(opts *bind.TransactOpts)
 			}
 		}
 
-		decodedTx, err := c.EthClient.Decode(txFn(c.EthClient.NewTXOpts()))
+		spinner := ui.NewSpinner()
+		spinner.Start("Submitting transaction...")
+
+		txOpts := c.EthClient.NewTXOpts()
+		txOpts.Context = ctx
+		decodedTx, err := c.EthClient.Decode(txFn(txOpts))
 		if err != nil {
+			spinner.Stop()
 			return TxOutput{Type: Regular}, err
 		}
 		c.Logger.Debug().Interface("tx", decodedTx.Transaction).Str("TxHash", decodedTx.Transaction.Hash().Hex()).Msg("Transaction mined successfully")
 
+		spinner.Update("Validating transaction...")
 		err = c.validateReceiptAndEvent(decodedTx.Transaction.To().Hex(), decodedTx, funName, strings.Split(validationEvent, "|"))
 		if err != nil {
+			spinner.Stop()
 			return TxOutput{Type: Regular}, err
 		}
+		spinner.Stop()
 		return TxOutput{
 			Type: Regular,
 			Hash: decodedTx.Transaction.Hash(),
@@ -202,8 +217,8 @@ func (c *TxClient) executeTransactionByTxType(txFn func(opts *bind.TransactOpts)
 			},
 		}, nil
 	case Raw:
-		fmt.Println("--unsigned flag detected: transaction not sent on-chain.")
-		fmt.Println("Generating call data for offline signing and submission in your preferred tool:")
+		ui.Warning("--unsigned flag detected: transaction not sent on-chain.")
+		ui.Dim("Generating call data for offline signing and submission in your preferred tool:")
 		tx, err := txFn(cmdCommon.SimTransactOpts())
 		if err != nil {
 			return TxOutput{Type: Raw}, err

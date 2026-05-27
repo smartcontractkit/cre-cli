@@ -1027,9 +1027,8 @@ func ParseInstruction(instructionData []byte, accountIndicesData []byte, account
 	if len(instructionData) < 8 {
 		return nil, fmt.Errorf("instruction data too short: expected at least 8 bytes, got %d", len(instructionData))
 	}
-	// Extract discriminator
-	discriminator := [8]byte{}
-	copy(discriminator[:], instructionData[0:8])
+	// Extract discriminator (TypeID for consistent equality with generated constants)
+	discriminator := binary.TypeIDFromBytes(instructionData[0:8])
 	// Parse based on discriminator
 	switch discriminator {
 	case Instruction_GetMultipleReserves:
