@@ -1,6 +1,7 @@
 package workflowtest
 
 import (
+	"context"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -26,6 +27,6 @@ func RegisterWorkflow(t *testing.T, wrc *client.WorkflowRegistryV2Client, workfl
 		DonFamily:    "1",
 	}
 
-	_, err = wrc.UpsertWorkflow(params)
+	_, err = wrc.UpsertWorkflow(context.Background(), params)
 	require.NoError(t, err, "Failed to register workflow")
 }

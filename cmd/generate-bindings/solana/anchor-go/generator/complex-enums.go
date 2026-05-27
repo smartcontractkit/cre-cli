@@ -16,7 +16,20 @@ func (g *Generator) isComplexEnum(envel idltype.IdlType) bool {
 }
 
 func (g *Generator) registerComplexEnumType(name string) {
+	if g.complexEnumRegistry == nil {
+		g.complexEnumRegistry = make(map[string]struct{})
+	}
 	g.complexEnumRegistry[name] = struct{}{}
+}
+
+func (g *Generator) isOptionalComplexEnum(ty idltype.IdlType) bool {
+	switch v := ty.(type) {
+	case *idltype.Option:
+		return g.isComplexEnum(v.Option)
+	case *idltype.COption:
+		return g.isComplexEnum(v.COption)
+	}
+	return false
 }
 
 func (g *Generator) registerComplexEnums(def idl.IdlTypeDef) {

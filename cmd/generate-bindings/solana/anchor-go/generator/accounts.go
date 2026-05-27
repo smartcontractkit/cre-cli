@@ -254,6 +254,8 @@ func (g *Generator) gen_IDLTypeDefTyStruct(
 		// TODO: should i exclude events here ? currently it does accounts/structs/events
 		code := Empty()
 		code.Add(creWriteReportFromStructs(exportedAccountName, g))
+		code.Line().Line()
+		code.Add(creWriteReportFromStructsSlice(exportedAccountName, g))
 		st.Add(code.Line().Line())
 	}
 	return st, nil

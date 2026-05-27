@@ -7,7 +7,6 @@ import (
 	. "github.com/dave/jennifer/jen"
 	"github.com/gagliardetto/anchor-go/idl"
 	"github.com/gagliardetto/anchor-go/idl/idltype"
-	"github.com/gagliardetto/anchor-go/tools"
 )
 
 func (g *Generator) gen_MarshalWithEncoder_struct(
@@ -45,32 +44,34 @@ func (g *Generator) gen_MarshalWithEncoder_struct(
 				}
 				switch fields := fields.(type) {
 				case idl.IdlDefinedFieldsNamed:
+					uniqueFieldNames := generateUniqueFieldNames(fields)
 					g.gen_marshal_DefinedFieldsNamed(
 						body,
 						fields,
 						checkNil,
 						func(field idl.IdlField) *Statement {
-							return Id("obj").Dot(tools.ToCamelUpper(field.Name))
+							return Id("obj").Dot(uniqueFieldNames[field.Name])
 						},
 						"encoder",
 						false, // returnNilErr
 						func(field idl.IdlField) string {
-							return tools.ToCamelUpper(field.Name)
+							return uniqueFieldNames[field.Name]
 						},
 					)
 				case idl.IdlDefinedFieldsTuple:
 					convertedFields := tupleToFieldsNamed(fields)
+					uniqueFieldNames := generateUniqueFieldNames(convertedFields)
 					g.gen_marshal_DefinedFieldsNamed(
 						body,
 						convertedFields,
 						checkNil,
 						func(field idl.IdlField) *Statement {
-							return Id("obj").Dot(tools.ToCamelUpper(field.Name))
+							return Id("obj").Dot(uniqueFieldNames[field.Name])
 						},
 						"encoder",
 						false, // returnNilErr
 						func(field idl.IdlField) string {
-							return tools.ToCamelUpper(field.Name)
+							return uniqueFieldNames[field.Name]
 						},
 					)
 				case nil:
@@ -152,7 +153,7 @@ func (g *Generator) gen_marshal_DefinedFieldsNamed(
 			body.Commentf("Serialize `%s`:", exportedArgName)
 		}
 
-		if g.isComplexEnum(field.Ty) || (IsArray(field.Ty) && g.isComplexEnum(field.Ty.(*idltype.Array).Type)) || (IsVec(field.Ty) && g.isComplexEnum(field.Ty.(*idltype.Vec).Vec)) {
+		if g.isComplexEnum(field.Ty) || (IsArray(field.Ty) && g.isComplexEnum(field.Ty.(*idltype.Array).Type)) || (IsVec(field.Ty) && g.isComplexEnum(field.Ty.(*idltype.Vec).Vec)) || g.isOptionalComplexEnum(field.Ty) {
 			switch field.Ty.(type) {
 			case *idltype.Defined:
 				enumTypeName := field.Ty.(*idltype.Defined).Name
@@ -260,6 +261,12 @@ func (g *Generator) gen_marshal_DefinedFieldsNamed(
 						)
 					})
 				})
+			case *idltype.Option:
+				enumTypeName := field.Ty.(*idltype.Option).Option.(*idltype.Defined).Name
+				gen_marshal_optionalComplexEnum(body, "WriteOption", enumTypeName, field, checkNil, nameFormatter, encoderVariableName, returnNilErr, exportedArgName)
+			case *idltype.COption:
+				enumTypeName := field.Ty.(*idltype.COption).COption.(*idltype.Defined).Name
+				gen_marshal_optionalComplexEnum(body, "WriteCOption", enumTypeName, field, checkNil, nameFormatter, encoderVariableName, returnNilErr, exportedArgName)
 			}
 		} else {
 			if IsOption(field.Ty) || IsCOption(field.Ty) {
@@ -378,5 +385,60 @@ func (g *Generator) gen_marshal_DefinedFieldsNamed(
 				)
 			}
 		}
+	}
+}
+
+func gen_marshal_optionalComplexEnum(
+	body *Group,
+	optionalityWriterName string,
+	enumTypeName string,
+	field idl.IdlField,
+	checkNil bool,
+	nameFormatter func(field idl.IdlField) *Statement,
+	encoderVariableName string,
+	returnNilErr bool,
+	exportedArgName string,
+) {
+	errReturn := func(wrapped Code) *Statement {
+		return ReturnFunc(func(returnBody *Group) {
+			if returnNilErr {
+				returnBody.Nil()
+			}
+			returnBody.Add(wrapped)
+		})
+	}
+	optionalityErr := func() *Statement {
+		return errReturn(
+			Qual(PkgAnchorGoErrors, "NewOption").Call(
+				Lit(exportedArgName),
+				Qual("fmt", "Errorf").Call(Lit("error while encoding optionality: %w"), Err()),
+			),
+		)
+	}
+	fieldErr := func() *Statement {
+		return errReturn(
+			Qual(PkgAnchorGoErrors, "NewField").Call(Lit(exportedArgName), Err()),
+		)
+	}
+
+	if checkNil {
+		body.BlockFunc(func(optGroup *Group) {
+			optGroup.If(nameFormatter(field).Op("==").Nil()).Block(
+				Err().Op("=").Id(encoderVariableName).Dot(optionalityWriterName).Call(False()),
+				If(Err().Op("!=").Nil()).Block(optionalityErr()),
+			).Else().Block(
+				Err().Op("=").Id(encoderVariableName).Dot(optionalityWriterName).Call(True()),
+				If(Err().Op("!=").Nil()).Block(optionalityErr()),
+				Err().Op("=").Id(formatEnumEncoderName(enumTypeName)).Call(Id(encoderVariableName), nameFormatter(field)),
+				If(Err().Op("!=").Nil()).Block(fieldErr()),
+			)
+		})
+	} else {
+		body.BlockFunc(func(optGroup *Group) {
+			optGroup.Err().Op("=").Id(encoderVariableName).Dot(optionalityWriterName).Call(True())
+			optGroup.If(Err().Op("!=").Nil()).Block(optionalityErr())
+			optGroup.Err().Op("=").Id(formatEnumEncoderName(enumTypeName)).Call(Id(encoderVariableName), nameFormatter(field))
+			optGroup.If(Err().Op("!=").Nil()).Block(fieldErr())
+		})
 	}
 }

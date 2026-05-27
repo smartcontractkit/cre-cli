@@ -1,6 +1,8 @@
 package common
 
 import (
+	"bytes"
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -11,13 +13,20 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	vaultcommon "github.com/smartcontractkit/chainlink-common/pkg/capabilities/actions/vault"
 	"github.com/smartcontractkit/chainlink-common/pkg/jsonrpc2"
 	"github.com/smartcontractkit/chainlink-evm/gethwrappers/workflow/generated/workflow_registry_wrapper_v2"
 	"github.com/smartcontractkit/chainlink/v2/core/capabilities/vault/vaulttypes"
+
+	"github.com/smartcontractkit/cre-cli/internal/credentials"
+	"github.com/smartcontractkit/cre-cli/internal/environments"
+	"github.com/smartcontractkit/cre-cli/internal/runtime"
+	"github.com/smartcontractkit/cre-cli/internal/settings"
 )
 
 type mockGatewayClient struct {
@@ -25,6 +34,10 @@ type mockGatewayClient struct {
 }
 
 func (m *mockGatewayClient) Post(b []byte) ([]byte, int, error) {
+	return m.post(b)
+}
+
+func (m *mockGatewayClient) PostWithBearer(b []byte, _ string) ([]byte, int, error) {
 	return m.post(b)
 }
 
@@ -60,7 +73,7 @@ func TestEncryptSecrets(t *testing.T) {
 			{ID: "test-secret-2", Value: "another-value", Namespace: "ns2"},
 		}
 
-		enc, err := h.EncryptSecrets(raw)
+		enc, err := h.EncryptSecrets(raw, "0xabc")
 		require.NoError(t, err)
 		require.Len(t, enc, 2)
 
@@ -89,7 +102,7 @@ func TestEncryptSecrets(t *testing.T) {
 			},
 		}
 
-		enc, err := h.EncryptSecrets(UpsertSecretsInputs{{ID: "s", Value: "v", Namespace: "n"}})
+		enc, err := h.EncryptSecrets(UpsertSecretsInputs{{ID: "s", Value: "v", Namespace: "n"}}, "0xabc")
 		require.Error(t, err)
 		require.Nil(t, enc)
 		require.Contains(t, err.Error(), "gateway POST failed")
@@ -115,11 +128,111 @@ func TestEncryptSecrets(t *testing.T) {
 			},
 		}
 
-		enc, err := h.EncryptSecrets(UpsertSecretsInputs{{ID: "s", Value: "v", Namespace: "n"}})
+		enc, err := h.EncryptSecrets(UpsertSecretsInputs{{ID: "s", Value: "v", Namespace: "n"}}, "0xabc")
 		require.Error(t, err)
 		require.Nil(t, enc)
 		require.Contains(t, err.Error(), "vault public key fetch error")
 	})
+}
+
+func TestResolveEffectiveOwner(t *testing.T) {
+	t.Run("returns canonicalized workflow owner address", func(t *testing.T) {
+		h, _, _ := newMockHandler(t)
+		h.OwnerAddress = "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
+
+		owner, err := h.ResolveEffectiveOwner()
+		require.NoError(t, err)
+		require.Equal(t, "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266", owner)
+	})
+
+	t.Run("errors when owner address is empty", func(t *testing.T) {
+		h, _, _ := newMockHandler(t)
+		h.OwnerAddress = ""
+
+		_, err := h.ResolveEffectiveOwner()
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "not a valid hex address")
+	})
+
+	t.Run("errors when owner address is malformed", func(t *testing.T) {
+		h, _, _ := newMockHandler(t)
+		h.OwnerAddress = "not-an-address"
+
+		_, err := h.ResolveEffectiveOwner()
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "not a valid hex address")
+	})
+}
+
+func TestResolveVaultIdentifierOwnerForAuth(t *testing.T) {
+	t.Run("browser returns derived workflow owner from session", func(t *testing.T) {
+		h, _, _ := newMockHandler(t)
+		h.Credentials.AuthType = credentials.AuthTypeBearer
+		h.Credentials.OrgID = "org-browser"
+		h.DerivedWorkflowOwner = "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
+
+		owner, err := h.ResolveVaultIdentifierOwnerForAuth(SecretsAuthBrowser)
+		require.NoError(t, err)
+		require.Equal(t, "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266", owner)
+	})
+
+	t.Run("browser errors on api key auth", func(t *testing.T) {
+		h, _, _ := newMockHandler(t)
+		h.Credentials.AuthType = credentials.AuthTypeApiKey
+		h.Credentials.OrgID = "org-1"
+
+		_, err := h.ResolveVaultIdentifierOwnerForAuth(SecretsAuthBrowser)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "interactive login")
+	})
+
+	t.Run("browser errors when derived workflow owner is empty", func(t *testing.T) {
+		h, _, _ := newMockHandler(t)
+		h.Credentials.AuthType = credentials.AuthTypeBearer
+		h.Credentials.OrgID = "org-1"
+
+		_, err := h.ResolveVaultIdentifierOwnerForAuth(SecretsAuthBrowser)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "derived workflow owner is not available")
+	})
+
+	t.Run("onchain delegates to ResolveEffectiveOwner", func(t *testing.T) {
+		h, _, _ := newMockHandler(t)
+		h.OwnerAddress = "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266"
+
+		owner, err := h.ResolveVaultIdentifierOwnerForAuth(SecretsAuthOnchain)
+		require.NoError(t, err)
+		require.Equal(t, "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266", owner)
+	})
+}
+
+func TestEncryptSecrets_UsesWorkflowOwnerAddress(t *testing.T) {
+	mockGw := &mockGatewayClient{
+		post: func(body []byte) ([]byte, int, error) {
+			var req jsonrpc2.Request[vaultcommon.GetPublicKeyRequest]
+			_ = json.Unmarshal(body, &req)
+			resp := jsonrpc2.Response[vaultcommon.GetPublicKeyResponse]{
+				Version: jsonrpc2.JsonRpcVersion,
+				ID:      req.ID,
+				Method:  vaulttypes.MethodPublicKeyGet,
+				Result:  &vaultcommon.GetPublicKeyResponse{PublicKey: vaultPublicKeyHex},
+			}
+			b, _ := json.Marshal(resp)
+			return b, http.StatusOK, nil
+		},
+	}
+
+	h, _, _ := newMockHandler(t)
+	h.Gw = mockGw
+	h.OwnerAddress = "0xabc"
+
+	enc, err := h.EncryptSecrets(UpsertSecretsInputs{
+		{ID: "secret-1", Value: "val1", Namespace: "main"},
+	}, "0xabc")
+	require.NoError(t, err)
+	require.Len(t, enc, 1)
+	require.Equal(t, "0xabc", enc[0].Id.Owner)
+	require.Equal(t, "secret-1", enc[0].Id.Key)
 }
 
 func TestPackAllowlistRequestTxData_Success_With0x(t *testing.T) {
@@ -183,4 +296,48 @@ func TestPackAllowlistRequestTxData_Success_No0x(t *testing.T) {
 	dataHex, err := h.PackAllowlistRequestTxData(d, 1*time.Minute)
 	require.NoError(t, err)
 	require.NotEmpty(t, dataHex)
+}
+
+func TestNewHandler_WorkflowRegistryClient(t *testing.T) {
+	newCtx := func(t *testing.T) (*runtime.Context, *MockClientFactory) {
+		t.Helper()
+		logger := zerolog.New(bytes.NewBufferString(""))
+		cf := new(MockClientFactory)
+		return &runtime.Context{
+			Logger:        &logger,
+			ClientFactory: cf,
+			Settings: &settings.Settings{
+				User:     settings.UserSettings{EthPrivateKey: ""},
+				Workflow: settings.WorkflowSettings{},
+			},
+			EnvironmentSet: &environments.EnvironmentSet{GatewayURL: "http://localhost"},
+			Credentials:    &credentials.Credentials{},
+		}, cf
+	}
+
+	t.Run("browser flow: WorkflowRegistryV2Client is not created", func(t *testing.T) {
+		ctx, cf := newCtx(t)
+		h, err := NewHandler(context.Background(), ctx, "", SecretsAuthBrowser)
+		require.NoError(t, err)
+		require.Nil(t, h.Wrc, "Wrc must be nil for browser flow")
+		cf.AssertNotCalled(t, "NewWorkflowRegistryV2Client")
+	})
+
+	t.Run("owner-key flow: WorkflowRegistryV2Client is created", func(t *testing.T) {
+		ctx, cf := newCtx(t)
+		cf.On("NewWorkflowRegistryV2Client", mock.Anything).Return(nil, nil)
+		h, err := NewHandler(context.Background(), ctx, "", SecretsAuthOnchain)
+		require.NoError(t, err)
+		// Wrc may be nil if the mock returns nil, but the factory must have been called.
+		_ = h
+		cf.AssertCalled(t, "NewWorkflowRegistryV2Client", mock.Anything)
+	})
+
+	t.Run("owner-key flow: factory error is propagated", func(t *testing.T) {
+		ctx, cf := newCtx(t)
+		cf.On("NewWorkflowRegistryV2Client", mock.Anything).Return(nil, errors.New("rpc url not found for chain ethereum-mainnet"))
+		_, err := NewHandler(context.Background(), ctx, "", SecretsAuthOnchain)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "workflow registry client")
+	})
 }

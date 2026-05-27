@@ -14,6 +14,13 @@
 #     - chain-name: ethereum-mainnet                # Required if your workflow interacts with this chain
 #       url: "<select your own rpc url>"
 #
+# RPC URLs support ${VAR_NAME} syntax to reference environment variables.
+# This keeps secrets out of project.yaml (which is committed to git).
+# Variables are resolved from your .env file or exported shell variables.
+# Example:
+#     - chain-name: ethereum-testnet-sepolia
+#       url: https://rpc.example.com/${CRE_SECRET_RPC_SEPOLIA}
+#
 # Experimental chains (automatically used by the simulator when present):
 # Use this for chains not yet in official chain-selectors (e.g., hackathons, new chain integrations).
 # In your workflow, reference the chain as evm:ChainSelector:<chain-selector>@1.0.0
@@ -25,12 +32,7 @@
 
 # ==========================================================================
 staging-settings:
-  rpcs:
-    - chain-name: {{EthSepoliaChainName}}
-      url: {{EthSepoliaRpcUrl}}
-
+{{RPCsList}}
 # ==========================================================================
 production-settings:
-  rpcs:
-    - chain-name: {{EthSepoliaChainName}}
-      url: {{EthSepoliaRpcUrl}}
+{{RPCsList}}

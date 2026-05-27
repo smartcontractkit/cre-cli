@@ -4,10 +4,12 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/spf13/viper"
+	"gopkg.in/yaml.v3"
 
 	chainSelectors "github.com/smartcontractkit/chain-selectors"
 
@@ -60,7 +62,11 @@ func GetRpcUrlSettings(v *viper.Viper, chainName string) (string, error) {
 
 	for _, rpc := range rpcs {
 		if rpc.ChainName == chainName {
-			return rpc.Url, nil
+			resolved, resolveErr := ResolveEnvVars(rpc.Url)
+			if resolveErr != nil {
+				return "", fmt.Errorf("rpc url for chain %q: %w", chainName, resolveErr)
+			}
+			return resolved, nil
 		}
 	}
 
@@ -84,6 +90,15 @@ func GetExperimentalChains(v *viper.Viper) ([]ExperimentalChain, error) {
 	err = v.UnmarshalKey(keyWithTarget, &chains)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal experimental-chains: %w", err)
+	}
+
+	for i := range chains {
+		resolved, resolveErr := ResolveEnvVars(chains[i].RPCURL)
+		if resolveErr != nil {
+			return nil, fmt.Errorf("experimental chain rpc-url (selector %d): %w",
+				chains[i].ChainSelector, resolveErr)
+		}
+		chains[i].RPCURL = resolved
 	}
 
 	return chains, nil
@@ -172,10 +187,49 @@ func GetTarget(v *viper.Viper) (string, error) {
 		return target, nil
 	}
 
-	return "", fmt.Errorf(
-		"target not set: specify --%s or set %s env var",
-		Flags.Target.Name, CreTargetEnvVar,
-	)
+	return "", nil
+}
+
+// GetAvailableTargets reads project.yaml and returns the top-level keys
+// that represent target configurations, preserving the order from the file.
+func GetAvailableTargets() ([]string, error) {
+	projectPath, err := getProjectSettingsPath()
+	if err != nil {
+		return nil, fmt.Errorf("failed to find project settings: %w", err)
+	}
+
+	data, err := os.ReadFile(projectPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read project settings: %w", err)
+	}
+
+	// Parse with yaml.v3 Node to preserve key order
+	var doc yaml.Node
+	if err := yaml.Unmarshal(data, &doc); err != nil {
+		return nil, fmt.Errorf("failed to parse project settings: %w", err)
+	}
+
+	if doc.Kind != yaml.DocumentNode || len(doc.Content) == 0 {
+		return nil, nil
+	}
+
+	root := doc.Content[0]
+	if root.Kind != yaml.MappingNode {
+		return nil, nil
+	}
+
+	// Mapping nodes alternate key, value, key, value...
+	// Only include keys whose values are mappings (actual target configs).
+	var targets []string
+	for i := 0; i+1 < len(root.Content); i += 2 {
+		key := root.Content[i]
+		val := root.Content[i+1]
+		if key.Kind == yaml.ScalarNode && val.Kind == yaml.MappingNode {
+			targets = append(targets, key.Value)
+		}
+	}
+
+	return targets, nil
 }
 
 func GetChainNameByChainSelector(chainSelector uint64) (string, error) {
@@ -197,16 +251,80 @@ func GetChainNameByChainSelector(chainSelector uint64) (string, error) {
 	return chainDetails.ChainName, nil
 }
 
+// ChainNameFromSelectorString parses a raw chain-selector string and resolves
+// it to a chain name. It combines the string-to-uint64 conversion with the
+// selector-to-name lookup in a single call.
+func ChainNameFromSelectorString(raw string) (string, error) {
+	sel, err := strconv.ParseUint(raw, 10, 64)
+	if err != nil {
+		return "", fmt.Errorf("invalid chain_selector %q: %w", raw, err)
+	}
+	return GetChainNameByChainSelector(sel)
+}
+
+// GetChainSelectorByChainName resolves a chain name to its chain selector across
+// all chain families supported by chain-selectors (EVM, Aptos, Solana, Sui,
+// Tron, Ton, Starknet, Stellar, Canton). Returns an error if the name is not
+// found in any family.
 func GetChainSelectorByChainName(name string) (uint64, error) {
-	chainID, err := chainSelectors.ChainIdFromName(name)
-	if err != nil {
-		return 0, fmt.Errorf("failed to get chain ID from name %q: %w", name, err)
+	if chainID, err := chainSelectors.ChainIdFromName(name); err == nil {
+		selector, selErr := chainSelectors.SelectorFromChainId(chainID)
+		if selErr != nil {
+			return 0, fmt.Errorf("failed to get selector from chain ID %d: %w", chainID, selErr)
+		}
+		return selector, nil
 	}
 
-	selector, err := chainSelectors.SelectorFromChainId(chainID)
-	if err != nil {
-		return 0, fmt.Errorf("failed to get selector from chain ID %d: %w", chainID, err)
+	if selector, ok := findNonEVMSelectorByName(name); ok {
+		return selector, nil
 	}
 
-	return selector, nil
+	return 0, fmt.Errorf("chain not found for name %q\n  Run 'cre workflow supported-chains' to see all valid chain names", name)
+}
+
+// findNonEVMSelectorByName looks up a chain name in every non-EVM family
+// registered with chain-selectors. The EVM family is intentionally excluded
+// because ChainIdFromName already covers it.
+func findNonEVMSelectorByName(name string) (uint64, bool) {
+	for _, c := range chainSelectors.AptosALL {
+		if c.Name == name {
+			return c.Selector, true
+		}
+	}
+	for _, c := range chainSelectors.SolanaALL {
+		if c.Name == name {
+			return c.Selector, true
+		}
+	}
+	for _, c := range chainSelectors.SuiALL {
+		if c.Name == name {
+			return c.Selector, true
+		}
+	}
+	for _, c := range chainSelectors.TronALL {
+		if c.Name == name {
+			return c.Selector, true
+		}
+	}
+	for _, c := range chainSelectors.TonALL {
+		if c.Name == name {
+			return c.Selector, true
+		}
+	}
+	for _, c := range chainSelectors.StarknetALL {
+		if c.Name == name {
+			return c.Selector, true
+		}
+	}
+	for _, c := range chainSelectors.StellarALL {
+		if c.Name == name {
+			return c.Selector, true
+		}
+	}
+	for _, c := range chainSelectors.CantonALL {
+		if c.Name == name {
+			return c.Selector, true
+		}
+	}
+	return 0, false
 }
