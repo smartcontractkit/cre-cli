@@ -21,6 +21,7 @@ const (
 	SethConfigPathSettingName     = "logging.seth-config-path"
 	RegistriesSettingName         = "contracts.registries"
 	KeystoneSettingName           = "contracts.keystone"
+	DeploymentRegistrySettingName = "user-workflow.deployment-registry"
 	RpcsSettingName               = "rpcs"
 	ExperimentalChainsSettingName = "experimental-chains" // used by simulator when present in target config
 )
@@ -34,6 +35,7 @@ type flagNames struct {
 	Owner                Flag
 	ProjectRoot          Flag
 	CliEnvFile           Flag
+	CliPublicEnvFile     Flag
 	Verbose              Flag
 	Target               Flag
 	OverridePreviousRoot Flag
@@ -45,12 +47,14 @@ type flagNames struct {
 	NonInteractive       Flag
 	SkipConfirmation     Flag
 	ChangesetFile        Flag
+	AllowUnknownChains   Flag
 }
 
 var Flags = flagNames{
 	Owner:                Flag{"owner", "o"},
 	ProjectRoot:          Flag{"project-root", "R"},
 	CliEnvFile:           Flag{"env", "e"},
+	CliPublicEnvFile:     Flag{"public-env", "E"},
 	Verbose:              Flag{"verbose", "v"},
 	Target:               Flag{"target", "T"},
 	OverridePreviousRoot: Flag{"override-previous-root", "O"},
@@ -61,6 +65,7 @@ var Flags = flagNames{
 	NonInteractive:       Flag{"non-interactive", ""},
 	SkipConfirmation:     Flag{"yes", "y"},
 	ChangesetFile:        Flag{"changeset-file", ""},
+	AllowUnknownChains:   Flag{"allow-unknown-chains", ""},
 }
 
 func AddTxnTypeFlags(cmd *cobra.Command) {
@@ -101,7 +106,15 @@ func LoadSettingsIntoViper(v *viper.Viper, cmd *cobra.Command) error {
 	if context.IsWorkflowCommand(cmd) {
 		// Step 2: Load workflow settings next (overwrites values from project settings)
 		if err := mergeConfigToViper(v, constants.DefaultWorkflowSettingsFileName); err != nil {
-			return fmt.Errorf("failed to load workflow settings: %w", err)
+			cwd, _ := os.Getwd()
+			return fmt.Errorf(
+				"workflow settings file not found: no '%s' in '%s'\n\n"+
+					"To fix:\n"+
+					"  • Run 'cre workflow init' to create a properly initialized workflow\n"+
+					"  • If this workflow was manually created, add a %s with your target configuration\n"+
+					"  • Check that the workflow folder path argument is correct",
+				constants.DefaultWorkflowSettingsFileName, cwd, constants.DefaultWorkflowSettingsFileName,
+			)
 		}
 	}
 

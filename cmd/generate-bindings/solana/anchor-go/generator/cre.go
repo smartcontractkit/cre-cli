@@ -63,10 +63,22 @@ func creWriteReportErrorBlock() Code {
 	return code
 }
 
-// func (c *DataStorage) WriteReportFrom<StructName>(runtime cre.Runtime, input <StructName>, accountList []solanago.PublicKey) cre.Promise[*solana.WriteReportReply] {
 func creWriteReportFromStructs(exportedAccountName string, g *Generator) Code {
 	code := Empty()
 	declarerName := newWriteReportFromInstructionFuncName(exportedAccountName)
+	code.Commentf("%s encodes the input struct, hashes the provided accounts,", declarerName)
+	code.Comment("generates a signed report, and submits it via WriteReport.")
+	code.Comment("")
+	code.Comment("remainingAccounts must follow the keystone-forwarder account layout:")
+	code.Comment("  - Index 0: forwarderState – the forwarder program's state account.")
+	code.Comment("  - Index 1: forwarderAuthority – PDA derived from seeds")
+	code.Comment("    [\"forwarder\", forwarderState, receiverProgram] under the forwarder program ID.")
+	code.Comment("  - Index 2+: receiver-specific accounts required by the target program.")
+	code.Comment("")
+	code.Comment("The full slice is hashed (via CalculateAccountsHash) into the report and forwarded")
+	code.Comment("as WriteCreReportRequest.RemainingAccounts. The on-chain forwarder strips indices 0 and 1")
+	code.Comment("before CPI-ing into the receiver, so they must be present and correctly ordered.")
+	code.Line()
 	code.Func().
 		Params(Id("c").Op("*").Id(tools.ToCamelUpper(g.options.Package))). // method receiver
 		Id(declarerName).
@@ -76,6 +88,7 @@ func creWriteReportFromStructs(exportedAccountName string, g *Generator) Code {
 				p.Id("runtime").Qual(PkgCRE, "Runtime")
 				p.Id("input").Id(exportedAccountName)
 				p.Id("remainingAccounts").Index().Op("*").Qual(PkgSolanaCre, "AccountMeta")
+				p.Id("computeConfig").Op("*").Qual(PkgSolanaCre, "ComputeConfig")
 			}),
 		).
 		// return type
@@ -109,8 +122,8 @@ func creWriteReportFromStructs(exportedAccountName string, g *Generator) Code {
 				Op("&").Qual(PkgPbSdk, "ReportRequest").Values(Dict{
 					Id("EncodedPayload"): Id("encodedFwdReport"),
 					Id("EncoderName"):    Lit("solana"),
-					Id("SigningAlgo"):    Lit("ed25519"),
-					Id("HashingAlgo"):    Lit("sha256"),
+					Id("SigningAlgo"):    Lit("ecdsa"),
+					Id("HashingAlgo"):    Lit("keccak256"),
 				}),
 			).Line()
 
@@ -129,6 +142,123 @@ func creWriteReportFromStructs(exportedAccountName string, g *Generator) Code {
 			)
 		})
 	return code
+}
+
+func creEncodeBorshVecU32() Code {
+	st := Empty()
+	st.Comment(`EncodeBorshVecU32 returns Anchor/Borsh encoding of a Vec whose elements are opaque byte payloads.`)
+	st.Comment(`Each [][]byte element must already be fully serialized for one Vec item on the wire.`)
+	st.Comment(`Layout: little-endian u32 length followed by concatenated element payloads.`)
+	st.Line()
+	st.Func().
+		Id("EncodeBorshVecU32").
+		Params(Id("elements").Index().Index().Byte()).
+		Params(Index().Byte(), Error()).
+		BlockFunc(func(b *Group) {
+			b.Id("buf").Op(":=").Qual("bytes", "NewBuffer").Call(Nil())
+			b.If(
+				Err().Op(":=").Qual("encoding/binary", "Write").Call(
+					Id("buf"),
+					Qual("encoding/binary", "LittleEndian"),
+					Id("uint32").Call(Len(Id("elements"))),
+				),
+				Err().Op("!=").Nil(),
+			).Block(Return(Nil(), Err()))
+			b.For(Id("_").Op(",").Id("elem").Op(":=").Range().Id("elements")).Block(
+				List(Id("_"), Err()).Op(":=").Id("buf").Dot("Write").Call(Id("elem")),
+				If(Err().Op("!=").Nil()).Block(
+					Return(Nil(), Err()),
+				),
+			)
+			b.Return(Id("buf").Dot("Bytes").Call(), Nil())
+		})
+	return st
+}
+
+// WriteReportFromBorshEncodedVec forwards a CRE report whose inner payload is EncodeBorshVecU32(elementPayloads).
+func creWriteReportFromBorshEncodedVec(g *Generator) Code {
+	pkg := tools.ToCamelUpper(g.options.Package)
+	code := Empty()
+	code.Comment(`WriteReportFromBorshEncodedVec publishes through the CRE signer using a forwarder payload built from`)
+	code.Comment(`Borsh Vec<byte…> semantics (EncodeBorshVecU32). Compose each elementPayload for your program (e.g. one encoded struct per row).`)
+	code.Comment(`Pass computeConfig = nil to use the host default Solana compute budget.`)
+	code.Line()
+	code.Func().
+		Params(Id("c").Op("*").Id(pkg)).
+		Id("WriteReportFromBorshEncodedVec").
+		Params(ListFunc(func(pl *Group) {
+			pl.Id("runtime").Qual(PkgCRE, "Runtime")
+			pl.Id("elementPayloads").Index().Index().Byte()
+			pl.Id("remainingAccounts").Index().Op("*").Qual(PkgSolanaCre, "AccountMeta")
+			pl.Id("computeConfig").Op("*").Qual(PkgSolanaCre, "ComputeConfig")
+		})).
+		Params(Qual(PkgCRE, "Promise").Types(Op("*").Qual(PkgSolanaCre, "WriteReportReply"))).
+		BlockFunc(func(block *Group) {
+			block.List(Id("payload"), Id("err")).Op(":=").Id("EncodeBorshVecU32").Call(Id("elementPayloads"))
+			block.Add(creWriteReportErrorBlock())
+			block.Id("encodedAccountList").Op(":=").Qual(PkgBindings, "CalculateAccountsHash").Call(Id("remainingAccounts"))
+			block.Id("fwdReport").Op(":=").Qual(PkgBindings, "ForwarderReport").Values(Dict{
+				Id("AccountHash"): Id("encodedAccountList"),
+				Id("Payload"):     Id("payload"),
+			})
+			block.List(Id("encodedFwdReport"), Id("err")).Op(":=").Id("fwdReport").Dot("Marshal").Call()
+			block.Add(creWriteReportErrorBlock())
+			block.Id("promise").Op(":=").Id("runtime").Dot("GenerateReport").Call(
+				Op("&").Qual(PkgPbSdk, "ReportRequest").Values(Dict{
+					Id("EncodedPayload"): Id("encodedFwdReport"),
+					Id("EncoderName"):    Lit("solana"),
+					Id("SigningAlgo"):    Lit("ecdsa"),
+					Id("HashingAlgo"):    Lit("keccak256"),
+				}),
+			).Line()
+			block.Return(Qual(PkgCRE, "ThenPromise").Call(Id("promise"), creWriteReportFromStructsLambda()))
+		})
+	return code
+}
+
+// creWriteReportFromStructsSlice emits:
+//
+//	func (c *<Pkg>) WriteReportFrom<StructName>s(runtime cre.Runtime, inputs []<StructName>, remainingAccounts []*solana.AccountMeta, computeConfig *solana.ComputeConfig) cre.Promise[*solana.WriteReportReply] {
+//	    elements := make([][]byte, len(inputs))
+//	    for i, input := range inputs {
+//	        encoded, err := c.Codec.Encode<StructName>Struct(input)
+//	        if err != nil { return cre.PromiseFromResult[*solana.WriteReportReply](nil, err) }
+//	        elements[i] = encoded
+//	    }
+//	    return c.WriteReportFromBorshEncodedVec(runtime, elements, remainingAccounts, computeConfig)
+//	}
+func creWriteReportFromStructsSlice(exportedStructName string, g *Generator) Code {
+	pkg := tools.ToCamelUpper(g.options.Package)
+	declarerName := newWriteReportFromInstructionFuncName(exportedStructName) + "s"
+	return Func().
+		Params(Id("c").Op("*").Id(pkg)).
+		Id(declarerName).
+		Params(ListMultiline(func(p *Group) {
+			p.Id("runtime").Qual(PkgCRE, "Runtime")
+			p.Id("inputs").Index().Id(exportedStructName)
+			p.Id("remainingAccounts").Index().Op("*").Qual(PkgSolanaCre, "AccountMeta")
+			p.Id("computeConfig").Op("*").Qual(PkgSolanaCre, "ComputeConfig")
+		})).
+		Params(Qual(PkgCRE, "Promise").Types(Op("*").Qual(PkgSolanaCre, "WriteReportReply"))).
+		BlockFunc(func(block *Group) {
+			block.Id("elements").Op(":=").Make(Index().Index().Byte(), Len(Id("inputs")))
+			block.For(Id("i").Op(",").Id("input").Op(":=").Range().Id("inputs")).Block(
+				List(Id("encoded"), Err()).Op(":=").
+					Id("c").Dot("Codec").Dot("Encode"+exportedStructName+"Struct").Call(Id("input")),
+				If(Err().Op("!=").Nil()).Block(
+					Return(Qual(PkgCRE, "PromiseFromResult").
+						Types(Op("*").Qual(PkgSolanaCre, "WriteReportReply")).
+						Call(Nil(), Err())),
+				),
+				Id("elements").Index(Id("i")).Op("=").Id("encoded"),
+			)
+			block.Return(Id("c").Dot("WriteReportFromBorshEncodedVec").Call(
+				Id("runtime"),
+				Id("elements"),
+				Id("remainingAccounts"),
+				Id("computeConfig"),
+			))
+		})
 }
 
 func creWriteReportFromStructsLambda() *Statement {
@@ -150,6 +280,7 @@ func creWriteReportFromStructsLambda() *Statement {
 						Id("Receiver"):          Id("ProgramID").Dot("Bytes").Call(),
 						Id("Report"):            Id("report"),
 						Id("RemainingAccounts"): Id("remainingAccounts"),
+						Id("ComputeConfig"):     Id("computeConfig"),
 					}),
 				),
 			),
@@ -200,7 +331,6 @@ func (g *Generator) genfile_constructor() (*OutputFile, error) {
 				Op("*").Id(tools.ToCamelUpper(g.options.Package)), Error(),
 			).
 			Block(
-				// return &DataStorage{ Codec: &Codec{}, IdlTypes: &idlTypes.IdlTypeDefSlice, client: client }, nil
 				Return(
 					Op("&").Id(tools.ToCamelUpper(g.options.Package)).Values(Dict{
 						Id("Codec"):  Op("&").Id("Codec").Values(),
@@ -210,6 +340,11 @@ func (g *Generator) genfile_constructor() (*OutputFile, error) {
 				),
 			)
 		file.Add(code)
+		code.Line()
+
+		file.Add(creEncodeBorshVecU32())
+		code.Line()
+		file.Add(creWriteReportFromBorshEncodedVec(g))
 		code.Line()
 
 		methods, err := g.generateCodecMethods()
