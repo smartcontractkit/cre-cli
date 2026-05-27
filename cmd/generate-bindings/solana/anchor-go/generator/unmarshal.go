@@ -118,10 +118,10 @@ func gen_UnmarshalWithDecoder_struct(
 
 				switch fields := fields.(type) {
 				case idl.IdlDefinedFieldsNamed:
-					gen_unmarshal_DefinedFieldsNamed(body, fields)
+					gen_unmarshal_DefinedFieldsNamed(body, fields, generateUniqueFieldNames(fields))
 				case idl.IdlDefinedFieldsTuple:
 					convertedFields := tupleToFieldsNamed(fields)
-					gen_unmarshal_DefinedFieldsNamed(body, convertedFields)
+					gen_unmarshal_DefinedFieldsNamed(body, convertedFields, generateUniqueFieldNames(convertedFields))
 				case nil:
 					// No fields, just an empty struct.
 					// TODO: should we panic here?
@@ -229,9 +229,11 @@ func tupleToFieldsNamed(
 func gen_unmarshal_DefinedFieldsNamed(
 	body *Group,
 	fields idl.IdlDefinedFieldsNamed,
+	uniqueFieldNames map[string]string,
 ) {
 	for _, field := range fields {
-		exportedArgName := tools.ToCamelUpper(field.Name)
+		goFieldName := uniqueFieldNames[field.Name]
+		exportedArgName := goFieldName
 		if IsOption(field.Ty) || IsCOption(field.Ty) {
 			body.Commentf("Deserialize `%s` (optional):", exportedArgName)
 		} else {
@@ -248,7 +250,7 @@ func gen_unmarshal_DefinedFieldsNamed(
 					{
 						argBody.Var().Err().Error()
 						argBody.List(
-							Id("obj").Dot(exportedArgName),
+							Id("obj").Dot(goFieldName),
 							Err(),
 						).Op("=").Id(formatEnumParserName(enumName)).Call(Id("decoder"))
 					}
@@ -264,11 +266,11 @@ func gen_unmarshal_DefinedFieldsNamed(
 					// Read the array items:
 					argBody.For(
 						Id("i").Op(":=").Lit(0),
-						Id("i").Op("<").Len(Id("obj").Dot(exportedArgName)),
+						Id("i").Op("<").Len(Id("obj").Dot(goFieldName)),
 						Id("i").Op("++"),
 					).BlockFunc(func(forBody *Group) {
 						forBody.List(
-							Id("obj").Dot(exportedArgName).Index(Id("i")),
+							Id("obj").Dot(goFieldName).Index(Id("i")),
 							Err(),
 						).Op("=").Id(formatEnumParserName(enumTypeName)).Call(Id("decoder"))
 						forBody.If(Err().Op("!=").Nil()).Block(
@@ -301,7 +303,7 @@ func gen_unmarshal_DefinedFieldsNamed(
 						),
 					)
 					// Create the vector:
-					argBody.Id("obj").Dot(exportedArgName).Op("=").Make(Index().Id(enumTypeName), Id("vecLen"))
+					argBody.Id("obj").Dot(goFieldName).Op("=").Make(Index().Id(enumTypeName), Id("vecLen"))
 					// Read the vector items:
 					argBody.For(
 						Id("i").Op(":=").Lit(0),
@@ -309,7 +311,7 @@ func gen_unmarshal_DefinedFieldsNamed(
 						Id("i").Op("++"),
 					).BlockFunc(func(forBody *Group) {
 						forBody.List(
-							Id("obj").Dot(exportedArgName).Index(Id("i")),
+							Id("obj").Dot(goFieldName).Index(Id("i")),
 							Err(),
 						).Op("=").Id(formatEnumParserName(enumTypeName)).Call(Id("decoder"))
 						forBody.If(Err().Op("!=").Nil()).Block(
@@ -351,7 +353,7 @@ func gen_unmarshal_DefinedFieldsNamed(
 						),
 					)
 					optGroup.If(Id("ok")).Block(
-						Err().Op("=").Id("decoder").Dot("Decode").Call(Op("&").Id("obj").Dot(exportedArgName)),
+						Err().Op("=").Id("decoder").Dot("Decode").Call(Op("&").Id("obj").Dot(goFieldName)),
 						If(Err().Op("!=").Nil()).Block(
 							Return(
 								Qual(PkgAnchorGoErrors, "NewField").Call(
@@ -363,7 +365,7 @@ func gen_unmarshal_DefinedFieldsNamed(
 					)
 				})
 			} else {
-				body.Err().Op("=").Id("decoder").Dot("Decode").Call(Op("&").Id("obj").Dot(exportedArgName))
+				body.Err().Op("=").Id("decoder").Dot("Decode").Call(Op("&").Id("obj").Dot(goFieldName))
 				body.If(Err().Op("!=").Nil()).Block(
 					Return(
 						Qual(PkgAnchorGoErrors, "NewField").Call(
