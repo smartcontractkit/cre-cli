@@ -15,23 +15,31 @@ import (
 // and gen_unmarshal_DefinedFieldsNamed to decide whether a field is routed to
 // the specialized enum encoder/parser or falls through to the generic
 // Encode/Decode path.
-func complexEnumGuard(ty idltype.IdlType) bool {
-	return isComplexEnum(ty) ||
-		(IsArray(ty) && isComplexEnum(ty.(*idltype.Array).Type)) ||
-		(IsVec(ty) && isComplexEnum(ty.(*idltype.Vec).Vec)) ||
-		isOptionalComplexEnum(ty)
+func complexEnumGuard(g *Generator, ty idltype.IdlType) bool {
+	return g.isComplexEnum(ty) ||
+		(IsArray(ty) && g.isComplexEnum(ty.(*idltype.Array).Type)) ||
+		(IsVec(ty) && g.isComplexEnum(ty.(*idltype.Vec).Vec)) ||
+		g.isOptionalComplexEnum(ty)
+}
+
+func newTestGenerator() *Generator {
+	return &Generator{
+		idl:                 &idl.Idl{},
+		options:             &GeneratorOptions{Package: "test"},
+		complexEnumRegistry: make(map[string]struct{}),
+	}
 }
 
 func TestComplexEnumGuard_handlesOptionAndCOption(t *testing.T) {
 	const name = "Outcome"
-	register_TypeName_as_ComplexEnum(name)
-	t.Cleanup(func() { delete(typeRegistryComplexEnum, name) })
+	g := newTestGenerator()
+	g.registerComplexEnumType(name)
 
 	defined := &idltype.Defined{Name: name}
 
-	assert.True(t, complexEnumGuard(defined), "bare Defined")
-	assert.True(t, complexEnumGuard(&idltype.Option{Option: defined}), "Option<ComplexEnum>")
-	assert.True(t, complexEnumGuard(&idltype.COption{COption: defined}), "COption<ComplexEnum>")
+	assert.True(t, complexEnumGuard(g, defined), "bare Defined")
+	assert.True(t, complexEnumGuard(g, &idltype.Option{Option: defined}), "Option<ComplexEnum>")
+	assert.True(t, complexEnumGuard(g, &idltype.COption{COption: defined}), "COption<ComplexEnum>")
 }
 
 // TestComplexEnumGuard_rejectsNonComplexOptionals ensures the guard does NOT
@@ -40,20 +48,20 @@ func TestComplexEnumGuard_handlesOptionAndCOption(t *testing.T) {
 // where .Option.(*idltype.Defined) would panic on a non-Defined inner type.
 func TestComplexEnumGuard_rejectsNonComplexOptionals(t *testing.T) {
 	const complexName = "Outcome"
-	register_TypeName_as_ComplexEnum(complexName)
-	t.Cleanup(func() { delete(typeRegistryComplexEnum, complexName) })
+	g := newTestGenerator()
+	g.registerComplexEnumType(complexName)
 
 	nonComplex := &idltype.Defined{Name: "PlainStruct"}
 
-	assert.False(t, complexEnumGuard(&idltype.Option{Option: nonComplex}),
+	assert.False(t, complexEnumGuard(g, &idltype.Option{Option: nonComplex}),
 		"Option<NonComplexDefined> must not trigger the complex-enum path")
-	assert.False(t, complexEnumGuard(&idltype.COption{COption: nonComplex}),
+	assert.False(t, complexEnumGuard(g, &idltype.COption{COption: nonComplex}),
 		"COption<NonComplexDefined> must not trigger the complex-enum path")
-	assert.False(t, complexEnumGuard(&idltype.Option{Option: &idltype.U64{}}),
+	assert.False(t, complexEnumGuard(g, &idltype.Option{Option: &idltype.U64{}}),
 		"Option<U64> must not trigger the complex-enum path")
-	assert.False(t, complexEnumGuard(&idltype.COption{COption: &idltype.U8{}}),
+	assert.False(t, complexEnumGuard(g, &idltype.COption{COption: &idltype.U8{}}),
 		"COption<U8> must not trigger the complex-enum path")
-	assert.False(t, complexEnumGuard(&idltype.Option{Option: &idltype.Vec{Vec: &idltype.Defined{Name: complexName}}}),
+	assert.False(t, complexEnumGuard(g, &idltype.Option{Option: &idltype.Vec{Vec: &idltype.Defined{Name: complexName}}}),
 		"Option<Vec<ComplexEnum>> — nested containers not supported, must not match")
 }
 
@@ -63,8 +71,8 @@ func TestComplexEnumGuard_rejectsNonComplexOptionals(t *testing.T) {
 // instead of the generic Encode/Decode.
 func TestComplexEnumCodegen_optionalComplexEnum(t *testing.T) {
 	const enumName = "Outcome"
-	register_TypeName_as_ComplexEnum(enumName)
-	t.Cleanup(func() { delete(typeRegistryComplexEnum, enumName) })
+	g := newTestGenerator()
+	g.registerComplexEnumType(enumName)
 
 	fields := idl.IdlDefinedFieldsNamed{
 		{Name: "id", Ty: &idltype.U64{}},
@@ -73,10 +81,10 @@ func TestComplexEnumCodegen_optionalComplexEnum(t *testing.T) {
 		{Name: "checksum", Ty: &idltype.U64{}},
 	}
 
-	marshalCode := gen_MarshalWithEncoder_struct(
+	marshalCode := g.gen_MarshalWithEncoder_struct(
 		&idl.Idl{}, false, "Report", "", fields, true,
 	)
-	unmarshalCode := gen_UnmarshalWithDecoder_struct(
+	unmarshalCode := g.gen_UnmarshalWithDecoder_struct(
 		&idl.Idl{}, false, "Report", "", fields,
 	)
 

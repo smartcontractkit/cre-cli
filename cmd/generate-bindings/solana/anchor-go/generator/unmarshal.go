@@ -72,7 +72,7 @@ func formatEnumEncoderName(enumTypeName string) string {
 	return "Encode" + enumTypeName
 }
 
-func gen_UnmarshalWithDecoder_struct(
+func (g *Generator) gen_UnmarshalWithDecoder_struct(
 	idl_ *idl.Idl,
 	withDiscriminator bool,
 	receiverTypeName string,
@@ -118,10 +118,10 @@ func gen_UnmarshalWithDecoder_struct(
 
 				switch fields := fields.(type) {
 				case idl.IdlDefinedFieldsNamed:
-					gen_unmarshal_DefinedFieldsNamed(body, fields, generateUniqueFieldNames(fields))
+					g.gen_unmarshal_DefinedFieldsNamed(body, fields, generateUniqueFieldNames(fields))
 				case idl.IdlDefinedFieldsTuple:
 					convertedFields := tupleToFieldsNamed(fields)
-					gen_unmarshal_DefinedFieldsNamed(body, convertedFields, generateUniqueFieldNames(convertedFields))
+					g.gen_unmarshal_DefinedFieldsNamed(body, convertedFields, generateUniqueFieldNames(convertedFields))
 				case nil:
 					// No fields, just an empty struct.
 					// TODO: should we panic here?
@@ -226,7 +226,7 @@ func tupleToFieldsNamed(
 	return fields
 }
 
-func gen_unmarshal_DefinedFieldsNamed(
+func (g *Generator) gen_unmarshal_DefinedFieldsNamed(
 	body *Group,
 	fields idl.IdlDefinedFieldsNamed,
 	uniqueFieldNames map[string]string,
@@ -240,7 +240,7 @@ func gen_unmarshal_DefinedFieldsNamed(
 			body.Commentf("Deserialize `%s`:", exportedArgName)
 		}
 
-		if isComplexEnum(field.Ty) || (IsArray(field.Ty) && isComplexEnum(field.Ty.(*idltype.Array).Type)) || (IsVec(field.Ty) && isComplexEnum(field.Ty.(*idltype.Vec).Vec)) || isOptionalComplexEnum(field.Ty) {
+		if g.isComplexEnum(field.Ty) || (IsArray(field.Ty) && g.isComplexEnum(field.Ty.(*idltype.Array).Type)) || (IsVec(field.Ty) && g.isComplexEnum(field.Ty.(*idltype.Vec).Vec)) || g.isOptionalComplexEnum(field.Ty) {
 			switch field.Ty.(type) {
 			case *idltype.Defined:
 				enumName := field.Ty.(*idltype.Defined).Name

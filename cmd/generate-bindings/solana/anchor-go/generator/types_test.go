@@ -40,13 +40,14 @@ func TestGenComplexEnum_ConsecutiveUppercase(t *testing.T) {
 	// won't find the original "HTTPStatus" entry and returns nil.
 	idlData := makeComplexEnumIDL("HTTPStatus")
 	gen := &Generator{
-		idl:     idlData,
-		options: &GeneratorOptions{Package: "test"},
+		idl:                 idlData,
+		options:             &GeneratorOptions{Package: "test"},
+		complexEnumRegistry: make(map[string]struct{}),
 	}
 
 	// Register the complex enum as the generator normally would.
 	for _, typ := range gen.idl.Types {
-		registerComplexEnums(typ)
+		gen.registerComplexEnums(typ)
 	}
 
 	outputFile, err := gen.genfile_types()
@@ -62,12 +63,13 @@ func TestGenComplexEnum_SnakeCaseName(t *testing.T) {
 	// "MyStatus", so ByName("MyStatus") won't find "my_status".
 	idlData := makeComplexEnumIDL("my_status")
 	gen := &Generator{
-		idl:     idlData,
-		options: &GeneratorOptions{Package: "test"},
+		idl:                 idlData,
+		options:             &GeneratorOptions{Package: "test"},
+		complexEnumRegistry: make(map[string]struct{}),
 	}
 
 	for _, typ := range gen.idl.Types {
-		registerComplexEnums(typ)
+		gen.registerComplexEnums(typ)
 	}
 
 	outputFile, err := gen.genfile_types()
@@ -83,12 +85,13 @@ func TestGenComplexEnum_AlreadyCamelCase(t *testing.T) {
 	// so ByName should find it. This should always work.
 	idlData := makeComplexEnumIDL("MyStatus")
 	gen := &Generator{
-		idl:     idlData,
-		options: &GeneratorOptions{Package: "test"},
+		idl:                 idlData,
+		options:             &GeneratorOptions{Package: "test"},
+		complexEnumRegistry: make(map[string]struct{}),
 	}
 
 	for _, typ := range gen.idl.Types {
-		registerComplexEnums(typ)
+		gen.registerComplexEnums(typ)
 	}
 
 	outputFile, err := gen.genfile_types()

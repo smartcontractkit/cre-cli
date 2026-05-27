@@ -112,7 +112,7 @@ func TestWriteReportMethods(t *testing.T) {
 	reply := ds.WriteReportFromUserData(runtime, datastorage.UserData{
 		Key:   "testKey",
 		Value: "testValue",
-	}, nil)
+	}, nil, nil)
 	require.NoError(t, err, "WriteReportDataStorageUserData should not return an error")
 	response, err := reply.Await()
 	require.NoError(t, err, "Awaiting WriteReportDataStorageUserData reply should not return an error")

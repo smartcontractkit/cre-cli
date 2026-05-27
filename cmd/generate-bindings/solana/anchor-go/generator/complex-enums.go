@@ -6,43 +6,43 @@ import (
 	"github.com/gagliardetto/anchor-go/idl/idltype"
 )
 
-// typeRegistryComplexEnum contains all types that are a complex enum (and thus implemented as an interface).
-var typeRegistryComplexEnum = make(map[string]struct{})
-
-func isComplexEnum(envel idltype.IdlType) bool {
+func (g *Generator) isComplexEnum(envel idltype.IdlType) bool {
 	switch vv := envel.(type) {
 	case *idltype.Defined:
-		_, ok := typeRegistryComplexEnum[vv.Name]
+		_, ok := g.complexEnumRegistry[vv.Name]
 		return ok
 	}
 	return false
 }
 
-func isOptionalComplexEnum(ty idltype.IdlType) bool {
+func (g *Generator) registerComplexEnumType(name string) {
+	if g.complexEnumRegistry == nil {
+		g.complexEnumRegistry = make(map[string]struct{})
+	}
+	g.complexEnumRegistry[name] = struct{}{}
+}
+
+func (g *Generator) isOptionalComplexEnum(ty idltype.IdlType) bool {
 	switch v := ty.(type) {
 	case *idltype.Option:
-		return isComplexEnum(v.Option)
+		return g.isComplexEnum(v.Option)
 	case *idltype.COption:
-		return isComplexEnum(v.COption)
+		return g.isComplexEnum(v.COption)
 	}
 	return false
 }
 
-func register_TypeName_as_ComplexEnum(name string) {
-	typeRegistryComplexEnum[name] = struct{}{}
-}
-
-func registerComplexEnums(def idl.IdlTypeDef) {
+func (g *Generator) registerComplexEnums(def idl.IdlTypeDef) {
 	switch vv := def.Ty.(type) {
 	case *idl.IdlTypeDefTyEnum:
 		enumTypeName := def.Name
 		if !vv.IsAllSimple() {
-			register_TypeName_as_ComplexEnum(enumTypeName)
+			g.registerComplexEnumType(enumTypeName)
 		}
 	case idl.IdlTypeDefTyEnum:
 		enumTypeName := def.Name
 		if !vv.IsAllSimple() {
-			register_TypeName_as_ComplexEnum(enumTypeName)
+			g.registerComplexEnumType(enumTypeName)
 		}
 	}
 }

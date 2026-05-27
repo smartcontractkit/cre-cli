@@ -42,7 +42,13 @@ func TestMarshalUnmarshalCodegen_matchesUniqueStructFieldNames(t *testing.T) {
 	fields := collidingNamedFields()
 	receiver := "CollideAccount"
 
-	marshalCode := gen_MarshalWithEncoder_struct(
+	g := &Generator{
+		idl:                 idlMinimal,
+		options:             &GeneratorOptions{Package: "test"},
+		complexEnumRegistry: make(map[string]struct{}),
+	}
+
+	marshalCode := g.gen_MarshalWithEncoder_struct(
 		idlMinimal,
 		false,
 		receiver,
@@ -50,7 +56,7 @@ func TestMarshalUnmarshalCodegen_matchesUniqueStructFieldNames(t *testing.T) {
 		fields,
 		true,
 	)
-	unmarshalCode := gen_UnmarshalWithDecoder_struct(
+	unmarshalCode := g.gen_UnmarshalWithDecoder_struct(
 		idlMinimal,
 		false,
 		receiver,
