@@ -89,8 +89,11 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 		idlPath = filepath.Join(projectRoot, "contracts", "solana", "src", "idl")
 	}
 
-	// Output path is contracts/{chainFamily}/src/generated/ under projectRoot
-	outPath := filepath.Join(projectRoot, "contracts", "solana", "src", "generated")
+	// Resolve output path with fallback to contracts/solana/src/generated/
+	outPath := v.GetString("out")
+	if outPath == "" {
+		outPath = filepath.Join(projectRoot, "contracts", "solana", "src", "generated")
+	}
 
 	return Inputs{
 		ProjectRoot: projectRoot,
