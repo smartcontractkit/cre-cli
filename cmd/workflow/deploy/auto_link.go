@@ -1,7 +1,6 @@
 package deploy
 
 import (
-	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -137,7 +136,7 @@ func (h *handler) checkLinkStatusViaGraphQL(ownerAddr common.Address) (bool, err
 	}
 
 	gql := graphqlclient.New(h.credentials, h.environmentSet, h.log)
-	if err := gql.Execute(context.Background(), req, &resp); err != nil {
+	if err := gql.Execute(h.execCtx, req, &resp); err != nil {
 		return false, fmt.Errorf("GraphQL query failed: %w", err)
 	}
 
@@ -181,7 +180,11 @@ func (h *handler) waitForBackendLinkProcessing(ownerAddr common.Address) error {
 	ui.Line()
 
 	// Wait for 3 block confirmations before polling
-	time.Sleep(initialBlockWait)
+	select {
+	case <-time.After(initialBlockWait):
+	case <-h.execCtx.Done():
+		return h.execCtx.Err()
+	}
 
 	err := retry.Do(
 		func() error {
@@ -199,6 +202,7 @@ func (h *handler) waitForBackendLinkProcessing(ownerAddr common.Address) error {
 		retry.Delay(retryDelay),
 		retry.DelayType(retry.FixedDelay), // Use fixed 3s delay between retries
 		retry.LastErrorOnly(true),
+		retry.Context(h.execCtx),
 		retry.OnRetry(func(n uint, err error) {
 			h.log.Debug().Uint("attempt", n+1).Uint("maxAttempts", maxAttempts).Err(err).Msg("Retrying link status check")
 			ui.Dim(fmt.Sprintf("  Waiting for verification... (attempt %d/%d)", n+1, maxAttempts))

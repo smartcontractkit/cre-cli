@@ -1,6 +1,7 @@
 package deploy
 
 import (
+	"context"
 	"fmt"
 	"sync"
 
@@ -44,10 +45,27 @@ func newOnchainRegistryDeployStrategy(h *handler) (*onchainRegistryDeployStrateg
 	return a, nil
 }
 
+func waitWithContext(ctx context.Context, wg *sync.WaitGroup) error {
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
 func (a *onchainRegistryDeployStrategy) RunPreDeployChecks() error {
 	h := a.h
 
-	a.wg.Wait()
+	if err := waitWithContext(a.h.execCtx, &a.wg); err != nil {
+		return err
+	}
 	if a.initErr != nil {
 		return a.initErr
 	}
