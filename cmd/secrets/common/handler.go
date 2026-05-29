@@ -168,13 +168,14 @@ func (h *Handler) ResolveInputs() (UpsertSecretsInputs, error) {
 		if !ok {
 			return nil, fmt.Errorf("environment variable %q for secret %q not found; please export it", envName, id)
 		}
-		if !utf8.Valid([]byte(envVal)) {
+		if !utf8.ValidString(envVal) {
 			return nil, fmt.Errorf("value for secret %q (env %q) contains invalid UTF-8", id, envName)
 		}
 
+		value := []byte(envVal)
 		out = append(out, SecretItem{
 			ID:        id,
-			Value:     []byte(envVal),
+			Value:     value,
 			Namespace: "main",
 		})
 
@@ -318,6 +319,7 @@ func (h *Handler) ResolveVaultIdentifierOwnerForAuth(secretsAuth string) (string
 
 // EncryptSecrets encrypts secrets for the given workflow owner address.
 // TDH2 label is the workflow owner address left-padded to 32 bytes; SecretIdentifier.Owner is the same hex address string.
+// Each item's Value slice is zeroed in place as it is encrypted; callers must not reuse rawSecrets afterward.
 func (h *Handler) EncryptSecrets(rawSecrets UpsertSecretsInputs, owner string) ([]*vault.EncryptedSecret, error) {
 	pubKeyHex, err := h.fetchVaultMasterPublicKeyHex()
 	if err != nil {
