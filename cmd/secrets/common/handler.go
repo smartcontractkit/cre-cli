@@ -3,7 +3,6 @@ package common
 import (
 	"context"
 	"crypto/ecdsa"
-	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -337,38 +336,6 @@ func (h *Handler) EncryptSecrets(rawSecrets UpsertSecretsInputs, owner string) (
 			Key:       item.ID,
 			Namespace: item.Namespace,
 			Owner:     owner,
-		}
-		encryptedSecrets = append(encryptedSecrets, &vault.EncryptedSecret{
-			Id:             secID,
-			EncryptedValue: cipherHex,
-		})
-	}
-	return encryptedSecrets, nil
-}
-
-// EncryptSecretsForBrowserOrg encrypts secrets scoped to the signed-in organization (interactive sign-in flow).
-// TDH2 label is SHA256(orgID); SecretIdentifier.Owner is the org id string. This is a separate binding from the
-// owner-key path (EOA left-padded label + workflow owner address); both remain supported via their respective entrypoints.
-func (h *Handler) EncryptSecretsForBrowserOrg(rawSecrets UpsertSecretsInputs, orgID string) ([]*vault.EncryptedSecret, error) {
-	pubKeyHex, err := h.fetchVaultMasterPublicKeyHex()
-	if err != nil {
-		return nil, err
-	}
-
-	label := sha256.Sum256([]byte(orgID))
-
-	encryptedSecrets := make([]*vault.EncryptedSecret, 0, len(rawSecrets))
-	for i := range rawSecrets {
-		item := &rawSecrets[i]
-		cipherHex, err := encryptSecretWithLabel(item.Value, pubKeyHex, label)
-		clear(item.Value)
-		if err != nil {
-			return nil, fmt.Errorf("failed to encrypt secret (key=%s ns=%s): %w", item.ID, item.Namespace, err)
-		}
-		secID := &vault.SecretIdentifier{
-			Key:       item.ID,
-			Namespace: item.Namespace,
-			Owner:     orgID,
 		}
 		encryptedSecrets = append(encryptedSecrets, &vault.EncryptedSecret{
 			Id:             secID,

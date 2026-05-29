@@ -63,8 +63,6 @@ func digestHexString(digest [32]byte) string {
 // exchanges the code for a short-lived vault JWT, and POSTs the same JSON-RPC body to the gateway with Bearer auth.
 // Login tokens in ~/.cre/cre.yaml are not modified; that session stays separate from this vault-only token.
 func (h *Handler) executeBrowserUpsert(ctx context.Context, inputs UpsertSecretsInputs, method string) error {
-	defer ZeroUpsertSecretValues(inputs)
-
 	if h.Credentials.AuthType == credentials.AuthTypeApiKey {
 		return fmt.Errorf("this sign-in flow requires an interactive login; API keys are not supported")
 	}
