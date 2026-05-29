@@ -45,27 +45,27 @@ func TestWorkflowUpsert(t *testing.T) {
 				simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
 				defer simulatedEnvironment.Close()
 
-			ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
-			handler := newTestHandler(ctx, buf)
+				ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
+				handler := newTestHandler(ctx, buf)
 
-			wrc, err := handler.clientFactory.NewWorkflowRegistryV2Client(context.Background())
-			require.NoError(t, err)
-			handler.wrc = wrc
+				wrc, err := handler.clientFactory.NewWorkflowRegistryV2Client(context.Background())
+				require.NoError(t, err)
+				handler.wrc = wrc
 
-			handler.inputs = tt.inputs
-			err = handler.ValidateInputs()
-			require.NoError(t, err)
+				handler.inputs = tt.inputs
+				err = handler.ValidateInputs()
+				require.NoError(t, err)
 
-			handler.workflowArtifact = &workflowArtifact{
-				BinaryData: []byte("0x1234"),
-				ConfigData: []byte("config"),
-				WorkflowID: "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
-			}
+				handler.workflowArtifact = &workflowArtifact{
+					BinaryData: []byte("0x1234"),
+					ConfigData: []byte("config"),
+					WorkflowID: "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+				}
 
-			onChain, err := settings.AsOnChain(ctx.ResolvedRegistry, "test")
-			require.NoError(t, err)
-			err = handler.upsert(onChain)
-			require.NoError(t, err)
+				onChain, err := settings.AsOnChain(ctx.ResolvedRegistry, "test")
+				require.NoError(t, err)
+				err = handler.upsert(onChain)
+				require.NoError(t, err)
 			})
 		}
 	})
