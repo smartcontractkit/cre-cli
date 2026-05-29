@@ -24,7 +24,7 @@ const (
 func (h *handler) ensureOwnerLinkedOrFail(onChain *settings.OnChainRegistry) error {
 	ownerAddr := common.HexToAddress(h.inputs.WorkflowOwner)
 
-	linked, err := h.wrc.IsOwnerLinked(h.execCtx, ownerAddr)
+	linked, err := h.wrc.IsOwnerLinked(h.executionContext(), ownerAddr)
 	if err != nil {
 		return fmt.Errorf("failed to check owner link status: %w", err)
 	}
@@ -65,7 +65,7 @@ func (h *handler) ensureOwnerLinkedOrFail(onChain *settings.OnChainRegistry) err
 func (h *handler) autoLinkMSIGAndExit(onChain *settings.OnChainRegistry) (halt bool, err error) {
 	ownerAddr := common.HexToAddress(h.inputs.WorkflowOwner)
 
-	linked, err := h.wrc.IsOwnerLinked(h.execCtx, ownerAddr)
+	linked, err := h.wrc.IsOwnerLinked(h.executionContext(), ownerAddr)
 	if err != nil {
 		return false, fmt.Errorf("failed to check owner link status: %w", err)
 	}
@@ -106,7 +106,7 @@ func (h *handler) tryAutoLink(onChain *settings.OnChainRegistry) error {
 		EnvironmentSet: h.environmentSet,
 	}
 
-	return linkkey.Exec(h.execCtx, rtx, linkkey.Inputs{
+	return linkkey.Exec(h.executionContext(), rtx, linkkey.Inputs{
 		WorkflowOwner:                   h.inputs.WorkflowOwner,
 		WorkflowRegistryContractAddress: onChain.Address(),
 		WorkflowOwnerLabel:              h.inputs.OwnerLabel,
@@ -136,7 +136,7 @@ func (h *handler) checkLinkStatusViaGraphQL(ownerAddr common.Address) (bool, err
 	}
 
 	gql := graphqlclient.New(h.credentials, h.environmentSet, h.log)
-	if err := gql.Execute(h.execCtx, req, &resp); err != nil {
+	if err := gql.Execute(h.executionContext(), req, &resp); err != nil {
 		return false, fmt.Errorf("GraphQL query failed: %w", err)
 	}
 
@@ -180,10 +180,11 @@ func (h *handler) waitForBackendLinkProcessing(ownerAddr common.Address) error {
 	ui.Line()
 
 	// Wait for 3 block confirmations before polling
+	ctx := h.executionContext()
 	select {
 	case <-time.After(initialBlockWait):
-	case <-h.execCtx.Done():
-		return h.execCtx.Err()
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 
 	err := retry.Do(
@@ -202,7 +203,7 @@ func (h *handler) waitForBackendLinkProcessing(ownerAddr common.Address) error {
 		retry.Delay(retryDelay),
 		retry.DelayType(retry.FixedDelay), // Use fixed 3s delay between retries
 		retry.LastErrorOnly(true),
-		retry.Context(h.execCtx),
+		retry.Context(ctx),
 		retry.OnRetry(func(n uint, err error) {
 			h.log.Debug().Uint("attempt", n+1).Uint("maxAttempts", maxAttempts).Err(err).Msg("Retrying link status check")
 			ui.Dim(fmt.Sprintf("  Waiting for verification... (attempt %d/%d)", n+1, maxAttempts))

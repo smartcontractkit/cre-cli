@@ -34,7 +34,7 @@ func newOnchainRegistryDeployStrategy(h *handler) (*onchainRegistryDeployStrateg
 	a.wg.Add(1)
 	go func() {
 		defer a.wg.Done()
-		wrc, err := h.clientFactory.NewWorkflowRegistryV2Client(h.execCtx)
+		wrc, err := h.clientFactory.NewWorkflowRegistryV2Client(h.executionContext())
 		if err != nil {
 			a.initErr = fmt.Errorf("failed to create workflow registry client: %w", err)
 			return
@@ -63,7 +63,7 @@ func waitWithContext(ctx context.Context, wg *sync.WaitGroup) error {
 func (a *onchainRegistryDeployStrategy) RunPreDeployChecks() error {
 	h := a.h
 
-	if err := waitWithContext(a.h.execCtx, &a.wg); err != nil {
+	if err := waitWithContext(a.h.executionContext(), &a.wg); err != nil {
 		return err
 	}
 	if a.initErr != nil {
@@ -90,7 +90,7 @@ func (a *onchainRegistryDeployStrategy) RunPreDeployChecks() error {
 }
 
 func (a *onchainRegistryDeployStrategy) CheckWorkflowExists(workflowOwner, workflowName, workflowTag, workflowID string) (bool, *uint8, error) {
-	workflow, err := a.wrc.GetWorkflow(a.h.execCtx, common.HexToAddress(workflowOwner), workflowName, workflowTag)
+	workflow, err := a.wrc.GetWorkflow(a.h.executionContext(), common.HexToAddress(workflowOwner), workflowName, workflowTag)
 	if err != nil {
 		return false, nil, err
 	}
@@ -110,7 +110,7 @@ func (a *onchainRegistryDeployStrategy) Upsert() error {
 	h := a.h
 
 	if err := checkUserDonLimitBeforeDeploy(
-		h.execCtx,
+		h.executionContext(),
 		a.wrc,
 		a.wrc,
 		common.HexToAddress(h.inputs.WorkflowOwner),

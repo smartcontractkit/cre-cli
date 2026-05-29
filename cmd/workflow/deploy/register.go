@@ -57,7 +57,7 @@ func (h *handler) handleUpsert(params client.RegisterWorkflowV2Parameters, onCha
 	workflowName := h.inputs.WorkflowName
 	workflowTag := h.inputs.WorkflowTag
 	h.log.Debug().Interface("Workflow parameters", params).Msg("Registering workflow...")
-	txOut, err := h.wrc.UpsertWorkflow(h.execCtx, params)
+	txOut, err := h.wrc.UpsertWorkflow(h.executionContext(), params)
 	if err != nil {
 		return fmt.Errorf("failed to register workflow: %w", err)
 	}

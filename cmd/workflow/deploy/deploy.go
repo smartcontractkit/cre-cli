@@ -133,6 +133,15 @@ func newHandler(ctx *runtime.Context, stdin io.Reader) *handler {
 	return &h
 }
 
+// executionContext returns the context from Execute(), or context.Background()
+// when handler methods are invoked directly in unit tests.
+func (h *handler) executionContext() context.Context {
+	if h.execCtx != nil {
+		return h.execCtx
+	}
+	return context.Background()
+}
+
 func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 	var configURL *string
 	if v.IsSet("config-url") {
@@ -231,7 +240,7 @@ func (h *handler) Execute(ctx context.Context) error {
 		return err
 	}
 
-	if err := h.execCtx.Err(); err != nil {
+	if err := h.executionContext().Err(); err != nil {
 		return err
 	}
 
@@ -278,7 +287,7 @@ func (h *handler) Execute(ctx context.Context) error {
 // Artifact upload is deferred to the deploy service so it runs after any
 // existing-workflow update confirmation.
 func (h *handler) prepareArtifacts() error {
-	if err := h.execCtx.Err(); err != nil {
+	if err := h.executionContext().Err(); err != nil {
 		return err
 	}
 
@@ -293,7 +302,7 @@ func (h *handler) prepareArtifacts() error {
 	if cmdcommon.IsURL(h.inputs.WasmPath) {
 		h.inputs.BinaryURL = h.inputs.WasmPath
 		ui.Dim("Fetching binary from URL for workflow ID computation...")
-		fetched, err := cmdcommon.FetchURL(h.execCtx, h.inputs.WasmPath)
+		fetched, err := cmdcommon.FetchURL(h.executionContext(), h.inputs.WasmPath)
 		if err != nil {
 			return fmt.Errorf("failed to fetch binary from URL: %w", err)
 		}
@@ -310,7 +319,7 @@ func (h *handler) prepareArtifacts() error {
 		h.inputs.ConfigURL = &url
 		h.inputs.ConfigPath = ""
 		ui.Dim("Fetching config from URL for workflow ID computation...")
-		fetched, err := cmdcommon.FetchURL(h.execCtx, url)
+		fetched, err := cmdcommon.FetchURL(h.executionContext(), url)
 		if err != nil {
 			return fmt.Errorf("failed to fetch config from URL: %w", err)
 		}

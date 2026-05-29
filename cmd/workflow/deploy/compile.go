@@ -67,7 +67,7 @@ func (h *handler) Compile() error {
 		h.runtimeContext.Workflow.Language = cmdcommon.GetWorkflowLanguage(workflowMainFile)
 	}
 
-	wasmFile, err = cmdcommon.CompileWorkflowToWasm(h.execCtx, resolvedWorkflowPath, cmdcommon.WorkflowCompileOptions{
+	wasmFile, err = cmdcommon.CompileWorkflowToWasm(h.executionContext(), resolvedWorkflowPath, cmdcommon.WorkflowCompileOptions{
 		StripSymbols:   true,
 		SkipTypeChecks: h.inputs.SkipTypeChecks,
 	})

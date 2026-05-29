@@ -1,6 +1,7 @@
 package deploy
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -159,6 +160,7 @@ func TestCheckLinkStatusViaGraphQL(t *testing.T) {
 				IsValidated: true,
 			}
 			h := newHandler(ctx, nil)
+			h.execCtx = context.Background()
 			h.inputs.WorkflowOwner = tt.ownerAddress
 			h.environmentSet.GraphQLURL = server.URL + "/graphql"
 
@@ -330,6 +332,7 @@ func TestWaitForBackendLinkProcessing(t *testing.T) {
 				IsValidated: true,
 			}
 			h := newHandler(ctx, nil)
+			h.execCtx = context.Background()
 			h.inputs.WorkflowOwner = tt.ownerAddress
 			h.environmentSet.GraphQLURL = server.URL + "/graphql"
 
