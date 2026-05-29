@@ -30,6 +30,7 @@ import (
 
 	"github.com/smartcontractkit/cre-cli/cmd/client"
 	cmdCommon "github.com/smartcontractkit/cre-cli/cmd/common"
+	"github.com/smartcontractkit/cre-cli/cmd/secrets/common/gateway"
 	"github.com/smartcontractkit/cre-cli/internal/client/graphqlclient"
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
@@ -71,7 +72,8 @@ type Handler struct {
 	OwnerAddress         string
 	DerivedWorkflowOwner string
 	EnvironmentSet       *environments.EnvironmentSet
-	Gw                   GatewayClient
+	GatewayURL           string
+	Gw                   gateway.Client
 	Wrc                  *client.WorkflowRegistryV2Client
 	Credentials          *credentials.Credentials
 	Settings             *settings.Settings
@@ -107,7 +109,8 @@ func NewHandler(execCtx context.Context, ctx *runtime.Context, secretsFilePath, 
 		Settings:             ctx.Settings,
 		execCtx:              execCtx,
 	}
-	h.Gw = &HTTPClient{URL: h.EnvironmentSet.GatewayURL, Client: &http.Client{Timeout: 90 * time.Second}}
+	h.GatewayURL = gateway.ResolveVaultGatewayURL(ctx.TenantContext, ctx.EnvironmentSet)
+	h.Gw = &gateway.HTTPClient{URL: h.GatewayURL, Client: &http.Client{Timeout: 90 * time.Second}}
 
 	if !IsBrowserFlow(secretsAuth) {
 		wrc, err := h.ClientFactory.NewWorkflowRegistryV2Client(execCtx)

@@ -1,4 +1,4 @@
-package common
+package gateway
 
 import (
 	"bytes"
@@ -13,7 +13,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
-type GatewayClient interface {
+type Client interface {
 	Post(body []byte) (respBody []byte, status int, err error)
 	// PostWithBearer sends the JSON-RPC body with Authorization: Bearer for the browser OAuth flow (no allowlist retries).
 	PostWithBearer(body []byte, bearerToken string) (respBody []byte, status int, err error)

@@ -82,7 +82,10 @@ func (a *onchainRegistryDeleteStrategy) DeleteWorkflows(workflows []WorkflowToDe
 	h := a.h
 	var errs []error
 	for _, wf := range workflows {
-		workflowID := wf.RawID.([32]byte)
+		workflowID, ok := wf.RawID.([32]byte)
+		if !ok {
+			return fmt.Errorf("unexpected RawID type for workflow %s: %T", wf.ID, wf.RawID)
+		}
 		txOut, err := a.wrc.DeleteWorkflow(h.execCtx, workflowID)
 		if err != nil {
 			h.log.Error().

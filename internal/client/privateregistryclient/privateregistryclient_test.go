@@ -86,7 +86,7 @@ func TestValidateUpsertWorkflowInput(t *testing.T) {
 		{
 			name:  "invalid status",
 			input: OffchainWorkflowInput{WorkflowID: "wf", Status: "INVALID", WorkflowName: "w", BinaryURL: "b", DonFamily: "f"},
-			err:   "status must be one of \"WORKFLOW_STATUS_UNSPECIFIED\", \"WORKFLOW_STATUS_ACTIVE\", \"WORKFLOW_STATUS_PAUSED\"",
+			err:   "status must be one of \"WORKFLOW_STATUS_ACTIVE\", \"WORKFLOW_STATUS_PAUSED\"",
 		},
 		{
 			name:  "workflowName exceeds max length",
