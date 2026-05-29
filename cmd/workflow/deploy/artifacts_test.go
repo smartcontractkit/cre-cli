@@ -1,7 +1,6 @@
 package deploy
 
 import (
-	"context"
 	//nolint:gosec
 	"encoding/json"
 	"errors"
@@ -72,8 +71,7 @@ func TestUpload_SuccessAndErrorCases(t *testing.T) {
 
 	simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
 	ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
-	h := newHandler(ctx, buf)
-	h.execCtx = context.Background()
+	h := newTestHandler(ctx, buf)
 	h.inputs.WorkflowOwner = chainsim.TestAddress
 	h.inputs.WorkflowName = "test_workflow"
 	h.inputs.DonFamily = "test_label"
@@ -149,8 +147,7 @@ func TestUploadArtifactToStorageService_OriginError(t *testing.T) {
 
 	simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
 	runtimeContext, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
-	h := newHandler(runtimeContext, buf)
-	h.execCtx = context.Background()
+	h := newTestHandler(runtimeContext, buf)
 	h.inputs.WorkflowOwner = chainsim.TestAddress
 	h.inputs.WorkflowName = "test_workflow"
 	h.inputs.DonFamily = "test_label"
@@ -190,8 +187,7 @@ func TestUploadArtifactToStorageService_AlreadyExistsError(t *testing.T) {
 
 	simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
 	runtimeContext, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
-	h := newHandler(runtimeContext, buf)
-	h.execCtx = context.Background()
+	h := newTestHandler(runtimeContext, buf)
 	h.inputs.WorkflowOwner = chainsim.TestAddress
 	h.inputs.WorkflowName = "test_workflow"
 	h.inputs.DonFamily = "test_label"
@@ -259,8 +255,7 @@ func TestUpload_UsesResolvedWorkflowOwnerForPresignedUrls(t *testing.T) {
 	simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
 	t.Cleanup(simulatedEnvironment.Close)
 	ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
-	h := newHandler(ctx, buf)
-	h.execCtx = context.Background()
+	h := newTestHandler(ctx, buf)
 	h.inputs.WorkflowOwner = "0x2222222222222222222222222222222222222222"
 	h.inputs.WorkflowName = "test_workflow"
 	h.inputs.DonFamily = "test_label"
