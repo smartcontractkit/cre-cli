@@ -272,6 +272,7 @@ func runCompile(simulatedEnvironment *chainsim.SimulatedEnvironment, inputs Inpu
 		return err
 	}
 
+	handler.execCtx = context.Background()
 	return handler.Compile()
 }
 
@@ -434,6 +435,7 @@ func TestCompileWithWasmPath(t *testing.T) {
 			WasmPath:      "https://example.com/binary.wasm",
 		}
 		handler.validated = true
+		handler.execCtx = context.Background()
 
 		// Compile() with URL wasm should return nil (skips compile entirely).
 		err := handler.Compile()
