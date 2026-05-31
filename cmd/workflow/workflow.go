@@ -8,6 +8,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/convert"
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/delete"
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/deploy"
+	"github.com/smartcontractkit/cre-cli/cmd/workflow/execution"
 	workflowget "github.com/smartcontractkit/cre-cli/cmd/workflow/get"
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/hash"
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/limits"
@@ -28,6 +29,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 
 	workflowCmd.AddCommand(supported_chains.New(runtimeContext))
 	workflowCmd.AddCommand(activate.New(runtimeContext))
+	workflowCmd.AddCommand(execution.New(runtimeContext))
 	workflowCmd.AddCommand(build.New(runtimeContext))
 	workflowCmd.AddCommand(convert.New(runtimeContext))
 	workflowCmd.AddCommand(delete.New(runtimeContext))
