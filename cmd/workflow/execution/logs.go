@@ -36,7 +36,10 @@ func NewLogsHandlerWithClient(ctx *runtime.Context, wdc *workflowdataclient.Clie
 	return &LogsHandler{credentials: ctx.Credentials, wdc: wdc}
 }
 
-func resolveLogsInputs(executionUUID, nodeFilter, outputFormat string) (LogsInputs, error) {
+func resolveLogsInputs(executionUUID, nodeFilter, outputFormat string, jsonFlag bool) (LogsInputs, error) {
+	if jsonFlag {
+		outputFormat = outputFormatJSON
+	}
 	if outputFormat != "" && outputFormat != outputFormatJSON {
 		return LogsInputs{}, fmt.Errorf("--output %q is not supported; only %q is accepted", outputFormat, outputFormatJSON)
 	}
@@ -70,6 +73,7 @@ func (h *LogsHandler) Execute(ctx context.Context, in LogsInputs) error {
 func newLogs(runtimeContext *runtime.Context) *cobra.Command {
 	var nodeFilter string
 	var outputFormat string
+	var jsonFlag bool
 
 	cmd := &cobra.Command{
 		Use:   "logs <execution-uuid>",
@@ -81,7 +85,7 @@ Use --node to filter to a specific capability node (client-side filter).`,
 			"  cre workflow execution logs 7f3d8a12-b1c2-4d3e-9f0a-1b2c3d4e5f6g --output json",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			in, err := resolveLogsInputs(args[0], nodeFilter, outputFormat)
+			in, err := resolveLogsInputs(args[0], nodeFilter, outputFormat, jsonFlag)
 			if err != nil {
 				return err
 			}
@@ -91,5 +95,6 @@ Use --node to filter to a specific capability node (client-side filter).`,
 
 	cmd.Flags().StringVar(&nodeFilter, "node", "", "Filter logs to a specific node/capability ID (case-insensitive)")
 	cmd.Flags().StringVar(&outputFormat, "output", "", `Output format: "json" prints a JSON array to stdout`)
+	cmd.Flags().BoolVar(&jsonFlag, "json", false, "Output as JSON (shorthand for --output=json)")
 	return cmd
 }

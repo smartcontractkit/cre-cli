@@ -34,7 +34,10 @@ func NewStatusHandlerWithClient(ctx *runtime.Context, wdc *workflowdataclient.Cl
 	return &StatusHandler{credentials: ctx.Credentials, wdc: wdc}
 }
 
-func resolveStatusInputs(executionUUID, outputFormat string) (StatusInputs, error) {
+func resolveStatusInputs(executionUUID, outputFormat string, jsonFlag bool) (StatusInputs, error) {
+	if jsonFlag {
+		outputFormat = outputFormatJSON
+	}
 	if outputFormat != "" && outputFormat != outputFormatJSON {
 		return StatusInputs{}, fmt.Errorf("--output %q is not supported; only %q is accepted", outputFormat, outputFormatJSON)
 	}
@@ -63,6 +66,7 @@ func (h *StatusHandler) Execute(ctx context.Context, in StatusInputs) error {
 
 func newStatus(runtimeContext *runtime.Context) *cobra.Command {
 	var outputFormat string
+	var jsonFlag bool
 
 	cmd := &cobra.Command{
 		Use:   "status <execution-uuid>",
@@ -73,7 +77,7 @@ top-level errors when the execution has failed.`,
 			"  cre workflow execution status 7f3d8a12-b1c2-4d3e-9f0a-1b2c3d4e5f6g --output json",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			in, err := resolveStatusInputs(args[0], outputFormat)
+			in, err := resolveStatusInputs(args[0], outputFormat, jsonFlag)
 			if err != nil {
 				return err
 			}
@@ -82,5 +86,6 @@ top-level errors when the execution has failed.`,
 	}
 
 	cmd.Flags().StringVar(&outputFormat, "output", "", `Output format: "json" prints JSON to stdout`)
+	cmd.Flags().BoolVar(&jsonFlag, "json", false, "Output as JSON (shorthand for --output=json)")
 	return cmd
 }

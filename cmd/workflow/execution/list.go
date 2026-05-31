@@ -73,7 +73,11 @@ func (h *ListHandler) resolveListInputs(
 	statusFlag, startFlag, endFlag string,
 	limit int,
 	outputFormat string,
+	jsonFlag bool,
 ) (ListInputs, error) {
+	if jsonFlag {
+		outputFormat = outputFormatJSON
+	}
 	if outputFormat != "" && outputFormat != outputFormatJSON {
 		return ListInputs{}, fmt.Errorf("--output %q is not supported; only %q is accepted", outputFormat, outputFormatJSON)
 	}
@@ -208,6 +212,7 @@ func newList(runtimeContext *runtime.Context) *cobra.Command {
 	var endFlag string
 	var limit int
 	var outputFormat string
+	var jsonFlag bool
 
 	cmd := &cobra.Command{
 		Use:   "list [workflow-uuid-or-name]",
@@ -226,7 +231,7 @@ When omitted, executions across all workflows are returned.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			h := newListHandler(runtimeContext)
-			in, err := h.resolveListInputs(cmd.Context(), statusFlag, startFlag, endFlag, limit, outputFormat)
+			in, err := h.resolveListInputs(cmd.Context(), statusFlag, startFlag, endFlag, limit, outputFormat, jsonFlag)
 			if err != nil {
 				return err
 			}
@@ -242,6 +247,7 @@ When omitted, executions across all workflows are returned.`,
 	cmd.Flags().StringVar(&endFlag, "end", "", "End of time range in ISO8601 format (e.g. 2026-01-02T00:00:00Z)")
 	cmd.Flags().IntVar(&limit, "limit", 20, "Maximum number of executions to return (max 100)")
 	cmd.Flags().StringVar(&outputFormat, "output", "", `Output format: "json" prints a JSON array to stdout`)
+	cmd.Flags().BoolVar(&jsonFlag, "json", false, "Output as JSON (shorthand for --output=json)")
 
 	return cmd
 }
