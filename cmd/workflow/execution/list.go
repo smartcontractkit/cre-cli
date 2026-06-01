@@ -116,32 +116,57 @@ func (h *ListHandler) resolveListInputs(
 	}, nil
 }
 
-// resolveWorkflowUUID accepts either a UUID (detected by length/format) or a
-// workflow name, and returns the platform UUID to use as a filter.
+// resolveWorkflowUUID resolves the platform UUID for a workflow given either its
+// on-chain WorkflowID (64-char hex hash) or its name. UUID is used internally
+// only and never surfaced to the user.
 func (h *ListHandler) resolveWorkflowUUID(ctx context.Context, arg string) (string, error) {
-	if looksLikeUUID(arg) {
-		return arg, nil
+	if looksLikeWorkflowID(arg) {
+		return h.resolveByWorkflowID(ctx, arg)
 	}
+	return h.resolveByName(ctx, arg)
+}
 
-	// Treat arg as a workflow name — look it up via the platform API.
+// resolveByWorkflowID finds the platform UUID for a given on-chain WorkflowID hash.
+func (h *ListHandler) resolveByWorkflowID(ctx context.Context, workflowID string) (string, error) {
 	spinner := ui.NewSpinner()
-	spinner.Start(fmt.Sprintf("Resolving workflow %q...", arg))
-	rows, err := h.wdc.SearchByName(ctx, arg, workflowdataclient.DefaultPageSize)
+	spinner.Start(fmt.Sprintf("Resolving workflow ID %q...", workflowID))
+	rows, err := h.wdc.ListAll(ctx, workflowdataclient.DefaultPageSize)
 	spinner.Stop()
 	if err != nil {
-		return "", fmt.Errorf("resolving workflow name %q: %w", arg, err)
+		return "", fmt.Errorf("resolving workflow ID %q: %w", workflowID, err)
+	}
+
+	for _, r := range rows {
+		if strings.EqualFold(r.WorkflowID, workflowID) {
+			if r.UUID == "" {
+				return "", fmt.Errorf("workflow with ID %q found but has no platform UUID", workflowID)
+			}
+			return r.UUID, nil
+		}
+	}
+	return "", fmt.Errorf("no workflow found with ID %q", workflowID)
+}
+
+// resolveByName finds the platform UUID for a workflow given its name.
+func (h *ListHandler) resolveByName(ctx context.Context, name string) (string, error) {
+	spinner := ui.NewSpinner()
+	spinner.Start(fmt.Sprintf("Resolving workflow %q...", name))
+	rows, err := h.wdc.SearchByName(ctx, name, workflowdataclient.DefaultPageSize)
+	spinner.Stop()
+	if err != nil {
+		return "", fmt.Errorf("resolving workflow name %q: %w", name, err)
 	}
 
 	// Exact-name match only (SearchByName is a contains match on the server).
 	var matches []workflowdataclient.Workflow
 	for _, r := range rows {
-		if strings.EqualFold(strings.TrimSpace(r.Name), arg) {
+		if strings.EqualFold(strings.TrimSpace(r.Name), name) {
 			matches = append(matches, r)
 		}
 	}
 
 	if len(matches) == 0 {
-		return "", fmt.Errorf("no workflow found with name %q", arg)
+		return "", fmt.Errorf("no workflow found with name %q", name)
 	}
 
 	// Prefer an ACTIVE workflow when multiple versions exist.
@@ -155,15 +180,15 @@ func (h *ListHandler) resolveWorkflowUUID(ctx context.Context, arg string) (stri
 		return active[0].UUID, nil
 	}
 	if len(active) > 1 {
-		return "", fmt.Errorf("multiple ACTIVE workflows named %q found; provide the workflow UUID instead", arg)
+		return "", fmt.Errorf("multiple ACTIVE workflows named %q found; provide the workflow ID instead", name)
 	}
 
 	// No ACTIVE found — fall back to first match and warn.
 	if !h.nonInteractive {
-		ui.Warning(fmt.Sprintf("No ACTIVE deployment for workflow %q; showing executions for the first match (status: %s)", arg, matches[0].Status))
+		ui.Warning(fmt.Sprintf("No ACTIVE deployment for workflow %q; showing executions for the first match (status: %s)", name, matches[0].Status))
 	}
 	if matches[0].UUID == "" {
-		return "", fmt.Errorf("workflow %q resolved but has no UUID; try providing the UUID directly", arg)
+		return "", fmt.Errorf("workflow %q resolved but has no platform UUID", name)
 	}
 	return matches[0].UUID, nil
 }
@@ -215,16 +240,16 @@ func newList(runtimeContext *runtime.Context) *cobra.Command {
 	var jsonFlag bool
 
 	cmd := &cobra.Command{
-		Use:   "list [workflow-uuid-or-name]",
+		Use:   "list [workflow-id-or-name]",
 		Short: "List recent executions for a workflow",
 		Long: `List workflow executions from the CRE platform.
 
-The optional argument accepts either a workflow UUID or a workflow name.
-When a name is given the CLI resolves it to the active deployment's UUID.
-When omitted, executions across all workflows are returned.`,
+The optional argument accepts either an on-chain Workflow ID (64-char hex,
+visible in 'cre workflow list') or a workflow name. When omitted, executions
+across all workflows are returned.`,
 		Example: "cre workflow execution list\n" +
 			"  cre workflow execution list my-workflow\n" +
-			"  cre workflow execution list 7f3d8a12-b1c2-4d3e-9f0a-1b2c3d4e5f6g\n" +
+			"  cre workflow execution list 00da21b8b3e117e31f3a3e8a0795225cbde6c00283a84395117669691f2b7856\n" +
 			"  cre workflow execution list my-workflow --status FAILURE\n" +
 			"  cre workflow execution list my-workflow --start 2026-01-01T00:00:00Z --end 2026-01-02T00:00:00Z\n" +
 			"  cre workflow execution list my-workflow --limit 50 --output json",
@@ -252,15 +277,14 @@ When omitted, executions across all workflows are returned.`,
 	return cmd
 }
 
-// looksLikeUUID returns true when s has the standard UUID shape (8-4-4-4-12).
-func looksLikeUUID(s string) bool {
-	parts := strings.Split(s, "-")
-	if len(parts) != 5 {
+// looksLikeWorkflowID returns true when s is a 64-character hex string,
+// matching the on-chain WorkflowID format shown in `cre workflow list`.
+func looksLikeWorkflowID(s string) bool {
+	if len(s) != 64 {
 		return false
 	}
-	lengths := []int{8, 4, 4, 4, 12}
-	for i, p := range parts {
-		if len(p) != lengths[i] {
+	for _, c := range s {
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
 			return false
 		}
 	}
