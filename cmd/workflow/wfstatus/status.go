@@ -22,9 +22,6 @@ import (
 
 const outputFormatJSON = "json"
 
-// creditLookbackDays is the window passed to the billing service for credit aggregation.
-const creditLookbackDays = 30
-
 // Handler fetches and renders a comprehensive workflow status view.
 type Handler struct {
 	credentials *credentials.Credentials
@@ -109,14 +106,14 @@ func (h *Handler) Execute(ctx context.Context, arg, outputFormat string) error {
 	spinner := ui.NewSpinner()
 	spinner.Start("Fetching workflow status...")
 
-	from := time.Now().UTC().AddDate(0, 0, -creditLookbackDays)
+	from := time.Now().UTC().AddDate(0, 0, -30)
 
 	var (
-		summary    *workflowdataclient.WorkflowSummary
-		deployment *workflowdataclient.WorkflowDeploymentRecord
-		executions []workflowdataclient.Execution
+		summary                        *workflowdataclient.WorkflowSummary
+		deployment                     *workflowdataclient.WorkflowDeploymentRecord
+		executions                     []workflowdataclient.Execution
 		summaryErr, deployErr, execErr error
-		wg         sync.WaitGroup
+		wg                             sync.WaitGroup
 	)
 
 	wg.Add(3)
@@ -206,7 +203,7 @@ func looksLikeWorkflowID(s string) bool {
 		return false
 	}
 	for _, c := range s {
-		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') && (c < 'A' || c > 'F') {
 			return false
 		}
 	}
