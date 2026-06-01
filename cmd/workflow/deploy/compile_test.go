@@ -255,7 +255,7 @@ func createTestSettings(workflowOwnerAddress, workflowOwnerType, workflowName, w
 
 func runCompile(simulatedEnvironment *chainsim.SimulatedEnvironment, inputs Inputs, ownerType string) error {
 	ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
-	handler := newTestHandler(ctx, buf)
+	handler := newHandler(ctx, buf)
 
 	ctx.Settings = createTestSettings(
 		inputs.WorkflowOwner,
@@ -271,7 +271,7 @@ func runCompile(simulatedEnvironment *chainsim.SimulatedEnvironment, inputs Inpu
 		return err
 	}
 
-	return handler.Compile()
+	return handler.Compile(context.Background())
 }
 
 // outputPathWithExtensions returns the path with .wasm.br.b64 appended as in Compile().
@@ -416,7 +416,7 @@ func TestCompileWithWasmPath(t *testing.T) {
 		defer simulatedEnvironment.Close()
 
 		ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
-		handler := newTestHandler(ctx, buf)
+		handler := newHandler(ctx, buf)
 		ctx.Settings = createTestSettings(
 			chainsim.TestAddress,
 			constants.WorkflowOwnerTypeEOA,
@@ -435,7 +435,7 @@ func TestCompileWithWasmPath(t *testing.T) {
 		handler.validated = true
 
 		// Compile() with URL wasm should return nil (skips compile entirely).
-		err := handler.Compile()
+		err := handler.Compile(context.Background())
 		require.NoError(t, err)
 	})
 

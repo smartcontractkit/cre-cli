@@ -1,6 +1,7 @@
 package deploy
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -302,7 +303,7 @@ func TestCheckWorkflowExists_PrivateRegistry(t *testing.T) {
 			defer simulatedEnvironment.Close()
 
 			ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
-			h := newTestHandler(ctx, buf)
+			h := newHandler(ctx, buf)
 			h.credentials = makeAPIKeyCredentials(t)
 
 			gqlServer := newAssertGQLServer(t, func(t *testing.T, req deployMockGraphQLRequest) (int, map[string]any) {
@@ -314,7 +315,7 @@ func TestCheckWorkflowExists_PrivateRegistry(t *testing.T) {
 			h.environmentSet.GraphQLURL = gqlServer.URL
 			strategy := newPrivateRegistryDeployStrategy(h)
 
-			exists, status, err := strategy.CheckWorkflowExists("", "jnowak-workflow-test-v5", "", tt.workflowID)
+			exists, status, err := strategy.CheckWorkflowExists(context.Background(), "", "jnowak-workflow-test-v5", "", tt.workflowID)
 			if tt.wantErr {
 				require.Error(t, err)
 				if tt.errMsg != "" {

@@ -73,8 +73,6 @@ type handler struct {
 	// existingWorkflowStatus stores the status of an existing workflow when updating.
 	// nil means this is a new workflow, otherwise it contains the current status (0=active, 1=paused).
 	existingWorkflowStatus *uint8
-
-	execCtx context.Context
 }
 
 var defaultOutputPath = "./binary.wasm.br.b64"
@@ -131,15 +129,6 @@ func newHandler(ctx *runtime.Context, stdin io.Reader) *handler {
 	}
 
 	return &h
-}
-
-// executionContext returns the context from Execute(), or context.Background()
-// when handler methods are invoked directly in unit tests.
-func (h *handler) executionContext() context.Context {
-	if h.execCtx != nil {
-		return h.execCtx
-	}
-	return context.Background()
 }
 
 func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
@@ -220,8 +209,6 @@ func (h *handler) Execute(ctx context.Context) error {
 		return fmt.Errorf("handler inputs not validated")
 	}
 
-	h.execCtx = ctx
-
 	deployAccess, err := h.credentials.GetDeploymentAccessStatus()
 	if err != nil {
 		return fmt.Errorf("failed to check deployment access: %w", err)
@@ -231,27 +218,27 @@ func (h *handler) Execute(ctx context.Context) error {
 		return h.accessRequester.PromptAndSubmitRequest(ctx)
 	}
 
-	adapter, err := newRegistryDeployStrategy(h.runtimeContext.ResolvedRegistry, h)
+	adapter, err := newRegistryDeployStrategy(ctx, h.runtimeContext.ResolvedRegistry, h)
 	if err != nil {
 		return err
 	}
 
-	if err := h.prepareArtifacts(); err != nil {
+	if err := h.prepareArtifacts(ctx); err != nil {
 		return err
 	}
 
-	if err := h.executionContext().Err(); err != nil {
+	if err := ctx.Err(); err != nil {
 		return err
 	}
 
-	if err := adapter.RunPreDeployChecks(); err != nil {
+	if err := adapter.RunPreDeployChecks(ctx); err != nil {
 		if errors.Is(err, errDeployHalted) {
 			return nil
 		}
 		return err
 	}
 
-	exists, existingStatus, err := adapter.CheckWorkflowExists(
+	exists, existingStatus, err := adapter.CheckWorkflowExists(ctx,
 		h.inputs.WorkflowOwner,
 		h.inputs.WorkflowName,
 		h.inputs.WorkflowTag,
@@ -272,11 +259,11 @@ func (h *handler) Execute(ctx context.Context) error {
 
 	ui.Line()
 	ui.Dim("Uploading files...")
-	if err := h.uploadArtifacts(); err != nil {
+	if err := h.uploadArtifacts(ctx); err != nil {
 		return fmt.Errorf("failed to upload workflow: %w", err)
 	}
 
-	err = adapter.Upsert()
+	err = adapter.Upsert(ctx)
 	if err == nil {
 		warnIfPausedWorkflowUpdate(h.existingWorkflowStatus)
 	}
@@ -286,8 +273,8 @@ func (h *handler) Execute(ctx context.Context) error {
 // prepareArtifacts handles compile/fetch, artifact preparation, and hashing.
 // Artifact upload is deferred to the deploy service so it runs after any
 // existing-workflow update confirmation.
-func (h *handler) prepareArtifacts() error {
-	if err := h.executionContext().Err(); err != nil {
+func (h *handler) prepareArtifacts(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
 		return err
 	}
 
@@ -302,14 +289,14 @@ func (h *handler) prepareArtifacts() error {
 	if cmdcommon.IsURL(h.inputs.WasmPath) {
 		h.inputs.BinaryURL = h.inputs.WasmPath
 		ui.Dim("Fetching binary from URL for workflow ID computation...")
-		fetched, err := cmdcommon.FetchURL(h.executionContext(), h.inputs.WasmPath)
+		fetched, err := cmdcommon.FetchURL(ctx, h.inputs.WasmPath)
 		if err != nil {
 			return fmt.Errorf("failed to fetch binary from URL: %w", err)
 		}
 		h.urlBinaryData = fetched
 		ui.Success(fmt.Sprintf("Using binary URL: %s", h.inputs.WasmPath))
 	} else {
-		if err := h.Compile(); err != nil {
+		if err := h.Compile(ctx); err != nil {
 			return fmt.Errorf("failed to compile workflow: %w", err)
 		}
 	}
@@ -319,7 +306,7 @@ func (h *handler) prepareArtifacts() error {
 		h.inputs.ConfigURL = &url
 		h.inputs.ConfigPath = ""
 		ui.Dim("Fetching config from URL for workflow ID computation...")
-		fetched, err := cmdcommon.FetchURL(h.executionContext(), url)
+		fetched, err := cmdcommon.FetchURL(ctx, url)
 		if err != nil {
 			return fmt.Errorf("failed to fetch config from URL: %w", err)
 		}

@@ -2,6 +2,7 @@ package deploy
 
 import (
 	//nolint:gosec
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -71,7 +72,7 @@ func TestUpload_SuccessAndErrorCases(t *testing.T) {
 
 	simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
 	ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
-	h := newTestHandler(ctx, buf)
+	h := newHandler(ctx, buf)
 	h.inputs.WorkflowOwner = chainsim.TestAddress
 	h.inputs.WorkflowName = "test_workflow"
 	h.inputs.DonFamily = "test_label"
@@ -99,7 +100,7 @@ func TestUpload_SuccessAndErrorCases(t *testing.T) {
 		ConfigData: []byte("configdata"),
 		WorkflowID: "workflow-id",
 	}
-	err := h.uploadArtifacts()
+	err := h.uploadArtifacts(context.Background())
 	require.NoError(t, err)
 	require.Equal(t, "http://origin/get", h.inputs.BinaryURL)
 	require.Equal(t, "http://origin/get", *h.inputs.ConfigURL)
@@ -110,12 +111,12 @@ func TestUpload_SuccessAndErrorCases(t *testing.T) {
 		ConfigData: nil,
 		WorkflowID: "workflow-id",
 	}
-	err = h.uploadArtifacts()
+	err = h.uploadArtifacts(context.Background())
 	require.NoError(t, err)
 
 	// Error: workflowArtifact is nil
 	h.workflowArtifact = nil
-	err = h.uploadArtifacts()
+	err = h.uploadArtifacts(context.Background())
 	require.ErrorContains(t, err, "workflowArtifact is nil")
 
 	// Error: empty BinaryData
@@ -124,7 +125,7 @@ func TestUpload_SuccessAndErrorCases(t *testing.T) {
 		ConfigData: []byte("configdata"),
 		WorkflowID: "workflow-id",
 	}
-	err = h.uploadArtifacts()
+	err = h.uploadArtifacts(context.Background())
 	require.ErrorContains(t, err, "uploading binary artifact: content is empty for artifactType BINARY")
 
 	// Error: workflowID is empty
@@ -133,7 +134,7 @@ func TestUpload_SuccessAndErrorCases(t *testing.T) {
 		ConfigData: []byte("configdata"),
 		WorkflowID: "",
 	}
-	err = h.uploadArtifacts()
+	err = h.uploadArtifacts(context.Background())
 	require.ErrorContains(t, err, "workflowID is empty")
 
 }
@@ -147,7 +148,7 @@ func TestUploadArtifactToStorageService_OriginError(t *testing.T) {
 
 	simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
 	runtimeContext, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
-	h := newTestHandler(runtimeContext, buf)
+	h := newHandler(runtimeContext, buf)
 	h.inputs.WorkflowOwner = chainsim.TestAddress
 	h.inputs.WorkflowName = "test_workflow"
 	h.inputs.DonFamily = "test_label"
@@ -174,7 +175,7 @@ func TestUploadArtifactToStorageService_OriginError(t *testing.T) {
 		ConfigData: []byte("configdata"),
 		WorkflowID: "workflow-id",
 	}
-	err := h.uploadArtifacts()
+	err := h.uploadArtifacts(context.Background())
 	require.ErrorContains(t, err, "upload to origin")
 }
 
@@ -187,7 +188,7 @@ func TestUploadArtifactToStorageService_AlreadyExistsError(t *testing.T) {
 
 	simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
 	runtimeContext, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
-	h := newTestHandler(runtimeContext, buf)
+	h := newHandler(runtimeContext, buf)
 	h.inputs.WorkflowOwner = chainsim.TestAddress
 	h.inputs.WorkflowName = "test_workflow"
 	h.inputs.DonFamily = "test_label"
@@ -240,7 +241,7 @@ func TestUploadArtifactToStorageService_AlreadyExistsError(t *testing.T) {
 		ConfigData: []byte("configdata"),
 		WorkflowID: "workflow-id",
 	}
-	err := h.uploadArtifacts()
+	err := h.uploadArtifacts(context.Background())
 	require.NoError(t, err)
 	require.Equal(t, "http://origin/get", h.inputs.BinaryURL)
 	require.Equal(t, "http://origin/get", *h.inputs.ConfigURL)
@@ -255,7 +256,7 @@ func TestUpload_UsesResolvedWorkflowOwnerForPresignedUrls(t *testing.T) {
 	simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
 	t.Cleanup(simulatedEnvironment.Close)
 	ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
-	h := newTestHandler(ctx, buf)
+	h := newHandler(ctx, buf)
 	h.inputs.WorkflowOwner = "0x2222222222222222222222222222222222222222"
 	h.inputs.WorkflowName = "test_workflow"
 	h.inputs.DonFamily = "test_label"
@@ -291,7 +292,7 @@ func TestUpload_UsesResolvedWorkflowOwnerForPresignedUrls(t *testing.T) {
 		WorkflowID: "workflow-id",
 	}
 
-	err := h.uploadArtifacts()
+	err := h.uploadArtifacts(context.Background())
 	require.NoError(t, err)
 	require.NotEmpty(t, ownersUsed)
 	for _, owner := range ownersUsed {

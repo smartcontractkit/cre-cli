@@ -46,7 +46,7 @@ func TestWorkflowUpsert(t *testing.T) {
 				defer simulatedEnvironment.Close()
 
 				ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
-				handler := newTestHandler(ctx, buf)
+				handler := newHandler(ctx, buf)
 
 				wrc, err := handler.clientFactory.NewWorkflowRegistryV2Client(context.Background())
 				require.NoError(t, err)
@@ -64,7 +64,7 @@ func TestWorkflowUpsert(t *testing.T) {
 
 				onChain, err := settings.AsOnChain(ctx.ResolvedRegistry, "test")
 				require.NoError(t, err)
-				err = handler.upsert(onChain)
+				err = handler.upsert(context.Background(), onChain)
 				require.NoError(t, err)
 			})
 		}

@@ -1,6 +1,7 @@
 package deploy
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -9,7 +10,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
-func (h *handler) Compile() error {
+func (h *handler) Compile(ctx context.Context) error {
 	if !h.validated {
 		return fmt.Errorf("handler h.inputs not validated")
 	}
@@ -67,7 +68,7 @@ func (h *handler) Compile() error {
 		h.runtimeContext.Workflow.Language = cmdcommon.GetWorkflowLanguage(workflowMainFile)
 	}
 
-	wasmFile, err = cmdcommon.CompileWorkflowToWasm(h.executionContext(), resolvedWorkflowPath, cmdcommon.WorkflowCompileOptions{
+	wasmFile, err = cmdcommon.CompileWorkflowToWasm(ctx, resolvedWorkflowPath, cmdcommon.WorkflowCompileOptions{
 		StripSymbols:   true,
 		SkipTypeChecks: h.inputs.SkipTypeChecks,
 	})
