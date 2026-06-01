@@ -117,13 +117,7 @@ func (c *Client) list(parent context.Context, pageSize int, search string) ([]Wo
 
 		batch := env.Workflows.Data
 		for _, g := range batch {
-			all = append(all, Workflow{
-				Name:           g.Name,
-				WorkflowID:     g.WorkflowID,
-				OwnerAddress:   g.OwnerAddress,
-				Status:         g.Status,
-				WorkflowSource: g.WorkflowSource,
-			})
+			all = append(all, Workflow(g))
 		}
 
 		if len(all) >= total || len(batch) == 0 {

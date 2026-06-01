@@ -320,7 +320,7 @@ func (c *Client) ListExecutionEvents(parent context.Context, in ListEventsInput)
 	for _, g := range env.WorkflowExecutionEvents.Data {
 		errs := make([]CapabilityExecutionError, 0, len(g.Errors))
 		for _, e := range g.Errors {
-			errs = append(errs, CapabilityExecutionError{Error: e.Error, Count: e.Count})
+			errs = append(errs, CapabilityExecutionError(e))
 		}
 		events = append(events, ExecutionEvent{
 			CapabilityID: g.CapabilityID,
@@ -349,11 +349,7 @@ func (c *Client) ListExecutionLogs(parent context.Context, executionUUID string)
 
 	logs := make([]ExecutionLog, 0, len(env.WorkflowExecutionLogs.Data))
 	for _, g := range env.WorkflowExecutionLogs.Data {
-		logs = append(logs, ExecutionLog{
-			NodeID:    g.NodeID,
-			Message:   g.Message,
-			Timestamp: g.Timestamp,
-		})
+		logs = append(logs, ExecutionLog(g))
 	}
 	return logs, nil
 }
@@ -363,7 +359,7 @@ func (c *Client) ListExecutionLogs(parent context.Context, executionUUID string)
 func toExecution(g gqlExecution) Execution {
 	errs := make([]ExecutionError, 0, len(g.Errors))
 	for _, e := range g.Errors {
-		errs = append(errs, ExecutionError{Error: e.Error, Count: e.Count})
+		errs = append(errs, ExecutionError(e))
 	}
 	return Execution{
 		UUID:         g.UUID,

@@ -149,12 +149,12 @@ func PrintExecutionDetailTable(e workflowdataclient.Execution) {
 // ---- Events ----
 
 type eventJSON struct {
-	CapabilityID string               `json:"capabilityID"`
-	Status       string               `json:"status"`
-	Method       *string              `json:"method,omitempty"`
-	StartedAt    string               `json:"startedAt"`
-	FinishedAt   *string              `json:"finishedAt,omitempty"`
-	Duration     *string              `json:"duration,omitempty"`
+	CapabilityID string                `json:"capabilityID"`
+	Status       string                `json:"status"`
+	Method       *string               `json:"method,omitempty"`
+	StartedAt    string                `json:"startedAt"`
+	FinishedAt   *string               `json:"finishedAt,omitempty"`
+	Duration     *string               `json:"duration,omitempty"`
 	Errors       []capabilityErrorJSON `json:"errors,omitempty"`
 }
 
