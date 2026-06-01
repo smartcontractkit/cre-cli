@@ -158,13 +158,17 @@ func (c *Client) GetWorkflowSummary(parent context.Context, uuid string, _ time.
 }
 
 // GetLatestDeployment fetches the most recent deployment record for a workflow.
-func (c *Client) GetLatestDeployment(parent context.Context, workflowUUID string) (*WorkflowDeploymentRecord, error) {
+// from/to mirror what the Explorer UI passes — the backend requires them even though
+// the schema marks them optional.
+func (c *Client) GetLatestDeployment(parent context.Context, workflowUUID string, from, to time.Time) (*WorkflowDeploymentRecord, error) {
 	ctx, cancel := c.CreateServiceContextWithTimeout(parent)
 	defer cancel()
 
 	req := graphql.NewRequest(getLatestDeploymentQuery)
 	req.Var("input", map[string]any{
 		"workflowUUID": workflowUUID,
+		"from":         from.UTC().Format(time.RFC3339),
+		"to":           to.UTC().Format(time.RFC3339),
 		"orderBy": map[string]any{
 			"field": "DEPLOYED_AT",
 			"order": "DESC",

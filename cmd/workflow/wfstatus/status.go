@@ -16,6 +16,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/client/workflowdataclient"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
+	"github.com/smartcontractkit/cre-cli/internal/tenantctx"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 	"github.com/smartcontractkit/cre-cli/internal/workflowrender"
 )
@@ -25,6 +26,7 @@ const outputFormatJSON = "json"
 // Handler fetches and renders a comprehensive workflow status view.
 type Handler struct {
 	credentials *credentials.Credentials
+	tenantCtx   *tenantctx.EnvironmentContext
 	wdc         *workflowdataclient.Client
 }
 
@@ -32,12 +34,12 @@ type Handler struct {
 func NewHandler(ctx *runtime.Context) *Handler {
 	gql := graphqlclient.New(ctx.Credentials, ctx.EnvironmentSet, ctx.Logger)
 	wdc := workflowdataclient.New(gql, ctx.Logger)
-	return &Handler{credentials: ctx.Credentials, wdc: wdc}
+	return &Handler{credentials: ctx.Credentials, tenantCtx: ctx.TenantContext, wdc: wdc}
 }
 
 // NewHandlerWithClient builds a Handler with a pre-built client (for testing).
 func NewHandlerWithClient(ctx *runtime.Context, wdc *workflowdataclient.Client) *Handler {
-	return &Handler{credentials: ctx.Credentials, wdc: wdc}
+	return &Handler{credentials: ctx.Credentials, tenantCtx: ctx.TenantContext, wdc: wdc}
 }
 
 // resolveUUID returns the platform UUID for a workflow name or on-chain WorkflowID.
@@ -106,7 +108,8 @@ func (h *Handler) Execute(ctx context.Context, arg, outputFormat string) error {
 	spinner := ui.NewSpinner()
 	spinner.Start("Fetching workflow status...")
 
-	from := time.Now().UTC().AddDate(0, 0, -30)
+	now := time.Now().UTC()
+	from := now.AddDate(-1, 0, 0) // 1-year lookback — mirrors Explorer behaviour
 
 	var (
 		summary                                          *workflowdataclient.WorkflowSummary
@@ -124,7 +127,7 @@ func (h *Handler) Execute(ctx context.Context, arg, outputFormat string) error {
 	}()
 	go func() {
 		defer wg.Done()
-		deployment, deployErr = h.wdc.GetLatestDeployment(ctx, uuid)
+		deployment, deployErr = h.wdc.GetLatestDeployment(ctx, uuid, from, now)
 	}()
 	go func() {
 		defer wg.Done()
@@ -150,15 +153,18 @@ func (h *Handler) Execute(ctx context.Context, arg, outputFormat string) error {
 	if execErr != nil {
 		return execErr
 	}
-	// deployErr, succErr, failErr are non-fatal — degrade gracefully.
+	// deployErr, succErr, failErr are non-fatal — show errors but continue rendering.
 	if deployErr != nil {
 		deployment = nil
+		ui.Warning(fmt.Sprintf("Could not fetch deployment record: %s", deployErr.Error()))
 	}
 	if succErr != nil {
 		successCount = 0
+		ui.Warning(fmt.Sprintf("Could not fetch success count: %s", succErr.Error()))
 	}
 	if failErr != nil {
 		failureCount = 0
+		ui.Warning(fmt.Sprintf("Could not fetch failure count: %s", failErr.Error()))
 	}
 	summary.SuccessCount = successCount
 	summary.FailureCount = failureCount
@@ -169,10 +175,17 @@ func (h *Handler) Execute(ctx context.Context, arg, outputFormat string) error {
 		lastExec = &executions[0]
 	}
 
+	var registries []*tenantctx.Registry
+	if h.tenantCtx != nil {
+		registries = h.tenantCtx.Registries
+	}
+
 	view := workflowrender.WorkflowStatusView{
 		Summary:       summary,
 		Deployment:    deployment,
+		DeploymentErr: deployErr,
 		LastExecution: lastExec,
+		Registries:    registries,
 	}
 
 	if outputFormat == outputFormatJSON {

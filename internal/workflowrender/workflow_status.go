@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/smartcontractkit/cre-cli/internal/client/workflowdataclient"
+	"github.com/smartcontractkit/cre-cli/internal/tenantctx"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
@@ -14,16 +15,27 @@ import (
 type WorkflowStatusView struct {
 	Summary       *workflowdataclient.WorkflowSummary
 	Deployment    *workflowdataclient.WorkflowDeploymentRecord
+	DeploymentErr error
 	LastExecution *workflowdataclient.Execution
+	Registries    []*tenantctx.Registry
 }
 
 // PrintWorkflowStatusTable renders a rich workflow status view to stdout.
 func PrintWorkflowStatusTable(v WorkflowStatusView) {
 	s := v.Summary
 	ui.Line()
+	matched := ResolveWorkflowRegistry(s.WorkflowSource, v.Registries)
+	regID := RegistryIDOrSource(s.WorkflowSource, matched)
+
 	ui.Bold(fmt.Sprintf("Workflow: %s", s.Name))
 	ui.Dim(fmt.Sprintf("   Workflow ID:    %s", s.WorkflowID))
 	ui.Dim(fmt.Sprintf("   Status:         %s%s", s.Status, deploymentStatusHint(s.Status)))
+	ui.Dim(fmt.Sprintf("   Registry:       %s", regID))
+	if matched != nil && RegistryEligibleForContractRows(matched) && matched.Address != nil {
+		ui.Dim(fmt.Sprintf("   Address:        %s", strings.TrimSpace(*matched.Address)))
+	} else if _, addr, ok := ParseContractWorkflowSource(s.WorkflowSource); ok && strings.TrimSpace(addr) != "" {
+		ui.Dim(fmt.Sprintf("   Address:        %s", strings.TrimSpace(addr)))
+	}
 	ui.Dim(fmt.Sprintf("   Registered:     %s", s.RegisteredAt.UTC().Format("2006-01-02 15:04:05")))
 
 	if s.ExecutedAt != nil {
@@ -55,6 +67,8 @@ func PrintWorkflowStatusTable(v WorkflowStatusView) {
 		if d.ErrorMessage != nil && *d.ErrorMessage != "" {
 			ui.Dim(fmt.Sprintf("   Error:          %s", *d.ErrorMessage))
 		}
+	} else if v.DeploymentErr != nil {
+		ui.Dim("   Unavailable — see warning above")
 	} else {
 		ui.Dim("   No deployment record found")
 	}
