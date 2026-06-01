@@ -131,6 +131,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	var registryID string
 	var includeDeleted bool
 	var outputFormat string
+	var jsonFlag bool
 
 	cmd := &cobra.Command{
 		Use:   "list",
@@ -143,6 +144,9 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 			"  cre workflow list --output json > workflows.json",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if jsonFlag {
+				outputFormat = outputFormatJSON
+			}
 			inputs, err := resolveInputs(registryID, includeDeleted, outputFormat)
 			if err != nil {
 				return err
@@ -154,5 +158,6 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	cmd.Flags().StringVar(&registryID, "registry", "", "Filter by registry ID from user context")
 	cmd.Flags().BoolVar(&includeDeleted, "include-deleted", false, "Include workflows in DELETED status")
 	cmd.Flags().StringVar(&outputFormat, "output", "", `Output format: "json" prints a JSON array to stdout`)
+	cmd.Flags().BoolVar(&jsonFlag, "json", false, "Output as JSON (shorthand for --output=json)")
 	return cmd
 }
