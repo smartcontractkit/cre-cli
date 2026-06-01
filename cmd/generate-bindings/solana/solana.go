@@ -12,6 +12,7 @@ import (
 
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
+	"github.com/smartcontractkit/cre-cli/internal/ui"
 	"github.com/smartcontractkit/cre-cli/internal/validation"
 )
 
@@ -161,7 +162,7 @@ func (h *handler) processIdlDirectory(inputs Inputs) error {
 		// Create output file path in contract-specific directory
 		outputFile := filepath.Join(contractOutDir, contractName+".go")
 
-		fmt.Printf("Processing IDL file: %s, contract: %s, output: %s\n", idlFile, contractName, outputFile)
+		ui.Dim(fmt.Sprintf("Processing IDL file: %s, contract: %s, output: %s\n", idlFile, contractName, outputFile))
 
 		err = GenerateBindings(
 			idlFile,
@@ -189,7 +190,7 @@ func (h *handler) processSingleIdl(inputs Inputs) error {
 		return fmt.Errorf("failed to create contract output directory %s: %w", contractOutDir, err)
 	}
 
-	fmt.Printf("Processing single IDL file: %s, contract: %s, output: %s\n", inputs.IdlPath, contractName, contractOutDir)
+	ui.Dim(fmt.Sprintf("Processing single IDL file: %s, contract: %s, output: %s\n", inputs.IdlPath, contractName, contractOutDir))
 
 	return GenerateBindings(
 		inputs.IdlPath,
