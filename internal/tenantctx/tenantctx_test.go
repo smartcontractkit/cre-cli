@@ -43,6 +43,10 @@ func gqlResponseOnChainAndPrivate() map[string]any {
 				"tenantId":         "42",
 				"defaultDonFamily": "zone-a",
 				"vaultGatewayUrl":  "https://gateway.example.com/",
+				"capabilitiesRegistry": map[string]any{
+					"chainSelector": "16015286601757825753",
+					"address":       "0x7f3191EaF73429177bAB3bAc5c36Ed2D5E39985f",
+				},
 				"registries": []any{
 					map[string]any{
 						"id":               "ethereum-testnet-sepolia",
@@ -77,6 +81,10 @@ func gqlResponsePrivateOnly() map[string]any {
 				"tenantId":         "99",
 				"defaultDonFamily": "zone-b",
 				"vaultGatewayUrl":  "https://gateway-private.example.com/",
+				"capabilitiesRegistry": map[string]any{
+					"chainSelector": "5009297550715157269",
+					"address":       "0x76c9cf548b4179F8901cda1f8623568b58215E62",
+				},
 				"registries": []any{
 					map[string]any{
 						"id":               "private",
@@ -177,6 +185,16 @@ func TestFetchAndWriteContext_OnChainAndPrivate(t *testing.T) {
 	if f.Address != "0x15fC6ae953E024d975e77382eEeC56A9101f9F88" {
 		t.Errorf("forwarder address = %q, want Sepolia mock forwarder", f.Address)
 	}
+
+	if envCtx.CapabilitiesRegistry == nil {
+		t.Fatal("expected capabilitiesRegistry to be populated")
+	}
+	if envCtx.CapabilitiesRegistry.ChainSelector != 16015286601757825753 {
+		t.Errorf("capabilitiesRegistry chain selector = %d, want %d", envCtx.CapabilitiesRegistry.ChainSelector, uint64(16015286601757825753))
+	}
+	if envCtx.CapabilitiesRegistry.Address != "0x7f3191EaF73429177bAB3bAc5c36Ed2D5E39985f" {
+		t.Errorf("capabilitiesRegistry address = %q, want staging mainline cap reg", envCtx.CapabilitiesRegistry.Address)
+	}
 }
 
 func TestFetchAndWriteContext_PrivateOnly(t *testing.T) {
@@ -204,6 +222,12 @@ func TestFetchAndWriteContext_PrivateOnly(t *testing.T) {
 	}
 	if len(envCtx.Forwarders) != 0 {
 		t.Errorf("expected 0 forwarders, got %d", len(envCtx.Forwarders))
+	}
+	if envCtx.CapabilitiesRegistry == nil {
+		t.Fatal("expected capabilitiesRegistry to be populated")
+	}
+	if envCtx.CapabilitiesRegistry.ChainSelector != 5009297550715157269 {
+		t.Errorf("capabilitiesRegistry chain selector = %d, want %d", envCtx.CapabilitiesRegistry.ChainSelector, uint64(5009297550715157269))
 	}
 }
 
