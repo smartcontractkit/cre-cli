@@ -1,33 +1,33 @@
-## cre workflow list
+## cre workflow status
 
-Lists workflows deployed for your organization
+Show deployment health and execution summary for a workflow
 
 ### Synopsis
 
-Lists workflows across registries in your organization. Requires authentication and user context. Deleted workflows are hidden by default.
+Show the full health picture of a workflow: deployment status, activation
+state, execution success/failure counts, and the most recent execution.
+
+Useful for diagnosing the gap between registering a workflow and it
+becoming active in the DON, or for a quick health check.
 
 ```
-cre workflow list [optional flags]
+cre workflow status <workflow-id-or-name> [optional flags]
 ```
 
 ### Examples
 
 ```
-cre workflow list
-  cre workflow list --registry private
-  cre workflow list --include-deleted
-  cre workflow list --output json
-  cre workflow list --output json > workflows.json
+cre workflow status my-workflow
+  cre workflow status 00da21b8b3e117e31f3a3e8a0795225cbde6c00283a84395117669691f2b7856
+  cre workflow status my-workflow --output json
 ```
 
 ### Options
 
 ```
-  -h, --help              help for list
-      --include-deleted   Include workflows in DELETED status
-      --json              Output as JSON (shorthand for --output=json)
-      --output string     Output format: "json" prints a JSON array to stdout
-      --registry string   Filter by registry ID from user context
+  -h, --help            help for status
+      --json            Output as JSON (shorthand for --output=json)
+      --output string   Output format: "json" prints JSON to stdout
 ```
 
 ### Options inherited from parent commands
