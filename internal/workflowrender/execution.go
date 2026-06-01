@@ -76,10 +76,7 @@ func PrintExecutionsTable(rows []workflowdataclient.Execution) {
 		if e.FinishedAt != nil {
 			ui.Dim(fmt.Sprintf("   Finished:  %s (%s)", e.FinishedAt.UTC().Format("2006-01-02 15:04:05"), formatDuration(e.FinishedAt.Sub(e.StartedAt))))
 		}
-		if e.CreditUsed != nil {
-			ui.Dim(fmt.Sprintf("   Credits:   %s", *e.CreditUsed))
-		}
-		ui.Line()
+			ui.Line()
 	}
 }
 
@@ -130,10 +127,6 @@ func PrintExecutionDetailTable(e workflowdataclient.Execution) {
 		)
 	}
 	ui.Dim(fmt.Sprintf("   Time:      %s", timeStr))
-
-	if e.CreditUsed != nil {
-		ui.Dim(fmt.Sprintf("   Credits:   %s", *e.CreditUsed))
-	}
 
 	if len(e.Errors) > 0 {
 		ui.Line()

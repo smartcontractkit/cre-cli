@@ -542,6 +542,7 @@ func isLoadSettings(cmd *cobra.Command) bool {
 		"cre workflow execution status": {},
 		"cre workflow execution events": {},
 		"cre workflow execution logs":   {},
+		"cre workflow status":           {},
 		"cre account":                   {},
 		"cre secrets":                   {},
 		"cre templates":                 {},
