@@ -40,8 +40,6 @@ func PrintWorkflowStatusTable(v WorkflowStatusView) {
 		}
 	}
 
-
-
 	ui.Line()
 	ui.Bold("Deployment")
 	if v.Deployment != nil {
@@ -109,7 +107,7 @@ func PrintWorkflowStatusJSON(v WorkflowStatusView) error {
 			"executionCount": s.ExecutionCount,
 			"successCount":   s.SuccessCount,
 			"failureCount":   s.FailureCount,
-			},
+		},
 	}
 
 	if v.Deployment != nil {

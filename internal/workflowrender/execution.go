@@ -70,13 +70,13 @@ func PrintExecutionsTable(rows []workflowdataclient.Execution) {
 
 	for i, e := range rows {
 		ui.Bold(fmt.Sprintf("%d. %s", i+1, e.UUID))
-		ui.Dim(fmt.Sprintf("   Workflow:  %s (%s)", e.WorkflowName, e.WorkflowUUID))
+		ui.Dim(fmt.Sprintf("   Workflow:  %s", e.WorkflowName))
 		ui.Dim(fmt.Sprintf("   Status:    %s", e.Status))
 		ui.Dim(fmt.Sprintf("   Started:   %s", e.StartedAt.UTC().Format("2006-01-02 15:04:05")))
 		if e.FinishedAt != nil {
 			ui.Dim(fmt.Sprintf("   Finished:  %s (%s)", e.FinishedAt.UTC().Format("2006-01-02 15:04:05"), formatDuration(e.FinishedAt.Sub(e.StartedAt))))
 		}
-			ui.Line()
+		ui.Line()
 	}
 }
 

@@ -109,14 +109,15 @@ func (h *Handler) Execute(ctx context.Context, arg, outputFormat string) error {
 	from := time.Now().UTC().AddDate(0, 0, -30)
 
 	var (
-		summary                        *workflowdataclient.WorkflowSummary
-		deployment                     *workflowdataclient.WorkflowDeploymentRecord
-		executions                     []workflowdataclient.Execution
-		summaryErr, deployErr, execErr error
-		wg                             sync.WaitGroup
+		summary                                          *workflowdataclient.WorkflowSummary
+		deployment                                       *workflowdataclient.WorkflowDeploymentRecord
+		executions                                       []workflowdataclient.Execution
+		successCount, failureCount                       int
+		summaryErr, deployErr, execErr, succErr, failErr error
+		wg                                               sync.WaitGroup
 	)
 
-	wg.Add(3)
+	wg.Add(5)
 	go func() {
 		defer wg.Done()
 		summary, summaryErr = h.wdc.GetWorkflowSummary(ctx, uuid, from)
@@ -132,6 +133,14 @@ func (h *Handler) Execute(ctx context.Context, arg, outputFormat string) error {
 			Limit:        1,
 		})
 	}()
+	go func() {
+		defer wg.Done()
+		successCount, succErr = h.wdc.CountExecutions(ctx, uuid, []workflowdataclient.ExecutionStatus{workflowdataclient.ExecutionStatusSuccess})
+	}()
+	go func() {
+		defer wg.Done()
+		failureCount, failErr = h.wdc.CountExecutions(ctx, uuid, []workflowdataclient.ExecutionStatus{workflowdataclient.ExecutionStatusFailure})
+	}()
 	wg.Wait()
 	spinner.Stop()
 
@@ -141,10 +150,19 @@ func (h *Handler) Execute(ctx context.Context, arg, outputFormat string) error {
 	if execErr != nil {
 		return execErr
 	}
-	// deployErr is non-fatal: the deployment query may be restricted for some users.
+	// deployErr, succErr, failErr are non-fatal — degrade gracefully.
 	if deployErr != nil {
 		deployment = nil
 	}
+	if succErr != nil {
+		successCount = 0
+	}
+	if failErr != nil {
+		failureCount = 0
+	}
+	summary.SuccessCount = successCount
+	summary.FailureCount = failureCount
+	summary.ExecutionCount = successCount + failureCount
 
 	var lastExec *workflowdataclient.Execution
 	if len(executions) > 0 {

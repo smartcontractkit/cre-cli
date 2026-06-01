@@ -272,6 +272,34 @@ func (c *Client) ListExecutions(parent context.Context, in ListExecutionsInput) 
 	return toExecutions(env.WorkflowExecutions.Data), nil
 }
 
+// CountExecutions returns the total number of executions matching the given filters.
+// It fetches only a single-item page — only the count field is used.
+func (c *Client) CountExecutions(parent context.Context, workflowUUID string, statuses []ExecutionStatus) (int, error) {
+	ctx, cancel := c.CreateServiceContextWithTimeout(parent)
+	defer cancel()
+
+	input := map[string]any{
+		"workflowUuid": workflowUUID,
+		"page":         map[string]any{"number": 0, "size": 1},
+	}
+	if len(statuses) > 0 {
+		ss := make([]string, len(statuses))
+		for i, s := range statuses {
+			ss[i] = string(s)
+		}
+		input["status"] = ss
+	}
+
+	req := graphql.NewRequest(listExecutionsQuery)
+	req.Var("input", input)
+
+	var env listExecutionsEnvelope
+	if err := c.graphql.Execute(ctx, req, &env); err != nil {
+		return 0, fmt.Errorf("count executions: %w", err)
+	}
+	return env.WorkflowExecutions.Count, nil
+}
+
 // GetExecution fetches a single execution by its UUID.
 func (c *Client) GetExecution(parent context.Context, uuid string) (*Execution, error) {
 	ctx, cancel := c.CreateServiceContextWithTimeout(parent)

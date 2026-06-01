@@ -80,15 +80,15 @@ query GetLatestDeployment($input: WorkflowDeploymentsInput!) {
 // ---- envelopes ----
 
 type gqlWorkflowSummary struct {
-	UUID           string     `json:"uuid"`
-	Name           string     `json:"name"`
-	WorkflowID     string     `json:"workflowId"`
-	OwnerAddress   string     `json:"ownerAddress"`
-	Status         string     `json:"status"`
-	WorkflowSource string     `json:"workflowSource"`
-	RegisteredAt   time.Time  `json:"registeredAt"`
-	ExecutedAt     *time.Time `json:"executedAt"`
-	ExecutionCount int        `json:"executionCount"`
+	UUID                   string     `json:"uuid"`
+	Name                   string     `json:"name"`
+	WorkflowID             string     `json:"workflowId"`
+	OwnerAddress           string     `json:"ownerAddress"`
+	Status                 string     `json:"status"`
+	WorkflowSource         string     `json:"workflowSource"`
+	RegisteredAt           time.Time  `json:"registeredAt"`
+	ExecutedAt             *time.Time `json:"executedAt"`
+	ExecutionCount         int        `json:"executionCount"`
 	ExecutionCountByStatus struct {
 		Success int `json:"success"`
 		Failure int `json:"failure"`
@@ -102,14 +102,14 @@ type getWorkflowSummaryEnvelope struct {
 }
 
 type gqlDeploymentRecord struct {
-	UUID         string     `json:"uuid"`
-	WorkflowID   string     `json:"workflowID"`
-	Status       string     `json:"status"`
-	DeployedAt   time.Time  `json:"deployedAt"`
-	TxHash       *string    `json:"txHash"`
-	BinaryURL    *string    `json:"binaryURL"`
-	ConfigURL    *string    `json:"configURL"`
-	ErrorMessage *string    `json:"errorMessage"`
+	UUID         string    `json:"uuid"`
+	WorkflowID   string    `json:"workflowID"`
+	Status       string    `json:"status"`
+	DeployedAt   time.Time `json:"deployedAt"`
+	TxHash       *string   `json:"txHash"`
+	BinaryURL    *string   `json:"binaryURL"`
+	ConfigURL    *string   `json:"configURL"`
+	ErrorMessage *string   `json:"errorMessage"`
 }
 
 type getLatestDeploymentEnvelope struct {
