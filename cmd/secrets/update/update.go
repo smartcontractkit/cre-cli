@@ -67,6 +67,7 @@ func New(ctx *runtime.Context) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			defer common.ZeroUpsertSecretValues(inputs)
 
 			if err := h.ValidateInputs(inputs); err != nil {
 				return err
