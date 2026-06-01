@@ -62,7 +62,7 @@ const (
 	EVMCapabilitiesVersion    = "v1.0.0-beta.12"
 	HTTPCapabilitiesVersion   = "v1.3.0"
 	CronCapabilitiesVersion   = "v1.3.0"
-	SolanaCapabilitiesVersion = "v0.1.1-0.20260210120110-1f2d5201a23f"
+	SolanaCapabilitiesVersion = "v0.1.0-beta.1"
 
 	TestAddress      = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
 	TestAddress2     = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
