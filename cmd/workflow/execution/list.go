@@ -152,7 +152,7 @@ func (h *ListHandler) resolveWorkflowUUID(ctx context.Context, arg string) (stri
 		}
 	}
 	if len(active) == 1 {
-		return active[0].WorkflowID, nil
+		return active[0].UUID, nil
 	}
 	if len(active) > 1 {
 		return "", fmt.Errorf("multiple ACTIVE workflows named %q found; provide the workflow UUID instead", arg)
@@ -162,10 +162,10 @@ func (h *ListHandler) resolveWorkflowUUID(ctx context.Context, arg string) (stri
 	if !h.nonInteractive {
 		ui.Warning(fmt.Sprintf("No ACTIVE deployment for workflow %q; showing executions for the first match (status: %s)", arg, matches[0].Status))
 	}
-	if matches[0].WorkflowID == "" {
+	if matches[0].UUID == "" {
 		return "", fmt.Errorf("workflow %q resolved but has no UUID; try providing the UUID directly", arg)
 	}
-	return matches[0].WorkflowID, nil
+	return matches[0].UUID, nil
 }
 
 // ExecuteWithArg resolves workflowArg (UUID or name) then calls Execute.

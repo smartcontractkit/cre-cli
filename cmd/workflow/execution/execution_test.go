@@ -159,8 +159,9 @@ func TestList_ByName_ResolvesActiveWorkflow(t *testing.T) {
 					"count": 1,
 					"data": []any{
 						map[string]any{
+							"uuid":           "wf-uuid-active",
 							"name":           "my-workflow",
-							"workflowId":     "wf-uuid-active",
+							"workflowId":     "abc123onchain",
 							"ownerAddress":   "0xowner",
 							"status":         "ACTIVE",
 							"workflowSource": "private",
