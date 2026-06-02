@@ -3,6 +3,7 @@ package workflowdataclient
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/machinebox/graphql"
@@ -37,7 +38,9 @@ type ExecutionError struct {
 // Execution is a single workflow execution record.
 type Execution struct {
 	UUID         string
+	ID           string // on-chain execution ID shown in the Explorer UI
 	WorkflowUUID string
+	WorkflowID   string // on-chain workflow hash (workflowId scalar)
 	WorkflowName string
 	Status       ExecutionStatus
 	StartedAt    time.Time
@@ -93,7 +96,9 @@ query ListExecutions($input: WorkflowExecutionsInput!) {
   workflowExecutions(input: $input) {
     data {
       uuid
+      id
       workflowUUID
+      workflowId
       workflowName
       status
       startedAt
@@ -114,7 +119,9 @@ query GetExecution($input: WorkflowExecutionInput!) {
   workflowExecution(input: $input) {
     data {
       uuid
+      id
       workflowUUID
+      workflowId
       workflowName
       status
       startedAt
@@ -168,7 +175,9 @@ type gqlExecutionError struct {
 
 type gqlExecution struct {
 	UUID         string              `json:"uuid"`
+	ID           string              `json:"id"`
 	WorkflowUUID string              `json:"workflowUUID"`
+	WorkflowID   string              `json:"workflowId"`
 	WorkflowName string              `json:"workflowName"`
 	Status       string              `json:"status"`
 	StartedAt    time.Time           `json:"startedAt"`
@@ -270,6 +279,28 @@ func (c *Client) ListExecutions(parent context.Context, in ListExecutionsInput) 
 	}
 
 	return toExecutions(env.WorkflowExecutions.Data), nil
+}
+
+// FindExecutionByOnChainID resolves the platform UUID for an execution given its
+// on-chain hex ID (the identifier shown in the Explorer UI). It searches recent
+// executions and matches on the id field.
+func (c *Client) FindExecutionByOnChainID(parent context.Context, onChainID string) (*Execution, error) {
+	// The API has no direct filter by on-chain ID, so we fetch a broad page
+	// and match client-side. The on-chain ID appears in recent executions.
+	executions, err := c.ListExecutions(parent, ListExecutionsInput{Limit: 100})
+	if err != nil {
+		return nil, fmt.Errorf("searching for execution %q: %w", onChainID, err)
+	}
+	for _, e := range executions {
+		if strings.EqualFold(e.ID, onChainID) {
+			full, err := c.GetExecution(parent, e.UUID)
+			if err != nil {
+				return nil, err
+			}
+			return full, nil
+		}
+	}
+	return nil, fmt.Errorf("execution with ID %q not found", onChainID)
 }
 
 // CountExecutions returns the total number of executions matching the given filters.
@@ -391,7 +422,9 @@ func toExecution(g gqlExecution) Execution {
 	}
 	return Execution{
 		UUID:         g.UUID,
+		ID:           g.ID,
 		WorkflowUUID: g.WorkflowUUID,
+		WorkflowID:   g.WorkflowID,
 		WorkflowName: g.WorkflowName,
 		Status:       ExecutionStatus(g.Status),
 		StartedAt:    g.StartedAt,

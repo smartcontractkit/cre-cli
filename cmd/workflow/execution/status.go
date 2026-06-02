@@ -3,6 +3,7 @@ package execution
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/spf13/cobra"
 
@@ -51,16 +52,45 @@ func (h *StatusHandler) Execute(ctx context.Context, in StatusInputs) error {
 
 	spinner := ui.NewSpinner()
 	spinner.Start("Fetching execution...")
-	exec, err := h.wdc.GetExecution(ctx, in.ExecutionUUID)
-	spinner.Stop()
+
+	var (
+		exec       *workflowdataclient.Execution
+		failEvents []workflowdataclient.ExecutionEvent
+		execErr    error
+		wg         sync.WaitGroup
+	)
+
+	uuid, err := resolveExecutionUUID(ctx, h.wdc, in.ExecutionUUID)
 	if err != nil {
+		spinner.Stop()
 		return err
 	}
 
-	if in.OutputFormat == outputFormatJSON {
-		return workflowrender.PrintExecutionDetailJSON(*exec)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		exec, execErr = h.wdc.GetExecution(ctx, uuid)
+	}()
+	wg.Wait()
+
+	// If the execution failed, fetch failed events in parallel with rendering setup.
+	if execErr == nil && exec.Status == workflowdataclient.ExecutionStatusFailure {
+		failStatus := "failure"
+		failEvents, _ = h.wdc.ListExecutionEvents(ctx, workflowdataclient.ListEventsInput{
+			ExecutionUUID: uuid,
+			Status:        &failStatus,
+		})
 	}
-	workflowrender.PrintExecutionDetailTable(*exec)
+
+	spinner.Stop()
+	if execErr != nil {
+		return execErr
+	}
+
+	if in.OutputFormat == outputFormatJSON {
+		return workflowrender.PrintExecutionDetailJSON(*exec, failEvents)
+	}
+	workflowrender.PrintExecutionDetailTable(*exec, failEvents)
 	return nil
 }
 

@@ -83,7 +83,7 @@ func PrintWorkflowStatusTable(v WorkflowStatusView) {
 		e := v.LastExecution
 		ui.Line()
 		ui.Bold("Last execution")
-		ui.Dim(fmt.Sprintf("   ID:             %s", e.UUID))
+		ui.Dim(fmt.Sprintf("   ID:             %s", e.ID))
 		ui.Dim(fmt.Sprintf("   Status:         %s", e.Status))
 		ui.Dim(fmt.Sprintf("   Started:        %s", e.StartedAt.UTC().Format("2006-01-02 15:04:05")))
 		if e.FinishedAt != nil {
@@ -96,10 +96,10 @@ func PrintWorkflowStatusTable(v WorkflowStatusView) {
 			}
 		}
 		ui.Line()
-		ui.Bold("Next steps:")
-		ui.Dim(fmt.Sprintf("   cre workflow execution list %s", s.Name))
-		ui.Dim(fmt.Sprintf("   cre workflow execution events %s", e.UUID))
-		ui.Dim(fmt.Sprintf("   cre workflow execution logs   %s", e.UUID))
+		ui.Bold("Debug further:")
+		ui.Dim(fmt.Sprintf("   cre workflow execution status %s", e.ID))
+		ui.Dim(fmt.Sprintf("   cre workflow execution events %s", e.ID))
+		ui.Dim(fmt.Sprintf("   cre workflow execution logs   %s", e.ID))
 	} else if s.Status == "PENDING" {
 		ui.Line()
 		ui.Dim("   Workflow has not executed yet — it may still be activating in the DON.")

@@ -55,9 +55,14 @@ func (h *LogsHandler) Execute(ctx context.Context, in LogsInputs) error {
 		return fmt.Errorf("credentials not available — run `cre login` and retry")
 	}
 
+	uuid, err := resolveExecutionUUID(ctx, h.wdc, in.ExecutionUUID)
+	if err != nil {
+		return err
+	}
+
 	spinner := ui.NewSpinner()
 	spinner.Start("Fetching execution logs...")
-	logs, err := h.wdc.ListExecutionLogs(ctx, in.ExecutionUUID)
+	logs, err := h.wdc.ListExecutionLogs(ctx, uuid)
 	spinner.Stop()
 	if err != nil {
 		return err

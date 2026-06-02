@@ -69,7 +69,7 @@ func PrintExecutionsTable(rows []workflowdataclient.Execution) {
 	ui.Line()
 
 	for i, e := range rows {
-		ui.Bold(fmt.Sprintf("%d. %s", i+1, e.UUID))
+		ui.Bold(fmt.Sprintf("%d. %s", i+1, e.ID))
 		ui.Dim(fmt.Sprintf("   Workflow:  %s", e.WorkflowName))
 		ui.Dim(fmt.Sprintf("   Status:    %s", e.Status))
 		ui.Dim(fmt.Sprintf("   Started:   %s", e.StartedAt.UTC().Format("2006-01-02 15:04:05")))
@@ -92,15 +92,35 @@ type executionErrorJSON struct {
 	Count int    `json:"count"`
 }
 
-// PrintExecutionDetailJSON marshals a single execution with its errors to stdout.
-func PrintExecutionDetailJSON(e workflowdataclient.Execution) error {
+// PrintExecutionDetailJSON marshals a single execution with its errors and failed events to stdout.
+func PrintExecutionDetailJSON(e workflowdataclient.Execution, failedEvents []workflowdataclient.ExecutionEvent) error {
 	errs := make([]executionErrorJSON, 0, len(e.Errors))
 	for _, err := range e.Errors {
 		errs = append(errs, executionErrorJSON{Error: err.Error, Count: err.Count})
 	}
-	detail := executionDetailJSON{
-		executionJSON: toExecutionJSON(e),
-		Errors:        errs,
+	type failedEventJSON struct {
+		CapabilityID string                `json:"capabilityID"`
+		Method       *string               `json:"method,omitempty"`
+		Errors       []capabilityErrorJSON `json:"errors,omitempty"`
+	}
+	fevs := make([]failedEventJSON, 0, len(failedEvents))
+	for _, ev := range failedEvents {
+		fe := failedEventJSON{CapabilityID: ev.CapabilityID, Method: ev.Method}
+		for _, ce := range ev.Errors {
+			fe.Errors = append(fe.Errors, capabilityErrorJSON{Error: ce.Error, Count: ce.Count})
+		}
+		fevs = append(fevs, fe)
+	}
+	type detailJSON struct {
+		executionDetailJSON
+		FailedEvents []failedEventJSON `json:"failedEvents,omitempty"`
+	}
+	detail := detailJSON{
+		executionDetailJSON: executionDetailJSON{
+			executionJSON: toExecutionJSON(e),
+			Errors:        errs,
+		},
+		FailedEvents: fevs,
 	}
 	data, err := json.MarshalIndent(detail, "", "  ")
 	if err != nil {
@@ -110,12 +130,12 @@ func PrintExecutionDetailJSON(e workflowdataclient.Execution) error {
 	return nil
 }
 
-// PrintExecutionDetailTable renders a single execution with its errors as a bulleted detail view.
-func PrintExecutionDetailTable(e workflowdataclient.Execution) {
+// PrintExecutionDetailTable renders a single execution with failed capability events inline.
+func PrintExecutionDetailTable(e workflowdataclient.Execution, failedEvents []workflowdataclient.ExecutionEvent) {
 	ui.Line()
-	ui.Bold(fmt.Sprintf("Execution: %s", e.UUID))
-	ui.Dim(fmt.Sprintf("   Workflow:  %s", e.WorkflowName))
-	ui.Dim(fmt.Sprintf("   UUID:      %s", e.WorkflowUUID))
+	ui.Bold(fmt.Sprintf("Execution: %s", e.ID))
+	ui.Dim(fmt.Sprintf("   Workflow:    %s", e.WorkflowName))
+	ui.Dim(fmt.Sprintf("   Workflow ID: %s", e.WorkflowID))
 	ui.Dim(fmt.Sprintf("   Status:    %s", e.Status))
 
 	timeStr := e.StartedAt.UTC().Format("2006-01-02 15:04:05")
@@ -136,6 +156,25 @@ func PrintExecutionDetailTable(e workflowdataclient.Execution) {
 		}
 	}
 
+	if len(failedEvents) > 0 {
+		ui.Line()
+		ui.Bold("Failures:")
+		for _, ev := range failedEvents {
+			method := ""
+			if ev.Method != nil && *ev.Method != "" {
+				method = " " + *ev.Method
+			}
+			ui.Dim(fmt.Sprintf("   %s%s", ev.CapabilityID, method))
+			for _, ce := range ev.Errors {
+				ui.Dim(fmt.Sprintf("     - %s (x%d)", ce.Error, ce.Count))
+			}
+		}
+	}
+
+	ui.Line()
+	ui.Bold("Debug further:")
+	ui.Dim(fmt.Sprintf("   cre workflow execution events %s", e.ID))
+	ui.Dim(fmt.Sprintf("   cre workflow execution logs   %s", e.ID))
 	ui.Line()
 }
 

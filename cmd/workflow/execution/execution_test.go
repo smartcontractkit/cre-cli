@@ -262,7 +262,7 @@ func TestStatus_NotFound(t *testing.T) {
 
 	rtCtx := rtCtxFor(t, srv.URL)
 	h := execution.NewStatusHandlerWithClient(rtCtx, wdcFor(t, srv.URL))
-	err := h.Execute(context.Background(), execution.StatusInputs{ExecutionUUID: "missing-uuid"})
+	err := h.Execute(context.Background(), execution.StatusInputs{ExecutionUUID: "00000000-0000-0000-0000-000000000001"})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not found")
 }
@@ -295,7 +295,7 @@ func TestStatus_FailureShowsErrors(t *testing.T) {
 	h := execution.NewStatusHandlerWithClient(rtCtx, wdcFor(t, srv.URL))
 
 	out := captureStdout(t, func() {
-		err := h.Execute(context.Background(), execution.StatusInputs{ExecutionUUID: "exec-uuid-1", OutputFormat: "json"})
+		err := h.Execute(context.Background(), execution.StatusInputs{ExecutionUUID: "05ace5cf-85ae-448b-9f42-270d42974d35", OutputFormat: "json"})
 		require.NoError(t, err)
 	})
 
@@ -345,7 +345,7 @@ func TestEvents_JSON(t *testing.T) {
 	h := execution.NewEventsHandlerWithClient(rtCtx, wdcFor(t, srv.URL))
 
 	out := captureStdout(t, func() {
-		err := h.Execute(context.Background(), execution.EventsInputs{ExecutionUUID: "exec-1", OutputFormat: "json"})
+		err := h.Execute(context.Background(), execution.EventsInputs{ExecutionUUID: "05ace5cf-85ae-448b-9f42-270d42974d35", OutputFormat: "json"})
 		require.NoError(t, err)
 	})
 
@@ -390,7 +390,7 @@ func TestLogs_NodeFilter_ClientSide(t *testing.T) {
 
 	out := captureStdout(t, func() {
 		err := h.Execute(context.Background(), execution.LogsInputs{
-			ExecutionUUID: "exec-1",
+			ExecutionUUID: "05ace5cf-85ae-448b-9f42-270d42974d35",
 			NodeFilter:    "ProcessData",
 			OutputFormat:  "json",
 		})
@@ -426,7 +426,7 @@ func TestLogs_NoFilter_ReturnsAll(t *testing.T) {
 	h := execution.NewLogsHandlerWithClient(rtCtx, wdcFor(t, srv.URL))
 
 	out := captureStdout(t, func() {
-		err := h.Execute(context.Background(), execution.LogsInputs{ExecutionUUID: "exec-1", OutputFormat: "json"})
+		err := h.Execute(context.Background(), execution.LogsInputs{ExecutionUUID: "05ace5cf-85ae-448b-9f42-270d42974d35", OutputFormat: "json"})
 		require.NoError(t, err)
 	})
 

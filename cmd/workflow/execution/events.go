@@ -61,10 +61,15 @@ func (h *EventsHandler) Execute(ctx context.Context, in EventsInputs) error {
 		return fmt.Errorf("credentials not available — run `cre login` and retry")
 	}
 
+	uuid, err := resolveExecutionUUID(ctx, h.wdc, in.ExecutionUUID)
+	if err != nil {
+		return err
+	}
+
 	spinner := ui.NewSpinner()
 	spinner.Start("Fetching execution events...")
 	events, err := h.wdc.ListExecutionEvents(ctx, workflowdataclient.ListEventsInput{
-		ExecutionUUID: in.ExecutionUUID,
+		ExecutionUUID: uuid,
 		CapabilityID:  in.CapabilityID,
 		Status:        in.Status,
 	})
