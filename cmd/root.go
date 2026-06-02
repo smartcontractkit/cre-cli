@@ -34,6 +34,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/telemetry"
+	"github.com/smartcontractkit/cre-cli/internal/tenantctx"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 	intupdate "github.com/smartcontractkit/cre-cli/internal/update"
 )
@@ -236,7 +237,14 @@ func newRootCommand() *cobra.Command {
 					spinner.Update("Loading user context...")
 				}
 				if err := runtimeContext.AttachTenantContext(cmd.Context()); err != nil {
-					ui.Warning("Failed to load user context")
+					if showSpinner {
+						spinner.Stop()
+					}
+					ui.ErrorWithSuggestions("Failed to load user context", []string{
+						"Run `cre login` to fetch your user context",
+						fmt.Sprintf("Ensure ~/.cre/%s exists and is readable", tenantctx.ContextFile),
+					})
+					return fmt.Errorf("user context required: %w", err)
 				}
 
 				// Check if organization is ungated for commands that require it
@@ -295,7 +303,14 @@ func newRootCommand() *cobra.Command {
 							spinner.Update("Loading user context...")
 						}
 						if err := runtimeContext.AttachTenantContext(cmd.Context()); err != nil {
-							ui.Warning("Failed to load user context")
+							if showSpinner {
+								spinner.Stop()
+							}
+							ui.ErrorWithSuggestions("Failed to load user context", []string{
+								"Run `cre login` to fetch your user context",
+								fmt.Sprintf("Ensure ~/.cre/%s exists and is readable", tenantctx.ContextFile),
+							})
+							return fmt.Errorf("user context required: %w", err)
 						}
 					}
 				}

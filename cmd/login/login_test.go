@@ -1,6 +1,8 @@
 package login
 
 import (
+	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -16,8 +18,50 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/oauth"
+	"github.com/smartcontractkit/cre-cli/internal/tenantctx"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
+
+func TestFetchTenantConfig_GQLError_ReturnsError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"errors": []map[string]string{{"message": "unauthorized"}},
+		})
+	}))
+	defer srv.Close()
+
+	tmp := t.TempDir()
+	t.Setenv("HOME", tmp)
+	log := zerolog.Nop()
+	h := &handler{
+		log: &log,
+		environmentSet: &environments.EnvironmentSet{
+			EnvName:    "STAGING",
+			GraphQLURL: srv.URL,
+		},
+	}
+
+	tokenSet := &credentials.CreLoginTokenSet{
+		AccessToken: "test-access-token",
+		IDToken:     "test-id-token",
+		ExpiresIn:   3600,
+		TokenType:   "Bearer",
+	}
+
+	err := h.fetchTenantConfig(context.Background(), tokenSet)
+	if err == nil {
+		t.Fatal("expected error when GQL fetch fails")
+	}
+	if !strings.Contains(err.Error(), "fetch user context") {
+		t.Errorf("expected fetch user context error, got: %v", err)
+	}
+
+	contextPath := filepath.Join(tmp, credentials.ConfigDir, tenantctx.ContextFile)
+	if _, statErr := os.Stat(contextPath); statErr == nil {
+		t.Errorf("expected %s not to be written on fetch failure", tenantctx.ContextFile)
+	}
+}
 
 func TestLogin_NonInteractive_ReturnsError(t *testing.T) {
 	// Create a parent command with the global --non-interactive persistent flag,
