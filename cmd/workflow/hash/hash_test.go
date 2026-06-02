@@ -1,6 +1,7 @@
 package hash
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"io"
@@ -80,7 +81,7 @@ func TestExecute_WithForUser(t *testing.T) {
 		WorkflowName: "test-workflow",
 	}
 
-	err := Execute(inputs)
+	err := Execute(context.Background(), inputs)
 	require.NoError(t, err)
 }
 
@@ -94,7 +95,7 @@ func TestExecute_WithoutForUser_UsesPrivateKey(t *testing.T) {
 		PrivateKey:   testPrivateKey,
 	}
 
-	err := Execute(inputs)
+	err := Execute(context.Background(), inputs)
 	require.NoError(t, err)
 }
 
@@ -107,7 +108,7 @@ func TestExecute_WithoutForUser_NoKey_Errors(t *testing.T) {
 		WorkflowName: "test-workflow",
 	}
 
-	err := Execute(inputs)
+	err := Execute(context.Background(), inputs)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "--public_key")
 }
@@ -173,7 +174,7 @@ func TestExecute_HashesAreDeterministic(t *testing.T) {
 		"workflow ID should start with version byte 00")
 
 	// Running Execute should succeed (hashes are printed via ui, verified above)
-	err = Execute(inputs)
+	err = Execute(context.Background(), inputs)
 	require.NoError(t, err)
 }
 
@@ -187,7 +188,7 @@ func TestExecute_EmptyConfig(t *testing.T) {
 		WorkflowName: "test-workflow",
 	}
 
-	err := Execute(inputs)
+	err := Execute(context.Background(), inputs)
 	require.NoError(t, err)
 }
 
@@ -201,7 +202,7 @@ func TestExecute_OffChainRequiresPublicKey(t *testing.T) {
 		RegistryType: settings.RegistryTypeOffChain,
 	}
 
-	err := Execute(inputs)
+	err := Execute(context.Background(), inputs)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "--public_key")
 }
@@ -218,7 +219,7 @@ func TestExecute_OffChainUsesPublicKey(t *testing.T) {
 		DerivedOwner: testDerivedOwner,
 	}
 
-	err := Execute(inputs)
+	err := Execute(context.Background(), inputs)
 	require.NoError(t, err)
 }
 
@@ -233,7 +234,7 @@ func TestExecute_OffChainUsesDerivedOwner(t *testing.T) {
 		DerivedOwner: testDerivedOwner,
 	}
 
-	err := Execute(inputs)
+	err := Execute(context.Background(), inputs)
 	require.NoError(t, err)
 }
 
