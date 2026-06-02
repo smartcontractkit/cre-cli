@@ -11,6 +11,8 @@ import (
 
 	"github.com/rs/zerolog"
 	"gopkg.in/yaml.v2"
+
+	"github.com/smartcontractkit/cre-cli/internal/creconfig"
 )
 
 type CreLoginTokenSet struct {
@@ -34,7 +36,6 @@ const (
 	CreApiKeyVar   = "CRE_API_KEY"
 	AuthTypeApiKey = "api-key"
 	AuthTypeBearer = "bearer"
-	ConfigDir      = ".cre"
 	ConfigFile     = "cre.yaml"
 
 	// DeploymentAccessStatusFullAccess indicates the organization has full deployment access
@@ -61,11 +62,10 @@ func New(logger *zerolog.Logger) (*Credentials, error) {
 		return cfg, nil
 	}
 
-	home, err := os.UserHomeDir()
+	path, err := creconfig.FilePath(ConfigFile)
 	if err != nil {
 		return cfg, nil
 	}
-	path := filepath.Join(home, ConfigDir, ConfigFile)
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("you are not logged in, run cre login and try again")
@@ -81,13 +81,9 @@ func New(logger *zerolog.Logger) (*Credentials, error) {
 }
 
 func SaveCredentials(tokenSet *CreLoginTokenSet) error {
-	home, err := os.UserHomeDir()
+	dir, err := creconfig.EnsureDir()
 	if err != nil {
-		return fmt.Errorf("get home dir: %w", err)
-	}
-	dir := filepath.Join(home, ConfigDir)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return fmt.Errorf("create config dir: %w", err)
+		return err
 	}
 
 	path := filepath.Join(dir, ConfigFile)

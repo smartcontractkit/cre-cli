@@ -16,6 +16,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
+	"github.com/smartcontractkit/cre-cli/internal/creconfig"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/oauth"
 	"github.com/smartcontractkit/cre-cli/internal/tenantctx"
@@ -57,7 +58,10 @@ func TestFetchTenantConfig_GQLError_ReturnsError(t *testing.T) {
 		t.Errorf("expected fetch user context error, got: %v", err)
 	}
 
-	contextPath := filepath.Join(tmp, credentials.ConfigDir, tenantctx.ContextFile)
+	contextPath, err := creconfig.FilePath(tenantctx.ContextFile)
+	if err != nil {
+		t.Fatalf("failed to resolve context path: %v", err)
+	}
 	if _, statErr := os.Stat(contextPath); statErr == nil {
 		t.Errorf("expected %s not to be written on fetch failure", tenantctx.ContextFile)
 	}
@@ -103,7 +107,10 @@ func TestSaveCredentials_WritesYAML(t *testing.T) {
 		t.Fatalf("saveCredentials error: %v", err)
 	}
 
-	path := filepath.Join(tmp, credentials.ConfigDir, credentials.ConfigFile)
+	path, err := creconfig.FilePath(credentials.ConfigFile)
+	if err != nil {
+		t.Fatalf("failed to resolve config path: %v", err)
+	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("cannot read config file: %v", err)

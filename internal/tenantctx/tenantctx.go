@@ -16,6 +16,7 @@ import (
 
 	"github.com/smartcontractkit/cre-cli/internal/client/graphqlclient"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
+	"github.com/smartcontractkit/cre-cli/internal/creconfig"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 )
 
@@ -90,7 +91,7 @@ const getTenantConfigQuery = `query GetTenantConfig {
 }`
 
 // FetchAndWriteContext fetches the user context from the service
-// and writes the registry manifest to ~/.cre/<ContextFile>.
+// and writes the registry manifest to the CLI config directory.
 func FetchAndWriteContext(ctx context.Context, gqlClient *graphqlclient.Client, envName string, log *zerolog.Logger) error {
 	ctx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
@@ -208,14 +209,14 @@ func parseChainSelectorJSON(raw []byte) (uint64, error) {
 	return 0, fmt.Errorf("chain selector must be a decimal string or integer JSON value: %s", string(raw))
 }
 
-// LoadContext reads the registry manifest from ~/.cre/<ContextFile>
+// LoadContext reads the registry manifest from the CLI config directory
 // and returns the EnvironmentContext for the given environment name.
 func LoadContext(envName string) (*EnvironmentContext, error) {
-	home, err := os.UserHomeDir()
+	path, err := creconfig.FilePath(ContextFile)
 	if err != nil {
-		return nil, fmt.Errorf("get home dir: %w", err)
+		return nil, err
 	}
-	return LoadContextFromPath(filepath.Join(home, credentials.ConfigDir, ContextFile), envName)
+	return LoadContextFromPath(path, envName)
 }
 
 // LoadContextFromPath reads the registry manifest at the given path
@@ -263,14 +264,9 @@ func EnsureContext(ctx context.Context, creds *credentials.Credentials, envSet *
 }
 
 func writeContextFile(data map[string]*EnvironmentContext, log *zerolog.Logger) error {
-	home, err := os.UserHomeDir()
+	dir, err := creconfig.EnsureDir()
 	if err != nil {
-		return fmt.Errorf("get home dir: %w", err)
-	}
-
-	dir := filepath.Join(home, credentials.ConfigDir)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return fmt.Errorf("create config dir: %w", err)
+		return err
 	}
 
 	out, err := yaml.Marshal(data)

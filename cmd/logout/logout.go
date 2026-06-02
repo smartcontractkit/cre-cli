@@ -5,13 +5,13 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path/filepath"
 
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
+	"github.com/smartcontractkit/cre-cli/internal/creconfig"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/tenantctx"
@@ -49,11 +49,10 @@ func newHandler(ctx *runtime.Context) *handler {
 }
 
 func (h *handler) execute() error {
-	home, err := os.UserHomeDir()
+	credPath, err := creconfig.FilePath(credentials.ConfigFile)
 	if err != nil {
-		return fmt.Errorf("could not determine home directory: %w", err)
+		return fmt.Errorf("could not determine config path: %w", err)
 	}
-	credPath := filepath.Join(home, credentials.ConfigDir, credentials.ConfigFile)
 
 	// Load credentials directly (logout is excluded from global credential loading)
 	creds, err := credentials.New(h.log)
@@ -90,11 +89,13 @@ func (h *handler) execute() error {
 
 	if err := credentials.SecureRemove(credPath); err != nil {
 		spinner.Stop()
-		return fmt.Errorf("failed to delete credentials file: %w", err)
+		return fmt.Errorf("failed to delete credentials file %s: %w", credPath, err)
 	}
 
-	contextPath := filepath.Join(home, credentials.ConfigDir, tenantctx.ContextFile)
-	if err := os.Remove(contextPath); err != nil && !os.IsNotExist(err) {
+	contextPath, err := creconfig.FilePath(tenantctx.ContextFile)
+	if err != nil {
+		h.log.Warn().Err(err).Msgf("failed to resolve %s path", tenantctx.ContextFile)
+	} else if err := os.Remove(contextPath); err != nil && !os.IsNotExist(err) {
 		h.log.Warn().Err(err).Msgf("failed to delete %s", tenantctx.ContextFile)
 	}
 

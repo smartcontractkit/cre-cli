@@ -20,6 +20,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/authvalidation"
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
+	"github.com/smartcontractkit/cre-cli/internal/creconfig"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/ethkeys"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
@@ -55,13 +56,14 @@ func mockGetCreOrganizationInfoGraphQLPayload() map[string]any {
 	}
 }
 
-// CreateTestBearerCredentialsHome writes JWT bearer credentials under HOME/.cre for subprocess CLI tests.
+// CreateTestBearerCredentialsHome writes JWT bearer credentials under the CLI config directory for subprocess CLI tests.
 func CreateTestBearerCredentialsHome(t *testing.T) string {
 	t.Helper()
 
 	homeDir := t.TempDir()
-	creDir := filepath.Join(homeDir, ".cre")
-	require.NoError(t, os.MkdirAll(creDir, 0o700), "failed to create .cre dir")
+	t.Setenv("HOME", homeDir)
+	creDir, err := creconfig.EnsureDir()
+	require.NoError(t, err, "failed to create config dir")
 
 	jwt := createTestJWT("test-org-id")
 	creConfig := "AccessToken: " + jwt + "\n" +
@@ -70,7 +72,7 @@ func CreateTestBearerCredentialsHome(t *testing.T) string {
 		"ExpiresIn: 3600\n" +
 		"TokenType: Bearer\n"
 
-	require.NoError(t, os.WriteFile(filepath.Join(creDir, "cre.yaml"), []byte(creConfig), 0o600), "failed to write test credentials")
+	require.NoError(t, os.WriteFile(filepath.Join(creDir, credentials.ConfigFile), []byte(creConfig), 0o600), "failed to write test credentials")
 
 	return homeDir
 }

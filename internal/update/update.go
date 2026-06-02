@@ -12,15 +12,16 @@ import (
 
 	"github.com/Masterminds/semver/v3"
 	"github.com/rs/zerolog"
+
+	"github.com/smartcontractkit/cre-cli/internal/creconfig"
 )
 
 const (
-	githubAPIURL  = "https://api.github.com/repos/smartcontractkit/cre-cli/releases/latest"
-	repoURL       = "https://github.com/smartcontractkit/cre-cli/releases"
-	timeout       = 6 * time.Second
-	cacheDuration = 24 * time.Hour
-	cacheFileName = "update.json"
-	cacheDirName  = ".cre"
+	githubAPIURL     = "https://api.github.com/repos/smartcontractkit/cre-cli/releases/latest"
+	repoURL          = "https://github.com/smartcontractkit/cre-cli/releases"
+	timeout          = 6 * time.Second
+	cacheDuration    = 24 * time.Hour
+	UpdateCacheFile  = "update.json"
 )
 
 // githubRelease is a minimal struct to parse the JSON response
@@ -36,12 +37,11 @@ type cacheState struct {
 }
 
 func getCachePath(logger *zerolog.Logger) (string, error) {
-	homeDir, err := os.UserHomeDir()
+	path, err := creconfig.FilePath(UpdateCacheFile)
 	if err != nil {
-		logger.Debug().Msgf("Failed to get user home directory: %v", err)
-		return "", err
+		logger.Debug().Msgf("Failed to get update cache path: %v", err)
 	}
-	return filepath.Join(homeDir, cacheDirName, cacheFileName), nil
+	return path, err
 }
 
 func loadCache(path string, logger *zerolog.Logger) (*cacheState, error) {
