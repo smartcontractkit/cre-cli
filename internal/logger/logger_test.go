@@ -60,8 +60,9 @@ func TestLogger(t *testing.T) {
 		log.Info().Msg("pretty message")
 		output := buf.String()
 
-		// Pretty logging typically includes colors (ANSI escape codes)
-		assert.Contains(t, output, "\x1b[")
+		// ConsoleWriter uses human-readable format instead of JSON (colors are omitted without a TTY).
+		assert.Contains(t, output, "INF pretty message")
+		assert.NotContains(t, output, `"level"`)
 	})
 
 	t.Run("Logger with fields", func(t *testing.T) {
