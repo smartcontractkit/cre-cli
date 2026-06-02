@@ -36,10 +36,10 @@ func PrintWorkflowStatusTable(v WorkflowStatusView) {
 	} else if _, addr, ok := ParseContractWorkflowSource(s.WorkflowSource); ok && strings.TrimSpace(addr) != "" {
 		ui.Dim(fmt.Sprintf("   Address:        %s", strings.TrimSpace(addr)))
 	}
-	ui.Dim(fmt.Sprintf("   Registered:     %s", s.RegisteredAt.UTC().Format("2006-01-02 15:04:05")))
+	ui.Dim(fmt.Sprintf("   Registered:     %s", s.RegisteredAt.UTC().Format("2006-01-02 15:04:05 UTC")))
 
 	if s.ExecutedAt != nil {
-		ui.Dim(fmt.Sprintf("   Last executed:  %s", s.ExecutedAt.UTC().Format("2006-01-02 15:04:05")))
+		ui.Dim(fmt.Sprintf("   Last executed:  %s", s.ExecutedAt.UTC().Format("2006-01-02 15:04:05 UTC")))
 		if s.Status == "PENDING" {
 			gap := s.ExecutedAt.Sub(s.RegisteredAt)
 			ui.Dim(fmt.Sprintf("   Activation gap: %s", formatDuration(gap)))
@@ -57,7 +57,7 @@ func PrintWorkflowStatusTable(v WorkflowStatusView) {
 	if v.Deployment != nil {
 		d := v.Deployment
 		ui.Dim(fmt.Sprintf("   Status:         %s", d.Status))
-		ui.Dim(fmt.Sprintf("   Deployed at:    %s", d.DeployedAt.UTC().Format("2006-01-02 15:04:05")))
+		ui.Dim(fmt.Sprintf("   Deployed at:    %s", d.DeployedAt.UTC().Format("2006-01-02 15:04:05 UTC")))
 		if d.TxHash != nil && *d.TxHash != "" {
 			ui.Dim(fmt.Sprintf("   Tx hash:        %s", *d.TxHash))
 		}
@@ -85,7 +85,7 @@ func PrintWorkflowStatusTable(v WorkflowStatusView) {
 		ui.Bold("Last execution")
 		ui.Dim(fmt.Sprintf("   ID:             %s", e.ID))
 		ui.Dim(fmt.Sprintf("   Status:         %s", e.Status))
-		ui.Dim(fmt.Sprintf("   Started:        %s", e.StartedAt.UTC().Format("2006-01-02 15:04:05")))
+		ui.Dim(fmt.Sprintf("   Started:        %s", e.StartedAt.UTC().Format("2006-01-02 15:04:05 UTC")))
 		if e.FinishedAt != nil {
 			ui.Dim(fmt.Sprintf("   Duration:       %s", formatDuration(e.FinishedAt.Sub(e.StartedAt))))
 		}

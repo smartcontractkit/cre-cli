@@ -72,9 +72,9 @@ func PrintExecutionsTable(rows []workflowdataclient.Execution) {
 		ui.Bold(fmt.Sprintf("%d. %s", i+1, e.ID))
 		ui.Dim(fmt.Sprintf("   Workflow:  %s", e.WorkflowName))
 		ui.Dim(fmt.Sprintf("   Status:    %s", e.Status))
-		ui.Dim(fmt.Sprintf("   Started:   %s", e.StartedAt.UTC().Format("2006-01-02 15:04:05")))
+		ui.Dim(fmt.Sprintf("   Started:   %s", e.StartedAt.UTC().Format("2006-01-02 15:04:05 UTC")))
 		if e.FinishedAt != nil {
-			ui.Dim(fmt.Sprintf("   Finished:  %s (%s)", e.FinishedAt.UTC().Format("2006-01-02 15:04:05"), formatDuration(e.FinishedAt.Sub(e.StartedAt))))
+			ui.Dim(fmt.Sprintf("   Finished:  %s (%s)", e.FinishedAt.UTC().Format("2006-01-02 15:04:05 UTC"), formatDuration(e.FinishedAt.Sub(e.StartedAt))))
 		}
 		ui.Line()
 	}
@@ -138,11 +138,11 @@ func PrintExecutionDetailTable(e workflowdataclient.Execution, failedEvents []wo
 	ui.Dim(fmt.Sprintf("   Workflow ID: %s", e.WorkflowID))
 	ui.Dim(fmt.Sprintf("   Status:    %s", e.Status))
 
-	timeStr := e.StartedAt.UTC().Format("2006-01-02 15:04:05")
+	timeStr := e.StartedAt.UTC().Format("2006-01-02 15:04:05 UTC")
 	if e.FinishedAt != nil {
 		timeStr = fmt.Sprintf("%s to %s (%s)",
-			e.StartedAt.UTC().Format("2006-01-02 15:04:05"),
-			e.FinishedAt.UTC().Format("15:04:05"),
+			e.StartedAt.UTC().Format("2006-01-02 15:04:05 UTC"),
+			e.FinishedAt.UTC().Format("15:04:05 UTC"),
 			formatDuration(e.FinishedAt.Sub(e.StartedAt)),
 		)
 	}
@@ -249,7 +249,7 @@ func PrintEventsTable(events []workflowdataclient.ExecutionEvent) {
 		ui.Bold(fmt.Sprintf("%d. %s", i+1, ev.CapabilityID))
 		ui.Dim(fmt.Sprintf("   Method:    %s", method))
 		ui.Dim(fmt.Sprintf("   Status:    %s", ev.Status))
-		ui.Dim(fmt.Sprintf("   Started:   %s", ev.StartedAt.UTC().Format("2006-01-02 15:04:05")))
+		ui.Dim(fmt.Sprintf("   Started:   %s", ev.StartedAt.UTC().Format("2006-01-02 15:04:05 UTC")))
 		ui.Dim(fmt.Sprintf("   Duration:  %s", dur))
 		if len(ev.Errors) > 0 {
 			errMsgs := make([]string, 0, len(ev.Errors))
@@ -302,7 +302,7 @@ func PrintLogsTable(logs []workflowdataclient.ExecutionLog, nodeFilter string) {
 			continue
 		}
 		ui.Print(fmt.Sprintf("[%s] [%s] %s",
-			l.Timestamp.UTC().Format("2006-01-02 15:04:05"),
+			l.Timestamp.UTC().Format("2006-01-02 15:04:05 UTC"),
 			l.NodeID,
 			l.Message,
 		))
