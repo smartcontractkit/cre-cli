@@ -10,7 +10,6 @@ import (
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/deploy"
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/execution"
 	workflowget "github.com/smartcontractkit/cre-cli/cmd/workflow/get"
-	"github.com/smartcontractkit/cre-cli/cmd/workflow/wfstatus"
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/hash"
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/limits"
 	workflowlist "github.com/smartcontractkit/cre-cli/cmd/workflow/list"
@@ -18,6 +17,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/simulate"
 	supported_chains "github.com/smartcontractkit/cre-cli/cmd/workflow/supported_chains"
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/test"
+	"github.com/smartcontractkit/cre-cli/cmd/workflow/wfstatus"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 )
 
