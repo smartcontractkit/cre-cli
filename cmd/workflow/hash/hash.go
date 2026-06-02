@@ -24,7 +24,7 @@ type Inputs struct {
 	WorkflowName      string
 	WorkflowPath      string
 	OwnerFromSettings string
-	PrivateKey        string
+	PrivateKey        string // #nosec G117 -- workflow owner private key flag value, not persisted
 	SkipTypeChecks    bool
 	RegistryType      settings.RegistryType
 	DerivedOwner      string

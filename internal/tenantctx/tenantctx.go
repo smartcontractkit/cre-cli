@@ -66,11 +66,11 @@ type gqlOnChainContract struct {
 
 type getTenantConfigResponse struct {
 	GetTenantConfig struct {
-		TenantID             string `json:"tenantId"`
-		DefaultDonFamily     string `json:"defaultDonFamily"`
-		VaultGatewayURL      string `json:"vaultGatewayUrl"`
+		TenantID             string             `json:"tenantId"`
+		DefaultDonFamily     string             `json:"defaultDonFamily"`
+		VaultGatewayURL      string             `json:"vaultGatewayUrl"`
 		CapabilitiesRegistry gqlOnChainContract `json:"capabilitiesRegistry"`
-		Registries       []struct {
+		Registries           []struct {
 			ID               string   `json:"id"`
 			Label            string   `json:"label"`
 			Type             string   `json:"type"`
@@ -177,7 +177,7 @@ func FetchAndWriteContext(ctx context.Context, gqlClient *graphqlclient.Client, 
 			Address:       capRegAddr,
 		},
 		Registries: registries,
-		Forwarders:       forwarders,
+		Forwarders: forwarders,
 	}
 
 	contextMap := map[string]*EnvironmentContext{
