@@ -3,8 +3,9 @@ package registrytype
 import (
 	"testing"
 
-	"github.com/smartcontractkit/cre-cli/internal/testutil"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/smartcontractkit/cre-cli/internal/testutil"
 )
 
 func TestFromGQL(t *testing.T) {
