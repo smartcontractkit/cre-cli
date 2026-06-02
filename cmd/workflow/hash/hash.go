@@ -24,7 +24,7 @@ type Inputs struct {
 	WorkflowName      string
 	WorkflowPath      string
 	OwnerFromSettings string
-	PrivateKey        string
+	PrivateKey        string // #nosec G117 -- CLI flag for optional signing key input
 	SkipTypeChecks    bool
 	RegistryType      settings.RegistryType
 	DerivedOwner      string

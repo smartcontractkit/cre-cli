@@ -224,7 +224,7 @@ func (h *Handler) ExecuteBrowserVaultAuthorization(ctx context.Context, method s
 	})
 	var exchangeResp struct {
 		ExchangeAuthCodeToToken struct {
-			AccessToken string `json:"accessToken"`
+			AccessToken string `json:"accessToken"` // #nosec G117 -- matches OAuth token exchange response field
 			ExpiresIn   int    `json:"expiresIn"`
 		} `json:"exchangeAuthCodeToToken"`
 	}

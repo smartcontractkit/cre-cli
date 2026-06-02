@@ -17,11 +17,11 @@ import (
 )
 
 const (
-	githubAPIURL     = "https://api.github.com/repos/smartcontractkit/cre-cli/releases/latest"
-	repoURL          = "https://github.com/smartcontractkit/cre-cli/releases"
-	timeout          = 6 * time.Second
-	cacheDuration    = 24 * time.Hour
-	UpdateCacheFile  = "update.json"
+	githubAPIURL    = "https://api.github.com/repos/smartcontractkit/cre-cli/releases/latest"
+	repoURL         = "https://github.com/smartcontractkit/cre-cli/releases"
+	timeout         = 6 * time.Second
+	cacheDuration   = 24 * time.Hour
+	UpdateCacheFile = "update.json"
 )
 
 // githubRelease is a minimal struct to parse the JSON response
