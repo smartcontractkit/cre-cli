@@ -60,8 +60,9 @@ func TestLogger(t *testing.T) {
 		log.Info().Msg("pretty message")
 		output := buf.String()
 
-		// ConsoleWriter uses human-readable format instead of JSON (colors are omitted without a TTY).
-		assert.Contains(t, output, "INF pretty message")
+		// ConsoleWriter uses human-readable format instead of JSON; ANSI colors depend on TTY detection.
+		assert.Contains(t, output, "pretty message")
+		assert.Contains(t, output, "INF")
 		assert.NotContains(t, output, `"level"`)
 	})
 

@@ -61,9 +61,8 @@ func CreateTestBearerCredentialsHome(t *testing.T) string {
 	t.Helper()
 
 	homeDir := t.TempDir()
-	t.Setenv("HOME", homeDir)
-	creDir, err := creconfig.EnsureDir()
-	require.NoError(t, err, "failed to create config dir")
+	creDir := filepath.Join(homeDir, creconfig.Dir)
+	require.NoError(t, os.MkdirAll(creDir, 0o700), "failed to create config dir")
 
 	jwt := createTestJWT("test-org-id")
 	creConfig := "AccessToken: " + jwt + "\n" +
@@ -75,6 +74,59 @@ func CreateTestBearerCredentialsHome(t *testing.T) string {
 	require.NoError(t, os.WriteFile(filepath.Join(creDir, credentials.ConfigFile), []byte(creConfig), 0o600), "failed to write test credentials")
 
 	return homeDir
+}
+
+// realGoCacheEnv returns GOPATH and GOMODCACHE locations outside t.TempDir()-backed HOME dirs.
+// Overriding HOME makes Go default GOPATH to $HOME/go; module files are read-only and break TempDir cleanup.
+func realGoCacheEnv(t *testing.T) (gopath, gomodcache string) {
+	t.Helper()
+
+	realHome, err := os.UserHomeDir()
+	require.NoError(t, err, "failed to get real home dir")
+
+	gopath = os.Getenv("GOPATH")
+	if gopath == "" {
+		gopath = filepath.Join(realHome, "go")
+	}
+
+	gomodcache = os.Getenv("GOMODCACHE")
+	if gomodcache == "" {
+		gomodcache = filepath.Join(gopath, "pkg", "mod")
+	}
+
+	return gopath, gomodcache
+}
+
+// pinGoCacheForTestHome keeps module cache out of temp HOME directories in the test process.
+func pinGoCacheForTestHome(t *testing.T) {
+	t.Helper()
+	gopath, gomodcache := realGoCacheEnv(t)
+	t.Setenv("GOPATH", gopath)
+	t.Setenv("GOMODCACHE", gomodcache)
+}
+
+// cliChildEnv builds subprocess env with isolated HOME for credentials and pinned Go cache paths.
+func cliChildEnv(t *testing.T, testHome string) []string {
+	t.Helper()
+	gopath, gomodcache := realGoCacheEnv(t)
+
+	childEnv := make([]string, 0, len(os.Environ())+4)
+	for _, entry := range os.Environ() {
+		if strings.HasPrefix(entry, "HOME=") ||
+			strings.HasPrefix(entry, "USERPROFILE=") ||
+			strings.HasPrefix(entry, "GOPATH=") ||
+			strings.HasPrefix(entry, "GOMODCACHE=") {
+			continue
+		}
+		childEnv = append(childEnv, entry)
+	}
+	childEnv = append(childEnv,
+		"HOME="+testHome,
+		"USERPROFILE="+testHome,
+		"GOPATH="+gopath,
+		"GOMODCACHE="+gomodcache,
+	)
+	return childEnv
 }
 
 func createTestJWT(orgID string) string {
@@ -241,29 +293,7 @@ func workflowDeployPrivateRegistry(t *testing.T, tc TestConfig) string {
 
 	cmd := exec.Command(CLIPath, args...)
 	testHome := CreateTestBearerCredentialsHome(t)
-
-	realHome, err := os.UserHomeDir()
-	require.NoError(t, err, "failed to get real home dir")
-
-	childEnv := make([]string, 0, len(os.Environ())+3)
-	hasGOPATH := false
-	for _, entry := range os.Environ() {
-		if strings.HasPrefix(entry, "HOME=") || strings.HasPrefix(entry, "USERPROFILE=") {
-			continue
-		}
-		if strings.HasPrefix(entry, "GOPATH=") {
-			hasGOPATH = true
-		}
-		childEnv = append(childEnv, entry)
-	}
-	childEnv = append(childEnv, "HOME="+testHome, "USERPROFILE="+testHome)
-	// When HOME is overridden, Go defaults GOPATH to $HOME/go which lands
-	// inside t.TempDir(). Go modules are read-only, so TempDir cleanup
-	// fails and marks the test as failed. Pin GOPATH to the real home.
-	if !hasGOPATH {
-		childEnv = append(childEnv, "GOPATH="+filepath.Join(realHome, "go"))
-	}
-	cmd.Env = childEnv
+	cmd.Env = cliChildEnv(t, testHome)
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
@@ -418,26 +448,7 @@ func workflowPausePrivateRegistry(t *testing.T, tc TestConfig) string {
 
 	cmd := exec.Command(CLIPath, args...)
 	testHome := CreateTestBearerCredentialsHome(t)
-
-	realHome, err := os.UserHomeDir()
-	require.NoError(t, err, "failed to get real home dir")
-
-	childEnv := make([]string, 0, len(os.Environ())+3)
-	hasGOPATH := false
-	for _, entry := range os.Environ() {
-		if strings.HasPrefix(entry, "HOME=") || strings.HasPrefix(entry, "USERPROFILE=") {
-			continue
-		}
-		if strings.HasPrefix(entry, "GOPATH=") {
-			hasGOPATH = true
-		}
-		childEnv = append(childEnv, entry)
-	}
-	childEnv = append(childEnv, "HOME="+testHome, "USERPROFILE="+testHome)
-	if !hasGOPATH {
-		childEnv = append(childEnv, "GOPATH="+filepath.Join(realHome, "go"))
-	}
-	cmd.Env = childEnv
+	cmd.Env = cliChildEnv(t, testHome)
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
@@ -588,26 +599,7 @@ func workflowActivatePrivateRegistry(t *testing.T, tc TestConfig) string {
 
 	cmd := exec.Command(CLIPath, args...)
 	testHome := CreateTestBearerCredentialsHome(t)
-
-	realHome, err := os.UserHomeDir()
-	require.NoError(t, err, "failed to get real home dir")
-
-	childEnv := make([]string, 0, len(os.Environ())+3)
-	hasGOPATH := false
-	for _, entry := range os.Environ() {
-		if strings.HasPrefix(entry, "HOME=") || strings.HasPrefix(entry, "USERPROFILE=") {
-			continue
-		}
-		if strings.HasPrefix(entry, "GOPATH=") {
-			hasGOPATH = true
-		}
-		childEnv = append(childEnv, entry)
-	}
-	childEnv = append(childEnv, "HOME="+testHome, "USERPROFILE="+testHome)
-	if !hasGOPATH {
-		childEnv = append(childEnv, "GOPATH="+filepath.Join(realHome, "go"))
-	}
-	cmd.Env = childEnv
+	cmd.Env = cliChildEnv(t, testHome)
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
@@ -746,26 +738,7 @@ func workflowDeletePrivateRegistry(t *testing.T, tc TestConfig) string {
 
 	cmd := exec.Command(CLIPath, args...)
 	testHome := CreateTestBearerCredentialsHome(t)
-
-	realHome, err := os.UserHomeDir()
-	require.NoError(t, err, "failed to get real home dir")
-
-	childEnv := make([]string, 0, len(os.Environ())+3)
-	hasGOPATH := false
-	for _, entry := range os.Environ() {
-		if strings.HasPrefix(entry, "HOME=") || strings.HasPrefix(entry, "USERPROFILE=") {
-			continue
-		}
-		if strings.HasPrefix(entry, "GOPATH=") {
-			hasGOPATH = true
-		}
-		childEnv = append(childEnv, entry)
-	}
-	childEnv = append(childEnv, "HOME="+testHome, "USERPROFILE="+testHome)
-	if !hasGOPATH {
-		childEnv = append(childEnv, "GOPATH="+filepath.Join(realHome, "go"))
-	}
-	cmd.Env = childEnv
+	cmd.Env = cliChildEnv(t, testHome)
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
@@ -857,6 +830,7 @@ func RunPrivateRegistryAuthAndSettingsFinalize(t *testing.T, envPath, blankWorkf
 	bearerHome := CreateTestBearerCredentialsHome(t)
 	t.Setenv("HOME", bearerHome)
 	t.Setenv("USERPROFILE", bearerHome)
+	pinGoCacheForTestHome(t)
 
 	logger := testutil.NewTestLogger()
 	creds, err := credentials.New(logger)
