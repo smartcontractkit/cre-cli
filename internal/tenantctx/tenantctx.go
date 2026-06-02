@@ -17,6 +17,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/client/graphqlclient"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
+	"github.com/smartcontractkit/cre-cli/internal/registrytype"
 )
 
 // ContextFile is the filename for the local registry manifest.
@@ -106,11 +107,11 @@ func FetchAndWriteContext(ctx context.Context, gqlClient *graphqlclient.Client, 
 
 	registries := make([]*Registry, 0, len(tc.Registries))
 	for _, r := range tc.Registries {
-		regType := mapRegistryType(r.Type, log)
+		regType := registrytype.FromGQL(r.Type, log)
 		id := r.ID
 		label := r.Label
 
-		if regType == "on-chain" {
+		if regType == registrytype.OnChain {
 			id = "onchain:" + r.ID
 			if r.Address != nil {
 				label = fmt.Sprintf("%s (%s)", r.ID, abbreviateAddress(*r.Address))
@@ -120,7 +121,7 @@ func FetchAndWriteContext(ctx context.Context, gqlClient *graphqlclient.Client, 
 		registries = append(registries, &Registry{
 			ID:               id,
 			Label:            label,
-			Type:             regType,
+			Type:             string(regType),
 			ChainSelector:    r.ChainSelector,
 			Address:          r.Address,
 			SecretsAuthFlows: mapSecretsAuthFlows(r.SecretsAuthFlows, log),
@@ -155,18 +156,6 @@ func FetchAndWriteContext(ctx context.Context, gqlClient *graphqlclient.Client, 
 	}
 
 	return writeContextFile(contextMap, log)
-}
-
-func mapRegistryType(gqlType string, log *zerolog.Logger) string {
-	switch gqlType {
-	case "ON_CHAIN":
-		return "on-chain"
-	case "OFF_CHAIN":
-		return "off-chain"
-	default:
-		log.Warn().Str("type", gqlType).Msg("unknown registry type, skipping")
-		return "unknown"
-	}
 }
 
 func mapSecretsAuthFlows(gqlFlows []string, log *zerolog.Logger) []string {

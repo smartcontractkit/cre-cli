@@ -423,19 +423,57 @@ func TestEnsureContext_DefaultsToProduction(t *testing.T) {
 
 // --- Helper functions ---
 
-func TestMapRegistryType(t *testing.T) {
-	tests := []struct {
-		input string
-		want  string
-	}{
-		{"ON_CHAIN", "on-chain"},
-		{"OFF_CHAIN", "off-chain"},
-		{"UNKNOWN", "unknown"},
+func TestFetchAndWriteContext_PersistsUnknownRegistryType(t *testing.T) {
+	response := map[string]any{
+		"data": map[string]any{
+			"getTenantConfig": map[string]any{
+				"tenantId":         "42",
+				"defaultDonFamily": "zone-a",
+				"vaultGatewayUrl":  "https://gateway.example.com/",
+				"registries": []any{
+					map[string]any{
+						"id":               "private",
+						"label":            "Private (Chainlink-hosted)",
+						"type":             "OFF_CHAIN",
+						"secretsAuthFlows": []any{"BROWSER"},
+					},
+					map[string]any{
+						"id":               "future-registry",
+						"label":            "Future Registry",
+						"type":             "FUTURE_TYPE",
+						"secretsAuthFlows": []any{},
+					},
+				},
+				"forwarders": []any{},
+			},
+		},
 	}
-	for _, tt := range tests {
-		if got := mapRegistryType(tt.input, testutil.NewTestLogger()); got != tt.want {
-			t.Errorf("mapRegistryType(%q) = %q, want %q", tt.input, got, tt.want)
-		}
+	srv := newMockGQLServer(t, response)
+	defer srv.Close()
+
+	t.Setenv("HOME", t.TempDir())
+	log := testutil.NewTestLogger()
+	client := newGQLClient(t, srv.URL)
+
+	if err := FetchAndWriteContext(context.Background(), client, "STAGING", log); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	envCtx, err := LoadContext("STAGING")
+	if err != nil {
+		t.Fatalf("failed to load written context: %v", err)
+	}
+	if len(envCtx.Registries) != 2 {
+		t.Fatalf("expected 2 registries (including unknown), got %d", len(envCtx.Registries))
+	}
+	if envCtx.Registries[0].ID != "private" {
+		t.Errorf("first registry ID = %q, want %q", envCtx.Registries[0].ID, "private")
+	}
+	if envCtx.Registries[1].ID != "future-registry" {
+		t.Errorf("second registry ID = %q, want %q", envCtx.Registries[1].ID, "future-registry")
+	}
+	if envCtx.Registries[1].Type != "unknown" {
+		t.Errorf("unknown registry type = %q, want %q", envCtx.Registries[1].Type, "unknown")
 	}
 }
 
