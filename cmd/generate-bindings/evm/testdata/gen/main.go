@@ -1,11 +1,11 @@
 package main
 
 import (
-	"github.com/smartcontractkit/cre-cli/cmd/generate-bindings/bindings"
+	"github.com/smartcontractkit/cre-cli/cmd/generate-bindings/evm"
 )
 
 func main() {
-	if err := bindings.GenerateBindings(
+	if err := evm.GenerateBindings(
 		"./testdata/DataStorage_combined.json",
 		"",
 		"bindings",
@@ -15,7 +15,7 @@ func main() {
 		panic(err)
 	}
 
-	if err := bindings.GenerateBindings(
+	if err := evm.GenerateBindings(
 		"./testdata/emptybindings/EmptyContract_combined.json",
 		"",
 		"emptybindings",
