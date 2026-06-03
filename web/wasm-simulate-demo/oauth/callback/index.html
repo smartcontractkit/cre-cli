@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>CRE login</title>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #0d1117; color: #e6edf3; padding: 2rem; }
+    .ok { color: #3fb950; }
+    .err { color: #f85149; }
+  </style>
+</head>
+<body>
+  <p id="msg">Completing login…</p>
+  <script>
+    (function () {
+      const params = new URLSearchParams(location.search);
+      const err = params.get("error");
+      const code = params.get("code");
+      const state = params.get("state");
+      const msg = document.getElementById("msg");
+      if (window.opener) {
+        window.opener.postMessage(
+          { type: "cre-oauth-callback", error: err, errorDescription: params.get("error_description"), code, state },
+          "*",
+        );
+        if (err) {
+          msg.textContent = "Login failed. You can close this window.";
+          msg.className = "err";
+        } else {
+          msg.textContent = "Login complete. You can close this window.";
+          msg.className = "ok";
+        }
+        setTimeout(function () { window.close(); }, 800);
+        return;
+      }
+      if (err) {
+        msg.textContent = "Login failed: " + (params.get("error_description") || err);
+        msg.className = "err";
+        return;
+      }
+      if (code) {
+        try {
+          sessionStorage.setItem("cre-oauth-pending-code", JSON.stringify({ code, state, at: Date.now() }));
+          msg.textContent = "Login code received. Return to the CRE demo tab.";
+          msg.className = "ok";
+        } catch (e) {
+          msg.textContent = "Could not store login code: " + e;
+          msg.className = "err";
+        }
+        return;
+      }
+      msg.textContent = "Missing authorization code.";
+      msg.className = "err";
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,8 @@
+{
+  "cronTypeUrl": "type.googleapis.com/capabilities.scheduler.cron.v1.Payload",
+  "manifestUrl": "./assets/manifest.json",
+  "subscribeB64": "CgJ7fSCAEBIA",
+  "wasmBytes": 14794127,
+  "workflowUrl": "./assets/hello-world.wasm",
+  "workflowWasm": "hello-world.wasm"
+}

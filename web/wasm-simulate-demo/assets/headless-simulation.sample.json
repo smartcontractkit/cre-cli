@@ -1,0 +1,9 @@
+{
+  "mode": "browser-headless",
+  "note": "Run Simulate on the page to generate headless-simulation.json with live results.",
+  "workflowWasm": "hello-world.wasm",
+  "wasmUrl": "./assets/hello-world.wasm",
+  "workflowSimulationResult": {
+    "Result": "Fired at <timestamp>"
+  }
+}

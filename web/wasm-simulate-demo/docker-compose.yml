@@ -1,0 +1,20 @@
+name: cre-cli-wasm-simulate-demo
+
+services:
+  demo:
+    build:
+      context: ../..
+      dockerfile: web/wasm-simulate-demo/Dockerfile
+    ports:
+      - "${WASM_DEMO_PORT:-9090}:80"
+    restart: unless-stopped
+
+  # OAuth redirect target (must match cre login: http://localhost:53682/callback)
+  oauth-callback:
+    image: nginx:1.27-alpine
+    volumes:
+      - ./oauth/callback/index.html:/usr/share/nginx/html/callback/index.html:ro
+      - ./nginx-oauth.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "53682:80"
+    restart: unless-stopped
