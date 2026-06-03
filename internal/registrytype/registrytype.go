@@ -2,7 +2,6 @@ package registrytype
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/rs/zerolog"
 )
@@ -35,15 +34,11 @@ func FromGQL(gqlType string, log *zerolog.Logger) Type {
 }
 
 // Parse converts a raw type string from context.yaml to a Type.
-// Unrecognised values return an error; there is no default to on-chain.
+// Only the canonical values written by FromGQL are accepted; anything else errors.
 func Parse(raw string) (Type, error) {
-	switch {
-	case strings.EqualFold(raw, string(OffChain)), strings.EqualFold(raw, "off_chain"):
-		return OffChain, nil
-	case strings.EqualFold(raw, string(OnChain)), strings.EqualFold(raw, "on_chain"):
-		return OnChain, nil
-	case strings.EqualFold(raw, string(Unknown)):
-		return Unknown, nil
+	switch Type(raw) {
+	case OnChain, OffChain, Unknown:
+		return Type(raw), nil
 	default:
 		return "", fmt.Errorf("unrecognised registry type %q", raw)
 	}

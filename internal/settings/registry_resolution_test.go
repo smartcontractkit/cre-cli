@@ -208,10 +208,6 @@ func TestParseRegistryType(t *testing.T) {
 	}{
 		{"on-chain", RegistryTypeOnChain},
 		{"off-chain", RegistryTypeOffChain},
-		{"ON-CHAIN", RegistryTypeOnChain},
-		{"OFF-CHAIN", RegistryTypeOffChain},
-		{"on_chain", RegistryTypeOnChain},
-		{"off_chain", RegistryTypeOffChain},
 		{"unknown", RegistryTypeUnknown},
 	}
 	for _, tt := range valid {
@@ -222,7 +218,7 @@ func TestParseRegistryType(t *testing.T) {
 		})
 	}
 
-	invalid := []string{"on-chian", ""}
+	invalid := []string{"ON-CHAIN", "on_chain", "on-chian", ""}
 	for _, input := range invalid {
 		t.Run(input, func(t *testing.T) {
 			_, err := ParseRegistryType(input)

@@ -32,12 +32,7 @@ func TestParse(t *testing.T) {
 	}{
 		{"on-chain", OnChain},
 		{"off-chain", OffChain},
-		{"ON-CHAIN", OnChain},
-		{"OFF-CHAIN", OffChain},
-		{"on_chain", OnChain},
-		{"off_chain", OffChain},
 		{"unknown", Unknown},
-		{"UNKNOWN", Unknown},
 	}
 	for _, tt := range valid {
 		t.Run(tt.input, func(t *testing.T) {
@@ -47,7 +42,7 @@ func TestParse(t *testing.T) {
 		})
 	}
 
-	invalid := []string{"on-chian", ""}
+	invalid := []string{"ON-CHAIN", "OFF-CHAIN", "on_chain", "off_chain", "ON_CHAIN", "OFF_CHAIN", "on-chian", ""}
 	for _, input := range invalid {
 		t.Run(input, func(t *testing.T) {
 			_, err := Parse(input)
