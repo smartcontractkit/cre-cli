@@ -29,6 +29,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/cmd/workflow"
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/context"
+	"github.com/smartcontractkit/cre-cli/internal/creconfig"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/logger"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
@@ -242,7 +243,7 @@ func newRootCommand() *cobra.Command {
 					}
 					ui.ErrorWithSuggestions("Failed to load user context", []string{
 						"Run `cre login` to fetch your user context",
-						fmt.Sprintf("Ensure ~/.cre/%s exists and is readable", tenantctx.ContextFile),
+						fmt.Sprintf("Ensure %s exists and is readable", creconfig.FilePathHint(tenantctx.ContextFile)),
 					})
 					return fmt.Errorf("user context required: %w", err)
 				}
@@ -308,7 +309,7 @@ func newRootCommand() *cobra.Command {
 							}
 							ui.ErrorWithSuggestions("Failed to load user context", []string{
 								"Run `cre login` to fetch your user context",
-								fmt.Sprintf("Ensure ~/.cre/%s exists and is readable", tenantctx.ContextFile),
+								fmt.Sprintf("Ensure %s exists and is readable", creconfig.FilePathHint(tenantctx.ContextFile)),
 							})
 							return fmt.Errorf("user context required: %w", err)
 						}
