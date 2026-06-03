@@ -6,14 +6,6 @@ import (
 	"testing"
 )
 
-func TestFileRelPath(t *testing.T) {
-	got := FileRelPath("context.yaml")
-	want := filepath.Join(Dir, "context.yaml")
-	if got != want {
-		t.Fatalf("FileRelPath() = %q, want %q", got, want)
-	}
-}
-
 func TestDirPath(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -71,7 +63,7 @@ func TestFilePathHint_FallsBackToRelPath(t *testing.T) {
 	t.Setenv("HOME", "")
 
 	got := FilePathHint("context.yaml")
-	want := FileRelPath("context.yaml")
+	want := filepath.Join(Dir, "context.yaml")
 	if got != want {
 		t.Fatalf("FilePathHint() = %q, want %q", got, want)
 	}

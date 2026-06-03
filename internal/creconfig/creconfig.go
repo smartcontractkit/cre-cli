@@ -38,19 +38,13 @@ func FilePath(name string) (string, error) {
 	return filepath.Join(dir, name), nil
 }
 
-// FileRelPath returns a home-relative path for static help text and committed docs.
-// It uses the host OS path separator (e.g. ".cre/template.yaml" or ".cre\template.yaml").
-func FileRelPath(name string) string {
-	return filepath.Join(Dir, name)
-}
-
 // FilePathHint returns the absolute config file path for user-facing messages,
-// or a home-relative path if the home directory cannot be resolved.
+// or a doc-style path (Dir/name) if the home directory cannot be resolved.
 func FilePathHint(name string) string {
 	if path, err := FilePath(name); err == nil {
 		return path
 	}
-	return FileRelPath(name)
+	return filepath.Join(Dir, name)
 }
 
 // JoinPath returns an absolute path under the CLI config directory.

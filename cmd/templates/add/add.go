@@ -21,7 +21,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	return &cobra.Command{
 		Use:     "add <owner/repo[@ref]>...",
 		Short:   "Adds a template repository source",
-		Long:    fmt.Sprintf("Adds one or more template repository sources to %s. These repositories are used by cre init to discover available templates.", creconfig.FileRelPath(templateconfig.TemplateConfigFile)),
+		Long:    fmt.Sprintf("Adds one or more template repository sources to your home directory (%s/%s). These repositories are used by cre init to discover available templates.", creconfig.Dir, templateconfig.TemplateConfigFile),
 		Args:    cobra.MinimumNArgs(1),
 		Example: "cre templates add smartcontractkit/cre-templates@main myorg/my-templates",
 		RunE: func(cmd *cobra.Command, args []string) error {

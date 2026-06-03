@@ -21,7 +21,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	return &cobra.Command{
 		Use:     "remove <owner/repo>...",
 		Short:   "Removes a template repository source",
-		Long:    fmt.Sprintf("Removes one or more template repository sources from %s. The ref portion is optional and ignored during matching.", creconfig.FileRelPath(templateconfig.TemplateConfigFile)),
+		Long:    fmt.Sprintf("Removes one or more template repository sources from your home directory (%s/%s). The ref portion is optional and ignored during matching.", creconfig.Dir, templateconfig.TemplateConfigFile),
 		Args:    cobra.MinimumNArgs(1),
 		Example: "cre templates remove smartcontractkit/cre-templates myorg/my-templates",
 		RunE: func(cmd *cobra.Command, args []string) error {
