@@ -19,14 +19,23 @@
       </label>
       <span id="wallet-status" class="status">Loading…</span>
       <div class="toolbar-spacer"></div>
-      <span id="mm-indicator" class="mm-indicator mm-off" title="MetaMask connection">
-        <span class="mm-dot" aria-hidden="true"></span>
-        <span id="mm-indicator-label">MetaMask not connected</span>
-      </span>
-      <button id="connect-mm-btn" type="button" class="btn-ghost">Connect MetaMask</button>
     </header>
 
     <section class="wallet-panel">
+      <section class="wallet-mm-bar" aria-label="MetaMask wallet">
+        <div class="wallet-mm-info">
+          <div class="wallet-mm-title-row">
+            <div class="wallet-mm-title">MetaMask wallet</div>
+            <span id="wallet-mm-status" class="wallet-mm-status wallet-mm-status-off">Disconnected</span>
+          </div>
+          <div id="wallet-mm-address" class="wallet-mm-address">Not connected</div>
+        </div>
+        <div class="wallet-mm-actions">
+          <button id="connect-mm-btn" type="button" class="btn-simulate">Connect MetaMask</button>
+          <button id="switch-mm-btn" type="button" class="btn-ghost is-hidden" hidden>Switch wallet</button>
+        </div>
+      </section>
+
       <p class="wallet-lead">
         Sign on-chain transactions with MetaMask instead of <code>CRE_ETH_PRIVATE_KEY</code>.
         Login uses the same OAuth flow as <code>cre login</code>.
@@ -58,6 +67,6 @@
     </main>
   </div>
 
-  <script type="module" src="./wallet-app.js"></script>
+  <script type="module" src="./wallet-app.js?v=3"></script>
 </body>
 </html>

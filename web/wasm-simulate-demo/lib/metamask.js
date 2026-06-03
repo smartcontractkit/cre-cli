@@ -145,6 +145,34 @@ export async function getConnectedAddress() {
     }
 }
 
+/** Remove in-page signer used by the simulate host. */
+export function clearGlobalSigner() {
+    delete globalThis.__creMetaMaskSigner;
+}
+
+/** Revoke site access to the selected account in MetaMask and clear the in-page signer. */
+export async function disconnectWallet() {
+    const eth = getEthereum();
+    if (eth) {
+        try {
+            await eth.request({
+                method: "wallet_revokePermissions",
+                params: [{ eth_accounts: {} }],
+            });
+        } catch (e) {
+            const code =
+                typeof e === "object" && e != null && "code" in e
+                    ? /** @type {{ code?: number }} */ (e).code
+                    : undefined;
+            if (code === 4001) {
+                rethrowMetaMaskError(e);
+            }
+            // Unsupported or nothing to revoke — still clear app-side signer below.
+        }
+    }
+    clearGlobalSigner();
+}
+
 /** @param {string} address */
 export function shortAddress(address) {
     if (!address || address.length < 10) {

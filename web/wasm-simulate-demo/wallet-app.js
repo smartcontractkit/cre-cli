@@ -12,6 +12,8 @@ import { initiateLinking, publishWorkflowDemo, registerWalletOnChain } from "./l
 import {
     MetaMaskUserRejectedError,
     connectWallet,
+    disconnectWallet,
+    ensureChain,
     formatMetaMaskError,
     getChainIdHex,
     getConnectedAddress,
@@ -23,12 +25,13 @@ import {
 
 const terminal = document.getElementById("terminal");
 const statusEl = document.getElementById("wallet-status");
-const mmIndicator = document.getElementById("mm-indicator");
-const mmIndicatorLabel = document.getElementById("mm-indicator-label");
 const loginBtn = document.getElementById("login-btn");
 const registerBtn = document.getElementById("register-wallet-btn");
 const publishBtn = document.getElementById("publish-wf-btn");
 const connectBtn = document.getElementById("connect-mm-btn");
+const switchBtn = document.getElementById("switch-mm-btn");
+const walletMmAddress = document.getElementById("wallet-mm-address");
+const walletMmStatus = document.getElementById("wallet-mm-status");
 const apiKeyInput = document.getElementById("api-key-input");
 const apiKeySaveBtn = document.getElementById("api-key-save-btn");
 const logoutBtn = document.getElementById("logout-btn");
@@ -36,6 +39,9 @@ const ownerLabelInput = document.getElementById("owner-label-input");
 
 /** @type {object | null} */
 let env = null;
+
+/** Ignore stale async MetaMask reads when events fire in quick succession. */
+let mmSyncGen = 0;
 
 const CHAIN_NAMES = {
     "0x1": "Mainnet",
@@ -65,64 +71,86 @@ function setStatus(text) {
     statusEl.textContent = text;
 }
 
-/**
- * @param {{ address: string | null, chainId: string | null }} state
- */
-async function updateMetaMaskIndicator(state = {}) {
-    if (!mmIndicator || !mmIndicatorLabel) {
+/** @param {HTMLElement | null} el @param {boolean} hidden */
+function setHidden(el, hidden) {
+    if (!el) {
         return;
     }
-    const address = state.address !== undefined ? state.address : await getConnectedAddress();
-    const chainId =
-        state.chainId !== undefined ? state.chainId : env ? await getChainIdHex() : await getChainIdHex();
+    el.hidden = hidden;
+    el.classList.toggle("is-hidden", hidden);
+}
 
-    mmIndicator.classList.remove("mm-on", "mm-off", "mm-warn");
-    connectBtn?.classList.remove("mm-connected");
+/** @param {string | null} address @param {string | null} chainId */
+function renderWalletPanel(address, chainId) {
+    const chainLabel = CHAIN_NAMES[chainId?.toLowerCase() ?? ""] ?? chainId ?? "";
+    const expectedChain = env?.workflowRegistryChainIdHex?.toLowerCase();
+    const actualChain = chainId?.toLowerCase();
+    const onExpectedChain = !expectedChain || !actualChain || actualChain === expectedChain;
+
+    if (walletMmAddress) {
+        if (!address) {
+            walletMmAddress.textContent = "Not connected";
+            walletMmAddress.classList.remove("wallet-mm-address-connected");
+        } else {
+            walletMmAddress.textContent = address + (chainLabel ? " · " + chainLabel : "");
+            walletMmAddress.classList.add("wallet-mm-address-connected");
+        }
+    }
+
+    if (walletMmStatus) {
+        walletMmStatus.classList.remove("wallet-mm-status-off", "wallet-mm-status-on", "wallet-mm-status-warn");
+        if (!hasMetaMask()) {
+            walletMmStatus.textContent = "Extension not installed";
+            walletMmStatus.classList.add("wallet-mm-status-off");
+        } else if (!address) {
+            walletMmStatus.textContent = "Disconnected";
+            walletMmStatus.classList.add("wallet-mm-status-off");
+        } else if (onExpectedChain) {
+            walletMmStatus.textContent = "Connected";
+            walletMmStatus.classList.add("wallet-mm-status-on");
+        } else {
+            const expectedLabel = CHAIN_NAMES[expectedChain ?? ""] ?? expectedChain;
+            walletMmStatus.textContent = "Wrong network (need " + expectedLabel + ")";
+            walletMmStatus.classList.add("wallet-mm-status-warn");
+        }
+    }
 
     if (!hasMetaMask()) {
-        mmIndicator.classList.add("mm-off");
-        mmIndicatorLabel.textContent = "MetaMask not installed";
         if (connectBtn) {
             connectBtn.textContent = "Connect MetaMask";
+            setHidden(connectBtn, false);
             connectBtn.disabled = true;
         }
+        setHidden(switchBtn, true);
         return;
     }
 
     if (connectBtn) {
         connectBtn.disabled = false;
+        connectBtn.textContent = "Connect MetaMask";
     }
 
     if (!address) {
-        mmIndicator.classList.add("mm-off");
-        mmIndicatorLabel.textContent = "MetaMask not connected";
-        if (connectBtn) {
-            connectBtn.textContent = "Connect MetaMask";
-        }
+        setHidden(connectBtn, false);
+        setHidden(switchBtn, true);
         return;
     }
 
-    const expectedChain = env?.workflowRegistryChainIdHex?.toLowerCase();
-    const actualChain = chainId?.toLowerCase();
-    const chainLabel = CHAIN_NAMES[actualChain ?? ""] ?? actualChain ?? "unknown network";
-    const onExpectedChain = !expectedChain || actualChain === expectedChain;
-
-    if (onExpectedChain) {
-        mmIndicator.classList.add("mm-on");
-        mmIndicatorLabel.textContent = "Connected · " + shortAddress(address) + " · " + chainLabel;
-        if (connectBtn) {
-            connectBtn.textContent = "Connected";
-            connectBtn.classList.add("mm-connected");
-        }
-    } else {
-        mmIndicator.classList.add("mm-warn");
-        const expectedLabel = CHAIN_NAMES[expectedChain ?? ""] ?? expectedChain;
-        mmIndicatorLabel.textContent =
-            "Connected · " + shortAddress(address) + " · wrong network (" + chainLabel + ", need " + expectedLabel + ")";
-        if (connectBtn) {
-            connectBtn.textContent = "Switch network";
-        }
+    setHidden(connectBtn, true);
+    setHidden(switchBtn, false);
+    if (switchBtn) {
+        switchBtn.disabled = false;
     }
+}
+
+async function syncMetaMaskUI() {
+    const gen = ++mmSyncGen;
+    const [address, chainId] = await Promise.all([getConnectedAddress(), getChainIdHex()]);
+    if (gen !== mmSyncGen) {
+        return;
+    }
+    renderWalletPanel(address, chainId);
+    refreshButtons();
 }
 
 function refreshButtons() {
@@ -149,8 +177,7 @@ async function refreshHeader() {
         parts.push("MM " + shortAddress(addr));
     }
     setStatus(parts.join(" · "));
-    await updateMetaMaskIndicator({ address: addr });
-    refreshButtons();
+    await syncMetaMaskUI();
 }
 
 async function init() {
@@ -167,9 +194,8 @@ async function init() {
     } else {
         installGlobalSigner();
         log("MetaMask signer registered for simulate page (window.__creMetaMaskSigner).", "ok");
-        onMetaMaskStateChange((state) => {
-            updateMetaMaskIndicator(state);
-            refreshButtons();
+        onMetaMaskStateChange(() => {
+            void syncMetaMaskUI();
         });
     }
     await refreshHeader();
@@ -210,14 +236,36 @@ loginBtn.addEventListener("click", async () => {
     await refreshHeader();
 });
 
-connectBtn.addEventListener("click", async () => {
+connectBtn?.addEventListener("click", async () => {
     try {
+        if (env?.workflowRegistryChainIdHex) {
+            await ensureChain(env.workflowRegistryChainIdHex);
+        }
         const addr = await connectWallet();
         installGlobalSigner();
         log("MetaMask connected: " + addr, "ok");
-        await updateMetaMaskIndicator({ address: addr });
     } catch (e) {
         logMetaMaskError(e, "MetaMask connect");
+    }
+    await refreshHeader();
+});
+
+switchBtn?.addEventListener("click", async () => {
+    const previous = await getConnectedAddress();
+    try {
+        await disconnectWallet();
+        if (env?.workflowRegistryChainIdHex) {
+            await ensureChain(env.workflowRegistryChainIdHex);
+        }
+        const addr = await connectWallet();
+        installGlobalSigner();
+        if (previous && previous.toLowerCase() !== addr.toLowerCase()) {
+            log("MetaMask switched from " + shortAddress(previous) + " to " + addr, "ok");
+        } else {
+            log("MetaMask wallet: " + addr, "ok");
+        }
+    } catch (e) {
+        logMetaMaskError(e, "Switch wallet");
     }
     await refreshHeader();
 });
@@ -225,7 +273,6 @@ connectBtn.addEventListener("click", async () => {
 registerBtn.addEventListener("click", async () => {
     try {
         const owner = await connectWallet();
-        await updateMetaMaskIndicator({ address: owner });
         const label = ownerLabelInput.value.trim() || "browser-demo";
         log("Initiating link-key for " + owner + " …", "dim");
         const linking = await initiateLinking(env, owner, label);
