@@ -2,7 +2,6 @@ package settings
 
 import (
 	"fmt"
-	"net/url"
 	"os"
 	"strings"
 
@@ -12,6 +11,7 @@ import (
 	"github.com/spf13/viper"
 	"sigs.k8s.io/yaml"
 
+	"github.com/smartcontractkit/cre-cli/internal/rpc"
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 )
 
@@ -277,20 +277,7 @@ func validateSettings(config *WorkflowSettings, allowUnknownChains bool) error {
 }
 
 func isValidRpcUrl(rpcURL string) error {
-	parsedURL, err := url.Parse(rpcURL)
-	if err != nil {
-		return fmt.Errorf("failed to parse RPC URL: invalid format")
-	}
-
-	// Check if the URL has a valid scheme and host
-	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
-		return fmt.Errorf("invalid scheme in RPC URL: %s", parsedURL.Scheme)
-	}
-	if parsedURL.Host == "" {
-		return fmt.Errorf("invalid host in RPC URL: %s", parsedURL.Host)
-	}
-
-	return nil
+	return rpc.IsValidURL(rpcURL)
 }
 
 func IsValidChainName(name string) error {
@@ -335,6 +322,8 @@ func ShouldSkipGetOwner(cmd *cobra.Command) bool {
 
 // ValidateDeploymentRPC ensures project settings define a valid RPC URL for chainName (e.g. the workflow
 // registry chain). It is a no-op when chainName is empty. Used during settings load and from secrets owner-key flows.
+//
+// TODO(DEVSVCS-5178)
 func ValidateDeploymentRPC(config *WorkflowSettings, chainName string) error {
 	if chainName == "" {
 		return nil

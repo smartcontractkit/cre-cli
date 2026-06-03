@@ -117,6 +117,10 @@ func New(ctx *runtime.Context) *cobra.Command {
 //   - MSIG step 1: build request, compute digest, write bundle, print steps
 //   - EOA: allowlist if needed, then POST to gateway
 func Execute(ctx context.Context, h *common.Handler, inputs DeleteSecretsInputs, duration time.Duration, secretsAuth string) error {
+	if _, err := h.EnsureVaultValidationOrConsent(ctx); err != nil {
+		return err
+	}
+
 	if !common.IsBrowserFlow(secretsAuth) {
 		if err := h.EnsureDeploymentRPCForOwnerKeySecrets(); err != nil {
 			return err

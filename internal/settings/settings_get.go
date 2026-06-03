@@ -47,6 +47,9 @@ type ExperimentalChain struct {
 	Forwarder     string `mapstructure:"forwarder" yaml:"forwarder"`
 }
 
+// GetRpcUrlSettings resolves the RPC URL for chainName from the current project target.
+//
+// TODO(DEVSVCS-5178)
 func GetRpcUrlSettings(v *viper.Viper, chainName string) (string, error) {
 	target, err := GetTarget(v)
 	if err != nil {
