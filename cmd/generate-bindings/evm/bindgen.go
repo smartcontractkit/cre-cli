@@ -1,4 +1,4 @@
-package bindings
+package evm
 
 import (
 	_ "embed"
@@ -11,7 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/compiler"
 	"github.com/ethereum/go-ethereum/crypto"
 
-	"github.com/smartcontractkit/cre-cli/cmd/generate-bindings/bindings/abigen"
+	"github.com/smartcontractkit/cre-cli/cmd/generate-bindings/evm/abigen"
 )
 
 //go:embed sourcecre.go.tpl

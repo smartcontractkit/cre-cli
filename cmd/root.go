@@ -29,11 +29,13 @@ import (
 	"github.com/smartcontractkit/cre-cli/cmd/workflow"
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/context"
+	"github.com/smartcontractkit/cre-cli/internal/creconfig"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/logger"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/telemetry"
+	"github.com/smartcontractkit/cre-cli/internal/tenantctx"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 	intupdate "github.com/smartcontractkit/cre-cli/internal/update"
 )
@@ -236,7 +238,14 @@ func newRootCommand() *cobra.Command {
 					spinner.Update("Loading user context...")
 				}
 				if err := runtimeContext.AttachTenantContext(cmd.Context()); err != nil {
-					ui.Warning("Failed to load user context")
+					if showSpinner {
+						spinner.Stop()
+					}
+					ui.ErrorWithSuggestions("Failed to load user context", []string{
+						"Run `cre login` to fetch your user context",
+						fmt.Sprintf("Ensure %s exists and is readable", creconfig.FilePathHint(tenantctx.ContextFile)),
+					})
+					return fmt.Errorf("user context required: %w", err)
 				}
 
 				// Check if organization is ungated for commands that require it
@@ -295,7 +304,14 @@ func newRootCommand() *cobra.Command {
 							spinner.Update("Loading user context...")
 						}
 						if err := runtimeContext.AttachTenantContext(cmd.Context()); err != nil {
-							ui.Warning("Failed to load user context")
+							if showSpinner {
+								spinner.Stop()
+							}
+							ui.ErrorWithSuggestions("Failed to load user context", []string{
+								"Run `cre login` to fetch your user context",
+								fmt.Sprintf("Ensure %s exists and is readable", creconfig.FilePathHint(tenantctx.ContextFile)),
+							})
+							return fmt.Errorf("user context required: %w", err)
 						}
 					}
 				}
@@ -524,6 +540,8 @@ func isLoadSettings(cmd *cobra.Command) bool {
 		"cre account list-key":          {},
 		"cre init":                      {},
 		"cre generate-bindings":         {},
+		"cre generate-bindings evm":     {},
+		"cre generate-bindings solana":  {},
 		"cre completion bash":           {},
 		"cre completion fish":           {},
 		"cre completion powershell":     {},
@@ -561,28 +579,30 @@ func isLoadSettings(cmd *cobra.Command) bool {
 func isLoadCredentials(cmd *cobra.Command) bool {
 	// It is not expected to have the credentials loaded when running the following commands
 	var excludedCommands = map[string]struct{}{
-		"cre version":                {},
-		"cre login":                  {},
-		"cre logout":                 {},
-		"cre completion bash":        {},
-		"cre completion fish":        {},
-		"cre completion powershell":  {},
-		"cre completion zsh":         {},
-		"cre help":                   {},
-		"cre generate-bindings":      {},
-		"cre update":                 {},
-		"cre workflow":               {},
-		"cre workflow limits":        {},
-		"cre workflow limits export": {},
-		"cre account":                {},
-		"cre secrets":                {},
-		"cre workflow build":         {},
-		"cre workflow hash":          {},
-		"cre templates":              {},
-		"cre templates list":         {},
-		"cre templates add":          {},
-		"cre templates remove":       {},
-		"cre":                        {},
+		"cre version":                  {},
+		"cre login":                    {},
+		"cre logout":                   {},
+		"cre completion bash":          {},
+		"cre completion fish":          {},
+		"cre completion powershell":    {},
+		"cre completion zsh":           {},
+		"cre help":                     {},
+		"cre generate-bindings":        {},
+		"cre generate-bindings evm":    {},
+		"cre generate-bindings solana": {},
+		"cre update":                   {},
+		"cre workflow":                 {},
+		"cre workflow limits":          {},
+		"cre workflow limits export":   {},
+		"cre account":                  {},
+		"cre secrets":                  {},
+		"cre workflow build":           {},
+		"cre workflow hash":            {},
+		"cre templates":                {},
+		"cre templates list":           {},
+		"cre templates add":            {},
+		"cre templates remove":         {},
+		"cre":                          {},
 	}
 
 	_, exists := excludedCommands[cmd.CommandPath()]

@@ -58,14 +58,11 @@ func RunAccountHappyPath(t *testing.T, tc TestConfig, testEthURL, chainName stri
 
 		// Handle authentication validation query
 		if strings.Contains(req.Query, "getCreOrganizationInfo") {
-			_ = json.NewEncoder(w).Encode(map[string]any{
-				"data": map[string]any{
-					"getCreOrganizationInfo": map[string]any{
-						"orgId":                 "test-org-id",
-						"derivedWorkflowOwners": []string{"ab12cd34ef56ab12cd34ef56ab12cd34ef56ab12"},
-					},
-				},
-			})
+			_ = json.NewEncoder(w).Encode(testutil.MockGetCreOrganizationInfoGraphQLPayload())
+			return
+		}
+		if testutil.QueryIsGetTenantConfig(req.Query) {
+			_ = json.NewEncoder(w).Encode(testutil.MockGetTenantConfigGraphQLPayload())
 			return
 		}
 
