@@ -9,13 +9,11 @@ import (
 	"github.com/rs/zerolog"
 	"gopkg.in/yaml.v3"
 
+	"github.com/smartcontractkit/cre-cli/internal/creconfig"
 	"github.com/smartcontractkit/cre-cli/internal/templaterepo"
 )
 
-const (
-	configDirName  = ".cre"
-	configFileName = "template.yaml"
-)
+const TemplateConfigFile = "template.yaml"
 
 // DefaultSources are the default template repositories.
 var DefaultSources = []templaterepo.RepoSource{
@@ -31,7 +29,7 @@ var DefaultSources = []templaterepo.RepoSource{
 	},
 }
 
-// Config represents the CLI template configuration file at ~/.cre/template.yaml.
+// Config represents the CLI template configuration file (TemplateConfigFile in the config directory).
 type Config struct {
 	TemplateRepositories []TemplateRepo `yaml:"templateRepositories"`
 }
@@ -43,7 +41,7 @@ type TemplateRepo struct {
 	Ref   string `yaml:"ref"`
 }
 
-// LoadTemplateSources returns the list of template sources from ~/.cre/template.yaml,
+// LoadTemplateSources returns template sources from the CLI config file,
 // falling back to the default source if the file doesn't exist.
 func LoadTemplateSources(logger *zerolog.Logger) []templaterepo.RepoSource {
 	cfg, err := loadConfigFile(logger)
@@ -62,16 +60,11 @@ func LoadTemplateSources(logger *zerolog.Logger) []templaterepo.RepoSource {
 	return DefaultSources
 }
 
-// SaveTemplateSources writes the given sources to ~/.cre/template.yaml.
+// SaveTemplateSources writes the given sources to the CLI template config file.
 func SaveTemplateSources(sources []templaterepo.RepoSource) error {
-	homeDir, err := os.UserHomeDir()
+	dir, err := creconfig.EnsureDir()
 	if err != nil {
-		return fmt.Errorf("get home directory: %w", err)
-	}
-
-	dir := filepath.Join(homeDir, configDirName)
-	if err := os.MkdirAll(dir, 0750); err != nil {
-		return fmt.Errorf("create config directory: %w", err)
+		return err
 	}
 
 	var repos []TemplateRepo
@@ -89,7 +82,7 @@ func SaveTemplateSources(sources []templaterepo.RepoSource) error {
 		return fmt.Errorf("marshal config: %w", err)
 	}
 
-	configPath := filepath.Join(dir, configFileName)
+	configPath := filepath.Join(dir, TemplateConfigFile)
 	tmp := configPath + ".tmp"
 	if err := os.WriteFile(tmp, data, 0600); err != nil {
 		return fmt.Errorf("write temp file: %w", err)
@@ -102,15 +95,13 @@ func SaveTemplateSources(sources []templaterepo.RepoSource) error {
 	return nil
 }
 
-// EnsureDefaultConfig creates ~/.cre/template.yaml with the default source
+// EnsureDefaultConfig creates the CLI template config file with the default source
 // if the file does not already exist.
 func EnsureDefaultConfig(logger *zerolog.Logger) error {
-	homeDir, err := os.UserHomeDir()
+	configPath, err := creconfig.FilePath(TemplateConfigFile)
 	if err != nil {
-		return fmt.Errorf("get home directory: %w", err)
+		return err
 	}
-
-	configPath := filepath.Join(homeDir, configDirName, configFileName)
 	if _, err := os.Stat(configPath); err == nil {
 		return nil // file already exists
 	}
@@ -143,12 +134,10 @@ func ParseRepoString(s string) (templaterepo.RepoSource, error) {
 }
 
 func loadConfigFile(logger *zerolog.Logger) (*Config, error) {
-	homeDir, err := os.UserHomeDir()
+	configPath, err := creconfig.FilePath(TemplateConfigFile)
 	if err != nil {
 		return nil, err
 	}
-
-	configPath := filepath.Join(homeDir, configDirName, configFileName)
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		if os.IsNotExist(err) {

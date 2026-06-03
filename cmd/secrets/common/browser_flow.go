@@ -61,7 +61,7 @@ func digestHexString(digest [32]byte) string {
 // executeBrowserUpsert handles secrets create/update when the user signs in with their organization account.
 // It encrypts the payload, binds a digest, requests a platform authorization URL, completes OAuth in the browser,
 // exchanges the code for a short-lived vault JWT, and POSTs the same JSON-RPC body to the gateway with Bearer auth.
-// Login tokens in ~/.cre/cre.yaml are not modified; that session stays separate from this vault-only token.
+// Login tokens in the CLI credentials file are not modified; that session stays separate from this vault-only token.
 func (h *Handler) executeBrowserUpsert(ctx context.Context, inputs UpsertSecretsInputs, method string) error {
 	if h.Credentials.AuthType == credentials.AuthTypeApiKey {
 		return fmt.Errorf("this sign-in flow requires an interactive login; API keys are not supported")
@@ -224,7 +224,7 @@ func (h *Handler) ExecuteBrowserVaultAuthorization(ctx context.Context, method s
 	})
 	var exchangeResp struct {
 		ExchangeAuthCodeToToken struct {
-			AccessToken string `json:"accessToken"` // #nosec G117 -- OAuth token exchange response field
+			AccessToken string `json:"accessToken"` // #nosec G117 -- matches OAuth token exchange response field
 			ExpiresIn   int    `json:"expiresIn"`
 		} `json:"exchangeAuthCodeToToken"`
 	}

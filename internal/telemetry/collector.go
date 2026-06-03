@@ -10,7 +10,11 @@ import (
 	"github.com/denisbrodbeck/machineid"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+
+	"github.com/smartcontractkit/cre-cli/internal/creconfig"
 )
+
+const MachineIDFile = "machine_id"
 
 // CollectMachineInfo gathers information about the machine running the CLI
 func CollectMachineInfo() MachineInfo {
@@ -42,10 +46,7 @@ func CollectWorkflowInfo(settings interface{}) *WorkflowInfo {
 
 // getOrCreateMachineID retrieves or generates a stable machine ID for telemetry
 func getOrCreateMachineID() (string, error) {
-	// Try to read existing machine ID from config (for backwards compatibility)
-	home, err := os.UserHomeDir()
-	if err == nil {
-		idFile := fmt.Sprintf("%s/.cre/machine_id", home)
+	if idFile, err := creconfig.FilePath(MachineIDFile); err == nil {
 		if data, err := os.ReadFile(idFile); err == nil && len(data) > 0 {
 			return strings.TrimSpace(string(data)), nil
 		}
