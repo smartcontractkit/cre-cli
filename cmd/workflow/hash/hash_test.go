@@ -1,6 +1,7 @@
 package hash
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"io"
@@ -15,6 +16,8 @@ import (
 	workflowUtils "github.com/smartcontractkit/chainlink-common/pkg/workflows"
 
 	cmdcommon "github.com/smartcontractkit/cre-cli/cmd/common"
+	"github.com/smartcontractkit/cre-cli/internal/runtime"
+	"github.com/smartcontractkit/cre-cli/internal/settings"
 )
 
 // Well-known test private key (never use on a real network).
@@ -22,6 +25,8 @@ const testPrivateKey = "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7b
 
 // Address derived from testPrivateKey.
 const testDerivedAddress = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+
+const testDerivedOwner = "0x1111111111111111111111111111111111111111"
 
 func TestResolveOwner_WithForUser(t *testing.T) {
 	t.Parallel()
@@ -76,7 +81,7 @@ func TestExecute_WithForUser(t *testing.T) {
 		WorkflowName: "test-workflow",
 	}
 
-	err := Execute(inputs)
+	err := Execute(context.Background(), inputs)
 	require.NoError(t, err)
 }
 
@@ -90,7 +95,7 @@ func TestExecute_WithoutForUser_UsesPrivateKey(t *testing.T) {
 		PrivateKey:   testPrivateKey,
 	}
 
-	err := Execute(inputs)
+	err := Execute(context.Background(), inputs)
 	require.NoError(t, err)
 }
 
@@ -103,9 +108,37 @@ func TestExecute_WithoutForUser_NoKey_Errors(t *testing.T) {
 		WorkflowName: "test-workflow",
 	}
 
-	err := Execute(inputs)
+	err := Execute(context.Background(), inputs)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "--public_key")
+}
+
+func TestResolveOwnerForRegistry_OffChainRequiresPublicKey(t *testing.T) {
+	t.Parallel()
+	_, err := ResolveOwnerForRegistry(settings.RegistryTypeOffChain, "", "0xSettingsOwner", testPrivateKey, "")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "--public_key")
+}
+
+func TestResolveOwnerForRegistry_OffChainUsesPublicKey(t *testing.T) {
+	t.Parallel()
+	addr, err := ResolveOwnerForRegistry(settings.RegistryTypeOffChain, "0xOwner", "0xSettingsOwner", testPrivateKey, testDerivedOwner)
+	require.NoError(t, err)
+	assert.Equal(t, "0xOwner", addr)
+}
+
+func TestResolveOwnerForRegistry_OffChainUsesDerivedOwner(t *testing.T) {
+	t.Parallel()
+	addr, err := ResolveOwnerForRegistry(settings.RegistryTypeOffChain, "", "0xSettingsOwner", testPrivateKey, testDerivedOwner)
+	require.NoError(t, err)
+	assert.Equal(t, testDerivedOwner, addr)
+}
+
+func TestResolveOwnerForRegistry_OnChainUsesDefaults(t *testing.T) {
+	t.Parallel()
+	addr, err := ResolveOwnerForRegistry(settings.RegistryTypeOnChain, "", "0xSettingsOwner", "", testDerivedOwner)
+	require.NoError(t, err)
+	assert.Equal(t, "0xSettingsOwner", addr)
 }
 
 func TestExecute_HashesAreDeterministic(t *testing.T) {
@@ -141,7 +174,7 @@ func TestExecute_HashesAreDeterministic(t *testing.T) {
 		"workflow ID should start with version byte 00")
 
 	// Running Execute should succeed (hashes are printed via ui, verified above)
-	err = Execute(inputs)
+	err = Execute(context.Background(), inputs)
 	require.NoError(t, err)
 }
 
@@ -155,7 +188,53 @@ func TestExecute_EmptyConfig(t *testing.T) {
 		WorkflowName: "test-workflow",
 	}
 
-	err := Execute(inputs)
+	err := Execute(context.Background(), inputs)
+	require.NoError(t, err)
+}
+
+func TestExecute_OffChainRequiresPublicKey(t *testing.T) {
+	wasmFile, configFile := setupTestArtifacts(t)
+
+	inputs := Inputs{
+		WasmPath:     wasmFile,
+		ConfigPath:   configFile,
+		WorkflowName: "test-workflow",
+		RegistryType: settings.RegistryTypeOffChain,
+	}
+
+	err := Execute(context.Background(), inputs)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "--public_key")
+}
+
+func TestExecute_OffChainUsesPublicKey(t *testing.T) {
+	wasmFile, configFile := setupTestArtifacts(t)
+
+	inputs := Inputs{
+		ForUser:      "0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF",
+		WasmPath:     wasmFile,
+		ConfigPath:   configFile,
+		WorkflowName: "test-workflow",
+		RegistryType: settings.RegistryTypeOffChain,
+		DerivedOwner: testDerivedOwner,
+	}
+
+	err := Execute(context.Background(), inputs)
+	require.NoError(t, err)
+}
+
+func TestExecute_OffChainUsesDerivedOwner(t *testing.T) {
+	wasmFile, configFile := setupTestArtifacts(t)
+
+	inputs := Inputs{
+		WasmPath:     wasmFile,
+		ConfigPath:   configFile,
+		WorkflowName: "test-workflow",
+		RegistryType: settings.RegistryTypeOffChain,
+		DerivedOwner: testDerivedOwner,
+	}
+
+	err := Execute(context.Background(), inputs)
 	require.NoError(t, err)
 }
 
@@ -217,8 +296,8 @@ func TestHashCommandFlags(t *testing.T) {
 	f := cmd.Flags().Lookup("public_key")
 	require.NotNil(t, f, "public_key flag should exist")
 	assert.Equal(t, "", f.DefValue)
-	assert.Contains(t, f.Usage, "Required when CRE_ETH_PRIVATE_KEY is not set")
-	assert.Contains(t, f.Usage, "Defaults to")
+	assert.Contains(t, f.Usage, "Required when the owner cannot be automatically derived")
+	assert.Contains(t, f.Usage, "overrides the owner derived")
 
 	f = cmd.Flags().Lookup("wasm")
 	require.NotNil(t, f, "wasm flag should exist")
@@ -228,6 +307,34 @@ func TestHashCommandFlags(t *testing.T) {
 
 	f = cmd.Flags().Lookup("no-config")
 	require.NotNil(t, f, "no-config flag should exist")
+}
+
+func TestResolveRegistryType(t *testing.T) {
+	t.Parallel()
+
+	runtimeContext := &runtime.Context{
+		Settings: &settings.Settings{
+			Workflow: settings.WorkflowSettings{
+				UserWorkflowSettings: struct {
+					WorkflowOwnerAddress string `mapstructure:"workflow-owner-address" yaml:"workflow-owner-address"`
+					WorkflowOwnerType    string `mapstructure:"workflow-owner-type" yaml:"workflow-owner-type"`
+					WorkflowName         string `mapstructure:"workflow-name" yaml:"workflow-name"`
+					DeploymentRegistry   string `mapstructure:"deployment-registry" yaml:"deployment-registry"`
+				}{
+					DeploymentRegistry: "private",
+				},
+			},
+		},
+	}
+
+	registryType, err := resolveRegistryType(runtimeContext)
+	require.NoError(t, err)
+	assert.Equal(t, settings.RegistryTypeOffChain, registryType)
+
+	runtimeContext.Settings.Workflow.UserWorkflowSettings.DeploymentRegistry = "mainnet"
+	registryType, err = resolveRegistryType(runtimeContext)
+	require.NoError(t, err)
+	assert.Equal(t, settings.RegistryTypeOnChain, registryType)
 }
 
 // setupTestArtifacts creates a minimal WASM file and config file in a temp directory.

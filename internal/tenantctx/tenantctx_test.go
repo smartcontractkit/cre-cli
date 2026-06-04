@@ -43,6 +43,10 @@ func gqlResponseOnChainAndPrivate() map[string]any {
 				"tenantId":         "42",
 				"defaultDonFamily": "zone-a",
 				"vaultGatewayUrl":  "https://gateway.example.com/",
+				"capabilitiesRegistry": map[string]any{
+					"chainSelector": "16015286601757825753",
+					"address":       "0x7f3191EaF73429177bAB3bAc5c36Ed2D5E39985f",
+				},
 				"registries": []any{
 					map[string]any{
 						"id":               "ethereum-testnet-sepolia",
@@ -59,6 +63,12 @@ func gqlResponseOnChainAndPrivate() map[string]any {
 						"secretsAuthFlows": []any{"BROWSER"},
 					},
 				},
+				"forwarders": []any{
+					map[string]any{
+						"chainSelector": "16015286601757825753",
+						"address":       "0x15fC6ae953E024d975e77382eEeC56A9101f9F88",
+					},
+				},
 			},
 		},
 	}
@@ -71,6 +81,10 @@ func gqlResponsePrivateOnly() map[string]any {
 				"tenantId":         "99",
 				"defaultDonFamily": "zone-b",
 				"vaultGatewayUrl":  "https://gateway-private.example.com/",
+				"capabilitiesRegistry": map[string]any{
+					"chainSelector": "5009297550715157269",
+					"address":       "0x76c9cf548b4179F8901cda1f8623568b58215E62",
+				},
 				"registries": []any{
 					map[string]any{
 						"id":               "private",
@@ -79,6 +93,7 @@ func gqlResponsePrivateOnly() map[string]any {
 						"secretsAuthFlows": []any{"BROWSER"},
 					},
 				},
+				"forwarders": []any{},
 			},
 		},
 	}
@@ -159,6 +174,27 @@ func TestFetchAndWriteContext_OnChainAndPrivate(t *testing.T) {
 	if len(private.SecretsAuthFlows) != 1 || private.SecretsAuthFlows[0] != "browser" {
 		t.Errorf("private SecretsAuthFlows = %v, want [browser]", private.SecretsAuthFlows)
 	}
+
+	if len(envCtx.Forwarders) != 1 {
+		t.Fatalf("expected 1 forwarder, got %d", len(envCtx.Forwarders))
+	}
+	f := envCtx.Forwarders[0]
+	if f.ChainSelector != 16015286601757825753 {
+		t.Errorf("forwarder chain selector = %d, want %d", f.ChainSelector, uint64(16015286601757825753))
+	}
+	if f.Address != "0x15fC6ae953E024d975e77382eEeC56A9101f9F88" {
+		t.Errorf("forwarder address = %q, want Sepolia mock forwarder", f.Address)
+	}
+
+	if envCtx.CapabilitiesRegistry == nil {
+		t.Fatal("expected capabilitiesRegistry to be populated")
+	}
+	if envCtx.CapabilitiesRegistry.ChainSelector != 16015286601757825753 {
+		t.Errorf("capabilitiesRegistry chain selector = %d, want %d", envCtx.CapabilitiesRegistry.ChainSelector, uint64(16015286601757825753))
+	}
+	if envCtx.CapabilitiesRegistry.Address != "0x7f3191EaF73429177bAB3bAc5c36Ed2D5E39985f" {
+		t.Errorf("capabilitiesRegistry address = %q, want staging mainline cap reg", envCtx.CapabilitiesRegistry.Address)
+	}
 }
 
 func TestFetchAndWriteContext_PrivateOnly(t *testing.T) {
@@ -183,6 +219,41 @@ func TestFetchAndWriteContext_PrivateOnly(t *testing.T) {
 	}
 	if envCtx.Registries[0].ID != "private" {
 		t.Errorf("ID = %q, want %q", envCtx.Registries[0].ID, "private")
+	}
+	if len(envCtx.Forwarders) != 0 {
+		t.Errorf("expected 0 forwarders, got %d", len(envCtx.Forwarders))
+	}
+	if envCtx.CapabilitiesRegistry == nil {
+		t.Fatal("expected capabilitiesRegistry to be populated")
+	}
+	if envCtx.CapabilitiesRegistry.ChainSelector != 5009297550715157269 {
+		t.Errorf("capabilitiesRegistry chain selector = %d, want %d", envCtx.CapabilitiesRegistry.ChainSelector, uint64(5009297550715157269))
+	}
+}
+
+func TestParseChainSelectorJSON(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		raw     string
+		want    uint64
+		wantErr bool
+	}{
+		{`"16015286601757825753"`, 16015286601757825753, false},
+		{`16015286601757825753`, 16015286601757825753, false},
+		{`null`, 0, true},
+		{`"not-a-number"`, 0, true},
+	}
+	for _, tc := range cases {
+		got, err := parseChainSelectorJSON([]byte(tc.raw))
+		if tc.wantErr {
+			if err == nil {
+				t.Errorf("raw %q: wanted error", tc.raw)
+			}
+			continue
+		}
+		if err != nil || got != tc.want {
+			t.Errorf("raw %q: got (%d, %v), want %d", tc.raw, got, err, tc.want)
+		}
 	}
 }
 
@@ -386,7 +457,7 @@ func TestMapRegistryType(t *testing.T) {
 		{"UNKNOWN", "unknown"},
 	}
 	for _, tt := range tests {
-		if got := mapRegistryType(tt.input); got != tt.want {
+		if got := mapRegistryType(tt.input, testutil.NewTestLogger()); got != tt.want {
 			t.Errorf("mapRegistryType(%q) = %q, want %q", tt.input, got, tt.want)
 		}
 	}

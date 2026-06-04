@@ -9,16 +9,17 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+
+	"github.com/smartcontractkit/cre-cli/internal/creconfig"
 )
 
 const (
 	templateListCacheDuration = 1 * time.Hour
 	tarballCacheDuration      = 24 * time.Hour
-	cacheDirName              = "template-cache"
-	creDirName                = ".cre"
+	TemplateCacheDir          = "template-cache"
 )
 
-// Cache manages template list and tarball caching at ~/.cre/template-cache/.
+// Cache manages template list and tarball caching under the CLI config directory.
 type Cache struct {
 	logger   *zerolog.Logger
 	cacheDir string
@@ -33,12 +34,10 @@ type templateListCache struct {
 
 // NewCache creates a new Cache instance.
 func NewCache(logger *zerolog.Logger) (*Cache, error) {
-	homeDir, err := os.UserHomeDir()
+	cacheDir, err := creconfig.JoinPath(TemplateCacheDir)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get home directory: %w", err)
+		return nil, fmt.Errorf("failed to get cache directory: %w", err)
 	}
-
-	cacheDir := filepath.Join(homeDir, creDirName, cacheDirName)
 	if err := os.MkdirAll(cacheDir, 0750); err != nil {
 		return nil, fmt.Errorf("failed to create cache directory: %w", err)
 	}

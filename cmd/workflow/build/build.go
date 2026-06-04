@@ -1,6 +1,7 @@
 package build
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -26,7 +27,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			outputPath, _ := cmd.Flags().GetString("output")
 			skipTypeChecks, _ := cmd.Flags().GetBool(cmdcommon.SkipTypeChecksCLIFlag)
-			return execute(args[0], outputPath, skipTypeChecks)
+			return execute(cmd.Context(), args[0], outputPath, skipTypeChecks)
 		},
 	}
 	buildCmd.Flags().StringP("output", "o", "", "Output file path for the compiled WASM binary (default: <workflow-folder>/binary.wasm)")
@@ -34,7 +35,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	return buildCmd
 }
 
-func execute(workflowFolder, outputPath string, skipTypeChecks bool) error {
+func execute(ctx context.Context, workflowFolder, outputPath string, skipTypeChecks bool) error {
 	workflowDir, err := filepath.Abs(workflowFolder)
 	if err != nil {
 		return fmt.Errorf("resolve workflow folder: %w", err)
@@ -60,7 +61,7 @@ func execute(workflowFolder, outputPath string, skipTypeChecks bool) error {
 	outputPath = cmdcommon.EnsureWasmExtension(outputPath)
 
 	ui.Dim("Compiling workflow...")
-	wasmBytes, err := cmdcommon.CompileWorkflowToWasm(resolvedPath, cmdcommon.WorkflowCompileOptions{
+	wasmBytes, err := cmdcommon.CompileWorkflowToWasm(ctx, resolvedPath, cmdcommon.WorkflowCompileOptions{
 		StripSymbols:   true,
 		SkipTypeChecks: skipTypeChecks,
 	})
