@@ -98,6 +98,7 @@ func New(ctx *runtime.Context) *cobra.Command {
 	}
 
 	settings.AddTxnTypeFlags(cmd)
+	settings.AddSkipConfirmation(cmd)
 
 	return cmd
 }
