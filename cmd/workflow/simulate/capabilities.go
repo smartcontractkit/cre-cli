@@ -21,7 +21,7 @@ import (
 
 // httpTriggerServerPort is the port on which the local HTTP server listens
 // when no --http-payload flag is supplied and the user chooses to POST the payload.
-const httpTriggerServerPort = 9090
+const httpTriggerServerPort = 2000
 
 // ManualTriggers holds chain-agnostic trigger services used in simulation.
 type ManualTriggers struct {
