@@ -698,23 +698,12 @@ func (c DataStorage) GetMultipleReserves(
 		return cre.PromiseFromResult[[]UpdateReserves](*new([]UpdateReserves), err)
 	}
 
-	var bn cre.Promise[*pb.BigInt]
-	if blockNumber == nil {
-		promise := c.client.HeaderByNumber(runtime, &evm.HeaderByNumberRequest{
-			BlockNumber: bindings.FinalizedBlockNumber,
-		})
-
-		bn = cre.Then(promise, func(finalizedBlock *evm.HeaderByNumberReply) (*pb.BigInt, error) {
-			if finalizedBlock == nil || finalizedBlock.Header == nil {
-				return nil, errors.New("failed to get finalized block header")
-			}
-			return finalizedBlock.Header.BlockNumber, nil
-		})
-	} else {
-		bn = cre.PromiseFromResult(pb.NewBigIntFromInt(blockNumber), nil)
+	bn := bindings.FinalizedBlockNumber
+	if blockNumber != nil {
+		bn = pb.NewBigIntFromInt(blockNumber)
 	}
 
-	promise := cre.ThenPromise(bn, func(bn *pb.BigInt) cre.Promise[*evm.CallContractReply] {
+	promise := cre.ThenPromise(cre.PromiseFromResult(bn, nil), func(bn *pb.BigInt) cre.Promise[*evm.CallContractReply] {
 		return c.client.CallContract(runtime, &evm.CallContractRequest{
 			Call:        &evm.CallMsg{To: c.Address.Bytes(), Data: calldata},
 			BlockNumber: bn,
@@ -735,23 +724,12 @@ func (c DataStorage) GetReserves(
 		return cre.PromiseFromResult[UpdateReserves](*new(UpdateReserves), err)
 	}
 
-	var bn cre.Promise[*pb.BigInt]
-	if blockNumber == nil {
-		promise := c.client.HeaderByNumber(runtime, &evm.HeaderByNumberRequest{
-			BlockNumber: bindings.FinalizedBlockNumber,
-		})
-
-		bn = cre.Then(promise, func(finalizedBlock *evm.HeaderByNumberReply) (*pb.BigInt, error) {
-			if finalizedBlock == nil || finalizedBlock.Header == nil {
-				return nil, errors.New("failed to get finalized block header")
-			}
-			return finalizedBlock.Header.BlockNumber, nil
-		})
-	} else {
-		bn = cre.PromiseFromResult(pb.NewBigIntFromInt(blockNumber), nil)
+	bn := bindings.FinalizedBlockNumber
+	if blockNumber != nil {
+		bn = pb.NewBigIntFromInt(blockNumber)
 	}
 
-	promise := cre.ThenPromise(bn, func(bn *pb.BigInt) cre.Promise[*evm.CallContractReply] {
+	promise := cre.ThenPromise(cre.PromiseFromResult(bn, nil), func(bn *pb.BigInt) cre.Promise[*evm.CallContractReply] {
 		return c.client.CallContract(runtime, &evm.CallContractRequest{
 			Call:        &evm.CallMsg{To: c.Address.Bytes(), Data: calldata},
 			BlockNumber: bn,
@@ -772,23 +750,12 @@ func (c DataStorage) GetTupleReserves(
 		return cre.PromiseFromResult[GetTupleReservesOutput](GetTupleReservesOutput{}, err)
 	}
 
-	var bn cre.Promise[*pb.BigInt]
-	if blockNumber == nil {
-		promise := c.client.HeaderByNumber(runtime, &evm.HeaderByNumberRequest{
-			BlockNumber: bindings.FinalizedBlockNumber,
-		})
-
-		bn = cre.Then(promise, func(finalizedBlock *evm.HeaderByNumberReply) (*pb.BigInt, error) {
-			if finalizedBlock == nil || finalizedBlock.Header == nil {
-				return nil, errors.New("failed to get finalized block header")
-			}
-			return finalizedBlock.Header.BlockNumber, nil
-		})
-	} else {
-		bn = cre.PromiseFromResult(pb.NewBigIntFromInt(blockNumber), nil)
+	bn := bindings.FinalizedBlockNumber
+	if blockNumber != nil {
+		bn = pb.NewBigIntFromInt(blockNumber)
 	}
 
-	promise := cre.ThenPromise(bn, func(bn *pb.BigInt) cre.Promise[*evm.CallContractReply] {
+	promise := cre.ThenPromise(cre.PromiseFromResult(bn, nil), func(bn *pb.BigInt) cre.Promise[*evm.CallContractReply] {
 		return c.client.CallContract(runtime, &evm.CallContractRequest{
 			Call:        &evm.CallMsg{To: c.Address.Bytes(), Data: calldata},
 			BlockNumber: bn,
@@ -809,23 +776,12 @@ func (c DataStorage) GetValue(
 		return cre.PromiseFromResult[string](*new(string), err)
 	}
 
-	var bn cre.Promise[*pb.BigInt]
-	if blockNumber == nil {
-		promise := c.client.HeaderByNumber(runtime, &evm.HeaderByNumberRequest{
-			BlockNumber: bindings.FinalizedBlockNumber,
-		})
-
-		bn = cre.Then(promise, func(finalizedBlock *evm.HeaderByNumberReply) (*pb.BigInt, error) {
-			if finalizedBlock == nil || finalizedBlock.Header == nil {
-				return nil, errors.New("failed to get finalized block header")
-			}
-			return finalizedBlock.Header.BlockNumber, nil
-		})
-	} else {
-		bn = cre.PromiseFromResult(pb.NewBigIntFromInt(blockNumber), nil)
+	bn := bindings.FinalizedBlockNumber
+	if blockNumber != nil {
+		bn = pb.NewBigIntFromInt(blockNumber)
 	}
 
-	promise := cre.ThenPromise(bn, func(bn *pb.BigInt) cre.Promise[*evm.CallContractReply] {
+	promise := cre.ThenPromise(cre.PromiseFromResult(bn, nil), func(bn *pb.BigInt) cre.Promise[*evm.CallContractReply] {
 		return c.client.CallContract(runtime, &evm.CallContractRequest{
 			Call:        &evm.CallMsg{To: c.Address.Bytes(), Data: calldata},
 			BlockNumber: bn,
@@ -847,23 +803,12 @@ func (c DataStorage) ReadData(
 		return cre.PromiseFromResult[string](*new(string), err)
 	}
 
-	var bn cre.Promise[*pb.BigInt]
-	if blockNumber == nil {
-		promise := c.client.HeaderByNumber(runtime, &evm.HeaderByNumberRequest{
-			BlockNumber: bindings.FinalizedBlockNumber,
-		})
-
-		bn = cre.Then(promise, func(finalizedBlock *evm.HeaderByNumberReply) (*pb.BigInt, error) {
-			if finalizedBlock == nil || finalizedBlock.Header == nil {
-				return nil, errors.New("failed to get finalized block header")
-			}
-			return finalizedBlock.Header.BlockNumber, nil
-		})
-	} else {
-		bn = cre.PromiseFromResult(pb.NewBigIntFromInt(blockNumber), nil)
+	bn := bindings.FinalizedBlockNumber
+	if blockNumber != nil {
+		bn = pb.NewBigIntFromInt(blockNumber)
 	}
 
-	promise := cre.ThenPromise(bn, func(bn *pb.BigInt) cre.Promise[*evm.CallContractReply] {
+	promise := cre.ThenPromise(cre.PromiseFromResult(bn, nil), func(bn *pb.BigInt) cre.Promise[*evm.CallContractReply] {
 		return c.client.CallContract(runtime, &evm.CallContractRequest{
 			Call:        &evm.CallMsg{To: c.Address.Bytes(), Data: calldata},
 			BlockNumber: bn,
