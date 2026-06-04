@@ -887,7 +887,7 @@ func RunPrivateRegistryAuthAndSettingsFinalize(t *testing.T, envPath, blankWorkf
 	tenantCtx := &tenantctx.EnvironmentContext{
 		DefaultDonFamily: "test-don",
 		Registries: []*tenantctx.Registry{
-			{ID: "reg-test", Type: "OFF_CHAIN"},
+			{ID: "reg-test", Type: string(settings.RegistryTypeOffChain)},
 		},
 	}
 	resolved, err := settings.ResolveRegistry("reg-test", tenantCtx, envSet)
