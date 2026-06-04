@@ -1,12 +1,10 @@
 package multi_command_flows
 
 import (
-	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -317,15 +315,8 @@ func secretsListMsig(t *testing.T, tc TestConfig) string {
 		"--unsigned",
 		"--" + settings.Flags.SkipConfirmation.Name,
 	}
-	cmd := exec.Command(CLIPath, args...)
-	// Let CLI handle context switching - don't set cmd.Dir manually
-
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	_ = cmd.Run()
-	out := stdout.String() + stderr.String()
+	res, _ := runCLI(t, args)
+	out := res.Combined()
 
 	return StripANSI(out)
 }
@@ -360,15 +351,8 @@ func secretsCreateEoa(t *testing.T, tc TestConfig) (bool, string) {
 		tc.GetProjectRootFlag(),
 		"--" + settings.Flags.SkipConfirmation.Name,
 	}
-	cmd := exec.Command(CLIPath, args...)
-	// Let CLI handle context switching - don't set cmd.Dir manually
-
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	_ = cmd.Run()
-	out := stdout.String() + stderr.String()
+	res, _ := runCLI(t, args)
+	out := res.Combined()
 
 	allowed := strings.Contains(out, "Digest allowlisted; proceeding to gateway POST") ||
 		strings.Contains(out, "Digest already allowlisted; skipping on-chain allowlist")
@@ -406,15 +390,8 @@ func secretsUpdateEoa(t *testing.T, tc TestConfig) (bool, string) {
 		tc.GetProjectRootFlag(),
 		"--" + settings.Flags.SkipConfirmation.Name,
 	}
-	cmd := exec.Command(CLIPath, args...)
-	// Let CLI handle context switching - don't set cmd.Dir manually
-
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	_ = cmd.Run()
-	out := stdout.String() + stderr.String()
+	res, _ := runCLI(t, args)
+	out := res.Combined()
 
 	allowed := strings.Contains(out, "Digest allowlisted; proceeding to gateway POST") ||
 		strings.Contains(out, "Digest already allowlisted; skipping on-chain allowlist")
@@ -435,15 +412,8 @@ func secretsListEoa(t *testing.T, tc TestConfig, ns string) (bool, string) {
 		tc.GetProjectRootFlag(),
 		"--" + settings.Flags.SkipConfirmation.Name,
 	}
-	cmd := exec.Command(CLIPath, args...)
-	// Let CLI handle context switching - don't set cmd.Dir manually
-
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	_ = cmd.Run()
-	out := stdout.String() + stderr.String()
+	res, _ := runCLI(t, args)
+	out := res.Combined()
 
 	allowed := strings.Contains(out, "Digest allowlisted; proceeding to gateway POST") ||
 		strings.Contains(out, "Digest already allowlisted; skipping on-chain allowlist")
@@ -475,14 +445,8 @@ func secretsDeleteEoa(t *testing.T, tc TestConfig, ns string) (bool, string) {
 		tc.GetProjectRootFlag(),
 		"--" + settings.Flags.SkipConfirmation.Name,
 	}
-	cmd := exec.Command(CLIPath, args...)
-	// Let CLI handle context switching - don't set cmd.Dir manually
-
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-	_ = cmd.Run()
-
-	out := stdout.String() + stderr.String()
+	res, _ := runCLI(t, args)
+	out := res.Combined()
 	allowed := strings.Contains(out, "Digest allowlisted; proceeding to gateway POST") ||
 		strings.Contains(out, "Digest already allowlisted; skipping on-chain allowlist")
 	return allowed, StripANSI(out)

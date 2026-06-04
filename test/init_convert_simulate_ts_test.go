@@ -13,6 +13,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
+	"github.com/smartcontractkit/cre-cli/internal/testutil/cretest"
 )
 
 // TestE2EInit_ConvertToCustomBuild_TS: init (typescriptSimpleExample), bun install, simulate (capture),
@@ -20,6 +21,7 @@ import (
 // workflow-wrapper, write custom compile-to-js with define section in Bun.build, patch main.ts, Makefile.
 // make with FLAG=customFlag/differentFlag, simulate and assert.
 func TestE2EInit_ConvertToCustomBuild_TS(t *testing.T) {
+	isolatedEnv(t)
 	tempDir := t.TempDir()
 	projectName := "e2e-convert-ts"
 	workflowName := "tsWorkflow"
@@ -34,17 +36,13 @@ func TestE2EInit_ConvertToCustomBuild_TS(t *testing.T) {
 	defer gqlSrv.Close()
 
 	// --- cre init with typescriptSimpleExample ---
-	var stdout, stderr bytes.Buffer
-	initCmd := exec.Command(CLIPath, "init",
+	requireCLI(t, "cre init failed", []string{"init",
 		"--project-root", tempDir,
 		"--project-name", projectName,
 		"--template-id", templateID,
 		"--workflow-name", workflowName,
-	)
-	initCmd.Dir = tempDir
-	initCmd.Stdout = &stdout
-	initCmd.Stderr = &stderr
-	require.NoError(t, initCmd.Run(), "cre init failed:\nSTDOUT:\n%s\nSTDERR:\n%s", stdout.String(), stderr.String())
+	}, cretest.WithDir(tempDir))
+	var stdout, stderr bytes.Buffer
 
 	require.FileExists(t, filepath.Join(projectRoot, constants.DefaultProjectSettingsFileName))
 	require.DirExists(t, workflowDirectory)
@@ -134,21 +132,16 @@ build:
 func convertTSBuildWithFlagAndAssert(t *testing.T, projectRoot, workflowDir, workflowName, envVar, wantSubstr string) {
 	t.Helper()
 	convertRunMakeBuild(t, workflowDir, envVar)
-	var stdout, stderr bytes.Buffer
 	workflowDirAbs, err := filepath.Abs(workflowDir)
 	require.NoError(t, err)
-	cmd := exec.Command(CLIPath, "workflow", "simulate", workflowDirAbs,
+	opts := []cretest.RunOption{cretest.WithDir(projectRoot)}
+	if envVar != "" {
+		opts = append(opts, cretest.WithExtraEnv(envVar))
+	}
+	res := requireCLI(t, "simulate failed", []string{"workflow", "simulate", workflowDirAbs,
 		"--project-root", projectRoot,
 		"--non-interactive", "--trigger-index=0",
 		"--target=staging-settings",
-	)
-	cmd.Dir = projectRoot
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	// Simulate runs CompileWorkflowToWasm which runs make build again; pass env so the rebuild uses the same FLAG
-	if envVar != "" {
-		cmd.Env = append(os.Environ(), envVar)
-	}
-	require.NoError(t, cmd.Run(), "simulate failed:\nSTDOUT:\n%s\nSTDERR:\n%s", stdout.String(), stderr.String())
-	require.Contains(t, stdout.String(), wantSubstr)
+	}, opts...)
+	require.Contains(t, res.Stdout, wantSubstr)
 }

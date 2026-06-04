@@ -4,12 +4,20 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 const Dir = ".cre"
 
+// ConfigDirEnvVar overrides the CLI config directory (absolute path to the directory
+// that contains context.yaml, cre.yaml, etc.). When unset, config lives under $HOME/.cre.
+const ConfigDirEnvVar = "CRE_CONFIG_DIR"
+
 // DirPath returns the absolute path to the CLI config directory.
 func DirPath() (string, error) {
+	if dir := strings.TrimSpace(os.Getenv(ConfigDirEnvVar)); dir != "" {
+		return filepath.Abs(dir)
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("get home dir: %w", err)

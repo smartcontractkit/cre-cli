@@ -17,6 +17,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/testutil"
+	"github.com/smartcontractkit/cre-cli/internal/testutil/cretest"
 )
 
 func newMockGQLServer(t *testing.T, response map[string]any) *httptest.Server {
@@ -120,7 +121,7 @@ func TestFetchAndWriteContext_OnChainAndPrivate(t *testing.T) {
 	srv := newMockGQLServer(t, gqlResponseOnChainAndPrivate())
 	defer srv.Close()
 
-	t.Setenv("HOME", t.TempDir())
+	cretest.IsolateConfig(t)
 	log := testutil.NewTestLogger()
 	client := newGQLClient(t, srv.URL)
 
@@ -201,7 +202,7 @@ func TestFetchAndWriteContext_PrivateOnly(t *testing.T) {
 	srv := newMockGQLServer(t, gqlResponsePrivateOnly())
 	defer srv.Close()
 
-	t.Setenv("HOME", t.TempDir())
+	cretest.IsolateConfig(t)
 	log := testutil.NewTestLogger()
 	client := newGQLClient(t, srv.URL)
 
@@ -266,7 +267,7 @@ func TestFetchAndWriteContext_GQLError(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	t.Setenv("HOME", t.TempDir())
+	cretest.IsolateConfig(t)
 	log := testutil.NewTestLogger()
 	client := newGQLClient(t, srv.URL)
 
@@ -280,7 +281,7 @@ func TestFetchAndWriteContext_EnvNameUppercased(t *testing.T) {
 	srv := newMockGQLServer(t, gqlResponsePrivateOnly())
 	defer srv.Close()
 
-	t.Setenv("HOME", t.TempDir())
+	cretest.IsolateConfig(t)
 	log := testutil.NewTestLogger()
 	client := newGQLClient(t, srv.URL)
 
@@ -370,8 +371,7 @@ func TestEnsureContext_APIKeyAlwaysFetches(t *testing.T) {
 	srv := newCountingGQLServer(t, &callCount, gqlResponsePrivateOnly())
 	defer srv.Close()
 
-	tmpHome := t.TempDir()
-	t.Setenv("HOME", tmpHome)
+	cretest.IsolateConfig(t)
 
 	log := testutil.NewTestLogger()
 	creds := &credentials.Credentials{AuthType: credentials.AuthTypeApiKey, APIKey: "test-key"}
@@ -399,8 +399,7 @@ func TestEnsureContext_BearerUsesCached(t *testing.T) {
 	srv := newCountingGQLServer(t, &callCount, gqlResponsePrivateOnly())
 	defer srv.Close()
 
-	tmpHome := t.TempDir()
-	t.Setenv("HOME", tmpHome)
+	cretest.IsolateConfig(t)
 
 	log := testutil.NewTestLogger()
 	creds := &credentials.Credentials{
@@ -430,7 +429,7 @@ func TestEnsureContext_DefaultsToProduction(t *testing.T) {
 	srv := newMockGQLServer(t, gqlResponsePrivateOnly())
 	defer srv.Close()
 
-	t.Setenv("HOME", t.TempDir())
+	cretest.IsolateConfig(t)
 	log := testutil.NewTestLogger()
 	creds := &credentials.Credentials{AuthType: credentials.AuthTypeApiKey, APIKey: "test-key"}
 	envSet := &environments.EnvironmentSet{EnvName: "", GraphQLURL: srv.URL}
@@ -479,7 +478,7 @@ func TestFetchAndWriteContext_PersistsUnknownRegistryType(t *testing.T) {
 	srv := newMockGQLServer(t, response)
 	defer srv.Close()
 
-	t.Setenv("HOME", t.TempDir())
+	cretest.IsolateConfig(t)
 	log := testutil.NewTestLogger()
 	client := newGQLClient(t, srv.URL)
 

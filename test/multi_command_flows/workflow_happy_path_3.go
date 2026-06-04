@@ -1,12 +1,10 @@
 package multi_command_flows
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -17,6 +15,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/testutil"
+	"github.com/smartcontractkit/cre-cli/internal/testutil/cretest"
 )
 
 // workflowInit runs cre init to initialize a new workflow project from scratch
@@ -61,25 +60,10 @@ func workflowInit(t *testing.T, projectRootFlag, projectName, workflowName strin
 		"--template", "hello-world-go", // Use the built-in Go template
 	}
 
-	cmd := exec.Command(CLIPath, args...)
-
-	// Set working directory to where the project should be created
 	parts := strings.Split(projectRootFlag, "=")
 	require.Len(t, parts, 2, "invalid project root flag format")
-	cmd.Dir = parts[1]
-
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-
-	require.NoError(
-		t,
-		cmd.Run(),
-		"cre init failed:\nSTDOUT:\n%s\nSTDERR:\n%s",
-		stdout.String(),
-		stderr.String(),
-	)
-
-	output = StripANSI(stdout.String() + stderr.String())
+	res := requireCLI(t, "cre init failed", args, cretest.WithDir(parts[1]))
+	output = StripANSI(res.Combined())
 	return
 }
 
@@ -187,16 +171,8 @@ func workflowDeployUnsigned(t *testing.T, tc TestConfig, projectRootFlag, workfl
 		"--" + settings.Flags.SkipConfirmation.Name,
 	}
 
-	cmd := exec.Command(CLIPath, args...)
-	// Let CLI handle context switching - don't set cmd.Dir manually
-
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-
-	err := cmd.Run()
-	out := StripANSI(stdout.String() + stderr.String())
-
-	return out, err
+	res, err := runCLI(t, args)
+	return StripANSI(res.Combined()), err
 }
 
 // workflowDeployWithConfigAndLinkedKey deploys a workflow with config using a pre-linked address
@@ -299,23 +275,8 @@ func workflowDeployWithConfigAndLinkedKey(t *testing.T, tc TestConfig, projectRo
 		"--" + settings.Flags.SkipConfirmation.Name,
 	}
 
-	cmd := exec.Command(CLIPath, args...)
-	// Let CLI handle context switching - don't set cmd.Dir manually
-
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-
-	require.NoError(
-		t,
-		cmd.Run(),
-		"cre workflow deploy failed:\nSTDOUT:\n%s\nSTDERR:\n%s",
-		stdout.String(),
-		stderr.String(),
-	)
-
-	out := StripANSI(stdout.String() + stderr.String())
-
-	return out
+	res := requireCLI(t, "cre workflow deploy failed", args)
+	return StripANSI(res.Combined())
 }
 
 // updateProjectSettings updates the project.yaml file with test settings

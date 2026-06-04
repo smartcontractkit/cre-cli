@@ -31,7 +31,7 @@ test-e2e:
 
 # test-quick: run tests with 30s timeout, skipping slow/flaky e2e tests. Use -short so TestE2EInit_ConvertToCustomBuild_TS is skipped.
 test-quick:
-	$(GOTEST) ./... -v -short -skip 'MultiCommandHappyPaths|TestPostToGateway|TestBlankWorkflowSimulation|TestWaitForBackendLinkProcessing|TestTryAutoLink|TestCheckLinkStatusViaGraphQL|Fails to run tests with invalid Go code' -timeout 30s
+	$(GOTEST) ./... -v -short -skip 'TestWorkflow_|TestSecrets_|TestAccount_|TestPostToGateway|TestBlankWorkflowSimulation|TestWaitForBackendLinkProcessing|TestTryAutoLink|TestCheckLinkStatusViaGraphQL|Fails to run tests with invalid Go code' -timeout 30s
 
 clean:
 	$(GOCLEAN)

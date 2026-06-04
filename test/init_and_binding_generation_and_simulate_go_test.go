@@ -12,9 +12,11 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
+	"github.com/smartcontractkit/cre-cli/internal/testutil/cretest"
 )
 
 func TestE2EInit_DevPoRTemplate(t *testing.T) {
+	isolatedEnv(t)
 	tempDir := t.TempDir()
 	projectName := "e2e-init-test"
 	workflowName := "devPoRWorkflow"
@@ -38,19 +40,8 @@ func TestE2EInit_DevPoRTemplate(t *testing.T) {
 		"--template", templateName,
 		"--workflow-name", workflowName,
 	}
+	requireCLI(t, "cre init failed", initArgs, cretest.WithDir(tempDir))
 	var stdout, stderr bytes.Buffer
-	initCmd := exec.Command(CLIPath, initArgs...)
-	initCmd.Dir = tempDir
-	initCmd.Stdout = &stdout
-	initCmd.Stderr = &stderr
-
-	require.NoError(
-		t,
-		initCmd.Run(),
-		"cre init failed:\nSTDOUT:\n%s\nSTDERR:\n%s",
-		stdout.String(),
-		stderr.String(),
-	)
 
 	require.FileExists(t, filepath.Join(projectRoot, constants.DefaultProjectSettingsFileName))
 	require.FileExists(t, filepath.Join(projectRoot, constants.DefaultEnvFileName))
@@ -105,16 +96,5 @@ func TestE2EInit_DevPoRTemplate(t *testing.T) {
 		"--trigger-index=0",
 		"--target=staging-settings",
 	}
-	simulateCmd := exec.Command(CLIPath, simulateArgs...)
-	simulateCmd.Dir = projectRoot
-	simulateCmd.Stdout = &stdout
-	simulateCmd.Stderr = &stderr
-
-	require.NoError(
-		t,
-		simulateCmd.Run(),
-		"cre workflow simulate failed:\nSTDOUT:\n%s\nSTDERR:\n%s",
-		stdout.String(),
-		stderr.String(),
-	)
+	requireCLI(t, "cre workflow simulate failed", simulateArgs, cretest.WithDir(projectRoot))
 }

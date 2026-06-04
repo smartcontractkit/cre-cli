@@ -1,12 +1,10 @@
 package multi_command_flows
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -119,23 +117,8 @@ func workflowDeployEoa(t *testing.T, tc TestConfig) string {
 		"--" + settings.Flags.SkipConfirmation.Name,
 	}
 
-	cmd := exec.Command(CLIPath, args...)
-	// Let CLI handle context switching - don't set cmd.Dir manually
-
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-
-	require.NoError(
-		t,
-		cmd.Run(),
-		"cre workflow deploy failed:\nSTDOUT:\n%s\nSTDERR:\n%s",
-		stdout.String(),
-		stderr.String(),
-	)
-
-	out := StripANSI(stdout.String() + stderr.String())
-
-	return out
+	res := requireCLI(t, "cre workflow deploy failed", args)
+	return StripANSI(res.Combined())
 }
 
 // workflowDeployUpdateWithConfig deploys a workflow update with config via CLI, mocking GraphQL + Origin.
@@ -237,23 +220,8 @@ func workflowDeployUpdateWithConfig(t *testing.T, tc TestConfig) string {
 		"--" + settings.Flags.SkipConfirmation.Name,
 	}
 
-	cmd := exec.Command(CLIPath, args...)
-	// Let CLI handle context switching - don't set cmd.Dir manually
-
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-
-	require.NoError(
-		t,
-		cmd.Run(),
-		"cre workflow deploy update failed:\nSTDOUT:\n%s\nSTDERR:\n%s",
-		stdout.String(),
-		stderr.String(),
-	)
-
-	out := StripANSI(stdout.String() + stderr.String())
-
-	return out
+	res := requireCLI(t, "cre workflow deploy update failed", args)
+	return StripANSI(res.Combined())
 }
 
 // RunHappyPath2Workflow runs the complete happy path 2 workflow:

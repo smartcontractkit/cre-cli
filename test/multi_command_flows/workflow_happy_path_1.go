@@ -1,12 +1,9 @@
 package multi_command_flows
 
 import (
-	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"os/exec"
 	"regexp"
 	"strings"
 	"testing"
@@ -24,14 +21,6 @@ type TestConfig interface {
 	GetCliEnvFlag() string
 	GetProjectRootFlag() string
 }
-
-// CLI path for testing
-var CLIPath = os.TempDir() + string(os.PathSeparator) + "cre" + func() string {
-	if os.PathSeparator == '\\' {
-		return ".exe"
-	}
-	return ""
-}()
 
 // Regular expression to strip ANSI escape codes from output
 var ansiRE = regexp.MustCompile(`\x1b\[[0-9;]*m`)
@@ -148,21 +137,8 @@ func workflowDeployEoaWithMockStorage(t *testing.T, tc TestConfig) (output strin
 		"--" + settings.Flags.SkipConfirmation.Name,
 	}
 
-	cmd := exec.Command(CLIPath, args...)
-	// Let CLI handle context switching - don't set cmd.Dir manually
-
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-
-	require.NoError(
-		t,
-		cmd.Run(),
-		"cre workflow deploy failed:\nSTDOUT:\n%s\nSTDERR:\n%s",
-		stdout.String(),
-		stderr.String(),
-	)
-
-	output = StripANSI(stdout.String() + stderr.String())
+	res := requireCLI(t, "cre workflow deploy failed", args)
+	output = StripANSI(res.Combined())
 	return
 }
 
@@ -183,21 +159,8 @@ func workflowPauseEoa(t *testing.T, tc TestConfig, gqlURL string) string {
 		"--" + settings.Flags.SkipConfirmation.Name,
 	}
 
-	cmd := exec.Command(CLIPath, args...)
-	// CLI will handle context switching automatically
-
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-
-	require.NoError(
-		t,
-		cmd.Run(),
-		"cre workflow pause failed:\nSTDOUT:\n%s\nSTDERR:\n%s",
-		stdout.String(),
-		stderr.String(),
-	)
-
-	return StripANSI(stdout.String() + stderr.String())
+	res := requireCLI(t, "cre workflow pause failed", args)
+	return StripANSI(res.Combined())
 }
 
 // workflowActivateEoa activates the workflow (by owner+name) via CLI.
@@ -217,21 +180,8 @@ func workflowActivateEoa(t *testing.T, tc TestConfig, gqlURL string) string {
 		"--" + settings.Flags.SkipConfirmation.Name,
 	}
 
-	cmd := exec.Command(CLIPath, args...)
-	// CLI will handle context switching automatically
-
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-
-	require.NoError(
-		t,
-		cmd.Run(),
-		"cre workflow activate failed:\nSTDOUT:\n%s\nSTDERR:\n%s",
-		stdout.String(),
-		stderr.String(),
-	)
-
-	return StripANSI(stdout.String() + stderr.String())
+	res := requireCLI(t, "cre workflow activate failed", args)
+	return StripANSI(res.Combined())
 }
 
 // workflowDeleteEoa deletes for the current owner+name via CLI (non-interactive).
@@ -251,21 +201,8 @@ func workflowDeleteEoa(t *testing.T, tc TestConfig, gqlURL string) string {
 		"--" + settings.Flags.SkipConfirmation.Name,
 	}
 
-	cmd := exec.Command(CLIPath, args...)
-	// CLI will handle context switching automatically
-
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-
-	require.NoError(
-		t,
-		cmd.Run(),
-		"cre workflow delete failed:\nSTDOUT:\n%s\nSTDERR:\n%s",
-		stdout.String(),
-		stderr.String(),
-	)
-
-	return StripANSI(stdout.String() + stderr.String())
+	res := requireCLI(t, "cre workflow delete failed", args)
+	return StripANSI(res.Combined())
 }
 
 // RunHappyPath1Workflow runs the complete happy path 1 workflow:

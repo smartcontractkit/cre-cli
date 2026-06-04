@@ -14,9 +14,10 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/testutil"
+	"github.com/smartcontractkit/cre-cli/internal/testutil/cretest"
 )
 
-func setupCredentialFile(t *testing.T, home string, token string) {
+func setupCredentialFile(t *testing.T, token string) {
 	t.Helper()
 	dir, err := creconfig.EnsureDir()
 	if err != nil {
@@ -42,8 +43,7 @@ func setupCredentialFile(t *testing.T, home string, token string) {
 }
 
 func TestExecute_NoCredentialsFile(t *testing.T) {
-	tDir := t.TempDir()
-	t.Setenv("HOME", tDir)
+	cretest.IsolateConfig(t)
 
 	creds := credentials.Credentials{
 		Tokens:   &credentials.CreLoginTokenSet{},
@@ -64,10 +64,9 @@ func TestExecute_NoCredentialsFile(t *testing.T) {
 }
 
 func TestExecute_SuccessRevocationAndRemoval(t *testing.T) {
-	tDir := t.TempDir()
-	t.Setenv("HOME", tDir)
+	cretest.IsolateConfig(t)
 	token := "test-refresh-token"
-	setupCredentialFile(t, tDir, token)
+	setupCredentialFile(t, token)
 
 	var received bool
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -123,10 +122,9 @@ func TestExecute_SuccessRevocationAndRemoval(t *testing.T) {
 }
 
 func TestExecute_RevocationFails_StillRemovesFile(t *testing.T) {
-	tDir := t.TempDir()
-	t.Setenv("HOME", tDir)
+	cretest.IsolateConfig(t)
 	token := "bad-refresh-token"
-	setupCredentialFile(t, tDir, token)
+	setupCredentialFile(t, token)
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)

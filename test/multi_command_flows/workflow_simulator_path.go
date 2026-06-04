@@ -1,12 +1,10 @@
 package multi_command_flows
 
 import (
-	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
@@ -100,20 +98,8 @@ func RunSimulationHappyPath(t *testing.T, tc TestConfig, projectDir string) {
 			"--target=staging-settings",
 		}
 
-		cmd := exec.Command(CLIPath, args...)
-
-		var stdout, stderr bytes.Buffer
-		cmd.Stdout, cmd.Stderr = &stdout, &stderr
-
-		require.NoError(
-			t,
-			cmd.Run(),
-			"cre workflow simulation failed:\nSTDOUT:\n%s\nSTDERR:\n%s",
-			stdout.String(),
-			stderr.String(),
-		)
-
-		out := StripANSI(stdout.String() + stderr.String())
+		res := requireCLI(t, "cre workflow simulation failed", args)
+		out := StripANSI(res.Combined())
 
 		require.Contains(t, out, "Workflow compiled", "expected workflow to compile.\nCLI OUTPUT:\n%s", out)
 		require.Contains(t, out, "[SIMULATION] Simulator Initialized", "expected workflow to initialize.\nCLI OUTPUT:\n%s", out)

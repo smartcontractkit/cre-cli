@@ -13,7 +13,7 @@ import (
 
 func TestNew_Default(t *testing.T) {
 	t.Setenv(CreApiKeyVar, "")
-	t.Setenv("HOME", t.TempDir())
+	isolateCREConfig(t)
 	logger := testutil.NewTestLogger()
 
 	_, err := New(logger)
@@ -24,7 +24,7 @@ func TestNew_Default(t *testing.T) {
 
 func TestNew_WithEnvAPIKey(t *testing.T) {
 	t.Setenv(CreApiKeyVar, "env-key")
-	t.Setenv("HOME", t.TempDir())
+	isolateCREConfig(t)
 	logger := testutil.NewTestLogger()
 
 	cfg, err := New(logger)
@@ -40,8 +40,7 @@ func TestNew_WithEnvAPIKey(t *testing.T) {
 }
 func TestNew_WithConfigFile(t *testing.T) {
 	t.Setenv(CreApiKeyVar, "")
-	tDir := t.TempDir()
-	t.Setenv("HOME", tDir)
+	isolateCREConfig(t)
 
 	dir, err := creconfig.EnsureDir()
 	if err != nil {
@@ -411,6 +410,16 @@ func TestCheckIsUngatedOrganization_InvalidJWTFormat(t *testing.T) {
 			}
 		})
 	}
+}
+
+func isolateCREConfig(t *testing.T) string {
+	t.Helper()
+	dir := filepath.Join(t.TempDir(), creconfig.Dir)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatalf("mkdir config dir: %v", err)
+	}
+	t.Setenv(creconfig.ConfigDirEnvVar, dir)
+	return dir
 }
 
 func TestSecureRemove(t *testing.T) {

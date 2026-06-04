@@ -1,14 +1,11 @@
 package multi_command_flows
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"os/exec"
-	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -19,13 +16,13 @@ import (
 
 	"github.com/smartcontractkit/cre-cli/internal/authvalidation"
 	"github.com/smartcontractkit/cre-cli/internal/constants"
-	"github.com/smartcontractkit/cre-cli/internal/creconfig"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/ethkeys"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/tenantctx"
 	"github.com/smartcontractkit/cre-cli/internal/testutil"
+	"github.com/smartcontractkit/cre-cli/internal/testutil/cretest"
 	"github.com/smartcontractkit/cre-cli/internal/testutil/testjwt"
 )
 
@@ -54,79 +51,6 @@ func mockGetCreOrganizationInfoGraphQLPayload() map[string]any {
 			},
 		},
 	}
-}
-
-// CreateTestBearerCredentialsHome writes JWT bearer credentials under the CLI config directory for subprocess CLI tests.
-func CreateTestBearerCredentialsHome(t *testing.T) string {
-	t.Helper()
-
-	homeDir := t.TempDir()
-	creDir := filepath.Join(homeDir, creconfig.Dir)
-	require.NoError(t, os.MkdirAll(creDir, 0o700), "failed to create config dir")
-
-	jwt := createTestJWT("test-org-id")
-	creConfig := "AccessToken: " + jwt + "\n" +
-		"IDToken: test-id-token\n" +
-		"RefreshToken: test-refresh-token\n" +
-		"ExpiresIn: 3600\n" +
-		"TokenType: Bearer\n"
-
-	require.NoError(t, os.WriteFile(filepath.Join(creDir, credentials.ConfigFile), []byte(creConfig), 0o600), "failed to write test credentials")
-
-	return homeDir
-}
-
-// realGoCacheEnv returns GOPATH and GOMODCACHE locations outside t.TempDir()-backed HOME dirs.
-// Overriding HOME makes Go default GOPATH to $HOME/go; module files are read-only and break TempDir cleanup.
-func realGoCacheEnv(t *testing.T) (gopath, gomodcache string) {
-	t.Helper()
-
-	realHome, err := os.UserHomeDir()
-	require.NoError(t, err, "failed to get real home dir")
-
-	gopath = os.Getenv("GOPATH")
-	if gopath == "" {
-		gopath = filepath.Join(realHome, "go")
-	}
-
-	gomodcache = os.Getenv("GOMODCACHE")
-	if gomodcache == "" {
-		gomodcache = filepath.Join(gopath, "pkg", "mod")
-	}
-
-	return gopath, gomodcache
-}
-
-// pinGoCacheForTestHome keeps module cache out of temp HOME directories in the test process.
-func pinGoCacheForTestHome(t *testing.T) {
-	t.Helper()
-	gopath, gomodcache := realGoCacheEnv(t)
-	t.Setenv("GOPATH", gopath)
-	t.Setenv("GOMODCACHE", gomodcache)
-}
-
-// cliChildEnv builds subprocess env with isolated HOME for credentials and pinned Go cache paths.
-func cliChildEnv(t *testing.T, testHome string) []string {
-	t.Helper()
-	gopath, gomodcache := realGoCacheEnv(t)
-
-	childEnv := make([]string, 0, len(os.Environ())+4)
-	for _, entry := range os.Environ() {
-		if strings.HasPrefix(entry, "HOME=") ||
-			strings.HasPrefix(entry, "USERPROFILE=") ||
-			strings.HasPrefix(entry, "GOPATH=") ||
-			strings.HasPrefix(entry, "GOMODCACHE=") {
-			continue
-		}
-		childEnv = append(childEnv, entry)
-	}
-	childEnv = append(childEnv,
-		"HOME="+testHome,
-		"USERPROFILE="+testHome,
-		"GOPATH="+gopath,
-		"GOMODCACHE="+gomodcache,
-	)
-	return childEnv
 }
 
 func createTestJWT(orgID string) string {
@@ -295,25 +219,12 @@ func workflowDeployPrivateRegistry(t *testing.T, tc TestConfig) string {
 		"--" + settings.Flags.SkipConfirmation.Name,
 	}
 
-	cmd := exec.Command(CLIPath, args...)
-	testHome := CreateTestBearerCredentialsHome(t)
-	cmd.Env = cliChildEnv(t, testHome)
-
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-
-	require.NoError(
-		t,
-		cmd.Run(),
-		"cre workflow deploy failed:\nSTDOUT:\n%s\nSTDERR:\n%s",
-		stdout.String(),
-		stderr.String(),
-	)
+	res := requireCLI(t, "cre workflow deploy failed", args, cretest.WithBearerCredentials("test-org-id"))
 	require.True(t, presignedPostCalled.Load(), "expected GeneratePresignedPostUrlForArtifact to be called")
 	require.True(t, uploadCalled.Load(), "expected artifact upload endpoint to be called")
 	require.True(t, upsertCalled.Load(), "expected UpsertOffchainWorkflow to be called")
 
-	return StripANSI(stdout.String() + stderr.String())
+	return StripANSI(res.Combined())
 }
 
 // RunWorkflowPrivateRegistryHappyPath runs the workflow deploy happy path for private registry.
@@ -454,24 +365,11 @@ func workflowPausePrivateRegistry(t *testing.T, tc TestConfig) string {
 		"--" + settings.Flags.SkipConfirmation.Name,
 	}
 
-	cmd := exec.Command(CLIPath, args...)
-	testHome := CreateTestBearerCredentialsHome(t)
-	cmd.Env = cliChildEnv(t, testHome)
-
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-
-	require.NoError(
-		t,
-		cmd.Run(),
-		"cre workflow pause failed:\nSTDOUT:\n%s\nSTDERR:\n%s",
-		stdout.String(),
-		stderr.String(),
-	)
+	res := requireCLI(t, "cre workflow pause failed", args, cretest.WithBearerCredentials("test-org-id"))
 	require.True(t, getWorkflowCalled.Load(), "expected GetOffchainWorkflowByName to be called")
 	require.True(t, pauseWorkflowCalled.Load(), "expected PauseOffchainWorkflow to be called")
 
-	return StripANSI(stdout.String() + stderr.String())
+	return StripANSI(res.Combined())
 }
 
 // RunWorkflowPausePrivateRegistryHappyPath runs the workflow pause happy path for private registry.
@@ -609,24 +507,11 @@ func workflowActivatePrivateRegistry(t *testing.T, tc TestConfig) string {
 		"--" + settings.Flags.SkipConfirmation.Name,
 	}
 
-	cmd := exec.Command(CLIPath, args...)
-	testHome := CreateTestBearerCredentialsHome(t)
-	cmd.Env = cliChildEnv(t, testHome)
-
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-
-	require.NoError(
-		t,
-		cmd.Run(),
-		"cre workflow activate failed:\nSTDOUT:\n%s\nSTDERR:\n%s",
-		stdout.String(),
-		stderr.String(),
-	)
+	res := requireCLI(t, "cre workflow activate failed", args, cretest.WithBearerCredentials("test-org-id"))
 	require.True(t, getWorkflowCalled.Load(), "expected GetOffchainWorkflowByName to be called")
 	require.True(t, activateWorkflowCalled.Load(), "expected ActivateOffchainWorkflow to be called")
 
-	return StripANSI(stdout.String() + stderr.String())
+	return StripANSI(res.Combined())
 }
 
 // RunWorkflowActivatePrivateRegistryHappyPath runs the workflow activate happy path for private registry.
@@ -752,24 +637,11 @@ func workflowDeletePrivateRegistry(t *testing.T, tc TestConfig) string {
 		"--" + settings.Flags.SkipConfirmation.Name,
 	}
 
-	cmd := exec.Command(CLIPath, args...)
-	testHome := CreateTestBearerCredentialsHome(t)
-	cmd.Env = cliChildEnv(t, testHome)
-
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-
-	require.NoError(
-		t,
-		cmd.Run(),
-		"cre workflow delete failed:\nSTDOUT:\n%s\nSTDERR:\n%s",
-		stdout.String(),
-		stderr.String(),
-	)
+	res := requireCLI(t, "cre workflow delete failed", args, cretest.WithBearerCredentials("test-org-id"))
 	require.True(t, getWorkflowCalled.Load(), "expected GetOffchainWorkflowByName to be called")
 	require.True(t, deleteWorkflowCalled.Load(), "expected DeleteOffchainWorkflow to be called")
 
-	return StripANSI(stdout.String() + stderr.String())
+	return StripANSI(res.Combined())
 }
 
 // RunWorkflowDeletePrivateRegistryHappyPath runs the workflow delete happy path for private registry.
@@ -843,10 +715,9 @@ func RunPrivateRegistryAuthAndSettingsFinalize(t *testing.T, envPath, blankWorkf
 	defer orgSrv.Close()
 	t.Setenv(environments.EnvVarGraphQLURL, orgSrv.URL+"/graphql")
 
-	bearerHome := CreateTestBearerCredentialsHome(t)
-	t.Setenv("HOME", bearerHome)
-	t.Setenv("USERPROFILE", bearerHome)
-	pinGoCacheForTestHome(t)
+	env := cretest.NewEnv(t)
+	cretest.SeedBearerCredentials(t, env.ConfigDir, "test-org-id")
+	cretest.PinGoCacheForProcess(t)
 
 	logger := testutil.NewTestLogger()
 	creds, err := credentials.New(logger)

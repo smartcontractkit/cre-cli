@@ -11,9 +11,11 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
+	"github.com/smartcontractkit/cre-cli/internal/testutil/cretest"
 )
 
 func TestE2EInit_DevPoRTemplateTS(t *testing.T) {
+	isolatedEnv(t)
 	tempDir := t.TempDir()
 	projectName := "e2e-init-test"
 	workflowName := "devPoRWorkflow"
@@ -23,8 +25,6 @@ func TestE2EInit_DevPoRTemplateTS(t *testing.T) {
 
 	ethKey := "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
 	t.Setenv(settings.EthPrivateKeyEnvVar, ethKey)
-
-	// Set dummy API key
 	t.Setenv(credentials.CreApiKeyVar, "test-api")
 
 	gqlSrv := NewGraphQLMockServerGetOrganization(t)
@@ -37,19 +37,7 @@ func TestE2EInit_DevPoRTemplateTS(t *testing.T) {
 		"--template", templateName,
 		"--workflow-name", workflowName,
 	}
-	var stdout, stderr bytes.Buffer
-	initCmd := exec.Command(CLIPath, initArgs...)
-	initCmd.Dir = tempDir
-	initCmd.Stdout = &stdout
-	initCmd.Stderr = &stderr
-
-	require.NoError(
-		t,
-		initCmd.Run(),
-		"cre init failed:\nSTDOUT:\n%s\nSTDERR:\n%s",
-		stdout.String(),
-		stderr.String(),
-	)
+	requireCLI(t, "cre init failed", initArgs, cretest.WithDir(tempDir))
 
 	require.FileExists(t, filepath.Join(projectRoot, constants.DefaultProjectSettingsFileName))
 	require.FileExists(t, filepath.Join(projectRoot, constants.DefaultEnvFileName))
@@ -60,25 +48,13 @@ func TestE2EInit_DevPoRTemplateTS(t *testing.T) {
 		require.FileExists(t, filepath.Join(workflowDirectory, f), "missing workflow file %q", f)
 	}
 
-	// --- bun install in the workflow directory ---
-	stdout.Reset()
-	stderr.Reset()
+	var stdout, stderr bytes.Buffer
 	bunCmd := exec.Command("bun", "install")
 	bunCmd.Dir = workflowDirectory
 	bunCmd.Stdout = &stdout
 	bunCmd.Stderr = &stderr
+	require.NoError(t, bunCmd.Run(), "bun install failed:\nSTDOUT:\n%s\nSTDERR:\n%s", stdout.String(), stderr.String())
 
-	require.NoError(
-		t,
-		bunCmd.Run(),
-		"bun install failed:\nSTDOUT:\n%s\nSTDERR:\n%s",
-		stdout.String(),
-		stderr.String(),
-	)
-
-	// --- cre workflow simulate devPoRWorkflow ---
-	stdout.Reset()
-	stderr.Reset()
 	simulateArgs := []string{
 		"workflow", "simulate",
 		workflowName,
@@ -87,16 +63,5 @@ func TestE2EInit_DevPoRTemplateTS(t *testing.T) {
 		"--trigger-index=0",
 		"--target=staging-settings",
 	}
-	simulateCmd := exec.Command(CLIPath, simulateArgs...)
-	simulateCmd.Dir = projectRoot
-	simulateCmd.Stdout = &stdout
-	simulateCmd.Stderr = &stderr
-
-	require.NoError(
-		t,
-		simulateCmd.Run(),
-		"cre workflow simulate failed:\nSTDOUT:\n%s\nSTDERR:\n%s",
-		stdout.String(),
-		stderr.String(),
-	)
+	requireCLI(t, "cre workflow simulate failed", simulateArgs, cretest.WithDir(projectRoot))
 }

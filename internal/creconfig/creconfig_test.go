@@ -6,9 +6,24 @@ import (
 	"testing"
 )
 
+func TestDirPath_CRE_CONFIG_DIR(t *testing.T) {
+	override := filepath.Join(t.TempDir(), "isolated-cre")
+	t.Setenv(ConfigDirEnvVar, override)
+
+	got, err := DirPath()
+	if err != nil {
+		t.Fatalf("DirPath() error: %v", err)
+	}
+	want, _ := filepath.Abs(override)
+	if got != want {
+		t.Fatalf("DirPath() = %q, want %q", got, want)
+	}
+}
+
 func TestDirPath(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv(ConfigDirEnvVar, "")
 
 	got, err := DirPath()
 	if err != nil {
@@ -23,6 +38,7 @@ func TestDirPath(t *testing.T) {
 func TestFilePath(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv(ConfigDirEnvVar, "")
 
 	got, err := FilePath("context.yaml")
 	if err != nil {
@@ -37,6 +53,7 @@ func TestFilePath(t *testing.T) {
 func TestJoinPath(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv(ConfigDirEnvVar, "")
 
 	got, err := JoinPath("template-cache", "list.json")
 	if err != nil {
@@ -51,6 +68,7 @@ func TestJoinPath(t *testing.T) {
 func TestFilePathHint(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv(ConfigDirEnvVar, "")
 
 	got := FilePathHint("context.yaml")
 	want := filepath.Join(home, Dir, "context.yaml")
@@ -72,6 +90,7 @@ func TestFilePathHint_FallsBackToRelPath(t *testing.T) {
 func TestEnsureDir(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv(ConfigDirEnvVar, "")
 
 	dir, err := EnsureDir()
 	if err != nil {

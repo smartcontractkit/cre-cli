@@ -1,7 +1,6 @@
 package multi_command_flows
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -10,7 +9,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"os/exec"
 	"strconv"
 	"strings"
 	"testing"
@@ -221,13 +219,8 @@ func RunAccountHappyPath(t *testing.T, tc TestConfig, testEthURL, chainName stri
 			"-l", "owner-label-1",
 			"--" + settings.Flags.SkipConfirmation.Name,
 		}
-		cmd := exec.Command(CLIPath, args...)
-
-		var stdout, stderr bytes.Buffer
-		cmd.Stdout, cmd.Stderr = &stdout, &stderr
-
-		err := cmd.Run()
-		out := StripANSI(stdout.String() + stderr.String())
+		res, err := runCLI(t, args)
+		out := StripANSI(res.Combined())
 
 		// Test CLI behavior - GraphQL interaction and response parsing
 		require.Contains(t, out, "Starting linking", "should announce linking start")
@@ -263,14 +256,8 @@ func RunAccountHappyPath(t *testing.T, tc TestConfig, testEthURL, chainName stri
 			tc.GetCliEnvFlag(),
 			tc.GetProjectRootFlag(),
 		}
-		cmd := exec.Command(CLIPath, args...)
-
-		var stdout, stderr bytes.Buffer
-		cmd.Stdout, cmd.Stderr = &stdout, &stderr
-
-		require.NoError(t, cmd.Run(), "list-key should not fail")
-
-		out := StripANSI(stdout.String() + stderr.String())
+		res := requireCLI(t, "list-key should not fail", args)
+		out := StripANSI(res.Combined())
 		require.Contains(t, out, "Workflow owners retrieved successfully", "should show success message")
 
 		// Check for linked owner (if link succeeded) or empty list (if link failed at contract level)
@@ -293,13 +280,8 @@ func RunAccountHappyPath(t *testing.T, tc TestConfig, testEthURL, chainName stri
 			tc.GetProjectRootFlag(),
 			"--" + settings.Flags.SkipConfirmation.Name,
 		}
-		cmd := exec.Command(CLIPath, args...)
-
-		var stdout, stderr bytes.Buffer
-		cmd.Stdout, cmd.Stderr = &stdout, &stderr
-
-		err := cmd.Run()
-		out := StripANSI(stdout.String() + stderr.String())
+		res, err := runCLI(t, args)
+		out := StripANSI(res.Combined())
 
 		// Test CLI behavior for unlink
 		require.Contains(t, out, "Starting unlinking", "should announce unlinking start")
@@ -331,14 +313,8 @@ func RunAccountHappyPath(t *testing.T, tc TestConfig, testEthURL, chainName stri
 			tc.GetCliEnvFlag(),
 			tc.GetProjectRootFlag(),
 		}
-		cmd := exec.Command(CLIPath, args...)
-
-		var stdout, stderr bytes.Buffer
-		cmd.Stdout, cmd.Stderr = &stdout, &stderr
-
-		require.NoError(t, cmd.Run(), "list-key should not fail")
-
-		out := StripANSI(stdout.String() + stderr.String())
+		res := requireCLI(t, "list-key should not fail", args)
+		out := StripANSI(res.Combined())
 		require.Contains(t, out, "Workflow owners retrieved successfully", "should show success message")
 
 		// After unlink, should show no linked owners

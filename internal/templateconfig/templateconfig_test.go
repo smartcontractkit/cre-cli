@@ -11,6 +11,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/creconfig"
 	"github.com/smartcontractkit/cre-cli/internal/templaterepo"
 	"github.com/smartcontractkit/cre-cli/internal/testutil"
+	"github.com/smartcontractkit/cre-cli/internal/testutil/cretest"
 )
 
 func TestParseRepoString(t *testing.T) {
@@ -46,7 +47,7 @@ func TestLoadTemplateSourcesDefault(t *testing.T) {
 	logger := testutil.NewTestLogger()
 
 	// Point HOME to a temp dir with no config file
-	t.Setenv("HOME", t.TempDir())
+	cretest.IsolateConfig(t)
 
 	sources := LoadTemplateSources(logger)
 	require.Len(t, sources, len(DefaultSources))
@@ -57,8 +58,7 @@ func TestLoadTemplateSourcesDefault(t *testing.T) {
 func TestLoadTemplateSourcesFromConfigFile(t *testing.T) {
 	logger := testutil.NewTestLogger()
 
-	homeDir := t.TempDir()
-	t.Setenv("HOME", homeDir)
+	cretest.IsolateConfig(t)
 
 	configDir, err := creconfig.DirPath()
 	require.NoError(t, err)
@@ -85,8 +85,7 @@ func TestLoadTemplateSourcesFromConfigFile(t *testing.T) {
 func TestSaveTemplateSources(t *testing.T) {
 	logger := testutil.NewTestLogger()
 
-	homeDir := t.TempDir()
-	t.Setenv("HOME", homeDir)
+	cretest.IsolateConfig(t)
 
 	sources := []templaterepo.RepoSource{
 		{Owner: "org1", Repo: "repo1", Ref: "main"},
@@ -116,8 +115,7 @@ func TestEnsureDefaultConfig(t *testing.T) {
 	logger := testutil.NewTestLogger()
 
 	t.Run("creates file when missing", func(t *testing.T) {
-		homeDir := t.TempDir()
-		t.Setenv("HOME", homeDir)
+		cretest.IsolateConfig(t)
 
 		require.NoError(t, EnsureDefaultConfig(logger))
 
@@ -130,8 +128,7 @@ func TestEnsureDefaultConfig(t *testing.T) {
 	})
 
 	t.Run("no-op when file exists", func(t *testing.T) {
-		homeDir := t.TempDir()
-		t.Setenv("HOME", homeDir)
+		cretest.IsolateConfig(t)
 
 		// Write custom config first
 		custom := []templaterepo.RepoSource{
@@ -151,8 +148,7 @@ func TestEnsureDefaultConfig(t *testing.T) {
 func TestAddRepoToExisting(t *testing.T) {
 	logger := testutil.NewTestLogger()
 
-	homeDir := t.TempDir()
-	t.Setenv("HOME", homeDir)
+	cretest.IsolateConfig(t)
 
 	// Start with defaults
 	require.NoError(t, SaveTemplateSources(DefaultSources))

@@ -14,11 +14,13 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
+	"github.com/smartcontractkit/cre-cli/internal/testutil/cretest"
 )
 
 // TestE2EInit_ConvertToCustomBuild_Go: init (blank Go), simulate (capture), convert, make build, simulate (require match),
 // then add FlagProof/constA/constB/Makefile FLAG, make with FLAG=customFlag/differentFlag, simulate and assert.
 func TestE2EInit_ConvertToCustomBuild_Go(t *testing.T) {
+	isolatedEnv(t)
 	tempDir := t.TempDir()
 	projectName := "e2e-convert-go"
 	workflowName := "goWorkflow"
@@ -33,17 +35,13 @@ func TestE2EInit_ConvertToCustomBuild_Go(t *testing.T) {
 	defer gqlSrv.Close()
 
 	// --- cre init with blank Go template ---
-	var stdout, stderr bytes.Buffer
-	initCmd := exec.Command(CLIPath, "init",
+	requireCLI(t, "cre init failed", []string{"init",
 		"--project-root", tempDir,
 		"--project-name", projectName,
 		"--template-id", templateID,
 		"--workflow-name", workflowName,
-	)
-	initCmd.Dir = tempDir
-	initCmd.Stdout = &stdout
-	initCmd.Stderr = &stderr
-	require.NoError(t, initCmd.Run(), "cre init failed:\nSTDOUT:\n%s\nSTDERR:\n%s", stdout.String(), stderr.String())
+	}, cretest.WithDir(tempDir))
+	var stdout, stderr bytes.Buffer
 
 	require.FileExists(t, filepath.Join(projectRoot, constants.DefaultProjectSettingsFileName))
 	require.DirExists(t, workflowDirectory)
@@ -104,19 +102,15 @@ const FlagProof = "unset"
 func convertGoBuildWithFlagAndAssert(t *testing.T, projectRoot, workflowDir, workflowName, envVar, wantSubstr, wantSubstr2 string) {
 	t.Helper()
 	convertRunMakeBuild(t, workflowDir, envVar)
-	var stdout, stderr bytes.Buffer
-	cmd := exec.Command(CLIPath, "workflow", "simulate", workflowName,
+	opts := []cretest.RunOption{cretest.WithDir(projectRoot)}
+	if envVar != "" {
+		opts = append(opts, cretest.WithExtraEnv(envVar))
+	}
+	res := requireCLI(t, "simulate failed", []string{"workflow", "simulate", workflowName,
 		"--project-root", projectRoot,
 		"--non-interactive", "--trigger-index=0",
 		"--target=staging-settings",
-	)
-	cmd.Dir = projectRoot
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	if envVar != "" {
-		cmd.Env = append(os.Environ(), envVar)
-	}
-	require.NoError(t, cmd.Run(), "simulate failed:\nSTDOUT:\n%s\nSTDERR:\n%s", stdout.String(), stderr.String())
-	require.Contains(t, stdout.String(), wantSubstr)
-	require.Contains(t, stdout.String(), wantSubstr2)
+	}, opts...)
+	require.Contains(t, res.Stdout, wantSubstr)
+	require.Contains(t, res.Stdout, wantSubstr2)
 }

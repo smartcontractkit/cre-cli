@@ -7,7 +7,9 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/smartcontractkit/cre-cli/internal/creconfig"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
+	"github.com/smartcontractkit/cre-cli/internal/testutil/cretest"
 )
 
 // buildBinary builds the Go binary from the specified source file.
@@ -45,16 +47,19 @@ func TestMain(m *testing.M) {
 		fmt.Printf("Error while preparing binary: %s", err.Error())
 		os.Exit(1)
 	}
+	cretest.SetCLIBinary(CLIPath)
 
 	// Store contents of env vars found in the shell environment and unset them
-	// That way they won't leak into tests
+	// so they do not leak into tests or write under the developer's real ~/.cre.
 	ethPrivateKeyValue := LookupAndUnsetEnvVar(settings.EthPrivateKeyEnvVar)
+	configDirValue := LookupAndUnsetEnvVar(creconfig.ConfigDirEnvVar)
 
 	// Run all tests
 	exitCode := m.Run()
 
-	// Restore env var that were previously present in this user's shell environment
+	// Restore env vars that were previously present in this user's shell environment
 	RestoreEnvVar(settings.EthPrivateKeyEnvVar, ethPrivateKeyValue)
+	RestoreEnvVar(creconfig.ConfigDirEnvVar, configDirValue)
 
 	// Exit with the appropriate code
 	os.Exit(exitCode)

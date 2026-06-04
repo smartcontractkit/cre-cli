@@ -20,6 +20,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/oauth"
 	"github.com/smartcontractkit/cre-cli/internal/tenantctx"
+	"github.com/smartcontractkit/cre-cli/internal/testutil/cretest"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
@@ -32,8 +33,7 @@ func TestFetchTenantConfig_GQLError_ReturnsError(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	tmp := t.TempDir()
-	t.Setenv("HOME", tmp)
+	cretest.IsolateConfig(t)
 	log := zerolog.Nop()
 	h := &handler{
 		log: &log,
@@ -92,8 +92,7 @@ func TestLogin_NonInteractive_ReturnsError(t *testing.T) {
 }
 
 func TestSaveCredentials_WritesYAML(t *testing.T) {
-	tmp := t.TempDir()
-	t.Setenv("HOME", tmp)
+	cretest.IsolateConfig(t)
 
 	tokenSet := &credentials.CreLoginTokenSet{
 		AccessToken:  "a",
