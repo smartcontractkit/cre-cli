@@ -36,6 +36,10 @@ func MockGetTenantConfigGraphQLPayload() map[string]any {
 				"tenantId":         "test-tenant-id",
 				"defaultDonFamily": "test-don",
 				"vaultGatewayUrl":  "https://vault.example.test",
+				"capabilitiesRegistry": map[string]any{
+					"chainSelector": "6433500567565415381",
+					"address":       "0x76c9cf548b4179F8901cda1f8623568b58215E62",
+				},
 				"registries": []map[string]any{
 					{
 						"id":               "anvil-devnet",
