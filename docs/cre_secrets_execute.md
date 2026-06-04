@@ -17,6 +17,7 @@ cre secrets execute 157364...af4d5.json
 ```
   -h, --help       help for execute
       --unsigned   If set, the command will either return the raw transaction instead of sending it to the network or execute the second step of secrets operations using a previously generated raw transaction
+      --yes        If set, the command will skip the confirmation prompt and proceed with the operation even if it is potentially destructive
 ```
 
 ### Options inherited from parent commands
