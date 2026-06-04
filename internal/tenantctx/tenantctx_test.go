@@ -454,6 +454,10 @@ func TestFetchAndWriteContext_PersistsUnknownRegistryType(t *testing.T) {
 				"tenantId":         "42",
 				"defaultDonFamily": "zone-a",
 				"vaultGatewayUrl":  "https://gateway.example.com/",
+				"capabilitiesRegistry": map[string]any{
+					"chainSelector": "16015286601757825753",
+					"address":       "0x7f3191EaF73429177bAB3bAc5c36Ed2D5E39985f",
+				},
 				"registries": []any{
 					map[string]any{
 						"id":               "private",
