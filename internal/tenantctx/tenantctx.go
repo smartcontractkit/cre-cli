@@ -40,13 +40,20 @@ type Forwarder struct {
 	Address       string `yaml:"address" json:"address"`
 }
 
+// OnChainContract is a chain selector and contract address pair.
+type OnChainContract struct {
+	ChainSelector uint64 `yaml:"chain_selector" json:"chainSelector"`
+	Address       string `yaml:"address" json:"address"`
+}
+
 // EnvironmentContext holds user context for a single CLI environment.
 type EnvironmentContext struct {
-	TenantID         string      `yaml:"tenant_id"`
-	DefaultDonFamily string      `yaml:"default_don_family"`
-	VaultGatewayURL  string      `yaml:"vault_gateway_url"`
-	Registries       []*Registry `yaml:"registries"`
-	Forwarders       []Forwarder `yaml:"forwarders,omitempty"`
+	TenantID             string           `yaml:"tenant_id"`
+	DefaultDonFamily     string           `yaml:"default_don_family"`
+	VaultGatewayURL      string           `yaml:"vault_gateway_url"`
+	CapabilitiesRegistry *OnChainContract `yaml:"capabilities_registry,omitempty"`
+	Registries           []*Registry      `yaml:"registries"`
+	Forwarders           []Forwarder      `yaml:"forwarders,omitempty"`
 }
 
 type gqlForwarder struct {
@@ -54,12 +61,18 @@ type gqlForwarder struct {
 	Address       string          `json:"address"`
 }
 
+type gqlOnChainContract struct {
+	ChainSelector json.RawMessage `json:"chainSelector"`
+	Address       string          `json:"address"`
+}
+
 type getTenantConfigResponse struct {
 	GetTenantConfig struct {
-		TenantID         string `json:"tenantId"`
-		DefaultDonFamily string `json:"defaultDonFamily"`
-		VaultGatewayURL  string `json:"vaultGatewayUrl"`
-		Registries       []struct {
+		TenantID             string             `json:"tenantId"`
+		DefaultDonFamily     string             `json:"defaultDonFamily"`
+		VaultGatewayURL      string             `json:"vaultGatewayUrl"`
+		CapabilitiesRegistry gqlOnChainContract `json:"capabilitiesRegistry"`
+		Registries           []struct {
 			ID               string   `json:"id"`
 			Label            string   `json:"label"`
 			Type             string   `json:"type"`
@@ -76,6 +89,10 @@ const getTenantConfigQuery = `query GetTenantConfig {
     tenantId
     defaultDonFamily
     vaultGatewayUrl
+    capabilitiesRegistry {
+      chainSelector
+      address
+    }
     registries {
       id
       label
@@ -144,12 +161,25 @@ func FetchAndWriteContext(ctx context.Context, gqlClient *graphqlclient.Client, 
 		forwarders = append(forwarders, Forwarder{ChainSelector: sel, Address: addr})
 	}
 
+	capRegSel, err := parseChainSelectorJSON(tc.CapabilitiesRegistry.ChainSelector)
+	if err != nil {
+		return fmt.Errorf("invalid capabilitiesRegistry chainSelector: %w", err)
+	}
+	capRegAddr := strings.TrimSpace(tc.CapabilitiesRegistry.Address)
+	if capRegAddr == "" {
+		return fmt.Errorf("capabilitiesRegistry address is empty")
+	}
+
 	envCtx := &EnvironmentContext{
 		TenantID:         tc.TenantID,
 		DefaultDonFamily: tc.DefaultDonFamily,
 		VaultGatewayURL:  tc.VaultGatewayURL,
-		Registries:       registries,
-		Forwarders:       forwarders,
+		CapabilitiesRegistry: &OnChainContract{
+			ChainSelector: capRegSel,
+			Address:       capRegAddr,
+		},
+		Registries: registries,
+		Forwarders: forwarders,
 	}
 
 	contextMap := map[string]*EnvironmentContext{

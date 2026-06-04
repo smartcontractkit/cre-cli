@@ -164,6 +164,10 @@ func workflowDeployPrivateRegistry(t *testing.T, tc TestConfig) string {
 							"tenantId":         "42",
 							"defaultDonFamily": "test-don",
 							"vaultGatewayUrl":  "https://vault.example.test",
+							"capabilitiesRegistry": map[string]any{
+								"chainSelector": "6433500567565415381",
+								"address":       "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+							},
 							"registries": []map[string]any{
 								{
 									"id":               "reg-test",
@@ -357,6 +361,10 @@ func workflowPausePrivateRegistry(t *testing.T, tc TestConfig) string {
 							"tenantId":         "42",
 							"defaultDonFamily": "test-don",
 							"vaultGatewayUrl":  "https://vault.example.test",
+							"capabilitiesRegistry": map[string]any{
+								"chainSelector": "6433500567565415381",
+								"address":       "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+							},
 							"registries": []map[string]any{
 								{
 									"id":               "reg-test",
@@ -508,6 +516,10 @@ func workflowActivatePrivateRegistry(t *testing.T, tc TestConfig) string {
 							"tenantId":         "42",
 							"defaultDonFamily": "test-don",
 							"vaultGatewayUrl":  "https://vault.example.test",
+							"capabilitiesRegistry": map[string]any{
+								"chainSelector": "6433500567565415381",
+								"address":       "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+							},
 							"registries": []map[string]any{
 								{
 									"id":               "reg-test",
@@ -659,6 +671,10 @@ func workflowDeletePrivateRegistry(t *testing.T, tc TestConfig) string {
 							"tenantId":         "42",
 							"defaultDonFamily": "test-don",
 							"vaultGatewayUrl":  "https://vault.example.test",
+							"capabilitiesRegistry": map[string]any{
+								"chainSelector": "6433500567565415381",
+								"address":       "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+							},
 							"registries": []map[string]any{
 								{
 									"id":               "reg-test",
