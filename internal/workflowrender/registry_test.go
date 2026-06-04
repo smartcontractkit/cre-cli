@@ -10,6 +10,15 @@ import (
 
 func sp(s string) *string { return &s }
 
+func TestRegistryTypeOffChain(t *testing.T) {
+	assert.True(t, registryTypeOffChain(&tenantctx.Registry{Type: "off-chain"}))
+	assert.False(t, registryTypeOffChain(&tenantctx.Registry{Type: "on-chain"}))
+	assert.False(t, registryTypeOffChain(&tenantctx.Registry{Type: "unknown"}))
+	assert.False(t, registryTypeOffChain(&tenantctx.Registry{Type: "OFF_CHAIN"}))
+	assert.False(t, registryTypeOffChain(&tenantctx.Registry{Type: ""}))
+	assert.False(t, registryTypeOffChain(nil))
+}
+
 func TestWorkflowSourceMatchesRegistry_DirectIDMatch(t *testing.T) {
 	reg := &tenantctx.Registry{ID: "private", Type: "off-chain"}
 	all := []*tenantctx.Registry{reg}
