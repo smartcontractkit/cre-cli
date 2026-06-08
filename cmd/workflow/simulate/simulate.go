@@ -751,6 +751,9 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 				ui.Line()
 			}
 			holder.TriggerFunc = func() error {
+				if payload == nil {
+					ui.Step(fmt.Sprintf("Waiting for HTTP request to start execution (listening on http://localhost:%d/trigger)...", httpTriggerServerPort))
+				}
 				return manualTriggerCaps.ManualHTTPTrigger.ManualTrigger(ctx, triggerRegistrationID, payload)
 			}
 		default:
