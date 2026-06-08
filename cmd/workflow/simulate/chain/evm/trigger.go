@@ -229,13 +229,13 @@ func extraTopicLines(topics [][]common.Hash) []string {
 		return nil
 	}
 	out := make([]string, 0, lastConcrete)
-	for i := 1; i <= lastConcrete; i++ {
-		if len(topics[i]) == 0 {
+	for _, slot := range topics[1 : lastConcrete+1] {
+		if len(slot) == 0 {
 			out = append(out, "(any)")
 			continue
 		}
-		parts := make([]string, 0, len(topics[i]))
-		for _, h := range topics[i] {
+		parts := make([]string, 0, len(slot))
+		for _, h := range slot {
 			parts = append(parts, h.Hex())
 		}
 		out = append(out, strings.Join(parts, ", "))

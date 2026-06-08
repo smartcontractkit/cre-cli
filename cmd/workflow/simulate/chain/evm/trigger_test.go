@@ -154,7 +154,7 @@ func newMockRPC(t *testing.T) *mockRPC {
 // parseGetLogsRange extracts the FromBlock/ToBlock from an eth_getLogs request
 // param object. Returns 0 for missing or "latest"/"earliest" tags so the mock
 // matches the relevant logs regardless.
-func parseGetLogsRange(params []json.RawMessage) (uint64, uint64) {
+func parseGetLogsRange(params []json.RawMessage) (fromBlock, toBlock uint64) {
 	if len(params) == 0 {
 		return 0, 0
 	}
@@ -165,7 +165,9 @@ func parseGetLogsRange(params []json.RawMessage) (uint64, uint64) {
 	if err := json.Unmarshal(params[0], &arg); err != nil {
 		return 0, 0
 	}
-	return parseHexBlock(arg.FromBlock), parseHexBlock(arg.ToBlock)
+	fromBlock = parseHexBlock(arg.FromBlock)
+	toBlock = parseHexBlock(arg.ToBlock)
+	return fromBlock, toBlock
 }
 
 func parseHexBlock(s string) uint64 {
