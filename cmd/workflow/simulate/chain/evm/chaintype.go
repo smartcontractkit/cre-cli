@@ -288,7 +288,8 @@ func (ct *EVMChainType) CollectCLIInputs(v *viper.Viper) map[string]string {
 }
 
 // ResolveTriggerData fetches the EVM log payload for the given selector from
-// CLI-supplied or interactively-prompted inputs.
+// CLI-supplied inputs, falling back to live log subscription in interactive mode
+// when no replay tx hash is given.
 func (ct *EVMChainType) ResolveTriggerData(ctx context.Context, selector uint64, params chain.TriggerParams) (interface{}, error) {
 	clientIface, ok := params.Clients[selector]
 	if !ok {
@@ -308,18 +309,37 @@ func (ct *EVMChainType) ResolveTriggerData(ctx context.Context, selector uint64,
 		receiptTimeout = d
 	}
 
-	if params.Interactive {
-		return GetEVMTriggerLog(ctx, client, receiptTimeout)
-	}
-
 	txHash := strings.TrimSpace(params.ChainTypeInputs[TriggerInputTxHash])
 	eventIndexStr := strings.TrimSpace(params.ChainTypeInputs[TriggerInputEventIndex])
-	if txHash == "" || eventIndexStr == "" {
+
+	// Replay path: explicit --evm-tx-hash. Works in both interactive and
+	// non-interactive modes for deterministic testing / CI.
+	if txHash != "" {
+		if eventIndexStr == "" {
+			return nil, fmt.Errorf("--evm-event-index is required when --evm-tx-hash is provided")
+		}
+		eventIndex, err := strconv.ParseUint(eventIndexStr, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid --evm-event-index %q: %w", eventIndexStr, err)
+		}
+		if params.Interactive {
+			printEVMTriggerReplayHeader(selector, txHash, eventIndex)
+		}
+		return GetEVMTriggerLogFromValues(ctx, client, txHash, eventIndex, receiptTimeout)
+	}
+
+	if !params.Interactive {
 		return nil, fmt.Errorf("--evm-tx-hash and --evm-event-index are required for EVM triggers in non-interactive mode")
 	}
-	eventIndex, err := strconv.ParseUint(eventIndexStr, 10, 64)
+
+	// Interactive wait-for-log path.
+	cfg, err := decodeLogTriggerConfig(params.TriggerPayload)
 	if err != nil {
-		return nil, fmt.Errorf("invalid --evm-event-index %q: %w", eventIndexStr, err)
+		return nil, fmt.Errorf("failed to decode EVM log trigger config: %w", err)
 	}
-	return GetEVMTriggerLogFromValues(ctx, client, txHash, eventIndex, receiptTimeout)
+	return WaitForEVMTriggerLog(ctx, client, WaitForLogConfig{
+		Selector:     selector,
+		Filter:       cfg,
+		WorkflowName: params.WorkflowName,
+	})
 }
