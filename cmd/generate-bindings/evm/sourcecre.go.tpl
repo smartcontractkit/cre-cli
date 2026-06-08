@@ -391,28 +391,17 @@ cre.Promise[*evm.CallContractReply]
         {{- end}}
     }
 
-	var bn cre.Promise[*pb.BigInt]
-	if blockNumber == nil {
-		promise := c.client.HeaderByNumber(runtime, &evm.HeaderByNumberRequest{
-			BlockNumber: bindings.FinalizedBlockNumber,
-		})
-
-		bn = cre.Then(promise, func(finalizedBlock *evm.HeaderByNumberReply) (*pb.BigInt, error) {
-            if finalizedBlock == nil || finalizedBlock.Header == nil {
-                return nil, errors.New("failed to get finalized block header")
-            }
-            return finalizedBlock.Header.BlockNumber, nil
-        })
-	} else {
-		bn = cre.PromiseFromResult(pb.NewBigIntFromInt(blockNumber), nil)
+	bn := bindings.FinalizedBlockNumber
+	if blockNumber != nil {
+		bn = pb.NewBigIntFromInt(blockNumber)
 	}
 
-    promise := cre.ThenPromise(bn, func(bn *pb.BigInt) cre.Promise[*evm.CallContractReply] {
-        return c.client.CallContract(runtime, &evm.CallContractRequest{
-            Call:        &evm.CallMsg{To: c.Address.Bytes(), Data: calldata},
-            BlockNumber: bn,
-        })
-    })
+   	promise := cre.ThenPromise(cre.PromiseFromResult(bn, nil), func(bn *pb.BigInt) cre.Promise[*evm.CallContractReply] {
+		return c.client.CallContract(runtime, &evm.CallContractRequest{
+			Call:        &evm.CallMsg{To: c.Address.Bytes(), Data: calldata},
+			BlockNumber: bn,
+		})
+	})
 
     {{- if gt (len $call.Normalized.Outputs) 0}}
     return cre.Then(promise, func(response *evm.CallContractReply) ({{- if gt (len $call.Normalized.Outputs) 1 -}}{{$call.Normalized.Name}}Output{{- else -}}{{with index $call.Normalized.Outputs 0}}{{bindtype .Type $.Structs}}{{end}}{{- end}}, error) {

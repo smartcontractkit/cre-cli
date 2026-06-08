@@ -99,7 +99,7 @@ func TestBlankWorkflowSimulation(t *testing.T) {
 	require.NoError(t, err)
 
 	// Execute the simulation. We expect this to compile the workflow and run the simulator successfully.
-	err = handler.Execute(inputs)
+	err = handler.Execute(context.Background(), inputs)
 	require.NoError(t, err, "Execute should not return an error")
 }
 

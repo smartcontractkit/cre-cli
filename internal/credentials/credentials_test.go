@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/smartcontractkit/cre-cli/internal/creconfig"
 	"github.com/smartcontractkit/cre-cli/internal/testutil"
 	"github.com/smartcontractkit/cre-cli/internal/testutil/testjwt"
 )
@@ -42,8 +43,8 @@ func TestNew_WithConfigFile(t *testing.T) {
 	tDir := t.TempDir()
 	t.Setenv("HOME", tDir)
 
-	dir := filepath.Join(tDir, ConfigDir)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	dir, err := creconfig.EnsureDir()
+	if err != nil {
 		t.Fatalf("failed to create config dir: %v", err)
 	}
 	file := filepath.Join(dir, ConfigFile)

@@ -6,6 +6,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 
+	"github.com/smartcontractkit/cre-cli/internal/creconfig"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/templateconfig"
 	"github.com/smartcontractkit/cre-cli/internal/templaterepo"
@@ -20,7 +21,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	return &cobra.Command{
 		Use:     "remove <owner/repo>...",
 		Short:   "Removes a template repository source",
-		Long:    `Removes one or more template repository sources from ~/.cre/template.yaml. The ref portion is optional and ignored during matching.`,
+		Long:    fmt.Sprintf("Removes one or more template repository sources from your home directory (%s/%s). The ref portion is optional and ignored during matching.", creconfig.Dir, templateconfig.TemplateConfigFile),
 		Args:    cobra.MinimumNArgs(1),
 		Example: "cre templates remove smartcontractkit/cre-templates myorg/my-templates",
 		RunE: func(cmd *cobra.Command, args []string) error {

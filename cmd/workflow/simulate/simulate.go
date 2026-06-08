@@ -91,7 +91,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return handler.Execute(inputs)
+			return handler.Execute(cmd.Context(), inputs)
 		},
 	}
 
@@ -253,14 +253,14 @@ func (h *handler) ValidateInputs(inputs Inputs) error {
 	return nil
 }
 
-func (h *handler) Execute(inputs Inputs) error {
+func (h *handler) Execute(ctx context.Context, inputs Inputs) error {
 	var wasmFileBinary []byte
 	var err error
 
 	if inputs.WasmPath != "" {
 		if cmdcommon.IsURL(inputs.WasmPath) {
 			ui.Dim("Fetching WASM binary from URL...")
-			wasmFileBinary, err = cmdcommon.FetchURL(inputs.WasmPath)
+			wasmFileBinary, err = cmdcommon.FetchURL(ctx, inputs.WasmPath)
 			if err != nil {
 				return fmt.Errorf("failed to fetch WASM from URL: %w", err)
 			}
@@ -299,7 +299,7 @@ func (h *handler) Execute(inputs Inputs) error {
 
 		spinner := ui.NewSpinner()
 		spinner.Start("Compiling workflow...")
-		wasmFileBinary, err = cmdcommon.CompileWorkflowToWasm(resolvedWorkflowPath, cmdcommon.WorkflowCompileOptions{
+		wasmFileBinary, err = cmdcommon.CompileWorkflowToWasm(ctx, resolvedWorkflowPath, cmdcommon.WorkflowCompileOptions{
 			StripSymbols:   false,
 			SkipTypeChecks: inputs.SkipTypeChecks,
 		})
@@ -346,7 +346,7 @@ func (h *handler) Execute(inputs Inputs) error {
 	var config []byte
 	if cmdcommon.IsURL(inputs.ConfigPath) {
 		ui.Dim("Fetching config from URL...")
-		config, err = cmdcommon.FetchURL(inputs.ConfigPath)
+		config, err = cmdcommon.FetchURL(ctx, inputs.ConfigPath)
 		if err != nil {
 			return fmt.Errorf("failed to fetch config from URL: %w", err)
 		}
