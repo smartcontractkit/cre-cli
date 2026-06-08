@@ -755,7 +755,7 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 					os.Exit(1)
 				}
 
-				triggerData, err := getTriggerDataForChainType(ctx, ct, sel, inputs, true)
+				triggerData, err := getTriggerDataForChainType(ctx, ct, sel, holder.TriggerToRun, inputs, true)
 				if err != nil {
 					ui.Error(fmt.Sprintf("Failed to get %s trigger data: %v", name, err))
 					os.Exit(1)
@@ -838,7 +838,7 @@ func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inp
 					os.Exit(1)
 				}
 
-				triggerData, err := getTriggerDataForChainType(ctx, ct, sel, inputs, false)
+				triggerData, err := getTriggerDataForChainType(ctx, ct, sel, holder.TriggerToRun, inputs, false)
 				if err != nil {
 					ui.Error(fmt.Sprintf("Failed to get %s trigger data: %v", name, err))
 					os.Exit(1)
@@ -947,11 +947,13 @@ func getHTTPTriggerPayload(invocationDir string) (*httptypedapi.Payload, error) 
 
 // getTriggerDataForChainType resolves trigger data for a specific chain type.
 // Each chain type defines its own trigger data format.
-func getTriggerDataForChainType(ctx context.Context, ct chain.ChainType, selector uint64, inputs Inputs, interactive bool) (interface{}, error) {
+func getTriggerDataForChainType(ctx context.Context, ct chain.ChainType, selector uint64, triggerSub *pb.TriggerSubscription, inputs Inputs, interactive bool) (interface{}, error) {
 	return ct.ResolveTriggerData(ctx, selector, chain.TriggerParams{
 		Clients:         inputs.ChainTypeClients[ct.Name()],
 		Interactive:     interactive,
 		ChainTypeInputs: inputs.ChainTypeInputs,
+		TriggerPayload:  triggerSub.GetPayload(),
+		WorkflowName:    inputs.WorkflowName,
 	})
 }
 
