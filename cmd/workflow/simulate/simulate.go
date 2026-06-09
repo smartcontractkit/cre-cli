@@ -91,7 +91,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return handler.Execute(inputs)
+			return handler.Execute(cmd.Context(), inputs)
 		},
 	}
 
@@ -253,7 +253,7 @@ func (h *handler) ValidateInputs(inputs Inputs) error {
 	return nil
 }
 
-func (h *handler) Execute(inputs Inputs) error {
+func (h *handler) Execute(ctx context.Context, inputs Inputs) error {
 	var wasmFileBinary []byte
 	var err error
 
@@ -376,7 +376,7 @@ func (h *handler) Execute(inputs Inputs) error {
 	}
 
 	// Set up context for signal handling
-	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT, syscall.SIGKILL)
+	ctx, cancel := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT, syscall.SIGKILL)
 	defer cancel()
 
 	// if logger instance is set to DEBUG, that means verbosity flag is set by the user

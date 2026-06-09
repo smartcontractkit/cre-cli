@@ -99,7 +99,7 @@ func TestBlankWorkflowSimulation(t *testing.T) {
 	require.NoError(t, err)
 
 	// Execute the simulation. We expect this to compile the workflow and run the simulator successfully.
-	err = handler.Execute(inputs)
+	err = handler.Execute(context.Background(), inputs)
 	require.NoError(t, err, "Execute should not return an error")
 }
 
@@ -531,7 +531,7 @@ func TestExecuteWASMBinarySizeLimitReturnsTypedError(t *testing.T) {
 	require.NoError(t, os.WriteFile(wasmPath, oversized, 0o600))
 
 	h := newHandler(newTestRuntimeCtx(t))
-	execErr := h.Execute(Inputs{
+	execErr := h.Execute(context.Background(), Inputs{
 		WasmPath:     wasmPath,
 		WorkflowPath: ".",
 		WorkflowName: "test-wf",
@@ -571,7 +571,7 @@ func TestExecuteWASMCompressedBinarySizeLimitReturnsTypedError(t *testing.T) {
 	require.NoError(t, os.WriteFile(wasmPath, wasmMagic, 0o600))
 
 	h := newHandler(newTestRuntimeCtx(t))
-	execErr := h.Execute(Inputs{
+	execErr := h.Execute(context.Background(), Inputs{
 		WasmPath:     wasmPath,
 		WorkflowPath: ".",
 		WorkflowName: "test-wf",
