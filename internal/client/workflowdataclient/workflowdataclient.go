@@ -3,6 +3,7 @@ package workflowdataclient
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/machinebox/graphql"
 	"github.com/rs/zerolog"
@@ -25,11 +26,20 @@ type Workflow struct {
 type Client struct {
 	graphql *graphqlclient.Client
 	log     *zerolog.Logger
+	timeout time.Duration
 }
 
 // New creates a WorkflowDataClient backed by the provided GraphQL client.
 func New(gql *graphqlclient.Client, log *zerolog.Logger) *Client {
-	return &Client{graphql: gql, log: log}
+	return &Client{graphql: gql, log: log, timeout: time.Minute}
+}
+
+func (c *Client) SetServiceTimeout(timeout time.Duration) {
+	c.timeout = timeout
+}
+
+func (c *Client) CreateServiceContextWithTimeout(parent context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(parent, c.timeout) //nolint:gosec // G118 -- cancel is deferred by callers
 }
 
 const listWorkflowsQuery = `
@@ -63,17 +73,19 @@ type listWorkflowsEnvelope struct {
 }
 
 // ListAll pages through the ListWorkflows query and returns all workflows.
-func (c *Client) ListAll(ctx context.Context, pageSize int) ([]Workflow, error) {
-	return c.list(ctx, pageSize, "")
+func (c *Client) ListAll(parent context.Context, pageSize int) ([]Workflow, error) {
+	return c.list(parent, pageSize, "")
 }
 
 // SearchByName pages through the ListWorkflows query with the given search
 // filter (server-side contains match on workflow name).
-func (c *Client) SearchByName(ctx context.Context, name string, pageSize int) ([]Workflow, error) {
-	return c.list(ctx, pageSize, name)
+func (c *Client) SearchByName(parent context.Context, name string, pageSize int) ([]Workflow, error) {
+	return c.list(parent, pageSize, name)
 }
 
-func (c *Client) list(ctx context.Context, pageSize int, search string) ([]Workflow, error) {
+func (c *Client) list(parent context.Context, pageSize int, search string) ([]Workflow, error) {
+	ctx, cancel := c.CreateServiceContextWithTimeout(parent)
+	defer cancel()
 	if pageSize <= 0 {
 		pageSize = DefaultPageSize
 	}

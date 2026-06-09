@@ -22,10 +22,10 @@ const (
 )
 
 // ensureOwnerLinkedOrFail checks if the owner is linked and attempts auto-link if needed
-func (h *handler) ensureOwnerLinkedOrFail(onChain *settings.OnChainRegistry) error {
+func (h *handler) ensureOwnerLinkedOrFail(ctx context.Context, onChain *settings.OnChainRegistry) error {
 	ownerAddr := common.HexToAddress(h.inputs.WorkflowOwner)
 
-	linked, err := h.wrc.IsOwnerLinked(ownerAddr)
+	linked, err := h.wrc.IsOwnerLinked(ctx, ownerAddr)
 	if err != nil {
 		return fmt.Errorf("failed to check owner link status: %w", err)
 	}
@@ -34,7 +34,7 @@ func (h *handler) ensureOwnerLinkedOrFail(onChain *settings.OnChainRegistry) err
 
 	if linked {
 		// Owner is linked on contract, now verify it's linked to the current user's account
-		linkedToCurrentUser, err := h.checkLinkStatusViaGraphQL(ownerAddr)
+		linkedToCurrentUser, err := h.checkLinkStatusViaGraphQL(ctx, ownerAddr)
 		if err != nil {
 			return fmt.Errorf("failed to validate key ownership: %w", err)
 		}
@@ -48,14 +48,14 @@ func (h *handler) ensureOwnerLinkedOrFail(onChain *settings.OnChainRegistry) err
 	}
 
 	ui.Dim(fmt.Sprintf("Owner not linked. Attempting auto-link: owner=%s", ownerAddr.Hex()))
-	if err := h.tryAutoLink(onChain); err != nil {
+	if err := h.tryAutoLink(ctx, onChain); err != nil {
 		return fmt.Errorf("auto-link attempt failed: %w", err)
 	}
 
 	ui.Success(fmt.Sprintf("Auto-link successful: owner=%s", ownerAddr.Hex()))
 
 	// Wait for linking process to complete
-	if err := h.waitForBackendLinkProcessing(ownerAddr); err != nil {
+	if err := h.waitForBackendLinkProcessing(ctx, ownerAddr); err != nil {
 		return fmt.Errorf("linking process failed: %w", err)
 	}
 
@@ -63,17 +63,17 @@ func (h *handler) ensureOwnerLinkedOrFail(onChain *settings.OnChainRegistry) err
 }
 
 // autoLinkMSIGAndExit handles MSIG auto-link and exits if manual intervention is needed
-func (h *handler) autoLinkMSIGAndExit(onChain *settings.OnChainRegistry) (halt bool, err error) {
+func (h *handler) autoLinkMSIGAndExit(ctx context.Context, onChain *settings.OnChainRegistry) (halt bool, err error) {
 	ownerAddr := common.HexToAddress(h.inputs.WorkflowOwner)
 
-	linked, err := h.wrc.IsOwnerLinked(ownerAddr)
+	linked, err := h.wrc.IsOwnerLinked(ctx, ownerAddr)
 	if err != nil {
 		return false, fmt.Errorf("failed to check owner link status: %w", err)
 	}
 
 	if linked {
 		// Owner is linked on contract, now verify it's linked to the current user's account
-		linkedToCurrentUser, err := h.checkLinkStatusViaGraphQL(ownerAddr)
+		linkedToCurrentUser, err := h.checkLinkStatusViaGraphQL(ctx, ownerAddr)
 		if err != nil {
 			return false, fmt.Errorf("failed to validate MSIG key ownership: %w", err)
 		}
@@ -89,7 +89,7 @@ func (h *handler) autoLinkMSIGAndExit(onChain *settings.OnChainRegistry) (halt b
 	ui.Dim(fmt.Sprintf("MSIG workflow owner link status: owner=%s, linked=%v", ownerAddr.Hex(), linked))
 	ui.Dim(fmt.Sprintf("MSIG owner: attempting auto-link... owner=%s", ownerAddr.Hex()))
 
-	if err := h.tryAutoLink(onChain); err != nil {
+	if err := h.tryAutoLink(ctx, onChain); err != nil {
 		return false, fmt.Errorf("MSIG auto-link attempt failed: %w", err)
 	}
 
@@ -98,7 +98,7 @@ func (h *handler) autoLinkMSIGAndExit(onChain *settings.OnChainRegistry) (halt b
 }
 
 // tryAutoLink executes the auto-link process using the link-key command
-func (h *handler) tryAutoLink(onChain *settings.OnChainRegistry) error {
+func (h *handler) tryAutoLink(ctx context.Context, onChain *settings.OnChainRegistry) error {
 	rtx := &runtime.Context{
 		Settings:       h.settings,
 		Credentials:    h.credentials,
@@ -107,7 +107,7 @@ func (h *handler) tryAutoLink(onChain *settings.OnChainRegistry) error {
 		EnvironmentSet: h.environmentSet,
 	}
 
-	return linkkey.Exec(rtx, linkkey.Inputs{
+	return linkkey.Exec(ctx, rtx, linkkey.Inputs{
 		WorkflowOwner:                   h.inputs.WorkflowOwner,
 		WorkflowRegistryContractAddress: onChain.Address(),
 		WorkflowOwnerLabel:              h.inputs.OwnerLabel,
@@ -115,7 +115,7 @@ func (h *handler) tryAutoLink(onChain *settings.OnChainRegistry) error {
 }
 
 // checkLinkStatusViaGraphQL checks if the owner is linked and verified by querying the service
-func (h *handler) checkLinkStatusViaGraphQL(ownerAddr common.Address) (bool, error) {
+func (h *handler) checkLinkStatusViaGraphQL(ctx context.Context, ownerAddr common.Address) (bool, error) {
 	const query = `
 	query {
 		listWorkflowOwners(filters: { linkStatus: LINKED_ONLY }) {
@@ -137,7 +137,7 @@ func (h *handler) checkLinkStatusViaGraphQL(ownerAddr common.Address) (bool, err
 	}
 
 	gql := graphqlclient.New(h.credentials, h.environmentSet, h.log)
-	if err := gql.Execute(context.Background(), req, &resp); err != nil {
+	if err := gql.Execute(ctx, req, &resp); err != nil {
 		return false, fmt.Errorf("GraphQL query failed: %w", err)
 	}
 
@@ -169,7 +169,7 @@ func (h *handler) checkLinkStatusViaGraphQL(ownerAddr common.Address) (bool, err
 }
 
 // waitForBackendLinkProcessing polls the service until the link is processed
-func (h *handler) waitForBackendLinkProcessing(ownerAddr common.Address) error {
+func (h *handler) waitForBackendLinkProcessing(ctx context.Context, ownerAddr common.Address) error {
 	const maxAttempts = 5
 	const retryDelay = 3 * time.Second
 	const initialBlockWait = 36 * time.Second // Wait for 3 block confirmations (~12s per block)
@@ -181,11 +181,15 @@ func (h *handler) waitForBackendLinkProcessing(ownerAddr common.Address) error {
 	ui.Line()
 
 	// Wait for 3 block confirmations before polling
-	time.Sleep(initialBlockWait)
+	select {
+	case <-time.After(initialBlockWait):
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 
 	err := retry.Do(
 		func() error {
-			linked, err := h.checkLinkStatusViaGraphQL(ownerAddr)
+			linked, err := h.checkLinkStatusViaGraphQL(ctx, ownerAddr)
 			if err != nil {
 				h.log.Warn().Err(err).Msg("Failed to check link status")
 				return err // Return error to trigger retry
@@ -199,6 +203,7 @@ func (h *handler) waitForBackendLinkProcessing(ownerAddr common.Address) error {
 		retry.Delay(retryDelay),
 		retry.DelayType(retry.FixedDelay), // Use fixed 3s delay between retries
 		retry.LastErrorOnly(true),
+		retry.Context(ctx),
 		retry.OnRetry(func(n uint, err error) {
 			h.log.Debug().Uint("attempt", n+1).Uint("maxAttempts", maxAttempts).Err(err).Msg("Retrying link status check")
 			ui.Dim(fmt.Sprintf("  Waiting for verification... (attempt %d/%d)", n+1, maxAttempts))

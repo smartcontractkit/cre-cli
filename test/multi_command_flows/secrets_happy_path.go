@@ -24,6 +24,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
+	"github.com/smartcontractkit/cre-cli/internal/testutil"
 )
 
 // Hex-encoded tdh2easy.PublicKey blob returned by the gateway
@@ -63,14 +64,11 @@ func RunSecretsHappyPath(t *testing.T, tc TestConfig, chainName string) {
 
 			// Handle authentication validation query
 			if strings.Contains(req.Query, "getCreOrganizationInfo") {
-				_ = json.NewEncoder(w).Encode(map[string]any{
-					"data": map[string]any{
-						"getCreOrganizationInfo": map[string]any{
-							"orgId":                 "test-org-id",
-							"derivedWorkflowOwners": []string{"ab12cd34ef56ab12cd34ef56ab12cd34ef56ab12"},
-						},
-					},
-				})
+				_ = json.NewEncoder(w).Encode(testutil.MockGetCreOrganizationInfoGraphQLPayload())
+				return
+			}
+			if testutil.QueryIsGetTenantConfig(req.Query) {
+				_ = json.NewEncoder(w).Encode(testutil.MockGetTenantConfigGraphQLPayload())
 				return
 			}
 
@@ -258,14 +256,11 @@ func RunSecretsListMsig(t *testing.T, tc TestConfig, chainName string) {
 
 			// Handle authentication validation query
 			if strings.Contains(req.Query, "getCreOrganizationInfo") {
-				_ = json.NewEncoder(w).Encode(map[string]any{
-					"data": map[string]any{
-						"getCreOrganizationInfo": map[string]any{
-							"orgId":                 "test-org-id",
-							"derivedWorkflowOwners": []string{"ab12cd34ef56ab12cd34ef56ab12cd34ef56ab12"},
-						},
-					},
-				})
+				_ = json.NewEncoder(w).Encode(testutil.MockGetCreOrganizationInfoGraphQLPayload())
+				return
+			}
+			if testutil.QueryIsGetTenantConfig(req.Query) {
+				_ = json.NewEncoder(w).Encode(testutil.MockGetTenantConfigGraphQLPayload())
 				return
 			}
 
@@ -320,6 +315,7 @@ func secretsListMsig(t *testing.T, tc TestConfig) string {
 		tc.GetCliEnvFlag(),
 		tc.GetProjectRootFlag(),
 		"--unsigned",
+		"--" + settings.Flags.SkipConfirmation.Name,
 	}
 	cmd := exec.Command(CLIPath, args...)
 	// Let CLI handle context switching - don't set cmd.Dir manually

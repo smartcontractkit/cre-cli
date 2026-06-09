@@ -183,15 +183,18 @@ func readSethConfigFromFile(configPath string) (*seth.Config, error) {
 	return &sethConfig, nil
 }
 
+// TODO(DEVSVCS-5178)
 func getChainID(rpcURL string) (uint64, error) {
-	client, err := rpc.DialContext(context.Background(), rpcURL)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	client, err := rpc.DialContext(ctx, rpcURL)
 	if err != nil {
 		return 0, err
 	}
 	defer client.Close()
 
 	var chainID string
-	err = client.CallContext(context.Background(), &chainID, "eth_chainId")
+	err = client.CallContext(ctx, &chainID, "eth_chainId")
 	if err != nil {
 		return 0, err
 	}

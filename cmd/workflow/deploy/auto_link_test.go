@@ -1,6 +1,7 @@
 package deploy
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -164,7 +165,7 @@ func TestCheckLinkStatusViaGraphQL(t *testing.T) {
 
 			// Test the function
 			ownerAddr := common.HexToAddress(tt.ownerAddress)
-			result, err := h.checkLinkStatusViaGraphQL(ownerAddr)
+			result, err := h.checkLinkStatusViaGraphQL(context.Background(), ownerAddr)
 
 			if tt.expectError {
 				assert.Error(t, err)
@@ -335,7 +336,7 @@ func TestWaitForBackendLinkProcessing(t *testing.T) {
 
 			// Test the function
 			ownerAddr := common.HexToAddress(tt.ownerAddress)
-			err := h.waitForBackendLinkProcessing(ownerAddr)
+			err := h.waitForBackendLinkProcessing(context.Background(), ownerAddr)
 
 			if tt.expectError {
 				assert.Error(t, err)

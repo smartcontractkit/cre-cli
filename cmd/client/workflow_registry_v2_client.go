@@ -1,6 +1,7 @@
 package client
 
 import (
+	"context"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -60,7 +61,19 @@ func NewWorkflowRegistryV2Client(logger *zerolog.Logger, ethClient *seth.Client,
 	}
 }
 
-func (wrc *WorkflowRegistryV2Client) LinkOwner(validityTimestamp *big.Int, proof [32]byte, signature []byte) (*TxOutput, error) {
+func (wrc *WorkflowRegistryV2Client) callOpts(ctx context.Context) *bind.CallOpts {
+	opts := wrc.EthClient.NewCallOpts()
+	opts.Context = ctx
+	return opts
+}
+
+func (wrc *WorkflowRegistryV2Client) txOpts(ctx context.Context) *bind.TransactOpts {
+	opts := wrc.EthClient.NewTXOpts()
+	opts.Context = ctx
+	return opts
+}
+
+func (wrc *WorkflowRegistryV2Client) LinkOwner(ctx context.Context, validityTimestamp *big.Int, proof [32]byte, signature []byte) (*TxOutput, error) {
 	contract, err := workflow_registry_v2_wrapper.NewWorkflowRegistry(wrc.ContractAddress, wrc.EthClient.Client)
 	if err != nil {
 		wrc.Logger.Error().
@@ -73,7 +86,7 @@ func (wrc *WorkflowRegistryV2Client) LinkOwner(validityTimestamp *big.Int, proof
 	txFn := func(opts *bind.TransactOpts) (*types.Transaction, error) {
 		return contract.LinkOwner(opts, validityTimestamp, proof, signature)
 	}
-	txOut, err := wrc.executeTransactionByTxType(txFn, "LinkOwner", "OwnershipLinkUpdated", validityTimestamp, proof, signature)
+	txOut, err := wrc.executeTransactionByTxType(ctx, txFn, "LinkOwner", "OwnershipLinkUpdated", validityTimestamp, proof, signature)
 	if err != nil {
 		wrc.Logger.Error().
 			Str("contract", contract.Address().Hex()).
@@ -92,7 +105,7 @@ func (wrc *WorkflowRegistryV2Client) LinkOwner(validityTimestamp *big.Int, proof
 	return &txOut, nil
 }
 
-func (wrc *WorkflowRegistryV2Client) UnlinkOwner(owner common.Address, validityTimestamp *big.Int, signature []byte) (*TxOutput, error) {
+func (wrc *WorkflowRegistryV2Client) UnlinkOwner(ctx context.Context, owner common.Address, validityTimestamp *big.Int, signature []byte) (*TxOutput, error) {
 	contract, err := workflow_registry_v2_wrapper.NewWorkflowRegistry(wrc.ContractAddress, wrc.EthClient.Client)
 	if err != nil {
 		wrc.Logger.Error().
@@ -105,7 +118,7 @@ func (wrc *WorkflowRegistryV2Client) UnlinkOwner(owner common.Address, validityT
 	txFn := func(opts *bind.TransactOpts) (*types.Transaction, error) {
 		return contract.UnlinkOwner(opts, owner, validityTimestamp, signature)
 	}
-	txOut, err := wrc.executeTransactionByTxType(txFn, "UnlinkOwner", "OwnershipLinkUpdated", owner, validityTimestamp, signature)
+	txOut, err := wrc.executeTransactionByTxType(ctx, txFn, "UnlinkOwner", "OwnershipLinkUpdated", owner, validityTimestamp, signature)
 	if err != nil {
 		wrc.Logger.Error().
 			Str("contract", contract.Address().Hex()).
@@ -124,7 +137,7 @@ func (wrc *WorkflowRegistryV2Client) UnlinkOwner(owner common.Address, validityT
 	return &txOut, nil
 }
 
-func (wrc *WorkflowRegistryV2Client) UpdateAllowedSigners(signers []common.Address, allowed bool) error {
+func (wrc *WorkflowRegistryV2Client) UpdateAllowedSigners(ctx context.Context, signers []common.Address, allowed bool) error {
 	contract, err := workflow_registry_v2_wrapper.NewWorkflowRegistry(wrc.ContractAddress, wrc.EthClient.Client)
 	if err != nil {
 		wrc.Logger.Error().
@@ -135,7 +148,7 @@ func (wrc *WorkflowRegistryV2Client) UpdateAllowedSigners(signers []common.Addre
 	}
 
 	tx, err := wrc.EthClient.Decode(
-		contract.UpdateAllowedSigners(wrc.EthClient.NewTXOpts(), signers, allowed),
+		contract.UpdateAllowedSigners(wrc.txOpts(ctx), signers, allowed),
 	)
 	if err != nil {
 		wrc.Logger.Error().
@@ -162,7 +175,7 @@ func (wrc *WorkflowRegistryV2Client) UpdateAllowedSigners(signers []common.Addre
 	return nil
 }
 
-func (wrc *WorkflowRegistryV2Client) SetDonLimit(donFamily string, limit uint32, userDefaultLimit uint32) error {
+func (wrc *WorkflowRegistryV2Client) SetDonLimit(ctx context.Context, donFamily string, limit uint32, userDefaultLimit uint32) error {
 	contract, err := workflow_registry_v2_wrapper.NewWorkflowRegistry(wrc.ContractAddress, wrc.EthClient.Client)
 	if err != nil {
 		wrc.Logger.Error().
@@ -173,7 +186,7 @@ func (wrc *WorkflowRegistryV2Client) SetDonLimit(donFamily string, limit uint32,
 	}
 
 	tx, err := wrc.EthClient.Decode(
-		contract.SetDONLimit(wrc.EthClient.NewTXOpts(), donFamily, limit, userDefaultLimit),
+		contract.SetDONLimit(wrc.txOpts(ctx), donFamily, limit, userDefaultLimit),
 	)
 	if err != nil {
 		wrc.Logger.Error().
@@ -196,7 +209,7 @@ func (wrc *WorkflowRegistryV2Client) SetDonLimit(donFamily string, limit uint32,
 	return nil
 }
 
-func (wrc *WorkflowRegistryV2Client) SetDONOverride(donFamily [32]byte, limit uint32, enabled bool) error {
+func (wrc *WorkflowRegistryV2Client) SetDONOverride(ctx context.Context, donFamily [32]byte, limit uint32, enabled bool) error {
 	contract, err := workflow_registry_v2_wrapper.NewWorkflowRegistry(wrc.ContractAddress, wrc.EthClient.Client)
 	if err != nil {
 		wrc.Logger.Error().
@@ -207,7 +220,7 @@ func (wrc *WorkflowRegistryV2Client) SetDONOverride(donFamily [32]byte, limit ui
 	}
 
 	tx, err := wrc.EthClient.Decode(
-		contract.SetUserDONOverride(wrc.EthClient.NewTXOpts(), common.Address{}, common.Hash(donFamily).Hex(), limit, enabled),
+		contract.SetUserDONOverride(wrc.txOpts(ctx), common.Address{}, common.Hash(donFamily).Hex(), limit, enabled),
 	)
 	if err != nil {
 		wrc.Logger.Error().
@@ -230,7 +243,7 @@ func (wrc *WorkflowRegistryV2Client) SetDONOverride(donFamily [32]byte, limit ui
 	return nil
 }
 
-func (wrc *WorkflowRegistryV2Client) SetDefaults(maxPerDON, maxPerUserDON uint32) error {
+func (wrc *WorkflowRegistryV2Client) SetDefaults(ctx context.Context, maxPerDON, maxPerUserDON uint32) error {
 	contract, err := workflow_registry_v2_wrapper.NewWorkflowRegistry(wrc.ContractAddress, wrc.EthClient.Client)
 	if err != nil {
 		wrc.Logger.Error().
@@ -261,7 +274,7 @@ func (wrc *WorkflowRegistryV2Client) SetDefaults(maxPerDON, maxPerUserDON uint32
 	return nil
 }
 
-func (wrc *WorkflowRegistryV2Client) SetUserDONOverride(user common.Address, donFamily [32]byte, limit uint32, enabled bool) error {
+func (wrc *WorkflowRegistryV2Client) SetUserDONOverride(ctx context.Context, user common.Address, donFamily [32]byte, limit uint32, enabled bool) error {
 	contract, err := workflow_registry_v2_wrapper.NewWorkflowRegistry(wrc.ContractAddress, wrc.EthClient.Client)
 	if err != nil {
 		wrc.Logger.Error().
@@ -272,7 +285,7 @@ func (wrc *WorkflowRegistryV2Client) SetUserDONOverride(user common.Address, don
 	}
 
 	tx, err := wrc.EthClient.Decode(
-		contract.SetUserDONOverride(wrc.EthClient.NewTXOpts(), user, common.Hash(donFamily).Hex(), limit, enabled),
+		contract.SetUserDONOverride(wrc.txOpts(ctx), user, common.Hash(donFamily).Hex(), limit, enabled),
 	)
 	if err != nil {
 		wrc.Logger.Error().
@@ -295,7 +308,7 @@ func (wrc *WorkflowRegistryV2Client) SetUserDONOverride(user common.Address, don
 	return nil
 }
 
-func (wrc *WorkflowRegistryV2Client) CanLinkOwner(owner common.Address, validityTimestamp *big.Int, proof [32]byte, signature []byte) error {
+func (wrc *WorkflowRegistryV2Client) CanLinkOwner(ctx context.Context, owner common.Address, validityTimestamp *big.Int, proof [32]byte, signature []byte) error {
 	contract, err := workflow_registry_v2_wrapper.NewWorkflowRegistry(wrc.ContractAddress, wrc.EthClient.Client)
 	if err != nil {
 		wrc.Logger.Error().
@@ -305,7 +318,7 @@ func (wrc *WorkflowRegistryV2Client) CanLinkOwner(owner common.Address, validity
 	}
 
 	_, err = callContractMethodV2(wrc, func() (struct{}, error) {
-		return struct{}{}, contract.CanLinkOwner(wrc.EthClient.NewCallOpts(), owner, validityTimestamp, proof, signature)
+		return struct{}{}, contract.CanLinkOwner(wrc.callOpts(ctx), owner, validityTimestamp, proof, signature)
 	})
 	if err != nil {
 		wrc.Logger.Error().
@@ -322,7 +335,7 @@ func (wrc *WorkflowRegistryV2Client) CanLinkOwner(owner common.Address, validity
 	return nil
 }
 
-func (wrc *WorkflowRegistryV2Client) CanUnlinkOwner(owner common.Address, validityTimestamp *big.Int, signature []byte) error {
+func (wrc *WorkflowRegistryV2Client) CanUnlinkOwner(ctx context.Context, owner common.Address, validityTimestamp *big.Int, signature []byte) error {
 	contract, err := workflow_registry_v2_wrapper.NewWorkflowRegistry(wrc.ContractAddress, wrc.EthClient.Client)
 	if err != nil {
 		wrc.Logger.Error().
@@ -332,7 +345,7 @@ func (wrc *WorkflowRegistryV2Client) CanUnlinkOwner(owner common.Address, validi
 	}
 
 	_, err = callContractMethodV2(wrc, func() (struct{}, error) {
-		return struct{}{}, contract.CanUnlinkOwner(wrc.EthClient.NewCallOpts(), owner, validityTimestamp, signature)
+		return struct{}{}, contract.CanUnlinkOwner(wrc.callOpts(ctx), owner, validityTimestamp, signature)
 	})
 	if err != nil {
 		wrc.Logger.Error().
@@ -349,72 +362,72 @@ func (wrc *WorkflowRegistryV2Client) CanUnlinkOwner(owner common.Address, validi
 	return nil
 }
 
-func (wrc *WorkflowRegistryV2Client) GetLinkedOwners(start, batchSize *big.Int) ([]common.Address, error) {
+func (wrc *WorkflowRegistryV2Client) GetLinkedOwners(ctx context.Context, start, batchSize *big.Int) ([]common.Address, error) {
 	contract, err := workflow_registry_v2_wrapper.NewWorkflowRegistry(wrc.ContractAddress, wrc.EthClient.Client)
 	if err != nil {
 		wrc.Logger.Error().Err(err).Msg("Failed to connect for GetLinkedOwners")
 		return nil, err
 	}
-	addrs, err := contract.GetLinkedOwners(wrc.EthClient.NewCallOpts(), start, batchSize)
+	addrs, err := contract.GetLinkedOwners(wrc.callOpts(ctx), start, batchSize)
 	if err != nil {
 		wrc.Logger.Error().Err(err).Msg("GetLinkedOwners call failed")
 	}
 	return addrs, err
 }
 
-func (wrc *WorkflowRegistryV2Client) GetMaxWorkflowsPerDON(donFamily [32]byte) (uint32, error) {
+func (wrc *WorkflowRegistryV2Client) GetMaxWorkflowsPerDON(ctx context.Context, donFamily [32]byte) (uint32, error) {
 	contract, err := workflow_registry_v2_wrapper.NewWorkflowRegistry(wrc.ContractAddress, wrc.EthClient.Client)
 	if err != nil {
 		wrc.Logger.Error().Err(err).Msg("Failed to connect for GetMaxWorkflowsPerDON")
 		return 0, err
 	}
-	val, err := contract.GetMaxWorkflowsPerDON(wrc.EthClient.NewCallOpts(), common.Hash(donFamily).Hex())
+	val, err := contract.GetMaxWorkflowsPerDON(wrc.callOpts(ctx), common.Hash(donFamily).Hex())
 	if err != nil {
 		wrc.Logger.Error().Err(err).Msg("GetMaxWorkflowsPerDON call failed")
 	}
 	return val.MaxWorkflows, err
 }
 
-func (wrc *WorkflowRegistryV2Client) GetMaxWorkflowsPerUserDON(user common.Address, donFamily [32]byte) (uint32, error) {
+func (wrc *WorkflowRegistryV2Client) GetMaxWorkflowsPerUserDON(ctx context.Context, user common.Address, donFamily [32]byte) (uint32, error) {
 	contract, err := workflow_registry_v2_wrapper.NewWorkflowRegistry(wrc.ContractAddress, wrc.EthClient.Client)
 	if err != nil {
 		wrc.Logger.Error().Err(err).Msg("Failed to connect for GetMaxWorkflowsPerUserDON")
 		return 0, err
 	}
-	val, err := contract.GetMaxWorkflowsPerUserDON(wrc.EthClient.NewCallOpts(), user, common.Hash(donFamily).Hex())
+	val, err := contract.GetMaxWorkflowsPerUserDON(wrc.callOpts(ctx), user, common.Hash(donFamily).Hex())
 	if err != nil {
 		wrc.Logger.Error().Err(err).Msg("GetMaxWorkflowsPerUserDON call failed")
 	}
 	return val, err
 }
 
-func (wrc *WorkflowRegistryV2Client) GetMaxWorkflowsPerUserDONByFamily(user common.Address, donFamily string) (uint32, error) {
+func (wrc *WorkflowRegistryV2Client) GetMaxWorkflowsPerUserDONByFamily(ctx context.Context, user common.Address, donFamily string) (uint32, error) {
 	contract, err := workflow_registry_v2_wrapper.NewWorkflowRegistry(wrc.ContractAddress, wrc.EthClient.Client)
 	if err != nil {
 		wrc.Logger.Error().Err(err).Msg("Failed to connect for GetMaxWorkflowsPerUserDONByFamily")
 		return 0, err
 	}
-	val, err := contract.GetMaxWorkflowsPerUserDON(wrc.EthClient.NewCallOpts(), user, donFamily)
+	val, err := contract.GetMaxWorkflowsPerUserDON(wrc.callOpts(ctx), user, donFamily)
 	if err != nil {
 		wrc.Logger.Error().Err(err).Msg("GetMaxWorkflowsPerUserDONByFamily call failed")
 	}
 	return val, err
 }
 
-func (wrc *WorkflowRegistryV2Client) IsAllowedSigner(signer common.Address) (bool, error) {
+func (wrc *WorkflowRegistryV2Client) IsAllowedSigner(ctx context.Context, signer common.Address) (bool, error) {
 	contract, err := workflow_registry_v2_wrapper.NewWorkflowRegistry(wrc.ContractAddress, wrc.EthClient.Client)
 	if err != nil {
 		wrc.Logger.Error().Err(err).Msg("Failed to connect for IsAllowedSigner")
 		return false, err
 	}
-	ok, err := contract.IsAllowedSigner(wrc.EthClient.NewCallOpts(), signer)
+	ok, err := contract.IsAllowedSigner(wrc.callOpts(ctx), signer)
 	if err != nil {
 		wrc.Logger.Error().Err(err).Msg("IsAllowedSigner call failed")
 	}
 	return ok, err
 }
 
-func (wrc *WorkflowRegistryV2Client) IsOwnerLinked(owner common.Address) (bool, error) {
+func (wrc *WorkflowRegistryV2Client) IsOwnerLinked(ctx context.Context, owner common.Address) (bool, error) {
 	contract, err := workflow_registry_v2_wrapper.NewWorkflowRegistry(wrc.ContractAddress, wrc.EthClient.Client)
 	if err != nil {
 		wrc.Logger.Error().
@@ -424,7 +437,7 @@ func (wrc *WorkflowRegistryV2Client) IsOwnerLinked(owner common.Address) (bool, 
 	}
 
 	result, err := callContractMethodV2(wrc, func() (bool, error) {
-		return contract.IsOwnerLinked(wrc.EthClient.NewCallOpts(), owner)
+		return contract.IsOwnerLinked(wrc.callOpts(ctx), owner)
 	})
 	if err != nil {
 		wrc.Logger.Error().
@@ -442,33 +455,33 @@ func (wrc *WorkflowRegistryV2Client) IsOwnerLinked(owner common.Address) (bool, 
 	return result, nil
 }
 
-func (wrc *WorkflowRegistryV2Client) TotalLinkedOwners() (*big.Int, error) {
+func (wrc *WorkflowRegistryV2Client) TotalLinkedOwners(ctx context.Context) (*big.Int, error) {
 	contract, err := workflow_registry_v2_wrapper.NewWorkflowRegistry(wrc.ContractAddress, wrc.EthClient.Client)
 	if err != nil {
 		wrc.Logger.Error().Err(err).Msg("Failed to connect for TotalLinkedOwners")
 		return nil, err
 	}
-	total, err := contract.TotalLinkedOwners(wrc.EthClient.NewCallOpts())
+	total, err := contract.TotalLinkedOwners(wrc.callOpts(ctx))
 	if err != nil {
 		wrc.Logger.Error().Err(err).Msg("TotalLinkedOwners call failed")
 	}
 	return total, err
 }
 
-func (wrc *WorkflowRegistryV2Client) TypeAndVersion() (string, error) {
+func (wrc *WorkflowRegistryV2Client) TypeAndVersion(ctx context.Context) (string, error) {
 	contract, err := workflow_registry_v2_wrapper.NewWorkflowRegistry(wrc.ContractAddress, wrc.EthClient.Client)
 	if err != nil {
 		wrc.Logger.Error().Err(err).Msg("Failed to connect for TypeAndVersion")
 		return "", err
 	}
-	tv, err := contract.TypeAndVersion(wrc.EthClient.NewCallOpts())
+	tv, err := contract.TypeAndVersion(wrc.callOpts(ctx))
 	if err != nil {
 		wrc.Logger.Error().Err(err).Msg("TypeAndVersion call failed")
 	}
 	return tv, err
 }
 
-func (wrc *WorkflowRegistryV2Client) UpsertWorkflow(params RegisterWorkflowV2Parameters) (*TxOutput, error) {
+func (wrc *WorkflowRegistryV2Client) UpsertWorkflow(ctx context.Context, params RegisterWorkflowV2Parameters) (*TxOutput, error) {
 	contract, err := workflow_registry_v2_wrapper.NewWorkflowRegistry(wrc.ContractAddress, wrc.EthClient.Client)
 	if err != nil {
 		wrc.Logger.Error().
@@ -492,7 +505,7 @@ func (wrc *WorkflowRegistryV2Client) UpsertWorkflow(params RegisterWorkflowV2Par
 			params.KeepAlive,
 		)
 	}
-	txOut, err := wrc.executeTransactionByTxType(txFn, "UpsertWorkflow", "WorkflowRegistered|WorkflowUpdated",
+	txOut, err := wrc.executeTransactionByTxType(ctx, txFn, "UpsertWorkflow", "WorkflowRegistered|WorkflowUpdated",
 		params.WorkflowName,
 		params.Tag,
 		params.WorkflowID,
@@ -513,7 +526,7 @@ func (wrc *WorkflowRegistryV2Client) UpsertWorkflow(params RegisterWorkflowV2Par
 	return &txOut, nil
 }
 
-func (wrc *WorkflowRegistryV2Client) GetWorkflow(owner common.Address, workflowName, tag string) (workflow_registry_v2_wrapper.WorkflowRegistryWorkflowMetadataView, error) {
+func (wrc *WorkflowRegistryV2Client) GetWorkflow(ctx context.Context, owner common.Address, workflowName, tag string) (workflow_registry_v2_wrapper.WorkflowRegistryWorkflowMetadataView, error) {
 	contract, err := workflow_registry_v2_wrapper.NewWorkflowRegistry(wrc.ContractAddress, wrc.EthClient.Client)
 	if err != nil {
 		wrc.Logger.Error().Err(err).Msg("Failed to connect for GetWorkflow")
@@ -521,7 +534,7 @@ func (wrc *WorkflowRegistryV2Client) GetWorkflow(owner common.Address, workflowN
 	}
 
 	result, err := callContractMethodV2(wrc, func() (workflow_registry_v2_wrapper.WorkflowRegistryWorkflowMetadataView, error) {
-		return contract.GetWorkflow(wrc.EthClient.NewCallOpts(), owner, workflowName, tag)
+		return contract.GetWorkflow(wrc.callOpts(ctx), owner, workflowName, tag)
 	})
 	if err != nil {
 		wrc.Logger.Error().Err(err).Msg("GetWorkflow call failed")
@@ -529,7 +542,7 @@ func (wrc *WorkflowRegistryV2Client) GetWorkflow(owner common.Address, workflowN
 	return result, err
 }
 
-func (wrc *WorkflowRegistryV2Client) GetWorkflowListByOwnerAndName(owner common.Address, workflowName string, start, limit *big.Int) ([]workflow_registry_v2_wrapper.WorkflowRegistryWorkflowMetadataView, error) {
+func (wrc *WorkflowRegistryV2Client) GetWorkflowListByOwnerAndName(ctx context.Context, owner common.Address, workflowName string, start, limit *big.Int) ([]workflow_registry_v2_wrapper.WorkflowRegistryWorkflowMetadataView, error) {
 	contract, err := workflow_registry_v2_wrapper.NewWorkflowRegistry(wrc.ContractAddress, wrc.EthClient.Client)
 	if err != nil {
 		wrc.Logger.Error().Err(err).Msg("Failed to connect for GetWorkflowListByOwnerAndName")
@@ -537,7 +550,7 @@ func (wrc *WorkflowRegistryV2Client) GetWorkflowListByOwnerAndName(owner common.
 	}
 
 	result, err := callContractMethodV2(wrc, func() ([]workflow_registry_v2_wrapper.WorkflowRegistryWorkflowMetadataView, error) {
-		return contract.GetWorkflowListByOwnerAndName(wrc.EthClient.NewCallOpts(), owner, workflowName, start, limit)
+		return contract.GetWorkflowListByOwnerAndName(wrc.callOpts(ctx), owner, workflowName, start, limit)
 	})
 	if err != nil {
 		wrc.Logger.Error().Err(err).Msg("GetWorkflowListByOwnerAndName call failed")
@@ -545,7 +558,7 @@ func (wrc *WorkflowRegistryV2Client) GetWorkflowListByOwnerAndName(owner common.
 	return result, err
 }
 
-func (wrc *WorkflowRegistryV2Client) GetWorkflowListByOwner(owner common.Address, start, limit *big.Int) ([]workflow_registry_v2_wrapper.WorkflowRegistryWorkflowMetadataView, error) {
+func (wrc *WorkflowRegistryV2Client) GetWorkflowListByOwner(ctx context.Context, owner common.Address, start, limit *big.Int) ([]workflow_registry_v2_wrapper.WorkflowRegistryWorkflowMetadataView, error) {
 	contract, err := workflow_registry_v2_wrapper.NewWorkflowRegistry(wrc.ContractAddress, wrc.EthClient.Client)
 	if err != nil {
 		wrc.Logger.Error().Err(err).Msg("Failed to connect for GetWorkflowListByOwner")
@@ -553,7 +566,7 @@ func (wrc *WorkflowRegistryV2Client) GetWorkflowListByOwner(owner common.Address
 	}
 
 	result, err := callContractMethodV2(wrc, func() ([]workflow_registry_v2_wrapper.WorkflowRegistryWorkflowMetadataView, error) {
-		return contract.GetWorkflowListByOwner(wrc.EthClient.NewCallOpts(), owner, start, limit)
+		return contract.GetWorkflowListByOwner(wrc.callOpts(ctx), owner, start, limit)
 	})
 	if err != nil {
 		wrc.Logger.Error().Err(err).Msg("GetWorkflowListByOwner call failed")
@@ -562,6 +575,7 @@ func (wrc *WorkflowRegistryV2Client) GetWorkflowListByOwner(owner common.Address
 }
 
 func (wrc *WorkflowRegistryV2Client) CheckUserDonLimit(
+	ctx context.Context,
 	owner common.Address,
 	donFamily string,
 	pending uint32,
@@ -569,7 +583,7 @@ func (wrc *WorkflowRegistryV2Client) CheckUserDonLimit(
 	const workflowStatusActive = uint8(0)
 	const workflowListPageSize = int64(200)
 
-	maxAllowed, err := wrc.GetMaxWorkflowsPerUserDONByFamily(owner, donFamily)
+	maxAllowed, err := wrc.GetMaxWorkflowsPerUserDONByFamily(ctx, owner, donFamily)
 	if err != nil {
 		return fmt.Errorf("failed to fetch per-user workflow limit: %w", err)
 	}
@@ -579,7 +593,7 @@ func (wrc *WorkflowRegistryV2Client) CheckUserDonLimit(
 	limit := big.NewInt(workflowListPageSize)
 
 	for {
-		list, err := wrc.GetWorkflowListByOwner(owner, start, limit)
+		list, err := wrc.GetWorkflowListByOwner(ctx, owner, start, limit)
 		if err != nil {
 			return fmt.Errorf("failed to check active workflows for DON %s: %w", donFamily, err)
 		}
@@ -606,7 +620,7 @@ func (wrc *WorkflowRegistryV2Client) CheckUserDonLimit(
 	return nil
 }
 
-func (wrc *WorkflowRegistryV2Client) DeleteWorkflow(workflowID [32]byte) (*TxOutput, error) {
+func (wrc *WorkflowRegistryV2Client) DeleteWorkflow(ctx context.Context, workflowID [32]byte) (*TxOutput, error) {
 	contract, err := workflow_registry_v2_wrapper.NewWorkflowRegistry(wrc.ContractAddress, wrc.EthClient.Client)
 	if err != nil {
 		wrc.Logger.Error().
@@ -619,7 +633,7 @@ func (wrc *WorkflowRegistryV2Client) DeleteWorkflow(workflowID [32]byte) (*TxOut
 	txFn := func(opts *bind.TransactOpts) (*types.Transaction, error) {
 		return contract.DeleteWorkflow(opts, workflowID)
 	}
-	txOut, err := wrc.executeTransactionByTxType(txFn, "DeleteWorkflow", "WorkflowDeleted", workflowID)
+	txOut, err := wrc.executeTransactionByTxType(ctx, txFn, "DeleteWorkflow", "WorkflowDeleted", workflowID)
 	if err != nil {
 		wrc.Logger.Error().
 			Str("contract", contract.Address().Hex()).
@@ -630,7 +644,7 @@ func (wrc *WorkflowRegistryV2Client) DeleteWorkflow(workflowID [32]byte) (*TxOut
 	return &txOut, nil
 }
 
-func (wrc *WorkflowRegistryV2Client) BatchPauseWorkflows(workflowIDs [][32]byte) (*TxOutput, error) {
+func (wrc *WorkflowRegistryV2Client) BatchPauseWorkflows(ctx context.Context, workflowIDs [][32]byte) (*TxOutput, error) {
 	contract, err := workflow_registry_v2_wrapper.NewWorkflowRegistry(wrc.ContractAddress, wrc.EthClient.Client)
 	if err != nil {
 		wrc.Logger.Error().
@@ -646,7 +660,7 @@ func (wrc *WorkflowRegistryV2Client) BatchPauseWorkflows(workflowIDs [][32]byte)
 			workflowIDs,
 		)
 	}
-	txOut, err := wrc.executeTransactionByTxType(txFn, "BatchPauseWorkflows", "WorkflowStatusUpdated", workflowIDs)
+	txOut, err := wrc.executeTransactionByTxType(ctx, txFn, "BatchPauseWorkflows", "WorkflowStatusUpdated", workflowIDs)
 	if err != nil {
 		wrc.Logger.Error().
 			Str("contract", contract.Address().Hex()).
@@ -657,7 +671,7 @@ func (wrc *WorkflowRegistryV2Client) BatchPauseWorkflows(workflowIDs [][32]byte)
 	return &txOut, nil
 }
 
-func (wrc *WorkflowRegistryV2Client) ActivateWorkflow(workflowID [32]byte, donFamily string) (*TxOutput, error) {
+func (wrc *WorkflowRegistryV2Client) ActivateWorkflow(ctx context.Context, workflowID [32]byte, donFamily string) (*TxOutput, error) {
 	contract, err := workflow_registry_v2_wrapper.NewWorkflowRegistry(wrc.ContractAddress, wrc.EthClient.Client)
 	if err != nil {
 		wrc.Logger.Error().
@@ -670,7 +684,7 @@ func (wrc *WorkflowRegistryV2Client) ActivateWorkflow(workflowID [32]byte, donFa
 	txFn := func(opts *bind.TransactOpts) (*types.Transaction, error) {
 		return contract.ActivateWorkflow(opts, workflowID, donFamily)
 	}
-	txOut, err := wrc.executeTransactionByTxType(txFn, "ActivateWorkflow", "WorkflowActivated", workflowID, donFamily)
+	txOut, err := wrc.executeTransactionByTxType(ctx, txFn, "ActivateWorkflow", "WorkflowActivated", workflowID, donFamily)
 	if err != nil {
 		wrc.Logger.Error().
 			Str("contract", contract.Address().Hex()).
@@ -715,7 +729,7 @@ func (wrc *WorkflowRegistryV2Client) validateReceiptAndEvent(
 
 // IsRequestAllowlisted queries the registry to check if a given (owner, requestDigest) is allowlisted.
 // requestDigestHex may include or omit the 0x prefix.
-func (wrc *WorkflowRegistryV2Client) IsRequestAllowlisted(owner common.Address, digest [32]byte) (bool, error) {
+func (wrc *WorkflowRegistryV2Client) IsRequestAllowlisted(ctx context.Context, owner common.Address, digest [32]byte) (bool, error) {
 	var contract workflowRegistryV2Contract
 	if wrc.Wr != nil {
 		contract = wrc.Wr
@@ -731,7 +745,7 @@ func (wrc *WorkflowRegistryV2Client) IsRequestAllowlisted(owner common.Address, 
 	var allowlisted bool
 	_, err := callContractMethodV2(wrc, func() (string, error) {
 		var callErr error
-		allowlisted, callErr = contract.IsRequestAllowlisted(wrc.EthClient.NewCallOpts(), owner, digest)
+		allowlisted, callErr = contract.IsRequestAllowlisted(wrc.callOpts(ctx), owner, digest)
 		return "", callErr
 	})
 	if err != nil {
@@ -753,7 +767,7 @@ func (wrc *WorkflowRegistryV2Client) IsRequestAllowlisted(owner common.Address, 
 
 // AllowlistRequest sends the request digest to the WorkflowRegistry allowlist with a default expiry of now + 10 minutes.
 // `requestDigestHex` should be the hex string produced by utils.CalculateRequestDigest(...), with or without "0x".
-func (wrc *WorkflowRegistryV2Client) AllowlistRequest(requestDigest [32]byte, duration time.Duration) (*TxOutput, error) {
+func (wrc *WorkflowRegistryV2Client) AllowlistRequest(ctx context.Context, requestDigest [32]byte, duration time.Duration) (*TxOutput, error) {
 	var contract workflowRegistryV2Contract
 	if wrc.Wr != nil {
 		contract = wrc.Wr
@@ -772,7 +786,7 @@ func (wrc *WorkflowRegistryV2Client) AllowlistRequest(requestDigest [32]byte, du
 	txFn := func(opts *bind.TransactOpts) (*types.Transaction, error) {
 		return contract.AllowlistRequest(opts, requestDigest, deadline)
 	}
-	txOut, err := wrc.executeTransactionByTxType(txFn, "AllowlistRequest", "RequestAllowlisted", requestDigest, duration)
+	txOut, err := wrc.executeTransactionByTxType(ctx, txFn, "AllowlistRequest", "RequestAllowlisted", requestDigest, duration)
 	if err != nil {
 		wrc.Logger.Error().
 			Str("contract", wrc.ContractAddress.Hex()).
