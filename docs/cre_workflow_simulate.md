@@ -27,6 +27,7 @@ cre workflow simulate ./my-workflow
       --evm-tx-hash string    EVM trigger transaction hash (0x...)
   -h, --help                  help for simulate
       --http-payload string   HTTP trigger payload as JSON string or path to JSON file
+      --keep-alive            Keep the simulator running after each execution and accept additional HTTP trigger requests (http-trigger only)
       --limits string         Production limits to enforce during simulation: 'default' for prod defaults, path to a limits JSON file (e.g. from 'cre workflow limits export'), or 'none' to disable (default "default")
       --no-config             Simulate without a config file
       --skip-type-checks      Skip TypeScript project typecheck during compilation (passes --skip-type-checks to cre-compile)

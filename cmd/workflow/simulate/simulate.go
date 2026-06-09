@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -62,6 +65,9 @@ type Inputs struct {
 	TriggerIndex    int               `validate:"-"`
 	HTTPPayload     string            `validate:"-"` // JSON string or /path/to/file.json
 	ChainTypeInputs map[string]string `validate:"-"` // CLI-supplied chain-type-specific trigger inputs
+	// KeepAlive keeps the HTTP trigger server running after each execution so it can
+	// process additional requests until the user interrupts (ctrl-C).
+	KeepAlive bool `validate:"-"`
 	// Limits enforcement
 	LimitsPath string `validate:"-"` // "default" or path to custom limits JSON
 	// SkipTypeChecks passes --skip-type-checks to cre-compile for TypeScript workflows.
@@ -104,6 +110,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	// Non-interactive trigger selection flags
 	simulateCmd.Flags().Int("trigger-index", -1, "Index of the trigger to run (0-based)")
 	simulateCmd.Flags().String("http-payload", "", "HTTP trigger payload as JSON string or path to JSON file")
+	simulateCmd.Flags().Bool("keep-alive", false, "Keep the simulator running after each execution and accept additional HTTP trigger requests (http-trigger only)")
 
 	// Register chain-type-specific CLI flags (e.g., --evm-tx-hash).
 	chain.RegisterAllCLIFlags(simulateCmd)
@@ -197,6 +204,7 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 		TriggerIndex:      v.GetInt("trigger-index"),
 		HTTPPayload:       v.GetString("http-payload"),
 		ChainTypeInputs:   chain.CollectAllCLIInputs(v),
+		KeepAlive:         v.GetBool("keep-alive"),
 		LimitsPath:        v.GetString("limits"),
 		SkipTypeChecks:    v.GetBool(cmdcommon.SkipTypeChecksCLIFlag),
 		InvocationDir:     h.runtimeContext.InvocationDir,
@@ -429,9 +437,10 @@ func run(
 		return fmt.Errorf("failed to create engine logger: %w", err)
 	}
 
-	// Channels to coordinate blocking
+	// Channels to coordinate blocking. executionFinishedCh is buffered so multiple
+	// runs (keep-alive mode) can each signal completion without blocking the engine.
 	initializedCh := make(chan struct{})
-	executionFinishedCh := make(chan struct{})
+	executionFinishedCh := make(chan struct{}, 1)
 
 	var manualTriggerCaps *ManualTriggers
 	simulatorInitialize := func(ctx context.Context, cfg simulator.RunnerConfig) (*capabilities.Registry, []services.Service) {
@@ -551,20 +560,47 @@ func run(
 			simLogger.Error("Trigger to run not selected")
 			os.Exit(1)
 		}
-		simLogger.Info("Running trigger", "trigger", triggerInfoAndBeforeStart.TriggerToRun.GetId())
-		err := triggerInfoAndBeforeStart.TriggerFunc()
-		if err != nil {
-			simLogger.Error("Failed to run trigger", "trigger", triggerInfoAndBeforeStart.TriggerToRun.GetId(), "error", err)
-			os.Exit(1)
+
+		keepAlive := inputs.KeepAlive && triggerInfoAndBeforeStart.TriggerToRun.GetId() == "http-trigger@1.0.0-alpha"
+		if inputs.KeepAlive && !keepAlive {
+			ui.Warning("--keep-alive only applies to http-trigger; ignoring for this trigger type")
+		}
+		if keepAlive {
+			runHTTPKeepAlive(ctx, inputs, triggerInfoAndBeforeStart, executionFinishedCh, simLogger)
+			return
 		}
 
-		select {
-		case <-executionFinishedCh:
-			simLogger.Info("Execution finished signal received")
-		case <-ctx.Done():
-			simLogger.Info("Received interrupt signal, stopping execution")
-		case <-time.After(WorkflowExecutionTimeout):
-			simLogger.Warn("Timeout waiting for execution to finish")
+		for iteration := 0; ; iteration++ {
+			if iteration > 0 {
+				ui.Line()
+				ui.Step(fmt.Sprintf("Keep-alive: ready for next request (run #%d)", iteration+1))
+				// Drain any stale completion signal so we wait for the new run's result.
+				select {
+				case <-executionFinishedCh:
+				default:
+				}
+			}
+
+			simLogger.Info("Running trigger", "trigger", triggerInfoAndBeforeStart.TriggerToRun.GetId())
+			err := triggerInfoAndBeforeStart.TriggerFunc()
+			if err != nil {
+				simLogger.Error("Failed to run trigger", "trigger", triggerInfoAndBeforeStart.TriggerToRun.GetId(), "error", err)
+				os.Exit(1)
+			}
+
+			select {
+			case <-executionFinishedCh:
+				simLogger.Info("Execution finished signal received")
+			case <-ctx.Done():
+				simLogger.Info("Received interrupt signal, stopping execution")
+				return
+			case <-time.After(WorkflowExecutionTimeout):
+				simLogger.Warn("Timeout waiting for execution to finish")
+			}
+
+			if !keepAlive {
+				return
+			}
 		}
 	}
 	simulatorCleanup := func(ctx context.Context, cfg simulator.RunnerConfig, registry *capabilities.Registry, services []services.Service) {
@@ -645,7 +681,10 @@ func run(
 					ui.Error("Execution resulted in an error being returned: " + r.Error)
 				}
 				ui.Line()
-				close(executionFinishedCh)
+				select {
+				case executionFinishedCh <- struct{}{}:
+				default:
+				}
 			},
 		},
 		WorkflowSettingsCfgFn: func(cfg *cresettings.Workflows) {
@@ -666,10 +705,157 @@ func run(
 	return nil
 }
 
+func runHTTPKeepAlive(ctx context.Context, inputs Inputs, triggerInfo *TriggerInfoAndBeforeStart, executionFinishedCh <-chan struct{}, simLogger *SimulationLogger) {
+	if triggerInfo.TriggerWithPayload == nil {
+		simLogger.Error("HTTP trigger payload function not initialized")
+		os.Exit(1)
+	}
+
+	payloadCh, closeServer, err := startHTTPKeepAlivePayloadServer(ctx, httpTriggerServerPort)
+	if err != nil {
+		ui.Error(fmt.Sprintf("Failed to start HTTP trigger server: %v", err))
+		os.Exit(1)
+	}
+	defer closeServer()
+
+	runPayload := func(payload *httptypedapi.Payload) bool {
+		simLogger.Info("Running trigger", "trigger", triggerInfo.TriggerToRun.GetId())
+		if err := triggerInfo.TriggerWithPayload(payload); err != nil {
+			simLogger.Error("Failed to run trigger", "trigger", triggerInfo.TriggerToRun.GetId(), "error", err)
+			os.Exit(1)
+		}
+
+		select {
+		case <-executionFinishedCh:
+			simLogger.Info("Execution finished signal received")
+		case <-ctx.Done():
+			simLogger.Info("Received interrupt signal, stopping execution")
+			return false
+		case <-time.After(WorkflowExecutionTimeout):
+			simLogger.Warn("Timeout waiting for execution to finish")
+		}
+
+		return true
+	}
+
+	iteration := 0
+	if strings.TrimSpace(inputs.HTTPPayload) != "" {
+		if triggerInfo.TriggerFunc == nil {
+			simLogger.Error("Trigger function not initialized")
+			os.Exit(1)
+		}
+		simLogger.Info("Running trigger", "trigger", triggerInfo.TriggerToRun.GetId())
+		if err := triggerInfo.TriggerFunc(); err != nil {
+			simLogger.Error("Failed to run trigger", "trigger", triggerInfo.TriggerToRun.GetId(), "error", err)
+			os.Exit(1)
+		}
+		select {
+		case <-executionFinishedCh:
+			simLogger.Info("Execution finished signal received")
+		case <-ctx.Done():
+			simLogger.Info("Received interrupt signal, stopping execution")
+			return
+		case <-time.After(WorkflowExecutionTimeout):
+			simLogger.Warn("Timeout waiting for execution to finish")
+		}
+		iteration = 1
+	}
+
+	for {
+		if iteration > 0 {
+			ui.Line()
+			ui.Step(fmt.Sprintf("Keep-alive: ready for next request (run #%d)", iteration+1))
+		}
+		ui.Step(fmt.Sprintf("Waiting for HTTP request to start execution (listening on http://localhost:%d/trigger)...", httpTriggerServerPort))
+
+		var payload *httptypedapi.Payload
+		select {
+		case payload = <-payloadCh:
+		case <-ctx.Done():
+			simLogger.Info("Received interrupt signal, stopping execution")
+			return
+		}
+
+		if !runPayload(payload) {
+			return
+		}
+		iteration++
+	}
+}
+
+func startHTTPKeepAlivePayloadServer(ctx context.Context, port int) (<-chan *httptypedapi.Payload, func(), error) {
+	payloadCh := make(chan *httptypedapi.Payload, 16)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/trigger", func(w http.ResponseWriter, r *http.Request) {
+		input, err := parseHTTPTriggerRequest(r)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("error processing request: %v", err), http.StatusBadRequest)
+			return
+		}
+
+		select {
+		case payloadCh <- &httptypedapi.Payload{Input: input}:
+			w.WriteHeader(http.StatusOK)
+		default:
+			http.Error(w, "trigger queue is full", http.StatusTooManyRequests)
+		}
+	})
+
+	server := &http.Server{
+		Handler:           mux,
+		ReadHeaderTimeout: time.Second,
+	}
+	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+	if err != nil {
+		return nil, nil, err
+	}
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		if err := server.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			// Nothing to do here: startup errors are handled synchronously by
+			// net.Listen above, and shutdown uses server.Close().
+			return
+		}
+	}()
+	go func() {
+		<-ctx.Done()
+		_ = server.Close()
+	}()
+
+	closeServer := func() {
+		_ = server.Close()
+		<-done
+	}
+	return payloadCh, closeServer, nil
+}
+
+func parseHTTPTriggerRequest(req *http.Request) ([]byte, error) {
+	if req.Method != http.MethodPost {
+		return nil, errors.New("gateway expects POST request")
+	}
+
+	body, err := io.ReadAll(req.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read request body: %w", err)
+	}
+
+	var rpcRequest struct {
+		Input json.RawMessage `json:"input"`
+	}
+	if err := json.Unmarshal(body, &rpcRequest); err != nil {
+		return nil, fmt.Errorf("failed to parse request body: %w", err)
+	}
+
+	return rpcRequest.Input, nil
+}
+
 type TriggerInfoAndBeforeStart struct {
-	TriggerFunc  func() error
-	TriggerToRun *pb.TriggerSubscription
-	BeforeStart  func(ctx context.Context, cfg simulator.RunnerConfig, registry *capabilities.Registry, services []services.Service, triggerSub []*pb.TriggerSubscription)
+	TriggerFunc        func() error
+	TriggerWithPayload func(*httptypedapi.Payload) error
+	TriggerToRun       *pb.TriggerSubscription
+	BeforeStart        func(ctx context.Context, cfg simulator.RunnerConfig, registry *capabilities.Registry, services []services.Service, triggerSub []*pb.TriggerSubscription)
 }
 
 // makeBeforeStartInteractive builds the interactive BeforeStart closure
@@ -751,9 +937,16 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 				ui.Line()
 			}
 			holder.TriggerFunc = func() error {
-				if payload == nil {
+				// Consume any inline payload on the first call; subsequent calls
+				// (keep-alive mode) listen on the local HTTP server.
+				p := payload
+				payload = nil
+				if p == nil {
 					ui.Step(fmt.Sprintf("Waiting for HTTP request to start execution (listening on http://localhost:%d/trigger)...", httpTriggerServerPort))
 				}
+				return manualTriggerCaps.ManualHTTPTrigger.ManualTrigger(ctx, triggerRegistrationID, p)
+			}
+			holder.TriggerWithPayload = func(payload *httptypedapi.Payload) error {
 				return manualTriggerCaps.ManualHTTPTrigger.ManualTrigger(ctx, triggerRegistrationID, payload)
 			}
 		default:
@@ -827,7 +1020,7 @@ func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inp
 				return manualTriggerCaps.ManualCronTrigger.ManualTrigger(ctx, triggerRegistrationID, skipWaitSignal)
 			}
 		case "http-trigger@1.0.0-alpha":
-			if strings.TrimSpace(inputs.HTTPPayload) == "" {
+			if strings.TrimSpace(inputs.HTTPPayload) == "" && !inputs.KeepAlive {
 				ui.Error("--http-payload is required for http-trigger@1.0.0-alpha in non-interactive mode")
 				os.Exit(1)
 			}
@@ -837,6 +1030,14 @@ func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inp
 				os.Exit(1)
 			}
 			holder.TriggerFunc = func() error {
+				p := payload
+				payload = nil
+				if p == nil {
+					ui.Step(fmt.Sprintf("Waiting for HTTP request to start execution (listening on http://localhost:%d/trigger)...", httpTriggerServerPort))
+				}
+				return manualTriggerCaps.ManualHTTPTrigger.ManualTrigger(ctx, triggerRegistrationID, p)
+			}
+			holder.TriggerWithPayload = func(payload *httptypedapi.Payload) error {
 				return manualTriggerCaps.ManualHTTPTrigger.ManualTrigger(ctx, triggerRegistrationID, payload)
 			}
 		default:

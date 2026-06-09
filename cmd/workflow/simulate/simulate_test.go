@@ -1,11 +1,14 @@
 package simulate
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	rt "runtime"
@@ -28,6 +31,19 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/testutil"
 )
+
+func freeTCPPort(t *testing.T) int {
+	t.Helper()
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	defer listener.Close()
+
+	addr, ok := listener.Addr().(*net.TCPAddr)
+	require.True(t, ok)
+	require.Greater(t, addr.Port, 0)
+	return addr.Port
+}
 
 // TestBlankWorkflowSimulation validates that the simulator can successfully
 // run a blank workflow from end to end in a non-interactive mode.
@@ -491,6 +507,50 @@ func TestNonInteractiveCronTriggerDoesNotBlockOnSchedule(t *testing.T) {
 	case <-time.After(3 * time.Second):
 		t.Fatal("TriggerFunc blocked waiting for cron schedule; skipWaitSignal must be sent before ManualTrigger is called")
 	}
+}
+
+func TestHTTPKeepAlivePayloadServerAcceptsMultipleRequests(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	port := freeTCPPort(t)
+	payloadCh, closeServer, err := startHTTPKeepAlivePayloadServer(ctx, port)
+	require.NoError(t, err)
+	t.Cleanup(closeServer)
+
+	for _, input := range []string{`{"key":"first"}`, `{"key":"second"}`} {
+		body := []byte(fmt.Sprintf(`{"input":%s}`, input))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, fmt.Sprintf("http://127.0.0.1:%d/trigger", port), bytes.NewReader(body))
+		require.NoError(t, err)
+		req.Header.Set("Content-Type", "application/json")
+
+		resp, err := http.DefaultClient.Do(req)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+		require.NoError(t, resp.Body.Close())
+	}
+
+	for _, want := range [][]byte{[]byte(`{"key":"first"}`), []byte(`{"key":"second"}`)} {
+		select {
+		case payload := <-payloadCh:
+			require.Equal(t, want, payload.Input)
+		case <-time.After(2 * time.Second):
+			t.Fatal("timed out waiting for queued HTTP trigger payload")
+		}
+	}
+}
+
+func TestManualHTTPTriggerEventsHaveUniqueIDs(t *testing.T) {
+	t.Parallel()
+
+	svc := NewManualHTTPTriggerService(logger.Test(t))
+	first := svc.createManualTriggerEvent(nil)
+	second := svc.createManualTriggerEvent(nil)
+
+	require.NotEmpty(t, first.Id)
+	require.NotEqual(t, first.Id, second.Id)
 }
 
 func TestSimulateConfigFlagsMutuallyExclusive(t *testing.T) {
