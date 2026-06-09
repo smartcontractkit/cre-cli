@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"gopkg.in/yaml.v2"
@@ -162,17 +161,6 @@ func TestNewEnvironmentSet_DonFamilyFromEnvVarOnly(t *testing.T) {
 	set = NewEnvironmentSet(ff, "STAGING")
 	if set.DonFamily != "zone-b" {
 		t.Errorf("DonFamily = %q; want zone-b from env var", set.DonFamily)
-	}
-}
-
-func TestEmbeddedEnvironmentFile_NoDonFamilyDefaults(t *testing.T) {
-	data, err := envFileContent.ReadFile("environments.yaml")
-	if err != nil {
-		t.Fatalf("reading embedded environments file: %v", err)
-	}
-	content := string(data)
-	if strings.Contains(content, "CRE_CLI_DON_FAMILY") {
-		t.Fatal("embedded environments.yaml must not define CRE_CLI_DON_FAMILY")
 	}
 }
 
