@@ -1,6 +1,7 @@
 package deploy
 
 import (
+	"context"
 	"fmt"
 	"sync"
 
@@ -23,7 +24,7 @@ type onchainRegistryDeployStrategy struct {
 	initErr error
 }
 
-func newOnchainRegistryDeployStrategy(h *handler) (*onchainRegistryDeployStrategy, error) {
+func newOnchainRegistryDeployStrategy(ctx context.Context, h *handler) (*onchainRegistryDeployStrategy, error) {
 	onChain, err := settings.AsOnChain(h.runtimeContext.ResolvedRegistry, "deploy")
 	if err != nil {
 		return nil, err
@@ -33,7 +34,7 @@ func newOnchainRegistryDeployStrategy(h *handler) (*onchainRegistryDeployStrateg
 	a.wg.Add(1)
 	go func() {
 		defer a.wg.Done()
-		wrc, err := h.clientFactory.NewWorkflowRegistryV2Client(h.execCtx)
+		wrc, err := h.clientFactory.NewWorkflowRegistryV2Client(ctx)
 		if err != nil {
 			a.initErr = fmt.Errorf("failed to create workflow registry client: %w", err)
 			return
@@ -44,10 +45,27 @@ func newOnchainRegistryDeployStrategy(h *handler) (*onchainRegistryDeployStrateg
 	return a, nil
 }
 
-func (a *onchainRegistryDeployStrategy) RunPreDeployChecks() error {
+func waitWithContext(ctx context.Context, wg *sync.WaitGroup) error {
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (a *onchainRegistryDeployStrategy) RunPreDeployChecks(ctx context.Context) error {
 	h := a.h
 
-	a.wg.Wait()
+	if err := waitWithContext(ctx, &a.wg); err != nil {
+		return err
+	}
 	if a.initErr != nil {
 		return a.initErr
 	}
@@ -55,7 +73,7 @@ func (a *onchainRegistryDeployStrategy) RunPreDeployChecks() error {
 	ui.Line()
 	ui.Dim("Verifying ownership...")
 	if h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerType == constants.WorkflowOwnerTypeMSIG {
-		halt, err := h.autoLinkMSIGAndExit(a.onChain)
+		halt, err := h.autoLinkMSIGAndExit(ctx, a.onChain)
 		if err != nil {
 			return fmt.Errorf("failed to check/handle MSIG owner link status: %w", err)
 		}
@@ -63,7 +81,7 @@ func (a *onchainRegistryDeployStrategy) RunPreDeployChecks() error {
 			return errDeployHalted
 		}
 	} else {
-		if err := h.ensureOwnerLinkedOrFail(a.onChain); err != nil {
+		if err := h.ensureOwnerLinkedOrFail(ctx, a.onChain); err != nil {
 			return err
 		}
 	}
@@ -71,8 +89,8 @@ func (a *onchainRegistryDeployStrategy) RunPreDeployChecks() error {
 	return nil
 }
 
-func (a *onchainRegistryDeployStrategy) CheckWorkflowExists(workflowOwner, workflowName, workflowTag, workflowID string) (bool, *uint8, error) {
-	workflow, err := a.wrc.GetWorkflow(a.h.execCtx, common.HexToAddress(workflowOwner), workflowName, workflowTag)
+func (a *onchainRegistryDeployStrategy) CheckWorkflowExists(ctx context.Context, workflowOwner, workflowName, workflowTag, workflowID string) (bool, *uint8, error) {
+	workflow, err := a.wrc.GetWorkflow(ctx, common.HexToAddress(workflowOwner), workflowName, workflowTag)
 	if err != nil {
 		return false, nil, err
 	}
@@ -88,11 +106,11 @@ func (a *onchainRegistryDeployStrategy) CheckWorkflowExists(workflowOwner, workf
 	return false, nil, nil
 }
 
-func (a *onchainRegistryDeployStrategy) Upsert() error {
+func (a *onchainRegistryDeployStrategy) Upsert(ctx context.Context) error {
 	h := a.h
 
 	if err := checkUserDonLimitBeforeDeploy(
-		h.execCtx,
+		ctx,
 		a.wrc,
 		a.wrc,
 		common.HexToAddress(h.inputs.WorkflowOwner),
@@ -106,7 +124,7 @@ func (a *onchainRegistryDeployStrategy) Upsert() error {
 
 	ui.Line()
 	ui.Dim("Preparing deployment transaction...")
-	if err := h.upsert(a.onChain); err != nil {
+	if err := h.upsert(ctx, a.onChain); err != nil {
 		return fmt.Errorf("failed to register workflow: %w", err)
 	}
 	return nil

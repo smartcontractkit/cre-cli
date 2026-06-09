@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/smartcontractkit/cre-cli/internal/client/workflowdataclient"
+	"github.com/smartcontractkit/cre-cli/internal/registrytype"
 	"github.com/smartcontractkit/cre-cli/internal/tenantctx"
 )
 
@@ -137,8 +138,8 @@ func registryTypeOffChain(reg *tenantctx.Registry) bool {
 	if reg == nil {
 		return false
 	}
-	t := strings.TrimSpace(strings.ReplaceAll(strings.ToLower(reg.Type), "_", "-"))
-	return t == "off-chain" || strings.EqualFold(strings.TrimSpace(reg.Type), "OFF_CHAIN")
+	regType, err := registrytype.Parse(reg.Type)
+	return err == nil && regType == registrytype.OffChain
 }
 
 func hasContractAddress(reg *tenantctx.Registry) bool {

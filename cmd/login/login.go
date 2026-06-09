@@ -127,7 +127,8 @@ func (h *handler) execute(ctx context.Context) error {
 
 	h.spinner.Update("Fetching user context...")
 	if err := h.fetchTenantConfig(ctx, tokenSet); err != nil {
-		h.log.Debug().Err(err).Msgf("failed to fetch user context — %s not written", tenantctx.ContextFile)
+		h.spinner.StopAll()
+		return fmt.Errorf("failed to fetch user context: %w", err)
 	}
 
 	// Stop spinner before final output

@@ -15,8 +15,10 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/smartcontractkit/cre-cli/internal/client/graphqlclient"
+	"github.com/smartcontractkit/cre-cli/internal/creconfig"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
+	"github.com/smartcontractkit/cre-cli/internal/registrytype"
 )
 
 // ContextFile is the filename for the local registry manifest.
@@ -38,13 +40,20 @@ type Forwarder struct {
 	Address       string `yaml:"address" json:"address"`
 }
 
+// OnChainContract is a chain selector and contract address pair.
+type OnChainContract struct {
+	ChainSelector uint64 `yaml:"chain_selector" json:"chainSelector"`
+	Address       string `yaml:"address" json:"address"`
+}
+
 // EnvironmentContext holds user context for a single CLI environment.
 type EnvironmentContext struct {
-	TenantID         string      `yaml:"tenant_id"`
-	DefaultDonFamily string      `yaml:"default_don_family"`
-	VaultGatewayURL  string      `yaml:"vault_gateway_url"`
-	Registries       []*Registry `yaml:"registries"`
-	Forwarders       []Forwarder `yaml:"forwarders,omitempty"`
+	TenantID             string           `yaml:"tenant_id"`
+	DefaultDonFamily     string           `yaml:"default_don_family"`
+	VaultGatewayURL      string           `yaml:"vault_gateway_url"`
+	CapabilitiesRegistry *OnChainContract `yaml:"capabilities_registry,omitempty"`
+	Registries           []*Registry      `yaml:"registries"`
+	Forwarders           []Forwarder      `yaml:"forwarders,omitempty"`
 }
 
 type gqlForwarder struct {
@@ -52,12 +61,18 @@ type gqlForwarder struct {
 	Address       string          `json:"address"`
 }
 
+type gqlOnChainContract struct {
+	ChainSelector json.RawMessage `json:"chainSelector"`
+	Address       string          `json:"address"`
+}
+
 type getTenantConfigResponse struct {
 	GetTenantConfig struct {
-		TenantID         string `json:"tenantId"`
-		DefaultDonFamily string `json:"defaultDonFamily"`
-		VaultGatewayURL  string `json:"vaultGatewayUrl"`
-		Registries       []struct {
+		TenantID             string             `json:"tenantId"`
+		DefaultDonFamily     string             `json:"defaultDonFamily"`
+		VaultGatewayURL      string             `json:"vaultGatewayUrl"`
+		CapabilitiesRegistry gqlOnChainContract `json:"capabilitiesRegistry"`
+		Registries           []struct {
 			ID               string   `json:"id"`
 			Label            string   `json:"label"`
 			Type             string   `json:"type"`
@@ -74,6 +89,10 @@ const getTenantConfigQuery = `query GetTenantConfig {
     tenantId
     defaultDonFamily
     vaultGatewayUrl
+    capabilitiesRegistry {
+      chainSelector
+      address
+    }
     registries {
       id
       label
@@ -90,7 +109,7 @@ const getTenantConfigQuery = `query GetTenantConfig {
 }`
 
 // FetchAndWriteContext fetches the user context from the service
-// and writes the registry manifest to ~/.cre/<ContextFile>.
+// and writes the registry manifest to the CLI config directory.
 func FetchAndWriteContext(ctx context.Context, gqlClient *graphqlclient.Client, envName string, log *zerolog.Logger) error {
 	ctx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
@@ -106,11 +125,11 @@ func FetchAndWriteContext(ctx context.Context, gqlClient *graphqlclient.Client, 
 
 	registries := make([]*Registry, 0, len(tc.Registries))
 	for _, r := range tc.Registries {
-		regType := mapRegistryType(r.Type, log)
+		regType := registrytype.FromGQL(r.Type, log)
 		id := r.ID
 		label := r.Label
 
-		if regType == "on-chain" {
+		if regType == registrytype.OnChain {
 			id = "onchain:" + r.ID
 			if r.Address != nil {
 				label = fmt.Sprintf("%s (%s)", r.ID, abbreviateAddress(*r.Address))
@@ -120,7 +139,7 @@ func FetchAndWriteContext(ctx context.Context, gqlClient *graphqlclient.Client, 
 		registries = append(registries, &Registry{
 			ID:               id,
 			Label:            label,
-			Type:             regType,
+			Type:             string(regType),
 			ChainSelector:    r.ChainSelector,
 			Address:          r.Address,
 			SecretsAuthFlows: mapSecretsAuthFlows(r.SecretsAuthFlows, log),
@@ -142,12 +161,25 @@ func FetchAndWriteContext(ctx context.Context, gqlClient *graphqlclient.Client, 
 		forwarders = append(forwarders, Forwarder{ChainSelector: sel, Address: addr})
 	}
 
+	capRegSel, err := parseChainSelectorJSON(tc.CapabilitiesRegistry.ChainSelector)
+	if err != nil {
+		return fmt.Errorf("invalid capabilitiesRegistry chainSelector: %w", err)
+	}
+	capRegAddr := strings.TrimSpace(tc.CapabilitiesRegistry.Address)
+	if capRegAddr == "" {
+		return fmt.Errorf("capabilitiesRegistry address is empty")
+	}
+
 	envCtx := &EnvironmentContext{
 		TenantID:         tc.TenantID,
 		DefaultDonFamily: tc.DefaultDonFamily,
 		VaultGatewayURL:  tc.VaultGatewayURL,
-		Registries:       registries,
-		Forwarders:       forwarders,
+		CapabilitiesRegistry: &OnChainContract{
+			ChainSelector: capRegSel,
+			Address:       capRegAddr,
+		},
+		Registries: registries,
+		Forwarders: forwarders,
 	}
 
 	contextMap := map[string]*EnvironmentContext{
@@ -155,18 +187,6 @@ func FetchAndWriteContext(ctx context.Context, gqlClient *graphqlclient.Client, 
 	}
 
 	return writeContextFile(contextMap, log)
-}
-
-func mapRegistryType(gqlType string, log *zerolog.Logger) string {
-	switch gqlType {
-	case "ON_CHAIN":
-		return "on-chain"
-	case "OFF_CHAIN":
-		return "off-chain"
-	default:
-		log.Warn().Str("type", gqlType).Msg("unknown registry type, skipping")
-		return "unknown"
-	}
 }
 
 func mapSecretsAuthFlows(gqlFlows []string, log *zerolog.Logger) []string {
@@ -208,14 +228,14 @@ func parseChainSelectorJSON(raw []byte) (uint64, error) {
 	return 0, fmt.Errorf("chain selector must be a decimal string or integer JSON value: %s", string(raw))
 }
 
-// LoadContext reads the registry manifest from ~/.cre/<ContextFile>
+// LoadContext reads the registry manifest from the CLI config directory
 // and returns the EnvironmentContext for the given environment name.
 func LoadContext(envName string) (*EnvironmentContext, error) {
-	home, err := os.UserHomeDir()
+	path, err := creconfig.FilePath(ContextFile)
 	if err != nil {
-		return nil, fmt.Errorf("get home dir: %w", err)
+		return nil, err
 	}
-	return LoadContextFromPath(filepath.Join(home, credentials.ConfigDir, ContextFile), envName)
+	return LoadContextFromPath(path, envName)
 }
 
 // LoadContextFromPath reads the registry manifest at the given path
@@ -263,14 +283,9 @@ func EnsureContext(ctx context.Context, creds *credentials.Credentials, envSet *
 }
 
 func writeContextFile(data map[string]*EnvironmentContext, log *zerolog.Logger) error {
-	home, err := os.UserHomeDir()
+	dir, err := creconfig.EnsureDir()
 	if err != nil {
-		return fmt.Errorf("get home dir: %w", err)
-	}
-
-	dir := filepath.Join(home, credentials.ConfigDir)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return fmt.Errorf("create config dir: %w", err)
+		return err
 	}
 
 	out, err := yaml.Marshal(data)
