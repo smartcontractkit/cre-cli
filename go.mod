@@ -6,6 +6,7 @@ require (
 	github.com/BurntSushi/toml v1.5.0
 	github.com/Masterminds/semver/v3 v3.5.0
 	github.com/andybalholm/brotli v1.2.1
+	github.com/aptos-labs/aptos-go-sdk v1.13.0
 	github.com/avast/retry-go/v4 v4.7.0
 	github.com/charmbracelet/bubbles v0.21.1-0.20250623103423-23b8fd6302d7
 	github.com/charmbracelet/bubbletea v1.3.6
@@ -29,17 +30,18 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/rs/zerolog v1.34.0
 	github.com/smartcontractkit/chain-selectors v1.0.100
+	github.com/smartcontractkit/chainlink-aptos v0.0.0-20260528122056-c5f2af08c373
 	github.com/smartcontractkit/chainlink-common v0.11.2-0.20260520194751-11a4f360f4e2
 	github.com/smartcontractkit/chainlink-common/keystore v1.1.0
 	github.com/smartcontractkit/chainlink-evm/gethwrappers v0.0.0-20260512150409-b4068bf735e6
-	github.com/smartcontractkit/chainlink-protos/cre/go v0.0.0-20260522145417-85c85baa73cf
+	github.com/smartcontractkit/chainlink-protos/cre/go v0.0.0-20260609153034-c8423a41ef9a
 	github.com/smartcontractkit/chainlink-protos/workflows/go v0.0.0-20260323124644-faea187e6997
 	github.com/smartcontractkit/chainlink-testing-framework/seth v1.51.5
 	github.com/smartcontractkit/chainlink/deployment v0.0.0-20260521170940-67f9a4b233f8
 	github.com/smartcontractkit/chainlink/v2 v2.29.1-cre-beta.0.0.20260521170940-67f9a4b233f8
-	github.com/smartcontractkit/cre-sdk-go v1.11.0
-	github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm v1.0.0-beta.12
-	github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/solana v0.1.0-beta.1
+	github.com/smartcontractkit/cre-sdk-go v1.9.0-capdev.1.0.20260605151643-add8be700599
+	github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm v1.0.0-beta.10-capdev.1.0.20260605151643-add8be700599
+	github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/solana v0.1.1-0.20260605151643-add8be700599
 	github.com/smartcontractkit/mcms v0.45.0
 	github.com/smartcontractkit/tdh2/go/tdh2 v0.0.0-20251120172354-e8ec0386b06c
 	github.com/spf13/cobra v1.10.2
@@ -79,7 +81,6 @@ require (
 	github.com/VictoriaMetrics/fastcache v1.13.0 // indirect
 	github.com/XSAM/otelsql v0.42.0 // indirect
 	github.com/apache/arrow-go/v18 v18.6.0 // indirect
-	github.com/aptos-labs/aptos-go-sdk v1.13.0 // indirect
 	github.com/atombender/go-jsonschema v0.16.1-0.20240916205339-a74cd4e2851c // indirect
 	github.com/atotto/clipboard v0.1.4 // indirect
 	github.com/avast/retry-go v3.0.0+incompatible // indirect
@@ -306,7 +307,6 @@ require (
 	github.com/shopspring/decimal v1.4.0 // indirect
 	github.com/sigurn/crc16 v0.0.0-20211026045750-20ab5afb07e3 // indirect
 	github.com/smartcontractkit/ccip-owner-contracts v0.1.0 // indirect
-	github.com/smartcontractkit/chainlink-aptos v0.0.0-20260507123701-77fc93b573bb // indirect
 	github.com/smartcontractkit/chainlink-automation v0.8.1 // indirect
 	github.com/smartcontractkit/chainlink-ccip/chains/solana v0.0.0-20260415165642-49f23e4d76cc // indirect
 	github.com/smartcontractkit/chainlink-ccip/chains/solana/gobindings v0.0.0-20260511195239-0f6e1b177fc7 // indirect
@@ -400,12 +400,12 @@ require (
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	go.yaml.in/yaml/v4 v4.0.0-rc.4 // indirect
 	golang.org/x/arch v0.11.0 // indirect
-	golang.org/x/crypto v0.51.0 // indirect
+	golang.org/x/crypto v0.52.0 // indirect
 	golang.org/x/exp v0.0.0-20260508232706-74f9aab9d74a // indirect
 	golang.org/x/net v0.54.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect
-	golang.org/x/sys v0.44.0 // indirect
+	golang.org/x/sys v0.45.0 // indirect
 	golang.org/x/text v0.37.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
 	golang.org/x/tools v0.45.0 // indirect
