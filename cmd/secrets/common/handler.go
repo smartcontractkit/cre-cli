@@ -19,6 +19,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/machinebox/graphql"
 	"github.com/rs/zerolog"
+	"github.com/spf13/viper"
 	"google.golang.org/protobuf/encoding/protojson"
 	"gopkg.in/yaml.v2"
 
@@ -38,6 +39,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/ethkeys"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
+	"github.com/smartcontractkit/cre-cli/internal/tenantctx"
 	"github.com/smartcontractkit/cre-cli/internal/types"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 	"github.com/smartcontractkit/cre-cli/internal/validation"
@@ -67,6 +69,8 @@ type SecretsYamlConfig struct {
 type Handler struct {
 	Log                  *zerolog.Logger
 	ClientFactory        client.Factory
+	Viper                *viper.Viper
+	TenantContext        *tenantctx.EnvironmentContext
 	SecretsFilePath      string
 	PrivateKey           *ecdsa.PrivateKey
 	OwnerAddress         string
@@ -78,6 +82,11 @@ type Handler struct {
 	Credentials          *credentials.Credentials
 	Settings             *settings.Settings
 	execCtx              context.Context
+
+	vaultValidationDecided bool
+	skipVaultValidation    bool
+	capRegRPCURL           string
+	capRegChainName        string
 }
 
 // NewHandler creates a new handler instance.
@@ -100,6 +109,8 @@ func NewHandler(execCtx context.Context, ctx *runtime.Context, secretsFilePath, 
 	h := &Handler{
 		Log:                  ctx.Logger,
 		ClientFactory:        ctx.ClientFactory,
+		Viper:                ctx.Viper,
+		TenantContext:        ctx.TenantContext,
 		SecretsFilePath:      secretsFilePath,
 		PrivateKey:           pk,
 		OwnerAddress:         ctx.Settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress,
@@ -427,6 +438,10 @@ func (h *Handler) Execute(
 	defer ZeroUpsertSecretValues(inputs)
 
 	h.execCtx = ctx
+	if _, err := h.EnsureVaultValidationOrConsent(ctx); err != nil {
+		return err
+	}
+
 	if IsBrowserFlow(secretsAuth) {
 		return h.executeBrowserUpsert(ctx, inputs, method)
 	}

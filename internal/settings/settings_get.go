@@ -47,30 +47,46 @@ type ExperimentalChain struct {
 	Forwarder     string `mapstructure:"forwarder" yaml:"forwarder"`
 }
 
-func GetRpcUrlSettings(v *viper.Viper, chainName string) (string, error) {
+// LookupRpcURL resolves the RPC URL for chainName from the current project target.
+// ok is false when no RPC is configured for chainName; that is not an error.
+func LookupRpcURL(v *viper.Viper, chainName string) (url string, ok bool, err error) {
 	target, err := GetTarget(v)
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
 
 	keyWithTarget := fmt.Sprintf("%s.%s", target, RpcsSettingName)
 	var rpcs []RpcEndpoint
 	err = v.UnmarshalKey(keyWithTarget, &rpcs)
 	if err != nil {
-		return "", fmt.Errorf("not possible to unmarshall rpcs: %w", err)
+		return "", false, fmt.Errorf("not possible to unmarshall rpcs: %w", err)
 	}
 
 	for _, rpc := range rpcs {
 		if rpc.ChainName == chainName {
 			resolved, resolveErr := ResolveEnvVars(rpc.Url)
 			if resolveErr != nil {
-				return "", fmt.Errorf("rpc url for chain %q: %w", chainName, resolveErr)
+				return "", false, fmt.Errorf("rpc url for chain %q: %w", chainName, resolveErr)
 			}
-			return resolved, nil
+			return resolved, true, nil
 		}
 	}
 
-	return "", fmt.Errorf("rpc url not found for chain %s", chainName)
+	return "", false, nil
+}
+
+// GetRpcUrlSettings resolves the RPC URL for chainName from the current project target.
+//
+// TODO(DEVSVCS-5178)
+func GetRpcUrlSettings(v *viper.Viper, chainName string) (string, error) {
+	url, ok, err := LookupRpcURL(v, chainName)
+	if err != nil {
+		return "", err
+	}
+	if !ok {
+		return "", fmt.Errorf("rpc url not found for chain %s", chainName)
+	}
+	return url, nil
 }
 
 // GetExperimentalChains reads the experimental-chains list from the current target.

@@ -69,6 +69,10 @@ func New(ctx *runtime.Context) *cobra.Command {
 				return err
 			}
 
+			if _, err := h.EnsureVaultValidationOrConsent(cmd.Context()); err != nil {
+				return err
+			}
+
 			ownerAddr := ethcommon.HexToAddress(h.OwnerAddress)
 
 			allowlisted, err := h.Wrc.IsRequestAllowlisted(cmd.Context(), ownerAddr, digest)
@@ -94,6 +98,7 @@ func New(ctx *runtime.Context) *cobra.Command {
 	}
 
 	settings.AddTxnTypeFlags(cmd)
+	settings.AddSkipConfirmation(cmd)
 
 	return cmd
 }

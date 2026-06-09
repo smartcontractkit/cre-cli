@@ -87,6 +87,10 @@ func New(ctx *runtime.Context) *cobra.Command {
 
 // Execute performs: build request → (MSIG step 1 bundle OR EOA allowlist+post) → parse.
 func Execute(ctx context.Context, h *common.Handler, namespace string, duration time.Duration, secretsAuth string) error {
+	if _, err := h.EnsureVaultValidationOrConsent(ctx); err != nil {
+		return err
+	}
+
 	if !common.IsBrowserFlow(secretsAuth) {
 		if err := h.EnsureDeploymentRPCForOwnerKeySecrets(); err != nil {
 			return err

@@ -315,6 +315,7 @@ func secretsListMsig(t *testing.T, tc TestConfig) string {
 		tc.GetCliEnvFlag(),
 		tc.GetProjectRootFlag(),
 		"--unsigned",
+		"--" + settings.Flags.SkipConfirmation.Name,
 	}
 	cmd := exec.Command(CLIPath, args...)
 	// Let CLI handle context switching - don't set cmd.Dir manually

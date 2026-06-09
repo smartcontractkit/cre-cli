@@ -183,6 +183,7 @@ func readSethConfigFromFile(configPath string) (*seth.Config, error) {
 	return &sethConfig, nil
 }
 
+// TODO(DEVSVCS-5178)
 func getChainID(rpcURL string) (uint64, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
