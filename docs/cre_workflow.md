@@ -19,12 +19,13 @@ cre workflow [optional flags]
 ### Options inherited from parent commands
 
 ```
-  -e, --env string            Path to .env file which contains sensitive info
-      --non-interactive       Fail instead of prompting; requires all inputs via flags
-  -R, --project-root string   Path to the project root
-  -E, --public-env string     Path to .env.public file which contains shared, non-sensitive build config
-  -T, --target string         Use target settings from YAML config
-  -v, --verbose               Run command in VERBOSE mode
+      --allow-unknown-chains   Skip chain-name validation against the chain-selectors registry (for experimental chains)
+  -e, --env string             Path to .env file which contains sensitive info
+      --non-interactive        Fail instead of prompting; requires all inputs via flags
+  -R, --project-root string    Path to the project root
+  -E, --public-env string      Path to .env.public file which contains shared, non-sensitive build config
+  -T, --target string          Use target settings from YAML config
+  -v, --verbose                Run command in VERBOSE mode
 ```
 
 ### SEE ALSO
@@ -41,5 +42,5 @@ cre workflow [optional flags]
 * [cre workflow list](cre_workflow_list.md)	 - Lists workflows deployed for your organization
 * [cre workflow pause](cre_workflow_pause.md)	 - Pauses workflow on the Workflow Registry contract
 * [cre workflow simulate](cre_workflow_simulate.md)	 - Simulates a workflow
-* [cre workflow supported-chains](cre_workflow_supported-chains.md)	 - List all supported chain names
+* [cre workflow supported-chains](cre_workflow_supported-chains.md)	 - List chains and mock forwarder addresses for your tenant
 

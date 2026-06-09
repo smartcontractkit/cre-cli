@@ -1,6 +1,7 @@
 package pause
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -34,7 +35,7 @@ func TestNonInteractive_WithoutYes_ReturnsError(t *testing.T) {
 	}
 	h.validated = true
 
-	err := h.Execute()
+	err := h.Execute(context.Background())
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "missing required flags for --non-interactive mode")
 }
@@ -60,7 +61,7 @@ func TestNonInteractive_WithYes_PassesGuard(t *testing.T) {
 	}
 	h.validated = true
 
-	err := h.Execute()
+	err := h.Execute(context.Background())
 	// Guard passes; error comes from WRC (no matching workflow), not the guard
 	require.Error(t, err)
 	require.NotContains(t, err.Error(), "missing required flags for --non-interactive mode")

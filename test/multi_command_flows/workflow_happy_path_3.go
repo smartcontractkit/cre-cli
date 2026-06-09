@@ -16,6 +16,7 @@ import (
 
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
+	"github.com/smartcontractkit/cre-cli/internal/testutil"
 )
 
 // workflowInit runs cre init to initialize a new workflow project from scratch
@@ -32,14 +33,11 @@ func workflowInit(t *testing.T, projectRootFlag, projectName, workflowName strin
 
 			// Handle authentication validation query
 			if strings.Contains(req.Query, "getCreOrganizationInfo") {
-				_ = json.NewEncoder(w).Encode(map[string]any{
-					"data": map[string]any{
-						"getCreOrganizationInfo": map[string]any{
-							"orgId":                 "test-org-id",
-							"derivedWorkflowOwners": []string{"ab12cd34ef56ab12cd34ef56ab12cd34ef56ab12"},
-						},
-					},
-				})
+				_ = json.NewEncoder(w).Encode(testutil.MockGetCreOrganizationInfoGraphQLPayload())
+				return
+			}
+			if testutil.QueryIsGetTenantConfig(req.Query) {
+				_ = json.NewEncoder(w).Encode(testutil.MockGetTenantConfigGraphQLPayload())
 				return
 			}
 
@@ -101,14 +99,11 @@ func workflowDeployUnsigned(t *testing.T, tc TestConfig, projectRootFlag, workfl
 
 			// Handle authentication validation query
 			if strings.Contains(req.Query, "getCreOrganizationInfo") {
-				_ = json.NewEncoder(w).Encode(map[string]any{
-					"data": map[string]any{
-						"getCreOrganizationInfo": map[string]any{
-							"orgId":                 "test-org-id",
-							"derivedWorkflowOwners": []string{"ab12cd34ef56ab12cd34ef56ab12cd34ef56ab12"},
-						},
-					},
-				})
+				_ = json.NewEncoder(w).Encode(testutil.MockGetCreOrganizationInfoGraphQLPayload())
+				return
+			}
+			if testutil.QueryIsGetTenantConfig(req.Query) {
+				_ = json.NewEncoder(w).Encode(testutil.MockGetTenantConfigGraphQLPayload())
 				return
 			}
 
@@ -220,14 +215,11 @@ func workflowDeployWithConfigAndLinkedKey(t *testing.T, tc TestConfig, projectRo
 
 			// Handle authentication validation query
 			if strings.Contains(req.Query, "getCreOrganizationInfo") {
-				_ = json.NewEncoder(w).Encode(map[string]any{
-					"data": map[string]any{
-						"getCreOrganizationInfo": map[string]any{
-							"orgId":                 "test-org-id",
-							"derivedWorkflowOwners": []string{"ab12cd34ef56ab12cd34ef56ab12cd34ef56ab12"},
-						},
-					},
-				})
+				_ = json.NewEncoder(w).Encode(testutil.MockGetCreOrganizationInfoGraphQLPayload())
+				return
+			}
+			if testutil.QueryIsGetTenantConfig(req.Query) {
+				_ = json.NewEncoder(w).Encode(testutil.MockGetTenantConfigGraphQLPayload())
 				return
 			}
 

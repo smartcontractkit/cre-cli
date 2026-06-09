@@ -6,6 +6,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 
+	"github.com/smartcontractkit/cre-cli/internal/creconfig"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/templateconfig"
 	"github.com/smartcontractkit/cre-cli/internal/templaterepo"
@@ -20,7 +21,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	return &cobra.Command{
 		Use:     "add <owner/repo[@ref]>...",
 		Short:   "Adds a template repository source",
-		Long:    `Adds one or more template repository sources to ~/.cre/template.yaml. These repositories are used by cre init to discover available templates.`,
+		Long:    fmt.Sprintf("Adds one or more template repository sources to your home directory (%s/%s). These repositories are used by cre init to discover available templates.", creconfig.Dir, templateconfig.TemplateConfigFile),
 		Args:    cobra.MinimumNArgs(1),
 		Example: "cre templates add smartcontractkit/cre-templates@main myorg/my-templates",
 		RunE: func(cmd *cobra.Command, args []string) error {

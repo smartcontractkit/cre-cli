@@ -1,6 +1,7 @@
 package simulate
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
 	"io"
@@ -8,10 +9,18 @@ import (
 	"path/filepath"
 	rt "runtime"
 	"testing"
+	"time"
 
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	commoncaps "github.com/smartcontractkit/chainlink-common/pkg/capabilities"
+	crontypedapi "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/triggers/cron"
+	"github.com/smartcontractkit/chainlink-common/pkg/logger"
+	pb "github.com/smartcontractkit/chainlink-protos/cre/go/sdk"
+	"github.com/smartcontractkit/chainlink/v2/core/capabilities/fakes"
+	simulator "github.com/smartcontractkit/chainlink/v2/core/services/workflows/cmd/cre/utils"
 
 	cmdcommon "github.com/smartcontractkit/cre-cli/cmd/common"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
@@ -89,7 +98,7 @@ func TestBlankWorkflowSimulation(t *testing.T) {
 	require.NoError(t, err)
 
 	// Execute the simulation. We expect this to compile the workflow and run the simulator successfully.
-	err = handler.Execute(inputs)
+	err = handler.Execute(context.Background(), inputs)
 	require.NoError(t, err, "Execute should not return an error")
 }
 
@@ -436,6 +445,57 @@ func TestSimulateResolveInputs_InvocationDir(t *testing.T) {
 	inputs, err := h.ResolveInputs(v, creSettings)
 	require.NoError(t, err)
 	assert.Equal(t, invocationDir, inputs.InvocationDir)
+}
+
+// TestNonInteractiveCronTriggerDoesNotBlockOnSchedule verifies that when the
+// simulator runs in non-interactive mode with a cron trigger, TriggerFunc
+// completes immediately without waiting for the actual cron schedule.
+//
+// The previous broken implementation sent skipWaitSignal *after* ManualTrigger
+// returned, so ManualTrigger blocked in its select until the real cron job fired
+// (up to 60 s). The fix pre-fills the channel before calling ManualTrigger.
+func TestNonInteractiveCronTriggerDoesNotBlockOnSchedule(t *testing.T) {
+	t.Parallel()
+
+	cronSvc, err := fakes.NewManualCronTriggerService(logger.Test(t))
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	require.NoError(t, cronSvc.Start(ctx))
+	t.Cleanup(func() { _ = cronSvc.Close() })
+
+	// Register the trigger with the ID that makeBeforeStartNonInteractive will use.
+	triggerIndex := 0
+	triggerRegistrationID := fmt.Sprintf("trigger_reg_1111111111111111111111111111111111111111111111111111111111111111_%d", triggerIndex)
+	_, capErr := cronSvc.RegisterTrigger(ctx, triggerRegistrationID,
+		commoncaps.RequestMetadata{WorkflowID: "test-workflow"},
+		&crontypedapi.Config{Schedule: "* * * * *"},
+	)
+	require.Nil(t, capErr)
+
+	holder := &TriggerInfoAndBeforeStart{}
+	inputs := Inputs{TriggerIndex: triggerIndex}
+	manualTriggers := &ManualTriggers{ManualCronTrigger: cronSvc}
+
+	beforeStart := makeBeforeStartNonInteractive(holder, inputs, func() *ManualTriggers {
+		return manualTriggers
+	})
+
+	triggerSub := []*pb.TriggerSubscription{{Id: "cron-trigger@1.0.0"}}
+	beforeStart(ctx, simulator.RunnerConfig{}, nil, nil, triggerSub)
+	require.NotNil(t, holder.TriggerFunc)
+
+	done := make(chan error, 1)
+	go func() { done <- holder.TriggerFunc() }()
+
+	select {
+	case err := <-done:
+		require.NoError(t, err)
+	case <-time.After(3 * time.Second):
+		t.Fatal("TriggerFunc blocked waiting for cron schedule; skipWaitSignal must be sent before ManualTrigger is called")
+	}
 }
 
 func TestSimulateConfigFlagsMutuallyExclusive(t *testing.T) {

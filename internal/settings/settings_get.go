@@ -48,30 +48,46 @@ type ExperimentalChain struct {
 	Forwarder     string `mapstructure:"forwarder" yaml:"forwarder"`
 }
 
-func GetRpcUrlSettings(v *viper.Viper, chainName string) (string, error) {
+// LookupRpcURL resolves the RPC URL for chainName from the current project target.
+// ok is false when no RPC is configured for chainName; that is not an error.
+func LookupRpcURL(v *viper.Viper, chainName string) (url string, ok bool, err error) {
 	target, err := GetTarget(v)
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
 
 	keyWithTarget := fmt.Sprintf("%s.%s", target, RpcsSettingName)
 	var rpcs []RpcEndpoint
 	err = v.UnmarshalKey(keyWithTarget, &rpcs)
 	if err != nil {
-		return "", fmt.Errorf("not possible to unmarshall rpcs: %w", err)
+		return "", false, fmt.Errorf("not possible to unmarshall rpcs: %w", err)
 	}
 
 	for _, rpc := range rpcs {
 		if rpc.ChainName == chainName {
 			resolved, resolveErr := ResolveEnvVars(rpc.Url)
 			if resolveErr != nil {
-				return "", fmt.Errorf("rpc url for chain %q: %w", chainName, resolveErr)
+				return "", false, fmt.Errorf("rpc url for chain %q: %w", chainName, resolveErr)
 			}
-			return resolved, nil
+			return resolved, true, nil
 		}
 	}
 
-	return "", fmt.Errorf("rpc url not found for chain %s", chainName)
+	return "", false, nil
+}
+
+// GetRpcUrlSettings resolves the RPC URL for chainName from the current project target.
+//
+// TODO(DEVSVCS-5178)
+func GetRpcUrlSettings(v *viper.Viper, chainName string) (string, error) {
+	url, ok, err := LookupRpcURL(v, chainName)
+	if err != nil {
+		return "", err
+	}
+	if !ok {
+		return "", fmt.Errorf("rpc url not found for chain %s", chainName)
+	}
+	return url, nil
 }
 
 // GetExperimentalChains reads the experimental-chains list from the current target.
@@ -263,22 +279,69 @@ func ChainNameFromSelectorString(raw string) (string, error) {
 	return GetChainNameByChainSelector(sel)
 }
 
+// GetChainSelectorByChainName resolves a chain name to its chain selector across
+// all chain families supported by chain-selectors (EVM, Aptos, Solana, Sui,
+// Tron, Ton, Starknet, Stellar, Canton). Returns an error if the name is not
+// found in any family.
 func GetChainSelectorByChainName(name string) (uint64, error) {
-	switch {
-	case strings.HasPrefix(name, chainSelectors.FamilyAptos):
-		for _, c := range chainSelectors.AptosALL {
-			if c.Name == name {
-				return c.Selector, nil
-			}
+	if chainID, err := chainSelectors.ChainIdFromName(name); err == nil {
+		selector, selErr := chainSelectors.SelectorFromChainId(chainID)
+		if selErr != nil {
+			return 0, fmt.Errorf("failed to get selector from chain ID %d: %w", chainID, selErr)
 		}
-	default:
-		if chainID, err := chainSelectors.ChainIdFromName(name); err == nil {
-			selector, err := chainSelectors.SelectorFromChainId(chainID)
-			if err != nil {
-				return 0, fmt.Errorf("failed to get selector from chain ID %d: %w", chainID, err)
-			}
-			return selector, nil
+		return selector, nil
+	}
+
+	if selector, ok := findNonEVMSelectorByName(name); ok {
+		return selector, nil
+	}
+
+	return 0, fmt.Errorf("chain not found for name %q\n  Run 'cre workflow supported-chains' to see all valid chain names", name)
+}
+
+// findNonEVMSelectorByName looks up a chain name in every non-EVM family
+// registered with chain-selectors. The EVM family is intentionally excluded
+// because ChainIdFromName already covers it.
+func findNonEVMSelectorByName(name string) (uint64, bool) {
+	for _, c := range chainSelectors.AptosALL {
+		if c.Name == name {
+			return c.Selector, true
 		}
 	}
-	return 0, fmt.Errorf("failed to get chain ID from name %q: chain not found\n  Run 'cre workflow supported-chains' to see all valid chain names", name)
+	for _, c := range chainSelectors.SolanaALL {
+		if c.Name == name {
+			return c.Selector, true
+		}
+	}
+	for _, c := range chainSelectors.SuiALL {
+		if c.Name == name {
+			return c.Selector, true
+		}
+	}
+	for _, c := range chainSelectors.TronALL {
+		if c.Name == name {
+			return c.Selector, true
+		}
+	}
+	for _, c := range chainSelectors.TonALL {
+		if c.Name == name {
+			return c.Selector, true
+		}
+	}
+	for _, c := range chainSelectors.StarknetALL {
+		if c.Name == name {
+			return c.Selector, true
+		}
+	}
+	for _, c := range chainSelectors.StellarALL {
+		if c.Name == name {
+			return c.Selector, true
+		}
+	}
+	for _, c := range chainSelectors.CantonALL {
+		if c.Name == name {
+			return c.Selector, true
+		}
+	}
+	return 0, false
 }

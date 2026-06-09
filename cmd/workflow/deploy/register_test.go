@@ -1,6 +1,7 @@
 package deploy
 
 import (
+	"context"
 	"path/filepath"
 	"testing"
 
@@ -47,7 +48,7 @@ func TestWorkflowUpsert(t *testing.T) {
 				ctx, buf := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
 				handler := newHandler(ctx, buf)
 
-				wrc, err := handler.clientFactory.NewWorkflowRegistryV2Client()
+				wrc, err := handler.clientFactory.NewWorkflowRegistryV2Client(context.Background())
 				require.NoError(t, err)
 				handler.wrc = wrc
 
@@ -55,17 +56,15 @@ func TestWorkflowUpsert(t *testing.T) {
 				err = handler.ValidateInputs()
 				require.NoError(t, err)
 
-				wfArt := workflowArtifact{
+				handler.workflowArtifact = &workflowArtifact{
 					BinaryData: []byte("0x1234"),
 					ConfigData: []byte("config"),
 					WorkflowID: "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
 				}
 
-				handler.workflowArtifact = &wfArt
-
 				onChain, err := settings.AsOnChain(ctx.ResolvedRegistry, "test")
 				require.NoError(t, err)
-				err = handler.upsert(onChain)
+				err = handler.upsert(context.Background(), onChain)
 				require.NoError(t, err)
 			})
 		}
