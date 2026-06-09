@@ -48,16 +48,17 @@ type WaitForLogConfig struct {
 	NowBlock *big.Int
 }
 
-// WaitForEVMTriggerLog blocks until a log matching the workflow's EVM log
-// trigger config appears on chain, then converts and returns it. Cancel ctx
-// (e.g. Ctrl+C) to abort the wait.
-//
-// Status output is written with plain ui.Print/ui.Dim rather than a bubbletea
-// spinner. Bubble Tea puts the terminal in raw mode, which strips the OS
-// translation of Ctrl+C into SIGINT — so signal.NotifyContext in the simulator
-// would never fire while a spinner was active and the wait could not be
-// interrupted.
-func WaitForEVMTriggerLog(ctx context.Context, ethClient *ethclient.Client, cfg WaitForLogConfig) (*evmpb.Log, error) {
+type EVMLogTriggerListener struct {
+	ethClient *ethclient.Client
+	addresses []common.Address
+	topics    [][]common.Hash
+	poll      time.Duration
+	fromBlock *big.Int
+	seen      map[string]struct{}
+	heartbeat int
+}
+
+func NewEVMLogTriggerListener(ctx context.Context, ethClient *ethclient.Client, cfg WaitForLogConfig) (*EVMLogTriggerListener, error) {
 	if cfg.Filter == nil || len(cfg.Filter.GetAddresses()) == 0 {
 		return nil, fmt.Errorf("EVM log trigger config is missing contract addresses; cannot wait for a matching event")
 	}
@@ -87,59 +88,31 @@ func WaitForEVMTriggerLog(ctx context.Context, ethClient *ethclient.Client, cfg 
 	}
 	ui.Dim(fmt.Sprintf("Listening for logs starting at block %s...", fromBlock.String()))
 
-	ticker := time.NewTicker(poll)
+	return &EVMLogTriggerListener{
+		ethClient: ethClient,
+		addresses: addresses,
+		topics:    topics,
+		poll:      poll,
+		fromBlock: fromBlock,
+		seen:      make(map[string]struct{}),
+	}, nil
+}
+
+func (l *EVMLogTriggerListener) Next(ctx context.Context) (interface{}, error) {
+	ticker := time.NewTicker(l.poll)
 	defer ticker.Stop()
 
-	// heartbeatEvery controls how often we print a "still waiting" line so the
-	// user knows the poller is alive on long waits. We use poll-iteration count
-	// instead of a separate timer to keep the loop single-threaded.
-	const heartbeatEvery = 10
-	iter := 0
-
 	for {
-		head, err := ethClient.HeaderByNumber(ctx, nil)
+		log, err := l.scanOnce(ctx)
 		if err != nil {
 			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 				return nil, err
 			}
-			ui.Dim(fmt.Sprintf("RPC error fetching latest block: %v (retrying)", err))
-		} else if head.Number.Cmp(fromBlock) >= 0 {
-			// Scan the closed range [fromBlock, head] in one query so we can't
-			// skip blocks that landed between polls.
-			query := ethereum.FilterQuery{
-				FromBlock: new(big.Int).Set(fromBlock),
-				ToBlock:   new(big.Int).Set(head.Number),
-				Addresses: addresses,
-				Topics:    topics,
-			}
-			logs, err := ethClient.FilterLogs(ctx, query)
-			if err != nil {
-				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-					return nil, err
-				}
-				ui.Dim(fmt.Sprintf("RPC error scanning blocks %s..%s: %v (retrying)", fromBlock, head.Number, err))
-			} else if len(logs) > 0 {
-				ui.Success(fmt.Sprintf("Matching EVM log event found at block %d (tx %s, index %d)",
-					logs[0].BlockNumber, logs[0].TxHash.Hex(), logs[0].Index))
-				return convertGethLog(&logs[0])
-			} else {
-				// Advance past the range we just successfully scanned, but
-				// keep a small overlap behind the chain tip so we re-check
-				// recent blocks on the next iteration. This guards against
-				// RPCs whose log index lags eth_blockNumber by a few seconds.
-				nextFrom := new(big.Int).Add(head.Number, big.NewInt(1))
-				rescanFrom := new(big.Int).Sub(head.Number, big.NewInt(int64(rescanOverlapBlocks-1)))
-				if rescanFrom.Cmp(nextFrom) < 0 {
-					nextFrom = rescanFrom
-				}
-				if nextFrom.Cmp(fromBlock) > 0 {
-					fromBlock = nextFrom
-				}
-				iter++
-				if iter%heartbeatEvery == 0 {
-					ui.Dim(fmt.Sprintf("Still waiting (scanned through block %s)...", head.Number.String()))
-				}
-			}
+			ui.Dim(fmt.Sprintf("RPC error while listening for logs: %v (retrying)", err))
+		} else if log != nil {
+			ui.Success(fmt.Sprintf("Matching EVM log event found at block %d (tx %s, index %d)",
+				log.BlockNumber, log.TxHash.Hex(), log.Index))
+			return convertGethLog(log)
 		}
 
 		select {
@@ -148,6 +121,79 @@ func WaitForEVMTriggerLog(ctx context.Context, ethClient *ethclient.Client, cfg 
 		case <-ticker.C:
 		}
 	}
+}
+
+func (l *EVMLogTriggerListener) scanOnce(ctx context.Context) (*types.Log, error) {
+	head, err := l.ethClient.HeaderByNumber(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	if head.Number.Cmp(l.fromBlock) < 0 {
+		return nil, nil
+	}
+
+	query := ethereum.FilterQuery{
+		FromBlock: new(big.Int).Set(l.fromBlock),
+		ToBlock:   new(big.Int).Set(head.Number),
+		Addresses: l.addresses,
+		Topics:    l.topics,
+	}
+	logs, err := l.ethClient.FilterLogs(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+
+	for i := range logs {
+		key := logCursorKey(&logs[i])
+		if _, ok := l.seen[key]; ok {
+			continue
+		}
+		l.seen[key] = struct{}{}
+		return &logs[i], nil
+	}
+
+	l.advanceFromBlock(head.Number)
+	l.heartbeat++
+	if l.heartbeat%10 == 0 {
+		ui.Dim(fmt.Sprintf("Still waiting (scanned through block %s)...", head.Number.String()))
+	}
+	return nil, nil
+}
+
+func (l *EVMLogTriggerListener) advanceFromBlock(head *big.Int) {
+	nextFrom := new(big.Int).Add(head, big.NewInt(1))
+	rescanFrom := new(big.Int).Sub(head, big.NewInt(int64(rescanOverlapBlocks-1)))
+	if rescanFrom.Cmp(nextFrom) < 0 {
+		nextFrom = rescanFrom
+	}
+	if nextFrom.Cmp(l.fromBlock) > 0 {
+		l.fromBlock = nextFrom
+	}
+}
+
+func logCursorKey(log *types.Log) string {
+	return fmt.Sprintf("%s:%d:%d:%s", log.BlockHash.Hex(), log.BlockNumber, log.Index, log.TxHash.Hex())
+}
+
+// WaitForEVMTriggerLog blocks until a log matching the workflow's EVM log
+// trigger config appears on chain, then converts and returns it. Cancel ctx
+// (e.g. Ctrl+C) to abort the wait.
+//
+// Status output is written with plain ui.Print/ui.Dim rather than a bubbletea
+// spinner. Bubble Tea puts the terminal in raw mode, which strips the OS
+// translation of Ctrl+C into SIGINT — so signal.NotifyContext in the simulator
+// would never fire while a spinner was active and the wait could not be
+// interrupted.
+func WaitForEVMTriggerLog(ctx context.Context, ethClient *ethclient.Client, cfg WaitForLogConfig) (*evmpb.Log, error) {
+	listener, err := NewEVMLogTriggerListener(ctx, ethClient, cfg)
+	if err != nil {
+		return nil, err
+	}
+	log, err := listener.Next(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return log.(*evmpb.Log), nil
 }
 
 // topicsToFilter converts the protobuf topic-values structure (4 slots of

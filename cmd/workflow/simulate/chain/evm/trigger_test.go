@@ -564,6 +564,88 @@ func TestWaitForEVMTriggerLog_DoesNotSkipBlocksBetweenPolls(t *testing.T) {
 	assert.Equal(t, uint64(103), valuespb.NewIntFromBigInt(got.BlockNumber).Uint64())
 }
 
+func TestEVMLogTriggerListenerReturnsMultipleMatchingLogs(t *testing.T) {
+	t.Parallel()
+
+	m := newMockRPC(t)
+	c := newEthClient(t, m.srv.URL)
+	defer c.Close()
+
+	addr := addrFromHex("0xabcd000000000000000000000000000000000005")
+	sig := hashFromHex("0x" + strings.Repeat("c", 64))
+	firstTx := hashFromHex("0x" + strings.Repeat("1", 64))
+	secondTx := hashFromHex("0x" + strings.Repeat("2", 64))
+
+	m.mu.Lock()
+	m.headNumber = 300
+	m.logs = []*types.Log{
+		{
+			Address:     addr,
+			Topics:      []common.Hash{sig},
+			Data:        []byte{0x01},
+			BlockHash:   hashFromHex("0xbe"),
+			TxHash:      firstTx,
+			BlockNumber: 300,
+			TxIndex:     0,
+			Index:       0,
+		},
+		{
+			Address:     addr,
+			Topics:      []common.Hash{sig},
+			Data:        []byte{0x02},
+			BlockHash:   hashFromHex("0xbe"),
+			TxHash:      secondTx,
+			BlockNumber: 300,
+			TxIndex:     1,
+			Index:       1,
+		},
+	}
+	m.mu.Unlock()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	listener, err := NewEVMLogTriggerListener(ctx, c, WaitForLogConfig{
+		Selector: 16015286601757825753,
+		Filter: &evmpb.FilterLogTriggerRequest{
+			Addresses: [][]byte{addr.Bytes()},
+			Topics:    []*evmpb.TopicValues{{Values: [][]byte{sig.Bytes()}}},
+		},
+		PollInterval: 10 * time.Millisecond,
+	})
+	require.NoError(t, err)
+
+	first, err := listener.Next(ctx)
+	require.NoError(t, err)
+	firstLog := first.(*evmpb.Log)
+	assert.Equal(t, firstTx.Bytes(), firstLog.TxHash)
+	assert.Equal(t, uint32(0), firstLog.Index)
+
+	second, err := listener.Next(ctx)
+	require.NoError(t, err)
+	secondLog := second.(*evmpb.Log)
+	assert.Equal(t, secondTx.Bytes(), secondLog.TxHash)
+	assert.Equal(t, uint32(1), secondLog.Index)
+}
+
+func TestManualEVMTriggerEventsHaveUniqueIDs(t *testing.T) {
+	t.Parallel()
+
+	first := &evmpb.Log{
+		BlockHash: []byte{0xbe},
+		TxHash:    hashFromHex("0x" + strings.Repeat("1", 64)).Bytes(),
+		Index:     390,
+	}
+	second := &evmpb.Log{
+		BlockHash: []byte{0xbf},
+		TxHash:    hashFromHex("0x" + strings.Repeat("2", 64)).Bytes(),
+		Index:     231,
+	}
+
+	require.NotEmpty(t, manualEVMTriggerEventID(first))
+	require.NotEqual(t, manualEVMTriggerEventID(first), manualEVMTriggerEventID(second))
+}
+
 func TestWaitForEVMTriggerLog_CancelsOnContext(t *testing.T) {
 	t.Parallel()
 

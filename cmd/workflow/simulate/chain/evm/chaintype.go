@@ -203,6 +203,30 @@ func (ct *EVMChainType) ExecuteTrigger(ctx context.Context, selector uint64, reg
 	return evmChain.ManualTrigger(ctx, registrationID, log)
 }
 
+func (ct *EVMChainType) NewTriggerListener(ctx context.Context, selector uint64, params chain.TriggerParams) (chain.TriggerListener, error) {
+	clientIface, ok := params.Clients[selector]
+	if !ok {
+		return nil, fmt.Errorf("no RPC configured for chain selector %d", selector)
+	}
+	client, ok := clientIface.(*ethclient.Client)
+	if !ok {
+		return nil, fmt.Errorf("invalid client type for EVM chain selector %d", selector)
+	}
+	if strings.TrimSpace(params.ChainTypeInputs[TriggerInputTxHash]) != "" {
+		return nil, fmt.Errorf("--listen cannot be combined with --%s for EVM log triggers", TriggerInputTxHash)
+	}
+
+	cfg, err := decodeLogTriggerConfig(params.TriggerPayload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode EVM log trigger config: %w", err)
+	}
+	return NewEVMLogTriggerListener(ctx, client, WaitForLogConfig{
+		Selector:     selector,
+		Filter:       cfg,
+		WorkflowName: params.WorkflowName,
+	})
+}
+
 // Supports reports whether an EVM chain capability is live for the selector.
 func (ct *EVMChainType) Supports(selector uint64) bool {
 	if ct.evmChains == nil {
@@ -328,7 +352,7 @@ func (ct *EVMChainType) ResolveTriggerData(ctx context.Context, selector uint64,
 		return GetEVMTriggerLogFromValues(ctx, client, txHash, eventIndex, receiptTimeout)
 	}
 
-	if !params.Interactive {
+	if !params.Interactive && !params.Listen {
 		return nil, fmt.Errorf("--evm-tx-hash and --evm-event-index are required for EVM triggers in non-interactive mode")
 	}
 

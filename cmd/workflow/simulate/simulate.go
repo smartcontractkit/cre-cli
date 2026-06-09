@@ -110,7 +110,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	// Non-interactive trigger selection flags
 	simulateCmd.Flags().Int("trigger-index", -1, "Index of the trigger to run (0-based)")
 	simulateCmd.Flags().String("http-payload", "", "HTTP trigger payload as JSON string or path to JSON file")
-	simulateCmd.Flags().Bool("listen", false, "Listen for HTTP trigger requests and run the simulator for each request (http-trigger only)")
+	simulateCmd.Flags().Bool("listen", false, "Listen for HTTP requests or supported log triggers and run the simulator for each match")
 
 	// Register chain-type-specific CLI flags (e.g., --evm-tx-hash).
 	chain.RegisterAllCLIFlags(simulateCmd)
@@ -561,11 +561,12 @@ func run(
 			os.Exit(1)
 		}
 
-		listen := inputs.Listen && triggerInfoAndBeforeStart.TriggerToRun.GetId() == "http-trigger@1.0.0-alpha"
+		httpListen := inputs.Listen && triggerInfoAndBeforeStart.TriggerToRun.GetId() == "http-trigger@1.0.0-alpha"
+		listen := inputs.Listen && (httpListen || triggerInfoAndBeforeStart.ListenSupported)
 		if inputs.Listen && !listen {
-			ui.Warning("--listen only applies to http-trigger; ignoring for this trigger type")
+			ui.Warning("--listen is not supported for this trigger type; ignoring")
 		}
-		if listen {
+		if httpListen {
 			runHTTPListen(ctx, inputs, triggerInfoAndBeforeStart, executionFinishedCh, simLogger)
 			return
 		}
@@ -854,6 +855,7 @@ func parseHTTPTriggerRequest(req *http.Request) ([]byte, error) {
 type TriggerInfoAndBeforeStart struct {
 	TriggerFunc        func() error
 	TriggerWithPayload func(*httptypedapi.Payload) error
+	ListenSupported    bool
 	TriggerToRun       *pb.TriggerSubscription
 	BeforeStart        func(ctx context.Context, cfg simulator.RunnerConfig, registry *capabilities.Registry, services []services.Service, triggerSub []*pb.TriggerSubscription)
 }
@@ -963,6 +965,35 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 					os.Exit(1)
 				}
 
+				if inputs.Listen {
+					listeningCT, ok := ct.(chain.ListeningChainType)
+					if !ok {
+						continue
+					}
+					listener, err := listeningCT.NewTriggerListener(ctx, sel, chain.TriggerParams{
+						Clients:         inputs.ChainTypeClients[ct.Name()],
+						Interactive:     true,
+						Listen:          true,
+						ChainTypeInputs: inputs.ChainTypeInputs,
+						TriggerPayload:  holder.TriggerToRun.GetPayload(),
+						WorkflowName:    inputs.WorkflowName,
+					})
+					if err != nil {
+						ui.Error(fmt.Sprintf("Failed to create %s trigger listener: %v", name, err))
+						os.Exit(1)
+					}
+					handled = true
+					holder.ListenSupported = true
+					holder.TriggerFunc = func() error {
+						triggerData, err := listener.Next(ctx)
+						if err != nil {
+							return err
+						}
+						return ct.ExecuteTrigger(ctx, sel, triggerRegistrationID, triggerData)
+					}
+					break
+				}
+
 				triggerData, err := getTriggerDataForChainType(ctx, ct, sel, holder.TriggerToRun, inputs, true)
 				if err != nil {
 					ui.Error(fmt.Sprintf("Failed to get %s trigger data: %v", name, err))
@@ -1052,6 +1083,35 @@ func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inp
 				if !ct.Supports(sel) {
 					ui.Error(fmt.Sprintf("%s unsupported or misconfigured chain for selector %d", name, sel))
 					os.Exit(1)
+				}
+
+				if inputs.Listen {
+					listeningCT, ok := ct.(chain.ListeningChainType)
+					if !ok {
+						continue
+					}
+					listener, err := listeningCT.NewTriggerListener(ctx, sel, chain.TriggerParams{
+						Clients:         inputs.ChainTypeClients[ct.Name()],
+						Interactive:     false,
+						Listen:          true,
+						ChainTypeInputs: inputs.ChainTypeInputs,
+						TriggerPayload:  holder.TriggerToRun.GetPayload(),
+						WorkflowName:    inputs.WorkflowName,
+					})
+					if err != nil {
+						ui.Error(fmt.Sprintf("Failed to create %s trigger listener: %v", name, err))
+						os.Exit(1)
+					}
+					handled = true
+					holder.ListenSupported = true
+					holder.TriggerFunc = func() error {
+						triggerData, err := listener.Next(ctx)
+						if err != nil {
+							return err
+						}
+						return ct.ExecuteTrigger(ctx, sel, triggerRegistrationID, triggerData)
+					}
+					break
 				}
 
 				triggerData, err := getTriggerDataForChainType(ctx, ct, sel, holder.TriggerToRun, inputs, false)
@@ -1160,6 +1220,7 @@ func getTriggerDataForChainType(ctx context.Context, ct chain.ChainType, selecto
 	return ct.ResolveTriggerData(ctx, selector, chain.TriggerParams{
 		Clients:         inputs.ChainTypeClients[ct.Name()],
 		Interactive:     interactive,
+		Listen:          inputs.Listen,
 		ChainTypeInputs: inputs.ChainTypeInputs,
 		TriggerPayload:  triggerSub.GetPayload(),
 		WorkflowName:    inputs.WorkflowName,

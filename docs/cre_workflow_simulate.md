@@ -29,7 +29,7 @@ cre workflow simulate ./my-workflow
   -h, --help                         help for simulate
       --http-payload string          HTTP trigger payload as JSON string or path to JSON file
       --limits string                Production limits to enforce during simulation: 'default' for prod defaults, path to a limits JSON file (e.g. from 'cre workflow limits export'), or 'none' to disable (default "default")
-      --listen                       Listen for HTTP trigger requests and run the simulator for each request (http-trigger only)
+      --listen                       Listen for HTTP requests or supported log triggers and run the simulator for each match
       --no-config                    Simulate without a config file
       --skip-type-checks             Skip TypeScript project typecheck during compilation (passes --skip-type-checks to cre-compile)
       --trigger-index int            Index of the trigger to run (0-based) (default -1)
