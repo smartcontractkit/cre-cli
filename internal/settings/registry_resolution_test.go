@@ -239,3 +239,22 @@ func TestInterfaceMethods(t *testing.T) {
 	assert.Equal(t, "private", offchain.ID())
 	assert.Equal(t, "zone-b", offchain.DonFamily())
 }
+
+func TestEffectiveDonFamily_TenantDefault(t *testing.T) {
+	envSet := stagingEnvSet()
+	tenantCtx := &tenantctx.EnvironmentContext{DefaultDonFamily: "tenant-zone"}
+	assert.Equal(t, "tenant-zone", EffectiveDonFamily(envSet, tenantCtx))
+}
+
+func TestEffectiveDonFamily_EnvOverridesTenant(t *testing.T) {
+	envSet := stagingEnvSet()
+	envSet.DonFamily = "from-env"
+	tenantCtx := &tenantctx.EnvironmentContext{DefaultDonFamily: "tenant-zone"}
+	assert.Equal(t, "from-env", EffectiveDonFamily(envSet, tenantCtx))
+}
+
+func TestEffectiveDonFamily_EmptyWhenNeitherSet(t *testing.T) {
+	envSet := stagingEnvSet()
+	assert.Equal(t, "", EffectiveDonFamily(envSet, nil))
+	assert.Equal(t, "", EffectiveDonFamily(envSet, &tenantctx.EnvironmentContext{}))
+}

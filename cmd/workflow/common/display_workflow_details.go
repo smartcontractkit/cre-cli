@@ -23,6 +23,7 @@ func DisplayWorkflowDetails(
 	ui.Line()
 	ui.Title(fmt.Sprintf("%s Workflow: %s", action, workflowName))
 	ui.Dim(fmt.Sprintf("Registry:      %s", runtimeContext.ResolvedRegistry.ID()))
+	ui.Dim(fmt.Sprintf("DON Family:    %s", runtimeContext.ResolvedRegistry.DonFamily()))
 	ui.Dim(fmt.Sprintf("Target:        %s", cfg.User.TargetName))
 	ui.Dim(fmt.Sprintf("Owner Address: %s", displayOwnerAddress))
 	ui.Line()
