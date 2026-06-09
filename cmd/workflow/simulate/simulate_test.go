@@ -509,14 +509,14 @@ func TestNonInteractiveCronTriggerDoesNotBlockOnSchedule(t *testing.T) {
 	}
 }
 
-func TestHTTPKeepAlivePayloadServerAcceptsMultipleRequests(t *testing.T) {
+func TestHTTPListenPayloadServerAcceptsMultipleRequests(t *testing.T) {
 	t.Parallel()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	port := freeTCPPort(t)
-	payloadCh, closeServer, err := startHTTPKeepAlivePayloadServer(ctx, port)
+	payloadCh, closeServer, err := startHTTPListenPayloadServer(ctx, port)
 	require.NoError(t, err)
 	t.Cleanup(closeServer)
 

@@ -65,9 +65,9 @@ type Inputs struct {
 	TriggerIndex    int               `validate:"-"`
 	HTTPPayload     string            `validate:"-"` // JSON string or /path/to/file.json
 	ChainTypeInputs map[string]string `validate:"-"` // CLI-supplied chain-type-specific trigger inputs
-	// KeepAlive keeps the HTTP trigger server running after each execution so it can
+	// Listen keeps the HTTP trigger server running after each execution so it can
 	// process additional requests until the user interrupts (ctrl-C).
-	KeepAlive bool `validate:"-"`
+	Listen bool `validate:"-"`
 	// Limits enforcement
 	LimitsPath string `validate:"-"` // "default" or path to custom limits JSON
 	// SkipTypeChecks passes --skip-type-checks to cre-compile for TypeScript workflows.
@@ -110,7 +110,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	// Non-interactive trigger selection flags
 	simulateCmd.Flags().Int("trigger-index", -1, "Index of the trigger to run (0-based)")
 	simulateCmd.Flags().String("http-payload", "", "HTTP trigger payload as JSON string or path to JSON file")
-	simulateCmd.Flags().Bool("keep-alive", false, "Keep the simulator running after each execution and accept additional HTTP trigger requests (http-trigger only)")
+	simulateCmd.Flags().Bool("listen", false, "Listen for HTTP trigger requests and run the simulator for each request (http-trigger only)")
 
 	// Register chain-type-specific CLI flags (e.g., --evm-tx-hash).
 	chain.RegisterAllCLIFlags(simulateCmd)
@@ -204,7 +204,7 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 		TriggerIndex:      v.GetInt("trigger-index"),
 		HTTPPayload:       v.GetString("http-payload"),
 		ChainTypeInputs:   chain.CollectAllCLIInputs(v),
-		KeepAlive:         v.GetBool("keep-alive"),
+		Listen:            v.GetBool("listen"),
 		LimitsPath:        v.GetString("limits"),
 		SkipTypeChecks:    v.GetBool(cmdcommon.SkipTypeChecksCLIFlag),
 		InvocationDir:     h.runtimeContext.InvocationDir,
@@ -438,7 +438,7 @@ func run(
 	}
 
 	// Channels to coordinate blocking. executionFinishedCh is buffered so multiple
-	// runs (keep-alive mode) can each signal completion without blocking the engine.
+	// runs (listen mode) can each signal completion without blocking the engine.
 	initializedCh := make(chan struct{})
 	executionFinishedCh := make(chan struct{}, 1)
 
@@ -561,19 +561,19 @@ func run(
 			os.Exit(1)
 		}
 
-		keepAlive := inputs.KeepAlive && triggerInfoAndBeforeStart.TriggerToRun.GetId() == "http-trigger@1.0.0-alpha"
-		if inputs.KeepAlive && !keepAlive {
-			ui.Warning("--keep-alive only applies to http-trigger; ignoring for this trigger type")
+		listen := inputs.Listen && triggerInfoAndBeforeStart.TriggerToRun.GetId() == "http-trigger@1.0.0-alpha"
+		if inputs.Listen && !listen {
+			ui.Warning("--listen only applies to http-trigger; ignoring for this trigger type")
 		}
-		if keepAlive {
-			runHTTPKeepAlive(ctx, inputs, triggerInfoAndBeforeStart, executionFinishedCh, simLogger)
+		if listen {
+			runHTTPListen(ctx, inputs, triggerInfoAndBeforeStart, executionFinishedCh, simLogger)
 			return
 		}
 
 		for iteration := 0; ; iteration++ {
 			if iteration > 0 {
 				ui.Line()
-				ui.Step(fmt.Sprintf("Keep-alive: ready for next request (run #%d)", iteration+1))
+				ui.Step(fmt.Sprintf("Listen: ready for next request (run #%d)", iteration+1))
 				// Drain any stale completion signal so we wait for the new run's result.
 				select {
 				case <-executionFinishedCh:
@@ -598,7 +598,7 @@ func run(
 				simLogger.Warn("Timeout waiting for execution to finish")
 			}
 
-			if !keepAlive {
+			if !listen {
 				return
 			}
 		}
@@ -705,13 +705,13 @@ func run(
 	return nil
 }
 
-func runHTTPKeepAlive(ctx context.Context, inputs Inputs, triggerInfo *TriggerInfoAndBeforeStart, executionFinishedCh <-chan struct{}, simLogger *SimulationLogger) {
+func runHTTPListen(ctx context.Context, inputs Inputs, triggerInfo *TriggerInfoAndBeforeStart, executionFinishedCh <-chan struct{}, simLogger *SimulationLogger) {
 	if triggerInfo.TriggerWithPayload == nil {
 		simLogger.Error("HTTP trigger payload function not initialized")
 		os.Exit(1)
 	}
 
-	payloadCh, closeServer, err := startHTTPKeepAlivePayloadServer(ctx, httpTriggerServerPort)
+	payloadCh, closeServer, err := startHTTPListenPayloadServer(ctx, httpTriggerServerPort)
 	if err != nil {
 		ui.Error(fmt.Sprintf("Failed to start HTTP trigger server: %v", err))
 		os.Exit(1)
@@ -764,7 +764,7 @@ func runHTTPKeepAlive(ctx context.Context, inputs Inputs, triggerInfo *TriggerIn
 	for {
 		if iteration > 0 {
 			ui.Line()
-			ui.Step(fmt.Sprintf("Keep-alive: ready for next request (run #%d)", iteration+1))
+			ui.Step(fmt.Sprintf("Listen: ready for next request (run #%d)", iteration+1))
 		}
 		ui.Step(fmt.Sprintf("Waiting for HTTP request to start execution (listening on http://localhost:%d/trigger)...", httpTriggerServerPort))
 
@@ -783,7 +783,7 @@ func runHTTPKeepAlive(ctx context.Context, inputs Inputs, triggerInfo *TriggerIn
 	}
 }
 
-func startHTTPKeepAlivePayloadServer(ctx context.Context, port int) (<-chan *httptypedapi.Payload, func(), error) {
+func startHTTPListenPayloadServer(ctx context.Context, port int) (<-chan *httptypedapi.Payload, func(), error) {
 	payloadCh := make(chan *httptypedapi.Payload, 16)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/trigger", func(w http.ResponseWriter, r *http.Request) {
@@ -938,7 +938,7 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 			}
 			holder.TriggerFunc = func() error {
 				// Consume any inline payload on the first call; subsequent calls
-				// (keep-alive mode) listen on the local HTTP server.
+				// (listen mode) listen on the local HTTP server.
 				p := payload
 				payload = nil
 				if p == nil {
@@ -1020,7 +1020,7 @@ func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inp
 				return manualTriggerCaps.ManualCronTrigger.ManualTrigger(ctx, triggerRegistrationID, skipWaitSignal)
 			}
 		case "http-trigger@1.0.0-alpha":
-			if strings.TrimSpace(inputs.HTTPPayload) == "" && !inputs.KeepAlive {
+			if strings.TrimSpace(inputs.HTTPPayload) == "" && !inputs.Listen {
 				ui.Error("--http-payload is required for http-trigger@1.0.0-alpha in non-interactive mode")
 				os.Exit(1)
 			}

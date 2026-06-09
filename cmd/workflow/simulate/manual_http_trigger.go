@@ -121,7 +121,7 @@ func (f *ManualHTTPTriggerService) ManualTrigger(ctx context.Context, triggerID 
 }
 
 func (f *ManualHTTPTriggerService) listenForTriggerPayload(ctx context.Context) (*httptypedapi.Payload, error) {
-	payloadCh, closeServer, err := startHTTPKeepAlivePayloadServer(ctx, httpTriggerServerPort)
+	payloadCh, closeServer, err := startHTTPListenPayloadServer(ctx, httpTriggerServerPort)
 	if err != nil {
 		return nil, err
 	}
