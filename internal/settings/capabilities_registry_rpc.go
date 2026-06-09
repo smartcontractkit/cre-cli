@@ -2,7 +2,6 @@ package settings
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/spf13/viper"
 
@@ -28,12 +27,12 @@ func ResolveCapabilitiesRegistryRPC(v *viper.Viper, tenantCtx *tenantctx.Environ
 		return "", "", false, fmt.Errorf("capabilities registry chain selector %d: %w", expectedSelector, err)
 	}
 
-	rpcURL, err = GetRpcUrlSettings(v, chainName)
+	rpcURL, found, err := LookupRpcURL(v, chainName)
 	if err != nil {
-		if strings.Contains(err.Error(), "rpc url not found") {
-			return "", chainName, false, nil
-		}
 		return "", chainName, false, err
+	}
+	if !found {
+		return "", chainName, false, nil
 	}
 
 	if err := rpc.IsValidURL(rpcURL); err != nil {

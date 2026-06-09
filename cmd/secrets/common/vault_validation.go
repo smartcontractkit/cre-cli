@@ -14,8 +14,7 @@ const vaultValidationSkippedWarning = "Vault gateway validation skipped; the enc
 // enables on-chain validation (skipValidation=false) or obtains explicit consent to
 // proceed without validation. The result is cached for the lifetime of the Handler so
 // encrypt and response parsing in the same command only prompt once.
-func (h *Handler) EnsureVaultValidationOrConsent(ctx context.Context) (skipValidation bool, err error) {
-	_ = ctx
+func (h *Handler) EnsureVaultValidationOrConsent(_ context.Context) (skipValidation bool, err error) {
 	if h.vaultValidationDecided {
 		return h.skipVaultValidation, nil
 	}
