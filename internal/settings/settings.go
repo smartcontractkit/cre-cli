@@ -57,7 +57,7 @@ type Settings struct {
 // UserSettings stores user-specific configurations.
 type UserSettings struct {
 	TargetName    string
-	EthPrivateKey string
+	EthPrivateKey EthPrivateKeyHex
 	EthUrl        string
 }
 
@@ -101,8 +101,10 @@ func New(logger *zerolog.Logger, v *viper.Viper, cmd *cobra.Command, registryCha
 		return nil, err
 	}
 
-	rawPrivKey := v.GetString(EthPrivateKeyEnvVar)
-	normPrivKey := NormalizeHexKey(rawPrivKey)
+	normPrivKey, err := ResolveEthPrivateKeyFromEnv(v.GetString(EthPrivateKeyEnvVar))
+	if err != nil {
+		return nil, err
+	}
 
 	return &Settings{
 		User: UserSettings{

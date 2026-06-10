@@ -163,9 +163,17 @@ func GetWorkflowOwner(v *viper.Viper) (ownerAddress string, ownerType string, er
 	}
 
 	// unsigned or changeset is not set, it is EOA path
-	rawPrivKey := v.GetString(EthPrivateKeyEnvVar)
-	normPrivKey := NormalizeHexKey(rawPrivKey)
-	ownerAddress, err = ethkeys.DeriveEthAddressFromPrivateKey(normPrivKey)
+	normPrivKey, err := ResolveEthPrivateKeyFromEnv(v.GetString(EthPrivateKeyEnvVar))
+	if err != nil {
+		return "", "", err
+	}
+	if normPrivKey == "" {
+		return "", "", fmt.Errorf(
+			"%s is not set. Set it in your .env file or export it in your shell environment",
+			EthPrivateKeyEnvVar,
+		)
+	}
+	ownerAddress, err = ethkeys.DeriveEthAddressFromPrivateKey(normPrivKey.Hex())
 	if err != nil {
 		return "", "", err
 	}
