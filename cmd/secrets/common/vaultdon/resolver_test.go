@@ -67,8 +67,8 @@ func TestResolveVaultDON(t *testing.T) {
 		dons: map[uint32]capreg.CapabilitiesRegistryDONInfo{
 			7: {Id: 7, Name: "workflow-don"},
 			9: {
-				Id: 9,
-				F:  2,
+				Id:         9,
+				F:          2,
 				NodeP2PIds: [][32]byte{p2pA, p2pB},
 				CapabilityConfigurations: []capreg.CapabilitiesRegistryCapabilityConfiguration{
 					{
