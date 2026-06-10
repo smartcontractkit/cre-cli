@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/ethereum/go-ethereum/common"
-
 	vaultcommon "github.com/smartcontractkit/chainlink-common/pkg/capabilities/actions/vault"
 	capreg "github.com/smartcontractkit/chainlink-evm/gethwrappers/workflow/generated/capabilities_registry_wrapper_v2"
 
@@ -95,34 +93,11 @@ func VaultPublicKeyHex(v *VaultDON) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	cfg, err := capabilitiesregistry.ParseVaultCapabilityConfig(raw)
+	cfg, err := parseVaultCapabilityConfig(raw)
 	if err != nil {
 		return "", err
 	}
 	return cfg.VaultPublicKey, nil
-}
-
-// OCRAllowedSigners returns the OCR signer addresses for vault DON member nodes.
-func OCRAllowedSigners(v *VaultDON) ([]common.Address, error) {
-	if v == nil {
-		return nil, fmt.Errorf("vault DON is nil")
-	}
-	signers := make([]common.Address, 0, len(v.Nodes))
-	for _, node := range v.Nodes {
-		if len(node.Signer) < 20 {
-			return nil, fmt.Errorf("node signer address too short for p2p id %x", node.P2pId)
-		}
-		signers = append(signers, common.BytesToAddress(node.Signer[:20]))
-	}
-	return signers, nil
-}
-
-// MinOCRSignatures returns the minimum valid OCR signature count (F+1) for the vault DON.
-func MinOCRSignatures(v *VaultDON) int {
-	if v == nil {
-		return 0
-	}
-	return int(v.DON.F) + 1
 }
 
 func donHostsVaultCapability(don *capreg.CapabilitiesRegistryDONInfo) bool {
@@ -132,6 +107,30 @@ func donHostsVaultCapability(don *capreg.CapabilitiesRegistryDONInfo) bool {
 		}
 	}
 	return false
+}
+
+type vaultCapabilityRegistryConfig struct {
+	VaultPublicKey string `mapstructure:"VaultPublicKey"`
+	Threshold      int    `mapstructure:"Threshold"`
+}
+
+func parseVaultCapabilityConfig(raw []byte) (*vaultCapabilityRegistryConfig, error) {
+	cfg, err := capabilitiesregistry.ParseCapabilityConfiguration(raw)
+	if err != nil {
+		return nil, err
+	}
+
+	out := &vaultCapabilityRegistryConfig{}
+	if err := cfg.DefaultConfig.UnwrapTo(out); err != nil {
+		return nil, fmt.Errorf("unwrap vault capability config: %w", err)
+	}
+	if out.VaultPublicKey == "" {
+		return nil, fmt.Errorf("VaultPublicKey is not provided in the capability config")
+	}
+	if out.Threshold <= 0 {
+		return nil, fmt.Errorf("invalid Threshold in the capability config")
+	}
+	return out, nil
 }
 
 func vaultCapabilityConfigBytes(v *VaultDON) ([]byte, error) {

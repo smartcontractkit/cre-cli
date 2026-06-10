@@ -15,6 +15,7 @@ import (
 	"github.com/smartcontractkit/chainlink-protos/cre/go/values"
 
 	"github.com/smartcontractkit/cre-cli/cmd/secrets/common/vaultdon"
+	"github.com/smartcontractkit/cre-cli/internal/onchain/capabilitiesregistry"
 )
 
 type mockReader struct {
@@ -94,13 +95,13 @@ func TestResolveVaultDON(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "deadbeef", pubKey)
 
-	signers, err := vaultdon.OCRAllowedSigners(v)
+	signers, err := capabilitiesregistry.OCRSignerAddresses(v.Nodes)
 	require.NoError(t, err)
 	require.Equal(t, []common.Address{
 		common.BytesToAddress(signerA[:20]),
 		common.BytesToAddress(signerB[:20]),
 	}, signers)
-	require.Equal(t, 3, vaultdon.MinOCRSignatures(v))
+	require.Equal(t, 3, capabilitiesregistry.MinOCRSignatures(v.DON.F))
 
 	// Cached on second call.
 	v2, err := resolver.ResolveVaultDON(context.Background())
@@ -149,4 +150,34 @@ func TestResolveVaultDON_MultipleVaultDONs(t *testing.T) {
 	_, err := vaultdon.NewResolver(reader, "staging-main").ResolveVaultDON(context.Background())
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "multiple vault DONs")
+}
+
+func TestVaultPublicKeyHex_NilVaultDON(t *testing.T) {
+	t.Parallel()
+	_, err := vaultdon.VaultPublicKeyHex(nil)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "vault DON is nil")
+}
+
+func TestParseVaultCapabilityConfig_MissingPublicKey(t *testing.T) {
+	t.Parallel()
+
+	valueMap, err := values.WrapMap(map[string]any{"Threshold": 1})
+	require.NoError(t, err)
+	raw, err := proto.Marshal(&capabilitiespb.CapabilityConfig{
+		DefaultConfig: values.ProtoMap(valueMap),
+	})
+	require.NoError(t, err)
+
+	v := &vaultdon.VaultDON{
+		DON: capreg.CapabilitiesRegistryDONInfo{
+			Id: 1,
+			CapabilityConfigurations: []capreg.CapabilitiesRegistryCapabilityConfiguration{
+				{CapabilityId: vaultcommon.CapabilityID, Config: raw},
+			},
+		},
+	}
+	_, err = vaultdon.VaultPublicKeyHex(v)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "VaultPublicKey")
 }

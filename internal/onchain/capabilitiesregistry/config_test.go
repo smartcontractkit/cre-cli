@@ -10,7 +10,7 @@ import (
 	"github.com/smartcontractkit/chainlink-protos/cre/go/values"
 )
 
-func TestParseVaultCapabilityConfig(t *testing.T) {
+func TestParseCapabilityConfiguration(t *testing.T) {
 	t.Parallel()
 
 	valueMap, err := values.WrapMap(map[string]any{
@@ -24,43 +24,20 @@ func TestParseVaultCapabilityConfig(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	cfg, err := ParseVaultCapabilityConfig(raw)
+	cfg, err := ParseCapabilityConfiguration(raw)
 	require.NoError(t, err)
-	require.Equal(t, "abc123", cfg.VaultPublicKey)
-	require.Equal(t, 2, cfg.Threshold)
+	require.NotNil(t, cfg.DefaultConfig)
+
+	var out map[string]any
+	require.NoError(t, cfg.DefaultConfig.UnwrapTo(&out))
+	require.Equal(t, "abc123", out["VaultPublicKey"])
+	require.EqualValues(t, 2, out["Threshold"])
 }
 
-func TestParseVaultCapabilityConfig_MissingPublicKey(t *testing.T) {
+func TestParseCapabilityConfiguration_InvalidProto(t *testing.T) {
 	t.Parallel()
 
-	valueMap, err := values.WrapMap(map[string]any{"Threshold": 1})
-	require.NoError(t, err)
-
-	raw, err := proto.Marshal(&capabilitiespb.CapabilityConfig{
-		DefaultConfig: values.ProtoMap(valueMap),
-	})
-	require.NoError(t, err)
-
-	_, err = ParseVaultCapabilityConfig(raw)
+	_, err := ParseCapabilityConfiguration([]byte("not-proto"))
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "VaultPublicKey")
-}
-
-func TestParseVaultCapabilityConfig_InvalidThreshold(t *testing.T) {
-	t.Parallel()
-
-	valueMap, err := values.WrapMap(map[string]any{
-		"VaultPublicKey": "abc123",
-		"Threshold":      0,
-	})
-	require.NoError(t, err)
-
-	raw, err := proto.Marshal(&capabilitiespb.CapabilityConfig{
-		DefaultConfig: values.ProtoMap(valueMap),
-	})
-	require.NoError(t, err)
-
-	_, err = ParseVaultCapabilityConfig(raw)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "Threshold")
+	require.Contains(t, err.Error(), "unmarshal capability config")
 }
