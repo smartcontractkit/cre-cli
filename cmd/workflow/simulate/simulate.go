@@ -61,7 +61,8 @@ type Inputs struct {
 	// (health check, capability registration) have a single source of truth.
 	ChainTypeResolved map[string]chain.ResolvedChains `validate:"-"`
 	// Non-interactive mode options
-	NonInteractive  bool              `validate:"-"`
+	NonInteractive  bool `validate:"-"`
+	HasTriggerIndex bool
 	TriggerIndex    int               `validate:"-"`
 	HTTPPayload     string            `validate:"-"` // JSON string or /path/to/file.json
 	ChainTypeInputs map[string]string `validate:"-"` // CLI-supplied chain-type-specific trigger inputs
@@ -201,6 +202,7 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 		ChainTypeKeys:     ctKeys,
 		WorkflowName:      creSettings.Workflow.UserWorkflowSettings.WorkflowName,
 		NonInteractive:    v.GetBool("non-interactive"),
+		HasTriggerIndex:   v.IsSet("trigger-index"),
 		TriggerIndex:      v.GetInt("trigger-index"),
 		HTTPPayload:       v.GetString("http-payload"),
 		ChainTypeInputs:   chain.CollectAllCLIInputs(v),
@@ -860,6 +862,38 @@ type TriggerInfoAndBeforeStart struct {
 	BeforeStart        func(ctx context.Context, cfg simulator.RunnerConfig, registry *capabilities.Registry, services []services.Service, triggerSub []*pb.TriggerSubscription)
 }
 
+func getTriggerIndex(inputs Inputs, triggerSub []*pb.TriggerSubscription) (int, error) {
+	if len(triggerSub) == 0 {
+		return -1, errors.New("no workflow triggers found, please check your workflow source code and config")
+	}
+
+	if len(triggerSub) == 1 {
+		return 0, nil
+	}
+
+	if inputs.HasTriggerIndex {
+		return inputs.TriggerIndex, nil
+	}
+
+	opts := make([]ui.SelectOption[int], len(triggerSub))
+	for i, trigger := range triggerSub {
+		opts[i] = ui.SelectOption[int]{
+			Label: fmt.Sprintf("%s %s", trigger.GetId(), trigger.GetMethod()),
+			Value: i,
+		}
+	}
+
+	ui.Line()
+	selected, err := ui.Select("Workflow simulation ready. Please select a trigger:", opts)
+	if err != nil {
+		ui.Error(fmt.Sprintf("Trigger selection failed: %v", err))
+		os.Exit(1)
+	}
+	ui.Line()
+
+	return selected, nil
+}
+
 // makeBeforeStartInteractive builds the interactive BeforeStart closure
 func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs, manualTriggerCapsGetter func() *ManualTriggers) func(context.Context, simulator.RunnerConfig, *capabilities.Registry, []services.Service, []*pb.TriggerSubscription) {
 	return func(
@@ -869,34 +903,16 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 		services []services.Service,
 		triggerSub []*pb.TriggerSubscription,
 	) {
-		if len(triggerSub) == 0 {
-			ui.Error("No workflow triggers found, please check your workflow source code and config")
+		triggerIndex, err := getTriggerIndex(inputs, triggerSub)
+		if err != nil {
+			ui.Error(fmt.Sprintf("Workflow initialization failed: %v", err))
 			os.Exit(1)
 		}
-
-		var triggerIndex int
-		if len(triggerSub) > 1 {
-			opts := make([]ui.SelectOption[int], len(triggerSub))
-			for i, trigger := range triggerSub {
-				opts[i] = ui.SelectOption[int]{
-					Label: fmt.Sprintf("%s %s", trigger.GetId(), trigger.GetMethod()),
-					Value: i,
-				}
-			}
-
-			ui.Line()
-			selected, err := ui.Select("Workflow simulation ready. Please select a trigger:", opts)
-			if err != nil {
-				ui.Error(fmt.Sprintf("Trigger selection failed: %v", err))
-				os.Exit(1)
-			}
-			triggerIndex = selected
-
-			holder.TriggerToRun = triggerSub[triggerIndex]
-			ui.Line()
-		} else {
-			holder.TriggerToRun = triggerSub[0]
+		if triggerIndex < 0 || triggerIndex >= len(triggerSub) {
+			ui.Error(fmt.Sprintf("Workflow initialization failed: trigger index out of range: %d", triggerIndex))
+			os.Exit(1)
 		}
+		holder.TriggerToRun = triggerSub[triggerIndex]
 
 		triggerRegistrationID := fmt.Sprintf("trigger_reg_1111111111111111111111111111111111111111111111111111111111111111_%d", triggerIndex)
 		trigger := holder.TriggerToRun.Id
