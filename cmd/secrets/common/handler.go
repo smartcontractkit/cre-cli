@@ -32,6 +32,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/cmd/client"
 	cmdCommon "github.com/smartcontractkit/cre-cli/cmd/common"
 	"github.com/smartcontractkit/cre-cli/cmd/secrets/common/gateway"
+	"github.com/smartcontractkit/cre-cli/cmd/secrets/common/vaultdon"
 	"github.com/smartcontractkit/cre-cli/internal/client/graphqlclient"
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
@@ -87,6 +88,7 @@ type Handler struct {
 	skipVaultValidation    bool
 	capRegRPCURL           string
 	capRegChainName        string
+	vaultDONResolver       *vaultdon.Resolver
 }
 
 // NewHandler creates a new handler instance.

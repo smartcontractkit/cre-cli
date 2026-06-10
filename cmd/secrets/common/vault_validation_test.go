@@ -52,6 +52,7 @@ func TestEnsureVaultValidationOrConsent_RPCConfigured(t *testing.T) {
 	}
 
 	h := testHandlerWithCapReg(t, v, tenantCtx)
+	h.EnvironmentSet.DonFamily = "staging-main"
 
 	skip, err := h.EnsureVaultValidationOrConsent(context.Background())
 	require.NoError(t, err)
@@ -61,6 +62,10 @@ func TestEnsureVaultValidationOrConsent_RPCConfigured(t *testing.T) {
 	rpcURL, ok := h.CapabilitiesRegistryRPC()
 	require.True(t, ok)
 	require.Equal(t, server.URL, rpcURL)
+
+	resolver, ok := h.VaultDONResolver()
+	require.True(t, ok)
+	require.NotNil(t, resolver)
 
 	skipCached, err := h.EnsureVaultValidationOrConsent(context.Background())
 	require.NoError(t, err)
@@ -106,6 +111,41 @@ func TestEnsureVaultValidationOrConsent_NonInteractiveWithoutRPC(t *testing.T) {
 	_, err := h.EnsureVaultValidationOrConsent(context.Background())
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "missing RPC for capabilities registry chain")
+}
+
+func TestEnsureVaultValidationOrConsent_MissingDonFamily(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			ID json.RawMessage `json:"id"`
+		}
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+		w.Header().Set("Content-Type", "application/json")
+		require.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			"jsonrpc": "2.0",
+			"id":      req.ID,
+			"result":  "0xaa36a7",
+		}))
+	}))
+	t.Cleanup(server.Close)
+
+	v := viper.New()
+	v.Set(settings.CreTargetEnvVar, "staging")
+	v.Set("staging.rpcs", []map[string]string{
+		{"chain-name": "ethereum-testnet-sepolia", "url": server.URL},
+	})
+
+	tenantCtx := &tenantctx.EnvironmentContext{
+		CapabilitiesRegistry: &tenantctx.OnChainContract{
+			ChainSelector: 16015286601757825753,
+			Address:       "0x7f3191EaF73429177bAB3bAc5c36Ed2D5E39985f",
+		},
+	}
+
+	h := testHandlerWithCapReg(t, v, tenantCtx)
+
+	_, err := h.EnsureVaultValidationOrConsent(context.Background())
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "don family is not configured")
 }
 
 func TestEnsureVaultValidationOrConsent_MissingCapabilitiesRegistry(t *testing.T) {
