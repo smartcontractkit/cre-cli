@@ -29,6 +29,10 @@ cre-admin
 dist
 *.wasm
 *.wasm.br
+!web/wasm-simulate-demo/assets/manifest.json
+!web/wasm-simulate-demo/assets/cre-environments.json
+!web/wasm-simulate-demo/assets/headless-simulation.sample.json
+!web/wasm-simulate-demo/assets/.gitkeep
 
 # env files
 *.env

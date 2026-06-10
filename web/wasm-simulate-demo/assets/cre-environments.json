@@ -1,0 +1,44 @@
+{
+  "defaultEnv": "STAGING",
+  "environments": {
+    "DEVELOPMENT": {
+      "envName": "DEVELOPMENT",
+      "authBase": "https://login-dev.cre.cldev.cloud",
+      "clientId": "KERrSYowuRhVyXUrI3u7pI8nnY95bIGt",
+      "audience": "https://graphql.cre.dev.internal.griddle.sh/",
+      "graphqlUrlDirect": "https://graphql-cre-dev.tailf8f749.ts.net/graphql",
+      "workflowRegistryAddress": "0x7e69E853D9Ce50C2562a69823c80E01360019Cef",
+      "workflowRegistryChainName": "ethereum-testnet-sepolia",
+      "workflowRegistryChainIdHex": "0xaa36a7",
+      "workflowRegistryChainExplorerUrl": "https://sepolia.etherscan.io",
+      "donFamily": "zone-a"
+    },
+    "STAGING": {
+      "envName": "STAGING",
+      "authBase": "https://login-stage.cre.cldev.cloud",
+      "clientId": "pKF1lgw56KKUo5LCl8kEREtVY50YB2Gd",
+      "audience": "https://graphql.cre.stage.internal.griddle.sh/",
+      "graphqlUrlDirect": "https://graphql-cre-stage.tailf8f749.ts.net/graphql",
+      "workflowRegistryAddress": "0xaE55eB3EDAc48a1163EE2cbb1205bE1e90Ea1135",
+      "workflowRegistryChainName": "ethereum-testnet-sepolia",
+      "workflowRegistryChainIdHex": "0xaa36a7",
+      "workflowRegistryChainExplorerUrl": "https://sepolia.etherscan.io",
+      "donFamily": "zone-a"
+    },
+    "PRODUCTION": {
+      "envName": "PRODUCTION",
+      "authBase": "https://login.chain.link",
+      "clientId": "vMqPqJ3ApbeN8jNeA42Dn4UxbkfhQQkW",
+      "audience": "https://api.cre.chain.link/",
+      "graphqlUrlDirect": "https://api.cre.chain.link/graphql",
+      "workflowRegistryAddress": "0x4Ac54353FA4Fa961AfcC5ec4B118596d3305E7e5",
+      "workflowRegistryChainName": "ethereum-mainnet",
+      "workflowRegistryChainIdHex": "0x1",
+      "workflowRegistryChainExplorerUrl": "https://etherscan.io",
+      "donFamily": "zone-a"
+    }
+  },
+  "demoWorkflowName": "helloWorkflow",
+  "demoWorkflowTag": "helloWorkflow",
+  "authRedirectUri": "http://localhost:53682/callback"
+}

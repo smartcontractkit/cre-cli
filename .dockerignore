@@ -1,0 +1,15 @@
+.git
+.github
+**/*_test.go
+**/testdata/
+**/test/
+docs/
+bin/
+cre
+cre-admin
+*.test
+.env
+.env.*
+node_modules/
+**/.vite/
+c2w/

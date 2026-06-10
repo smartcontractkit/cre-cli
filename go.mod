@@ -36,7 +36,7 @@ require (
 	github.com/smartcontractkit/chainlink-protos/workflows/go v0.0.0-20260323124644-faea187e6997
 	github.com/smartcontractkit/chainlink-testing-framework/seth v1.51.5
 	github.com/smartcontractkit/chainlink/deployment v0.0.0-20260521170940-67f9a4b233f8
-	github.com/smartcontractkit/chainlink/v2 v2.29.1-cre-beta.0.0.20260521170940-67f9a4b233f8
+	github.com/smartcontractkit/chainlink/v2 v2.29.1-cre-beta.0
 	github.com/smartcontractkit/cre-sdk-go v1.11.0
 	github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm v1.0.0-beta.12
 	github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/solana v0.1.0-beta.1
@@ -330,6 +330,7 @@ require (
 	github.com/smartcontractkit/chainlink-ton v1.0.5-0.20260520103847-15ca4de9dba9 // indirect
 	github.com/smartcontractkit/chainlink-tron/relayer v0.0.11-0.20260408092456-3c6369888d4a // indirect
 	github.com/smartcontractkit/cld-changesets v0.4.0 // indirect
+	github.com/smartcontractkit/cre-sdk-go/capabilities/scheduler/cron v1.0.0-beta.0 // indirect
 	github.com/smartcontractkit/freeport v0.1.3-0.20250828155247-add56fa28aad // indirect
 	github.com/smartcontractkit/grpc-proxy v0.0.0-20240830132753-a7e17fec5ab7 // indirect
 	github.com/smartcontractkit/libocr v0.0.0-20260508200755-99940c85383c // indirect

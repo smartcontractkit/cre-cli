@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CRE workflow simulate</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="page">
+    <header class="toolbar">
+      <nav class="nav-tabs" aria-label="Demo sections">
+        <a class="nav-tab nav-tab-active" href="./index.html">Simulate</a>
+        <a class="nav-tab" href="./wallet.html">Account &amp; wallet</a>
+      </nav>
+      <label class="env-select-wrap">
+        <span class="env-select-label">CRE_CLI_ENV</span>
+        <select id="cre-env-select" class="env-select" aria-label="CRE environment (CRE_CLI_ENV)"></select>
+      </label>
+      <button id="simulate-btn" type="button" class="btn-simulate">Simulate</button>
+      <span id="status" class="status">Loading prelinked WASM…</span>
+      <div class="toolbar-spacer"></div>
+      <nav class="asset-links" aria-label="Workflow assets">
+        <a id="wasm-link" class="asset-link" href="./assets/hello-world.wasm" download="hello-world.wasm">workflow.wasm</a>
+        <a id="manifest-link" class="asset-link" href="./assets/manifest.json" target="_blank" rel="noopener">manifest.json</a>
+        <a id="sim-json-link" class="asset-link disabled" href="#" download="headless-simulation.json">headless-simulation.json</a>
+        <button id="fetch-sim-btn" type="button" class="btn-ghost" disabled>Fetch simulation JSON</button>
+      </nav>
+    </header>
+
+    <main class="terminal-wrap">
+      <div id="terminal" class="terminal" aria-live="polite" aria-label="Simulation output"></div>
+    </main>
+  </div>
+
+  <script src="./vendor/wasi_defs.js"></script>
+  <script src="./vendor/browser_wasi_shim.js"></script>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CRE account &amp; wallet</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="page">
+    <header class="toolbar">
+      <nav class="nav-tabs" aria-label="Demo sections">
+        <a class="nav-tab" href="./index.html">Simulate</a>
+        <a class="nav-tab nav-tab-active" href="./wallet.html">Account &amp; wallet</a>
+      </nav>
+      <label class="env-select-wrap">
+        <span class="env-select-label">CRE_CLI_ENV</span>
+        <select id="cre-env-select" class="env-select" aria-label="CRE environment (CRE_CLI_ENV)"></select>
+      </label>
+      <span id="wallet-status" class="status">Loading…</span>
+      <div class="toolbar-spacer"></div>
+    </header>
+
+    <section class="wallet-panel">
+      <section class="wallet-mm-bar" aria-label="MetaMask wallet">
+        <div class="wallet-mm-info">
+          <div class="wallet-mm-title-row">
+            <div class="wallet-mm-title">MetaMask wallet</div>
+            <span id="wallet-mm-status" class="wallet-mm-status wallet-mm-status-off">Disconnected</span>
+          </div>
+          <div id="wallet-mm-address" class="wallet-mm-address">Not connected</div>
+        </div>
+        <div class="wallet-mm-actions">
+          <button id="connect-mm-btn" type="button" class="btn-simulate">Connect MetaMask</button>
+          <button id="switch-mm-btn" type="button" class="btn-ghost is-hidden" hidden>Switch wallet</button>
+        </div>
+      </section>
+
+      <p class="wallet-lead">
+        Sign on-chain transactions with MetaMask instead of <code>CRE_ETH_PRIVATE_KEY</code>.
+        Login uses the same OAuth flow as <code>cre login</code>.
+      </p>
+
+      <div class="wallet-actions">
+        <button id="login-btn" type="button" class="btn-simulate">Login</button>
+        <button id="register-wallet-btn" type="button" class="btn-ghost" disabled>Register wallet</button>
+        <button id="publish-wf-btn" type="button" class="btn-ghost" disabled>Publish workflow</button>
+      </div>
+
+      <details class="wallet-advanced">
+        <summary>API key (CI / non-interactive)</summary>
+        <div class="api-key-row">
+          <input id="api-key-input" type="password" class="api-key-input" placeholder="CRE_API_KEY" autocomplete="off" />
+          <button id="api-key-save-btn" type="button" class="btn-ghost">Save key</button>
+          <button id="logout-btn" type="button" class="btn-ghost">Logout</button>
+        </div>
+      </details>
+
+      <label class="wallet-field">
+        Owner label (for register wallet)
+        <input id="owner-label-input" type="text" class="api-key-input" value="browser-demo" />
+      </label>
+    </section>
+
+    <main class="terminal-wrap">
+      <div id="terminal" class="terminal" aria-live="polite" aria-label="Account output"></div>
+    </main>
+  </div>
+
+  <script type="module" src="./wallet-app.js?v=3"></script>
+</body>
+</html>
