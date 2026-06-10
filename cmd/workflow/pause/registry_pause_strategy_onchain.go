@@ -97,6 +97,7 @@ func (a *onchainRegistryPauseStrategy) Pause() error {
 		ui.Line()
 		ui.Bold("Details:")
 		ui.Dim(fmt.Sprintf("   Registry:         %s", h.runtimeContext.ResolvedRegistry.ID()))
+		ui.Dim(fmt.Sprintf("   DON Family:       %s", h.runtimeContext.ResolvedRegistry.DonFamily()))
 		ui.Dim(fmt.Sprintf("   Contract address: %s", oc.Address()))
 		ui.Dim(fmt.Sprintf("   Transaction hash: %s", txOut.Hash))
 		ui.Dim(fmt.Sprintf("   Workflow Name:    %s", workflowName))
