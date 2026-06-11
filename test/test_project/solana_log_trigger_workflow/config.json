@@ -1,7 +1,0 @@
-{
-  "solana": {
-    "chainName": "solana-devnet",
-    "filterName": "access-logged-example",
-    "callerFilter": ""
-  }
-}
