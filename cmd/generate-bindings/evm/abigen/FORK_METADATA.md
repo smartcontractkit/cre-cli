@@ -5,8 +5,8 @@
 - Source Repository: https://github.com/ethereum/go-ethereum
 - Original Package: accounts/abi/bind
 - Fork Date: 2025-06-18
-- Upstream Version: v1.17.0
-- Upstream Commit: 4997a248ab4acdb40383f1e1a5d3813a634370a6
+- Upstream Version: v1.17.3
+- Upstream Commit: 117e067f0f0bae1a17082321f224dedb6765b10f
 
 ## Modifications
 
@@ -31,7 +31,8 @@
 
 - 2025-06-18: Initial fork from v1.16.0
 - 2026-02-25: Bump metadata version (no changes)
+- 2026-06-11: Synced to v1.17.3 — applied upstream `source2.go.tpl` event error handling (`bind.ErrNoEventSignature`, `bind.ErrEventSignatureMismatch`)
 
 ## Security Patches Applied
 
-None yet.
+None. Reviewed v1.17.0→v1.17.3 upstream changes; no security-relevant abigen modifications. The flagged p2p/nat STUN commit is outside `accounts/abi/abigen`.
