@@ -1,6 +1,8 @@
 package chain
 
 import (
+	"google.golang.org/protobuf/types/known/anypb"
+
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	"github.com/smartcontractkit/chainlink/v2/core/capabilities"
 )
@@ -52,5 +54,13 @@ type CapabilityConfig struct {
 type TriggerParams struct {
 	Clients         map[uint64]ChainClient
 	Interactive     bool
+	Listen          bool
 	ChainTypeInputs map[string]string
+	// TriggerPayload is the protobuf Any payload from the selected
+	// pb.TriggerSubscription. Chain types unmarshal it into their own
+	// trigger-config message (e.g. evm.FilterLogTriggerRequest) to learn what
+	// the workflow is actually subscribed to.
+	TriggerPayload *anypb.Any
+	// WorkflowName is used to render replay-command hints in interactive copy.
+	WorkflowName string
 }
