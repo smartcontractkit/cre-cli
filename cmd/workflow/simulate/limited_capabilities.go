@@ -2,7 +2,6 @@ package simulate
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"google.golang.org/protobuf/proto"
@@ -39,7 +38,8 @@ func (l *LimitedHTTPAction) SendRequest(ctx context.Context, metadata commonCap.
 	reqLimit := l.limits.HTTPRequestSizeLimit()
 	if reqLimit > 0 && len(input.GetBody()) > reqLimit {
 		return nil, caperrors.NewPublicUserError(
-			fmt.Errorf("simulation limit exceeded: HTTP request body size %d bytes exceeds limit of %d bytes", len(input.GetBody()), reqLimit),
+			limitExceeded(LimitHTTPRequest, "HTTP request body", uint64(len(input.GetBody())), uint64(reqLimit), true,
+				"Reduce the request payload in your http_action step"),
 			caperrors.ResourceExhausted,
 		)
 	}
@@ -62,7 +62,8 @@ func (l *LimitedHTTPAction) SendRequest(ctx context.Context, metadata commonCap.
 	respLimit := l.limits.HTTPResponseSizeLimit()
 	if resp != nil && resp.Response != nil && respLimit > 0 && len(resp.Response.GetBody()) > respLimit {
 		return nil, caperrors.NewPublicUserError(
-			fmt.Errorf("simulation limit exceeded: HTTP response body size %d bytes exceeds limit of %d bytes", len(resp.Response.GetBody()), respLimit),
+			limitExceeded(LimitHTTPResponse, "HTTP response body", uint64(len(resp.Response.GetBody())), uint64(respLimit), true,
+				"The upstream returned an oversized response; filter or paginate before consuming"),
 			caperrors.ResourceExhausted,
 		)
 	}
@@ -102,7 +103,8 @@ func (l *LimitedConfidentialHTTPAction) SendRequest(ctx context.Context, metadat
 		reqSize := len(input.GetRequest().GetBodyString()) + len(input.GetRequest().GetBodyBytes())
 		if reqSize > reqLimit {
 			return nil, caperrors.NewPublicUserError(
-				fmt.Errorf("simulation limit exceeded: confidential HTTP request body size %d bytes exceeds limit of %d bytes", reqSize, reqLimit),
+				limitExceeded(LimitConfHTTPRequest, "Confidential HTTP request body", uint64(reqSize), uint64(reqLimit), true,
+					"Reduce the payload to the confidential_http_action step"),
 				caperrors.ResourceExhausted,
 			)
 		}
@@ -126,7 +128,8 @@ func (l *LimitedConfidentialHTTPAction) SendRequest(ctx context.Context, metadat
 	respLimit := l.limits.ConfHTTPResponseSizeLimit()
 	if resp != nil && resp.Response != nil && respLimit > 0 && len(resp.Response.GetBody()) > respLimit {
 		return nil, caperrors.NewPublicUserError(
-			fmt.Errorf("simulation limit exceeded: confidential HTTP response body size %d bytes exceeds limit of %d bytes", len(resp.Response.GetBody()), respLimit),
+			limitExceeded(LimitConfHTTPResponse, "Confidential HTTP response body", uint64(len(resp.Response.GetBody())), uint64(respLimit), true,
+				"The upstream returned an oversized response; filter before consuming"),
 			caperrors.ResourceExhausted,
 		)
 	}
@@ -168,7 +171,8 @@ func (l *LimitedConsensusNoDAG) Simple(ctx context.Context, metadata commonCap.R
 		inputSize := proto.Size(input)
 		if inputSize > obsLimit {
 			return nil, caperrors.NewPublicUserError(
-				fmt.Errorf("simulation limit exceeded: consensus observation size %d bytes exceeds limit of %d bytes", inputSize, obsLimit),
+				limitExceeded(LimitConsensusObservation, "Consensus observation", uint64(inputSize), uint64(obsLimit), true,
+					"Reduce data passed as observations to the consensus step"),
 				caperrors.ResourceExhausted,
 			)
 		}

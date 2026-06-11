@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -321,7 +322,8 @@ func (h *handler) Execute(ctx context.Context, inputs Inputs) error {
 	if simLimits != nil {
 		binaryLimit := simLimits.WASMBinarySize()
 		if binaryLimit > 0 && len(wasmFileBinary) > binaryLimit {
-			return fmt.Errorf("WASM binary size %d bytes exceeds limit of %d bytes", len(wasmFileBinary), binaryLimit)
+			return limitExceeded(LimitWASMBinary, "WASM binary", uint64(len(wasmFileBinary)), uint64(binaryLimit), true,
+				"Reduce compiled binary size (strip symbols, enable size-optimized build)")
 		}
 
 		compressedLimit := simLimits.WASMCompressedBinarySize()
@@ -331,7 +333,8 @@ func (h *handler) Execute(ctx context.Context, inputs Inputs) error {
 				return fmt.Errorf("failed to compress brotli: %w", err)
 			}
 			if len(compressed) > compressedLimit {
-				return fmt.Errorf("WASM compressed binary size %d bytes exceeds limit of %d bytes", len(compressed), compressedLimit)
+				return limitExceeded(LimitWASMCompressedBinary, "WASM compressed binary", uint64(len(compressed)), uint64(compressedLimit), true,
+					"Reduce compiled binary size — even compressed it exceeds the limit")
 			}
 		}
 
@@ -373,7 +376,7 @@ func (h *handler) Execute(ctx context.Context, inputs Inputs) error {
 	}
 
 	// Set up context for signal handling
-	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT, syscall.SIGKILL)
+	ctx, cancel := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT, syscall.SIGKILL)
 	defer cancel()
 
 	// if logger instance is set to DEBUG, that means verbosity flag is set by the user
@@ -429,9 +432,35 @@ func run(
 		return fmt.Errorf("failed to create engine logger: %w", err)
 	}
 
+	// hookCtx is canceled whenever a fatal error occurs inside a lifecycle hook
+	// that cannot return an error directly (e.g. simulatorInitialize, BeforeStart).
+	// Canceling it unblocks the waitFn and causes Run() to stop.
+	hookCtx, hookCancel := context.WithCancel(ctx)
+	defer hookCancel()
+
+	// lifecycleErr captures the first fatal error from any hook that calls os.Exit.
+	// executionResultErr captures an error returned by the engine's execution result.
+	var (
+		lifecycleErr       error
+		executionResultErr error
+	)
+
+	// setLifecycleErr records the first lifecycle error and cancels hookCtx so
+	// all blocking selects unblock and Run() returns promptly.
+	setLifecycleErr := func(err error) {
+		if lifecycleErr == nil {
+			lifecycleErr = err
+		}
+		hookCancel()
+	}
+
 	// Channels to coordinate blocking
 	initializedCh := make(chan struct{})
 	executionFinishedCh := make(chan struct{})
+	var closeExecutionFinishedOnce sync.Once
+	closeExecutionFinished := func() {
+		closeExecutionFinishedOnce.Do(func() { close(executionFinishedCh) })
+	}
 
 	var manualTriggerCaps *ManualTriggers
 	simulatorInitialize := func(ctx context.Context, cfg simulator.RunnerConfig) (*capabilities.Registry, []services.Service) {
@@ -447,8 +476,8 @@ func run(
 			bs := simulator.NewBillingService(billingLggr)
 			err := bs.Start(ctx)
 			if err != nil {
-				ui.Error(fmt.Sprintf("Failed to start billing service: %v", err))
-				os.Exit(1)
+				setLifecycleErr(fmt.Errorf("failed to start billing service: %w", err))
+				return registry, srvcs
 			}
 
 			srvcs = append(srvcs, bs)
@@ -458,8 +487,8 @@ func run(
 			beholderLggr := lggr.Named("Beholder")
 			err := setupCustomBeholder(beholderLggr, verbosity, simLogger)
 			if err != nil {
-				ui.Error(fmt.Sprintf("Failed to setup beholder: %v", err))
-				os.Exit(1)
+				setLifecycleErr(fmt.Errorf("failed to setup beholder: %w", err))
+				return registry, srvcs
 			}
 		}
 
@@ -468,8 +497,8 @@ func run(
 		var err error
 		manualTriggerCaps, err = NewManualTriggerCapabilities(ctx, triggerLggr, registry)
 		if err != nil {
-			ui.Error(fmt.Sprintf("Failed to create trigger capabilities: %v", err))
-			os.Exit(1)
+			setLifecycleErr(fmt.Errorf("failed to create trigger capabilities: %w", err))
+			return registry, srvcs
 		}
 		srvcs = append(srvcs, manualTriggerCaps.ManualCronTrigger, manualTriggerCaps.ManualHTTPTrigger)
 
@@ -497,8 +526,8 @@ func run(
 				Logger:     triggerLggr,
 			})
 			if err != nil {
-				ui.Error(fmt.Sprintf("Failed to register %s capabilities: %v", name, err))
-				os.Exit(1)
+				setLifecycleErr(fmt.Errorf("failed to register %s capabilities: %w", name, err))
+				return registry, srvcs
 			}
 			srvcs = append(srvcs, ctSrvcs...)
 		}
@@ -507,21 +536,21 @@ func run(
 		computeLggr := lggr.Named("ActionsCapabilities")
 		computeCaps, err := NewFakeActionCapabilities(ctx, computeLggr, registry, inputs.SecretsPath, simLimits)
 		if err != nil {
-			ui.Error(fmt.Sprintf("Failed to create compute capabilities: %v", err))
-			os.Exit(1)
+			setLifecycleErr(fmt.Errorf("failed to create compute capabilities: %w", err))
+			return registry, srvcs
 		}
 
 		// Start trigger capabilities
 		if err := manualTriggerCaps.Start(ctx); err != nil {
-			ui.Error(fmt.Sprintf("Failed to start trigger: %v", err))
-			os.Exit(1)
+			setLifecycleErr(fmt.Errorf("failed to start trigger capabilities: %w", err))
+			return registry, srvcs
 		}
 
 		// Start compute capabilities
 		for _, cap := range computeCaps {
 			if err = cap.Start(ctx); err != nil {
-				ui.Error(fmt.Sprintf("Failed to start capability: %v", err))
-				os.Exit(1)
+				setLifecycleErr(fmt.Errorf("failed to start capability %s: %w", cap.Name(), err))
+				return registry, srvcs
 			}
 		}
 
@@ -534,34 +563,43 @@ func run(
 
 	getManualTriggerCaps := func() *ManualTriggers { return manualTriggerCaps }
 	if inputs.NonInteractive {
-		triggerInfoAndBeforeStart.BeforeStart = makeBeforeStartNonInteractive(triggerInfoAndBeforeStart, inputs, getManualTriggerCaps)
+		triggerInfoAndBeforeStart.BeforeStart = makeBeforeStartNonInteractive(triggerInfoAndBeforeStart, inputs, getManualTriggerCaps, setLifecycleErr)
 	} else {
-		triggerInfoAndBeforeStart.BeforeStart = makeBeforeStartInteractive(triggerInfoAndBeforeStart, inputs, getManualTriggerCaps)
+		triggerInfoAndBeforeStart.BeforeStart = makeBeforeStartInteractive(triggerInfoAndBeforeStart, inputs, getManualTriggerCaps, setLifecycleErr)
 	}
 
 	waitFn := func(context.Context, simulator.RunnerConfig, *capabilities.Registry, []services.Service) {
-		<-initializedCh
+		// Wait for the engine to initialize, or bail out if a lifecycle error occurred.
+		select {
+		case <-initializedCh:
+		case <-hookCtx.Done():
+			return
+		}
+
+		if lifecycleErr != nil {
+			return
+		}
 
 		// Manual trigger execution
 		if triggerInfoAndBeforeStart.TriggerFunc == nil {
-			simLogger.Error("Trigger function not initialized")
-			os.Exit(1)
+			setLifecycleErr(fmt.Errorf("trigger function not initialized"))
+			return
 		}
 		if triggerInfoAndBeforeStart.TriggerToRun == nil {
-			simLogger.Error("Trigger to run not selected")
-			os.Exit(1)
+			setLifecycleErr(fmt.Errorf("trigger to run not selected"))
+			return
 		}
 		simLogger.Info("Running trigger", "trigger", triggerInfoAndBeforeStart.TriggerToRun.GetId())
 		err := triggerInfoAndBeforeStart.TriggerFunc()
 		if err != nil {
-			simLogger.Error("Failed to run trigger", "trigger", triggerInfoAndBeforeStart.TriggerToRun.GetId(), "error", err)
-			os.Exit(1)
+			setLifecycleErr(fmt.Errorf("failed to run trigger %s: %w", triggerInfoAndBeforeStart.TriggerToRun.GetId(), err))
+			return
 		}
 
 		select {
 		case <-executionFinishedCh:
 			simLogger.Info("Execution finished signal received")
-		case <-ctx.Done():
+		case <-hookCtx.Done():
 			simLogger.Info("Received interrupt signal, stopping execution")
 		case <-time.After(WorkflowExecutionTimeout):
 			simLogger.Warn("Timeout waiting for execution to finish")
@@ -593,28 +631,35 @@ func run(
 		AfterRun:    emptyHook,
 		Cleanup:     simulatorCleanup,
 		Finally:     emptyHook,
-	}).Run(ctx, inputs.WorkflowName, binary, config, secrets, simulator.RunnerConfig{
+	}).Run(hookCtx, inputs.WorkflowName, binary, config, secrets, simulator.RunnerConfig{
 		EnableBeholder: true,
 		EnableBilling:  false,
 		Lggr:           engineLog,
 		LifecycleHooks: v2.LifecycleHooks{
 			OnInitialized: func(err error) {
 				if err != nil {
-					simLogger.Error("Failed to initialize simulator", "error", err)
-					os.Exit(1)
+					setLifecycleErr(fmt.Errorf("failed to initialize simulator: %w", err))
+					return
 				}
 				simLogger.Info("Simulator Initialized")
 				ui.Line()
 				close(initializedCh)
 			},
 			OnExecutionError: func(msg string) {
-				ui.Error("Workflow execution failed:")
-				ui.Print(msg)
-				os.Exit(1)
+				errMsg := msg
+				// Engine-enforced limits (e.g. call count limits) produce "limit exceeded"
+				// errors but don't go through our capability wrappers, so they lack the
+				// remediation hint. Detect and append it here.
+				if strings.Contains(strings.ToLower(msg), "limit exceeded") {
+					errMsg += "\nThis limit mirrors a production constraint.\nUse 'cre workflow limits export' to customize limits, or --limits=none to disable."
+				}
+				// Do not print here — root.go prints the returned error once after cleanup.
+				executionResultErr = fmt.Errorf("workflow execution failed: %s", errMsg)
+				closeExecutionFinished()
 			},
 			OnResultReceived: func(result *pb.ExecutionResult) {
 				if result == nil || result.Result == nil {
-					// OnExecutionError will print the error message of the crash.
+					// OnExecutionError will handle the crash message.
 					return
 				}
 
@@ -642,10 +687,11 @@ func run(
 					ui.Success("Workflow Simulation Result:")
 					ui.Print(string(j))
 				case *pb.ExecutionResult_Error:
-					ui.Error("Execution resulted in an error being returned: " + r.Error)
+					// Do not print here — root.go prints the returned error once after cleanup.
+					executionResultErr = fmt.Errorf("workflow execution returned an error: %s", r.Error)
 				}
 				ui.Line()
-				close(executionFinishedCh)
+				closeExecutionFinished()
 			},
 		},
 		WorkflowSettingsCfgFn: func(cfg *cresettings.Workflows) {
@@ -663,6 +709,12 @@ func run(
 		},
 	})
 
+	if lifecycleErr != nil {
+		return lifecycleErr
+	}
+	if executionResultErr != nil {
+		return executionResultErr
+	}
 	return nil
 }
 
@@ -672,8 +724,10 @@ type TriggerInfoAndBeforeStart struct {
 	BeforeStart  func(ctx context.Context, cfg simulator.RunnerConfig, registry *capabilities.Registry, services []services.Service, triggerSub []*pb.TriggerSubscription)
 }
 
-// makeBeforeStartInteractive builds the interactive BeforeStart closure
-func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs, manualTriggerCapsGetter func() *ManualTriggers) func(context.Context, simulator.RunnerConfig, *capabilities.Registry, []services.Service, []*pb.TriggerSubscription) {
+// makeBeforeStartInteractive builds the interactive BeforeStart closure.
+// onErr is called instead of os.Exit when a fatal error occurs; it records
+// the error and cancels the hook context so Run() unblocks and returns.
+func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs, manualTriggerCapsGetter func() *ManualTriggers, onErr func(error)) func(context.Context, simulator.RunnerConfig, *capabilities.Registry, []services.Service, []*pb.TriggerSubscription) {
 	return func(
 		ctx context.Context,
 		cfg simulator.RunnerConfig,
@@ -682,8 +736,8 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 		triggerSub []*pb.TriggerSubscription,
 	) {
 		if len(triggerSub) == 0 {
-			ui.Error("No workflow triggers found, please check your workflow source code and config")
-			os.Exit(1)
+			onErr(fmt.Errorf("no workflow triggers found; check your workflow source code and config"))
+			return
 		}
 
 		var triggerIndex int
@@ -699,8 +753,8 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 			ui.Line()
 			selected, err := ui.Select("Workflow simulation ready. Please select a trigger:", opts)
 			if err != nil {
-				ui.Error(fmt.Sprintf("Trigger selection failed: %v", err))
-				os.Exit(1)
+				onErr(fmt.Errorf("trigger selection failed: %w", err))
+				return
 			}
 			triggerIndex = selected
 
@@ -735,8 +789,8 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 		case "http-trigger@1.0.0-alpha":
 			payload, err := getHTTPTriggerPayload(inputs.InvocationDir)
 			if err != nil {
-				ui.Error(fmt.Sprintf("Failed to get HTTP trigger payload: %v", err))
-				os.Exit(1)
+				onErr(fmt.Errorf("failed to get HTTP trigger payload: %w", err))
+				return
 			}
 			holder.TriggerFunc = func() error {
 				return manualTriggerCaps.ManualHTTPTrigger.ManualTrigger(ctx, triggerRegistrationID, payload)
@@ -751,14 +805,14 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 				}
 
 				if !ct.Supports(sel) {
-					ui.Error(fmt.Sprintf("%s unsupported or misconfigured chain for selector %d", name, sel))
-					os.Exit(1)
+					onErr(fmt.Errorf("%s unsupported or misconfigured chain for selector %d", name, sel))
+					return
 				}
 
 				triggerData, err := getTriggerDataForChainType(ctx, ct, sel, inputs, true)
 				if err != nil {
-					ui.Error(fmt.Sprintf("Failed to get %s trigger data: %v", name, err))
-					os.Exit(1)
+					onErr(fmt.Errorf("failed to get %s trigger data: %w", name, err))
+					return
 				}
 
 				handled = true
@@ -769,15 +823,17 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 			}
 
 			if !handled {
-				ui.Error(fmt.Sprintf("Unsupported trigger type: %s", holder.TriggerToRun.Id))
-				os.Exit(1)
+				onErr(fmt.Errorf("unsupported trigger type: %s", holder.TriggerToRun.Id))
+				return
 			}
 		}
 	}
 }
 
-// makeBeforeStartNonInteractive builds the non-interactive BeforeStart closure
-func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs, manualTriggerCapsGetter func() *ManualTriggers) func(context.Context, simulator.RunnerConfig, *capabilities.Registry, []services.Service, []*pb.TriggerSubscription) {
+// makeBeforeStartNonInteractive builds the non-interactive BeforeStart closure.
+// onErr is called instead of os.Exit when a fatal error occurs; it records
+// the error and cancels the hook context so Run() unblocks and returns.
+func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs, manualTriggerCapsGetter func() *ManualTriggers, onErr func(error)) func(context.Context, simulator.RunnerConfig, *capabilities.Registry, []services.Service, []*pb.TriggerSubscription) {
 	return func(
 		ctx context.Context,
 		cfg simulator.RunnerConfig,
@@ -786,16 +842,16 @@ func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inp
 		triggerSub []*pb.TriggerSubscription,
 	) {
 		if len(triggerSub) == 0 {
-			ui.Error("No workflow triggers found, please check your workflow source code and config")
-			os.Exit(1)
+			onErr(fmt.Errorf("no workflow triggers found; check your workflow source code and config"))
+			return
 		}
 		if inputs.TriggerIndex < 0 {
-			ui.Error("--trigger-index is required when --non-interactive is enabled")
-			os.Exit(1)
+			onErr(fmt.Errorf("--trigger-index is required when --non-interactive is enabled"))
+			return
 		}
 		if inputs.TriggerIndex >= len(triggerSub) {
-			ui.Error(fmt.Sprintf("Invalid --trigger-index %d; available range: 0-%d", inputs.TriggerIndex, len(triggerSub)-1))
-			os.Exit(1)
+			onErr(fmt.Errorf("invalid --trigger-index %d; available range: 0-%d", inputs.TriggerIndex, len(triggerSub)-1))
+			return
 		}
 
 		holder.TriggerToRun = triggerSub[inputs.TriggerIndex]
@@ -813,13 +869,13 @@ func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inp
 			}
 		case "http-trigger@1.0.0-alpha":
 			if strings.TrimSpace(inputs.HTTPPayload) == "" {
-				ui.Error("--http-payload is required for http-trigger@1.0.0-alpha in non-interactive mode")
-				os.Exit(1)
+				onErr(fmt.Errorf("--http-payload is required for http-trigger@1.0.0-alpha in non-interactive mode"))
+				return
 			}
 			payload, err := getHTTPTriggerPayloadFromInput(inputs.HTTPPayload, inputs.InvocationDir)
 			if err != nil {
-				ui.Error(fmt.Sprintf("Failed to parse HTTP trigger payload: %v", err))
-				os.Exit(1)
+				onErr(fmt.Errorf("failed to parse HTTP trigger payload: %w", err))
+				return
 			}
 			holder.TriggerFunc = func() error {
 				return manualTriggerCaps.ManualHTTPTrigger.ManualTrigger(ctx, triggerRegistrationID, payload)
@@ -834,14 +890,14 @@ func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inp
 				}
 
 				if !ct.Supports(sel) {
-					ui.Error(fmt.Sprintf("%s unsupported or misconfigured chain for selector %d", name, sel))
-					os.Exit(1)
+					onErr(fmt.Errorf("%s unsupported or misconfigured chain for selector %d", name, sel))
+					return
 				}
 
 				triggerData, err := getTriggerDataForChainType(ctx, ct, sel, inputs, false)
 				if err != nil {
-					ui.Error(fmt.Sprintf("Failed to get %s trigger data: %v", name, err))
-					os.Exit(1)
+					onErr(fmt.Errorf("failed to get %s trigger data: %w", name, err))
+					return
 				}
 
 				handled = true
@@ -852,8 +908,8 @@ func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inp
 			}
 
 			if !handled {
-				ui.Error(fmt.Sprintf("Unsupported trigger type: %s", holder.TriggerToRun.Id))
-				os.Exit(1)
+				onErr(fmt.Errorf("unsupported trigger type: %s", holder.TriggerToRun.Id))
+				return
 			}
 		}
 	}
