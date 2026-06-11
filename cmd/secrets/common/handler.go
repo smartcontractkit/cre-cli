@@ -98,8 +98,8 @@ type Handler struct {
 func NewHandler(execCtx context.Context, ctx *runtime.Context, secretsFilePath, secretsAuth string) (*Handler, error) {
 	var pk *ecdsa.PrivateKey
 	var err error
-	if ctx.Settings.User.EthPrivateKey != "" {
-		pk, err = crypto.HexToECDSA(ctx.Settings.User.EthPrivateKey)
+	if ctx.Settings.User.EthPrivateKey.IsSet() {
+		pk, err = crypto.HexToECDSA(ctx.Settings.User.EthPrivateKey.Hex())
 		if err != nil {
 			return nil, fmt.Errorf("failed to decode the provided private key: %w", err)
 		}
