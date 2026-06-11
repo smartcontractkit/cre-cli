@@ -41,7 +41,7 @@ require (
 	github.com/smartcontractkit/chainlink/v2 v2.29.1-cre-beta.0.0.20260521170940-67f9a4b233f8
 	github.com/smartcontractkit/cre-sdk-go v1.9.0-capdev.1.0.20260605151643-add8be700599
 	github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm v1.0.0-beta.10-capdev.1.0.20260605151643-add8be700599
-	github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/solana v0.1.1-0.20260605151643-add8be700599
+	github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/solana v0.1.1-0.20260611154347-d79a90f7c6da
 	github.com/smartcontractkit/mcms v0.45.0
 	github.com/smartcontractkit/tdh2/go/tdh2 v0.0.0-20251120172354-e8ec0386b06c
 	github.com/spf13/cobra v1.10.2
@@ -427,7 +427,3 @@ require (
 replace github.com/gogo/protobuf => github.com/regen-network/protobuf v1.3.3-alpha.regen.1
 
 replace github.com/fbsobreira/gotron-sdk => github.com/smartcontractkit/chainlink-tron/relayer/gotron-sdk v0.0.5-0.20251014143056-a0c6328c91e9
-
-replace github.com/smartcontractkit/cre-sdk-go => ../cre-sdk-go
-
-replace github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/solana => ../cre-sdk-go/capabilities/blockchain/solana
