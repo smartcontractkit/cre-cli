@@ -11,8 +11,7 @@ import (
 const vaultValidationSkippedWarning = "Vault gateway validation skipped; the encryption key and response signatures will not be verified independently of the gateway."
 
 // vaultValidationGateEnabled toggles CapabilitiesRegistry RPC resolution and consent
-// before secrets commands. Disabled until gateway public-key / OCR verification lands.
-// TODO(CL114-04): set to true when validation is implemented.
+// before secrets commands.
 const vaultValidationGateEnabled = false
 
 // EnsureVaultValidationOrConsent resolves CapabilitiesRegistry RPC settings and either
