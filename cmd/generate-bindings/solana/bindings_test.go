@@ -189,10 +189,11 @@ func TestLogTrigger(t *testing.T) {
 		testPubKey := testPrivKey.PublicKey()
 		testPubKey2, err := solana.NewRandomPrivateKey()
 		require.NoError(t, err)
+		caller2 := testPubKey2.PublicKey()
 
 		filters := []datastorage.AccessLoggedFilters{
 			{Caller: &testPubKey},
-			{Caller: &testPubKey2.PublicKey()},
+			{Caller: &caller2},
 		}
 
 		subkeys, err := ds.Codec.EncodeAccessLoggedSubkeys(filters)
