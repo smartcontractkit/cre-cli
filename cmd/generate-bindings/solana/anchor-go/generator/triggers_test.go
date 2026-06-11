@@ -16,7 +16,10 @@ func TestIsFilterableField(t *testing.T) {
 		ty   idltype.IdlType
 		want bool
 	}{
+		{name: "bool", ty: &idltype.Bool{}, want: false},
 		{name: "pubkey", ty: &idltype.Pubkey{}, want: true},
+		{name: "u128", ty: &idltype.U128{}, want: false},
+		{name: "i128", ty: &idltype.I128{}, want: false},
 		{name: "string", ty: &idltype.String{}, want: true},
 		{name: "bytes", ty: &idltype.Bytes{}, want: true},
 		{name: "u64", ty: &idltype.U64{}, want: true},

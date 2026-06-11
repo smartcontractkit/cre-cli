@@ -19,7 +19,8 @@ var (
 
 // Events
 // The <Event>Filters struct should be used as a filter for log triggers.
-// Only top-level scalar fields are filterable. Nested structs, vecs, and arrays require manual SubkeyConfig.
+// Only top-level scalar fields with supported subkey encodings are auto-filterable.
+// Nested structs, vecs, arrays, bool, u128, and i128 require manual SubkeyConfig.
 
 // AccessLoggedFilters holds optional filter values for AccessLogged log triggers.
 // Set a field to filter on that value (OR across filter rows). Leave nil for wildcard.

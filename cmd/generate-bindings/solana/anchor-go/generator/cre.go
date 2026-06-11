@@ -465,8 +465,15 @@ func isFilterableField(idlType idltype.IdlType) bool {
 		return isFilterableField(copt.COption)
 	case IsVec(idlType), IsArray(idlType), IsDefined(idlType):
 		return false
+	case IsBool(idlType):
+		return false
 	default:
-		return IsIDLTypeKind(idlType)
+		switch idlType.(type) {
+		case *idltype.U128, *idltype.I128:
+			return false
+		default:
+			return IsIDLTypeKind(idlType)
+		}
 	}
 }
 

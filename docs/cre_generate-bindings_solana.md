@@ -12,10 +12,12 @@ For example, data_storage.json generates bindings in generated/data_storage/ pac
 When the IDL defines events, bindings also include a `triggers.go` file with typed log-trigger helpers:
 
 * `<Event>Filters` — optional per-field filter values (nil means wildcard for that field)
-* `Encode<Event>Subkeys` — converts filter rows into `SubkeyConfig` values for the log poller
+* `Encode<Event>Subkeys` — converts filter rows into `SubkeyConfig` values for log trigger registration
 * `LogTrigger<Event>Log` — registers a typed trigger that decodes matching logs into `DecodedLog[<Event>]`
 
-Only top-level scalar event fields are auto-filterable (pubkey, string, bytes, bool, integers, floats, and optional wrappers around those).
+Only top-level scalar event fields with supported subkey encodings are auto-filterable: `u8`–`u64`, `i8`–`i64`, `u256`/`i256` (`[32]byte`), `f32`, `f64`, `string`, `bytes`, `pubkey`, and `Option` wrappers around those scalars.
+`bool`, `u128`, and `i128` are omitted from generated filters; use manual `SubkeyConfig` for those fields.
+Filter values are encoded via `bindings.PrepareSubkeyValue`: integers and floats use 8-byte big-endian encoding; `bytes` and fixed byte arrays compare by full value equality.
 Nested structs, vecs, and arrays are omitted from generated filters; build `SubkeyConfig` manually for those paths.
 Multiple filter rows OR values within the same field; different fields in the same registration are ANDed together.
 

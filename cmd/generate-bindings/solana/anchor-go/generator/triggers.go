@@ -22,7 +22,8 @@ func (g *Generator) genfile_triggers() (*OutputFile, error) {
 
 	file.Comment("Events")
 	file.Comment("The <Event>Filters struct should be used as a filter for log triggers.")
-	file.Comment("Only top-level scalar fields are filterable. Nested structs, vecs, and arrays require manual SubkeyConfig.")
+	file.Comment("Only top-level scalar fields with supported subkey encodings are auto-filterable.")
+	file.Comment("Nested structs, vecs, arrays, bool, u128, and i128 require manual SubkeyConfig.")
 	file.Line()
 
 	for _, event := range g.idl.Events {
