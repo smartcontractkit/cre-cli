@@ -247,12 +247,12 @@ func (ct *EVMChainType) RunHealthCheck(resolved chain.ResolvedChains) error {
 // is true, an invalid or default-sentinel key is a hard error. Otherwise a
 // sentinel key is used with a warning so non-broadcast simulations can run.
 func (ct *EVMChainType) ResolveKey(creSettings *settings.Settings, broadcast bool) (interface{}, error) {
-	pk, err := crypto.HexToECDSA(creSettings.User.EthPrivateKey)
+	pk, err := crypto.HexToECDSA(creSettings.User.EthPrivateKey.Hex())
 	if err != nil {
 		// If the user explicitly set a key that looks like a hex string but is
 		// malformed (wrong length, invalid chars), always error with guidance.
-		// Skip placeholder values like "your-eth-private-key" from the default .env template.
-		if creSettings.User.EthPrivateKey != "" && isHexString(creSettings.User.EthPrivateKey) {
+		// Skip placeholder values like DefaultEthPrivateKeyEnvPlaceholder from the default .env template.
+		if creSettings.User.EthPrivateKey.IsSet() && isHexString(creSettings.User.EthPrivateKey.Hex()) {
 			return nil, fmt.Errorf(
 				"invalid private key: expected 64 hex characters (256 bits), got %d characters.\n\n"+
 					"The CLI reads CRE_ETH_PRIVATE_KEY from your .env file or system environment.\n"+
@@ -261,7 +261,7 @@ func (ct *EVMChainType) ResolveKey(creSettings *settings.Settings, broadcast boo
 					"  • Pasted an Ethereum address (40 chars) instead of a private key (64 chars)\n"+
 					"  • Value has extra quotes — use CRE_ETH_PRIVATE_KEY=abc123... without wrapping quotes\n"+
 					"  • Key was truncated during copy-paste",
-				len(creSettings.User.EthPrivateKey))
+				len(creSettings.User.EthPrivateKey.Hex()))
 		}
 		if broadcast {
 			return nil, fmt.Errorf(
