@@ -2,6 +2,7 @@ package vaultdon_test
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"math/big"
 	"testing"
@@ -32,7 +33,7 @@ func (m *mockReader) GetDONsInFamily(_ context.Context, _ string) ([]*big.Int, e
 func (m *mockReader) GetDON(_ context.Context, donID uint32) (capreg.CapabilitiesRegistryDONInfo, error) {
 	don, ok := m.dons[donID]
 	if !ok {
-		return capreg.CapabilitiesRegistryDONInfo{}, context.Canceled
+		return capreg.CapabilitiesRegistryDONInfo{}, fmt.Errorf("DON %d not found", donID)
 	}
 	return don, nil
 }
@@ -98,8 +99,7 @@ func TestResolveVaultDON(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "deadbeef", pubKey)
 
-	signers, err := capabilitiesregistry.OCRSignerAddresses(v.Nodes)
-	require.NoError(t, err)
+	signers := capabilitiesregistry.OCRSignerAddresses(v.Nodes)
 	require.Equal(t, []common.Address{addrA, addrB}, signers)
 	require.Equal(t, 3, capabilitiesregistry.MinOCRSignatures(v.DON.F))
 

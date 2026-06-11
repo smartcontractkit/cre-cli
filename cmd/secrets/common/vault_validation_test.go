@@ -70,6 +70,8 @@ func TestEnsureVaultValidationOrConsent_RPCConfigured(t *testing.T) {
 	skipCached, err := h.EnsureVaultValidationOrConsent(context.Background())
 	require.NoError(t, err)
 	require.False(t, skipCached)
+
+	h.CloseCapRegClient()
 }
 
 func TestEnsureVaultValidationOrConsent_SkipConfirmationWithoutRPC(t *testing.T) {

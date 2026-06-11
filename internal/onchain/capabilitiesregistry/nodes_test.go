@@ -19,11 +19,10 @@ func TestOCRSignerAddresses(t *testing.T) {
 	copy(signerA[:20], addrA.Bytes())
 	copy(signerB[:20], addrB.Bytes())
 
-	signers, err := OCRSignerAddresses([]capreg.INodeInfoProviderNodeInfo{
+	signers := OCRSignerAddresses([]capreg.INodeInfoProviderNodeInfo{
 		{P2pId: [32]byte{1}, Signer: signerA},
 		{P2pId: [32]byte{2}, Signer: signerB},
 	})
-	require.NoError(t, err)
 	require.Equal(t, []common.Address{addrA, addrB}, signers)
 }
 

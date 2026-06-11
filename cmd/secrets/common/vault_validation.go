@@ -118,6 +118,7 @@ func (h *Handler) initVaultDONResolver(ctx context.Context, rpcURL string) error
 		return fmt.Errorf("failed to create capabilities registry client: %w", err)
 	}
 
+	h.capRegClient = client
 	h.vaultDONResolver = vaultdon.NewResolver(client, strings.TrimSpace(family))
 	return nil
 }

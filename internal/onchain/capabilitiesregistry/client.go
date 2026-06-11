@@ -20,6 +20,7 @@ const (
 // Client is a read-only CapabilitiesRegistry contract client backed by a validated RPC URL.
 type Client struct {
 	contract *capreg.CapabilitiesRegistry
+	eth      *ethclient.Client
 }
 
 // NewReadOnlyClient dials rpcURL and binds contractAddress. The caller must have already
@@ -37,10 +38,20 @@ func NewReadOnlyClient(ctx context.Context, rpcURL, contractAddress string) (*Cl
 	addr := common.HexToAddress(contractAddress)
 	contract, err := capreg.NewCapabilitiesRegistry(addr, backend)
 	if err != nil {
+		backend.Close()
 		return nil, fmt.Errorf("bind capabilities registry at %s: %w", contractAddress, err)
 	}
 
-	return &Client{contract: contract}, nil
+	return &Client{contract: contract, eth: backend}, nil
+}
+
+// Close releases the underlying RPC connection.
+func (c *Client) Close() {
+	if c == nil || c.eth == nil {
+		return
+	}
+	c.eth.Close()
+	c.eth = nil
 }
 
 // GetDONsInFamily returns all DON IDs registered under donFamily.
