@@ -177,3 +177,85 @@ func TestEncodeStruct(t *testing.T) {
 	require.NoError(t, err, "Encoding DataStorageDataAccount should not return an error")
 	require.NotNil(t, encoded, "Encoded data should not be nil")
 }
+
+func TestLogTrigger(t *testing.T) {
+	client := &solanasdk.Client{ChainSelector: anyChainSelector}
+	ds, err := datastorage.NewDataStorage(client)
+	require.NoError(t, err)
+
+	t.Run("AccessLogged subkey encoding and Adapt", func(t *testing.T) {
+		testPrivKey, err := solana.NewRandomPrivateKey()
+		require.NoError(t, err)
+		testPubKey := testPrivKey.PublicKey()
+		testPubKey2, err := solana.NewRandomPrivateKey()
+		require.NoError(t, err)
+		caller2 := testPubKey2.PublicKey()
+
+		filters := []datastorage.AccessLoggedFilters{
+			{Caller: &testPubKey},
+			{Caller: &caller2},
+		}
+
+		subkeys, err := ds.Codec.EncodeAccessLoggedSubkeys(filters)
+		require.NoError(t, err)
+		require.Len(t, subkeys, 1)
+		require.Equal(t, []string{"Caller"}, subkeys[0].Path)
+		require.Len(t, subkeys[0].Comparers, 2)
+
+		trigger, err := ds.LogTriggerAccessLoggedLog(
+			anyChainSelector,
+			"access-logged-filter",
+			filters,
+			nil,
+		)
+		require.NoError(t, err)
+		require.NotNil(t, trigger)
+
+		message := "test message"
+		event := datastorage.AccessLogged{
+			Caller:  testPubKey,
+			Message: message,
+		}
+		eventData, err := event.Marshal()
+		require.NoError(t, err)
+
+		discriminator := datastorage.Event_AccessLogged
+		fullData := append(discriminator[:], eventData...)
+
+		mockLog := &solanasdk.Log{
+			Address: datastorage.ProgramID.Bytes(),
+			Data:    fullData,
+		}
+
+		decodedLog, err := trigger.Adapt(mockLog)
+		require.NoError(t, err)
+		require.NotNil(t, decodedLog)
+		require.Equal(t, testPubKey, decodedLog.Data.Caller)
+		require.Equal(t, message, decodedLog.Data.Message)
+		require.Equal(t, mockLog, decodedLog.Log)
+	})
+
+	t.Run("NoFields empty filters", func(t *testing.T) {
+		trigger, err := ds.LogTriggerNoFieldsLog(
+			anyChainSelector,
+			"no-fields-filter",
+			[]datastorage.NoFieldsFilters{},
+			nil,
+		)
+		require.NoError(t, err)
+		require.NotNil(t, trigger)
+
+		subkeys, err := ds.Codec.EncodeNoFieldsSubkeys([]datastorage.NoFieldsFilters{})
+		require.NoError(t, err)
+		require.Empty(t, subkeys)
+
+		eventData, err := datastorage.NoFields{}.Marshal()
+		require.NoError(t, err)
+		fullData := append(datastorage.Event_NoFields[:], eventData...)
+
+		mockLog := &solanasdk.Log{Data: fullData}
+		decodedLog, err := trigger.Adapt(mockLog)
+		require.NoError(t, err)
+		require.NotNil(t, decodedLog)
+	})
+}

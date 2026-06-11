@@ -11,6 +11,7 @@ import (
 
 	. "github.com/dave/jennifer/jen"
 	"github.com/gagliardetto/anchor-go/idl"
+	"github.com/gagliardetto/anchor-go/idl/idltype"
 	"github.com/gagliardetto/anchor-go/tools"
 )
 
@@ -409,5 +410,264 @@ func (g *Generator) generateCodecMethods() ([]Code, error) {
 	if err != nil {
 		return nil, err
 	}
-	return append(accountMethods, structMethods...), nil
+
+	eventSubkeyMethods, err := g.generateCodecEventSubkeyMethods()
+	if err != nil {
+		return nil, err
+	}
+
+	return append(append(accountMethods, structMethods...), eventSubkeyMethods...), nil
+}
+
+func (g *Generator) generateCodecEventSubkeyMethods() ([]Code, error) {
+	methods := make([]Code, 0, len(g.idl.Events))
+	for _, event := range g.idl.Events {
+		exportedName := tools.ToCamelUpper(event.Name)
+		m := Id("Encode"+exportedName+"Subkeys").
+			Params(Id("filters").Index().Id(exportedName+"Filters")).
+			Params(
+				Index().Op("*").Qual(PkgSolanaCre, "SubkeyConfig"),
+				Error(),
+			)
+		methods = append(methods, m)
+	}
+	return methods, nil
+}
+
+func (g *Generator) getEventStructFields(eventName string) (idl.IdlDefinedFieldsNamed, error) {
+	for _, typ := range g.idl.Types {
+		if typ.Name != eventName {
+			continue
+		}
+		structTy, ok := typ.Ty.(*idl.IdlTypeDefTyStruct)
+		if !ok {
+			return nil, fmt.Errorf("event %s is not a struct", eventName)
+		}
+		if structTy.Fields == nil {
+			return idl.IdlDefinedFieldsNamed{}, nil
+		}
+		switch fields := structTy.Fields.(type) {
+		case idl.IdlDefinedFieldsNamed:
+			return fields, nil
+		case idl.IdlDefinedFieldsTuple:
+			return nil, fmt.Errorf("event %s uses tuple fields, not supported for log triggers", eventName)
+		default:
+			return idl.IdlDefinedFieldsNamed{}, nil
+		}
+	}
+	return nil, fmt.Errorf("type %s not found in IDL", eventName)
+}
+
+func isFilterableField(idlType idltype.IdlType) bool {
+	switch {
+	case IsOption(idlType):
+		opt := idlType.(*idltype.Option)
+		return isFilterableField(opt.Option)
+	case IsCOption(idlType):
+		copt := idlType.(*idltype.COption)
+		return isFilterableField(copt.COption)
+	case IsVec(idlType), IsArray(idlType), IsDefined(idlType):
+		return false
+	default:
+		return IsIDLTypeKind(idlType)
+	}
+}
+
+func filterFieldGoType(idlType idltype.IdlType) Code {
+	if IsOption(idlType) {
+		return filterFieldGoType(idlType.(*idltype.Option).Option)
+	}
+	if IsCOption(idlType) {
+		return filterFieldGoType(idlType.(*idltype.COption).COption)
+	}
+	return Op("*").Add(genTypeName(idlType))
+}
+
+type eventFilterField struct {
+	goName string
+	idlName string
+	ty     idltype.IdlType
+}
+
+func getEventFilterFields(fields idl.IdlDefinedFieldsNamed) []eventFilterField {
+	result := make([]eventFilterField, 0, len(fields))
+	for _, field := range fields {
+		if !isFilterableField(field.Ty) {
+			continue
+		}
+		result = append(result, eventFilterField{
+			goName:  tools.ToCamelUpper(field.Name),
+			idlName: field.Name,
+			ty:      field.Ty,
+		})
+	}
+	return result
+}
+
+func creEventFiltersStruct(eventName string, filterFields []eventFilterField) Code {
+	exportedName := tools.ToCamelUpper(eventName)
+	st := Empty()
+	st.Commentf("%sFilters holds optional filter values for %s log triggers.", exportedName, exportedName)
+	st.Line()
+	st.Comment("Set a field to filter on that value (OR across filter rows). Leave nil for wildcard.")
+	st.Line()
+	st.Type().Id(exportedName + "Filters").StructFunc(func(g *Group) {
+		for _, field := range filterFields {
+			g.Id(field.goName).Add(filterFieldGoType(field.ty))
+		}
+	})
+	return st
+}
+
+func creEncodeSubkeysForEvent(eventName string, filterFields []eventFilterField) Code {
+	exportedName := tools.ToCamelUpper(eventName)
+	return Func().
+		Params(Id("c").Op("*").Id("Codec")).
+		Id("Encode"+exportedName+"Subkeys").
+		Params(Id("filters").Index().Id(exportedName+"Filters")).
+		Params(Index().Op("*").Qual(PkgSolanaCre, "SubkeyConfig"), Error()).
+		BlockFunc(func(block *Group) {
+			for _, field := range filterFields {
+				block.Id(field.goName + "Comparers").Op(":=").Make(
+					Index().Op("*").Qual(PkgSolanaCre, "ValueComparator"), Lit(0),
+				)
+			}
+			if len(filterFields) > 0 {
+				block.Line()
+				block.For(Id("_").Op(",").Id("f").Op(":=").Range().Id("filters")).BlockFunc(func(row *Group) {
+					for _, field := range filterFields {
+						row.If(Id("f").Dot(field.goName).Op("!=").Nil()).Block(
+							List(Id("val"), Id("err")).Op(":=").Qual(PkgBindings, "PrepareSubkeyValue").Call(
+								Op("*").Id("f").Dot(field.goName),
+							),
+							If(Id("err").Op("!=").Nil()).Block(
+								Return(Nil(), Qual("fmt", "Errorf").Call(
+									Lit("failed to encode subkey value for "+field.goName+": %w"),
+									Id("err"),
+								)),
+							),
+							Id(field.goName+"Comparers").Op("=").Append(
+								Id(field.goName+"Comparers"),
+								Op("&").Qual(PkgSolanaCre, "ValueComparator").Values(Dict{
+									Id("Value"):    Id("val"),
+									Id("Operator"): Qual(PkgSolanaCre, "ComparisonOperator_COMPARISON_OPERATOR_EQ"),
+								}),
+							),
+						)
+					}
+				})
+				block.Line()
+			}
+
+			block.Id("subkeys").Op(":=").Make(Index().Op("*").Qual(PkgSolanaCre, "SubkeyConfig"), Lit(0))
+			for _, field := range filterFields {
+				block.If(Len(Id(field.goName+"Comparers")).Op(">").Lit(0)).Block(
+					Id("subkeys").Op("=").Append(
+						Id("subkeys"),
+						Op("&").Qual(PkgSolanaCre, "SubkeyConfig").Values(Dict{
+							Id("Path"): Index().String().Values(Lit(field.goName)),
+							Id("Comparers"): Id(field.goName + "Comparers"),
+						}),
+					),
+				)
+			}
+			block.Return(Id("subkeys"), Nil())
+		})
+}
+
+func creLogTriggerForEvent(eventName string, g *Generator) Code {
+	exportedName := tools.ToCamelUpper(eventName)
+	pkg := tools.ToCamelUpper(g.options.Package)
+	code := Empty()
+
+	code.Commentf("%sTrigger wraps the raw log trigger and provides decoded %s data.", exportedName, exportedName)
+	code.Line()
+	code.Type().Id(exportedName+"Trigger").Struct(
+		Qual(PkgCRE, "Trigger").Types(
+			Op("*").Qual(PkgSolanaCre, "Log"),
+			Op("*").Qual(PkgSolanaCre, "Log"),
+		),
+		Id("contract").Op("*").Id(pkg),
+	)
+	code.Line()
+
+	code.Commentf("Adapt decodes the log into %s event data.", exportedName)
+	code.Line()
+	code.Func().
+		Params(Id("t").Op("*").Id(exportedName+"Trigger")).
+		Id("Adapt").
+		Params(Id("l").Op("*").Qual(PkgSolanaCre, "Log")).
+		Params(
+			Op("*").Qual(PkgBindings, "DecodedLog").Types(Id(exportedName)),
+			Error(),
+		).
+		Block(
+			List(Id("decoded"), Id("err")).Op(":=").Id("ParseEvent_"+exportedName).Call(Id("l").Dot("GetData").Call()),
+			If(Id("err").Op("!=").Nil()).Block(
+				Return(
+					Nil(),
+					Qual("fmt", "Errorf").Call(Lit("failed to decode "+exportedName+" log: %w"), Id("err")),
+				),
+			),
+			Return(
+				Op("&").Qual(PkgBindings, "DecodedLog").Types(Id(exportedName)).Values(Dict{
+					Id("Log"):  Id("l"),
+					Id("Data"): Op("*").Id("decoded"),
+				}),
+				Nil(),
+			),
+		)
+	code.Line()
+
+	code.Commentf("LogTrigger%sLog registers a typed log trigger for %s events.", exportedName, exportedName)
+	code.Line()
+	code.Func().
+		Params(Id("c").Op("*").Id(pkg)).
+		Id("LogTrigger"+exportedName+"Log").
+		Params(ListMultiline(func(p *Group) {
+			p.Id("chainSelector").Uint64()
+			p.Id("filterName").String()
+			p.Id("filters").Index().Id(exportedName + "Filters")
+			p.Id("opts").Op("*").Qual(PkgBindings, "LogTriggerOptions")
+		})).
+		Params(
+			Qual(PkgCRE, "Trigger").Types(
+				Op("*").Qual(PkgSolanaCre, "Log"),
+				Op("*").Qual(PkgBindings, "DecodedLog").Types(Id(exportedName)),
+			),
+			Error(),
+		).
+		BlockFunc(func(block *Group) {
+			block.List(Id("subkeys"), Id("err")).Op(":=").Id("c").Dot("Codec").Dot("Encode"+exportedName+"Subkeys").Call(Id("filters"))
+			block.If(Id("err").Op("!=").Nil()).Block(
+				Return(Nil(), Qual("fmt", "Errorf").Call(Lit("failed to encode subkeys for "+exportedName+": %w"), Id("err"))),
+			)
+
+			block.Id("req").Op(":=").Op("&").Qual(PkgSolanaCre, "FilterLogTriggerRequest").Values(Dict{
+				Id("Name"):            Id("filterName"),
+				Id("Address"):         Id("ProgramID").Dot("Bytes").Call(),
+				Id("EventName"):       Lit(eventName),
+				Id("ContractIdlJson"): Index().Byte().Call(Id("IDL")),
+				Id("Subkeys"):         Id("subkeys"),
+			})
+			block.If(
+				Id("opts").Op("!=").Nil().Op("&&").Id("opts").Dot("CpiFilterConfig").Op("!=").Nil(),
+			).Block(
+				Id("req").Dot("CpiFilterConfig").Op("=").Id("opts").Dot("CpiFilterConfig"),
+			)
+
+			block.Id("rawTrigger").Op(":=").Qual(PkgSolanaCre, "LogTrigger").Call(
+				Id("chainSelector"),
+				Id("req"),
+			)
+			block.Return(
+				Op("&").Id(exportedName+"Trigger").Values(Dict{
+					Id("Trigger"):  Id("rawTrigger"),
+					Id("contract"): Id("c"),
+				}),
+				Nil(),
+			)
+		})
+
+	return code
 }
