@@ -9,6 +9,13 @@ Supports Solana chain family and Go language.
 Each contract gets its own package subdirectory to avoid naming conflicts.
 For example, data_storage.json generates bindings in generated/data_storage/ package.
 
+Generated bindings include:
+
+- Instruction builders and parsers
+- Account and event type definitions with Borsh marshal/unmarshal
+- Write report helpers (`WriteReportFrom*`) for keystone forwarder integration
+- Log trigger helpers (`LogTrigger*Log`) with typed filters and `Adapt()` decoding
+
 ```
 cre generate-bindings solana [optional flags]
 ```
@@ -16,8 +23,38 @@ cre generate-bindings solana [optional flags]
 ### Examples
 
 ```
-  cre generate-bindings-solana
+  cre generate-bindings solana
 ```
+
+### Log trigger usage
+
+After generating bindings, register a typed log trigger in your workflow:
+
+```go
+ds, _ := datastorage.NewDataStorage(client)
+
+trigger, err := ds.LogTriggerAccessLoggedLog(
+    chainSelector,
+    "access-logged-filter",
+    []datastorage.AccessLoggedFilters{
+        {Caller: &expectedCaller},
+    },
+    nil,
+)
+if err != nil {
+    return nil, err
+}
+
+return cre.Workflow[config.Config]{
+    cre.Handler(trigger, func(cfg config.Config, rt cre.Runtime, log *bindings.DecodedLog[datastorage.AccessLogged]) (string, error) {
+        return log.Data.Message, nil
+    }),
+}, nil
+```
+
+Filter rows use OR semantics per field (mirroring EVM log trigger topic filters). Leave a filter field nil for wildcard. Only top-level scalar event fields are filterable; nested structs, vecs, and arrays require manual `SubkeyConfig`.
+
+For CPI-emitted events, pass `&bindings.LogTriggerOptions{CpiFilterConfig: ...}`.
 
 ### Options
 
@@ -43,4 +80,3 @@ cre generate-bindings solana [optional flags]
 ### SEE ALSO
 
 * [cre generate-bindings](cre_generate-bindings.md)	 - Generate bindings for contracts
-

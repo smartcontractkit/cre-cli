@@ -427,3 +427,5 @@ require (
 replace github.com/gogo/protobuf => github.com/regen-network/protobuf v1.3.3-alpha.regen.1
 
 replace github.com/fbsobreira/gotron-sdk => github.com/smartcontractkit/chainlink-tron/relayer/gotron-sdk v0.0.5-0.20251014143056-a0c6328c91e9
+
+replace github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/solana => ../cre-sdk-go/capabilities/blockchain/solana

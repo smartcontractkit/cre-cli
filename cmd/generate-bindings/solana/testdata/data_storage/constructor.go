@@ -80,9 +80,12 @@ func (c *DataStorage) WriteReportFromBorshEncodedVec(runtime cre.Runtime, elemen
 type DataStorageCodec interface {
 	DecodeDataAccount(data []byte) (*DataAccount, error)
 	EncodeAccessLoggedStruct(in AccessLogged) ([]byte, error)
+	EncodeAccessLoggedSubkeys(filters []AccessLoggedFilters) ([]*solana.SubkeyConfig, error)
 	EncodeDataAccountStruct(in DataAccount) ([]byte, error)
 	EncodeDynamicEventStruct(in DynamicEvent) ([]byte, error)
+	EncodeDynamicEventSubkeys(filters []DynamicEventFilters) ([]*solana.SubkeyConfig, error)
 	EncodeNoFieldsStruct(in NoFields) ([]byte, error)
+	EncodeNoFieldsSubkeys(filters []NoFieldsFilters) ([]*solana.SubkeyConfig, error)
 	EncodeUpdateReservesStruct(in UpdateReserves) ([]byte, error)
 	EncodeUserDataStruct(in UserData) ([]byte, error)
 }
