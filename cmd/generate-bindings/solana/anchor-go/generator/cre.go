@@ -455,6 +455,9 @@ func (g *Generator) getEventStructFields(eventName string) (idl.IdlDefinedFields
 	return nil, fmt.Errorf("type %s not found in IDL", eventName)
 }
 
+// isFilterableField reports whether a field can be auto-generated in <Event>Filters.
+// Inclusion/exclusion mirrors chainlink-solana log poller subkey support: only types
+// that NewIndexedValue can encode and ExtractField can traverse are filterable.
 func isFilterableField(idlType idltype.IdlType) bool {
 	switch {
 	case IsOption(idlType):
@@ -530,7 +533,7 @@ func creEncodeSubkeysForEvent(eventName string, filterFields []eventFilterField)
 		Params(Index().Op("*").Qual(PkgSolanaCre, "SubkeyConfig"), Error()).
 		BlockFunc(func(block *Group) {
 			for _, field := range filterFields {
-				block.Id(field.goName + "Comparers").Op(":=").Make(
+				block.Id(field.goName+"Comparers").Op(":=").Make(
 					Index().Op("*").Qual(PkgSolanaCre, "ValueComparator"), Lit(0),
 				)
 			}
@@ -563,11 +566,11 @@ func creEncodeSubkeysForEvent(eventName string, filterFields []eventFilterField)
 
 			block.Id("subkeys").Op(":=").Make(Index().Op("*").Qual(PkgSolanaCre, "SubkeyConfig"), Lit(0))
 			for _, field := range filterFields {
-				block.If(Len(Id(field.goName+"Comparers")).Op(">").Lit(0)).Block(
+				block.If(Len(Id(field.goName + "Comparers")).Op(">").Lit(0)).Block(
 					Id("subkeys").Op("=").Append(
 						Id("subkeys"),
 						Op("&").Qual(PkgSolanaCre, "SubkeyConfig").Values(Dict{
-							Id("Path"): Index().String().Values(Lit(field.goName)),
+							Id("Path"):      Index().String().Values(Lit(field.goName)),
 							Id("Comparers"): Id(field.goName + "Comparers"),
 						}),
 					),
@@ -584,7 +587,7 @@ func creLogTriggerForEvent(eventName string, g *Generator) Code {
 
 	code.Commentf("%sTrigger wraps the raw log trigger and provides decoded %s data.", exportedName, exportedName)
 	code.Line()
-	code.Type().Id(exportedName+"Trigger").Struct(
+	code.Type().Id(exportedName + "Trigger").Struct(
 		Qual(PkgCRE, "Trigger").Types(
 			Op("*").Qual(PkgSolanaCre, "Log"),
 			Op("*").Qual(PkgSolanaCre, "Log"),
@@ -639,7 +642,7 @@ func creLogTriggerForEvent(eventName string, g *Generator) Code {
 			Error(),
 		).
 		BlockFunc(func(block *Group) {
-			block.List(Id("subkeys"), Id("err")).Op(":=").Id("c").Dot("Codec").Dot("Encode"+exportedName+"Subkeys").Call(Id("filters"))
+			block.List(Id("subkeys"), Id("err")).Op(":=").Id("c").Dot("Codec").Dot("Encode" + exportedName + "Subkeys").Call(Id("filters"))
 			block.If(Id("err").Op("!=").Nil()).Block(
 				Return(Nil(), Qual("fmt", "Errorf").Call(Lit("failed to encode subkeys for "+exportedName+": %w"), Id("err"))),
 			)
