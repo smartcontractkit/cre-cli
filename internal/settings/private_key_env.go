@@ -32,13 +32,6 @@ func ResolveEthPrivateKeyFromEnv(raw string) (EthPrivateKeyHex, error) {
 	return EthPrivateKeyHex(norm), nil
 }
 
-// IsUsablePrivateKeyHex reports whether raw looks like an intentional private key
-// value (non-empty, non-placeholder, valid 64-character hex).
-func IsUsablePrivateKeyHex(raw string) bool {
-	key, err := ResolveEthPrivateKeyFromEnv(raw)
-	return err == nil && key.IsSet()
-}
-
 func isPrivateKeyEnvPlaceholder(s string) bool {
 	_, ok := privateKeyEnvPlaceholders[strings.TrimSpace(s)]
 	return ok

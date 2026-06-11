@@ -72,11 +72,3 @@ func TestResolveEthPrivateKeyFromEnv(t *testing.T) {
 		})
 	}
 }
-
-func TestIsUsablePrivateKeyHex(t *testing.T) {
-	t.Parallel()
-
-	assert.False(t, settings.IsUsablePrivateKeyHex(""))
-	assert.False(t, settings.IsUsablePrivateKeyHex(settings.DefaultEthPrivateKeyEnvPlaceholder))
-	assert.True(t, settings.IsUsablePrivateKeyHex("ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"))
-}
