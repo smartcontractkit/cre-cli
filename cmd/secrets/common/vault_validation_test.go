@@ -22,7 +22,24 @@ func testHandlerWithCapReg(t *testing.T, v *viper.Viper, tenantCtx *tenantctx.En
 	return h
 }
 
+func TestEnsureVaultValidationOrConsent_GateDisabled(t *testing.T) {
+	if vaultValidationGateEnabled {
+		t.Skip("gate enabled; covered by other tests")
+	}
+
+	h := testHandlerWithCapReg(t, viper.New(), &tenantctx.EnvironmentContext{})
+	skip, err := h.EnsureVaultValidationOrConsent(context.Background())
+	require.NoError(t, err)
+	require.True(t, skip)
+	require.True(t, h.SkipVaultValidation())
+	_, ok := h.CapabilitiesRegistryRPC()
+	require.False(t, ok)
+}
+
 func TestEnsureVaultValidationOrConsent_RPCConfigured(t *testing.T) {
+	if !vaultValidationGateEnabled {
+		t.Skip("vault validation gate disabled")
+	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			ID     json.RawMessage `json:"id"`
@@ -68,6 +85,9 @@ func TestEnsureVaultValidationOrConsent_RPCConfigured(t *testing.T) {
 }
 
 func TestEnsureVaultValidationOrConsent_SkipConfirmationWithoutRPC(t *testing.T) {
+	if !vaultValidationGateEnabled {
+		t.Skip("vault validation gate disabled")
+	}
 	v := viper.New()
 	v.Set(settings.CreTargetEnvVar, "staging")
 	v.Set(settings.Flags.SkipConfirmation.Name, true)
@@ -90,6 +110,9 @@ func TestEnsureVaultValidationOrConsent_SkipConfirmationWithoutRPC(t *testing.T)
 }
 
 func TestEnsureVaultValidationOrConsent_NonInteractiveWithoutRPC(t *testing.T) {
+	if !vaultValidationGateEnabled {
+		t.Skip("vault validation gate disabled")
+	}
 	v := viper.New()
 	v.Set(settings.CreTargetEnvVar, "staging")
 	v.Set(settings.Flags.NonInteractive.Name, true)
@@ -109,6 +132,9 @@ func TestEnsureVaultValidationOrConsent_NonInteractiveWithoutRPC(t *testing.T) {
 }
 
 func TestEnsureVaultValidationOrConsent_MissingCapabilitiesRegistry(t *testing.T) {
+	if !vaultValidationGateEnabled {
+		t.Skip("vault validation gate disabled")
+	}
 	v := viper.New()
 	h := testHandlerWithCapReg(t, v, &tenantctx.EnvironmentContext{})
 
