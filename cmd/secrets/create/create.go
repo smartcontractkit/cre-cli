@@ -37,7 +37,7 @@ func New(ctx *runtime.Context) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := common.ValidateSecretsAuthFlow(secretsAuth, ctx.EnvironmentSet.EnvName); err != nil {
+			if err := common.ValidateSecretsAuthFlow(secretsAuth); err != nil {
 				return err
 			}
 
