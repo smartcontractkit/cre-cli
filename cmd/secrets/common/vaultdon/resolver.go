@@ -3,6 +3,7 @@ package vaultdon
 import (
 	"context"
 	"fmt"
+	"math"
 	"math/big"
 
 	vaultcommon "github.com/smartcontractkit/chainlink-common/pkg/capabilities/actions/vault"
@@ -53,7 +54,11 @@ func (r *Resolver) ResolveVaultDON(ctx context.Context) (*VaultDON, error) {
 		if id == nil || !id.IsUint64() {
 			continue
 		}
-		don, err := r.reader.GetDON(ctx, uint32(id.Uint64())) // #nosec G115 -- guarded by IsUint64
+		u := id.Uint64()
+		if u > math.MaxUint32 {
+			return nil, fmt.Errorf("DON id %s overflows uint32", id.String())
+		}
+		don, err := r.reader.GetDON(ctx, uint32(u)) // #nosec G115 -- overflow checked above
 		if err != nil {
 			return nil, err
 		}

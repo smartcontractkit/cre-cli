@@ -12,19 +12,19 @@ import (
 func TestOCRSignerAddresses(t *testing.T) {
 	t.Parallel()
 
+	addrA := common.HexToAddress("0x1111111111111111111111111111111111111111")
+	addrB := common.HexToAddress("0x2222222222222222222222222222222222222222")
+
 	var signerA, signerB [32]byte
-	copy(signerA[12:], common.Hex2Bytes("1111111111111111111111111111111111111111"))
-	copy(signerB[12:], common.Hex2Bytes("2222222222222222222222222222222222222222"))
+	copy(signerA[:20], addrA.Bytes())
+	copy(signerB[:20], addrB.Bytes())
 
 	signers, err := OCRSignerAddresses([]capreg.INodeInfoProviderNodeInfo{
 		{P2pId: [32]byte{1}, Signer: signerA},
 		{P2pId: [32]byte{2}, Signer: signerB},
 	})
 	require.NoError(t, err)
-	require.Equal(t, []common.Address{
-		common.BytesToAddress(signerA[:20]),
-		common.BytesToAddress(signerB[:20]),
-	}, signers)
+	require.Equal(t, []common.Address{addrA, addrB}, signers)
 }
 
 func TestMinOCRSignatures(t *testing.T) {

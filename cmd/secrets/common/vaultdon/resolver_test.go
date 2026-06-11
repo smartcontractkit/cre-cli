@@ -2,6 +2,7 @@ package vaultdon_test
 
 import (
 	"context"
+	"math"
 	"math/big"
 	"testing"
 
@@ -59,9 +60,11 @@ func TestResolveVaultDON(t *testing.T) {
 
 	p2pA := [32]byte{1}
 	p2pB := [32]byte{2}
+	addrA := common.HexToAddress("0x1111111111111111111111111111111111111111")
+	addrB := common.HexToAddress("0x2222222222222222222222222222222222222222")
 	var signerA, signerB [32]byte
-	copy(signerA[12:], common.Hex2Bytes("1111111111111111111111111111111111111111"))
-	copy(signerB[12:], common.Hex2Bytes("2222222222222222222222222222222222222222"))
+	copy(signerA[:20], addrA.Bytes())
+	copy(signerB[:20], addrB.Bytes())
 
 	reader := &mockReader{
 		donIDs: []*big.Int{big.NewInt(7), big.NewInt(9)},
@@ -97,16 +100,27 @@ func TestResolveVaultDON(t *testing.T) {
 
 	signers, err := capabilitiesregistry.OCRSignerAddresses(v.Nodes)
 	require.NoError(t, err)
-	require.Equal(t, []common.Address{
-		common.BytesToAddress(signerA[:20]),
-		common.BytesToAddress(signerB[:20]),
-	}, signers)
+	require.Equal(t, []common.Address{addrA, addrB}, signers)
 	require.Equal(t, 3, capabilitiesregistry.MinOCRSignatures(v.DON.F))
 
 	// Cached on second call.
 	v2, err := resolver.ResolveVaultDON(context.Background())
 	require.NoError(t, err)
 	require.Same(t, v, v2)
+}
+
+func TestResolveVaultDON_DONIDOverflow(t *testing.T) {
+	t.Parallel()
+
+	overflowID := new(big.Int).SetUint64(uint64(math.MaxUint32) + 1)
+	reader := &mockReader{
+		donIDs: []*big.Int{overflowID},
+		dons:   map[uint32]capreg.CapabilitiesRegistryDONInfo{},
+	}
+
+	_, err := vaultdon.NewResolver(reader, "staging-main").ResolveVaultDON(context.Background())
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "overflows uint32")
 }
 
 func TestResolveVaultDON_NoVaultDON(t *testing.T) {
