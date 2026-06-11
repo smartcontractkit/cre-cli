@@ -41,7 +41,7 @@ require (
 	github.com/smartcontractkit/chainlink/v2 v2.29.1-cre-beta.0.0.20260521170940-67f9a4b233f8
 	github.com/smartcontractkit/cre-sdk-go v1.9.0-capdev.1.0.20260605151643-add8be700599
 	github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm v1.0.0-beta.10-capdev.1.0.20260605151643-add8be700599
-	github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/solana v0.1.1-0.20260611165349-654c49de454c
+	github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/solana v0.1.1-0.20260611183538-4223605f03f2
 	github.com/smartcontractkit/mcms v0.45.0
 	github.com/smartcontractkit/tdh2/go/tdh2 v0.0.0-20251120172354-e8ec0386b06c
 	github.com/spf13/cobra v1.10.2

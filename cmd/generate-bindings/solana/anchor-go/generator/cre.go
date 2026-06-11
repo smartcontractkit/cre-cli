@@ -655,9 +655,11 @@ func creLogTriggerForEvent(eventName string, g *Generator) Code {
 				Id("Subkeys"):         Id("subkeys"),
 			})
 			block.If(
-				Id("opts").Op("!=").Nil().Op("&&").Id("opts").Dot("CpiFilterConfig").Op("!=").Nil(),
+				Id("opts").Op("!=").Nil().Op("&&").Id("opts").Dot("CPI"),
 			).Block(
-				Id("req").Dot("CpiFilterConfig").Op("=").Id("opts").Dot("CpiFilterConfig"),
+				Id("req").Dot("CpiFilterConfig").Op("=").Qual(PkgBindings, "AnchorCPILogTriggerConfig").Call(
+					Id("ProgramID").Dot("Bytes").Call(),
+				),
 			)
 
 			block.Id("rawTrigger").Op(":=").Qual(PkgSolanaCre, "LogTrigger").Call(

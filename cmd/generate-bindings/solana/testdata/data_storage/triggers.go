@@ -5,6 +5,7 @@ package data_storage
 
 import (
 	"fmt"
+
 	solanago "github.com/gagliardetto/solana-go"
 	solana "github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/solana"
 	bindings "github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/solana/bindings"
@@ -107,8 +108,8 @@ func (c *DataStorage) LogTriggerAccessLoggedLog(
 		Name:            filterName,
 		Subkeys:         subkeys,
 	}
-	if opts != nil && opts.CpiFilterConfig != nil {
-		req.CpiFilterConfig = opts.CpiFilterConfig
+	if opts != nil && opts.CPI {
+		req.CpiFilterConfig = bindings.AnchorCPILogTriggerConfig(ProgramID.Bytes())
 	}
 	rawTrigger := solana.LogTrigger(chainSelector, req)
 	return &AccessLoggedTrigger{Trigger: rawTrigger}, nil
@@ -217,8 +218,8 @@ func (c *DataStorage) LogTriggerDynamicEventLog(
 		Name:            filterName,
 		Subkeys:         subkeys,
 	}
-	if opts != nil && opts.CpiFilterConfig != nil {
-		req.CpiFilterConfig = opts.CpiFilterConfig
+	if opts != nil && opts.CPI {
+		req.CpiFilterConfig = bindings.AnchorCPILogTriggerConfig(ProgramID.Bytes())
 	}
 	rawTrigger := solana.LogTrigger(chainSelector, req)
 	return &DynamicEventTrigger{Trigger: rawTrigger}, nil
@@ -268,8 +269,8 @@ func (c *DataStorage) LogTriggerNoFieldsLog(
 		Name:            filterName,
 		Subkeys:         subkeys,
 	}
-	if opts != nil && opts.CpiFilterConfig != nil {
-		req.CpiFilterConfig = opts.CpiFilterConfig
+	if opts != nil && opts.CPI {
+		req.CpiFilterConfig = bindings.AnchorCPILogTriggerConfig(ProgramID.Bytes())
 	}
 	rawTrigger := solana.LogTrigger(chainSelector, req)
 	return &NoFieldsTrigger{Trigger: rawTrigger}, nil
