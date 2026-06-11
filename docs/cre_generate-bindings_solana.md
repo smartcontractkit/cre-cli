@@ -9,6 +9,16 @@ Supports Solana chain family and Go language.
 Each contract gets its own package subdirectory to avoid naming conflicts.
 For example, data_storage.json generates bindings in generated/data_storage/ package.
 
+When the IDL defines events, bindings also include a `triggers.go` file with typed log-trigger helpers:
+
+* `<Event>Filters` — optional per-field filter values (nil means wildcard for that field)
+* `Encode<Event>Subkeys` — converts filter rows into `SubkeyConfig` values for the log poller
+* `LogTrigger<Event>Log` — registers a typed trigger that decodes matching logs into `DecodedLog[<Event>]`
+
+Only top-level scalar event fields are auto-filterable (pubkey, string, bytes, bool, integers, floats, and optional wrappers around those).
+Nested structs, vecs, and arrays are omitted from generated filters; build `SubkeyConfig` manually for those paths.
+Multiple filter rows OR values within the same field; different fields in the same registration are ANDed together.
+
 ```
 cre generate-bindings solana [optional flags]
 ```

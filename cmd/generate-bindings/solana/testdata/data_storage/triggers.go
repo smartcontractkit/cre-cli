@@ -74,7 +74,6 @@ func (c *Codec) EncodeAccessLoggedSubkeys(filters []AccessLoggedFilters) ([]*sol
 // AccessLoggedTrigger wraps the raw log trigger and provides decoded AccessLogged data.
 type AccessLoggedTrigger struct {
 	cre.Trigger[*solana.Log, *solana.Log]
-	contract *DataStorage
 }
 
 // Adapt decodes the log into AccessLogged event data.
@@ -111,10 +110,7 @@ func (c *DataStorage) LogTriggerAccessLoggedLog(
 		req.CpiFilterConfig = opts.CpiFilterConfig
 	}
 	rawTrigger := solana.LogTrigger(chainSelector, req)
-	return &AccessLoggedTrigger{
-		Trigger:  rawTrigger,
-		contract: c,
-	}, nil
+	return &AccessLoggedTrigger{Trigger: rawTrigger}, nil
 }
 
 // DynamicEventFilters holds optional filter values for DynamicEvent log triggers.
@@ -188,7 +184,6 @@ func (c *Codec) EncodeDynamicEventSubkeys(filters []DynamicEventFilters) ([]*sol
 // DynamicEventTrigger wraps the raw log trigger and provides decoded DynamicEvent data.
 type DynamicEventTrigger struct {
 	cre.Trigger[*solana.Log, *solana.Log]
-	contract *DataStorage
 }
 
 // Adapt decodes the log into DynamicEvent event data.
@@ -225,10 +220,7 @@ func (c *DataStorage) LogTriggerDynamicEventLog(
 		req.CpiFilterConfig = opts.CpiFilterConfig
 	}
 	rawTrigger := solana.LogTrigger(chainSelector, req)
-	return &DynamicEventTrigger{
-		Trigger:  rawTrigger,
-		contract: c,
-	}, nil
+	return &DynamicEventTrigger{Trigger: rawTrigger}, nil
 }
 
 // NoFieldsFilters holds optional filter values for NoFields log triggers.
@@ -243,7 +235,6 @@ func (c *Codec) EncodeNoFieldsSubkeys(filters []NoFieldsFilters) ([]*solana.Subk
 // NoFieldsTrigger wraps the raw log trigger and provides decoded NoFields data.
 type NoFieldsTrigger struct {
 	cre.Trigger[*solana.Log, *solana.Log]
-	contract *DataStorage
 }
 
 // Adapt decodes the log into NoFields event data.
@@ -280,8 +271,5 @@ func (c *DataStorage) LogTriggerNoFieldsLog(
 		req.CpiFilterConfig = opts.CpiFilterConfig
 	}
 	rawTrigger := solana.LogTrigger(chainSelector, req)
-	return &NoFieldsTrigger{
-		Trigger:  rawTrigger,
-		contract: c,
-	}, nil
+	return &NoFieldsTrigger{Trigger: rawTrigger}, nil
 }

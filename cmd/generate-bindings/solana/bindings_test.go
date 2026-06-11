@@ -235,6 +235,65 @@ func TestLogTrigger(t *testing.T) {
 		require.Equal(t, mockLog, decodedLog.Log)
 	})
 
+	t.Run("DynamicEvent scalar filters exclude nested and vec fields", func(t *testing.T) {
+		key := "lookup-key"
+		sender := "alice"
+		metadata := []byte{0xde, 0xad, 0xbe, 0xef}
+
+		filters := []datastorage.DynamicEventFilters{
+			{Key: &key},
+			{Sender: &sender},
+			{Metadata: &metadata},
+		}
+
+		subkeys, err := ds.Codec.EncodeDynamicEventSubkeys(filters)
+		require.NoError(t, err)
+		require.Len(t, subkeys, 3)
+
+		paths := make([]string, len(subkeys))
+		for i, subkey := range subkeys {
+			require.Len(t, subkey.Path, 1)
+			paths[i] = subkey.Path[0]
+			require.Len(t, subkey.Comparers, 1)
+		}
+		require.Contains(t, paths, "Key")
+		require.Contains(t, paths, "Sender")
+		require.Contains(t, paths, "Metadata")
+
+		trigger, err := ds.LogTriggerDynamicEventLog(
+			anyChainSelector,
+			"dynamic-event-filter",
+			filters,
+			nil,
+		)
+		require.NoError(t, err)
+		require.NotNil(t, trigger)
+
+		event := datastorage.DynamicEvent{
+			Key:    key,
+			Sender: sender,
+			UserData: datastorage.UserData{
+				Key:   "nested-key",
+				Value: "nested-value",
+			},
+			Metadata:      metadata,
+			MetadataArray: [][]byte{{0x01}, {0x02}},
+		}
+		eventData, err := event.Marshal()
+		require.NoError(t, err)
+		fullData := append(datastorage.Event_DynamicEvent[:], eventData...)
+
+		mockLog := &solanasdk.Log{Data: fullData}
+		decodedLog, err := trigger.Adapt(mockLog)
+		require.NoError(t, err)
+		require.NotNil(t, decodedLog)
+		require.Equal(t, key, decodedLog.Data.Key)
+		require.Equal(t, sender, decodedLog.Data.Sender)
+		require.Equal(t, metadata, decodedLog.Data.Metadata)
+		require.Equal(t, "nested-key", decodedLog.Data.UserData.Key)
+		require.Len(t, decodedLog.Data.MetadataArray, 2)
+	})
+
 	t.Run("NoFields empty filters", func(t *testing.T) {
 		trigger, err := ds.LogTriggerNoFieldsLog(
 			anyChainSelector,

@@ -411,15 +411,12 @@ func (g *Generator) generateCodecMethods() ([]Code, error) {
 		return nil, err
 	}
 
-	eventSubkeyMethods, err := g.generateCodecEventSubkeyMethods()
-	if err != nil {
-		return nil, err
-	}
+	eventSubkeyMethods := g.generateCodecEventSubkeyMethods()
 
 	return append(append(accountMethods, structMethods...), eventSubkeyMethods...), nil
 }
 
-func (g *Generator) generateCodecEventSubkeyMethods() ([]Code, error) {
+func (g *Generator) generateCodecEventSubkeyMethods() []Code {
 	methods := make([]Code, 0, len(g.idl.Events))
 	for _, event := range g.idl.Events {
 		exportedName := tools.ToCamelUpper(event.Name)
@@ -431,7 +428,7 @@ func (g *Generator) generateCodecEventSubkeyMethods() ([]Code, error) {
 			)
 		methods = append(methods, m)
 	}
-	return methods, nil
+	return methods
 }
 
 func (g *Generator) getEventStructFields(eventName string) (idl.IdlDefinedFieldsNamed, error) {
@@ -452,7 +449,7 @@ func (g *Generator) getEventStructFields(eventName string) (idl.IdlDefinedFields
 		case idl.IdlDefinedFieldsTuple:
 			return nil, fmt.Errorf("event %s uses tuple fields, not supported for log triggers", eventName)
 		default:
-			return idl.IdlDefinedFieldsNamed{}, nil
+			return nil, fmt.Errorf("event %s has unsupported field layout %T", eventName, structTy.Fields)
 		}
 	}
 	return nil, fmt.Errorf("type %s not found in IDL", eventName)
@@ -485,7 +482,6 @@ func filterFieldGoType(idlType idltype.IdlType) Code {
 
 type eventFilterField struct {
 	goName string
-	idlName string
 	ty     idltype.IdlType
 }
 
@@ -496,9 +492,8 @@ func getEventFilterFields(fields idl.IdlDefinedFieldsNamed) []eventFilterField {
 			continue
 		}
 		result = append(result, eventFilterField{
-			goName:  tools.ToCamelUpper(field.Name),
-			idlName: field.Name,
-			ty:      field.Ty,
+			goName: tools.ToCamelUpper(field.Name),
+			ty:     field.Ty,
 		})
 	}
 	return result
@@ -587,7 +582,6 @@ func creLogTriggerForEvent(eventName string, g *Generator) Code {
 			Op("*").Qual(PkgSolanaCre, "Log"),
 			Op("*").Qual(PkgSolanaCre, "Log"),
 		),
-		Id("contract").Op("*").Id(pkg),
 	)
 	code.Line()
 
@@ -662,8 +656,7 @@ func creLogTriggerForEvent(eventName string, g *Generator) Code {
 			)
 			block.Return(
 				Op("&").Id(exportedName+"Trigger").Values(Dict{
-					Id("Trigger"):  Id("rawTrigger"),
-					Id("contract"): Id("c"),
+					Id("Trigger"): Id("rawTrigger"),
 				}),
 				Nil(),
 			)
