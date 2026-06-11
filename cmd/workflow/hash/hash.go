@@ -44,7 +44,6 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 			s := runtimeContext.Settings
 			v := runtimeContext.Viper
 
-			rawPrivKey := v.GetString(settings.EthPrivateKeyEnvVar)
 			registryType, err := resolveRegistryType(runtimeContext)
 			if err != nil {
 				return err
@@ -57,7 +56,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 				WorkflowName:      s.Workflow.UserWorkflowSettings.WorkflowName,
 				WorkflowPath:      s.Workflow.WorkflowArtifactSettings.WorkflowPath,
 				OwnerFromSettings: s.Workflow.UserWorkflowSettings.WorkflowOwnerAddress,
-				PrivateKey:        settings.NormalizeHexKey(rawPrivKey),
+				PrivateKey:        s.User.EthPrivateKey.Hex(),
 				SkipTypeChecks:    v.GetBool(cmdcommon.SkipTypeChecksCLIFlag),
 				RegistryType:      registryType,
 				DerivedOwner:      runtimeContext.DerivedWorkflowOwner,
