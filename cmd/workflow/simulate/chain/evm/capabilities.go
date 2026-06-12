@@ -15,7 +15,7 @@ import (
 
 // EVMChainCapabilities holds the EVM chain capability servers created for simulation.
 type EVMChainCapabilities struct {
-	EVMChains map[uint64]*fakes.FakeEVMChain
+	EVMChains map[uint64]*ManualEVMChain
 }
 
 // NewEVMChainCapabilities creates EVM chain capability servers and registers them
@@ -31,7 +31,7 @@ func NewEVMChainCapabilities(
 	dryRunChainWrite bool,
 	limits EVMChainLimits,
 ) (*EVMChainCapabilities, error) {
-	evmChains := make(map[uint64]*fakes.FakeEVMChain)
+	evmChains := make(map[uint64]*ManualEVMChain)
 	for sel, client := range clients {
 		fwdStr, ok := forwarders[sel]
 		if !ok {
@@ -54,12 +54,13 @@ func NewEVMChainCapabilities(
 			evmCap = NewLimitedEVMChain(evm, limits)
 		}
 
-		evmServer := evmserver.NewClientServer(evmCap)
+		manualEVM := NewManualEVMChain(evmCap)
+		evmServer := evmserver.NewClientServer(manualEVM)
 		if err := registry.Add(ctx, evmServer); err != nil {
 			return nil, err
 		}
 
-		evmChains[sel] = evm
+		evmChains[sel] = manualEVM
 	}
 
 	return &EVMChainCapabilities{
