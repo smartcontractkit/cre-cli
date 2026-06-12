@@ -139,6 +139,9 @@ func TestEnsureVaultValidationOrConsent_NonInteractiveWithoutRPC(t *testing.T) {
 }
 
 func TestEnsureVaultValidationOrConsent_MissingDonFamily(t *testing.T) {
+	if !vaultValidationGateEnabled {
+		t.Skip("vault validation gate disabled")
+	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			ID json.RawMessage `json:"id"`
