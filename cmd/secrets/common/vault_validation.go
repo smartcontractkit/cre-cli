@@ -11,11 +11,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
-const vaultValidationSkippedWarning = "Vault gateway validation skipped; the encryption key and response signatures will not be verified independently of the gateway."
-
-// vaultValidationGateEnabled toggles CapabilitiesRegistry RPC resolution and consent
-// before secrets commands.
-const vaultValidationGateEnabled = false
+const vaultValidationSkippedWarning = "Vault gateway validation skipped; response signatures will not be verified independently of the gateway."
 
 // EnsureVaultValidationOrConsent resolves CapabilitiesRegistry RPC settings and either
 // enables on-chain validation (skipValidation=false) or obtains explicit consent to
@@ -24,12 +20,6 @@ const vaultValidationGateEnabled = false
 func (h *Handler) EnsureVaultValidationOrConsent(ctx context.Context) (skipValidation bool, err error) {
 	if h.vaultValidationDecided {
 		return h.skipVaultValidation, nil
-	}
-
-	if !vaultValidationGateEnabled {
-		h.skipVaultValidation = true
-		h.vaultValidationDecided = true
-		return true, nil
 	}
 
 	rpcURL, chainName, ok, err := settings.ResolveCapabilitiesRegistryRPC(h.Viper, h.TenantContext)
@@ -65,7 +55,7 @@ func (h *Handler) EnsureVaultValidationOrConsent(ctx context.Context) (skipValid
 	}
 
 	prompt := fmt.Sprintf(
-		"Vault gateway responses cannot be validated without an RPC for %s in your project settings. Proceeding without validation means the CLI cannot verify the encryption key or DON signatures independently of the gateway. Proceed anyway?",
+		"Vault gateway responses cannot be validated without an RPC for %s in your project settings. Proceeding without validation means the CLI cannot verify DON signatures independently of the gateway. Proceed anyway?",
 		chainName,
 	)
 	proceed, err := ui.Confirm(prompt)

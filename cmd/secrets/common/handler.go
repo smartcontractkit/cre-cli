@@ -269,50 +269,38 @@ func (h *Handler) LogMSIGNextSteps(txData string, digest [32]byte, bundlePath st
 	return nil
 }
 
-// fetchVaultMasterPublicKeyHex loads the vault master public key from the gateway (publicKey/get).
-func (h *Handler) fetchVaultMasterPublicKeyHex() (string, error) {
-	requestID := uuid.New().String()
-	getPublicKeyRequest := jsonrpc2.Request[vault.GetPublicKeyRequest]{
-		Version: jsonrpc2.JsonRpcVersion,
-		ID:      requestID,
-		Method:  vaulttypes.MethodPublicKeyGet,
-		Params:  &vault.GetPublicKeyRequest{},
+// vaultMasterPublicKeyHex loads the vault master public key from the tenant CapabilitiesRegistry.
+func (h *Handler) vaultMasterPublicKeyHex(ctx context.Context) (string, error) {
+	if err := h.ensureVaultDONResolver(ctx); err != nil {
+		return "", err
 	}
 
-	reqBody, err := json.Marshal(getPublicKeyRequest)
+	v, err := h.vaultDONResolver.ResolveVaultDON(ctx)
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal public key request: %w", err)
+		return "", fmt.Errorf("resolve vault DON: %w", err)
 	}
 
-	respBody, status, err := h.Gw.Post(reqBody)
+	pubKeyHex, err := vaultdon.VaultPublicKeyHex(v)
 	if err != nil {
-		return "", fmt.Errorf("gateway POST failed: %w", err)
+		return "", fmt.Errorf("read vault public key from CapabilitiesRegistry: %w", err)
 	}
-	if status != http.StatusOK {
-		return "", fmt.Errorf("gateway returned non-200: %d body=%s", status, string(respBody))
+	return pubKeyHex, nil
+}
+
+func (h *Handler) ensureVaultDONResolver(ctx context.Context) error {
+	if h.vaultDONResolver != nil {
+		return nil
 	}
 
-	var rpcResp jsonrpc2.Response[vault.GetPublicKeyResponse]
-	if err := json.Unmarshal(respBody, &rpcResp); err != nil {
-		return "", fmt.Errorf("failed to unmarshal public key response: %w", err)
+	rpcURL, chainName, ok, err := settings.ResolveCapabilitiesRegistryRPC(h.Viper, h.TenantContext)
+	if err != nil {
+		return err
 	}
-	if rpcResp.Error != nil {
-		return "", fmt.Errorf("vault public key fetch error: %s", rpcResp.Error.Error())
-	}
-	if rpcResp.Version != jsonrpc2.JsonRpcVersion {
-		return "", fmt.Errorf("jsonrpc version mismatch: got %q", rpcResp.Version)
-	}
-	if rpcResp.ID != requestID {
-		return "", fmt.Errorf("jsonrpc id mismatch: got %q want %q", rpcResp.ID, requestID)
-	}
-	if rpcResp.Method != vaulttypes.MethodPublicKeyGet {
-		return "", fmt.Errorf("jsonrpc method mismatch: got %q", rpcResp.Method)
-	}
-	if rpcResp.Result == nil || rpcResp.Result.PublicKey == "" {
-		return "", fmt.Errorf("empty result in public key response")
+	if !ok {
+		return fmt.Errorf("encrypting secrets requires an RPC for %s in project settings", chainName)
 	}
 
-	return rpcResp.Result.PublicKey, nil
+	return h.initVaultDONResolver(ctx, rpcURL)
 }
 
 // ResolveEffectiveOwner returns the checksummed workflow owner address for owner-key vault operations.
@@ -347,7 +335,12 @@ func (h *Handler) ResolveVaultIdentifierOwnerForAuth(secretsAuth string) (string
 // TDH2 label is the workflow owner address left-padded to 32 bytes; SecretIdentifier.Owner is the same hex address string.
 // Each item's Value slice is zeroed in place as it is encrypted; callers must not reuse rawSecrets afterward.
 func (h *Handler) EncryptSecrets(rawSecrets UpsertSecretsInputs, owner string) ([]*vault.EncryptedSecret, error) {
-	pubKeyHex, err := h.fetchVaultMasterPublicKeyHex()
+	ctx := h.execCtx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	pubKeyHex, err := h.vaultMasterPublicKeyHex(ctx)
 	if err != nil {
 		return nil, err
 	}

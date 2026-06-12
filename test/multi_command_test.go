@@ -14,6 +14,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
+	testcontracts "github.com/smartcontractkit/cre-cli/test/contracts"
 	"github.com/smartcontractkit/cre-cli/test/multi_command_flows"
 )
 
@@ -185,6 +186,9 @@ func TestMultiCommandHappyPaths(t *testing.T) {
 		t.Setenv("TESTID_ENV", "testval")
 		t.Setenv("TESTID_ENV_UPDATED", "testval2")
 
+		sethClient := testcontracts.NewSethClientWithContracts(t, L, testEthUrl, constants.TestAnvilChainID, SethConfigPath)
+		capRegAddr := testcontracts.DeployVaultCapabilitiesRegistry(t, sethClient, multi_command_flows.VaultPublicKeyHex, "zone-a")
+
 		tc := NewTestConfig(t)
 
 		// Use linked Address3 + its key
@@ -193,7 +197,7 @@ func TestMultiCommandHappyPaths(t *testing.T) {
 		t.Cleanup(tc.Cleanup(t))
 
 		// Run secrets happy path workflow
-		multi_command_flows.RunSecretsHappyPath(t, tc, chainselectors.ANVIL_DEVNET.Name)
+		multi_command_flows.RunSecretsHappyPath(t, tc, chainselectors.ANVIL_DEVNET.Name, capRegAddr.Hex())
 	})
 
 	// Run Secrets List with Unsigned
