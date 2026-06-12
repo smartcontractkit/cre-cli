@@ -93,6 +93,12 @@ func (g *Generator) Generate() (*Output, error) {
 				return nil, err
 			}
 			output.Files = append(output.Files, file)
+
+			file, err = g.genfile_triggers()
+			if err != nil {
+				return nil, err
+			}
+			output.Files = append(output.Files, file)
 		}
 		{
 			file, err := g.genfile_constructor()
