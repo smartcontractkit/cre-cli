@@ -87,6 +87,8 @@ func New(ctx *runtime.Context) *cobra.Command {
 
 // Execute performs: build request → (MSIG step 1 bundle OR EOA allowlist+post) → parse.
 func Execute(ctx context.Context, h *common.Handler, namespace string, duration time.Duration, secretsAuth string) error {
+	defer h.CloseCapRegClient()
+
 	if _, err := h.EnsureVaultValidationOrConsent(ctx); err != nil {
 		return err
 	}

@@ -41,6 +41,7 @@ func New(ctx *runtime.Context) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			defer h.CloseCapRegClient()
 
 			// Load the bundle, error if missing fields in json
 			b, err := common.LoadBundle(bundlePath)
