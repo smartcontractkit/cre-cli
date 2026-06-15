@@ -200,7 +200,6 @@ func TestEncryptSecrets(t *testing.T) {
 			donIDs: []*big.Int{big.NewInt(1)},
 			dons:   map[uint32]capreg.CapabilitiesRegistryDONInfo{},
 		}, "zone-a")
-		h.execCtx = context.Background()
 
 		enc, err := h.EncryptSecrets(UpsertSecretsInputs{{ID: "s", Value: []byte("v"), Namespace: "n"}}, "0xabc")
 		require.Error(t, err)

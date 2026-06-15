@@ -70,5 +70,4 @@ func attachMockVaultDONResolver(t *testing.T, h *Handler, vaultPublicKeyHex stri
 
 	h.vaultDONResolver = vaultdon.NewResolver(reader, "zone-a")
 	h.skipVaultValidation = false
-	h.execCtx = context.Background()
 }

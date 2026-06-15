@@ -402,12 +402,7 @@ func (h *Handler) ResolveVaultIdentifierOwnerForAuth(secretsAuth string) (string
 // TDH2 label is the workflow owner address left-padded to 32 bytes; SecretIdentifier.Owner is the same hex address string.
 // Each item's Value slice is zeroed in place as it is encrypted; callers must not reuse rawSecrets afterward.
 func (h *Handler) EncryptSecrets(rawSecrets UpsertSecretsInputs, owner string) ([]*vault.EncryptedSecret, error) {
-	ctx := h.execCtx
-	if ctx == nil {
-		ctx = context.Background()
-	}
-
-	pubKeyHex, err := h.vaultMasterPublicKeyHex(ctx)
+	pubKeyHex, err := h.vaultMasterPublicKeyHex(h.execCtx)
 	if err != nil {
 		return nil, err
 	}
