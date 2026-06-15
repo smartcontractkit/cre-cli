@@ -5,21 +5,25 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"math/big"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/rs/zerolog"
-	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	vaultcommon "github.com/smartcontractkit/chainlink-common/pkg/capabilities/actions/vault"
+	"github.com/smartcontractkit/chainlink-common/pkg/jsonrpc2"
 	capreg "github.com/smartcontractkit/chainlink-evm/gethwrappers/workflow/generated/capabilities_registry_wrapper_v2"
 	"github.com/smartcontractkit/chainlink-evm/gethwrappers/workflow/generated/workflow_registry_wrapper_v2"
+	"github.com/smartcontractkit/chainlink/v2/core/capabilities/vault/vaulttypes"
 
 	"github.com/smartcontractkit/cre-cli/cmd/secrets/common/gateway"
 	"github.com/smartcontractkit/cre-cli/cmd/secrets/common/vaultdon"
@@ -65,12 +69,33 @@ func TestZeroUpsertSecretValues(t *testing.T) {
 	}
 }
 
-func TestEncryptSecrets(t *testing.T) {
-	h, _, _ := newMockHandler(t)
-	h.OwnerAddress = "0xabc"
-	attachMockVaultDONResolver(t, h, vaultPublicKeyHex)
+func attachGatewayPublicKeyMock(t *testing.T, h *Handler, publicKeyHex string) {
+	t.Helper()
+	h.Gw = &mockGatewayClient{
+		post: func(body []byte) ([]byte, int, error) {
+			var req jsonrpc2.Request[vaultcommon.GetPublicKeyRequest]
+			require.NoError(t, json.Unmarshal(body, &req))
+			require.Equal(t, jsonrpc2.JsonRpcVersion, req.Version)
+			require.Equal(t, vaulttypes.MethodPublicKeyGet, req.Method)
 
-	t.Run("success - encrypts secrets with CapabilitiesRegistry public key", func(t *testing.T) {
+			resp := jsonrpc2.Response[vaultcommon.GetPublicKeyResponse]{
+				Version: jsonrpc2.JsonRpcVersion,
+				ID:      req.ID,
+				Method:  vaulttypes.MethodPublicKeyGet,
+				Result:  &vaultcommon.GetPublicKeyResponse{PublicKey: publicKeyHex},
+			}
+			b, err := json.Marshal(resp)
+			return b, http.StatusOK, err
+		},
+	}
+}
+
+func TestEncryptSecrets(t *testing.T) {
+	t.Run("success - encrypts secrets with a gateway-fetched public key", func(t *testing.T) {
+		h, _, _ := newMockHandler(t)
+		h.OwnerAddress = "0xabc"
+		attachGatewayPublicKeyMock(t, h, vaultPublicKeyHex)
+
 		raw := UpsertSecretsInputs{
 			{ID: "test-secret-1", Value: []byte("value1"), Namespace: "ns1"},
 			{ID: "test-secret-2", Value: []byte("another-value"), Namespace: "ns2"},
@@ -88,7 +113,6 @@ func TestEncryptSecrets(t *testing.T) {
 		require.Equal(t, "ns2", enc[1].Id.Namespace)
 		require.Equal(t, "0xabc", enc[1].Id.Owner)
 
-		// We can't (and don't need to) decrypt here; just assert it's valid hex and non-empty.
 		_, err = hex.DecodeString(enc[0].EncryptedValue)
 		require.NoError(t, err)
 		require.NotEmpty(t, enc[0].EncryptedValue)
@@ -102,45 +126,83 @@ func TestEncryptSecrets(t *testing.T) {
 		}
 	})
 
-	t.Run("failure - CapabilitiesRegistry resolver unavailable", func(t *testing.T) {
-		h2, _, _ := newMockHandler(t)
-		h2.OwnerAddress = "0xabc"
-		h2.TenantContext = &tenantctx.EnvironmentContext{
-			CapabilitiesRegistry: &tenantctx.OnChainContract{
-				ChainSelector: 16015286601757825753,
-				Address:       "0x7f3191EaF73429177bAB3bAc5c36Ed2D5E39985f",
+	t.Run("success - gateway key matches CapabilitiesRegistry when RPC is configured", func(t *testing.T) {
+		h, _, _ := newMockHandler(t)
+		h.OwnerAddress = "0xabc"
+		attachGatewayPublicKeyMock(t, h, vaultPublicKeyHex)
+		attachMockVaultDONResolver(t, h, vaultPublicKeyHex)
+
+		enc, err := h.EncryptSecrets(UpsertSecretsInputs{{ID: "s", Value: []byte("v"), Namespace: "n"}}, "0xabc")
+		require.NoError(t, err)
+		require.Len(t, enc, 1)
+	})
+
+	t.Run("failure - gateway key does not match CapabilitiesRegistry", func(t *testing.T) {
+		h, _, _ := newMockHandler(t)
+		h.OwnerAddress = "0xabc"
+		attachGatewayPublicKeyMock(t, h, vaultPublicKeyHex)
+		attachMockVaultDONResolver(t, h, "deadbeef")
+
+		enc, err := h.EncryptSecrets(UpsertSecretsInputs{{ID: "s", Value: []byte("v"), Namespace: "n"}}, "0xabc")
+		require.Error(t, err)
+		require.Nil(t, enc)
+		require.Contains(t, err.Error(), "does not match CapabilitiesRegistry")
+	})
+
+	t.Run("failure - gateway POST error", func(t *testing.T) {
+		h, _, _ := newMockHandler(t)
+		h.OwnerAddress = "0xabc"
+		h.Gw = &mockGatewayClient{
+			post: func(_ []byte) ([]byte, int, error) {
+				return nil, 0, errors.New("network down")
 			},
 		}
-		v := viper.New()
-		v.Set(settings.CreTargetEnvVar, "staging")
-		h2.Viper = v
 
-		enc, err := h2.EncryptSecrets(UpsertSecretsInputs{{ID: "s", Value: []byte("v"), Namespace: "n"}}, "0xabc")
+		enc, err := h.EncryptSecrets(UpsertSecretsInputs{{ID: "s", Value: []byte("v"), Namespace: "n"}}, "0xabc")
 		require.Error(t, err)
 		require.Nil(t, enc)
-		require.Contains(t, err.Error(), "encrypting secrets requires an RPC")
+		require.Contains(t, err.Error(), "gateway POST failed")
 	})
 
-	t.Run("failure - capabilities registry missing from user context", func(t *testing.T) {
-		h2, _, _ := newMockHandler(t)
-		h2.OwnerAddress = "0xabc"
+	t.Run("failure - JSON-RPC error from gateway", func(t *testing.T) {
+		h, _, _ := newMockHandler(t)
+		h.OwnerAddress = "0xabc"
+		h.Gw = &mockGatewayClient{
+			post: func(body []byte) ([]byte, int, error) {
+				var req jsonrpc2.Request[vaultcommon.GetPublicKeyRequest]
+				_ = json.Unmarshal(body, &req)
 
-		enc, err := h2.EncryptSecrets(UpsertSecretsInputs{{ID: "s", Value: []byte("v"), Namespace: "n"}}, "0xabc")
+				resp := map[string]any{
+					"jsonrpc": jsonrpc2.JsonRpcVersion,
+					"id":      req.ID,
+					"method":  vaulttypes.MethodPublicKeyGet,
+					"error": map[string]any{
+						"code":    -32000,
+						"message": "pk error",
+					},
+				}
+				b, _ := json.Marshal(resp)
+				return b, http.StatusOK, nil
+			},
+		}
+
+		enc, err := h.EncryptSecrets(UpsertSecretsInputs{{ID: "s", Value: []byte("v"), Namespace: "n"}}, "0xabc")
 		require.Error(t, err)
 		require.Nil(t, enc)
-		require.Contains(t, err.Error(), "capabilities registry is not configured")
+		require.Contains(t, err.Error(), "vault public key fetch error")
 	})
 
-	t.Run("failure - vault DON resolution error", func(t *testing.T) {
-		h3, _, _ := newMockHandler(t)
-		h3.OwnerAddress = "0xabc"
-		h3.vaultDONResolver = vaultdon.NewResolver(&mockCapRegReader{
+	t.Run("failure - vault DON resolution error when RPC is configured", func(t *testing.T) {
+		h, _, _ := newMockHandler(t)
+		h.OwnerAddress = "0xabc"
+		attachGatewayPublicKeyMock(t, h, vaultPublicKeyHex)
+		h.vaultDONResolver = vaultdon.NewResolver(&mockCapRegReader{
 			donIDs: []*big.Int{big.NewInt(1)},
 			dons:   map[uint32]capreg.CapabilitiesRegistryDONInfo{},
 		}, "zone-a")
-		h3.execCtx = context.Background()
+		h.execCtx = context.Background()
 
-		enc, err := h3.EncryptSecrets(UpsertSecretsInputs{{ID: "s", Value: []byte("v"), Namespace: "n"}}, "0xabc")
+		enc, err := h.EncryptSecrets(UpsertSecretsInputs{{ID: "s", Value: []byte("v"), Namespace: "n"}}, "0xabc")
 		require.Error(t, err)
 		require.Nil(t, enc)
 		require.Contains(t, err.Error(), "resolve vault DON")
@@ -221,7 +283,7 @@ func TestResolveVaultIdentifierOwnerForAuth(t *testing.T) {
 func TestEncryptSecrets_UsesWorkflowOwnerAddress(t *testing.T) {
 	h, _, _ := newMockHandler(t)
 	h.OwnerAddress = "0xabc"
-	attachMockVaultDONResolver(t, h, vaultPublicKeyHex)
+	attachGatewayPublicKeyMock(t, h, vaultPublicKeyHex)
 
 	enc, err := h.EncryptSecrets(UpsertSecretsInputs{
 		{ID: "secret-1", Value: []byte("val1"), Namespace: "main"},

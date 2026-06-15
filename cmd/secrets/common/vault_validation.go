@@ -11,7 +11,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
-const vaultValidationSkippedWarning = "Vault gateway validation skipped; response signatures will not be verified independently of the gateway."
+const vaultValidationSkippedWarning = "Vault gateway validation skipped; the encryption key and response signatures will not be verified independently of the gateway."
 
 // EnsureVaultValidationOrConsent resolves CapabilitiesRegistry RPC settings and either
 // enables on-chain validation (skipValidation=false) or obtains explicit consent to
@@ -55,7 +55,7 @@ func (h *Handler) EnsureVaultValidationOrConsent(ctx context.Context) (skipValid
 	}
 
 	prompt := fmt.Sprintf(
-		"Vault gateway responses cannot be validated without an RPC for %s in your project settings. Proceeding without validation means the CLI cannot verify DON signatures independently of the gateway. Proceed anyway?",
+		"Vault gateway responses cannot be validated without an RPC for %s in your project settings. Proceeding without validation means the CLI cannot verify the encryption key or DON signatures independently of the gateway. Proceed anyway?",
 		chainName,
 	)
 	proceed, err := ui.Confirm(prompt)

@@ -106,9 +106,19 @@ func RunSecretsHappyPath(t *testing.T, tc TestConfig, chainName string, capRegAd
 		var req reqEnvelope
 		_ = json.NewDecoder(r.Body).Decode(&req)
 
-		// Handle vault secrets methods (public key now comes from CapabilitiesRegistry).
+		// Handle the vault master public key fetch and secrets RPC methods.
 		if req.Method == vaulttypes.MethodPublicKeyGet {
-			t.Fatal("unexpected publicKey/get request; vault master key must come from CapabilitiesRegistry")
+			type pkResult struct {
+				PublicKey string `json:"publicKey"`
+			}
+			out := map[string]any{
+				"jsonrpc": "2.0",
+				"id":      req.ID,
+				"method":  vaulttypes.MethodPublicKeyGet,
+				"result":  pkResult{PublicKey: VaultPublicKeyHex},
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(out)
 			return
 		}
 

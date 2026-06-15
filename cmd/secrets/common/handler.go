@@ -269,17 +269,57 @@ func (h *Handler) LogMSIGNextSteps(txData string, digest [32]byte, bundlePath st
 	return nil
 }
 
-// vaultMasterPublicKeyHex loads the vault master public key from the tenant CapabilitiesRegistry.
-func (h *Handler) vaultMasterPublicKeyHex(ctx context.Context) (string, error) {
-	if err := h.ensureVaultDONResolver(ctx); err != nil {
-		return "", err
+// fetchVaultMasterPublicKeyHex loads the vault master public key from the gateway (publicKey/get).
+func (h *Handler) fetchVaultMasterPublicKeyHex() (string, error) {
+	requestID := uuid.New().String()
+	getPublicKeyRequest := jsonrpc2.Request[vault.GetPublicKeyRequest]{
+		Version: jsonrpc2.JsonRpcVersion,
+		ID:      requestID,
+		Method:  vaulttypes.MethodPublicKeyGet,
+		Params:  &vault.GetPublicKeyRequest{},
 	}
 
+	reqBody, err := json.Marshal(getPublicKeyRequest)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal public key request: %w", err)
+	}
+
+	respBody, status, err := h.Gw.Post(reqBody)
+	if err != nil {
+		return "", fmt.Errorf("gateway POST failed: %w", err)
+	}
+	if status != http.StatusOK {
+		return "", fmt.Errorf("gateway returned non-200: %d body=%s", status, string(respBody))
+	}
+
+	var rpcResp jsonrpc2.Response[vault.GetPublicKeyResponse]
+	if err := json.Unmarshal(respBody, &rpcResp); err != nil {
+		return "", fmt.Errorf("failed to unmarshal public key response: %w", err)
+	}
+	if rpcResp.Error != nil {
+		return "", fmt.Errorf("vault public key fetch error: %s", rpcResp.Error.Error())
+	}
+	if rpcResp.Version != jsonrpc2.JsonRpcVersion {
+		return "", fmt.Errorf("jsonrpc version mismatch: got %q", rpcResp.Version)
+	}
+	if rpcResp.ID != requestID {
+		return "", fmt.Errorf("jsonrpc id mismatch: got %q want %q", rpcResp.ID, requestID)
+	}
+	if rpcResp.Method != vaulttypes.MethodPublicKeyGet {
+		return "", fmt.Errorf("jsonrpc method mismatch: got %q", rpcResp.Method)
+	}
+	if rpcResp.Result == nil || rpcResp.Result.PublicKey == "" {
+		return "", fmt.Errorf("empty result in public key response")
+	}
+
+	return rpcResp.Result.PublicKey, nil
+}
+
+func (h *Handler) vaultPublicKeyFromCapReg(ctx context.Context) (string, error) {
 	v, err := h.vaultDONResolver.ResolveVaultDON(ctx)
 	if err != nil {
 		return "", fmt.Errorf("resolve vault DON: %w", err)
 	}
-
 	pubKeyHex, err := vaultdon.VaultPublicKeyHex(v)
 	if err != nil {
 		return "", fmt.Errorf("read vault public key from CapabilitiesRegistry: %w", err)
@@ -287,20 +327,47 @@ func (h *Handler) vaultMasterPublicKeyHex(ctx context.Context) (string, error) {
 	return pubKeyHex, nil
 }
 
-func (h *Handler) ensureVaultDONResolver(ctx context.Context) error {
+// optionalCapRegVaultPublicKeyHex returns the on-chain vault public key when CapabilitiesRegistry
+// RPC settings are available. compare is false when no RPC is configured or tenant context
+// cannot be used for on-chain reads.
+func (h *Handler) optionalCapRegVaultPublicKeyHex(ctx context.Context) (key string, compare bool, err error) {
 	if h.vaultDONResolver != nil {
-		return nil
+		key, err := h.vaultPublicKeyFromCapReg(ctx)
+		return key, true, err
 	}
 
-	rpcURL, chainName, ok, err := settings.ResolveCapabilitiesRegistryRPC(h.Viper, h.TenantContext)
+	rpcURL, _, ok, resolveErr := settings.ResolveCapabilitiesRegistryRPC(h.Viper, h.TenantContext)
+	if resolveErr != nil || !ok {
+		return "", false, nil
+	}
+
+	if err := h.initVaultDONResolver(ctx, rpcURL); err != nil {
+		return "", true, err
+	}
+
+	key, err = h.vaultPublicKeyFromCapReg(ctx)
+	return key, true, err
+}
+
+// vaultMasterPublicKeyHex loads the vault master public key from the gateway and, when CapabilitiesRegistry
+// RPC is configured, verifies it matches the on-chain commitment before encryption.
+func (h *Handler) vaultMasterPublicKeyHex(ctx context.Context) (string, error) {
+	gatewayKey, err := h.fetchVaultMasterPublicKeyHex()
 	if err != nil {
-		return err
-	}
-	if !ok {
-		return fmt.Errorf("encrypting secrets requires an RPC for %s in project settings", chainName)
+		return "", err
 	}
 
-	return h.initVaultDONResolver(ctx, rpcURL)
+	onChainKey, compare, err := h.optionalCapRegVaultPublicKeyHex(ctx)
+	if err != nil {
+		return "", err
+	}
+	if !compare {
+		return gatewayKey, nil
+	}
+	if !strings.EqualFold(gatewayKey, onChainKey) {
+		return "", fmt.Errorf("vault public key from gateway does not match CapabilitiesRegistry")
+	}
+	return gatewayKey, nil
 }
 
 // ResolveEffectiveOwner returns the checksummed workflow owner address for owner-key vault operations.
