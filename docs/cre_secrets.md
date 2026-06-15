@@ -13,8 +13,9 @@ cre secrets [optional flags]
 ### Options
 
 ```
-  -h, --help               help for secrets
-      --timeout duration   Timeout for secrets operations (e.g. 30m, 2h, 48h). (default 48h0m0s)
+  -h, --help                  help for secrets
+      --secrets-auth string   Secrets auth flow (default "onchain"). browser: organization-owned secrets for the private registry. onchain: secrets for on-chain registered workflows. (default "onchain")
+      --timeout duration      Timeout for secrets operations (e.g. 30m, 2h, 48h). (default 48h0m0s)
 ```
 
 ### Options inherited from parent commands

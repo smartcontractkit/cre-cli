@@ -28,6 +28,7 @@ cre secrets create my-secrets.yaml
       --non-interactive        Fail instead of prompting; requires all inputs via flags
   -R, --project-root string    Path to the project root
   -E, --public-env string      Path to .env.public file which contains shared, non-sensitive build config
+      --secrets-auth string    Secrets auth flow (default "onchain"). browser: organization-owned secrets for the private registry. onchain: secrets for on-chain registered workflows. (default "onchain")
   -T, --target string          Use target settings from YAML config
       --timeout duration       Timeout for secrets operations (e.g. 30m, 2h, 48h). (default 48h0m0s)
   -v, --verbose                Run command in VERBOSE mode
