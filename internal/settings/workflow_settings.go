@@ -167,6 +167,10 @@ func loadWorkflowSettings(logger *zerolog.Logger, v *viper.Viper, cmd *cobra.Com
 		return WorkflowSettings{}, errors.Wrap(err, "for target "+target)
 	}
 
+	if err := ValidateMultisigCompatibility(v, cmd, nil); err != nil {
+		return WorkflowSettings{}, err
+	}
+
 	// This is required because some commands still read values directly out of viper
 	// TODO: Remove this function once all access to settings no longer uses viper
 	// DEVSVCS-1561
@@ -187,6 +191,9 @@ func FinalizeWorkflowOwner(
 	resolved ResolvedRegistry,
 	derivedWorkflowOwner string,
 ) error {
+	if err := ValidateMultisigCompatibility(v, cmd, resolved); err != nil {
+		return err
+	}
 	if ShouldSkipGetOwner(cmd) {
 		return nil
 	}
