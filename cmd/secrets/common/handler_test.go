@@ -15,6 +15,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/rs/zerolog"
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -90,11 +91,25 @@ func attachGatewayPublicKeyMock(t *testing.T, h *Handler, publicKeyHex string) {
 	}
 }
 
+func attachCapRegTenantWithoutRPC(t *testing.T, h *Handler) {
+	t.Helper()
+	h.TenantContext = &tenantctx.EnvironmentContext{
+		CapabilitiesRegistry: &tenantctx.OnChainContract{
+			ChainSelector: 16015286601757825753,
+			Address:       "0x7f3191EaF73429177bAB3bAc5c36Ed2D5E39985f",
+		},
+	}
+	v := viper.New()
+	v.Set(settings.CreTargetEnvVar, "staging")
+	h.Viper = v
+}
+
 func TestEncryptSecrets(t *testing.T) {
 	t.Run("success - encrypts secrets with a gateway-fetched public key", func(t *testing.T) {
 		h, _, _ := newMockHandler(t)
 		h.OwnerAddress = "0xabc"
 		attachGatewayPublicKeyMock(t, h, vaultPublicKeyHex)
+		attachCapRegTenantWithoutRPC(t, h)
 
 		raw := UpsertSecretsInputs{
 			{ID: "test-secret-1", Value: []byte("value1"), Namespace: "ns1"},
@@ -192,6 +207,29 @@ func TestEncryptSecrets(t *testing.T) {
 		require.Contains(t, err.Error(), "vault public key fetch error")
 	})
 
+	t.Run("failure - invalid CapabilitiesRegistry RPC configuration", func(t *testing.T) {
+		h, _, _ := newMockHandler(t)
+		h.OwnerAddress = "0xabc"
+		attachGatewayPublicKeyMock(t, h, vaultPublicKeyHex)
+		h.TenantContext = &tenantctx.EnvironmentContext{
+			CapabilitiesRegistry: &tenantctx.OnChainContract{
+				ChainSelector: 16015286601757825753,
+				Address:       "0x7f3191EaF73429177bAB3bAc5c36Ed2D5E39985f",
+			},
+		}
+		v := viper.New()
+		v.Set(settings.CreTargetEnvVar, "staging")
+		v.Set("staging.rpcs", []map[string]string{
+			{"chain-name": "ethereum-testnet-sepolia", "url": "not-a-valid-url"},
+		})
+		h.Viper = v
+
+		enc, err := h.EncryptSecrets(UpsertSecretsInputs{{ID: "s", Value: []byte("v"), Namespace: "n"}}, "0xabc")
+		require.Error(t, err)
+		require.Nil(t, enc)
+		require.Contains(t, err.Error(), "invalid RPC URL")
+	})
+
 	t.Run("failure - vault DON resolution error when RPC is configured", func(t *testing.T) {
 		h, _, _ := newMockHandler(t)
 		h.OwnerAddress = "0xabc"
@@ -283,6 +321,7 @@ func TestEncryptSecrets_UsesWorkflowOwnerAddress(t *testing.T) {
 	h, _, _ := newMockHandler(t)
 	h.OwnerAddress = "0xabc"
 	attachGatewayPublicKeyMock(t, h, vaultPublicKeyHex)
+	attachCapRegTenantWithoutRPC(t, h)
 
 	enc, err := h.EncryptSecrets(UpsertSecretsInputs{
 		{ID: "secret-1", Value: []byte("val1"), Namespace: "main"},

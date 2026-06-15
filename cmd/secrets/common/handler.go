@@ -328,20 +328,22 @@ func (h *Handler) vaultPublicKeyFromCapReg(ctx context.Context) (string, error) 
 }
 
 // optionalCapRegVaultPublicKeyHex returns the on-chain vault public key when CapabilitiesRegistry
-// RPC settings are available. compare is false when no RPC is configured or tenant context
-// cannot be used for on-chain reads.
+// RPC settings are available. compare is false only when no RPC is configured for the registry chain.
 func (h *Handler) optionalCapRegVaultPublicKeyHex(ctx context.Context) (key string, compare bool, err error) {
 	if h.vaultDONResolver != nil {
 		key, err = h.vaultPublicKeyFromCapReg(ctx)
 		return key, true, err
 	}
 
-	rpcURL, _, ok, resolveErr := settings.ResolveCapabilitiesRegistryRPC(h.Viper, h.TenantContext)
-	if resolveErr != nil || !ok {
+	rpcURL, _, ok, err := settings.ResolveCapabilitiesRegistryRPC(h.Viper, h.TenantContext)
+	if err != nil {
+		return "", false, err
+	}
+	if !ok {
 		return "", false, nil
 	}
 
-	if err := h.initVaultDONResolver(ctx, rpcURL); err != nil {
+	if err = h.initVaultDONResolver(ctx, rpcURL); err != nil {
 		return "", true, err
 	}
 
