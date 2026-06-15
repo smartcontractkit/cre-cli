@@ -332,7 +332,7 @@ func (h *Handler) vaultPublicKeyFromCapReg(ctx context.Context) (string, error) 
 // cannot be used for on-chain reads.
 func (h *Handler) optionalCapRegVaultPublicKeyHex(ctx context.Context) (key string, compare bool, err error) {
 	if h.vaultDONResolver != nil {
-		key, err := h.vaultPublicKeyFromCapReg(ctx)
+		key, err = h.vaultPublicKeyFromCapReg(ctx)
 		return key, true, err
 	}
 
