@@ -27,9 +27,9 @@ func DeployVaultCapabilitiesRegistry(t *testing.T, sethClient *seth.Client, vaul
 
 	_, err = sethClient.Decode(contract.AddCapabilities(sethClient.NewTXOpts(), []capreg.CapabilitiesRegistryCapability{
 		{
-			CapabilityId:            vaultcommon.CapabilityID,
-			ConfigurationContract:   common.Address{},
-			Metadata:                []byte{},
+			CapabilityId:          vaultcommon.CapabilityID,
+			ConfigurationContract: common.Address{},
+			Metadata:              []byte{},
 		},
 	}))
 	require.NoError(t, err)
