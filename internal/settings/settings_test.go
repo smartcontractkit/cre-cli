@@ -136,7 +136,33 @@ func TestLoadEnvAndSettings(t *testing.T) {
 	s, err := settings.New(logger, v, cmd, "")
 	require.NoError(t, err)
 	assert.Equal(t, "staging", s.User.TargetName)
-	assert.Equal(t, "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80", s.User.PrivateKey(settings.EVM))
+	assert.Equal(t, settings.EthPrivateKeyHex("ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"), s.User.PrivateKey(settings.EVM))
+}
+
+func TestLoadEnvAndSettingsCreInitPlaceholderPrivateKey(t *testing.T) {
+	envVars := map[string]string{
+		settings.CreTargetEnvVar:     "staging",
+		settings.EthPrivateKeyEnvVar: settings.DefaultEthPrivateKeyEnvPlaceholder,
+	}
+
+	workflowTemplatePath, err := filepath.Abs(TempWorkflowSettingsFile)
+	require.NoError(t, err)
+
+	projectTemplatePath, err := filepath.Abs(TempProjectSettingsFile)
+	require.NoError(t, err)
+
+	tempDir := t.TempDir()
+	restoreWorkingDirectory, err := testutil.ChangeWorkingDirectory(tempDir)
+	require.NoError(t, err)
+	defer restoreWorkingDirectory()
+
+	v, logger := createTestContext(t, envVars, tempDir)
+
+	setUpTestSettingsFiles(t, v, workflowTemplatePath, projectTemplatePath, tempDir)
+	cmd := makeCmdWithSecretsAuth("create", "browser")
+	s, err := settings.New(logger, v, cmd, "")
+	require.NoError(t, err)
+	assert.Empty(t, s.User.PrivateKey(settings.EVM))
 }
 
 func TestLoadEnvAndSettingsWithWorkflowSettingsFlag(t *testing.T) {

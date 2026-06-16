@@ -32,11 +32,13 @@ import (
 	"github.com/smartcontractkit/cre-cli/cmd/client"
 	cmdCommon "github.com/smartcontractkit/cre-cli/cmd/common"
 	"github.com/smartcontractkit/cre-cli/cmd/secrets/common/gateway"
+	"github.com/smartcontractkit/cre-cli/cmd/secrets/common/vaultdon"
 	"github.com/smartcontractkit/cre-cli/internal/client/graphqlclient"
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/ethkeys"
+	"github.com/smartcontractkit/cre-cli/internal/onchain/capabilitiesregistry"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/tenantctx"
@@ -87,6 +89,8 @@ type Handler struct {
 	skipVaultValidation    bool
 	capRegRPCURL           string
 	capRegChainName        string
+	capRegClient           *capabilitiesregistry.Client
+	vaultDONResolver       *vaultdon.Resolver
 }
 
 // NewHandler creates a new handler instance.
@@ -132,6 +136,14 @@ func NewHandler(execCtx context.Context, ctx *runtime.Context, secretsFilePath, 
 	}
 
 	return h, nil
+}
+
+// CloseCapRegClient releases the CapabilitiesRegistry RPC client opened for vault validation.
+func (h *Handler) CloseCapRegClient() {
+	if h.capRegClient != nil {
+		h.capRegClient.Close()
+		h.capRegClient = nil
+	}
 }
 
 // EnsureDeploymentRPCForOwnerKeySecrets checks project settings for an RPC URL on the workflow registry chain (owner-key / allowlist flows only).
@@ -435,6 +447,7 @@ func (h *Handler) Execute(
 	duration time.Duration,
 	secretsAuth string,
 ) error {
+	defer h.CloseCapRegClient()
 	defer ZeroUpsertSecretValues(inputs)
 
 	h.execCtx = ctx
