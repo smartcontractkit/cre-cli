@@ -21,7 +21,6 @@ import (
 	workflow_registry_wrapper "github.com/smartcontractkit/chainlink-evm/gethwrappers/workflow/generated/workflow_registry_wrapper_v2"
 	"github.com/smartcontractkit/chainlink-testing-framework/seth"
 
-	cmdCommon "github.com/smartcontractkit/cre-cli/cmd/common"
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 )
@@ -81,17 +80,16 @@ func NewEthClientFromEnv(v *viper.Viper, l *zerolog.Logger, ethUrl string) (*set
 	if err != nil {
 		return nil, fmt.Errorf("failed to get chain ID: %w", err)
 	}
-	rawPrivKey := v.GetString(settings.EthPrivateKeyEnvVar)
-	normPrivKey := settings.NormalizeHexKey(rawPrivKey)
+	resolvedKey, err := settings.ResolveEthPrivateKeyFromEnv(v.GetString(settings.EthPrivateKeyEnvVar))
+	if err != nil {
+		return nil, err
+	}
 
 	keys := []string{}
-	if normPrivKey == "" {
+	if !resolvedKey.IsSet() {
 		l.Debug().Msg("No private key provided, all commands that write to chain will work only in unsigned mode")
 	} else {
-		if err := cmdCommon.ValidatePrivateKey(normPrivKey); err != nil {
-			return nil, fmt.Errorf("invalid private key: %w", err)
-		}
-		keys = []string{normPrivKey}
+		keys = []string{resolvedKey.Hex()}
 	}
 
 	client, err := NewSethClient(sethConfigPath, ethUrl, keys, ethChainID)
@@ -183,15 +181,18 @@ func readSethConfigFromFile(configPath string) (*seth.Config, error) {
 	return &sethConfig, nil
 }
 
+// TODO(DEVSVCS-5178)
 func getChainID(rpcURL string) (uint64, error) {
-	client, err := rpc.DialContext(context.Background(), rpcURL)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	client, err := rpc.DialContext(ctx, rpcURL)
 	if err != nil {
 		return 0, err
 	}
 	defer client.Close()
 
 	var chainID string
-	err = client.CallContext(context.Background(), &chainID, "eth_chainId")
+	err = client.CallContext(ctx, &chainID, "eth_chainId")
 	if err != nil {
 		return 0, err
 	}

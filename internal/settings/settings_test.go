@@ -139,6 +139,32 @@ func TestLoadEnvAndSettings(t *testing.T) {
 	assert.Equal(t, "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80", s.User.PrivateKey(settings.EVM))
 }
 
+func TestLoadEnvAndSettingsCreInitPlaceholderPrivateKey(t *testing.T) {
+	envVars := map[string]string{
+		settings.CreTargetEnvVar:     "staging",
+		settings.EthPrivateKeyEnvVar: settings.DefaultEthPrivateKeyEnvPlaceholder,
+	}
+
+	workflowTemplatePath, err := filepath.Abs(TempWorkflowSettingsFile)
+	require.NoError(t, err)
+
+	projectTemplatePath, err := filepath.Abs(TempProjectSettingsFile)
+	require.NoError(t, err)
+
+	tempDir := t.TempDir()
+	restoreWorkingDirectory, err := testutil.ChangeWorkingDirectory(tempDir)
+	require.NoError(t, err)
+	defer restoreWorkingDirectory()
+
+	v, logger := createTestContext(t, envVars, tempDir)
+
+	setUpTestSettingsFiles(t, v, workflowTemplatePath, projectTemplatePath, tempDir)
+	cmd := makeCmdWithSecretsAuth("create", "browser")
+	s, err := settings.New(logger, v, cmd, "")
+	require.NoError(t, err)
+	assert.Empty(t, s.User.EthPrivateKey)
+}
+
 func TestLoadEnvAndSettingsWithWorkflowSettingsFlag(t *testing.T) {
 	envVars := map[string]string{
 		settings.CreTargetEnvVar:     "staging",
@@ -262,7 +288,7 @@ func makeCmdWithSecretsAuth(use, secretsAuthValue string) *cobra.Command {
 		Use: use,
 		Run: func(cmd *cobra.Command, args []string) {},
 	}
-	cmd.Flags().String("secrets-auth", "owner-key-signing", "auth mode")
+	cmd.Flags().String("secrets-auth", "onchain", "auth mode")
 	_ = cmd.Flags().Parse([]string{"--secrets-auth=" + secretsAuthValue})
 	return cmd
 }
@@ -471,8 +497,8 @@ func TestShouldSkipGetOwner(t *testing.T) {
 			wantSkip: true,
 		},
 		{
-			name:     "secrets create with --secrets-auth=owner-key-signing → do NOT skip",
-			cmd:      makeCmdWithSecretsAuth("create", "owner-key-signing"),
+			name:     "secrets create with --secrets-auth=onchain → do NOT skip",
+			cmd:      makeCmdWithSecretsAuth("create", "onchain"),
 			wantSkip: false,
 		},
 		{

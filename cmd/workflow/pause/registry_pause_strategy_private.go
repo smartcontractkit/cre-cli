@@ -32,7 +32,7 @@ func (a *privateRegistryPauseStrategy) Pause() error {
 
 	ui.Dim(fmt.Sprintf("Fetching workflow to pause... Name=%s", workflowName))
 
-	workflow, err := a.prc.GetWorkflowByName(workflowName)
+	workflow, err := a.prc.GetWorkflowByName(a.h.execCtx, workflowName)
 	if err != nil {
 		return fmt.Errorf("failed to get workflow: %w", err)
 	}
@@ -45,7 +45,7 @@ func (a *privateRegistryPauseStrategy) Pause() error {
 
 	ui.Dim(fmt.Sprintf("Processing pause for workflow ID %s...", workflow.WorkflowID))
 
-	result, err := a.prc.PauseWorkflowInRegistry(workflow.WorkflowID)
+	result, err := a.prc.PauseWorkflowInRegistry(a.h.execCtx, workflow.WorkflowID)
 	if err != nil {
 		return fmt.Errorf("failed to pause workflow in private registry: %w", err)
 	}
@@ -54,6 +54,7 @@ func (a *privateRegistryPauseStrategy) Pause() error {
 	ui.Line()
 	ui.Bold("Details:")
 	ui.Dim(fmt.Sprintf("   Registry:         %s", h.runtimeContext.ResolvedRegistry.ID()))
+	ui.Dim(fmt.Sprintf("   DON Family:       %s", result.DonFamily))
 	ui.Dim(fmt.Sprintf("   Workflow Name:    %s", result.WorkflowName))
 	ui.Dim(fmt.Sprintf("   Workflow ID:      %s", result.WorkflowID))
 	ui.Dim(fmt.Sprintf("   Status:           %s", privateregistryclient.FormatStatus(result.Status)))
