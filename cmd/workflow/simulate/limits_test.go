@@ -32,7 +32,7 @@ func TestDefaultLimitsAndExportDefaultLimitsJSON(t *testing.T) {
 	assert.Equal(t, 25_000, limits.ConsensusObservationSizeLimit())
 	assert.Equal(t, 5_000, limits.EVMChainWriteReportSizeLimit())
 	assert.Equal(t, 5_000, limits.AptosChainWriteReportSizeLimit())
-	assert.Equal(t, uint64(5_000_000), limits.EVMChainWriteGasLimit())
+	assert.Equal(t, uint64(10_000_000), limits.EVMChainWriteGasLimit())
 	assert.Equal(t, uint64(2_000_000), limits.AptosChainWriteGasLimit())
 	assert.Equal(t, 100_000_000, limits.WASMBinarySize())
 	assert.Equal(t, 20_000_000, limits.WASMCompressedBinarySize())
@@ -191,6 +191,6 @@ func TestSimulationLimitsSummaryIncludesKeyLimitValues(t *testing.T) {
 	assert.Contains(t, summary, "HTTP: req=120kb resp=250kb timeout=10s")
 	assert.Contains(t, summary, "ConfHTTP: req=125kb resp=500kb timeout=1m30s")
 	assert.Contains(t, summary, "Consensus obs=25kb")
-	assert.Contains(t, summary, "ChainWrite evm_report=5kb evm_gas=5000000 aptos_report=5kb aptos_gas=2000000")
+	assert.Contains(t, summary, "ChainWrite evm_report=5kb evm_gas=10000000 aptos_report=5kb aptos_gas=2000000")
 	assert.Contains(t, summary, "WASM binary=100mb compressed=20mb")
 }

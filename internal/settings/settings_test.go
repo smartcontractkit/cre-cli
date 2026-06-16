@@ -136,7 +136,7 @@ func TestLoadEnvAndSettings(t *testing.T) {
 	s, err := settings.New(logger, v, cmd, "")
 	require.NoError(t, err)
 	assert.Equal(t, "staging", s.User.TargetName)
-	assert.Equal(t, settings.EthPrivateKeyHex("ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"), s.User.PrivateKey(settings.EVM))
+	assert.Equal(t, "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80", s.User.PrivateKey(settings.EVM))
 }
 
 func TestLoadEnvAndSettingsCreInitPlaceholderPrivateKey(t *testing.T) {
