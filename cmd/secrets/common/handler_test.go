@@ -142,7 +142,10 @@ func TestEncryptSecrets(t *testing.T) {
 	})
 
 	t.Run("success - gateway key matches CapabilitiesRegistry when RPC is configured", func(t *testing.T) {
+		pinTestHome(t)
 		h, _, _ := newMockHandler(t)
+		h.TenantContext = tofuTestTenantContext()
+		h.EnvironmentSet.EnvName = "staging"
 		h.OwnerAddress = "0xabc"
 		attachGatewayPublicKeyMock(t, h, vaultPublicKeyHex)
 		attachMockVaultDONResolver(t, h, vaultPublicKeyHex)
@@ -153,7 +156,10 @@ func TestEncryptSecrets(t *testing.T) {
 	})
 
 	t.Run("failure - gateway key does not match CapabilitiesRegistry", func(t *testing.T) {
+		pinTestHome(t)
 		h, _, _ := newMockHandler(t)
+		h.TenantContext = tofuTestTenantContext()
+		h.EnvironmentSet.EnvName = "staging"
 		h.OwnerAddress = "0xabc"
 		attachGatewayPublicKeyMock(t, h, vaultPublicKeyHex)
 		attachMockVaultDONResolver(t, h, "deadbeef")

@@ -352,7 +352,8 @@ func (h *Handler) optionalCapRegVaultPublicKeyHex(ctx context.Context) (key stri
 }
 
 // vaultMasterPublicKeyHex loads the vault master public key from the gateway and, when CapabilitiesRegistry
-// RPC is configured, verifies it matches the on-chain commitment before encryption.
+// RPC is configured, verifies it matches the on-chain commitment before encryption. When validation is
+// enabled, TOFU pinning detects gateway key changes that are not reflected on-chain.
 func (h *Handler) vaultMasterPublicKeyHex(ctx context.Context) (string, error) {
 	gatewayKey, err := h.fetchVaultMasterPublicKeyHex()
 	if err != nil {
@@ -363,12 +364,31 @@ func (h *Handler) vaultMasterPublicKeyHex(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if !compare {
+	if !compare || h.SkipVaultValidation() {
 		return gatewayKey, nil
 	}
+
+	gatewayFP, err := tenantctx.VaultPublicKeyFingerprint(gatewayKey)
+	if err != nil {
+		return "", err
+	}
+	onChainFP, err := tenantctx.VaultPublicKeyFingerprint(onChainKey)
+	if err != nil {
+		return "", err
+	}
+
+	if err := h.verifyVaultKeyTOFU(gatewayFP, onChainFP); err != nil {
+		return "", err
+	}
+
 	if !strings.EqualFold(gatewayKey, onChainKey) {
 		return "", fmt.Errorf("vault public key from gateway does not match CapabilitiesRegistry")
 	}
+
+	if err := h.persistVaultKeyPin(gatewayFP); err != nil {
+		return "", err
+	}
+
 	return gatewayKey, nil
 }
 
