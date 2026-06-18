@@ -602,7 +602,7 @@ func (h *Handler) Execute(
 		if status != http.StatusOK {
 			return fmt.Errorf("gateway returned a non-200 status code: status_code=%d, body=%s", status, respBody)
 		}
-		return h.ParseVaultGatewayResponse(method, respBody)
+		return h.ParseVaultGatewayResponse(method, requestID, respBody)
 	}
 
 	if txOut == nil && allowlisted {
@@ -683,10 +683,10 @@ func (h *Handler) Execute(
 	return nil
 }
 
-// ParseVaultGatewayResponse parses the JSON-RPC response, decodes the SignedOCRResponse payload
-// into the appropriate proto type (CreateSecretsResponse, UpdateSecretsResponse, DeleteSecretsResponse),
-// and logs one line per secret with id/owner/namespace/success/error.
-func (h *Handler) ParseVaultGatewayResponse(method string, respBody []byte) error {
+// ParseVaultGatewayResponse parses the JSON-RPC response, optionally verifies OCR signatures
+// and the JSON-RPC response id, decodes the SignedOCRResponse payload into the appropriate proto
+// type, and logs one line per secret with id/owner/namespace/success/error.
+func (h *Handler) ParseVaultGatewayResponse(method, requestID string, respBody []byte) error {
 	// Unmarshal JSON-RPC envelope with SignedOCRResponse result
 	var rpcResp jsonrpc2.Response[vaulttypes.SignedOCRResponse]
 	if err := json.Unmarshal(respBody, &rpcResp); err != nil {
@@ -697,6 +697,10 @@ func (h *Handler) ParseVaultGatewayResponse(method string, respBody []byte) erro
 	if rpcResp.Error != nil {
 		b, _ := json.Marshal(rpcResp.Error)
 		return fmt.Errorf("gateway returned JSON-RPC error: %s", string(b))
+	}
+
+	if err := h.verifyVaultGatewayResponse(h.vaultResponseVerifyContext(), &rpcResp, requestID); err != nil {
+		return err
 	}
 
 	// Ensure we have a result payload

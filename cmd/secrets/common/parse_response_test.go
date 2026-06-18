@@ -41,7 +41,10 @@ func encodeRPCBodyFromPayload(payload []byte) []byte {
 
 func newTestHandler(buf *bytes.Buffer) *Handler {
 	logger := zerolog.New(buf)
-	return &Handler{Log: &logger}
+	return &Handler{
+		Log:                 &logger,
+		skipVaultValidation: true,
+	}
 }
 
 // Build the payload using the real proto types
@@ -129,7 +132,7 @@ func TestParseVaultGatewayResponse_Create_LogsPerItem(t *testing.T) {
 	h := newTestHandler(&buf)
 
 	body := encodeRPCBodyFromPayload(buildCreatePayloadProto(t))
-	if err := h.ParseVaultGatewayResponse(vaulttypes.MethodSecretsCreate, body); err != nil {
+	if err := h.ParseVaultGatewayResponse(vaulttypes.MethodSecretsCreate, "", body); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -174,7 +177,7 @@ func TestParseVaultGatewayResponse_Update_Success(t *testing.T) {
 	h := newTestHandler(nil)
 
 	body := encodeRPCBodyFromPayload(buildUpdatePayloadProto(t))
-	if err := h.ParseVaultGatewayResponse(vaulttypes.MethodSecretsUpdate, body); err != nil {
+	if err := h.ParseVaultGatewayResponse(vaulttypes.MethodSecretsUpdate, "", body); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -203,7 +206,7 @@ func TestParseVaultGatewayResponse_Delete_Success(t *testing.T) {
 	h := newTestHandler(&buf)
 
 	body := encodeRPCBodyFromPayload(buildDeletePayloadProto(t))
-	if err := h.ParseVaultGatewayResponse(vaulttypes.MethodSecretsDelete, body); err != nil {
+	if err := h.ParseVaultGatewayResponse(vaulttypes.MethodSecretsDelete, "", body); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -226,7 +229,7 @@ func TestParseVaultGatewayResponse_JSONRPCError(t *testing.T) {
 	h := newTestHandler(&buf)
 
 	body := encodeRPCBodyFromError(-32000, "upstream failed")
-	err := h.ParseVaultGatewayResponse(vaulttypes.MethodSecretsCreate, body)
+	err := h.ParseVaultGatewayResponse(vaulttypes.MethodSecretsCreate, "", body)
 	if err == nil || !strings.Contains(err.Error(), "gateway returned JSON-RPC error") ||
 		!strings.Contains(err.Error(), "upstream failed") {
 		t.Fatalf("expected JSON-RPC error surfaced, got: %v", err)
@@ -239,7 +242,7 @@ func TestParseVaultGatewayResponse_EmptyPayload(t *testing.T) {
 
 	// Omit payload entirely -> handler should report "empty SignedOCRResponse payload"
 	raw := encodeRPCBodyFromPayload(nil)
-	err := h.ParseVaultGatewayResponse(vaulttypes.MethodSecretsUpdate, raw)
+	err := h.ParseVaultGatewayResponse(vaulttypes.MethodSecretsUpdate, "", raw)
 	if err == nil || !strings.Contains(err.Error(), "empty SignedOCRResponse payload") {
 		t.Fatalf("expected empty payload error, got: %v", err)
 	}
@@ -250,7 +253,7 @@ func TestParseVaultGatewayResponse_MalformedTopLevelJSON(t *testing.T) {
 	h := newTestHandler(&buf)
 
 	raw := []byte(`{"jsonrpc":"2.0","id":"1","result": this is not valid}`)
-	err := h.ParseVaultGatewayResponse(vaulttypes.MethodSecretsUpdate, raw)
+	err := h.ParseVaultGatewayResponse(vaulttypes.MethodSecretsUpdate, "", raw)
 	if err == nil || !strings.Contains(err.Error(), "failed to unmarshal JSON-RPC response") {
 		t.Fatalf("expected unmarshal error, got: %v", err)
 	}
@@ -262,7 +265,7 @@ func TestParseVaultGatewayResponse_BadPayloadForCreate(t *testing.T) {
 
 	// Wrong shape for the proto: responses should be an array.
 	raw := encodeRPCBodyFromPayload([]byte(`{"responses":"not-an-array"}`))
-	err := h.ParseVaultGatewayResponse(vaulttypes.MethodSecretsCreate, raw)
+	err := h.ParseVaultGatewayResponse(vaulttypes.MethodSecretsCreate, "", raw)
 	if err == nil || !strings.Contains(err.Error(), "failed to decode create payload") {
 		t.Fatalf("expected proto decode error for create, got: %v", err)
 	}
@@ -274,7 +277,7 @@ func TestParseVaultGatewayResponse_UnsupportedMethod_Warns(t *testing.T) {
 
 	// Non-empty payload so it passes "empty payload" check; method is unknown -> warn.
 	raw := encodeRPCBodyFromPayload([]byte(`{"anything":"ok"}`))
-	if err := h.ParseVaultGatewayResponse("totally.unknown.method", raw); err != nil {
+	if err := h.ParseVaultGatewayResponse("totally.unknown.method", "", raw); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	out := buf.String()
@@ -337,7 +340,7 @@ func TestParseVaultGatewayResponse_List_SuccessWithIdentifiers(t *testing.T) {
 	h := newTestHandler(&buf)
 
 	body := encodeRPCBodyFromPayload(buildListPayloadProtoSuccessWithItems(t))
-	if err := h.ParseVaultGatewayResponse(vaulttypes.MethodSecretsList, body); err != nil {
+	if err := h.ParseVaultGatewayResponse(vaulttypes.MethodSecretsList, "", body); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -369,7 +372,7 @@ func TestParseVaultGatewayResponse_List_EmptySuccess(t *testing.T) {
 	h := newTestHandler(&buf)
 
 	body := encodeRPCBodyFromPayload(buildListPayloadProtoEmptySuccess(t))
-	if err := h.ParseVaultGatewayResponse(vaulttypes.MethodSecretsList, body); err != nil {
+	if err := h.ParseVaultGatewayResponse(vaulttypes.MethodSecretsList, "", body); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -398,7 +401,7 @@ func TestParseVaultGatewayResponse_List_Failure(t *testing.T) {
 	h := newTestHandler(&buf)
 
 	body := encodeRPCBodyFromPayload(buildListPayloadProtoFailure(t, "boom"))
-	if err := h.ParseVaultGatewayResponse(vaulttypes.MethodSecretsList, body); err != nil {
+	if err := h.ParseVaultGatewayResponse(vaulttypes.MethodSecretsList, "", body); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -425,7 +428,7 @@ func TestParseVaultGatewayResponse_BadPayloadForList(t *testing.T) {
 
 	// Wrong shape: identifiers should be an array
 	raw := encodeRPCBodyFromPayload([]byte(`{"identifiers":"not-an-array"}`))
-	err := h.ParseVaultGatewayResponse(vaulttypes.MethodSecretsList, raw)
+	err := h.ParseVaultGatewayResponse(vaulttypes.MethodSecretsList, "", raw)
 	if err == nil || !strings.Contains(err.Error(), "failed to decode list payload") {
 		t.Fatalf("expected decode error for list payload, got: %v", err)
 	}
