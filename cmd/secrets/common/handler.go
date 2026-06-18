@@ -315,6 +315,63 @@ func (h *Handler) fetchVaultMasterPublicKeyHex() (string, error) {
 	return rpcResp.Result.PublicKey, nil
 }
 
+func (h *Handler) vaultPublicKeyFromCapReg(ctx context.Context) (string, error) {
+	v, err := h.vaultDONResolver.ResolveVaultDON(ctx)
+	if err != nil {
+		return "", fmt.Errorf("resolve vault DON: %w", err)
+	}
+	pubKeyHex, err := vaultdon.VaultPublicKeyHex(v)
+	if err != nil {
+		return "", fmt.Errorf("read vault public key from CapabilitiesRegistry: %w", err)
+	}
+	return pubKeyHex, nil
+}
+
+// optionalCapRegVaultPublicKeyHex returns the on-chain vault public key when CapabilitiesRegistry
+// RPC settings are available. compare is false only when no RPC is configured for the registry chain.
+func (h *Handler) optionalCapRegVaultPublicKeyHex(ctx context.Context) (key string, compare bool, err error) {
+	if h.vaultDONResolver != nil {
+		key, err = h.vaultPublicKeyFromCapReg(ctx)
+		return key, true, err
+	}
+
+	rpcURL, _, ok, err := settings.ResolveCapabilitiesRegistryRPC(h.Viper, h.TenantContext)
+	if err != nil {
+		return "", false, err
+	}
+	if !ok {
+		return "", false, nil
+	}
+
+	if err = h.initVaultDONResolver(ctx, rpcURL); err != nil {
+		return "", true, err
+	}
+
+	key, err = h.vaultPublicKeyFromCapReg(ctx)
+	return key, true, err
+}
+
+// vaultMasterPublicKeyHex loads the vault master public key from the gateway and, when CapabilitiesRegistry
+// RPC is configured, verifies it matches the on-chain commitment before encryption.
+func (h *Handler) vaultMasterPublicKeyHex(ctx context.Context) (string, error) {
+	gatewayKey, err := h.fetchVaultMasterPublicKeyHex()
+	if err != nil {
+		return "", err
+	}
+
+	onChainKey, compare, err := h.optionalCapRegVaultPublicKeyHex(ctx)
+	if err != nil {
+		return "", err
+	}
+	if !compare {
+		return gatewayKey, nil
+	}
+	if !strings.EqualFold(gatewayKey, onChainKey) {
+		return "", fmt.Errorf("vault public key from gateway does not match CapabilitiesRegistry")
+	}
+	return gatewayKey, nil
+}
+
 // ResolveEffectiveOwner returns the checksummed workflow owner address for owner-key vault operations.
 func (h *Handler) ResolveEffectiveOwner() (string, error) {
 	if !common.IsHexAddress(h.OwnerAddress) {
@@ -347,7 +404,7 @@ func (h *Handler) ResolveVaultIdentifierOwnerForAuth(secretsAuth string) (string
 // TDH2 label is the workflow owner address left-padded to 32 bytes; SecretIdentifier.Owner is the same hex address string.
 // Each item's Value slice is zeroed in place as it is encrypted; callers must not reuse rawSecrets afterward.
 func (h *Handler) EncryptSecrets(rawSecrets UpsertSecretsInputs, owner string) ([]*vault.EncryptedSecret, error) {
-	pubKeyHex, err := h.fetchVaultMasterPublicKeyHex()
+	pubKeyHex, err := h.vaultMasterPublicKeyHex(h.execCtx)
 	if err != nil {
 		return nil, err
 	}

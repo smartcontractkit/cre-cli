@@ -30,6 +30,7 @@ func newMockHandler(t *testing.T) (*Handler, *MockClientFactory, *ecdsa.PrivateK
 		OwnerAddress:   "0xabc",
 		EnvironmentSet: &environments.EnvironmentSet{},
 		Credentials:    &credentials.Credentials{},
+		execCtx:        context.Background(),
 	}
 	return h, mockClientFactory, privateKey
 }
