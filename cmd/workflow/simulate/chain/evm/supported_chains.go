@@ -141,4 +141,7 @@ var SupportedChains = []chain.ChainConfig{
 
 	// Rhyolite (private testnet)
 	{Selector: chainselectors.PRIVATE_TESTNET_RHYOLITE.Selector, Forwarder: "0xBefF2190E6F56C108cD748844Bbd18D4a70F1E21"},
+
+	// Pumice (private testnet)
+	{Selector: chainselectors.PRIVATE_TESTNET_PUMICE.Selector, Forwarder: "0xBefF2190E6F56C108cD748844Bbd18D4a70F1E21"},
 }
