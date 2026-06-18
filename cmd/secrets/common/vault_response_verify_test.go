@@ -46,8 +46,8 @@ func attachMockVaultDONResolverWithOCRSigners(t *testing.T, h *Handler, signers 
 		donIDs: []*big.Int{big.NewInt(1)},
 		dons: map[uint32]capreg.CapabilitiesRegistryDONInfo{
 			1: {
-				Id:         1,
-				F:          1,
+				Id: 1,
+				F:  1,
 				NodeP2PIds: func() [][32]byte {
 					ids := make([][32]byte, len(nodes))
 					for i := range nodes {
