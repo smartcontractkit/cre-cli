@@ -32,7 +32,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 		"Timeout for secrets operations (e.g. 30m, 2h, 48h).",
 	)
 
-	secretsCmd.PersistentFlags().String("secrets-auth", "onchain", "Authentication mode: onchain (wallet key) or browser (account credentials).")
+	secretsCmd.PersistentFlags().String("secrets-auth", "onchain", "Authentication mode: onchain uses a wallet key for secrets on the on-chain registry; browser uses account credentials for secrets on the private registry.")
 
 	secretsCmd.AddCommand(create.New(runtimeContext))
 	secretsCmd.AddCommand(update.New(runtimeContext))

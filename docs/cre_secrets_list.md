@@ -23,7 +23,7 @@ cre secrets list [optional flags]
       --non-interactive        Fail instead of prompting; requires all inputs via flags
   -R, --project-root string    Path to the project root
   -E, --public-env string      Path to .env.public file which contains shared, non-sensitive build config
-      --secrets-auth string    Authentication mode: onchain (wallet key) or browser (account credentials). (default "onchain")
+      --secrets-auth string    Authentication mode: onchain uses a wallet key for secrets on the on-chain registry; browser uses account credentials for secrets on the private registry. (default "onchain")
   -T, --target string          Use target settings from YAML config
       --timeout duration       Timeout for secrets operations (e.g. 30m, 2h, 48h). (default 48h0m0s)
   -v, --verbose                Run command in VERBOSE mode
