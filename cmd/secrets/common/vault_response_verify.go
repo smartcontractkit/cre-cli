@@ -34,6 +34,7 @@ func (h *Handler) verifyVaultGatewayResponse(
 	if signed == nil {
 		return fmt.Errorf("empty SignedOCRResponse result")
 	}
+	// TODO(DEVSVCS-5365)
 	if len(signed.Signatures) == 0 {
 		return nil
 	}
@@ -49,11 +50,4 @@ func (h *Handler) verifyVaultGatewayResponse(
 		return fmt.Errorf("vault response signature verification failed: %w", err)
 	}
 	return nil
-}
-
-func (h *Handler) vaultResponseVerifyContext() context.Context {
-	if h.execCtx != nil {
-		return h.execCtx
-	}
-	return context.Background()
 }

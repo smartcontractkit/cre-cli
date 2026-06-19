@@ -2,6 +2,7 @@ package common
 
 import (
 	"bytes"
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"math/big"
@@ -101,7 +102,7 @@ func encodeSignedRPCBody(t *testing.T, requestID string, payload []byte, ctxHex 
 func TestVerifyVaultGatewayResponse_SkipWhenOptedOut(t *testing.T) {
 	var buf bytes.Buffer
 	logger := zerolog.New(&buf)
-	h := &Handler{Log: &logger, skipVaultValidation: true}
+	h := &Handler{Log: &logger, execCtx: context.Background(), skipVaultValidation: true}
 
 	body := encodeSignedRPCBody(t, "req-1", []byte(`{"responses":[]}`),
 		"00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
@@ -115,7 +116,7 @@ func TestVerifyVaultGatewayResponse_SkipWhenOptedOut(t *testing.T) {
 func TestVerifyVaultGatewayResponse_RequestIDMismatch(t *testing.T) {
 	var buf bytes.Buffer
 	logger := zerolog.New(&buf)
-	h := &Handler{Log: &logger}
+	h := &Handler{Log: &logger, execCtx: context.Background()}
 
 	body := encodeRPCBodyFromPayload(buildCreatePayloadProto(t))
 	err := h.ParseVaultGatewayResponse(vaulttypes.MethodSecretsCreate, "expected-id", body)
@@ -125,7 +126,7 @@ func TestVerifyVaultGatewayResponse_RequestIDMismatch(t *testing.T) {
 func TestVerifyVaultGatewayResponse_EmptySignaturesPassThrough(t *testing.T) {
 	var buf bytes.Buffer
 	logger := zerolog.New(&buf)
-	h := &Handler{Log: &logger}
+	h := &Handler{Log: &logger, execCtx: context.Background()}
 	attachMockVaultDONResolver(t, h, "deadbeef")
 
 	requestID := "req-empty-sigs"
@@ -143,7 +144,7 @@ func TestVerifyVaultGatewayResponse_EmptySignaturesPassThrough(t *testing.T) {
 func TestVerifyVaultGatewayResponse_ValidSignatures(t *testing.T) {
 	var buf bytes.Buffer
 	logger := zerolog.New(&buf)
-	h := &Handler{Log: &logger}
+	h := &Handler{Log: &logger, execCtx: context.Background()}
 	attachMockVaultDONResolverWithOCRSigners(t, h, []common.Address{
 		common.HexToAddress("0xd6da96fe596705b32bc3a0e11cdefad77feaad79"),
 		common.HexToAddress("0x327aa349c9718cd36c877d1e90458fe1929768ad"),
@@ -166,7 +167,7 @@ func TestVerifyVaultGatewayResponse_ValidSignatures(t *testing.T) {
 func TestVerifyVaultGatewayResponse_InvalidSignatures(t *testing.T) {
 	var buf bytes.Buffer
 	logger := zerolog.New(&buf)
-	h := &Handler{Log: &logger}
+	h := &Handler{Log: &logger, execCtx: context.Background()}
 	attachMockVaultDONResolverWithOCRSigners(t, h, []common.Address{
 		common.HexToAddress("0xd6da96fe596705b32bc3a0e11cdefad77feaad79"),
 	})

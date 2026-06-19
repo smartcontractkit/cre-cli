@@ -719,7 +719,7 @@ func (h *Handler) ParseVaultGatewayResponse(method, requestID string, respBody [
 		return fmt.Errorf("gateway returned JSON-RPC error: %s", string(b))
 	}
 
-	if err := h.verifyVaultGatewayResponse(h.vaultResponseVerifyContext(), &rpcResp, requestID); err != nil {
+	if err := h.verifyVaultGatewayResponse(h.execCtx, &rpcResp, requestID); err != nil {
 		return err
 	}
 
