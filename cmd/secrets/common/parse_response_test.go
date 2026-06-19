@@ -2,6 +2,7 @@ package common
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"os"
@@ -43,6 +44,7 @@ func newTestHandler(buf *bytes.Buffer) *Handler {
 	logger := zerolog.New(buf)
 	return &Handler{
 		Log:                 &logger,
+		execCtx:             context.Background(),
 		skipVaultValidation: true,
 	}
 }

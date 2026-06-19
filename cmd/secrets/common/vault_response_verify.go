@@ -50,10 +50,3 @@ func (h *Handler) verifyVaultGatewayResponse(
 	}
 	return nil
 }
-
-func (h *Handler) vaultResponseVerifyContext() context.Context {
-	if h.execCtx != nil {
-		return h.execCtx
-	}
-	return context.Background()
-}
