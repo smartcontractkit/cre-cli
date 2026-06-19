@@ -34,6 +34,7 @@ func (h *Handler) verifyVaultGatewayResponse(
 	if signed == nil {
 		return fmt.Errorf("empty SignedOCRResponse result")
 	}
+	// TODO(DEVSVCS-5365)
 	if len(signed.Signatures) == 0 {
 		return nil
 	}
