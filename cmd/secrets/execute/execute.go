@@ -94,7 +94,7 @@ func New(ctx *runtime.Context) *cobra.Command {
 			}
 
 			// Parse & print results according to the bundle method
-			return h.ParseVaultGatewayResponse(b.Method, respBody)
+			return h.ParseVaultGatewayResponse(b.Method, b.RequestID, respBody)
 		},
 	}
 

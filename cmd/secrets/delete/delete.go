@@ -188,7 +188,7 @@ func Execute(ctx context.Context, h *common.Handler, inputs DeleteSecretsInputs,
 		if status != http.StatusOK {
 			return fmt.Errorf("gateway returned a non-200 status code: status_code=%d, body=%s", status, respBody)
 		}
-		return h.ParseVaultGatewayResponse(vaulttypes.MethodSecretsDelete, respBody)
+		return h.ParseVaultGatewayResponse(vaulttypes.MethodSecretsDelete, requestID, respBody)
 	}
 
 	ownerAddr := ethcommon.HexToAddress(owner)
