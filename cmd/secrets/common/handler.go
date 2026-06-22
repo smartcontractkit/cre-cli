@@ -125,6 +125,9 @@ func NewHandler(execCtx context.Context, ctx *runtime.Context, secretsFilePath, 
 		execCtx:              execCtx,
 	}
 	h.GatewayURL = gateway.ResolveVaultGatewayURL(ctx.TenantContext, ctx.EnvironmentSet)
+	if err := gateway.ValidateGatewayURL(h.GatewayURL); err != nil {
+		return nil, err
+	}
 	h.Gw = &gateway.HTTPClient{URL: h.GatewayURL, Client: &http.Client{Timeout: 90 * time.Second}}
 
 	if !IsBrowserFlow(secretsAuth) {
