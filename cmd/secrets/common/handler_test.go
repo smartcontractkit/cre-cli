@@ -475,4 +475,22 @@ func TestNewHandler_GatewayURL(t *testing.T) {
 		require.True(t, ok)
 		require.Equal(t, "https://env-override.example.com/", gw.URL)
 	})
+
+	t.Run("rejects non-https remote gateway URL", func(t *testing.T) {
+		t.Setenv(environments.EnvVarVaultGatewayURL, "")
+		ctx := *baseCtx
+		ctx.TenantContext = &tenantctx.EnvironmentContext{VaultGatewayURL: "http://insecure.example.com/"}
+		_, err := NewHandler(context.Background(), &ctx, "", SecretsAuthBrowser)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "https://")
+	})
+
+	t.Run("allows http loopback gateway URL", func(t *testing.T) {
+		t.Setenv(environments.EnvVarVaultGatewayURL, "")
+		ctx := *baseCtx
+		ctx.TenantContext = &tenantctx.EnvironmentContext{VaultGatewayURL: "http://127.0.0.1:1234"}
+		h, err := NewHandler(context.Background(), &ctx, "", SecretsAuthBrowser)
+		require.NoError(t, err)
+		require.Equal(t, "http://127.0.0.1:1234", h.GatewayURL)
+	})
 }
