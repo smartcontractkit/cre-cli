@@ -46,7 +46,7 @@ type EnvironmentSet struct {
 	WorkflowRegistryAddress          string `yaml:"CRE_CLI_WORKFLOW_REGISTRY_ADDRESS"`
 	WorkflowRegistryChainName        string `yaml:"CRE_CLI_WORKFLOW_REGISTRY_CHAIN_NAME"`
 	WorkflowRegistryChainExplorerURL string `yaml:"CRE_CLI_WORKFLOW_REGISTRY_CHAIN_EXPLORER_URL"`
-	DonFamily                        string `yaml:"CRE_CLI_DON_FAMILY"`
+	DonFamily                        string `yaml:"-"`
 }
 
 // RequiresVPN returns true if the GraphQL endpoint is on a private network

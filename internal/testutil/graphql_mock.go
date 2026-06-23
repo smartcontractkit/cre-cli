@@ -34,7 +34,7 @@ func MockGetTenantConfigGraphQLPayload() map[string]any {
 		"data": map[string]any{
 			"getTenantConfig": map[string]any{
 				"tenantId":         "test-tenant-id",
-				"defaultDonFamily": "test-don",
+				"defaultDonFamily": "zone-a",
 				"vaultGatewayUrl":  "https://vault.example.test",
 				"capabilitiesRegistry": map[string]any{
 					"chainSelector": "6433500567565415381",

@@ -77,6 +77,18 @@ type ChainType interface {
 	CollectCLIInputs(v *viper.Viper) map[string]string
 }
 
+// TriggerListener streams chain trigger payloads that match the selected
+// workflow subscription until the caller's context is cancelled.
+type TriggerListener interface {
+	Next(ctx context.Context) (interface{}, error)
+}
+
+// ListeningChainType is an optional extension for chain types that can keep
+// listening for trigger events and produce a fresh trigger payload each time.
+type ListeningChainType interface {
+	NewTriggerListener(ctx context.Context, selector uint64, params TriggerParams) (TriggerListener, error)
+}
+
 // CLIFlagDef describes a CLI flag a chain type needs registered.
 type CLIFlagDef struct {
 	Name         string

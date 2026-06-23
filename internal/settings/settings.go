@@ -134,7 +134,11 @@ func New(logger *zerolog.Logger, v *viper.Viper, cmd *cobra.Command, registryCha
 
 	privateKeys := make(map[string]string, len(AllChainTypes))
 	for _, f := range AllChainTypes {
-		privateKeys[f.Name] = NormalizeHexKey(v.GetString(f.PrivateKeyEnv))
+		raw := v.GetString(f.PrivateKeyEnv)
+		if isPrivateKeyEnvPlaceholder(raw) {
+			continue
+		}
+		privateKeys[f.Name] = NormalizeHexKey(raw)
 	}
 
 	return &Settings{

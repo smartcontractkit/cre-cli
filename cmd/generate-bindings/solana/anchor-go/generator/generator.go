@@ -12,8 +12,8 @@ import (
 var Debug = false // Set to true to enable debug logging.
 
 type Generator struct {
-	options            *GeneratorOptions
-	idl                *idl.Idl
+	options             *GeneratorOptions
+	idl                 *idl.Idl
 	complexEnumRegistry map[string]struct{}
 }
 
