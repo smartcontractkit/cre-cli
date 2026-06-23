@@ -29,11 +29,12 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/rs/zerolog v1.34.0
 	github.com/smartcontractkit/chain-selectors v1.0.102
-	github.com/smartcontractkit/chainlink-common v0.11.2-0.20260611160104-87b1e75d2c33
+	github.com/smartcontractkit/chainlink-common v0.11.2-0.20260623104656-f39eba3e2bc6
 	github.com/smartcontractkit/chainlink-common/keystore v1.2.0
 	github.com/smartcontractkit/chainlink-evm/gethwrappers v0.0.0-20260512150409-b4068bf735e6
-	github.com/smartcontractkit/chainlink-protos/cre/go v0.0.0-20260616232143-9a69bb7e7ebf
+	github.com/smartcontractkit/chainlink-protos/cre/go v0.0.0-20260618082634-432eb85805e7
 	github.com/smartcontractkit/chainlink-protos/workflows/go v0.0.0-20260528221400-84746b70eeeb
+	github.com/smartcontractkit/chainlink-solana/contracts v0.0.0-20260623120402-8a9c097642bf
 	github.com/smartcontractkit/chainlink-testing-framework/seth v1.51.5
 	github.com/smartcontractkit/chainlink/deployment v0.0.0-20260521170940-67f9a4b233f8
 	github.com/smartcontractkit/chainlink/v2 v2.29.1-cre-beta.0.0.20260618123253-f1ee915b9a56
@@ -47,7 +48,6 @@ require (
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.11.1
 	github.com/test-go/testify v1.1.4
-	go.uber.org/zap v1.28.0
 	golang.org/x/mod v0.36.0
 	golang.org/x/term v0.43.0
 	google.golang.org/protobuf v1.36.11
@@ -76,6 +76,7 @@ require (
 	github.com/NethermindEth/juno v0.12.5 // indirect
 	github.com/NethermindEth/starknet.go v0.8.0 // indirect
 	github.com/ProjectZKM/Ziren/crates/go-runtime/zkvm_runtime v0.0.0-20260416073033-7c2071eaa8d4 // indirect
+	github.com/Unheilbar/anchor-go v1.0.3 // indirect
 	github.com/VictoriaMetrics/fastcache v1.13.0 // indirect
 	github.com/XSAM/otelsql v0.42.0 // indirect
 	github.com/apache/arrow-go/v18 v18.6.0 // indirect
@@ -397,6 +398,7 @@ require (
 	go.uber.org/goleak v1.3.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/ratelimit v0.3.1 // indirect
+	go.uber.org/zap v1.28.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.4 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	go.yaml.in/yaml/v4 v4.0.0-rc.4 // indirect

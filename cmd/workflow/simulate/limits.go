@@ -94,6 +94,12 @@ func applyEngineLimits(cfg *cresettings.Workflows, limits *SimulationLimits) {
 	cfg.HTTPTrigger = src.HTTPTrigger
 	cfg.LogTrigger = src.LogTrigger
 
+	//ChainWrite limits - NOTE these are not applied here, but allows flexibility in the future if we want engine to control limits
+	cfg.ChainWrite.EVM.ReportSizeLimit = src.ChainWrite.EVM.ReportSizeLimit
+	cfg.ChainWrite.EVM.GasLimit = src.ChainWrite.EVM.GasLimit
+	cfg.ChainWrite.Solana.ReportSizeLimit = src.ChainWrite.Solana.ReportSizeLimit
+	cfg.ChainWrite.Solana.GasLimit = src.ChainWrite.Solana.GasLimit
+
 	// NOTE: ChainAllowed is NOT overridden — simulation keeps allow-all
 }
 
@@ -103,6 +109,8 @@ func disableEngineLimits(cfg *cresettings.Workflows) {
 	maxInt := settings.Setting[int]{DefaultValue: math.MaxInt32}
 	maxSize := settings.Setting[config.Size]{DefaultValue: math.MaxInt32}
 	maxDuration := settings.Setting[time.Duration]{DefaultValue: 24 * time.Hour}
+	maxGas := settings.Setting[uint64]{DefaultValue: math.MaxUint64}
+	maxGas32 := settings.Setting[uint32]{DefaultValue: math.MaxUint32}
 
 	// Execution limits
 	cfg.ExecutionTimeout = maxDuration
@@ -151,7 +159,10 @@ func disableEngineLimits(cfg *cresettings.Workflows) {
 
 	// ChainWrite limits
 	cfg.ChainWrite.TargetsLimit = maxInt
-	cfg.ChainWrite.ReportSizeLimit = maxSize
+	cfg.ChainWrite.EVM.ReportSizeLimit = maxSize
+	cfg.ChainWrite.EVM.GasLimit.Default = maxGas
+	cfg.ChainWrite.Solana.ReportSizeLimit = maxSize
+	cfg.ChainWrite.Solana.GasLimit.Default = maxGas32
 
 	// ChainRead limits
 	cfg.ChainRead.CallLimit = maxInt
@@ -196,6 +207,16 @@ func (l *SimulationLimits) ChainWriteGasLimit() uint64 {
 	return l.Workflows.ChainWrite.EVM.GasLimit.Default.DefaultValue
 }
 
+// SolanaChainWriteReportSizeLimit returns the Solana chain write report size limit in bytes.
+func (l *SimulationLimits) SolanaChainWriteReportSizeLimit() int {
+	return int(l.Workflows.ChainWrite.Solana.ReportSizeLimit.DefaultValue)
+}
+
+// SolanaChainWriteComputeLimit returns the default Solana chain write compute unit limit.
+func (l *SimulationLimits) SolanaChainWriteComputeLimit() uint32 {
+	return l.Workflows.ChainWrite.Solana.GasLimit.Default.DefaultValue
+}
+
 // WASMBinarySize returns the WASM binary size limit in bytes.
 func (l *SimulationLimits) WASMBinarySize() int {
 	return int(l.Workflows.WASMBinarySizeLimit.DefaultValue)
@@ -210,7 +231,7 @@ func (l *SimulationLimits) WASMCompressedBinarySize() int {
 func (l *SimulationLimits) LimitsSummary() string {
 	w := &l.Workflows
 	return fmt.Sprintf(
-		"HTTP: req=%s resp=%s timeout=%s | ConfHTTP: req=%s resp=%s timeout=%s | Consensus obs=%s | ChainWrite report=%s gas=%d | WASM binary=%s compressed=%s",
+		"HTTP: req=%s resp=%s timeout=%s | ConfHTTP: req=%s resp=%s timeout=%s | Consensus obs=%s | ChainWrite evm_report=%s evm_gas=%d solana_report=%s solana_cu=%d | WASM binary=%s compressed=%s",
 		w.HTTPAction.RequestSizeLimit.DefaultValue,
 		w.HTTPAction.ResponseSizeLimit.DefaultValue,
 		w.HTTPAction.ConnectionTimeout.DefaultValue,
@@ -220,6 +241,8 @@ func (l *SimulationLimits) LimitsSummary() string {
 		w.Consensus.ObservationSizeLimit.DefaultValue,
 		w.ChainWrite.ReportSizeLimit.DefaultValue,
 		w.ChainWrite.EVM.GasLimit.Default.DefaultValue,
+		w.ChainWrite.Solana.ReportSizeLimit.DefaultValue,
+		w.ChainWrite.Solana.GasLimit.Default.DefaultValue,
 		w.WASMBinarySizeLimit.DefaultValue,
 		w.WASMCompressedBinarySizeLimit.DefaultValue,
 	)
