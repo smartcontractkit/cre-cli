@@ -38,10 +38,11 @@ type RpcEndpoint struct {
 	Url string `mapstructure:"url" yaml:"url"`
 }
 
-// ExperimentalChain represents an EVM chain not in official chain-selectors.
+// ExperimentalChain represents a chain not in official chain-selectors.
 // Automatically used by the simulator when present in the target's experimental-chains config.
-// The ChainSelector is used as the selector key for EVM clients and forwarders.
+// ChainType selects the chain family; empty defaults to "evm" for backward compat.
 type ExperimentalChain struct {
+	ChainType     string `mapstructure:"chain-type" yaml:"chain-type"`
 	ChainSelector uint64 `mapstructure:"chain-selector" yaml:"chain-selector"`
 	RPCURL        string `mapstructure:"rpc-url" yaml:"rpc-url"`
 	Forwarder     string `mapstructure:"forwarder" yaml:"forwarder"`
@@ -291,19 +292,24 @@ func ChainNameFromSelectorString(raw string) (string, error) {
 // Tron, Ton, Starknet, Stellar, Canton). Returns an error if the name is not
 // found in any family.
 func GetChainSelectorByChainName(name string) (uint64, error) {
-	if chainID, err := chainSelectors.ChainIdFromName(name); err == nil {
-		selector, selErr := chainSelectors.SelectorFromChainId(chainID)
-		if selErr != nil {
-			return 0, fmt.Errorf("failed to get selector from chain ID %d: %w", chainID, selErr)
+	switch {
+	case strings.HasPrefix(name, chainSelectors.FamilySolana):
+		for _, c := range chainSelectors.SolanaALL {
+			if c.Name == name {
+				return c.Selector, nil
+			}
 		}
-		return selector, nil
+	default:
+		if chainID, err := chainSelectors.ChainIdFromName(name); err == nil {
+			selector, err := chainSelectors.SelectorFromChainId(chainID)
+			if err != nil {
+				return 0, fmt.Errorf("failed to get selector from chain ID %d: %w", chainID, err)
+			}
+			return selector, nil
+		}
 	}
 
-	if selector, ok := findNonEVMSelectorByName(name); ok {
-		return selector, nil
-	}
-
-	return 0, fmt.Errorf("chain not found for name %q\n  Run 'cre workflow supported-chains' to see all valid chain names", name)
+	return 0, fmt.Errorf("failed to get chain ID from name %q: chain not found\n  Run 'cre workflow supported-chains' to see all valid chain names", name)
 }
 
 // findNonEVMSelectorByName looks up a chain name in every non-EVM family

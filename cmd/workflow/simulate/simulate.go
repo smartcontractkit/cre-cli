@@ -105,7 +105,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	}
 
 	simulateCmd.Flags().BoolP("engine-logs", "g", false, "Enable non-fatal engine logging")
-	simulateCmd.Flags().Bool("broadcast", false, "Broadcast transactions to the EVM (default: false)")
+	simulateCmd.Flags().Bool("broadcast", false, "Broadcast transactions to configured chains (default: false)")
 	simulateCmd.Flags().String("wasm", "", "Path or URL to a pre-built WASM binary (skips compilation)")
 	simulateCmd.Flags().String("config", "", "Override the config file path from workflow.yaml")
 	simulateCmd.Flags().Bool("no-config", false, "Simulate without a config file")
@@ -494,11 +494,10 @@ func run(
 		}
 		srvcs = append(srvcs, manualTriggerCaps.ManualCronTrigger, manualTriggerCaps.ManualHTTPTrigger)
 
-		// Only set Limits when non-nil to avoid the typed-nil interface trap
-		// (a nil *SimulationLimits boxed into chain.Limits compares != nil).
-		var capLimits chain.Limits
+		// nil capLimits disables enforcement.
+		var capLimits *cresettings.Workflows
 		if simLimits != nil {
-			capLimits = simLimits
+			capLimits = &simLimits.Workflows
 		}
 
 		// Register chain-type-specific capabilities

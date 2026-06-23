@@ -197,13 +197,13 @@ func (l *SimulationLimits) ConsensusObservationSizeLimit() int {
 	return int(l.Workflows.Consensus.ObservationSizeLimit.DefaultValue)
 }
 
-// ChainWriteReportSizeLimit returns the chain write report size limit in bytes.
-func (l *SimulationLimits) ChainWriteReportSizeLimit() int {
-	return int(l.Workflows.ChainWrite.ReportSizeLimit.DefaultValue)
+// EVMChainWriteReportSizeLimit returns the EVM chain write report size limit in bytes.
+func (l *SimulationLimits) EVMChainWriteReportSizeLimit() int {
+	return int(l.Workflows.ChainWrite.EVM.ReportSizeLimit.DefaultValue)
 }
 
-// ChainWriteGasLimit returns the default EVM gas limit.
-func (l *SimulationLimits) ChainWriteGasLimit() uint64 {
+// EVMChainWriteGasLimit returns the default EVM gas limit.
+func (l *SimulationLimits) EVMChainWriteGasLimit() uint64 {
 	return l.Workflows.ChainWrite.EVM.GasLimit.Default.DefaultValue
 }
 

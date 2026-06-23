@@ -56,7 +56,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 				WorkflowName:      s.Workflow.UserWorkflowSettings.WorkflowName,
 				WorkflowPath:      s.Workflow.WorkflowArtifactSettings.WorkflowPath,
 				OwnerFromSettings: s.Workflow.UserWorkflowSettings.WorkflowOwnerAddress,
-				PrivateKey:        s.User.EthPrivateKey.Hex(),
+				PrivateKey:        s.User.PrivateKey(settings.EVM),
 				SkipTypeChecks:    v.GetBool(cmdcommon.SkipTypeChecksCLIFlag),
 				RegistryType:      registryType,
 				DerivedOwner:      runtimeContext.DerivedWorkflowOwner,
