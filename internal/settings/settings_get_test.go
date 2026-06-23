@@ -25,13 +25,38 @@ func TestGetWorkflowOwner(t *testing.T) {
 		assert.Equal(t, constants.WorkflowOwnerTypeEOA, ownerType)
 	})
 
-	t.Run("returns error for invalid eth private key", func(t *testing.T) {
+	t.Run("returns error for non-hex private key", func(t *testing.T) {
 		v := viper.New()
 		v.Set(settings.CreTargetEnvVar, "test")
 		v.Set(settings.EthPrivateKeyEnvVar, "invalid")
 
 		owner, ownerType, err := settings.GetWorkflowOwner(v)
 		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid private key: expected 64 hex characters")
+		assert.Equal(t, "", owner)
+		assert.Equal(t, "", ownerType)
+	})
+
+	t.Run("returns error for cre init placeholder", func(t *testing.T) {
+		v := viper.New()
+		v.Set(settings.CreTargetEnvVar, "test")
+		v.Set(settings.EthPrivateKeyEnvVar, settings.DefaultEthPrivateKeyEnvPlaceholder)
+
+		owner, ownerType, err := settings.GetWorkflowOwner(v)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "CRE_ETH_PRIVATE_KEY is not set")
+		assert.Equal(t, "", owner)
+		assert.Equal(t, "", ownerType)
+	})
+
+	t.Run("returns error for malformed hex private key", func(t *testing.T) {
+		v := viper.New()
+		v.Set(settings.CreTargetEnvVar, "test")
+		v.Set(settings.EthPrivateKeyEnvVar, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+
+		owner, ownerType, err := settings.GetWorkflowOwner(v)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid private key: expected 64 hex characters")
 		assert.Equal(t, "", owner)
 		assert.Equal(t, "", ownerType)
 	})

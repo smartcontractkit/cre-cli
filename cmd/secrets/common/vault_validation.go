@@ -3,7 +3,10 @@ package common
 import (
 	"context"
 	"fmt"
+	"strings"
 
+	"github.com/smartcontractkit/cre-cli/cmd/secrets/common/vaultdon"
+	"github.com/smartcontractkit/cre-cli/internal/onchain/capabilitiesregistry"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
@@ -14,7 +17,7 @@ const vaultValidationSkippedWarning = "Vault gateway validation skipped; the enc
 // enables on-chain validation (skipValidation=false) or obtains explicit consent to
 // proceed without validation. The result is cached for the lifetime of the Handler so
 // encrypt and response parsing in the same command only prompt once.
-func (h *Handler) EnsureVaultValidationOrConsent(_ context.Context) (skipValidation bool, err error) {
+func (h *Handler) EnsureVaultValidationOrConsent(ctx context.Context) (skipValidation bool, err error) {
 	if h.vaultValidationDecided {
 		return h.skipVaultValidation, nil
 	}
@@ -25,6 +28,9 @@ func (h *Handler) EnsureVaultValidationOrConsent(_ context.Context) (skipValidat
 	}
 
 	if ok {
+		if err := h.initVaultDONResolver(ctx, rpcURL); err != nil {
+			return false, err
+		}
 		h.capRegRPCURL = rpcURL
 		h.capRegChainName = chainName
 		h.skipVaultValidation = false
@@ -83,4 +89,36 @@ func (h *Handler) CapabilitiesRegistryRPC() (rpcURL string, ok bool) {
 // CapabilitiesRegistryChainName returns the chain name for the tenant CapabilitiesRegistry.
 func (h *Handler) CapabilitiesRegistryChainName() string {
 	return h.capRegChainName
+}
+
+// VaultDONResolver returns the shared vault DON resolver when on-chain validation is enabled.
+func (h *Handler) VaultDONResolver() (*vaultdon.Resolver, bool) {
+	if h.skipVaultValidation || h.vaultDONResolver == nil {
+		return nil, false
+	}
+	return h.vaultDONResolver, true
+}
+
+func (h *Handler) initVaultDONResolver(ctx context.Context, rpcURL string) error {
+	if h.TenantContext == nil || h.TenantContext.CapabilitiesRegistry == nil {
+		return fmt.Errorf("capabilities registry is not configured in your user context; run `cre login` to refresh")
+	}
+
+	family := settings.EffectiveDonFamily(h.EnvironmentSet, h.TenantContext)
+	if family == "" {
+		return fmt.Errorf("don family is not configured; run `cre login` to refresh")
+	}
+
+	client, err := capabilitiesregistry.NewReadOnlyClient(
+		ctx,
+		rpcURL,
+		h.TenantContext.CapabilitiesRegistry.Address,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create capabilities registry client: %w", err)
+	}
+
+	h.capRegClient = client
+	h.vaultDONResolver = vaultdon.NewResolver(client, strings.TrimSpace(family))
+	return nil
 }

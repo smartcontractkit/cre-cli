@@ -119,7 +119,7 @@ func GenerateProjectEnvFile(workingDirectory string) (string, error) {
 
 	replacements := map[string]string{
 		"GithubApiToken": "your-github-token",
-		"EthPrivateKey":  "your-eth-private-key",
+		"EthPrivateKey":  DefaultEthPrivateKeyEnvPlaceholder,
 	}
 
 	if err := GenerateFileFromTemplate(outputPath, ProjectEnvironmentTemplateContent, replacements); err != nil {

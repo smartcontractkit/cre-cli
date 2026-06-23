@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -33,6 +34,7 @@ func init() {
 	}, []chain.CLIFlagDef{
 		{Name: TriggerInputTxHash, Description: "EVM trigger transaction hash (0x...)", FlagType: chain.CLIFlagString},
 		{Name: TriggerInputEventIndex, Description: "EVM trigger log index (0-based)", DefaultValue: "-1", FlagType: chain.CLIFlagInt},
+		{Name: TriggerInputReceiptTimeout, Description: "Timeout for waiting on an EVM transaction receipt (e.g. 30s, 2m)", DefaultValue: "1m", FlagType: chain.CLIFlagString},
 	})
 }
 
@@ -201,6 +203,30 @@ func (ct *EVMChainType) ExecuteTrigger(ctx context.Context, selector uint64, reg
 	return evmChain.ManualTrigger(ctx, registrationID, log)
 }
 
+func (ct *EVMChainType) NewTriggerListener(ctx context.Context, selector uint64, params chain.TriggerParams) (chain.TriggerListener, error) {
+	clientIface, ok := params.Clients[selector]
+	if !ok {
+		return nil, fmt.Errorf("no RPC configured for chain selector %d", selector)
+	}
+	client, ok := clientIface.(*ethclient.Client)
+	if !ok {
+		return nil, fmt.Errorf("invalid client type for EVM chain selector %d", selector)
+	}
+	if strings.TrimSpace(params.ChainTypeInputs[TriggerInputTxHash]) != "" {
+		return nil, fmt.Errorf("--listen cannot be combined with --%s for EVM log triggers", TriggerInputTxHash)
+	}
+
+	cfg, err := decodeLogTriggerConfig(params.TriggerPayload)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode EVM log trigger config: %w", err)
+	}
+	return NewEVMLogTriggerListener(ctx, client, WaitForLogConfig{
+		Selector:     selector,
+		Filter:       cfg,
+		WorkflowName: params.WorkflowName,
+	})
+}
+
 // Supports reports whether an EVM chain capability is live for the selector.
 func (ct *EVMChainType) Supports(selector uint64) bool {
 	if ct.evmChains == nil {
@@ -221,12 +247,12 @@ func (ct *EVMChainType) RunHealthCheck(resolved chain.ResolvedChains) error {
 // is true, an invalid or default-sentinel key is a hard error. Otherwise a
 // sentinel key is used with a warning so non-broadcast simulations can run.
 func (ct *EVMChainType) ResolveKey(creSettings *settings.Settings, broadcast bool) (interface{}, error) {
-	pk, err := crypto.HexToECDSA(creSettings.User.EthPrivateKey)
+	pk, err := crypto.HexToECDSA(creSettings.User.EthPrivateKey.Hex())
 	if err != nil {
 		// If the user explicitly set a key that looks like a hex string but is
 		// malformed (wrong length, invalid chars), always error with guidance.
-		// Skip placeholder values like "your-eth-private-key" from the default .env template.
-		if creSettings.User.EthPrivateKey != "" && isHexString(creSettings.User.EthPrivateKey) {
+		// Skip placeholder values like DefaultEthPrivateKeyEnvPlaceholder from the default .env template.
+		if creSettings.User.EthPrivateKey.IsSet() && isHexString(creSettings.User.EthPrivateKey.Hex()) {
 			return nil, fmt.Errorf(
 				"invalid private key: expected 64 hex characters (256 bits), got %d characters.\n\n"+
 					"The CLI reads CRE_ETH_PRIVATE_KEY from your .env file or system environment.\n"+
@@ -235,7 +261,7 @@ func (ct *EVMChainType) ResolveKey(creSettings *settings.Settings, broadcast boo
 					"  • Pasted an Ethereum address (40 chars) instead of a private key (64 chars)\n"+
 					"  • Value has extra quotes — use CRE_ETH_PRIVATE_KEY=abc123... without wrapping quotes\n"+
 					"  • Key was truncated during copy-paste",
-				len(creSettings.User.EthPrivateKey))
+				len(creSettings.User.EthPrivateKey.Hex()))
 		}
 		if broadcast {
 			return nil, fmt.Errorf(
@@ -266,8 +292,9 @@ func isHexString(s string) bool {
 
 // CLI input keys consumed from chain.TriggerParams.ChainTypeInputs.
 const (
-	TriggerInputTxHash     = "evm-tx-hash"
-	TriggerInputEventIndex = "evm-event-index"
+	TriggerInputTxHash         = "evm-tx-hash"
+	TriggerInputEventIndex     = "evm-event-index"
+	TriggerInputReceiptTimeout = "evm-receipt-timeout"
 )
 
 func (ct *EVMChainType) CollectCLIInputs(v *viper.Viper) map[string]string {
@@ -278,11 +305,15 @@ func (ct *EVMChainType) CollectCLIInputs(v *viper.Viper) map[string]string {
 	if idx := v.GetInt(TriggerInputEventIndex); idx >= 0 {
 		inputs[TriggerInputEventIndex] = strconv.Itoa(idx)
 	}
+	if timeout := strings.TrimSpace(v.GetString(TriggerInputReceiptTimeout)); timeout != "" {
+		inputs[TriggerInputReceiptTimeout] = timeout
+	}
 	return inputs
 }
 
 // ResolveTriggerData fetches the EVM log payload for the given selector from
-// CLI-supplied or interactively-prompted inputs.
+// CLI-supplied inputs, falling back to live log subscription in interactive mode
+// when no replay tx hash is given.
 func (ct *EVMChainType) ResolveTriggerData(ctx context.Context, selector uint64, params chain.TriggerParams) (interface{}, error) {
 	clientIface, ok := params.Clients[selector]
 	if !ok {
@@ -293,18 +324,46 @@ func (ct *EVMChainType) ResolveTriggerData(ctx context.Context, selector uint64,
 		return nil, fmt.Errorf("invalid client type for EVM chain selector %d", selector)
 	}
 
-	if params.Interactive {
-		return GetEVMTriggerLog(ctx, client)
+	receiptTimeout := time.Minute // default
+	if raw := strings.TrimSpace(params.ChainTypeInputs[TriggerInputReceiptTimeout]); raw != "" {
+		d, err := time.ParseDuration(raw)
+		if err != nil {
+			return nil, fmt.Errorf("invalid --%s %q: %w", TriggerInputReceiptTimeout, raw, err)
+		}
+		receiptTimeout = d
 	}
 
 	txHash := strings.TrimSpace(params.ChainTypeInputs[TriggerInputTxHash])
 	eventIndexStr := strings.TrimSpace(params.ChainTypeInputs[TriggerInputEventIndex])
-	if txHash == "" || eventIndexStr == "" {
+
+	// Replay path: explicit --evm-tx-hash. Works in both interactive and
+	// non-interactive modes for deterministic testing / CI.
+	if txHash != "" {
+		if eventIndexStr == "" {
+			return nil, fmt.Errorf("--evm-event-index is required when --evm-tx-hash is provided")
+		}
+		eventIndex, err := strconv.ParseUint(eventIndexStr, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid --evm-event-index %q: %w", eventIndexStr, err)
+		}
+		if params.Interactive {
+			printEVMTriggerReplayHeader(selector, txHash, eventIndex)
+		}
+		return GetEVMTriggerLogFromValues(ctx, client, txHash, eventIndex, receiptTimeout)
+	}
+
+	if !params.Interactive && !params.Listen {
 		return nil, fmt.Errorf("--evm-tx-hash and --evm-event-index are required for EVM triggers in non-interactive mode")
 	}
-	eventIndex, err := strconv.ParseUint(eventIndexStr, 10, 64)
+
+	// Interactive wait-for-log path.
+	cfg, err := decodeLogTriggerConfig(params.TriggerPayload)
 	if err != nil {
-		return nil, fmt.Errorf("invalid --evm-event-index %q: %w", eventIndexStr, err)
+		return nil, fmt.Errorf("failed to decode EVM log trigger config: %w", err)
 	}
-	return GetEVMTriggerLogFromValues(ctx, client, txHash, eventIndex)
+	return WaitForEVMTriggerLog(ctx, client, WaitForLogConfig{
+		Selector:     selector,
+		Filter:       cfg,
+		WorkflowName: params.WorkflowName,
+	})
 }
