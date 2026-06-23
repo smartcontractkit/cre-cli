@@ -532,7 +532,7 @@ func TestNonInteractiveCronTriggerDoesNotBlockOnSchedule(t *testing.T) {
 
 	beforeStart := makeBeforeStartNonInteractive(holder, inputs, func() *ManualTriggers {
 		return manualTriggers
-	})
+	}, nil)
 
 	triggerSub := []*pb.TriggerSubscription{{Id: "cron-trigger@1.0.0"}}
 	beforeStart(ctx, simulator.RunnerConfig{}, nil, nil, triggerSub)
@@ -585,7 +585,7 @@ func TestHTTPListenPayloadServerAcceptsMultipleRequests(t *testing.T) {
 func TestManualHTTPTriggerEventsHaveUniqueIDs(t *testing.T) {
 	t.Parallel()
 
-	svc := NewManualHTTPTriggerService(logger.Test(t), defaultHTTPTriggerServerPort)
+	svc := NewManualHTTPTriggerService(logger.Test(t), defaultHTTPTriggerServerPort, nil)
 	first := svc.createManualTriggerEvent(nil)
 	second := svc.createManualTriggerEvent(nil)
 

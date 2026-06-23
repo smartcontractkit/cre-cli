@@ -3,6 +3,7 @@ package evm
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"net/http"
@@ -16,9 +17,11 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/time/rate"
 	"google.golang.org/protobuf/types/known/anypb"
 
 	evmpb "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/chain-capabilities/evm"
+	"github.com/smartcontractkit/chainlink-common/pkg/config"
 	valuespb "github.com/smartcontractkit/chainlink-protos/cre/go/values/pb"
 )
 
@@ -626,6 +629,67 @@ func TestEVMLogTriggerListenerReturnsMultipleMatchingLogs(t *testing.T) {
 	secondLog := second.(*evmpb.Log)
 	assert.Equal(t, secondTx.Bytes(), secondLog.TxHash)
 	assert.Equal(t, uint32(1), secondLog.Index)
+}
+
+func TestEVMLogTriggerListenerEnforcesEventRateLimit(t *testing.T) {
+	t.Parallel()
+
+	m := newMockRPC(t)
+	c := newEthClient(t, m.srv.URL)
+	defer c.Close()
+
+	addr := addrFromHex("0xabcd000000000000000000000000000000000006")
+	sig := hashFromHex("0x" + strings.Repeat("e", 64))
+
+	m.mu.Lock()
+	m.headNumber = 400
+	m.logs = []*types.Log{
+		{
+			Address:     addr,
+			Topics:      []common.Hash{sig},
+			Data:        []byte{0x01},
+			BlockHash:   hashFromHex("0xbe"),
+			TxHash:      hashFromHex("0x" + strings.Repeat("3", 64)),
+			BlockNumber: 400,
+			TxIndex:     0,
+			Index:       0,
+		},
+		{
+			Address:     addr,
+			Topics:      []common.Hash{sig},
+			Data:        []byte{0x02},
+			BlockHash:   hashFromHex("0xbe"),
+			TxHash:      hashFromHex("0x" + strings.Repeat("4", 64)),
+			BlockNumber: 400,
+			TxIndex:     1,
+			Index:       1,
+		},
+	}
+	m.mu.Unlock()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	listener, err := NewEVMLogTriggerListener(ctx, c, WaitForLogConfig{
+		Selector: 16015286601757825753,
+		Filter: &evmpb.FilterLogTriggerRequest{
+			Addresses: [][]byte{addr.Bytes()},
+			Topics:    []*evmpb.TopicValues{{Values: [][]byte{sig.Bytes()}}},
+		},
+		PollInterval: 10 * time.Millisecond,
+		EventRateLimit: &config.Rate{
+			Limit: rate.Every(time.Hour),
+			Burst: 1,
+		},
+	})
+	require.NoError(t, err)
+
+	_, err = listener.Next(ctx)
+	require.NoError(t, err)
+
+	_, err = listener.Next(ctx)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, errLogTriggerEventRateLimitExceeded))
 }
 
 func TestManualEVMTriggerEventsHaveUniqueIDs(t *testing.T) {

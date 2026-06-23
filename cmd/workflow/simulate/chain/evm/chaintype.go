@@ -17,6 +17,7 @@ import (
 
 	corekeys "github.com/smartcontractkit/chainlink-common/keystore/corekeys"
 	evmpb "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/chain-capabilities/evm"
+	"github.com/smartcontractkit/chainlink-common/pkg/config"
 	"github.com/smartcontractkit/chainlink-common/pkg/services"
 
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain"
@@ -27,6 +28,10 @@ import (
 const defaultSentinelPrivateKey = "0000000000000000000000000000000000000000000000000000000000000001"
 
 var sentinelKeyBytes = common.FromHex(defaultSentinelPrivateKey)
+
+type logTriggerRateLimits interface {
+	LogTriggerEventRateLimit() config.Rate
+}
 
 func init() {
 	chain.Register(string(corekeys.EVM), func(lggr *zerolog.Logger) chain.ChainType {
@@ -215,15 +220,17 @@ func (ct *EVMChainType) NewTriggerListener(ctx context.Context, selector uint64,
 	if strings.TrimSpace(params.ChainTypeInputs[TriggerInputTxHash]) != "" {
 		return nil, fmt.Errorf("--listen cannot be combined with --%s for EVM log triggers", TriggerInputTxHash)
 	}
+	eventRateLimit := eventRateLimitFromLimits(params.Limits)
 
 	cfg, err := decodeLogTriggerConfig(params.TriggerPayload)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode EVM log trigger config: %w", err)
 	}
 	return NewEVMLogTriggerListener(ctx, client, WaitForLogConfig{
-		Selector:     selector,
-		Filter:       cfg,
-		WorkflowName: params.WorkflowName,
+		Selector:       selector,
+		Filter:         cfg,
+		WorkflowName:   params.WorkflowName,
+		EventRateLimit: eventRateLimit,
 	})
 }
 
@@ -362,8 +369,21 @@ func (ct *EVMChainType) ResolveTriggerData(ctx context.Context, selector uint64,
 		return nil, fmt.Errorf("failed to decode EVM log trigger config: %w", err)
 	}
 	return WaitForEVMTriggerLog(ctx, client, WaitForLogConfig{
-		Selector:     selector,
-		Filter:       cfg,
-		WorkflowName: params.WorkflowName,
+		Selector:       selector,
+		Filter:         cfg,
+		WorkflowName:   params.WorkflowName,
+		EventRateLimit: eventRateLimitFromLimits(params.Limits),
 	})
+}
+
+func eventRateLimitFromLimits(limits chain.Limits) *config.Rate {
+	if limits == nil {
+		return nil
+	}
+	triggerLimits, ok := limits.(logTriggerRateLimits)
+	if !ok {
+		return nil
+	}
+	rate := triggerLimits.LogTriggerEventRateLimit()
+	return &rate
 }

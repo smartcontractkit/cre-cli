@@ -13,9 +13,11 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"golang.org/x/time/rate"
 	"google.golang.org/protobuf/types/known/anypb"
 
 	evmpb "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/chain-capabilities/evm"
+	"github.com/smartcontractkit/chainlink-common/pkg/config"
 	valuespb "github.com/smartcontractkit/chainlink-protos/cre/go/values/pb"
 
 	"github.com/smartcontractkit/cre-cli/internal/settings"
@@ -35,12 +37,16 @@ const defaultWaitForLogPollInterval = 3 * time.Second
 // yet and never re-check it.
 const rescanOverlapBlocks = 5
 
+var errLogTriggerEventRateLimitExceeded = errors.New("simulation log trigger event rate limit exceeded")
+
 // WaitForLogConfig describes a workflow's EVM log trigger subscription so the
 // simulator can wait for the next matching on-chain event.
 type WaitForLogConfig struct {
 	Selector     uint64
 	Filter       *evmpb.FilterLogTriggerRequest
 	WorkflowName string
+	// EventRateLimit enforces LogTrigger.EventRateLimit when set.
+	EventRateLimit *config.Rate
 	// PollInterval overrides the polling cadence for tests. Zero means default.
 	PollInterval time.Duration
 	// NowBlock overrides the initial "latest block" lookup for tests. When nil,
@@ -56,6 +62,8 @@ type EVMLogTriggerListener struct {
 	fromBlock *big.Int
 	seen      map[string]struct{}
 	heartbeat int
+	limiter   *rate.Limiter
+	limitText string
 }
 
 func NewEVMLogTriggerListener(ctx context.Context, ethClient *ethclient.Client, cfg WaitForLogConfig) (*EVMLogTriggerListener, error) {
@@ -88,6 +96,13 @@ func NewEVMLogTriggerListener(ctx context.Context, ethClient *ethclient.Client, 
 	}
 	ui.Dim(fmt.Sprintf("Listening for logs starting at block %s...", fromBlock.String()))
 
+	var eventLimiter *rate.Limiter
+	limitText := ""
+	if cfg.EventRateLimit != nil && cfg.EventRateLimit.Limit > 0 && cfg.EventRateLimit.Burst > 0 {
+		eventLimiter = rate.NewLimiter(cfg.EventRateLimit.Limit, cfg.EventRateLimit.Burst)
+		limitText = cfg.EventRateLimit.String()
+	}
+
 	return &EVMLogTriggerListener{
 		ethClient: ethClient,
 		addresses: addresses,
@@ -95,6 +110,8 @@ func NewEVMLogTriggerListener(ctx context.Context, ethClient *ethclient.Client, 
 		poll:      poll,
 		fromBlock: fromBlock,
 		seen:      make(map[string]struct{}),
+		limiter:   eventLimiter,
+		limitText: limitText,
 	}, nil
 }
 
@@ -106,6 +123,9 @@ func (l *EVMLogTriggerListener) Next(ctx context.Context) (interface{}, error) {
 		log, err := l.scanOnce(ctx)
 		if err != nil {
 			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				return nil, err
+			}
+			if errors.Is(err, errLogTriggerEventRateLimitExceeded) {
 				return nil, err
 			}
 			ui.Dim(fmt.Sprintf("RPC error while listening for logs: %v (retrying)", err))
@@ -147,6 +167,9 @@ func (l *EVMLogTriggerListener) scanOnce(ctx context.Context) (*types.Log, error
 		key := logCursorKey(&logs[i])
 		if _, ok := l.seen[key]; ok {
 			continue
+		}
+		if l.limiter != nil && !l.limiter.Allow() {
+			return nil, fmt.Errorf("%w: %s", errLogTriggerEventRateLimitExceeded, l.limitText)
 		}
 		l.seen[key] = struct{}{}
 		return &logs[i], nil
