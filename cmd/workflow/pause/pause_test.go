@@ -21,7 +21,7 @@ func TestNonInteractive_WithoutYes_ReturnsError(t *testing.T) {
 	ctx := simulatedEnvironment.NewRuntimeContext()
 	ctx.Settings = &settings.Settings{
 		User: settings.UserSettings{
-			EthPrivateKey: chainsim.TestPrivateKey,
+			PrivateKeys: map[string]string{settings.EVM.Name: chainsim.TestPrivateKey},
 		},
 	}
 	ctx.Settings.Workflow.UserWorkflowSettings.WorkflowOwnerType = constants.WorkflowOwnerTypeEOA
@@ -47,7 +47,7 @@ func TestNonInteractive_WithYes_PassesGuard(t *testing.T) {
 	ctx := simulatedEnvironment.NewRuntimeContext()
 	ctx.Settings = &settings.Settings{
 		User: settings.UserSettings{
-			EthPrivateKey: chainsim.TestPrivateKey,
+			PrivateKeys: map[string]string{settings.EVM.Name: chainsim.TestPrivateKey},
 		},
 	}
 	ctx.Settings.Workflow.UserWorkflowSettings.WorkflowOwnerType = constants.WorkflowOwnerTypeEOA
@@ -141,7 +141,7 @@ func TestWorkflowPauseCommand(t *testing.T) {
 				ctx := simulatedEnvironment.NewRuntimeContext()
 				ctx.Settings = &settings.Settings{
 					User: settings.UserSettings{
-						EthPrivateKey: chainsim.TestPrivateKey,
+						PrivateKeys: map[string]string{settings.EVM.Name: chainsim.TestPrivateKey},
 					},
 				}
 				ctx.Settings.Workflow.UserWorkflowSettings.WorkflowOwnerType = constants.WorkflowOwnerTypeEOA

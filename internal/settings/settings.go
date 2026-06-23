@@ -80,9 +80,16 @@ type Settings struct {
 
 // UserSettings stores user-specific configurations.
 type UserSettings struct {
-	TargetName    string
-	EthPrivateKey EthPrivateKeyHex
-	EthUrl        string
+	TargetName  string
+	PrivateKeys map[string]string // keyed by ChainType.Name
+}
+
+// PrivateKey returns the signing key for the given chain, or "" if unset.
+func (u UserSettings) PrivateKey(f ChainType) string {
+	if u.PrivateKeys == nil {
+		return ""
+	}
+	return u.PrivateKeys[f.Name]
 }
 
 // New initializes and loads settings from YAML config files and the environment.
@@ -125,15 +132,15 @@ func New(logger *zerolog.Logger, v *viper.Viper, cmd *cobra.Command, registryCha
 		return nil, err
 	}
 
-	normPrivKey, err := ResolveEthPrivateKeyFromEnv(v.GetString(EthPrivateKeyEnvVar))
-	if err != nil {
-		return nil, err
+	privateKeys := make(map[string]string, len(AllChainTypes))
+	for _, f := range AllChainTypes {
+		privateKeys[f.Name] = NormalizeHexKey(v.GetString(f.PrivateKeyEnv))
 	}
 
 	return &Settings{
 		User: UserSettings{
-			EthPrivateKey: normPrivKey,
-			TargetName:    target,
+			PrivateKeys: privateKeys,
+			TargetName:  target,
 		},
 		Workflow:        workflowSettings,
 		StorageSettings: storageSettings,
@@ -207,7 +214,11 @@ func LoadEnv(logger *zerolog.Logger, v *viper.Viper, envPath string) {
 	loadedEnvFilePath = ""
 	loadedEnvVars = nil
 	loadedEnvFilePath, loadedEnvVars = loadEnvFile(logger, envPath)
-	bindAllVars(v, loadedEnvVars, EthPrivateKeyEnvVar, CreTargetEnvVar)
+	extras := []string{CreTargetEnvVar}
+	for _, f := range AllChainTypes {
+		extras = append(extras, f.PrivateKeyEnv)
+	}
+	bindAllVars(v, loadedEnvVars, extras...)
 }
 
 // LoadPublicEnv loads variables from envPath into the process environment
