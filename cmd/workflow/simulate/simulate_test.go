@@ -256,6 +256,45 @@ func TestSimulateResolveInputs_WasmFlag(t *testing.T) {
 	})
 }
 
+func TestSimulateResolveInputs_HTTPTriggerPort(t *testing.T) {
+	t.Parallel()
+
+	t.Run("default port when flag unset", func(t *testing.T) {
+		t.Parallel()
+		v := createSimulateTestViper(t)
+		creSettings := createSimulateTestSettings("test-workflow", "main.go", "")
+
+		runtimeCtx := &runtime.Context{
+			Logger:   testutil.NewTestLogger(),
+			Viper:    v,
+			Settings: creSettings,
+		}
+		h := newHandler(runtimeCtx)
+
+		inputs, err := h.ResolveInputs(v, creSettings)
+		require.NoError(t, err)
+		assert.Equal(t, defaultHTTPTriggerServerPort, inputs.HTTPTriggerPort)
+	})
+
+	t.Run("flag overrides default", func(t *testing.T) {
+		t.Parallel()
+		v := createSimulateTestViper(t)
+		v.Set("http-trigger-port", 3210)
+		creSettings := createSimulateTestSettings("test-workflow", "main.go", "")
+
+		runtimeCtx := &runtime.Context{
+			Logger:   testutil.NewTestLogger(),
+			Viper:    v,
+			Settings: creSettings,
+		}
+		h := newHandler(runtimeCtx)
+
+		inputs, err := h.ResolveInputs(v, creSettings)
+		require.NoError(t, err)
+		assert.Equal(t, 3210, inputs.HTTPTriggerPort)
+	})
+}
+
 func TestSimulateValidateInputs_URLBypass(t *testing.T) {
 	t.Parallel()
 
@@ -268,10 +307,11 @@ func TestSimulateValidateInputs_URLBypass(t *testing.T) {
 	h := newHandler(runtimeCtx)
 
 	inputs := Inputs{
-		WorkflowPath: tmpFile,
-		ConfigPath:   "https://example.com/config.yaml",
-		WasmPath:     "https://example.com/binary.wasm",
-		WorkflowName: "test-workflow",
+		WorkflowPath:    tmpFile,
+		ConfigPath:      "https://example.com/config.yaml",
+		WasmPath:        "https://example.com/binary.wasm",
+		HTTPTriggerPort: defaultHTTPTriggerServerPort,
+		WorkflowName:    "test-workflow",
 	}
 
 	err := h.ValidateInputs(inputs)
@@ -487,7 +527,7 @@ func TestNonInteractiveCronTriggerDoesNotBlockOnSchedule(t *testing.T) {
 	require.Nil(t, capErr)
 
 	holder := &TriggerInfoAndBeforeStart{}
-	inputs := Inputs{TriggerIndex: triggerIndex}
+	inputs := Inputs{TriggerIndex: triggerIndex, HTTPTriggerPort: defaultHTTPTriggerServerPort}
 	manualTriggers := &ManualTriggers{ManualCronTrigger: cronSvc}
 
 	beforeStart := makeBeforeStartNonInteractive(holder, inputs, func() *ManualTriggers {
@@ -545,7 +585,7 @@ func TestHTTPListenPayloadServerAcceptsMultipleRequests(t *testing.T) {
 func TestManualHTTPTriggerEventsHaveUniqueIDs(t *testing.T) {
 	t.Parallel()
 
-	svc := NewManualHTTPTriggerService(logger.Test(t))
+	svc := NewManualHTTPTriggerService(logger.Test(t), defaultHTTPTriggerServerPort)
 	first := svc.createManualTriggerEvent(nil)
 	second := svc.createManualTriggerEvent(nil)
 

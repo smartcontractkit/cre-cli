@@ -39,15 +39,17 @@ type ManualHTTPTriggerService struct {
 	workflowIDs map[string]string
 	inputs      map[string]*httptypedapi.Config
 	eventSeq    uint64
+	port        int
 }
 
-func NewManualHTTPTriggerService(parentLggr logger.Logger) *ManualHTTPTriggerService {
+func NewManualHTTPTriggerService(parentLggr logger.Logger, port int) *ManualHTTPTriggerService {
 	return &ManualHTTPTriggerService{
 		CapabilityInfo: manualHTTPTriggerInfo,
 		lggr:           logger.Named(parentLggr, "HTTPTriggerService"),
 		callbackCh:     make(map[string]chan capabilities.TriggerAndId[*httptypedapi.Payload]),
 		workflowIDs:    make(map[string]string),
 		inputs:         make(map[string]*httptypedapi.Config),
+		port:           port,
 	}
 }
 
@@ -121,7 +123,7 @@ func (f *ManualHTTPTriggerService) ManualTrigger(ctx context.Context, triggerID 
 }
 
 func (f *ManualHTTPTriggerService) listenForTriggerPayload(ctx context.Context) (*httptypedapi.Payload, error) {
-	payloadCh, closeServer, err := startHTTPListenPayloadServer(ctx, httpTriggerServerPort)
+	payloadCh, closeServer, err := startHTTPListenPayloadServer(ctx, f.port)
 	if err != nil {
 		return nil, err
 	}
