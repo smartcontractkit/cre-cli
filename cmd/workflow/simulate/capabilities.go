@@ -18,10 +18,6 @@ import (
 	"github.com/smartcontractkit/chainlink/v2/core/capabilities/fakes"
 )
 
-// httpTriggerServerPort is the port on which the local HTTP server listens
-// when no --http-payload flag is supplied and the user chooses to POST the payload.
-const httpTriggerServerPort = 2000
-
 // ManualTriggers holds chain-agnostic trigger services used in simulation.
 type ManualTriggers struct {
 	ManualCronTrigger *fakes.ManualCronTriggerService
@@ -30,7 +26,7 @@ type ManualTriggers struct {
 
 // NewManualTriggerCapabilities creates and registers cron and HTTP trigger capabilities.
 // These are chain-agnostic and shared across all chain types.
-func NewManualTriggerCapabilities(ctx context.Context, lggr logger.Logger, registry *capabilities.Registry) (*ManualTriggers, error) {
+func NewManualTriggerCapabilities(ctx context.Context, lggr logger.Logger, registry *capabilities.Registry, httpTriggerPort int) (*ManualTriggers, error) {
 	manualCronTrigger, err := fakes.NewManualCronTriggerService(lggr)
 	if err != nil {
 		return nil, err
@@ -40,7 +36,7 @@ func NewManualTriggerCapabilities(ctx context.Context, lggr logger.Logger, regis
 		return nil, err
 	}
 
-	manualHTTPTrigger := NewManualHTTPTriggerService(lggr)
+	manualHTTPTrigger := NewManualHTTPTriggerService(lggr, httpTriggerPort)
 	manualHTTPTriggerServer := httptrigger.NewHTTPServer(manualHTTPTrigger)
 	if err := registry.Add(ctx, manualHTTPTriggerServer); err != nil {
 		return nil, err

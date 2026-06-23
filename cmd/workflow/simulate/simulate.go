@@ -44,6 +44,7 @@ import (
 )
 
 const WorkflowExecutionTimeout = 5 * time.Minute
+const defaultHTTPTriggerServerPort = 2000
 
 type Inputs struct {
 	WasmPath     string `validate:"omitempty,file,ascii,max=97" cli:"--wasm"`
@@ -65,6 +66,7 @@ type Inputs struct {
 	HasTriggerIndex bool
 	TriggerIndex    int               `validate:"-"`
 	HTTPPayload     string            `validate:"-"` // JSON string or /path/to/file.json
+	HTTPTriggerPort int               `validate:"min=1,max=65535"`
 	ChainTypeInputs map[string]string `validate:"-"` // CLI-supplied chain-type-specific trigger inputs
 	// Listen keeps the HTTP trigger server running after each execution so it can
 	// process additional requests until the user interrupts (ctrl-C).
@@ -111,7 +113,8 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	// Non-interactive trigger selection flags
 	simulateCmd.Flags().Int("trigger-index", -1, "Index of the trigger to run (0-based)")
 	simulateCmd.Flags().String("http-payload", "", "HTTP trigger payload as JSON string or path to JSON file")
-	simulateCmd.Flags().Bool("listen", false, "Listen for HTTP requests or supported log triggers and run the simulator for each match")
+	simulateCmd.Flags().Int("http-trigger-port", defaultHTTPTriggerServerPort, "Port used by the local HTTP trigger server")
+	simulateCmd.Flags().Bool("listen", false, "Listen for HTTP requests or supported log triggers and run the simulator for each match (not supported by cron)")
 
 	// Register chain-type-specific CLI flags (e.g., --evm-tx-hash).
 	chain.RegisterAllCLIFlags(simulateCmd)
@@ -190,6 +193,11 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 		}
 	}
 
+	httpTriggerPort := v.GetInt("http-trigger-port")
+	if !v.IsSet("http-trigger-port") {
+		httpTriggerPort = defaultHTTPTriggerServerPort
+	}
+
 	return Inputs{
 		WasmPath:          v.GetString("wasm"),
 		WorkflowPath:      creSettings.Workflow.WorkflowArtifactSettings.WorkflowPath,
@@ -205,6 +213,7 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 		HasTriggerIndex:   v.IsSet("trigger-index"),
 		TriggerIndex:      v.GetInt("trigger-index"),
 		HTTPPayload:       v.GetString("http-payload"),
+		HTTPTriggerPort:   httpTriggerPort,
 		ChainTypeInputs:   chain.CollectAllCLIInputs(v),
 		Listen:            v.GetBool("listen"),
 		LimitsPath:        v.GetString("limits"),
@@ -477,7 +486,7 @@ func run(
 		// Register chain-agnostic cron and HTTP triggers
 		triggerLggr := lggr.Named("TriggerCapabilities")
 		var err error
-		manualTriggerCaps, err = NewManualTriggerCapabilities(ctx, triggerLggr, registry)
+		manualTriggerCaps, err = NewManualTriggerCapabilities(ctx, triggerLggr, registry, inputs.HTTPTriggerPort)
 		if err != nil {
 			ui.Error(fmt.Sprintf("Failed to create trigger capabilities: %v", err))
 			os.Exit(1)
@@ -714,7 +723,7 @@ func runHTTPListen(ctx context.Context, inputs Inputs, triggerInfo *TriggerInfoA
 		os.Exit(1)
 	}
 
-	payloadCh, closeServer, err := startHTTPListenPayloadServer(ctx, httpTriggerServerPort)
+	payloadCh, closeServer, err := startHTTPListenPayloadServer(ctx, inputs.HTTPTriggerPort)
 	if err != nil {
 		ui.Error(fmt.Sprintf("Failed to start HTTP trigger server: %v", err))
 		os.Exit(1)
@@ -769,7 +778,7 @@ func runHTTPListen(ctx context.Context, inputs Inputs, triggerInfo *TriggerInfoA
 			ui.Line()
 			ui.Step(fmt.Sprintf("Listen: ready for next request (run #%d)", iteration+1))
 		}
-		ui.Step(fmt.Sprintf("Waiting for HTTP request to start execution (listening on http://localhost:%d/trigger)...", httpTriggerServerPort))
+		ui.Step(fmt.Sprintf("Waiting for HTTP request to start execution (listening on http://localhost:%d/trigger)...", inputs.HTTPTriggerPort))
 
 		var payload *httptypedapi.Payload
 		select {
@@ -946,7 +955,7 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 				ui.Line()
 				ui.Step("No input detected for http-trigger. Supply the payload using one of:")
 				ui.Dim("1. POST JSON to the local trigger server, example:")
-				ui.Dim(fmt.Sprintf(`     curl -X POST http://localhost:%d/trigger \`, httpTriggerServerPort))
+				ui.Dim(fmt.Sprintf(`     curl -X POST http://localhost:%d/trigger \`, inputs.HTTPTriggerPort))
 				ui.Dim("          -H 'Content-Type: application/json' \\")
 				ui.Dim("          -d '{\"input\":{\"key\":\"value\"}}'")
 				ui.Dim("2. Re-run with --http-payload flag:")
@@ -960,7 +969,7 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 				p := payload
 				payload = nil
 				if p == nil {
-					ui.Step(fmt.Sprintf("Waiting for HTTP request to start execution (listening on http://localhost:%d/trigger)...", httpTriggerServerPort))
+					ui.Step(fmt.Sprintf("Waiting for HTTP request to start execution (listening on http://localhost:%d/trigger)...", inputs.HTTPTriggerPort))
 				}
 				return manualTriggerCaps.ManualHTTPTrigger.ManualTrigger(ctx, triggerRegistrationID, p)
 			}
@@ -1080,7 +1089,7 @@ func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inp
 				p := payload
 				payload = nil
 				if p == nil {
-					ui.Step(fmt.Sprintf("Waiting for HTTP request to start execution (listening on http://localhost:%d/trigger)...", httpTriggerServerPort))
+					ui.Step(fmt.Sprintf("Waiting for HTTP request to start execution (listening on http://localhost:%d/trigger)...", inputs.HTTPTriggerPort))
 				}
 				return manualTriggerCaps.ManualHTTPTrigger.ManualTrigger(ctx, triggerRegistrationID, p)
 			}
