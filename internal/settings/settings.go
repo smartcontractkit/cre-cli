@@ -12,13 +12,32 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
+	"github.com/smartcontractkit/chainlink-common/keystore/corekeys"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
-// sensitive information (not in configuration file)
-const (
-	EthPrivateKeyEnvVar = "CRE_ETH_PRIVATE_KEY"
-	CreTargetEnvVar     = "CRE_TARGET"
+const CreTargetEnvVar = "CRE_TARGET"
+
+// ChainType describes a chain family and the per-family settings the CLI
+// loads from the environment. Add a family by appending to AllChainTypes.
+type ChainType struct {
+	Name          string
+	PrivateKeyEnv string
+}
+
+var (
+	EVM = ChainType{
+		Name:          string(corekeys.EVM),
+		PrivateKeyEnv: "CRE_ETH_PRIVATE_KEY",
+	}
+
+	AllChainTypes = []ChainType{EVM}
+)
+
+// Backwards-compat aliases; prefer EVM.PrivateKeyEnv / Aptos.PrivateKeyEnv /
+// Solana.PrivateKeyEnv.
+var (
+	EthPrivateKeyEnvVar = EVM.PrivateKeyEnv
 )
 
 // State tracked by LoadEnv / LoadPublicEnv so downstream code (e.g. build

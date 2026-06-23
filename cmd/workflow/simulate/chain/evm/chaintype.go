@@ -156,13 +156,9 @@ func (ct *EVMChainType) RegisterCapabilities(ctx context.Context, cfg chain.Capa
 	// cfg.Limits is the generic chain.Limits contract. The EVM chain type
 	// needs the wider EVMChainLimits contract (adds ChainWriteGasLimit). A
 	// nil cfg.Limits disables enforcement entirely.
-	var evmLimits EVMChainLimits
+	var evmLimits chain.Limits
 	if cfg.Limits != nil {
-		el, ok := cfg.Limits.(EVMChainLimits)
-		if !ok {
-			return nil, fmt.Errorf("EVM chain type: limits value does not implement evm.EVMChainLimits (got %T)", cfg.Limits)
-		}
-		evmLimits = el
+		evmLimits = ExtractLimits(cfg.Limits)
 	}
 
 	evmCaps, err := NewEVMChainCapabilities(
@@ -252,7 +248,8 @@ func (ct *EVMChainType) ResolveKey(creSettings *settings.Settings, broadcast boo
 		// If the user explicitly set a key that looks like a hex string but is
 		// malformed (wrong length, invalid chars), always error with guidance.
 		// Skip placeholder values like DefaultEthPrivateKeyEnvPlaceholder from the default .env template.
-		if creSettings.User.PrivateKey(settings.EVM) != "" && isHexString(creSettings.User.PrivateKey(settings.EVM)) {
+		evmKey := creSettings.User.PrivateKey(settings.EVM)
+		if evmKey != "" && isHexString(evmKey) {
 			return nil, fmt.Errorf(
 				"invalid private key: expected 64 hex characters (256 bits), got %d characters.\n\n"+
 					"The CLI reads CRE_ETH_PRIVATE_KEY from your .env file or system environment.\n"+
