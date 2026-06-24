@@ -118,11 +118,6 @@ func GenerateBindingsTS(
 	if err := parsedIdl.Validate(); err != nil {
 		return "", fmt.Errorf("invalid IDL: %w", err)
 	}
-	if parsedIdl.Address == nil || parsedIdl.Address.IsZero() {
-		slog.Warn("IDL has no address field; generated program ID constant will be empty — pass the program ID at construction time",
-			"path", pathToIdl)
-	}
-
 	rawIdl, err := os.ReadFile(pathToIdl) //nolint:gosec // G703 -- path from trusted CLI flags
 	if err != nil {
 		return "", fmt.Errorf("read IDL %q: %w", pathToIdl, err)
