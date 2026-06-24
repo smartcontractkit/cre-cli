@@ -13,7 +13,7 @@ import (
 	evmserver "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/chain-capabilities/evm/server"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/core"
 	sdkpb "github.com/smartcontractkit/chainlink-protos/cre/go/sdk"
-	
+
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain"
 )
 
@@ -104,11 +104,7 @@ func TestLimitedEVMChainWriteReportRejectsOversizedReport(t *testing.T) {
 func TestLimitedEVMChainWriteReportRejectsOversizedGasLimit(t *testing.T) {
 	t.Parallel()
 
-<<<<<<< HEAD
-	limits := chain.Limits{ReportSize: 4}
-=======
-	limits := chain.Limits{ReportSize: 4, GasLimit: 10}
->>>>>>> d232d9efca1b722426902cbd10543b8043697a5d
+	limits := chain.Limits{GasLimit: 10}
 	inner := &evmClientCapabilityStub{}
 	wrapper := NewLimitedEVMChain(inner, limits)
 
