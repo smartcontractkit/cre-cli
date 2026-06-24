@@ -51,9 +51,8 @@ func TestLoadLimitsParsesCustomFileAndPreservesDefaultsForUnsetFields(t *testing
 		"ChainWrite": {
 			"ReportSizeLimit": "9kb",
 			"EVM": {
-				"GasLimit": {
-					"Default": "123"
-				}
+				"ReportSizeLimit": "9kb",
+				"GasLimit": {"Default": "1234567"}
 			}
 		}
 	}`)
@@ -64,7 +63,7 @@ func TestLoadLimitsParsesCustomFileAndPreservesDefaultsForUnsetFields(t *testing
 	assert.Equal(t, 7_000, limits.HTTPRequestSizeLimit())
 	assert.Equal(t, 100_000, limits.HTTPResponseSizeLimit(), "unset values should keep cresettings defaults")
 	assert.Equal(t, 9_000, limits.EVMChainWriteReportSizeLimit())
-	assert.Equal(t, uint64(123), limits.EVMChainWriteGasLimit())
+	assert.Equal(t, uint64(1234567), limits.EVMChainWriteGasLimit())
 	assert.Equal(t, 2*time.Second, limits.Workflows.HTTPAction.ConnectionTimeout.DefaultValue)
 }
 
@@ -176,6 +175,6 @@ func TestSimulationLimitsSummaryIncludesKeyLimitValues(t *testing.T) {
 	assert.Contains(t, summary, "HTTP: req=120kb resp=250kb timeout=10s")
 	assert.Contains(t, summary, "ConfHTTP: req=125kb resp=500kb timeout=1m30s")
 	assert.Contains(t, summary, "Consensus obs=25kb")
-	assert.Contains(t, summary, "ChainWrite report=50kb gas=10000000")
+	assert.Contains(t, summary, "ChainWrite evm_report=50kb evm_gas=10000000")
 	assert.Contains(t, summary, "WASM binary=100mb compressed=20mb")
 }

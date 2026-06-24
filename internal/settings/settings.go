@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/smartcontractkit/chainlink-common/keystore/corekeys"
+
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 

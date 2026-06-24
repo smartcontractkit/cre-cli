@@ -239,7 +239,7 @@ func (l *SimulationLimits) LimitsSummary() string {
 		w.ConfidentialHTTP.ResponseSizeLimit.DefaultValue,
 		w.ConfidentialHTTP.ConnectionTimeout.DefaultValue,
 		w.Consensus.ObservationSizeLimit.DefaultValue,
-		w.ChainWrite.ReportSizeLimit.DefaultValue,
+		w.ChainWrite.EVM.ReportSizeLimit.DefaultValue,
 		w.ChainWrite.EVM.GasLimit.Default.DefaultValue,
 		w.ChainWrite.Solana.ReportSizeLimit.DefaultValue,
 		w.ChainWrite.Solana.GasLimit.Default.DefaultValue,
