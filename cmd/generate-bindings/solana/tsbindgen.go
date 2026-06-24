@@ -119,7 +119,8 @@ func GenerateBindingsTS(
 		return "", fmt.Errorf("invalid IDL: %w", err)
 	}
 	if parsedIdl.Address == nil || parsedIdl.Address.IsZero() {
-		return "", fmt.Errorf("address is empty in idl file: %s", pathToIdl)
+		slog.Warn("IDL has no address field; generated program ID constant will be empty — pass the program ID at construction time",
+			"path", pathToIdl)
 	}
 
 	rawIdl, err := os.ReadFile(pathToIdl) //nolint:gosec // G703 -- path from trusted CLI flags
@@ -184,13 +185,17 @@ func buildTSBindingData(parsedIdl *idl.Idl, programName, idlJSON string) (*tsBin
 		return nil, fmt.Errorf("program name %q maps to invalid TypeScript class name %q", programName, className)
 	}
 
+	programID := ""
+	if parsedIdl.Address != nil && !parsedIdl.Address.IsZero() {
+		programID = parsedIdl.Address.String()
+	}
 	data := &tsBindingData{
 		ProgramName:    programName,
 		ClassName:      className,
 		MockName:       className + "Mock",
 		ProgramIDConst: toUpperSnake(programName) + "_PROGRAM_ID",
 		IdlConst:       toUpperSnake(programName) + "_IDL",
-		ProgramID:      parsedIdl.Address.String(),
+		ProgramID:      programID,
 		IdlJSON:        idlJSON,
 	}
 

@@ -9,6 +9,24 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// writeTestIdlNoAddress writes a minimal valid IDL without an address field.
+func writeTestIdlNoAddress(t *testing.T) string {
+	t.Helper()
+	idl := `{
+  "metadata": {"name": "no_addr", "version": "0.1.0", "spec": "0.1.0"},
+  "instructions": [
+    {"name": "on_report", "discriminator": [214,173,18,221,173,148,151,208], "accounts": [], "args": []}
+  ],
+  "accounts": [],
+  "events": [],
+  "errors": [],
+  "types": []
+}`
+	path := filepath.Join(t.TempDir(), "no_addr.json")
+	require.NoError(t, os.WriteFile(path, []byte(idl), 0o600))
+	return path
+}
+
 // writeTestIdl writes a minimal valid IDL with the given types JSON fragment
 // and returns its path.
 func writeTestIdl(t *testing.T, typesJSON string) string {
@@ -183,6 +201,24 @@ func TestGenerateBindingsTS_FailLoud(t *testing.T) {
 			assert.Contains(t, err.Error(), tc.wantErr)
 		})
 	}
+}
+
+// TestGenerateBindingsTS_MissingAddress verifies that an IDL without an address
+// field succeeds (previously it returned an error). The generated program ID
+// constant must be empty so callers know to supply the address at construction time.
+func TestGenerateBindingsTS_MissingAddress(t *testing.T) {
+	idlPath := writeTestIdlNoAddress(t)
+	outDir := t.TempDir()
+	className, err := GenerateBindingsTS(idlPath, "no_addr", outDir)
+	require.NoError(t, err)
+	assert.Equal(t, "NoAddr", className)
+
+	content, err := os.ReadFile(filepath.Join(outDir, "NoAddr.ts"))
+	require.NoError(t, err)
+	source := string(content)
+
+	// Program ID constant must be empty — caller must supply it at construction time.
+	assert.Contains(t, source, "export const NO_ADDR_PROGRAM_ID = ''")
 }
 
 func TestGenerateBindingsTS_WriteMethodCollision(t *testing.T) {
