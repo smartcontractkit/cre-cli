@@ -13,16 +13,9 @@ import (
 	evmserver "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/chain-capabilities/evm/server"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/core"
 	sdkpb "github.com/smartcontractkit/chainlink-protos/cre/go/sdk"
+
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain"
 )
-
-type stubEVMLimits struct {
-	reportSizeLimit int
-	gasLimit        uint64
-}
-
-func (s *stubEVMLimits) ChainWriteReportSizeLimit() int { return s.reportSizeLimit }
-func (s *stubEVMLimits) ChainWriteGasLimit() uint64     { return s.gasLimit }
 
 type evmCapabilityBaseStub struct{}
 

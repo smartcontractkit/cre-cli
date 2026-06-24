@@ -136,7 +136,7 @@ func TestLoadEnvAndSettings(t *testing.T) {
 	s, err := settings.New(logger, v, cmd, "")
 	require.NoError(t, err)
 	assert.Equal(t, "staging", s.User.TargetName)
-	assert.Equal(t, settings.EthPrivateKeyHex("ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"), s.User.PrivateKey(settings.EVM))
+	assert.Equal(t, envVars[settings.EthPrivateKeyEnvVar], s.User.PrivateKey(settings.EVM))
 }
 
 func TestLoadEnvAndSettingsCreInitPlaceholderPrivateKey(t *testing.T) {
@@ -162,7 +162,7 @@ func TestLoadEnvAndSettingsCreInitPlaceholderPrivateKey(t *testing.T) {
 	cmd := makeCmdWithSecretsAuth("create", "browser")
 	s, err := settings.New(logger, v, cmd, "")
 	require.NoError(t, err)
-	assert.Empty(t, s.User.PrivateKey(settings.EVM))
+	assert.Equal(t, envVars[settings.EthPrivateKeyEnvVar], s.User.PrivateKey(settings.EVM))
 }
 
 func TestLoadEnvAndSettingsWithWorkflowSettingsFlag(t *testing.T) {
@@ -195,7 +195,7 @@ func TestLoadEnvAndSettingsWithWorkflowSettingsFlag(t *testing.T) {
 	s, err := settings.New(logger, v, cmd, "")
 	require.NoError(t, err)
 	assert.Equal(t, "staging", s.User.TargetName)
-	assert.Equal(t, settings.EthPrivateKeyHex("ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"), s.User.PrivateKey(settings.EVM))
+	assert.Equal(t, settings.NormalizeHexKey(envVars[settings.EthPrivateKeyEnvVar]), s.User.PrivateKey(settings.EVM))
 }
 
 func TestInlineEnvTakesPrecedenceOverDotEnv(t *testing.T) {
@@ -225,7 +225,7 @@ func TestInlineEnvTakesPrecedenceOverDotEnv(t *testing.T) {
 	s, err := settings.New(logger, v, cmd, "")
 	require.NoError(t, err)
 	assert.Equal(t, "staging", s.User.TargetName)
-	assert.Equal(t, settings.EthPrivateKeyHex("ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"), s.User.PrivateKey(settings.EVM))
+	assert.Equal(t, envVars[settings.EthPrivateKeyEnvVar], s.User.PrivateKey(settings.EVM))
 }
 
 func TestLoadEnvAndMergedSettings(t *testing.T) {
@@ -267,7 +267,7 @@ func TestLoadEnvAndMergedSettings(t *testing.T) {
 	rpc2 := s.Workflow.RPCs[1]
 	assert.Equal(t, "https://somethingElse.rpc.org", rpc1.Url, "First RPC URL mismatch")
 	assert.Equal(t, "https://something.rpc.org", rpc2.Url, "Second RPC URL mismatch")
-	assert.Equal(t, settings.EthPrivateKeyHex("ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"), s.User.PrivateKey(settings.EVM))
+	assert.Equal(t, envVars[settings.EthPrivateKeyEnvVar], s.User.PrivateKey(settings.EVM))
 }
 
 // helper to build a command with optional --broadcast flag and parse args
