@@ -4,6 +4,7 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
+	"github.com/smartcontractkit/chainlink-common/pkg/settings/cresettings"
 	"github.com/smartcontractkit/chainlink/v2/core/capabilities"
 )
 
@@ -17,12 +18,11 @@ type ChainConfig struct {
 	Forwarder string // chain-type-specific forwarding address
 }
 
-// Limits exposes the chain-write limits that every chain type's capability
-// enforcement layer needs. Chain-type-specific accessors (e.g. EVM gas limit)
-// live on chain-type-scoped extension interfaces in the family package so
-// non-EVM chain types cannot accidentally depend on EVM semantics.
-type Limits interface {
-	ChainWriteReportSizeLimit() int
+// Limits is the common per-family limits contract enforced by the
+// LimitedChain wrappers.
+type Limits struct {
+	ReportSize int
+	GasLimit   uint64
 }
 
 // ResolvedChains is the result of ChainType.ResolveClients: the RPC clients,
@@ -44,7 +44,7 @@ type CapabilityConfig struct {
 	Forwarders map[uint64]string
 	PrivateKey interface{} // chain-type-specific key type; EVM uses *ecdsa.PrivateKey
 	Broadcast  bool
-	Limits     Limits // nil disables limit enforcement
+	Limits     *cresettings.Workflows // nil disables enforcement
 	Logger     logger.Logger
 }
 
