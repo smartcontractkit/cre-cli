@@ -676,7 +676,7 @@ func TestEVMLogTriggerListenerEnforcesEventRateLimit(t *testing.T) {
 			Addresses: [][]byte{addr.Bytes()},
 			Topics:    []*evmpb.TopicValues{{Values: [][]byte{sig.Bytes()}}},
 		},
-		PollInterval: 10 * time.Millisecond,
+		PollInterval: time.Second,
 		EventRateLimit: &config.Rate{
 			Limit: rate.Every(time.Hour),
 			Burst: 1,
