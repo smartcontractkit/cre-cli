@@ -28,17 +28,17 @@ require (
 	github.com/machinebox/graphql v0.2.2
 	github.com/pkg/errors v0.9.1
 	github.com/rs/zerolog v1.34.0
-	github.com/smartcontractkit/chain-selectors v1.0.102
+	github.com/smartcontractkit/chain-selectors v1.0.104
 	github.com/smartcontractkit/chainlink-common v0.11.2-0.20260611160104-87b1e75d2c33
 	github.com/smartcontractkit/chainlink-common/keystore v1.2.0
 	github.com/smartcontractkit/chainlink-evm/gethwrappers v0.0.0-20260512150409-b4068bf735e6
-	github.com/smartcontractkit/chainlink-protos/cre/go v0.0.0-20260616232143-9a69bb7e7ebf
+	github.com/smartcontractkit/chainlink-protos/cre/go v0.0.0-20260623200841-e0322b819f62
 	github.com/smartcontractkit/chainlink-protos/workflows/go v0.0.0-20260528221400-84746b70eeeb
 	github.com/smartcontractkit/chainlink-testing-framework/seth v1.51.5
 	github.com/smartcontractkit/chainlink/deployment v0.0.0-20260521170940-67f9a4b233f8
 	github.com/smartcontractkit/chainlink/v2 v2.29.1-cre-beta.0.0.20260618123253-f1ee915b9a56
-	github.com/smartcontractkit/cre-sdk-go v1.12.0
-	github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm v1.0.0-beta.12
+	github.com/smartcontractkit/cre-sdk-go v1.13.0
+	github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm v1.0.0-beta.13
 	github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/solana v0.1.0-beta.1
 	github.com/smartcontractkit/mcms v0.45.0
 	github.com/smartcontractkit/tdh2/go/tdh2 v0.0.0-20251120172354-e8ec0386b06c
@@ -376,7 +376,7 @@ require (
 	go.opentelemetry.io/contrib/bridges/prometheus v0.68.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.68.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.67.0 // indirect
-	go.opentelemetry.io/otel v1.43.0 // indirect
+	go.opentelemetry.io/otel v1.44.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc v0.19.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploghttp v0.19.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc v1.43.0 // indirect
@@ -388,11 +388,11 @@ require (
 	go.opentelemetry.io/otel/exporters/stdout/stdoutmetric v1.43.0 // indirect
 	go.opentelemetry.io/otel/exporters/stdout/stdouttrace v1.43.0 // indirect
 	go.opentelemetry.io/otel/log v0.19.0 // indirect
-	go.opentelemetry.io/otel/metric v1.43.0 // indirect
+	go.opentelemetry.io/otel/metric v1.44.0 // indirect
 	go.opentelemetry.io/otel/sdk v1.43.0 // indirect
 	go.opentelemetry.io/otel/sdk/log v0.19.0 // indirect
 	go.opentelemetry.io/otel/sdk/metric v1.43.0 // indirect
-	go.opentelemetry.io/otel/trace v1.43.0 // indirect
+	go.opentelemetry.io/otel/trace v1.44.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.10.0 // indirect
 	go.uber.org/goleak v1.3.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
