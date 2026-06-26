@@ -37,5 +37,5 @@ func TestManualHTTPTriggerEnforcesRateLimit(t *testing.T) {
 
 	err = svc.ManualTrigger(context.Background(), "trigger-1", &httptypedapi.Payload{Input: []byte(`{"k":"v2"}`)})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "simulation limit exceeded: HTTP trigger rate limit")
+	assert.ErrorIs(t, err, errHTTPTriggerRateLimited)
 }

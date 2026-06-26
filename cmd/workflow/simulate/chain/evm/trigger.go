@@ -37,8 +37,6 @@ const defaultWaitForLogPollInterval = 3 * time.Second
 // yet and never re-check it.
 const rescanOverlapBlocks = 5
 
-var errLogTriggerEventRateLimitExceeded = errors.New("simulation log trigger event rate limit exceeded")
-
 // WaitForLogConfig describes a workflow's EVM log trigger subscription so the
 // simulator can wait for the next matching on-chain event.
 type WaitForLogConfig struct {
@@ -125,9 +123,6 @@ func (l *EVMLogTriggerListener) Next(ctx context.Context) (interface{}, error) {
 			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 				return nil, err
 			}
-			if errors.Is(err, errLogTriggerEventRateLimitExceeded) {
-				return nil, err
-			}
 			ui.Dim(fmt.Sprintf("RPC error while listening for logs: %v (retrying)", err))
 		} else if log != nil {
 			ui.Success(fmt.Sprintf("Matching EVM log event found at block %d (tx %s, index %d)",
@@ -169,7 +164,10 @@ func (l *EVMLogTriggerListener) scanOnce(ctx context.Context) (*types.Log, error
 			continue
 		}
 		if l.limiter != nil && !l.limiter.Allow() {
-			return nil, fmt.Errorf("%w: %s", errLogTriggerEventRateLimitExceeded, l.limitText)
+			ui.Warning(fmt.Sprintf("Log trigger event rate limit exceeded (%s) — event dropped (tx %s, index %d)",
+				l.limitText, logs[i].TxHash.Hex(), logs[i].Index))
+			l.seen[key] = struct{}{}
+			continue
 		}
 		l.seen[key] = struct{}{}
 		return &logs[i], nil

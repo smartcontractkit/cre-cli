@@ -687,9 +687,11 @@ func TestEVMLogTriggerListenerEnforcesEventRateLimit(t *testing.T) {
 	_, err = listener.Next(ctx)
 	require.NoError(t, err)
 
+	// The second log is rate-limited: it should be dropped silently and the
+	// listener should keep waiting rather than returning an error. The context
+	// times out because no further logs arrive.
 	_, err = listener.Next(ctx)
-	require.Error(t, err)
-	assert.True(t, errors.Is(err, errLogTriggerEventRateLimitExceeded))
+	assert.True(t, errors.Is(err, context.DeadlineExceeded), "expected deadline exceeded after rate-limited log is dropped, got: %v", err)
 }
 
 func TestManualEVMTriggerEventsHaveUniqueIDs(t *testing.T) {

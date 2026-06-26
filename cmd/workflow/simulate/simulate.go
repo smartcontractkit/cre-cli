@@ -599,6 +599,13 @@ func run(
 			simLogger.Info("Running trigger", "trigger", triggerInfoAndBeforeStart.TriggerToRun.GetId())
 			err := triggerInfoAndBeforeStart.TriggerFunc()
 			if err != nil {
+				if errors.Is(err, errHTTPTriggerRateLimited) {
+					simLogger.Warn("Trigger rate limited, skipping execution", "trigger", triggerInfoAndBeforeStart.TriggerToRun.GetId(), "limit", err)
+					if !listen {
+						return
+					}
+					continue
+				}
 				simLogger.Error("Failed to run trigger", "trigger", triggerInfoAndBeforeStart.TriggerToRun.GetId(), "error", err)
 				os.Exit(1)
 			}
@@ -736,6 +743,10 @@ func runHTTPListen(ctx context.Context, inputs Inputs, triggerInfo *TriggerInfoA
 	runPayload := func(payload *httptypedapi.Payload) bool {
 		simLogger.Info("Running trigger", "trigger", triggerInfo.TriggerToRun.GetId())
 		if err := triggerInfo.TriggerWithPayload(payload); err != nil {
+			if errors.Is(err, errHTTPTriggerRateLimited) {
+				simLogger.Warn("Trigger rate limited, skipping execution", "trigger", triggerInfo.TriggerToRun.GetId(), "limit", err)
+				return true
+			}
 			simLogger.Error("Failed to run trigger", "trigger", triggerInfo.TriggerToRun.GetId(), "error", err)
 			os.Exit(1)
 		}
@@ -761,19 +772,24 @@ func runHTTPListen(ctx context.Context, inputs Inputs, triggerInfo *TriggerInfoA
 		}
 		simLogger.Info("Running trigger", "trigger", triggerInfo.TriggerToRun.GetId())
 		if err := triggerInfo.TriggerFunc(); err != nil {
-			simLogger.Error("Failed to run trigger", "trigger", triggerInfo.TriggerToRun.GetId(), "error", err)
-			os.Exit(1)
+			if errors.Is(err, errHTTPTriggerRateLimited) {
+				simLogger.Warn("Trigger rate limited, skipping execution", "trigger", triggerInfo.TriggerToRun.GetId(), "limit", err)
+			} else {
+				simLogger.Error("Failed to run trigger", "trigger", triggerInfo.TriggerToRun.GetId(), "error", err)
+				os.Exit(1)
+			}
+		} else {
+			select {
+			case <-executionFinishedCh:
+				simLogger.Info("Execution finished signal received")
+			case <-ctx.Done():
+				simLogger.Info("Received interrupt signal, stopping execution")
+				return
+			case <-time.After(WorkflowExecutionTimeout):
+				simLogger.Warn("Timeout waiting for execution to finish")
+			}
+			iteration = 1
 		}
-		select {
-		case <-executionFinishedCh:
-			simLogger.Info("Execution finished signal received")
-		case <-ctx.Done():
-			simLogger.Info("Received interrupt signal, stopping execution")
-			return
-		case <-time.After(WorkflowExecutionTimeout):
-			simLogger.Warn("Timeout waiting for execution to finish")
-		}
-		iteration = 1
 	}
 
 	for {

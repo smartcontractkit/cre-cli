@@ -20,6 +20,8 @@ import (
 	"github.com/smartcontractkit/chainlink/v2/core/services/workflows/events"
 )
 
+var errHTTPTriggerRateLimited = fmt.Errorf("HTTP trigger rate limited")
+
 var _ services.Service = (*ManualHTTPTriggerService)(nil)
 var _ httpserver.HTTPCapability = (*ManualHTTPTriggerService)(nil)
 
@@ -112,7 +114,7 @@ func (f *ManualHTTPTriggerService) ManualTrigger(ctx context.Context, triggerID 
 		return fmt.Errorf("callback channel not found for triggerID")
 	}
 	if limiter != nil && !limiter.Allow() {
-		return fmt.Errorf("simulation limit exceeded: HTTP trigger rate limit %s", f.rateLimit.String())
+		return fmt.Errorf("%w: %s", errHTTPTriggerRateLimited, f.rateLimit.String())
 	}
 
 	if payload == nil {
