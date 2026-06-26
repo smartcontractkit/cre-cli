@@ -598,9 +598,7 @@ func run(
 		EnableBilling:  false,
 		Lggr:           engineLog,
 		LifecycleHooks: v2.LifecycleHooks{
-			OnRequirementsSet: func(executionId string, requirements *pb.Requirements) {
-				logRequirements(requirements)
-			},
+			OnRequirementsSet: logRequirements,
 			OnInitialized: func(err error) {
 				if err != nil {
 					simLogger.Error("Failed to initialize simulator", "error", err)
@@ -1004,7 +1002,7 @@ func getHTTPTriggerPayloadFromInput(input, invocationDir string) (*httptypedapi.
 	return &httptypedapi.Payload{Input: raw}, nil
 }
 
-func logRequirements(requirements *pb.Requirements) {
+func logRequirements(_ string, requirements *pb.Requirements) {
 	if requirements.Tee == nil || requirements.Tee.Item == nil {
 		return
 	}
