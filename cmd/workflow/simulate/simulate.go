@@ -552,10 +552,14 @@ func run(
 	triggerInfoAndBeforeStart := &TriggerInfoAndBeforeStart{}
 
 	getManualTriggerCaps := func() *ManualTriggers { return manualTriggerCaps }
+	var limitsWorkflows *cresettings.Workflows
+	if simLimits != nil {
+		limitsWorkflows = &simLimits.Workflows
+	}
 	if inputs.NonInteractive {
-		triggerInfoAndBeforeStart.BeforeStart = makeBeforeStartNonInteractive(triggerInfoAndBeforeStart, inputs, getManualTriggerCaps, simLimits)
+		triggerInfoAndBeforeStart.BeforeStart = makeBeforeStartNonInteractive(triggerInfoAndBeforeStart, inputs, getManualTriggerCaps, limitsWorkflows)
 	} else {
-		triggerInfoAndBeforeStart.BeforeStart = makeBeforeStartInteractive(triggerInfoAndBeforeStart, inputs, getManualTriggerCaps, simLimits)
+		triggerInfoAndBeforeStart.BeforeStart = makeBeforeStartInteractive(triggerInfoAndBeforeStart, inputs, getManualTriggerCaps, limitsWorkflows)
 	}
 
 	waitFn := func(context.Context, simulator.RunnerConfig, *capabilities.Registry, []services.Service) {
@@ -903,7 +907,7 @@ func getTriggerIndex(inputs Inputs, triggerSub []*pb.TriggerSubscription) (int, 
 }
 
 // makeBeforeStartInteractive builds the interactive BeforeStart closure
-func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs, manualTriggerCapsGetter func() *ManualTriggers, limits chain.Limits) func(context.Context, simulator.RunnerConfig, *capabilities.Registry, []services.Service, []*pb.TriggerSubscription) {
+func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs, manualTriggerCapsGetter func() *ManualTriggers, limits *cresettings.Workflows) func(context.Context, simulator.RunnerConfig, *capabilities.Registry, []services.Service, []*pb.TriggerSubscription) {
 	return func(
 		ctx context.Context,
 		cfg simulator.RunnerConfig,
@@ -1041,7 +1045,7 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 }
 
 // makeBeforeStartNonInteractive builds the non-interactive BeforeStart closure
-func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs, manualTriggerCapsGetter func() *ManualTriggers, limits chain.Limits) func(context.Context, simulator.RunnerConfig, *capabilities.Registry, []services.Service, []*pb.TriggerSubscription) {
+func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs, manualTriggerCapsGetter func() *ManualTriggers, limits *cresettings.Workflows) func(context.Context, simulator.RunnerConfig, *capabilities.Registry, []services.Service, []*pb.TriggerSubscription) {
 	return func(
 		ctx context.Context,
 		cfg simulator.RunnerConfig,
@@ -1242,7 +1246,7 @@ func getHTTPTriggerPayloadFromInput(invocationDir, input string) (*httptypedapi.
 
 // getTriggerDataForChainType resolves trigger data for a specific chain type.
 // Each chain type defines its own trigger data format.
-func getTriggerDataForChainType(ctx context.Context, ct chain.ChainType, selector uint64, triggerSub *pb.TriggerSubscription, inputs Inputs, limits chain.Limits, interactive bool) (interface{}, error) {
+func getTriggerDataForChainType(ctx context.Context, ct chain.ChainType, selector uint64, triggerSub *pb.TriggerSubscription, inputs Inputs, limits *cresettings.Workflows, interactive bool) (interface{}, error) {
 	return ct.ResolveTriggerData(ctx, selector, chain.TriggerParams{
 		Clients:         inputs.ChainTypeClients[ct.Name()],
 		Interactive:     interactive,

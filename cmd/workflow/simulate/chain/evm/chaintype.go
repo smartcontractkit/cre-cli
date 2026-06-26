@@ -19,6 +19,7 @@ import (
 	evmpb "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/chain-capabilities/evm"
 	"github.com/smartcontractkit/chainlink-common/pkg/config"
 	"github.com/smartcontractkit/chainlink-common/pkg/services"
+	"github.com/smartcontractkit/chainlink-common/pkg/settings/cresettings"
 
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
@@ -28,10 +29,6 @@ import (
 const defaultSentinelPrivateKey = "0000000000000000000000000000000000000000000000000000000000000001"
 
 var sentinelKeyBytes = common.FromHex(defaultSentinelPrivateKey)
-
-type logTriggerRateLimits interface {
-	LogTriggerEventRateLimit() config.Rate
-}
 
 func init() {
 	chain.Register(string(corekeys.EVM), func(lggr *zerolog.Logger) chain.ChainType {
@@ -377,14 +374,10 @@ func (ct *EVMChainType) ResolveTriggerData(ctx context.Context, selector uint64,
 	})
 }
 
-func eventRateLimitFromLimits(limits chain.Limits) *config.Rate {
+func eventRateLimitFromLimits(limits *cresettings.Workflows) *config.Rate {
 	if limits == nil {
 		return nil
 	}
-	triggerLimits, ok := limits.(logTriggerRateLimits)
-	if !ok {
-		return nil
-	}
-	rate := triggerLimits.LogTriggerEventRateLimit()
+	rate := limits.LogTrigger.EventRateLimit.DefaultValue
 	return &rate
 }

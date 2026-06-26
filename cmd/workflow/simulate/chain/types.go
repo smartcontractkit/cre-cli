@@ -55,7 +55,7 @@ type TriggerParams struct {
 	Clients         map[uint64]ChainClient
 	Interactive     bool
 	Listen          bool
-	Limits          Limits
+	Limits          *cresettings.Workflows
 	ChainTypeInputs map[string]string
 	// TriggerPayload is the protobuf Any payload from the selected
 	// pb.TriggerSubscription. Chain types unmarshal it into their own
