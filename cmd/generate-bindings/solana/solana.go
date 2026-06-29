@@ -292,7 +292,7 @@ func (h *handler) writeTSBarrel(inputs Inputs, classNames []string) error {
 	var sb strings.Builder
 	sb.WriteString("// Code generated — DO NOT EDIT.\n")
 	for _, name := range classNames {
-		fmt.Fprintf(&sb, "export * from './%s'\nexport * from './%s_mock'\n", name, name)
+		fmt.Fprintf(&sb, "export * from './%s'\n", name)
 	}
 	if err := os.WriteFile(indexPath, []byte(sb.String()), 0o600); err != nil {
 		return fmt.Errorf("failed to write index.ts: %w", err)
