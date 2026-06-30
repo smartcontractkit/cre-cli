@@ -31,14 +31,19 @@ var (
 		Name:          string(corekeys.EVM),
 		PrivateKeyEnv: "CRE_ETH_PRIVATE_KEY",
 	}
+	Solana = ChainType{
+		Name:          string(corekeys.Solana),
+		PrivateKeyEnv: "CRE_SOLANA_PRIVATE_KEY",
+	}
 
-	AllChainTypes = []ChainType{EVM}
+	AllChainTypes = []ChainType{EVM, Solana}
 )
 
 // Backwards-compat aliases; prefer EVM.PrivateKeyEnv / Aptos.PrivateKeyEnv /
 // Solana.PrivateKeyEnv.
 var (
-	EthPrivateKeyEnvVar = EVM.PrivateKeyEnv
+	EthPrivateKeyEnvVar    = EVM.PrivateKeyEnv
+	SolanaPrivateKeyEnvVar = Solana.PrivateKeyEnv
 )
 
 // State tracked by LoadEnv / LoadPublicEnv so downstream code (e.g. build
