@@ -249,20 +249,18 @@ func CleanLogMessage(msg string) string {
 	// Common patterns: time=..., timestamp=..., ts=..., level=...
 	msg = strings.TrimSpace(msg)
 
-	// Remove time=... patterns
-	timePattern := regexp.MustCompile(`time=\S+\s*`)
+	// Anchor on word-boundary so we don't eat substrings inside user words
+	// (e.g. `lamports=<n>` was getting its `ts=<n>` portion stripped).
+	timePattern := regexp.MustCompile(`\btime=\S+\s*`)
 	msg = timePattern.ReplaceAllString(msg, "")
 
-	// Remove timestamp=... patterns
-	timestampPattern := regexp.MustCompile(`timestamp=\S+\s*`)
+	timestampPattern := regexp.MustCompile(`\btimestamp=\S+\s*`)
 	msg = timestampPattern.ReplaceAllString(msg, "")
 
-	// Remove ts=... patterns
-	tsPattern := regexp.MustCompile(`ts=\S+\s*`)
+	tsPattern := regexp.MustCompile(`\bts=\S+\s*`)
 	msg = tsPattern.ReplaceAllString(msg, "")
 
-	// Remove level=... patterns
-	levelPattern := regexp.MustCompile(`level=\S+\s*`)
+	levelPattern := regexp.MustCompile(`\blevel=\S+\s*`)
 	msg = levelPattern.ReplaceAllString(msg, "")
 
 	return strings.TrimSpace(msg)
