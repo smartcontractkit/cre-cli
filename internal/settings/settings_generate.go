@@ -178,11 +178,16 @@ func FindOrCreateProjectSettings(startDir string, replacements map[string]string
 	return nil
 }
 
-func GenerateWorkflowSettingsFile(workingDirectory string, workflowName string, workflowPath string) (string, error) {
+func GenerateWorkflowSettingsFile(workingDirectory string, workflowName string, workflowPath string, deploymentRegistry string) (string, error) {
 	// Use default replacements.
 	replacements := GetDefaultReplacements()
 	replacements["WorkflowName"] = workflowName
 	replacements["WorkflowPath"] = workflowPath
+	if deploymentRegistry != "" {
+		replacements["DeploymentRegistryLine"] = fmt.Sprintf("    deployment-registry: %q", deploymentRegistry)
+	} else {
+		replacements["DeploymentRegistryLine"] = ""
+	}
 
 	// Resolve the absolute output path for the workflow settings file.
 	outputPath, err := filepath.Abs(path.Join(workingDirectory, constants.DefaultWorkflowSettingsFileName))

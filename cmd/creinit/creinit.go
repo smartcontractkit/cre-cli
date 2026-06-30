@@ -18,17 +18,19 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/templateconfig"
 	"github.com/smartcontractkit/cre-cli/internal/templaterepo"
+	"github.com/smartcontractkit/cre-cli/internal/tenantctx"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 	"github.com/smartcontractkit/cre-cli/internal/validation"
 )
 
 type Inputs struct {
-	ProjectName    string            `validate:"omitempty,project_name" cli:"project-name"`
-	TemplateName   string            `validate:"omitempty" cli:"template"`
-	WorkflowName   string            `validate:"omitempty,workflow_name" cli:"workflow-name"`
-	RpcURLs        map[string]string // chain-name -> url, from --rpc-url flags
-	NonInteractive bool
-	ProjectRoot    string // from -R / --project-root flag
+	ProjectName        string            `validate:"omitempty,project_name" cli:"project-name"`
+	TemplateName       string            `validate:"omitempty" cli:"template"`
+	WorkflowName       string            `validate:"omitempty,workflow_name" cli:"workflow-name"`
+	RpcURLs            map[string]string // chain-name -> url, from --rpc-url flags
+	DeploymentRegistry string            // from --deployment-registry flag
+	NonInteractive     bool
+	ProjectRoot        string // from -R / --project-root flag
 }
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
@@ -75,6 +77,7 @@ Templates are fetched dynamically from GitHub repositories.`,
 	initCmd.Flags().StringP("template", "t", "", "Name of the template to use (e.g., kv-store-go)")
 	initCmd.Flags().Bool("refresh", false, "Bypass template cache and fetch fresh data")
 	initCmd.Flags().StringArray("rpc-url", nil, "RPC URL for a network (format: chain-name=url, repeatable)")
+	initCmd.Flags().String("deployment-registry", "", "Registry ID to deploy workflows to (e.g. my-private-registry or onchain:ethereum-testnet-sepolia)")
 
 	// Deprecated: --template-id is kept for backwards compatibility, maps to hello-world-go
 	initCmd.Flags().Uint32("template-id", 0, "")
@@ -141,11 +144,12 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 	}
 
 	return Inputs{
-		ProjectName:    v.GetString("project-name"),
-		TemplateName:   templateName,
-		WorkflowName:   v.GetString("workflow-name"),
-		RpcURLs:        rpcURLs,
-		NonInteractive: v.GetBool("non-interactive"),
+		ProjectName:        v.GetString("project-name"),
+		TemplateName:       templateName,
+		WorkflowName:       v.GetString("workflow-name"),
+		RpcURLs:            rpcURLs,
+		DeploymentRegistry: v.GetString("deployment-registry"),
+		NonInteractive:     v.GetBool("non-interactive"),
 	}, nil
 }
 
@@ -270,7 +274,18 @@ func (h *handler) Execute(inputs Inputs) error {
 	}
 
 	// Run the interactive wizard
-	result, err := RunWizard(inputs, isNewProject, startDir, workflowTemplates, selectedTemplate)
+	if inputs.NonInteractive && inputs.DeploymentRegistry == "" {
+		ui.Warning("No --deployment-registry specified, defaulting to on-chain registry. Add --deployment-registry to make this explicit.")
+	}
+
+	var registries []*tenantctx.Registry
+	if h.runtimeContext.TenantContext != nil {
+		registries = h.runtimeContext.TenantContext.Registries
+	}
+	if len(registries) == 0 && !inputs.NonInteractive {
+		ui.Warning("No registries found for your organization — skipping registry selection. Run `cre registry list` to check.")
+	}
+	result, err := RunWizard(inputs, isNewProject, startDir, workflowTemplates, selectedTemplate, registries)
 	if err != nil {
 		// If stdin is not a terminal, the wizard will fail trying to open a TTY.
 		// Detect this via term.IsTerminal rather than matching third-party error strings.
@@ -301,6 +316,7 @@ func (h *handler) Execute(inputs Inputs) error {
 	// Extract values from wizard result
 	projName := result.ProjectName
 	workflowName := result.WorkflowName
+	deploymentRegistry := result.RegistryID
 
 	// Apply defaults
 	if projName == "" {
@@ -409,7 +425,7 @@ func (h *handler) Execute(inputs Inputs) error {
 					h.log.Debug().Msgf("Skipping workflow.yaml generation for %s (already exists from template)", wf.Dir)
 					continue
 				}
-				if _, err := settings.GenerateWorkflowSettingsFile(wfDir, wf.Dir, entryPoint); err != nil {
+				if _, err := settings.GenerateWorkflowSettingsFile(wfDir, wf.Dir, entryPoint, deploymentRegistry); err != nil {
 					return fmt.Errorf("failed to generate workflow settings for %s: %w", wf.Dir, err)
 				}
 			}
@@ -418,7 +434,7 @@ func (h *handler) Execute(inputs Inputs) error {
 			wfSettingsPath := filepath.Join(workflowDirectory, constants.DefaultWorkflowSettingsFileName)
 			if _, err := os.Stat(wfSettingsPath); err == nil {
 				h.log.Debug().Msgf("Skipping workflow.yaml generation (already exists from template)")
-			} else if _, err := settings.GenerateWorkflowSettingsFile(workflowDirectory, workflowName, entryPoint); err != nil {
+			} else if _, err := settings.GenerateWorkflowSettingsFile(workflowDirectory, workflowName, entryPoint, deploymentRegistry); err != nil {
 				return fmt.Errorf("failed to generate %s file: %w", constants.DefaultWorkflowSettingsFileName, err)
 			}
 		}
