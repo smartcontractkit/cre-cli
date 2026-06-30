@@ -34,7 +34,7 @@ require (
 	github.com/smartcontractkit/chainlink-evm/gethwrappers v0.0.0-20260512150409-b4068bf735e6
 	github.com/smartcontractkit/chainlink-protos/cre/go v0.0.0-20260618082634-432eb85805e7
 	github.com/smartcontractkit/chainlink-protos/workflows/go v0.0.0-20260528221400-84746b70eeeb
-	github.com/smartcontractkit/chainlink-solana/contracts v0.0.0-20260623120402-8a9c097642bf
+	github.com/smartcontractkit/chainlink-solana/contracts v0.0.0-20260630111559-5dc9e683ca16
 	github.com/smartcontractkit/chainlink-testing-framework/seth v1.51.5
 	github.com/smartcontractkit/chainlink/deployment v0.0.0-20260521170940-67f9a4b233f8
 	github.com/smartcontractkit/chainlink/v2 v2.29.1-cre-beta.0.0.20260623132047-9ce687ea3d0d

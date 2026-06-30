@@ -25,5 +25,5 @@ var SupportedChains = []chain.ChainConfig{
 // Required because the on-chain `report` instruction needs both program ID
 // (resolved via chain.ChainConfig.Forwarder) and state account (here).
 var forwarderStateAccounts = map[uint64]string{
-	chainselectors.SOLANA_DEVNET.Selector: "MBUQyaWiZ6TmEr3k7p9nuVnHZWv6KTL1j3tQCUGrJ4r",
+	chainselectors.SOLANA_DEVNET.Selector: "5Tipz3yhTBdVsDbaBxZkrp7Gjf3brGq5SKkxReefPMP7",
 }
