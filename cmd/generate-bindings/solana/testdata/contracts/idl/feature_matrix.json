@@ -1,0 +1,78 @@
+{
+  "address": "ECL8142j2YQAvs9R9geSsRnkVH2wLEi7soJCRyJ74cfL",
+  "metadata": {
+    "name": "feature_matrix",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Fixture exercising the v1 TypeScript type-coverage matrix"
+  },
+  "instructions": [
+    {
+      "name": "on_report",
+      "discriminator": [214, 173, 18, 221, 173, 148, 151, 208],
+      "accounts": [],
+      "args": [
+        {"name": "_metadata", "type": "bytes"},
+        {"name": "payload", "type": "bytes"}
+      ]
+    }
+  ],
+  "accounts": [],
+  "events": [],
+  "errors": [],
+  "types": [
+    {
+      "name": "Color",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {"name": "Red"},
+          {"name": "Green"},
+          {"name": "Blue"}
+        ]
+      }
+    },
+    {
+      "name": "Inner",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {"name": "id", "type": "u32"},
+          {"name": "label", "type": "string"}
+        ]
+      }
+    },
+    {
+      "name": "Everything",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {"name": "flag", "type": "bool"},
+          {"name": "tiny", "type": "u8"},
+          {"name": "tiny_signed", "type": "i8"},
+          {"name": "small", "type": "u16"},
+          {"name": "small_signed", "type": "i16"},
+          {"name": "medium", "type": "u32"},
+          {"name": "medium_signed", "type": "i32"},
+          {"name": "big", "type": "u64"},
+          {"name": "big_signed", "type": "i64"},
+          {"name": "huge", "type": "u128"},
+          {"name": "huge_signed", "type": "i128"},
+          {"name": "ratio", "type": "f32"},
+          {"name": "precise_ratio", "type": "f64"},
+          {"name": "title", "type": "string"},
+          {"name": "blob", "type": "bytes"},
+          {"name": "owner", "type": "pubkey"},
+          {"name": "scores", "type": {"vec": "u64"}},
+          {"name": "fixed_window", "type": {"array": ["u8", 32]}},
+          {"name": "maybe_note", "type": {"option": "string"}},
+          {"name": "nested", "type": {"defined": {"name": "Inner"}}},
+          {"name": "maybe_nested", "type": {"option": {"defined": {"name": "Inner"}}}},
+          {"name": "favorite_color", "type": {"defined": {"name": "Color"}}},
+          {"name": "color_history", "type": {"vec": {"defined": {"name": "Color"}}}},
+          {"name": "default", "type": "bool"}
+        ]
+      }
+    }
+  ]
+}
