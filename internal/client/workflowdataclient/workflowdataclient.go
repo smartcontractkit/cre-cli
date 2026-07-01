@@ -15,6 +15,7 @@ const DefaultPageSize = 100
 
 // Workflow is a workflow row returned by the platform list API.
 type Workflow struct {
+	UUID           string
 	Name           string
 	WorkflowID     string
 	OwnerAddress   string
@@ -46,6 +47,7 @@ const listWorkflowsQuery = `
 query ListWorkflows($input: WorkflowsInput!) {
   workflows(input: $input) {
     data {
+      uuid
       name
       workflowId
       ownerAddress
@@ -58,6 +60,7 @@ query ListWorkflows($input: WorkflowsInput!) {
 `
 
 type gqlWorkflow struct {
+	UUID           string `json:"uuid"`
 	Name           string `json:"name"`
 	WorkflowID     string `json:"workflowId"`
 	OwnerAddress   string `json:"ownerAddress"`

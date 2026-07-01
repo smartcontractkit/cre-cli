@@ -80,6 +80,14 @@ func (h *handler) handleUpsert(ctx context.Context, params client.RegisterWorkfl
 		if h.inputs.ConfigURL != nil && *h.inputs.ConfigURL != "" {
 			ui.Dim(fmt.Sprintf("   Config URL:       %s", *h.inputs.ConfigURL))
 		}
+		ui.Line()
+		ui.Bold("Next steps:")
+		ui.Dim("   cre workflow list")
+		ui.Dim(fmt.Sprintf("   cre workflow execution list %s", workflowName))
+		ui.Dim(fmt.Sprintf("   cre workflow execution list %s --status FAILURE", workflowName))
+		ui.Dim("   cre workflow execution status <execution-id>")
+		ui.Dim("   cre workflow execution events  <execution-id>")
+		ui.Dim("   cre workflow execution logs    <execution-id>")
 
 	case client.Raw:
 		ui.Line()
