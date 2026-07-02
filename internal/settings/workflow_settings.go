@@ -301,11 +301,9 @@ func IsValidChainName(name string) error {
 	return nil
 }
 
-// For commands that don't need the workflow owner, we skip deriving it from an
-// Ethereum private key during settings load.
-// ShouldSkipGetOwner returns true for simulate because simulate resolves
-// chain-family-specific broadcast keys later, after it knows which chains have
-// configured clients. `cre help` should skip as well.
+// For commands that don't need the private key, we skip getting the owner address.
+// ShouldSkipGetOwner returns true if the command is `simulate` and
+// `--broadcast` is false or not set. `cre help` should skip as well.
 // It also returns true for secrets commands using the browser OAuth flow, where
 // the owner is resolved from OAuth credentials rather than an ETH private key.
 func ShouldSkipGetOwner(cmd *cobra.Command) bool {
@@ -315,7 +313,10 @@ func ShouldSkipGetOwner(cmd *cobra.Command) bool {
 	case "hash":
 		return true
 	case "simulate":
-		return true
+		// Treat missing/invalid flag as false (i.e., skip).
+		// If broadcast is explicitly true, don't skip.
+		b, _ := cmd.Flags().GetBool("broadcast")
+		return !b
 	default:
 		// Browser OAuth flow resolves the owner from credentials, not from
 		// CRE_ETH_PRIVATE_KEY, so skip EOA owner derivation at settings load.

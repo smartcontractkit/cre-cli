@@ -462,9 +462,9 @@ func TestShouldSkipGetOwner(t *testing.T) {
 		wantSkip bool
 	}{
 		{
-			name:     "simulate with --broadcast=true → skip",
+			name:     "simulate with --broadcast=true → do NOT skip",
 			cmd:      makeCmd("simulate", true, "--broadcast"),
-			wantSkip: true,
+			wantSkip: false,
 		},
 		{
 			name:     "simulate with --broadcast=false → skip",

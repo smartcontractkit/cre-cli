@@ -2,8 +2,6 @@ package solana
 
 import (
 	"context"
-	"crypto/ed25519"
-	"encoding/hex"
 	"fmt"
 	"strings"
 
@@ -14,10 +12,10 @@ import (
 
 	corekeys "github.com/smartcontractkit/chainlink-common/keystore/corekeys"
 	"github.com/smartcontractkit/chainlink-common/pkg/services"
+	"github.com/smartcontractkit/chainlink-common/pkg/settings/cresettings"
 
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
-	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
 // 32 zero bytes → derives ed25519 sentinel keypair. Used when the user hasn't
@@ -46,7 +44,6 @@ func (ct *SolanaChainType) SupportedChains() []chain.ChainConfig { return Suppor
 func (ct *SolanaChainType) ResolveClients(v *viper.Viper) (chain.ResolvedChains, error) {
 	clients := make(map[uint64]chain.ChainClient)
 	forwarders := make(map[uint64]string)
-	experimental := make(map[uint64]bool)
 	ct.programIDs = make(map[uint64]solana.PublicKey)
 	ct.stateAccounts = make(map[uint64]solana.PublicKey)
 
@@ -82,78 +79,29 @@ func (ct *SolanaChainType) ResolveClients(v *viper.Viper) (chain.ResolvedChains,
 		ct.stateAccounts[c.Selector] = state
 	}
 
-	expChains, err := settings.GetExperimentalChains(v)
-	if err != nil {
-		return chain.ResolvedChains{}, fmt.Errorf("failed to load experimental chains config: %w", err)
-	}
-	for _, ec := range expChains {
-		if !strings.EqualFold(ec.ChainType, ct.Name()) {
-			continue
-		}
-		if ec.ChainSelector == 0 {
-			return chain.ResolvedChains{}, fmt.Errorf("experimental chain missing chain-selector")
-		}
-		if strings.TrimSpace(ec.RPCURL) == "" {
-			return chain.ResolvedChains{}, fmt.Errorf("experimental solana chain %d missing rpc-url", ec.ChainSelector)
-		}
-		forwarder := strings.TrimSpace(ec.Forwarder)
-		if forwarder == "" {
-			return chain.ResolvedChains{}, fmt.Errorf("experimental solana chain %d missing forwarder", ec.ChainSelector)
-		}
-		// Experimental Solana entries don't carry a state-account slot; for now we
-		// only support experimental chains whose program ID and state are already
-		// in the built-in maps. (Once the experimental-chains config grows a
-		// chain-specific extra blob, plumb state-account through here.)
-		programID, perr := solana.PublicKeyFromBase58(forwarder)
-		if perr != nil {
-			return chain.ResolvedChains{}, fmt.Errorf("invalid forwarder for experimental solana chain %d: %w", ec.ChainSelector, perr)
-		}
-		stateB58, hasState := forwarderStateAccounts[ec.ChainSelector]
-		if !hasState {
-			return chain.ResolvedChains{}, fmt.Errorf("experimental solana chain %d has no built-in state account; not yet supported", ec.ChainSelector)
-		}
-		state, sErr := solana.PublicKeyFromBase58(stateB58)
-		if sErr != nil {
-			return chain.ResolvedChains{}, fmt.Errorf("invalid state account for experimental solana chain %d: %w", ec.ChainSelector, sErr)
-		}
-
-		if _, exists := clients[ec.ChainSelector]; exists {
-			if forwarders[ec.ChainSelector] != forwarder {
-				ui.Warning(fmt.Sprintf("Warning: experimental solana chain %d overrides supported chain forwarder (supported: %s, experimental: %s)\n",
-					ec.ChainSelector, forwarders[ec.ChainSelector], forwarder))
-				forwarders[ec.ChainSelector] = forwarder
-				ct.programIDs[ec.ChainSelector] = programID
-			} else {
-				ct.log.Debug().Uint64("chain-selector", ec.ChainSelector).Msg("Experimental chain matches supported chain config")
-			}
-			continue
-		}
-		ct.log.Debug().Msgf("Using RPC for experimental solana chain %d: %s", ec.ChainSelector, chain.RedactURL(ec.RPCURL))
-		clients[ec.ChainSelector] = rpc.New(ec.RPCURL)
-		forwarders[ec.ChainSelector] = forwarder
-		ct.programIDs[ec.ChainSelector] = programID
-		ct.stateAccounts[ec.ChainSelector] = state
-		experimental[ec.ChainSelector] = true
-		ui.Dim(fmt.Sprintf("Added experimental solana chain (chain-selector: %d)\n", ec.ChainSelector))
-	}
-
-	return chain.ResolvedChains{Clients: clients, Forwarders: forwarders, ExperimentalSelectors: experimental}, nil
+	return chain.ResolvedChains{Clients: clients, Forwarders: forwarders}, nil
 }
 
 func (ct *SolanaChainType) ResolveKey(s *settings.Settings, broadcast bool) (interface{}, error) {
 	raw := strings.TrimSpace(s.User.PrivateKey(settings.Solana))
 
-	// Empty → sentinel (unless broadcasting).
+	// Solana simulation requires a valid private key in all cases (both broadcast and non-broadcast).
+	// Unlike EVM (which uses Anvil with pre-funded deterministic accounts), Solana's test network
+	// requires the transmitter account to exist and be funded on-chain. Using a random or sentinel key
+	// will fail when the RPC tries to access a non-existent signer account.
+	// Solution: Mandate CRE_SOLANA_PRIVATE_KEY for all Solana workflow simulations.
 	if raw == "" {
-		if broadcast {
-			return nil, fmt.Errorf("CRE_SOLANA_PRIVATE_KEY is required to broadcast. Please set it in your .env file or system environment")
-		}
-		ui.Warning("Using default Solana private key for chain write simulation. To use your own key, set CRE_SOLANA_PRIVATE_KEY in your .env file or system environment.")
-		seed, _ := hex.DecodeString(defaultSentinelSolanaSeed)
-		return solana.PrivateKey(ed25519.NewKeyFromSeed(seed)), nil
+		return nil, fmt.Errorf(
+			"CRE_SOLANA_PRIVATE_KEY is required for Solana workflow simulation.\n\n"+
+				"The Solana test network requires the transmitter account (derived from your private key) to exist and be funded on-chain.\n"+
+				"Please set your private key in your .env file or system environment:\n\n"+
+				"  CRE_SOLANA_PRIVATE_KEY=<your-64-byte-base58-keypair>\n\n"+
+				"You can generate a test key using: solana-keygen new\n"+
+				"Then fund it on devnet: solana airdrop 10 <your-address> --url devnet",
+		)
 	}
 
-	// Try base58 (64-byte solana keypair, standard Solana CLI / wallet format) first.
+	// Try base58 (64-byte solana keypair, standard Solana CLI / wallet format).
 	if key, err := solana.PrivateKeyFromBase58(raw); err == nil && len(key) == 64 {
 		if broadcast && key.PublicKey().IsZero() {
 			return nil, fmt.Errorf("CRE_SOLANA_PRIVATE_KEY decodes to a zero key; refusing to broadcast")
@@ -161,16 +109,7 @@ func (ct *SolanaChainType) ResolveKey(s *settings.Settings, broadcast bool) (int
 		return key, nil
 	}
 
-	// Fall back to 32-byte hex seed (parity with Aptos input convention).
-	hexSeed := strings.TrimPrefix(strings.ToLower(raw), "0x")
-	seed, err := hex.DecodeString(hexSeed)
-	if err != nil || len(seed) != 32 {
-		return nil, fmt.Errorf(
-			"CRE_SOLANA_PRIVATE_KEY must be a 64-byte base58 keypair or a 32-byte hex seed; got %d bytes via base58 / %d bytes via hex",
-			0, len(seed),
-		)
-	}
-	return solana.PrivateKey(ed25519.NewKeyFromSeed(seed)), nil
+	return nil, fmt.Errorf("CRE_SOLANA_PRIVATE_KEY must be a 64-byte base58 keypair")
 }
 
 func (ct *SolanaChainType) ResolveTriggerData(_ context.Context, _ uint64, _ chain.TriggerParams) (interface{}, error) {
@@ -242,4 +181,12 @@ func (ct *SolanaChainType) RunHealthCheck(resolved chain.ResolvedChains) error {
 
 func (ct *SolanaChainType) CollectCLIInputs(_ *viper.Viper) map[string]string {
 	return map[string]string{}
+}
+
+func ExtractLimits(w *cresettings.Workflows) chain.Limits {
+	return chain.Limits{
+		ReportSize: int(w.ChainWrite.Solana.ReportSizeLimit.DefaultValue),
+		// Solana compute-unit limit is Setting[uint32]; widen to chain.Limits.GasLimit (uint64).
+		GasLimit: uint64(w.ChainWrite.Solana.GasLimit.Default.DefaultValue),
+	}
 }
