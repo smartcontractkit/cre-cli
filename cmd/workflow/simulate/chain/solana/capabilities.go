@@ -9,9 +9,8 @@ import (
 
 	solanaserver "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/chain-capabilities/solana/server"
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
-	"github.com/smartcontractkit/chainlink/v2/core/capabilities"
-
 	solanafakes "github.com/smartcontractkit/chainlink-solana/contracts/capabilities/fakes"
+	"github.com/smartcontractkit/chainlink/v2/core/capabilities"
 
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain"
 )
