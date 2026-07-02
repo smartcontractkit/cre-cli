@@ -80,11 +80,11 @@ func (a *privateRegistryDeployStrategy) Upsert(ctx context.Context) error {
 	ui.Line()
 	ui.Bold("Next steps:")
 	ui.Dim("   cre workflow list")
-	ui.Dim(fmt.Sprintf("   cre workflow execution list %s", result.WorkflowName))
-	ui.Dim(fmt.Sprintf("   cre workflow execution list %s --status FAILURE", result.WorkflowName))
-	ui.Dim("   cre workflow execution status <execution-id>")
-	ui.Dim("   cre workflow execution events  <execution-id>")
-	ui.Dim("   cre workflow execution logs    <execution-id>")
+	ui.Dim(fmt.Sprintf("   cre execution list %s", result.WorkflowName))
+	ui.Dim(fmt.Sprintf("   cre execution list %s --status FAILURE", result.WorkflowName))
+	ui.Dim("   cre execution status <execution-id>")
+	ui.Dim("   cre execution events  <execution-id>")
+	ui.Dim("   cre execution logs    <execution-id>")
 
 	return nil
 }

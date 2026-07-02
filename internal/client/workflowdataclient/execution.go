@@ -78,6 +78,8 @@ type ListExecutionsInput struct {
 	Statuses     []ExecutionStatus
 	From         *time.Time
 	To           *time.Time
+	// Search is passed to the platform search filter (e.g. on-chain execution id hex).
+	Search *string
 	// Limit is the maximum number of results to return (capped at 100 by the API).
 	Limit int
 }
@@ -269,6 +271,9 @@ func (c *Client) ListExecutions(parent context.Context, in ListExecutionsInput) 
 	if in.To != nil {
 		input["to"] = in.To.UTC().Format(time.RFC3339)
 	}
+	if in.Search != nil && *in.Search != "" {
+		input["search"] = *in.Search
+	}
 
 	req := graphql.NewRequest(listExecutionsQuery)
 	req.Var("input", input)
@@ -282,12 +287,11 @@ func (c *Client) ListExecutions(parent context.Context, in ListExecutionsInput) 
 }
 
 // FindExecutionByOnChainID resolves the platform UUID for an execution given its
-// on-chain hex ID (the identifier shown in the Explorer UI). It searches recent
-// executions and matches on the id field.
+// on-chain hex ID (the identifier shown in the Explorer UI). It uses the platform
+// workflowExecutions search filter, then verifies an exact id match on the result.
 func (c *Client) FindExecutionByOnChainID(parent context.Context, onChainID string) (*Execution, error) {
-	// The API has no direct filter by on-chain ID, so we fetch a broad page
-	// and match client-side. The on-chain ID appears in recent executions.
-	executions, err := c.ListExecutions(parent, ListExecutionsInput{Limit: 100})
+	search := onChainID
+	executions, err := c.ListExecutions(parent, ListExecutionsInput{Search: &search, Limit: 10})
 	if err != nil {
 		return nil, fmt.Errorf("searching for execution %q: %w", onChainID, err)
 	}

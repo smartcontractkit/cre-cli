@@ -36,7 +36,6 @@ cre workflow [optional flags]
 * [cre workflow custom-build](cre_workflow_custom-build.md)	 - Converts an existing workflow to a custom (self-compiled) build
 * [cre workflow delete](cre_workflow_delete.md)	 - Deletes all versions of a workflow from the Workflow Registry
 * [cre workflow deploy](cre_workflow_deploy.md)	 - Deploys a workflow to the Workflow Registry contract
-* [cre workflow execution](cre_workflow_execution.md)	 - Query workflow execution history
 * [cre workflow get](cre_workflow_get.md)	 - Shows metadata for the workflow configured in workflow.yaml
 * [cre workflow hash](cre_workflow_hash.md)	 - Computes and displays workflow hashes
 * [cre workflow limits](cre_workflow_limits.md)	 - Manage simulation limits

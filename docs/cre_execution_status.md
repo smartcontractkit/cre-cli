@@ -1,4 +1,4 @@
-## cre workflow execution status
+## cre execution status
 
 Show detailed status of a single execution
 
@@ -8,14 +8,14 @@ Fetch and display the full status of a workflow execution, including
 top-level errors when the execution has failed.
 
 ```
-cre workflow execution status <execution-uuid> [optional flags]
+cre execution status <execution-uuid> [optional flags]
 ```
 
 ### Examples
 
 ```
-cre workflow execution status 7f3d8a12-b1c2-4d3e-9f0a-1b2c3d4e5f6g
-  cre workflow execution status 7f3d8a12-b1c2-4d3e-9f0a-1b2c3d4e5f6g --output json
+cre execution status 7f3d8a12-b1c2-4d3e-9f0a-1b2c3d4e5f6g
+  cre execution status 7f3d8a12-b1c2-4d3e-9f0a-1b2c3d4e5f6g --output json
 ```
 
 ### Options
@@ -40,5 +40,5 @@ cre workflow execution status 7f3d8a12-b1c2-4d3e-9f0a-1b2c3d4e5f6g
 
 ### SEE ALSO
 
-* [cre workflow execution](cre_workflow_execution.md)	 - Query workflow execution history
+* [cre execution](cre_execution.md)	 - Query workflow execution history
 

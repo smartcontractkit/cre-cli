@@ -1,4 +1,4 @@
-package workflowrender
+package workflowresolve
 
 import (
 	"encoding/json"
@@ -173,8 +173,8 @@ func PrintExecutionDetailTable(e workflowdataclient.Execution, failedEvents []wo
 
 	ui.Line()
 	ui.Bold("Debug further:")
-	ui.Dim(fmt.Sprintf("   cre workflow execution events %s", e.ID))
-	ui.Dim(fmt.Sprintf("   cre workflow execution logs   %s", e.ID))
+	ui.Dim(fmt.Sprintf("   cre execution events %s", e.ID))
+	ui.Dim(fmt.Sprintf("   cre execution logs   %s", e.ID))
 	ui.Line()
 }
 

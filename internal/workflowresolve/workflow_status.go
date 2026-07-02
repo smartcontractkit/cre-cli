@@ -1,4 +1,4 @@
-package workflowrender
+package workflowresolve
 
 import (
 	"encoding/json"
@@ -97,9 +97,9 @@ func PrintWorkflowStatusTable(v WorkflowStatusView) {
 		}
 		ui.Line()
 		ui.Bold("Debug further:")
-		ui.Dim(fmt.Sprintf("   cre workflow execution status %s", e.ID))
-		ui.Dim(fmt.Sprintf("   cre workflow execution events %s", e.ID))
-		ui.Dim(fmt.Sprintf("   cre workflow execution logs   %s", e.ID))
+		ui.Dim(fmt.Sprintf("   cre execution status %s", e.ID))
+		ui.Dim(fmt.Sprintf("   cre execution events %s", e.ID))
+		ui.Dim(fmt.Sprintf("   cre execution logs   %s", e.ID))
 	} else if s.Status == "PENDING" {
 		ui.Line()
 		ui.Dim("   Workflow has not executed yet — it may still be activating in the DON.")

@@ -1,4 +1,4 @@
-package workflowrender
+package workflowresolve
 
 import (
 	"testing"

@@ -1,4 +1,4 @@
-## cre workflow execution list
+## cre execution list
 
 List recent executions for a workflow
 
@@ -11,18 +11,18 @@ visible in 'cre workflow list') or a workflow name. When omitted, executions
 across all workflows are returned.
 
 ```
-cre workflow execution list [workflow-id-or-name] [flags]
+cre execution list [workflow-id-or-name] [flags]
 ```
 
 ### Examples
 
 ```
-cre workflow execution list
-  cre workflow execution list my-workflow
-  cre workflow execution list 00da21b8b3e117e31f3a3e8a0795225cbde6c00283a84395117669691f2b7856
-  cre workflow execution list my-workflow --status FAILURE
-  cre workflow execution list my-workflow --start 2026-01-01T00:00:00Z --end 2026-01-02T00:00:00Z
-  cre workflow execution list my-workflow --limit 50 --output json
+cre execution list
+  cre execution list my-workflow
+  cre execution list 00da21b8b3e117e31f3a3e8a0795225cbde6c00283a84395117669691f2b7856
+  cre execution list my-workflow --status FAILURE
+  cre execution list my-workflow --start 2026-01-01T00:00:00Z --end 2026-01-02T00:00:00Z
+  cre execution list my-workflow --limit 50 --output json
 ```
 
 ### Options
@@ -51,5 +51,5 @@ cre workflow execution list
 
 ### SEE ALSO
 
-* [cre workflow execution](cre_workflow_execution.md)	 - Query workflow execution history
+* [cre execution](cre_execution.md)	 - Query workflow execution history
 

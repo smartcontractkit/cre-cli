@@ -1,4 +1,4 @@
-## cre workflow execution logs
+## cre execution logs
 
 Show logs emitted during a workflow execution
 
@@ -8,15 +8,15 @@ Fetch and display all log lines emitted during a workflow execution.
 Use --node to filter to a specific capability node (client-side filter).
 
 ```
-cre workflow execution logs <execution-uuid> [optional flags]
+cre execution logs <execution-uuid> [optional flags]
 ```
 
 ### Examples
 
 ```
-cre workflow execution logs 7f3d8a12-b1c2-4d3e-9f0a-1b2c3d4e5f6g
-  cre workflow execution logs 7f3d8a12-b1c2-4d3e-9f0a-1b2c3d4e5f6g --node ProcessData
-  cre workflow execution logs 7f3d8a12-b1c2-4d3e-9f0a-1b2c3d4e5f6g --output json
+cre execution logs 7f3d8a12-b1c2-4d3e-9f0a-1b2c3d4e5f6g
+  cre execution logs 7f3d8a12-b1c2-4d3e-9f0a-1b2c3d4e5f6g --node ProcessData
+  cre execution logs 7f3d8a12-b1c2-4d3e-9f0a-1b2c3d4e5f6g --output json
 ```
 
 ### Options
@@ -42,5 +42,5 @@ cre workflow execution logs 7f3d8a12-b1c2-4d3e-9f0a-1b2c3d4e5f6g
 
 ### SEE ALSO
 
-* [cre workflow execution](cre_workflow_execution.md)	 - Query workflow execution history
+* [cre execution](cre_execution.md)	 - Query workflow execution history
 

@@ -12,10 +12,8 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/tenantctx"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
-	"github.com/smartcontractkit/cre-cli/internal/workflowrender"
+	"github.com/smartcontractkit/cre-cli/internal/workflowresolve"
 )
-
-const outputFormatJSON = "json"
 
 // Inputs holds the resolved and validated flag values for the list command.
 type Inputs struct {
@@ -28,9 +26,10 @@ type Inputs struct {
 
 // resolveInputs builds Inputs from raw flag values, validating that the
 // output format (if provided) is a recognised value.
-func resolveInputs(registryFilter string, includeDeleted bool, outputFormat string) (Inputs, error) {
-	if outputFormat != "" && outputFormat != outputFormatJSON {
-		return Inputs{}, fmt.Errorf("--output %q is not supported; only %q is accepted", outputFormat, outputFormatJSON)
+func resolveInputs(registryFilter string, includeDeleted bool, outputFormat string, jsonFlag bool) (Inputs, error) {
+	outputFormat, err := workflowresolve.ResolveOutputFormat(outputFormat, jsonFlag)
+	if err != nil {
+		return Inputs{}, err
 	}
 	return Inputs{
 		RegistryFilter: registryFilter,
@@ -80,9 +79,9 @@ func (h *Handler) Execute(ctx context.Context, inputs Inputs) error {
 	}
 
 	if inputs.RegistryFilter != "" {
-		if workflowrender.FindRegistry(h.tenantCtx.Registries, inputs.RegistryFilter) == nil {
+		if workflowresolve.FindRegistry(h.tenantCtx.Registries, inputs.RegistryFilter) == nil {
 			return fmt.Errorf("registry %q not found in user context; available: [%s]",
-				inputs.RegistryFilter, workflowrender.AvailableRegistryIDs(h.tenantCtx.Registries))
+				inputs.RegistryFilter, workflowresolve.AvailableRegistryIDs(h.tenantCtx.Registries))
 		}
 	}
 
@@ -95,31 +94,31 @@ func (h *Handler) Execute(ctx context.Context, inputs Inputs) error {
 	}
 
 	if inputs.RegistryFilter != "" {
-		reg := workflowrender.FindRegistry(h.tenantCtx.Registries, inputs.RegistryFilter)
-		rows = workflowrender.FilterRowsByRegistry(rows, reg, h.tenantCtx.Registries)
+		reg := workflowresolve.FindRegistry(h.tenantCtx.Registries, inputs.RegistryFilter)
+		rows = workflowresolve.FilterRowsByRegistry(rows, reg, h.tenantCtx.Registries)
 	}
 
 	afterRegistryFilter := len(rows)
 	if !inputs.IncludeDeleted {
-		rows = workflowrender.OmitDeleted(rows)
+		rows = workflowresolve.OmitDeleted(rows)
 	}
 
-	if inputs.OutputFormat == outputFormatJSON {
-		return workflowrender.PrintWorkflowsJSON(rows, h.tenantCtx.Registries)
+	if inputs.OutputFormat == workflowresolve.OutputFormatJSON {
+		return workflowresolve.PrintWorkflowsJSON(rows, h.tenantCtx.Registries)
 	}
 
-	workflowrender.PrintWorkflowTable(rows, h.tenantCtx.Registries, workflowrender.TableOptions{
+	workflowresolve.PrintWorkflowTable(rows, h.tenantCtx.Registries, workflowresolve.TableOptions{
 		CountBeforeDeletedFilter: afterRegistryFilter,
 		IncludeDeleted:           inputs.IncludeDeleted,
 	})
 
 	if len(rows) > 0 {
 		ui.Bold("Inspect executions:")
-		ui.Dim("   cre workflow execution list <workflow-id-or-name>")
-		ui.Dim("   cre workflow execution list <workflow-id-or-name> --status FAILURE")
-		ui.Dim("   cre workflow execution status <execution-id>")
-		ui.Dim("   cre workflow execution events  <execution-id>")
-		ui.Dim("   cre workflow execution logs    <execution-id>")
+		ui.Dim("   cre execution list <workflow-id-or-name>")
+		ui.Dim("   cre execution list <workflow-id-or-name> --status FAILURE")
+		ui.Dim("   cre execution status <execution-id>")
+		ui.Dim("   cre execution events  <execution-id>")
+		ui.Dim("   cre execution logs    <execution-id>")
 		ui.Line()
 	}
 
@@ -144,10 +143,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 			"  cre workflow list --output json > workflows.json",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if jsonFlag {
-				outputFormat = outputFormatJSON
-			}
-			inputs, err := resolveInputs(registryID, includeDeleted, outputFormat)
+			inputs, err := resolveInputs(registryID, includeDeleted, outputFormat, jsonFlag)
 			if err != nil {
 				return err
 			}

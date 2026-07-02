@@ -1,4 +1,4 @@
-## cre workflow execution events
+## cre execution events
 
 Show the node/capability event timeline for an execution
 
@@ -8,16 +8,16 @@ Fetch and display the ordered sequence of capability events for a workflow
 execution, including per-event status, method, duration, and any errors.
 
 ```
-cre workflow execution events <execution-uuid> [optional flags]
+cre execution events <execution-uuid> [optional flags]
 ```
 
 ### Examples
 
 ```
-cre workflow execution events 7f3d8a12-b1c2-4d3e-9f0a-1b2c3d4e5f6g
-  cre workflow execution events 7f3d8a12-b1c2-4d3e-9f0a-1b2c3d4e5f6g --capability fetch-price
-  cre workflow execution events 7f3d8a12-b1c2-4d3e-9f0a-1b2c3d4e5f6g --status FAILURE
-  cre workflow execution events 7f3d8a12-b1c2-4d3e-9f0a-1b2c3d4e5f6g --output json
+cre execution events 7f3d8a12-b1c2-4d3e-9f0a-1b2c3d4e5f6g
+  cre execution events 7f3d8a12-b1c2-4d3e-9f0a-1b2c3d4e5f6g --capability fetch-price
+  cre execution events 7f3d8a12-b1c2-4d3e-9f0a-1b2c3d4e5f6g --status FAILURE
+  cre execution events 7f3d8a12-b1c2-4d3e-9f0a-1b2c3d4e5f6g --output json
 ```
 
 ### Options
@@ -44,5 +44,5 @@ cre workflow execution events 7f3d8a12-b1c2-4d3e-9f0a-1b2c3d4e5f6g
 
 ### SEE ALSO
 
-* [cre workflow execution](cre_workflow_execution.md)	 - Query workflow execution history
+* [cre execution](cre_execution.md)	 - Query workflow execution history
 

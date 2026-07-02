@@ -1,4 +1,4 @@
-package execution
+package status
 
 import (
 	"context"
@@ -12,46 +12,55 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
-	"github.com/smartcontractkit/cre-cli/internal/workflowrender"
+	"github.com/smartcontractkit/cre-cli/internal/workflowresolve"
 )
 
-type StatusInputs struct {
-	ExecutionUUID string
-	OutputFormat  string
+// Inputs holds resolved and validated flag/arg values for execution status.
+type Inputs struct {
+	ExecutionRef string
+	OutputFormat string
 }
 
-type StatusHandler struct {
+func resolveInputs(executionRef, outputFormat string, jsonFlag bool) (Inputs, error) {
+	outputFormat, err := workflowresolve.ResolveOutputFormat(outputFormat, jsonFlag)
+	if err != nil {
+		return Inputs{}, err
+	}
+	return Inputs{ExecutionRef: executionRef, OutputFormat: outputFormat}, nil
+}
+
+// Handler fetches and renders a single execution detail view.
+type Handler struct {
 	credentials *credentials.Credentials
 	wdc         *workflowdataclient.Client
 }
 
-func NewStatusHandler(ctx *runtime.Context) *StatusHandler {
+// NewHandler builds a Handler with a real WorkflowDataClient.
+func NewHandler(ctx *runtime.Context) *Handler {
 	gql := graphqlclient.New(ctx.Credentials, ctx.EnvironmentSet, ctx.Logger)
 	wdc := workflowdataclient.New(gql, ctx.Logger)
-	return &StatusHandler{credentials: ctx.Credentials, wdc: wdc}
+	return &Handler{credentials: ctx.Credentials, wdc: wdc}
 }
 
-func NewStatusHandlerWithClient(ctx *runtime.Context, wdc *workflowdataclient.Client) *StatusHandler {
-	return &StatusHandler{credentials: ctx.Credentials, wdc: wdc}
+// NewHandlerWithClient builds a Handler with a pre-built client (for testing).
+func NewHandlerWithClient(ctx *runtime.Context, wdc *workflowdataclient.Client) *Handler {
+	return &Handler{credentials: ctx.Credentials, wdc: wdc}
 }
 
-func resolveStatusInputs(executionUUID, outputFormat string, jsonFlag bool) (StatusInputs, error) {
-	if jsonFlag {
-		outputFormat = outputFormatJSON
-	}
-	if outputFormat != "" && outputFormat != outputFormatJSON {
-		return StatusInputs{}, fmt.Errorf("--output %q is not supported; only %q is accepted", outputFormat, outputFormatJSON)
-	}
-	return StatusInputs{ExecutionUUID: executionUUID, OutputFormat: outputFormat}, nil
-}
-
-func (h *StatusHandler) Execute(ctx context.Context, in StatusInputs) error {
+// Execute fetches and renders execution status.
+func (h *Handler) Execute(ctx context.Context, inputs Inputs) error {
 	if h.credentials == nil {
 		return fmt.Errorf("credentials not available — run `cre login` and retry")
 	}
 
 	spinner := ui.NewSpinner()
 	spinner.Start("Fetching execution...")
+
+	uuid, err := workflowresolve.ResolveExecutionUUID(ctx, h.wdc, inputs.ExecutionRef)
+	if err != nil {
+		spinner.Stop()
+		return err
+	}
 
 	var (
 		exec       *workflowdataclient.Execution
@@ -60,12 +69,6 @@ func (h *StatusHandler) Execute(ctx context.Context, in StatusInputs) error {
 		wg         sync.WaitGroup
 	)
 
-	uuid, err := resolveExecutionUUID(ctx, h.wdc, in.ExecutionUUID)
-	if err != nil {
-		spinner.Stop()
-		return err
-	}
-
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -73,7 +76,6 @@ func (h *StatusHandler) Execute(ctx context.Context, in StatusInputs) error {
 	}()
 	wg.Wait()
 
-	// If the execution failed, fetch failed events in parallel with rendering setup.
 	if execErr == nil && exec.Status == workflowdataclient.ExecutionStatusFailure {
 		failStatus := "failure"
 		failEvents, _ = h.wdc.ListExecutionEvents(ctx, workflowdataclient.ListEventsInput{
@@ -87,14 +89,15 @@ func (h *StatusHandler) Execute(ctx context.Context, in StatusInputs) error {
 		return execErr
 	}
 
-	if in.OutputFormat == outputFormatJSON {
-		return workflowrender.PrintExecutionDetailJSON(*exec, failEvents)
+	if inputs.OutputFormat == workflowresolve.OutputFormatJSON {
+		return workflowresolve.PrintExecutionDetailJSON(*exec, failEvents)
 	}
-	workflowrender.PrintExecutionDetailTable(*exec, failEvents)
+	workflowresolve.PrintExecutionDetailTable(*exec, failEvents)
 	return nil
 }
 
-func newStatus(runtimeContext *runtime.Context) *cobra.Command {
+// New returns the cobra command.
+func New(runtimeContext *runtime.Context) *cobra.Command {
 	var outputFormat string
 	var jsonFlag bool
 
@@ -103,15 +106,15 @@ func newStatus(runtimeContext *runtime.Context) *cobra.Command {
 		Short: "Show detailed status of a single execution",
 		Long: `Fetch and display the full status of a workflow execution, including
 top-level errors when the execution has failed.`,
-		Example: "cre workflow execution status 7f3d8a12-b1c2-4d3e-9f0a-1b2c3d4e5f6g\n" +
-			"  cre workflow execution status 7f3d8a12-b1c2-4d3e-9f0a-1b2c3d4e5f6g --output json",
+		Example: "cre execution status 7f3d8a12-b1c2-4d3e-9f0a-1b2c3d4e5f6g\n" +
+			"  cre execution status 7f3d8a12-b1c2-4d3e-9f0a-1b2c3d4e5f6g --output json",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			in, err := resolveStatusInputs(args[0], outputFormat, jsonFlag)
+			inputs, err := resolveInputs(args[0], outputFormat, jsonFlag)
 			if err != nil {
 				return err
 			}
-			return NewStatusHandler(runtimeContext).Execute(cmd.Context(), in)
+			return NewHandler(runtimeContext).Execute(cmd.Context(), inputs)
 		},
 	}
 

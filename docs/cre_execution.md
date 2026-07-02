@@ -1,10 +1,14 @@
-## cre workflow execution
+## cre execution
 
 Query workflow execution history
 
 ### Synopsis
 
 The execution command provides visibility into workflow executions, node events, and logs.
+
+```
+cre execution [optional flags]
+```
 
 ### Options
 
@@ -26,9 +30,9 @@ The execution command provides visibility into workflow executions, node events,
 
 ### SEE ALSO
 
-* [cre workflow](cre_workflow.md)	 - Manages workflows
-* [cre workflow execution events](cre_workflow_execution_events.md)	 - Show the node/capability event timeline for an execution
-* [cre workflow execution list](cre_workflow_execution_list.md)	 - List recent executions for a workflow
-* [cre workflow execution logs](cre_workflow_execution_logs.md)	 - Show logs emitted during a workflow execution
-* [cre workflow execution status](cre_workflow_execution_status.md)	 - Show detailed status of a single execution
+* [cre](cre.md)	 - CRE CLI tool
+* [cre execution events](cre_execution_events.md)	 - Show the node/capability event timeline for an execution
+* [cre execution list](cre_execution_list.md)	 - List recent executions for a workflow
+* [cre execution logs](cre_execution_logs.md)	 - Show logs emitted during a workflow execution
+* [cre execution status](cre_execution_status.md)	 - Show detailed status of a single execution
 

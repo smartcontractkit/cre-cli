@@ -6,7 +6,6 @@ package wfstatus
 import (
 	"context"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -18,10 +17,22 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/tenantctx"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
-	"github.com/smartcontractkit/cre-cli/internal/workflowrender"
+	"github.com/smartcontractkit/cre-cli/internal/workflowresolve"
 )
 
-const outputFormatJSON = "json"
+// Inputs holds resolved and validated flag/arg values for workflow status.
+type Inputs struct {
+	WorkflowRef  string
+	OutputFormat string
+}
+
+func resolveInputs(workflowRef, outputFormat string, jsonFlag bool) (Inputs, error) {
+	outputFormat, err := workflowresolve.ResolveOutputFormat(outputFormat, jsonFlag)
+	if err != nil {
+		return Inputs{}, err
+	}
+	return Inputs{WorkflowRef: workflowRef, OutputFormat: outputFormat}, nil
+}
 
 // Handler fetches and renders a comprehensive workflow status view.
 type Handler struct {
@@ -42,65 +53,13 @@ func NewHandlerWithClient(ctx *runtime.Context, wdc *workflowdataclient.Client) 
 	return &Handler{credentials: ctx.Credentials, tenantCtx: ctx.TenantContext, wdc: wdc}
 }
 
-// resolveUUID returns the platform UUID for a workflow name or on-chain WorkflowID.
-func (h *Handler) resolveUUID(ctx context.Context, arg string) (string, error) {
-	if looksLikeWorkflowID(arg) {
-		return h.resolveByWorkflowID(ctx, arg)
-	}
-	return h.resolveByName(ctx, arg)
-}
-
-func (h *Handler) resolveByWorkflowID(ctx context.Context, workflowID string) (string, error) {
-	spinner := ui.NewSpinner()
-	spinner.Start(fmt.Sprintf("Resolving workflow ID %q...", workflowID))
-	rows, err := h.wdc.ListAll(ctx, workflowdataclient.DefaultPageSize)
-	spinner.Stop()
-	if err != nil {
-		return "", fmt.Errorf("resolving workflow ID %q: %w", workflowID, err)
-	}
-	for _, r := range rows {
-		if strings.EqualFold(r.WorkflowID, workflowID) {
-			if r.UUID == "" {
-				return "", fmt.Errorf("workflow with ID %q found but has no platform UUID", workflowID)
-			}
-			return r.UUID, nil
-		}
-	}
-	return "", fmt.Errorf("no workflow found with ID %q", workflowID)
-}
-
-func (h *Handler) resolveByName(ctx context.Context, name string) (string, error) {
-	spinner := ui.NewSpinner()
-	spinner.Start(fmt.Sprintf("Resolving workflow %q...", name))
-	rows, err := h.wdc.SearchByName(ctx, name, workflowdataclient.DefaultPageSize)
-	spinner.Stop()
-	if err != nil {
-		return "", fmt.Errorf("resolving workflow name %q: %w", name, err)
-	}
-	var matches []workflowdataclient.Workflow
-	for _, r := range rows {
-		if strings.EqualFold(strings.TrimSpace(r.Name), name) {
-			matches = append(matches, r)
-		}
-	}
-	if len(matches) == 0 {
-		return "", fmt.Errorf("no workflow found with name %q", name)
-	}
-	for _, r := range matches {
-		if strings.EqualFold(r.Status, "ACTIVE") {
-			return r.UUID, nil
-		}
-	}
-	return matches[0].UUID, nil
-}
-
 // Execute fetches all status data in parallel and renders it.
-func (h *Handler) Execute(ctx context.Context, arg, outputFormat string) error {
+func (h *Handler) Execute(ctx context.Context, inputs Inputs) error {
 	if h.credentials == nil {
 		return fmt.Errorf("credentials not available — run `cre login` and retry")
 	}
 
-	uuid, err := h.resolveUUID(ctx, arg)
+	uuid, err := workflowresolve.ResolveWorkflowUUID(ctx, h.wdc, inputs.WorkflowRef, workflowresolve.ResolveOptions{})
 	if err != nil {
 		return err
 	}
@@ -112,15 +71,14 @@ func (h *Handler) Execute(ctx context.Context, arg, outputFormat string) error {
 	from := now.AddDate(-1, 0, 0) // 1-year lookback — mirrors Explorer behaviour
 
 	var (
-		summary                                          *workflowdataclient.WorkflowSummary
-		deployment                                       *workflowdataclient.WorkflowDeploymentRecord
-		executions                                       []workflowdataclient.Execution
-		successCount, failureCount                       int
-		summaryErr, deployErr, execErr, succErr, failErr error
-		wg                                               sync.WaitGroup
+		summary                        *workflowdataclient.WorkflowSummary
+		deployment                     *workflowdataclient.WorkflowDeploymentRecord
+		executions                     []workflowdataclient.Execution
+		summaryErr, deployErr, execErr error
+		wg                             sync.WaitGroup
 	)
 
-	wg.Add(5)
+	wg.Add(3)
 	go func() {
 		defer wg.Done()
 		summary, summaryErr = h.wdc.GetWorkflowSummary(ctx, uuid, from)
@@ -136,14 +94,6 @@ func (h *Handler) Execute(ctx context.Context, arg, outputFormat string) error {
 			Limit:        1,
 		})
 	}()
-	go func() {
-		defer wg.Done()
-		successCount, succErr = h.wdc.CountExecutions(ctx, uuid, []workflowdataclient.ExecutionStatus{workflowdataclient.ExecutionStatusSuccess})
-	}()
-	go func() {
-		defer wg.Done()
-		failureCount, failErr = h.wdc.CountExecutions(ctx, uuid, []workflowdataclient.ExecutionStatus{workflowdataclient.ExecutionStatusFailure})
-	}()
 	wg.Wait()
 	spinner.Stop()
 
@@ -153,22 +103,10 @@ func (h *Handler) Execute(ctx context.Context, arg, outputFormat string) error {
 	if execErr != nil {
 		return execErr
 	}
-	// deployErr, succErr, failErr are non-fatal — show errors but continue rendering.
 	if deployErr != nil {
 		deployment = nil
 		ui.Warning(fmt.Sprintf("Could not fetch deployment record: %s", deployErr.Error()))
 	}
-	if succErr != nil {
-		successCount = 0
-		ui.Warning(fmt.Sprintf("Could not fetch success count: %s", succErr.Error()))
-	}
-	if failErr != nil {
-		failureCount = 0
-		ui.Warning(fmt.Sprintf("Could not fetch failure count: %s", failErr.Error()))
-	}
-	summary.SuccessCount = successCount
-	summary.FailureCount = failureCount
-	summary.ExecutionCount = successCount + failureCount
 
 	var lastExec *workflowdataclient.Execution
 	if len(executions) > 0 {
@@ -180,7 +118,7 @@ func (h *Handler) Execute(ctx context.Context, arg, outputFormat string) error {
 		registries = h.tenantCtx.Registries
 	}
 
-	view := workflowrender.WorkflowStatusView{
+	view := workflowresolve.WorkflowStatusView{
 		Summary:       summary,
 		Deployment:    deployment,
 		DeploymentErr: deployErr,
@@ -188,10 +126,10 @@ func (h *Handler) Execute(ctx context.Context, arg, outputFormat string) error {
 		Registries:    registries,
 	}
 
-	if outputFormat == outputFormatJSON {
-		return workflowrender.PrintWorkflowStatusJSON(view)
+	if inputs.OutputFormat == workflowresolve.OutputFormatJSON {
+		return workflowresolve.PrintWorkflowStatusJSON(view)
 	}
-	workflowrender.PrintWorkflowStatusTable(view)
+	workflowresolve.PrintWorkflowStatusTable(view)
 	return nil
 }
 
@@ -213,30 +151,15 @@ becoming active in the DON, or for a quick health check.`,
 			"  cre workflow status my-workflow --output json",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if jsonFlag {
-				outputFormat = outputFormatJSON
+			inputs, err := resolveInputs(args[0], outputFormat, jsonFlag)
+			if err != nil {
+				return err
 			}
-			if outputFormat != "" && outputFormat != outputFormatJSON {
-				return fmt.Errorf("--output %q is not supported; only %q is accepted", outputFormat, outputFormatJSON)
-			}
-			return NewHandler(runtimeContext).Execute(cmd.Context(), args[0], outputFormat)
+			return NewHandler(runtimeContext).Execute(cmd.Context(), inputs)
 		},
 	}
 
 	cmd.Flags().StringVar(&outputFormat, "output", "", `Output format: "json" prints JSON to stdout`)
 	cmd.Flags().BoolVar(&jsonFlag, "json", false, "Output as JSON (shorthand for --output=json)")
 	return cmd
-}
-
-// looksLikeWorkflowID returns true for 64-char hex strings (on-chain WorkflowID).
-func looksLikeWorkflowID(s string) bool {
-	if len(s) != 64 {
-		return false
-	}
-	for _, c := range s {
-		if (c < '0' || c > '9') && (c < 'a' || c > 'f') && (c < 'A' || c > 'F') {
-			return false
-		}
-	}
-	return true
 }

@@ -3,7 +3,6 @@ package workflowdataclient
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/machinebox/graphql"
@@ -38,9 +37,9 @@ type WorkflowDeploymentRecord struct {
 
 // ---- queries ----
 
-const getWorkflowSummaryQuery = `
-query GetWorkflowSummary($input: WorkflowsInput!) {
-  workflows(input: $input) {
+const getWorkflowQuery = `
+query GetWorkflow($input: WorkflowInput!) {
+  workflow(input: $input) {
     data {
       uuid
       name
@@ -95,10 +94,10 @@ type gqlWorkflowSummary struct {
 	} `json:"executionCountByStatus"`
 }
 
-type getWorkflowSummaryEnvelope struct {
-	Workflows struct {
-		Data []gqlWorkflowSummary `json:"data"`
-	} `json:"workflows"`
+type getWorkflowEnvelope struct {
+	Workflow struct {
+		Data *gqlWorkflowSummary `json:"data"`
+	} `json:"workflow"`
 }
 
 type gqlDeploymentRecord struct {
@@ -121,40 +120,39 @@ type getLatestDeploymentEnvelope struct {
 // ---- methods ----
 
 // GetWorkflowSummary fetches extended workflow details including execution health.
-// uuid is the platform UUID used to match the correct workflow from the list.
-func (c *Client) GetWorkflowSummary(parent context.Context, uuid string, _ time.Time) (*WorkflowSummary, error) {
+func (c *Client) GetWorkflowSummary(parent context.Context, uuid string, from time.Time) (*WorkflowSummary, error) {
 	ctx, cancel := c.CreateServiceContextWithTimeout(parent)
 	defer cancel()
 
-	req := graphql.NewRequest(getWorkflowSummaryQuery)
+	req := graphql.NewRequest(getWorkflowQuery)
 	req.Var("input", map[string]any{
-		"page": map[string]any{"number": 0, "size": DefaultPageSize},
+		"uuid": uuid,
+		"from": from.UTC().Format(time.RFC3339),
 	})
 
-	var env getWorkflowSummaryEnvelope
+	var env getWorkflowEnvelope
 	if err := c.graphql.Execute(ctx, req, &env); err != nil {
 		return nil, fmt.Errorf("get workflow summary: %w", err)
 	}
 
-	for _, g := range env.Workflows.Data {
-		if !strings.EqualFold(g.UUID, uuid) {
-			continue
-		}
-		return &WorkflowSummary{
-			UUID:           g.UUID,
-			Name:           g.Name,
-			WorkflowID:     g.WorkflowID,
-			OwnerAddress:   g.OwnerAddress,
-			Status:         g.Status,
-			WorkflowSource: g.WorkflowSource,
-			RegisteredAt:   g.RegisteredAt,
-			ExecutedAt:     g.ExecutedAt,
-			ExecutionCount: g.ExecutionCount,
-			SuccessCount:   g.ExecutionCountByStatus.Success,
-			FailureCount:   g.ExecutionCountByStatus.Failure,
-		}, nil
+	if env.Workflow.Data == nil {
+		return nil, fmt.Errorf("workflow %q not found", uuid)
 	}
-	return nil, fmt.Errorf("workflow %q not found", uuid)
+
+	g := *env.Workflow.Data
+	return &WorkflowSummary{
+		UUID:           g.UUID,
+		Name:           g.Name,
+		WorkflowID:     g.WorkflowID,
+		OwnerAddress:   g.OwnerAddress,
+		Status:         g.Status,
+		WorkflowSource: g.WorkflowSource,
+		RegisteredAt:   g.RegisteredAt,
+		ExecutedAt:     g.ExecutedAt,
+		ExecutionCount: g.ExecutionCount,
+		SuccessCount:   g.ExecutionCountByStatus.Success,
+		FailureCount:   g.ExecutionCountByStatus.Failure,
+	}, nil
 }
 
 // GetLatestDeployment fetches the most recent deployment record for a workflow.
