@@ -487,7 +487,7 @@ func run(
 		// Register chain-agnostic cron and HTTP triggers
 		triggerLggr := lggr.Named("TriggerCapabilities")
 		var err error
-		manualTriggerCaps, err = NewManualTriggerCapabilities(ctx, triggerLggr, registry, inputs.HTTPTriggerPort)
+		manualTriggerCaps, err = NewManualTriggerCapabilities(ctx, triggerLggr, registry, inputs.HTTPTriggerPort, simLimits)
 		if err != nil {
 			ui.Error(fmt.Sprintf("Failed to create trigger capabilities: %v", err))
 			os.Exit(1)
@@ -553,10 +553,14 @@ func run(
 	triggerInfoAndBeforeStart := &TriggerInfoAndBeforeStart{}
 
 	getManualTriggerCaps := func() *ManualTriggers { return manualTriggerCaps }
+	var limitsWorkflows *cresettings.Workflows
+	if simLimits != nil {
+		limitsWorkflows = &simLimits.Workflows
+	}
 	if inputs.NonInteractive {
-		triggerInfoAndBeforeStart.BeforeStart = makeBeforeStartNonInteractive(triggerInfoAndBeforeStart, inputs, getManualTriggerCaps)
+		triggerInfoAndBeforeStart.BeforeStart = makeBeforeStartNonInteractive(triggerInfoAndBeforeStart, inputs, getManualTriggerCaps, limitsWorkflows)
 	} else {
-		triggerInfoAndBeforeStart.BeforeStart = makeBeforeStartInteractive(triggerInfoAndBeforeStart, inputs, getManualTriggerCaps)
+		triggerInfoAndBeforeStart.BeforeStart = makeBeforeStartInteractive(triggerInfoAndBeforeStart, inputs, getManualTriggerCaps, limitsWorkflows)
 	}
 
 	waitFn := func(context.Context, simulator.RunnerConfig, *capabilities.Registry, []services.Service) {
@@ -596,6 +600,13 @@ func run(
 			simLogger.Info("Running trigger", "trigger", triggerInfoAndBeforeStart.TriggerToRun.GetId())
 			err := triggerInfoAndBeforeStart.TriggerFunc()
 			if err != nil {
+				if errors.Is(err, errHTTPTriggerRateLimited) {
+					simLogger.Warn("Trigger rate limited, skipping execution", "trigger", triggerInfoAndBeforeStart.TriggerToRun.GetId(), "limit", err)
+					if !listen {
+						return
+					}
+					continue
+				}
 				simLogger.Error("Failed to run trigger", "trigger", triggerInfoAndBeforeStart.TriggerToRun.GetId(), "error", err)
 				os.Exit(1)
 			}
@@ -733,6 +744,10 @@ func runHTTPListen(ctx context.Context, inputs Inputs, triggerInfo *TriggerInfoA
 	runPayload := func(payload *httptypedapi.Payload) bool {
 		simLogger.Info("Running trigger", "trigger", triggerInfo.TriggerToRun.GetId())
 		if err := triggerInfo.TriggerWithPayload(payload); err != nil {
+			if errors.Is(err, errHTTPTriggerRateLimited) {
+				simLogger.Warn("Trigger rate limited, skipping execution", "trigger", triggerInfo.TriggerToRun.GetId(), "limit", err)
+				return true
+			}
 			simLogger.Error("Failed to run trigger", "trigger", triggerInfo.TriggerToRun.GetId(), "error", err)
 			os.Exit(1)
 		}
@@ -758,19 +773,24 @@ func runHTTPListen(ctx context.Context, inputs Inputs, triggerInfo *TriggerInfoA
 		}
 		simLogger.Info("Running trigger", "trigger", triggerInfo.TriggerToRun.GetId())
 		if err := triggerInfo.TriggerFunc(); err != nil {
-			simLogger.Error("Failed to run trigger", "trigger", triggerInfo.TriggerToRun.GetId(), "error", err)
-			os.Exit(1)
+			if errors.Is(err, errHTTPTriggerRateLimited) {
+				simLogger.Warn("Trigger rate limited, skipping execution", "trigger", triggerInfo.TriggerToRun.GetId(), "limit", err)
+			} else {
+				simLogger.Error("Failed to run trigger", "trigger", triggerInfo.TriggerToRun.GetId(), "error", err)
+				os.Exit(1)
+			}
+		} else {
+			select {
+			case <-executionFinishedCh:
+				simLogger.Info("Execution finished signal received")
+			case <-ctx.Done():
+				simLogger.Info("Received interrupt signal, stopping execution")
+				return
+			case <-time.After(WorkflowExecutionTimeout):
+				simLogger.Warn("Timeout waiting for execution to finish")
+			}
+			iteration = 1
 		}
-		select {
-		case <-executionFinishedCh:
-			simLogger.Info("Execution finished signal received")
-		case <-ctx.Done():
-			simLogger.Info("Received interrupt signal, stopping execution")
-			return
-		case <-time.After(WorkflowExecutionTimeout):
-			simLogger.Warn("Timeout waiting for execution to finish")
-		}
-		iteration = 1
 	}
 
 	for {
@@ -904,7 +924,7 @@ func getTriggerIndex(inputs Inputs, triggerSub []*pb.TriggerSubscription) (int, 
 }
 
 // makeBeforeStartInteractive builds the interactive BeforeStart closure
-func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs, manualTriggerCapsGetter func() *ManualTriggers) func(context.Context, simulator.RunnerConfig, *capabilities.Registry, []services.Service, []*pb.TriggerSubscription) {
+func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs, manualTriggerCapsGetter func() *ManualTriggers, limits *cresettings.Workflows) func(context.Context, simulator.RunnerConfig, *capabilities.Registry, []services.Service, []*pb.TriggerSubscription) {
 	return func(
 		ctx context.Context,
 		cfg simulator.RunnerConfig,
@@ -999,6 +1019,7 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 						Clients:         inputs.ChainTypeClients[ct.Name()],
 						Interactive:     true,
 						Listen:          true,
+						Limits:          limits,
 						ChainTypeInputs: inputs.ChainTypeInputs,
 						TriggerPayload:  holder.TriggerToRun.GetPayload(),
 						WorkflowName:    inputs.WorkflowName,
@@ -1019,7 +1040,7 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 					break
 				}
 
-				triggerData, err := getTriggerDataForChainType(ctx, ct, sel, holder.TriggerToRun, inputs, true)
+				triggerData, err := getTriggerDataForChainType(ctx, ct, sel, holder.TriggerToRun, inputs, limits, true)
 				if err != nil {
 					ui.Error(fmt.Sprintf("Failed to get %s trigger data: %v", name, err))
 					os.Exit(1)
@@ -1041,7 +1062,7 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 }
 
 // makeBeforeStartNonInteractive builds the non-interactive BeforeStart closure
-func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs, manualTriggerCapsGetter func() *ManualTriggers) func(context.Context, simulator.RunnerConfig, *capabilities.Registry, []services.Service, []*pb.TriggerSubscription) {
+func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs, manualTriggerCapsGetter func() *ManualTriggers, limits *cresettings.Workflows) func(context.Context, simulator.RunnerConfig, *capabilities.Registry, []services.Service, []*pb.TriggerSubscription) {
 	return func(
 		ctx context.Context,
 		cfg simulator.RunnerConfig,
@@ -1119,6 +1140,7 @@ func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inp
 						Clients:         inputs.ChainTypeClients[ct.Name()],
 						Interactive:     false,
 						Listen:          true,
+						Limits:          limits,
 						ChainTypeInputs: inputs.ChainTypeInputs,
 						TriggerPayload:  holder.TriggerToRun.GetPayload(),
 						WorkflowName:    inputs.WorkflowName,
@@ -1139,7 +1161,7 @@ func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inp
 					break
 				}
 
-				triggerData, err := getTriggerDataForChainType(ctx, ct, sel, holder.TriggerToRun, inputs, false)
+				triggerData, err := getTriggerDataForChainType(ctx, ct, sel, holder.TriggerToRun, inputs, limits, false)
 				if err != nil {
 					ui.Error(fmt.Sprintf("Failed to get %s trigger data: %v", name, err))
 					os.Exit(1)
@@ -1241,11 +1263,12 @@ func getHTTPTriggerPayloadFromInput(invocationDir, input string) (*httptypedapi.
 
 // getTriggerDataForChainType resolves trigger data for a specific chain type.
 // Each chain type defines its own trigger data format.
-func getTriggerDataForChainType(ctx context.Context, ct chain.ChainType, selector uint64, triggerSub *pb.TriggerSubscription, inputs Inputs, interactive bool) (interface{}, error) {
+func getTriggerDataForChainType(ctx context.Context, ct chain.ChainType, selector uint64, triggerSub *pb.TriggerSubscription, inputs Inputs, limits *cresettings.Workflows, interactive bool) (interface{}, error) {
 	return ct.ResolveTriggerData(ctx, selector, chain.TriggerParams{
 		Clients:         inputs.ChainTypeClients[ct.Name()],
 		Interactive:     interactive,
 		Listen:          inputs.Listen,
+		Limits:          limits,
 		ChainTypeInputs: inputs.ChainTypeInputs,
 		TriggerPayload:  triggerSub.GetPayload(),
 		WorkflowName:    inputs.WorkflowName,
