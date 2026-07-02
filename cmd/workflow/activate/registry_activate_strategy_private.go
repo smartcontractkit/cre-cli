@@ -54,6 +54,7 @@ func (a *privateRegistryActivateStrategy) Activate() error {
 	ui.Line()
 	ui.Bold("Details:")
 	ui.Dim(fmt.Sprintf("   Registry:         %s", h.runtimeContext.ResolvedRegistry.ID()))
+	ui.Dim(fmt.Sprintf("   DON Family:       %s", h.runtimeContext.ResolvedRegistry.DonFamily()))
 	ui.Dim(fmt.Sprintf("   Workflow Name:    %s", result.WorkflowName))
 	ui.Dim(fmt.Sprintf("   Workflow ID:      %s", result.WorkflowID))
 	ui.Dim(fmt.Sprintf("   Status:           %s", privateregistryclient.FormatStatus(result.Status)))

@@ -1,11 +1,15 @@
 package simulate
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	rt "runtime"
@@ -28,6 +32,19 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/testutil"
 )
+
+func freeTCPPort(t *testing.T) int {
+	t.Helper()
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	defer listener.Close()
+
+	addr, ok := listener.Addr().(*net.TCPAddr)
+	require.True(t, ok)
+	require.Greater(t, addr.Port, 0)
+	return addr.Port
+}
 
 // TestBlankWorkflowSimulation validates that the simulator can successfully
 // run a blank workflow from end to end in a non-interactive mode.
@@ -82,8 +99,10 @@ func TestBlankWorkflowSimulation(t *testing.T) {
 		Settings: &settings.Settings{
 			Workflow: workflowSettings,
 			User: settings.UserSettings{
-				TargetName:    "staging-settings",
-				EthPrivateKey: "88888845d8761ca4a8cefb324c89702f12114ffbd0c47222f12aac0ad6538888",
+				TargetName: "staging-settings",
+				PrivateKeys: map[string]string{
+					settings.EVM.Name: "88888845d8761ca4a8cefb324c89702f12114ffbd0c47222f12aac0ad6538888",
+				},
 			},
 		},
 	}
@@ -135,7 +154,9 @@ func createSimulateTestSettings(workflowName, workflowPath, configPath string) *
 			},
 		},
 		User: settings.UserSettings{
-			EthPrivateKey: "88888845d8761ca4a8cefb324c89702f12114ffbd0c47222f12aac0ad6538888",
+			PrivateKeys: map[string]string{
+				settings.EVM.Name: "88888845d8761ca4a8cefb324c89702f12114ffbd0c47222f12aac0ad6538888",
+			},
 		},
 	}
 }
@@ -240,6 +261,45 @@ func TestSimulateResolveInputs_WasmFlag(t *testing.T) {
 	})
 }
 
+func TestSimulateResolveInputs_HTTPTriggerPort(t *testing.T) {
+	t.Parallel()
+
+	t.Run("default port when flag unset", func(t *testing.T) {
+		t.Parallel()
+		v := createSimulateTestViper(t)
+		creSettings := createSimulateTestSettings("test-workflow", "main.go", "")
+
+		runtimeCtx := &runtime.Context{
+			Logger:   testutil.NewTestLogger(),
+			Viper:    v,
+			Settings: creSettings,
+		}
+		h := newHandler(runtimeCtx)
+
+		inputs, err := h.ResolveInputs(v, creSettings)
+		require.NoError(t, err)
+		assert.Equal(t, defaultHTTPTriggerServerPort, inputs.HTTPTriggerPort)
+	})
+
+	t.Run("flag overrides default", func(t *testing.T) {
+		t.Parallel()
+		v := createSimulateTestViper(t)
+		v.Set("http-trigger-port", 3210)
+		creSettings := createSimulateTestSettings("test-workflow", "main.go", "")
+
+		runtimeCtx := &runtime.Context{
+			Logger:   testutil.NewTestLogger(),
+			Viper:    v,
+			Settings: creSettings,
+		}
+		h := newHandler(runtimeCtx)
+
+		inputs, err := h.ResolveInputs(v, creSettings)
+		require.NoError(t, err)
+		assert.Equal(t, 3210, inputs.HTTPTriggerPort)
+	})
+}
+
 func TestSimulateValidateInputs_URLBypass(t *testing.T) {
 	t.Parallel()
 
@@ -252,10 +312,11 @@ func TestSimulateValidateInputs_URLBypass(t *testing.T) {
 	h := newHandler(runtimeCtx)
 
 	inputs := Inputs{
-		WorkflowPath: tmpFile,
-		ConfigPath:   "https://example.com/config.yaml",
-		WasmPath:     "https://example.com/binary.wasm",
-		WorkflowName: "test-workflow",
+		WorkflowPath:    tmpFile,
+		ConfigPath:      "https://example.com/config.yaml",
+		WasmPath:        "https://example.com/binary.wasm",
+		HTTPTriggerPort: defaultHTTPTriggerServerPort,
+		WorkflowName:    "test-workflow",
 	}
 
 	err := h.ValidateInputs(inputs)
@@ -352,79 +413,73 @@ func TestGetHTTPTriggerPayloadFromInput(t *testing.T) {
 	payloadFile := filepath.Join(tmpDir, "payload.json")
 	require.NoError(t, os.WriteFile(payloadFile, []byte(payloadJSON), 0600))
 
-	t.Run("empty input returns error", func(t *testing.T) {
+	t.Run("empty input returns nil payload and no error", func(t *testing.T) {
 		t.Parallel()
-		_, err := getHTTPTriggerPayloadFromInput("", "")
+		payload, err := getHTTPTriggerPayloadFromInput("", "")
+		require.NoError(t, err)
+		require.Nil(t, payload)
+	})
+
+	t.Run("whitespace-only input returns nil payload and no error", func(t *testing.T) {
+		t.Parallel()
+		payload, err := getHTTPTriggerPayloadFromInput("   ", "    ")
+		require.NoError(t, err)
+		require.Nil(t, payload)
+	})
+
+	t.Run("absolute file path reads and parses JSON", func(t *testing.T) {
+		t.Parallel()
+		payload, err := getHTTPTriggerPayloadFromInput("", payloadFile)
+		require.NoError(t, err)
+		require.NotNil(t, payload)
+		var got map[string]interface{}
+		require.NoError(t, json.Unmarshal(payload.Input, &got))
+		assert.Equal(t, "GET", got["method"])
+		assert.Equal(t, "/hello", got["path"])
+	})
+
+	t.Run("relative path resolved against invocationDir reads and parses JSON", func(t *testing.T) {
+		t.Parallel()
+		payload, err := getHTTPTriggerPayloadFromInput(tmpDir, "payload.json")
+		require.NoError(t, err)
+		require.NotNil(t, payload)
+		var got map[string]interface{}
+		require.NoError(t, json.Unmarshal(payload.Input, &got))
+		assert.Equal(t, "GET", got["method"])
+		assert.Equal(t, "/hello", got["path"])
+	})
+
+	t.Run("nonexistent file path returns invalid JSON error", func(t *testing.T) {
+		t.Parallel()
+		_, err := getHTTPTriggerPayloadFromInput("", "/nonexistent/no-such-file.json")
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "empty http payload input")
+		assert.Contains(t, err.Error(), "invalid JSON input")
 	})
 
-	t.Run("whitespace-only input returns error", func(t *testing.T) {
-		t.Parallel()
-		_, err := getHTTPTriggerPayloadFromInput("   ", "")
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "empty http payload input")
-	})
-
-	t.Run("at-prefix with absolute file path reads file", func(t *testing.T) {
-		t.Parallel()
-		payload, err := getHTTPTriggerPayloadFromInput("@"+payloadFile, "")
-		require.NoError(t, err)
-		assert.Equal(t, []byte(payloadJSON), payload.Input)
-	})
-
-	t.Run("at-prefix with relative path resolved against invocationDir", func(t *testing.T) {
-		t.Parallel()
-		payload, err := getHTTPTriggerPayloadFromInput("@payload.json", tmpDir)
-		require.NoError(t, err)
-		assert.Equal(t, []byte(payloadJSON), payload.Input)
-	})
-
-	t.Run("at-prefix with nonexistent file returns error", func(t *testing.T) {
-		t.Parallel()
-		_, err := getHTTPTriggerPayloadFromInput("@/nonexistent/no-such-file.json", "")
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to read file")
-	})
-
-	t.Run("absolute file path without at-prefix reads file", func(t *testing.T) {
-		t.Parallel()
-		payload, err := getHTTPTriggerPayloadFromInput(payloadFile, "")
-		require.NoError(t, err)
-		assert.Equal(t, []byte(payloadJSON), payload.Input)
-	})
-
-	t.Run("relative file path resolved against invocationDir reads file", func(t *testing.T) {
-		t.Parallel()
-		payload, err := getHTTPTriggerPayloadFromInput("payload.json", tmpDir)
-		require.NoError(t, err)
-		assert.Equal(t, []byte(payloadJSON), payload.Input)
-	})
-
-	t.Run("inline JSON string used as raw bytes", func(t *testing.T) {
+	t.Run("inline JSON string parsed as payload", func(t *testing.T) {
 		t.Parallel()
 		inlineJSON := `{"method":"POST","path":"/api"}`
-		payload, err := getHTTPTriggerPayloadFromInput(inlineJSON, "")
+		payload, err := getHTTPTriggerPayloadFromInput("", inlineJSON)
 		require.NoError(t, err)
-		assert.Equal(t, []byte(inlineJSON), payload.Input)
+		require.NotNil(t, payload)
+		var got map[string]interface{}
+		require.NoError(t, json.Unmarshal(payload.Input, &got))
+		assert.Equal(t, "POST", got["method"])
+		assert.Equal(t, "/api", got["path"])
 	})
 
-	t.Run("nonexistent relative path with empty invocationDir treated as raw bytes", func(t *testing.T) {
+	t.Run("non-JSON non-file input returns error", func(t *testing.T) {
 		t.Parallel()
-		// A path that doesn't exist is treated as raw bytes (no error).
-		input := "no-such-file-or-json"
-		payload, err := getHTTPTriggerPayloadFromInput(input, "")
-		require.NoError(t, err)
-		assert.Equal(t, []byte(input), payload.Input)
+		_, err := getHTTPTriggerPayloadFromInput("", "no-such-file-or-json")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid JSON input")
 	})
 
-	t.Run("relative path not found in invocationDir treated as raw bytes", func(t *testing.T) {
+	t.Run("relative path not found in invocationDir returns error", func(t *testing.T) {
 		t.Parallel()
-		// A relative path that resolves to a nonexistent file is used as raw bytes.
-		input := "does-not-exist.json"
-		payload, err := getHTTPTriggerPayloadFromInput(input, tmpDir)
-		require.NoError(t, err)
-		assert.Equal(t, []byte(input), payload.Input)
+		_, err := getHTTPTriggerPayloadFromInput(tmpDir, "does-not-exist.json")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid JSON input")
 	})
 }
 
@@ -477,12 +532,12 @@ func TestNonInteractiveCronTriggerDoesNotBlockOnSchedule(t *testing.T) {
 	require.Nil(t, capErr)
 
 	holder := &TriggerInfoAndBeforeStart{}
-	inputs := Inputs{TriggerIndex: triggerIndex}
+	inputs := Inputs{TriggerIndex: triggerIndex, HTTPTriggerPort: defaultHTTPTriggerServerPort}
 	manualTriggers := &ManualTriggers{ManualCronTrigger: cronSvc}
 
 	beforeStart := makeBeforeStartNonInteractive(holder, inputs, func() *ManualTriggers {
 		return manualTriggers
-	}, func(err error) { require.NoError(t, err, "unexpected BeforeStart error") })
+	}, func(err error) { require.NoError(t, err, "unexpected BeforeStart error") }, nil)
 
 	triggerSub := []*pb.TriggerSubscription{{Id: "cron-trigger@1.0.0"}}
 	beforeStart(ctx, simulator.RunnerConfig{}, nil, nil, triggerSub)
@@ -587,6 +642,50 @@ func TestExecuteWASMCompressedBinarySizeLimitReturnsTypedError(t *testing.T) {
 	assert.Contains(t, limitErr.Error(), "cre workflow limits export")
 }
 
+func TestHTTPListenPayloadServerAcceptsMultipleRequests(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	port := freeTCPPort(t)
+	payloadCh, closeServer, err := startHTTPListenPayloadServer(ctx, port)
+	require.NoError(t, err)
+	t.Cleanup(closeServer)
+
+	for _, input := range []string{`{"key":"first"}`, `{"key":"second"}`} {
+		body := []byte(fmt.Sprintf(`{"input":%s}`, input))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, fmt.Sprintf("http://127.0.0.1:%d/trigger", port), bytes.NewReader(body))
+		require.NoError(t, err)
+		req.Header.Set("Content-Type", "application/json")
+
+		resp, err := http.DefaultClient.Do(req) // #nosec G704 -- URL targets localhost test server
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+		require.NoError(t, resp.Body.Close())
+	}
+
+	for _, want := range [][]byte{[]byte(`{"key":"first"}`), []byte(`{"key":"second"}`)} {
+		select {
+		case payload := <-payloadCh:
+			require.Equal(t, want, payload.Input)
+		case <-time.After(2 * time.Second):
+			t.Fatal("timed out waiting for queued HTTP trigger payload")
+		}
+	}
+}
+
+func TestManualHTTPTriggerEventsHaveUniqueIDs(t *testing.T) {
+	t.Parallel()
+
+	svc := NewManualHTTPTriggerService(logger.Test(t), defaultHTTPTriggerServerPort, nil)
+	first := svc.createManualTriggerEvent(nil)
+	second := svc.createManualTriggerEvent(nil)
+
+	require.NotEmpty(t, first.Id)
+	require.NotEqual(t, first.Id, second.Id)
+}
+
 func TestSimulateConfigFlagsMutuallyExclusive(t *testing.T) {
 	t.Parallel()
 
@@ -595,7 +694,9 @@ func TestSimulateConfigFlagsMutuallyExclusive(t *testing.T) {
 		Viper:  viper.New(),
 		Settings: &settings.Settings{
 			User: settings.UserSettings{
-				EthPrivateKey: "88888845d8761ca4a8cefb324c89702f12114ffbd0c47222f12aac0ad6538888",
+				PrivateKeys: map[string]string{
+					settings.EVM.Name: "88888845d8761ca4a8cefb324c89702f12114ffbd0c47222f12aac0ad6538888",
+				},
 			},
 		},
 	}

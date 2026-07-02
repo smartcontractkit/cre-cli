@@ -23,7 +23,7 @@
 #
 # Experimental chains (automatically used by the simulator when present):
 # Use this for chains not yet in official chain-selectors (e.g., hackathons, new chain integrations).
-# In your workflow, reference the chain as evm:ChainSelector:<chain-selector>@1.0.0
+# In your workflow, reference the chain as <chain-type>:ChainSelector:<chain-selector>@1.0.0
 #
 #   experimental-chains:
 #     - chain-selector: 12345                       # The chain selector value

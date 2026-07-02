@@ -38,39 +38,56 @@ type RpcEndpoint struct {
 	Url string `mapstructure:"url" yaml:"url"`
 }
 
-// ExperimentalChain represents an EVM chain not in official chain-selectors.
+// ExperimentalChain represents a chain not in official chain-selectors.
 // Automatically used by the simulator when present in the target's experimental-chains config.
-// The ChainSelector is used as the selector key for EVM clients and forwarders.
+// ChainType selects the chain family; empty defaults to "evm" for backward compat.
 type ExperimentalChain struct {
+	ChainType     string `mapstructure:"chain-type" yaml:"chain-type"`
 	ChainSelector uint64 `mapstructure:"chain-selector" yaml:"chain-selector"`
 	RPCURL        string `mapstructure:"rpc-url" yaml:"rpc-url"`
 	Forwarder     string `mapstructure:"forwarder" yaml:"forwarder"`
 }
 
-func GetRpcUrlSettings(v *viper.Viper, chainName string) (string, error) {
+// LookupRpcURL resolves the RPC URL for chainName from the current project target.
+// ok is false when no RPC is configured for chainName; that is not an error.
+func LookupRpcURL(v *viper.Viper, chainName string) (url string, ok bool, err error) {
 	target, err := GetTarget(v)
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
 
 	keyWithTarget := fmt.Sprintf("%s.%s", target, RpcsSettingName)
 	var rpcs []RpcEndpoint
 	err = v.UnmarshalKey(keyWithTarget, &rpcs)
 	if err != nil {
-		return "", fmt.Errorf("not possible to unmarshall rpcs: %w", err)
+		return "", false, fmt.Errorf("not possible to unmarshall rpcs: %w", err)
 	}
 
 	for _, rpc := range rpcs {
 		if rpc.ChainName == chainName {
 			resolved, resolveErr := ResolveEnvVars(rpc.Url)
 			if resolveErr != nil {
-				return "", fmt.Errorf("rpc url for chain %q: %w", chainName, resolveErr)
+				return "", false, fmt.Errorf("rpc url for chain %q: %w", chainName, resolveErr)
 			}
-			return resolved, nil
+			return resolved, true, nil
 		}
 	}
 
-	return "", fmt.Errorf("rpc url not found for chain %s", chainName)
+	return "", false, nil
+}
+
+// GetRpcUrlSettings resolves the RPC URL for chainName from the current project target.
+//
+// TODO(DEVSVCS-5178)
+func GetRpcUrlSettings(v *viper.Viper, chainName string) (string, error) {
+	url, ok, err := LookupRpcURL(v, chainName)
+	if err != nil {
+		return "", err
+	}
+	if !ok {
+		return "", fmt.Errorf("rpc url not found for chain %s", chainName)
+	}
+	return url, nil
 }
 
 // GetExperimentalChains reads the experimental-chains list from the current target.
@@ -147,9 +164,17 @@ func GetWorkflowOwner(v *viper.Viper) (ownerAddress string, ownerType string, er
 	}
 
 	// unsigned or changeset is not set, it is EOA path
-	rawPrivKey := v.GetString(EthPrivateKeyEnvVar)
-	normPrivKey := NormalizeHexKey(rawPrivKey)
-	ownerAddress, err = ethkeys.DeriveEthAddressFromPrivateKey(normPrivKey)
+	normPrivKey, err := ResolveEthPrivateKeyFromEnv(v.GetString(EthPrivateKeyEnvVar))
+	if err != nil {
+		return "", "", err
+	}
+	if normPrivKey == "" {
+		return "", "", fmt.Errorf(
+			"%s is not set. Set it in your .env file or export it in your shell environment",
+			EthPrivateKeyEnvVar,
+		)
+	}
+	ownerAddress, err = ethkeys.DeriveEthAddressFromPrivateKey(normPrivKey.Hex())
 	if err != nil {
 		return "", "", err
 	}
