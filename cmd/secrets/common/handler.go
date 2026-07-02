@@ -20,7 +20,6 @@ import (
 	"github.com/machinebox/graphql"
 	"github.com/rs/zerolog"
 	"github.com/spf13/viper"
-	"google.golang.org/protobuf/encoding/protojson"
 	"gopkg.in/yaml.v2"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/capabilities/actions/vault"
@@ -714,7 +713,7 @@ func (h *Handler) ParseVaultGatewayResponse(method, requestID string, respBody [
 	switch method {
 	case vaulttypes.MethodSecretsCreate:
 		var p vault.CreateSecretsResponse
-		if err := protojson.Unmarshal(rpcResp.Result.Payload, &p); err != nil {
+		if err := unmarshalVaultResponsePayload(rpcResp.Result.Payload, &p); err != nil {
 			return fmt.Errorf("failed to decode create payload: %w", err)
 		}
 
@@ -734,7 +733,7 @@ func (h *Handler) ParseVaultGatewayResponse(method, requestID string, respBody [
 		}
 	case vaulttypes.MethodSecretsUpdate:
 		var p vault.UpdateSecretsResponse
-		if err := protojson.Unmarshal(rpcResp.Result.Payload, &p); err != nil {
+		if err := unmarshalVaultResponsePayload(rpcResp.Result.Payload, &p); err != nil {
 			return fmt.Errorf("failed to decode update payload: %w", err)
 		}
 		for _, r := range p.GetResponses() {
@@ -752,7 +751,7 @@ func (h *Handler) ParseVaultGatewayResponse(method, requestID string, respBody [
 		}
 	case vaulttypes.MethodSecretsDelete:
 		var p vault.DeleteSecretsResponse
-		if err := protojson.Unmarshal(rpcResp.Result.Payload, &p); err != nil {
+		if err := unmarshalVaultResponsePayload(rpcResp.Result.Payload, &p); err != nil {
 			return fmt.Errorf("failed to decode delete payload: %w", err)
 		}
 		for _, r := range p.GetResponses() {
@@ -770,7 +769,7 @@ func (h *Handler) ParseVaultGatewayResponse(method, requestID string, respBody [
 		}
 	case vaulttypes.MethodSecretsList:
 		var p vault.ListSecretIdentifiersResponse
-		if err := protojson.Unmarshal(rpcResp.Result.Payload, &p); err != nil {
+		if err := unmarshalVaultResponsePayload(rpcResp.Result.Payload, &p); err != nil {
 			return fmt.Errorf("failed to decode list payload: %w", err)
 		}
 
