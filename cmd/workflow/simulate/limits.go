@@ -202,6 +202,16 @@ func (l *SimulationLimits) EVMChainWriteGasLimit() uint64 {
 	return l.Workflows.ChainWrite.EVM.GasLimit.Default.DefaultValue
 }
 
+// HTTPTriggerRateLimit returns the HTTP trigger event rate limit.
+func (l *SimulationLimits) HTTPTriggerRateLimit() config.Rate {
+	return l.Workflows.HTTPTrigger.RateLimit.DefaultValue
+}
+
+// LogTriggerEventRateLimit returns the log trigger event rate limit.
+func (l *SimulationLimits) LogTriggerEventRateLimit() config.Rate {
+	return l.Workflows.LogTrigger.EventRateLimit.DefaultValue
+}
+
 // WASMBinarySize returns the WASM binary size limit in bytes.
 func (l *SimulationLimits) WASMBinarySize() int {
 	return int(l.Workflows.WASMBinarySizeLimit.DefaultValue)

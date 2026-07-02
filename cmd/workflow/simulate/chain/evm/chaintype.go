@@ -17,7 +17,9 @@ import (
 
 	corekeys "github.com/smartcontractkit/chainlink-common/keystore/corekeys"
 	evmpb "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/chain-capabilities/evm"
+	"github.com/smartcontractkit/chainlink-common/pkg/config"
 	"github.com/smartcontractkit/chainlink-common/pkg/services"
+	"github.com/smartcontractkit/chainlink-common/pkg/settings/cresettings"
 
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
@@ -215,15 +217,17 @@ func (ct *EVMChainType) NewTriggerListener(ctx context.Context, selector uint64,
 	if strings.TrimSpace(params.ChainTypeInputs[TriggerInputTxHash]) != "" {
 		return nil, fmt.Errorf("--listen cannot be combined with --%s for EVM log triggers", TriggerInputTxHash)
 	}
+	eventRateLimit := eventRateLimitFromLimits(params.Limits)
 
 	cfg, err := decodeLogTriggerConfig(params.TriggerPayload)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode EVM log trigger config: %w", err)
 	}
 	return NewEVMLogTriggerListener(ctx, client, WaitForLogConfig{
-		Selector:     selector,
-		Filter:       cfg,
-		WorkflowName: params.WorkflowName,
+		Selector:       selector,
+		Filter:         cfg,
+		WorkflowName:   params.WorkflowName,
+		EventRateLimit: eventRateLimit,
 	})
 }
 
@@ -363,8 +367,17 @@ func (ct *EVMChainType) ResolveTriggerData(ctx context.Context, selector uint64,
 		return nil, fmt.Errorf("failed to decode EVM log trigger config: %w", err)
 	}
 	return WaitForEVMTriggerLog(ctx, client, WaitForLogConfig{
-		Selector:     selector,
-		Filter:       cfg,
-		WorkflowName: params.WorkflowName,
+		Selector:       selector,
+		Filter:         cfg,
+		WorkflowName:   params.WorkflowName,
+		EventRateLimit: eventRateLimitFromLimits(params.Limits),
 	})
+}
+
+func eventRateLimitFromLimits(limits *cresettings.Workflows) *config.Rate {
+	if limits == nil {
+		return nil
+	}
+	rate := limits.LogTrigger.EventRateLimit.DefaultValue
+	return &rate
 }
