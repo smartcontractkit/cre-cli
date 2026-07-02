@@ -18,10 +18,6 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 )
 
-// 32 zero bytes → derives ed25519 sentinel keypair. Used when the user hasn't
-// configured CRE_SOLANA_PRIVATE_KEY and isn't broadcasting.
-const defaultSentinelSolanaSeed = "0000000000000000000000000000000000000000000000000000000000000000"
-
 func init() {
 	chain.Register(string(corekeys.Solana), func(lggr *zerolog.Logger) chain.ChainType {
 		return &SolanaChainType{log: lggr}
@@ -92,11 +88,11 @@ func (ct *SolanaChainType) ResolveKey(s *settings.Settings, broadcast bool) (int
 	// Solution: Mandate CRE_SOLANA_PRIVATE_KEY for all Solana workflow simulations.
 	if raw == "" {
 		return nil, fmt.Errorf(
-			"CRE_SOLANA_PRIVATE_KEY is required for Solana workflow simulation.\n\n"+
-				"The Solana test network requires the transmitter account (derived from your private key) to exist and be funded on-chain.\n"+
-				"Please set your private key in your .env file or system environment:\n\n"+
-				"  CRE_SOLANA_PRIVATE_KEY=<your-64-byte-base58-keypair>\n\n"+
-				"You can generate a test key using: solana-keygen new\n"+
+			"CRE_SOLANA_PRIVATE_KEY is required for Solana workflow simulation.\n\n" +
+				"The Solana test network requires the transmitter account (derived from your private key) to exist and be funded on-chain.\n" +
+				"Please set your private key in your .env file or system environment:\n\n" +
+				"  CRE_SOLANA_PRIVATE_KEY=<your-64-byte-base58-keypair>\n\n" +
+				"You can generate a test key using: solana-keygen new\n" +
 				"Then fund it on devnet: solana airdrop 10 <your-address> --url devnet",
 		)
 	}
