@@ -2,6 +2,8 @@ package chain
 
 import (
 	"testing"
+
+	"github.com/smartcontractkit/cre-cli/internal/redact"
 )
 
 func TestRedactURL(t *testing.T) {
@@ -33,7 +35,7 @@ func TestRedactURL(t *testing.T) {
 		{
 			name: "invalid URL",
 			raw:  "://bad",
-			want: "***",
+			want: redact.RedactedValue,
 		},
 	}
 
