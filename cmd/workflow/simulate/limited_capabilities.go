@@ -171,7 +171,7 @@ func (l *LimitedConsensusNoDAG) Simple(ctx context.Context, metadata commonCap.R
 		inputSize := proto.Size(input)
 		if inputSize > obsLimit {
 			return nil, caperrors.NewPublicUserError(
-				limitExceeded(LimitConsensusObservation, "Consensus observation", uint64(inputSize), uint64(obsLimit), true,
+				limitExceeded(LimitConsensusObservation, "Consensus observation", uint64(inputSize), uint64(obsLimit), true, //nolint:gosec // proto.Size always returns non-negative
 					"Reduce data passed as observations to the consensus step"),
 				caperrors.ResourceExhausted,
 			)

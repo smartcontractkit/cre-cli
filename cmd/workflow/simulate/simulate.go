@@ -740,93 +740,6 @@ func run(
 	return nil
 }
 
-func runHTTPListen(ctx context.Context, inputs Inputs, triggerInfo *TriggerInfoAndBeforeStart, executionFinishedCh <-chan struct{}, simLogger *SimulationLogger) {
-	if triggerInfo.TriggerWithPayload == nil {
-		simLogger.Error("HTTP trigger payload function not initialized")
-		os.Exit(1)
-	}
-
-	payloadCh, closeServer, err := startHTTPListenPayloadServer(ctx, inputs.HTTPTriggerPort)
-	if err != nil {
-		ui.Error(fmt.Sprintf("Failed to start HTTP trigger server: %v", err))
-		os.Exit(1)
-	}
-	defer closeServer()
-
-	runPayload := func(payload *httptypedapi.Payload) bool {
-		simLogger.Info("Running trigger", "trigger", triggerInfo.TriggerToRun.GetId())
-		if err := triggerInfo.TriggerWithPayload(payload); err != nil {
-			if errors.Is(err, errHTTPTriggerRateLimited) {
-				simLogger.Warn("Trigger rate limited, skipping execution", "trigger", triggerInfo.TriggerToRun.GetId(), "limit", err)
-				return true
-			}
-			simLogger.Error("Failed to run trigger", "trigger", triggerInfo.TriggerToRun.GetId(), "error", err)
-			os.Exit(1)
-		}
-
-		select {
-		case <-executionFinishedCh:
-			simLogger.Info("Execution finished signal received")
-		case <-ctx.Done():
-			simLogger.Info("Received interrupt signal, stopping execution")
-			return false
-		case <-time.After(WorkflowExecutionTimeout):
-			simLogger.Warn("Timeout waiting for execution to finish")
-		}
-
-		return true
-	}
-
-	iteration := 0
-	if strings.TrimSpace(inputs.HTTPPayload) != "" {
-		if triggerInfo.TriggerFunc == nil {
-			simLogger.Error("Trigger function not initialized")
-			os.Exit(1)
-		}
-		simLogger.Info("Running trigger", "trigger", triggerInfo.TriggerToRun.GetId())
-		if err := triggerInfo.TriggerFunc(); err != nil {
-			if errors.Is(err, errHTTPTriggerRateLimited) {
-				simLogger.Warn("Trigger rate limited, skipping execution", "trigger", triggerInfo.TriggerToRun.GetId(), "limit", err)
-			} else {
-				simLogger.Error("Failed to run trigger", "trigger", triggerInfo.TriggerToRun.GetId(), "error", err)
-				os.Exit(1)
-			}
-		} else {
-			select {
-			case <-executionFinishedCh:
-				simLogger.Info("Execution finished signal received")
-			case <-ctx.Done():
-				simLogger.Info("Received interrupt signal, stopping execution")
-				return
-			case <-time.After(WorkflowExecutionTimeout):
-				simLogger.Warn("Timeout waiting for execution to finish")
-			}
-			iteration = 1
-		}
-	}
-
-	for {
-		if iteration > 0 {
-			ui.Line()
-			ui.Step(fmt.Sprintf("Listen: ready for next request (run #%d)", iteration+1))
-		}
-		ui.Step(fmt.Sprintf("Waiting for HTTP request to start execution (listening on http://localhost:%d/trigger)...", inputs.HTTPTriggerPort))
-
-		var payload *httptypedapi.Payload
-		select {
-		case payload = <-payloadCh:
-		case <-ctx.Done():
-			simLogger.Info("Received interrupt signal, stopping execution")
-			return
-		}
-
-		if !runPayload(payload) {
-			return
-		}
-		iteration++
-	}
-}
-
 func startHTTPListenPayloadServer(ctx context.Context, port int) (<-chan *httptypedapi.Payload, func(), error) {
 	payloadCh := make(chan *httptypedapi.Payload, 16)
 	mux := http.NewServeMux()
@@ -901,38 +814,6 @@ type TriggerInfoAndBeforeStart struct {
 	ListenSupported    bool
 	TriggerToRun       *pb.TriggerSubscription
 	BeforeStart        func(ctx context.Context, cfg simulator.RunnerConfig, registry *capabilities.Registry, services []services.Service, triggerSub []*pb.TriggerSubscription)
-}
-
-func getTriggerIndex(inputs Inputs, triggerSub []*pb.TriggerSubscription) (int, error) {
-	if len(triggerSub) == 0 {
-		return -1, errors.New("no workflow triggers found, please check your workflow source code and config")
-	}
-
-	if len(triggerSub) == 1 {
-		return 0, nil
-	}
-
-	if inputs.HasTriggerIndex {
-		return inputs.TriggerIndex, nil
-	}
-
-	opts := make([]ui.SelectOption[int], len(triggerSub))
-	for i, trigger := range triggerSub {
-		opts[i] = ui.SelectOption[int]{
-			Label: fmt.Sprintf("%s %s", trigger.GetId(), trigger.GetMethod()),
-			Value: i,
-		}
-	}
-
-	ui.Line()
-	selected, err := ui.Select("Workflow simulation ready. Please select a trigger:", opts)
-	if err != nil {
-		ui.Error(fmt.Sprintf("Trigger selection failed: %v", err))
-		os.Exit(1)
-	}
-	ui.Line()
-
-	return selected, nil
 }
 
 // makeBeforeStartInteractive builds the interactive BeforeStart closure.
