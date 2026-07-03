@@ -1,10 +1,23 @@
 package update
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
+	"github.com/smartcontractkit/cre-cli/install"
 	"github.com/stretchr/testify/require"
 )
+
+func TestReleasePublicKeyMatchesInstall(t *testing.T) {
+	embedded := install.ReleasePublicKey
+	require.NotEmpty(t, embedded)
+
+	canonical, err := os.ReadFile(filepath.Join("public_key.asc"))
+	require.NoError(t, err)
+
+	require.Equal(t, canonical, embedded, "embedded public_key.asc must match install/public_key.asc (symlink target)")
+}
 
 func TestGetSigAssetName(t *testing.T) {
 	require.Equal(t, "cre_linux_amd64.sig", getSigAssetName("linux", "amd64"))

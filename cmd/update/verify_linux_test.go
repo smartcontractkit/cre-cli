@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/smartcontractkit/cre-cli/install"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/openpgp"
 	"golang.org/x/crypto/openpgp/armor"
@@ -72,8 +73,8 @@ func TestVerifyGPGSignature_unexpectedSigner(t *testing.T) {
 }
 
 func TestVerifyGPGSignature_embeddedReleaseKeyParses(t *testing.T) {
-	require.NotEmpty(t, releasePublicKey)
-	_, err := openpgp.ReadArmoredKeyRing(bytes.NewReader(releasePublicKey))
+	require.NotEmpty(t, install.ReleasePublicKey)
+	_, err := openpgp.ReadArmoredKeyRing(bytes.NewReader(install.ReleasePublicKey))
 	require.NoError(t, err)
 }
 

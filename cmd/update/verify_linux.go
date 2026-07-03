@@ -4,24 +4,21 @@ package update
 
 import (
 	"bytes"
-	_ "embed"
 	"fmt"
 	"io"
 	"os"
 	"strings"
 
+	"github.com/smartcontractkit/cre-cli/install"
 	"golang.org/x/crypto/openpgp"
 	"golang.org/x/crypto/openpgp/armor"
 )
-
-//go:embed ../../install/public_key.asc
-var releasePublicKey []byte
 
 func verifyReleaseBinary(binPath, sigPath string) error {
 	if sigPath == "" {
 		return fmt.Errorf("missing signature file path")
 	}
-	return verifyGPGSignature(releasePublicKey, binPath, sigPath)
+	return verifyGPGSignature(install.ReleasePublicKey, binPath, sigPath)
 }
 
 func verifyGPGSignature(publicKey []byte, binPath, sigPath string) error {
@@ -84,8 +81,12 @@ func validateSignerIdentity(entity *openpgp.Entity) error {
 		return fmt.Errorf("missing signer identity")
 	}
 	for _, identity := range entity.Identities {
+		email := ""
+		if identity.UserId != nil {
+			email = identity.UserId.Email
+		}
 		if strings.Contains(identity.Name, expectedSignerName) &&
-			strings.EqualFold(identity.Email, expectedSignerEmail) {
+			strings.EqualFold(email, expectedSignerEmail) {
 			return nil
 		}
 	}
