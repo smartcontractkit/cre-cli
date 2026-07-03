@@ -1,6 +1,6 @@
 ## cre update
 
-Update the cre CLI to the latest version
+Update the cre CLI to the latest version. Release signatures are verified before the binary is installed (GPG on Linux, codesign on macOS, Authenticode on Windows).
 
 ```
 cre update [optional flags]
