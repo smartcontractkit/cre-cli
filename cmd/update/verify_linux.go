@@ -1,5 +1,6 @@
 //go:build linux
 
+//nolint:staticcheck // SA1019: OpenPGP required to verify KMS GPG release signatures.
 package update
 
 import (
@@ -9,9 +10,10 @@ import (
 	"os"
 	"strings"
 
-	"github.com/smartcontractkit/cre-cli/install"
 	"golang.org/x/crypto/openpgp"
 	"golang.org/x/crypto/openpgp/armor"
+
+	"github.com/smartcontractkit/cre-cli/install"
 )
 
 func verifyReleaseBinary(binPath, sigPath string) error {
@@ -43,10 +45,7 @@ func verifyGPGSignature(publicKey []byte, binPath, sigPath string) error {
 		return fmt.Errorf("GPG signature invalid: %w", err)
 	}
 
-	if err := validateSignerIdentity(entity); err != nil {
-		return err
-	}
-	return nil
+	return validateSignerIdentity(entity)
 }
 
 func checkDetachedSignature(keyring openpgp.KeyRing, signed *os.File, sigBytes []byte) (*openpgp.Entity, error) {

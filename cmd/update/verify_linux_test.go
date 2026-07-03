@@ -1,5 +1,6 @@
 //go:build linux
 
+//nolint:staticcheck // SA1019: OpenPGP required to verify KMS GPG release signatures.
 package update
 
 import (
@@ -8,10 +9,11 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/smartcontractkit/cre-cli/install"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/openpgp"
 	"golang.org/x/crypto/openpgp/armor"
+
+	"github.com/smartcontractkit/cre-cli/install"
 )
 
 func TestVerifyGPGSignature_validSignature(t *testing.T) {
