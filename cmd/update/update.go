@@ -413,6 +413,13 @@ func New(_ *runtime.Context) *cobra.Command { // <-- No longer uses rt
 	var versionCmd = &cobra.Command{
 		Use:   "update",
 		Short: "Update the cre CLI to the latest version",
+		Long: `Update the cre CLI to the latest version
+
+Release signatures are verified using the public key published by the CRE team.
+
+On Linux, the signature is verified using GPG.
+On macOS, the signature is verified using codesign.
+On Windows, the signature is verified using Authenticode.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return Run(version.Version)
 		},
