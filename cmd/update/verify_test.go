@@ -5,8 +5,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/smartcontractkit/cre-cli/install"
 	"github.com/stretchr/testify/require"
+
+	"github.com/smartcontractkit/cre-cli/install"
 )
 
 func TestReleasePublicKeyMatchesInstall(t *testing.T) {
