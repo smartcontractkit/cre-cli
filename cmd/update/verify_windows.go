@@ -10,7 +10,7 @@ import (
 )
 
 // windowsSignerSubject is a substring of the Authenticode certificate subject.
-const windowsSignerSubject = "Smart Contract"
+const windowsSignerSubject = "SmartContract"
 
 func verifyReleaseBinary(binPath, _ string) error {
 	escaped := strings.ReplaceAll(binPath, "'", "''")
