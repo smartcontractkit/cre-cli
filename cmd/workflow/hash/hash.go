@@ -1,6 +1,7 @@
 package hash
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -23,7 +24,7 @@ type Inputs struct {
 	WorkflowName      string
 	WorkflowPath      string
 	OwnerFromSettings string
-	PrivateKey        string
+	PrivateKey        string // #nosec G117 -- CLI flag for optional signing key input
 	SkipTypeChecks    bool
 	RegistryType      settings.RegistryType
 	DerivedOwner      string
@@ -43,7 +44,6 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 			s := runtimeContext.Settings
 			v := runtimeContext.Viper
 
-			rawPrivKey := v.GetString(settings.EthPrivateKeyEnvVar)
 			registryType, err := resolveRegistryType(runtimeContext)
 			if err != nil {
 				return err
@@ -56,13 +56,13 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 				WorkflowName:      s.Workflow.UserWorkflowSettings.WorkflowName,
 				WorkflowPath:      s.Workflow.WorkflowArtifactSettings.WorkflowPath,
 				OwnerFromSettings: s.Workflow.UserWorkflowSettings.WorkflowOwnerAddress,
-				PrivateKey:        settings.NormalizeHexKey(rawPrivKey),
+				PrivateKey:        s.User.PrivateKey(settings.EVM),
 				SkipTypeChecks:    v.GetBool(cmdcommon.SkipTypeChecksCLIFlag),
 				RegistryType:      registryType,
 				DerivedOwner:      runtimeContext.DerivedWorkflowOwner,
 			}
 
-			return Execute(inputs)
+			return Execute(cmd.Context(), inputs)
 		},
 	}
 
@@ -81,8 +81,8 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	return hashCmd
 }
 
-func Execute(inputs Inputs) error {
-	rawBinary, err := loadBinary(inputs.WasmPath, inputs.WorkflowPath, inputs.SkipTypeChecks)
+func Execute(ctx context.Context, inputs Inputs) error {
+	rawBinary, err := loadBinary(ctx, inputs.WasmPath, inputs.WorkflowPath, inputs.SkipTypeChecks)
 	if err != nil {
 		return err
 	}
@@ -92,7 +92,7 @@ func Execute(inputs Inputs) error {
 		return fmt.Errorf("failed to compress binary: %w", err)
 	}
 
-	config, err := loadConfig(inputs.ConfigPath)
+	config, err := loadConfig(ctx, inputs.ConfigPath)
 	if err != nil {
 		return err
 	}
@@ -190,11 +190,11 @@ func isPrivateRegistryID(deploymentRegistry string) bool {
 	return strings.EqualFold(deploymentRegistry, "private")
 }
 
-func loadBinary(wasmFlag, workflowPathFromSettings string, skipTypeChecks bool) ([]byte, error) {
+func loadBinary(ctx context.Context, wasmFlag, workflowPathFromSettings string, skipTypeChecks bool) ([]byte, error) {
 	if wasmFlag != "" {
 		if cmdcommon.IsURL(wasmFlag) {
 			ui.Dim("Fetching WASM binary from URL...")
-			data, err := cmdcommon.FetchURL(wasmFlag)
+			data, err := cmdcommon.FetchURL(ctx, wasmFlag)
 			if err != nil {
 				return nil, fmt.Errorf("failed to fetch WASM from URL: %w", err)
 			}
@@ -221,7 +221,7 @@ func loadBinary(wasmFlag, workflowPathFromSettings string, skipTypeChecks bool) 
 
 	spinner := ui.NewSpinner()
 	spinner.Start("Compiling workflow...")
-	wasmBytes, err := cmdcommon.CompileWorkflowToWasm(resolvedWorkflowPath, cmdcommon.WorkflowCompileOptions{
+	wasmBytes, err := cmdcommon.CompileWorkflowToWasm(ctx, resolvedWorkflowPath, cmdcommon.WorkflowCompileOptions{
 		StripSymbols:   true,
 		SkipTypeChecks: skipTypeChecks,
 	})
@@ -235,13 +235,13 @@ func loadBinary(wasmFlag, workflowPathFromSettings string, skipTypeChecks bool) 
 	return wasmBytes, nil
 }
 
-func loadConfig(configPath string) ([]byte, error) {
+func loadConfig(ctx context.Context, configPath string) ([]byte, error) {
 	if configPath == "" {
 		return nil, nil
 	}
 	if cmdcommon.IsURL(configPath) {
 		ui.Dim("Fetching config from URL...")
-		data, err := cmdcommon.FetchURL(configPath)
+		data, err := cmdcommon.FetchURL(ctx, configPath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch config from URL: %w", err)
 		}

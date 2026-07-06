@@ -10,7 +10,12 @@ import (
 	"github.com/denisbrodbeck/machineid"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+
+	"github.com/smartcontractkit/cre-cli/internal/creconfig"
+	"github.com/smartcontractkit/cre-cli/internal/redact"
 )
+
+const MachineIDFile = "machine_id"
 
 // CollectMachineInfo gathers information about the machine running the CLI
 func CollectMachineInfo() MachineInfo {
@@ -42,10 +47,7 @@ func CollectWorkflowInfo(settings interface{}) *WorkflowInfo {
 
 // getOrCreateMachineID retrieves or generates a stable machine ID for telemetry
 func getOrCreateMachineID() (string, error) {
-	// Try to read existing machine ID from config (for backwards compatibility)
-	home, err := os.UserHomeDir()
-	if err == nil {
-		idFile := fmt.Sprintf("%s/.cre/machine_id", home)
+	if idFile, err := creconfig.FilePath(MachineIDFile); err == nil {
 		if data, err := os.ReadFile(idFile); err == nil && len(data) > 0 {
 			return strings.TrimSpace(string(data)), nil
 		}
@@ -79,10 +81,9 @@ func collectFlags(cmd *cobra.Command) []KeyValuePair {
 		// Only include flags that were explicitly set by the user
 		// This avoids cluttering telemetry with default values
 		if flag.Changed {
-			value := flag.Value.String()
 			flags = append(flags, KeyValuePair{
 				Key:   flag.Name,
-				Value: value,
+				Value: redact.Flag(flag.Name, flag.Value.String()),
 			})
 		}
 	})
@@ -105,7 +106,7 @@ func CollectCommandInfo(cmd *cobra.Command, args []string) CommandInfo {
 	}
 
 	// Collect args (only positional arguments, not flags)
-	info.Args = args
+	info.Args = redact.Args(info.Action, info.Subcommand, args)
 
 	// Collect flags as key-value pairs (only flags explicitly set by user)
 	info.Flags = collectFlags(cmd)

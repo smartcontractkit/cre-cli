@@ -1,6 +1,7 @@
 package deploy
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -27,17 +28,17 @@ func (a *privateRegistryDeployStrategy) ensureClient() {
 	}
 }
 
-func (a *privateRegistryDeployStrategy) RunPreDeployChecks() error {
+func (a *privateRegistryDeployStrategy) RunPreDeployChecks(_ context.Context) error {
 	return nil
 }
 
-func (a *privateRegistryDeployStrategy) CheckWorkflowExists(_, workflowName, _, workflowID string) (bool, *uint8, error) {
+func (a *privateRegistryDeployStrategy) CheckWorkflowExists(ctx context.Context, _, workflowName, _, workflowID string) (bool, *uint8, error) {
 	a.ensureClient()
 
-	workflow, err := a.prc.GetWorkflowByName(workflowName)
+	workflow, err := a.prc.GetWorkflowByName(ctx, workflowName)
 	if err == nil {
 		if workflow.WorkflowID == workflowID {
-			return false, nil, fmt.Errorf("workflow with id %s already exists", workflowID)
+			return true, offchainStatusToUint8(workflow.Status), fmt.Errorf("workflow with id %s is already registered and unchanged; re-deployment skipped: %w", workflowID, errWorkflowUnchanged)
 		}
 		return true, offchainStatusToUint8(workflow.Status), nil
 	}
@@ -48,7 +49,7 @@ func (a *privateRegistryDeployStrategy) CheckWorkflowExists(_, workflowName, _, 
 	return false, nil, err
 }
 
-func (a *privateRegistryDeployStrategy) Upsert() error {
+func (a *privateRegistryDeployStrategy) Upsert(ctx context.Context) error {
 	a.ensureClient()
 
 	h := a.h
@@ -57,7 +58,7 @@ func (a *privateRegistryDeployStrategy) Upsert() error {
 	ui.Line()
 	ui.Dim(fmt.Sprintf("Registering workflow in private registry (workflowID: %s)...", input.WorkflowID))
 
-	result, err := a.prc.UpsertWorkflowInRegistry(input)
+	result, err := a.prc.UpsertWorkflowInRegistry(ctx, input)
 	if err != nil {
 		return fmt.Errorf("failed to register workflow in private registry: %w", err)
 	}
@@ -66,6 +67,7 @@ func (a *privateRegistryDeployStrategy) Upsert() error {
 	ui.Line()
 	ui.Bold("Details:")
 	ui.Dim(fmt.Sprintf("   Registry:         %s", h.runtimeContext.ResolvedRegistry.ID()))
+	ui.Dim(fmt.Sprintf("   DON Family:       %s", h.inputs.DonFamily))
 	ui.Dim(fmt.Sprintf("   Workflow Name:    %s", result.WorkflowName))
 	ui.Dim(fmt.Sprintf("   Workflow ID:      %s", result.WorkflowID))
 	ui.Dim(fmt.Sprintf("   Status:           %s", privateregistryclient.FormatStatus(result.Status)))

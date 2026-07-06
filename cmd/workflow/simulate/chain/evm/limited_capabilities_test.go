@@ -13,15 +13,9 @@ import (
 	evmserver "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/chain-capabilities/evm/server"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/core"
 	sdkpb "github.com/smartcontractkit/chainlink-protos/cre/go/sdk"
+
+	"github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain"
 )
-
-type stubEVMLimits struct {
-	reportSizeLimit int
-	gasLimit        uint64
-}
-
-func (s *stubEVMLimits) ChainWriteReportSizeLimit() int { return s.reportSizeLimit }
-func (s *stubEVMLimits) ChainWriteGasLimit() uint64     { return s.gasLimit }
 
 type evmCapabilityBaseStub struct{}
 
@@ -94,7 +88,7 @@ func (s *evmClientCapabilityStub) ChainSelector() uint64 { return 0 }
 func TestLimitedEVMChainWriteReportRejectsOversizedReport(t *testing.T) {
 	t.Parallel()
 
-	limits := &stubEVMLimits{reportSizeLimit: 4}
+	limits := chain.Limits{ReportSize: 4}
 	inner := &evmClientCapabilityStub{}
 	wrapper := NewLimitedEVMChain(inner, limits)
 
@@ -110,7 +104,7 @@ func TestLimitedEVMChainWriteReportRejectsOversizedReport(t *testing.T) {
 func TestLimitedEVMChainWriteReportRejectsOversizedGasLimit(t *testing.T) {
 	t.Parallel()
 
-	limits := &stubEVMLimits{gasLimit: 10}
+	limits := chain.Limits{GasLimit: 10}
 	inner := &evmClientCapabilityStub{}
 	wrapper := NewLimitedEVMChain(inner, limits)
 
@@ -126,7 +120,7 @@ func TestLimitedEVMChainWriteReportRejectsOversizedGasLimit(t *testing.T) {
 func TestLimitedEVMChainWriteReportDelegatesOnBoundaryValues(t *testing.T) {
 	t.Parallel()
 
-	limits := &stubEVMLimits{reportSizeLimit: 4, gasLimit: 10}
+	limits := chain.Limits{ReportSize: 4, GasLimit: 10}
 
 	input := &evmcappb.WriteReportRequest{
 		Report:    &sdkpb.ReportResponse{RawReport: []byte("1234")},
@@ -145,5 +139,45 @@ func TestLimitedEVMChainWriteReportDelegatesOnBoundaryValues(t *testing.T) {
 	resp, err := wrapper.WriteReport(context.Background(), commonCap.RequestMetadata{}, input)
 	require.NoError(t, err)
 	assert.Same(t, expectedResp, resp)
+	assert.Equal(t, 1, inner.writeReportCalls)
+}
+
+func TestLimitedEVMChainWriteReportZeroLimitsDelegate(t *testing.T) {
+	t.Parallel()
+
+	inner := &evmClientCapabilityStub{}
+	wrapper := NewLimitedEVMChain(inner, chain.Limits{})
+
+	_, err := wrapper.WriteReport(context.Background(), commonCap.RequestMetadata{}, &evmcappb.WriteReportRequest{
+		Report:    &sdkpb.ReportResponse{RawReport: make([]byte, 1_000_000)},
+		GasConfig: &evmcappb.GasConfig{GasLimit: 1_000_000_000},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 1, inner.writeReportCalls)
+}
+
+func TestLimitedEVMChainWriteReportNilGasConfigDelegates(t *testing.T) {
+	t.Parallel()
+
+	inner := &evmClientCapabilityStub{}
+	wrapper := NewLimitedEVMChain(inner, chain.Limits{ReportSize: 100, GasLimit: 10})
+
+	_, err := wrapper.WriteReport(context.Background(), commonCap.RequestMetadata{}, &evmcappb.WriteReportRequest{
+		Report: &sdkpb.ReportResponse{RawReport: []byte("x")},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 1, inner.writeReportCalls)
+}
+
+func TestLimitedEVMChainWriteReportNilReportDelegates(t *testing.T) {
+	t.Parallel()
+
+	inner := &evmClientCapabilityStub{}
+	wrapper := NewLimitedEVMChain(inner, chain.Limits{ReportSize: 100, GasLimit: 100})
+
+	_, err := wrapper.WriteReport(context.Background(), commonCap.RequestMetadata{}, &evmcappb.WriteReportRequest{
+		GasConfig: &evmcappb.GasConfig{GasLimit: 50},
+	})
+	require.NoError(t, err)
 	assert.Equal(t, 1, inner.writeReportCalls)
 }

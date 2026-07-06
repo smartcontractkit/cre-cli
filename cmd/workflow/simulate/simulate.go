@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -31,7 +34,8 @@ import (
 
 	cmdcommon "github.com/smartcontractkit/cre-cli/cmd/common"
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain"
-	_ "github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain/evm" // register EVM chain family via package init
+	_ "github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain/evm"    // register EVM chain family via package init
+	_ "github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain/solana" // register Solana chain family via package init
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
@@ -41,6 +45,7 @@ import (
 )
 
 const WorkflowExecutionTimeout = 5 * time.Minute
+const defaultHTTPTriggerServerPort = 2000
 
 type Inputs struct {
 	WasmPath     string `validate:"omitempty,file,ascii,max=97" cli:"--wasm"`
@@ -58,10 +63,15 @@ type Inputs struct {
 	// (health check, capability registration) have a single source of truth.
 	ChainTypeResolved map[string]chain.ResolvedChains `validate:"-"`
 	// Non-interactive mode options
-	NonInteractive  bool              `validate:"-"`
+	NonInteractive  bool `validate:"-"`
+	HasTriggerIndex bool
 	TriggerIndex    int               `validate:"-"`
-	HTTPPayload     string            `validate:"-"` // JSON string or @/path/to/file.json
+	HTTPPayload     string            `validate:"-"` // JSON string or /path/to/file.json
+	HTTPTriggerPort int               `validate:"min=1,max=65535"`
 	ChainTypeInputs map[string]string `validate:"-"` // CLI-supplied chain-type-specific trigger inputs
+	// Listen keeps the HTTP trigger server running after each execution so it can
+	// process additional requests until the user interrupts (ctrl-C).
+	Listen bool `validate:"-"`
 	// Limits enforcement
 	LimitsPath string `validate:"-"` // "default" or path to custom limits JSON
 	// SkipTypeChecks passes --skip-type-checks to cre-compile for TypeScript workflows.
@@ -90,12 +100,12 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return handler.Execute(inputs)
+			return handler.Execute(cmd.Context(), inputs)
 		},
 	}
 
 	simulateCmd.Flags().BoolP("engine-logs", "g", false, "Enable non-fatal engine logging")
-	simulateCmd.Flags().Bool("broadcast", false, "Broadcast transactions to the EVM (default: false)")
+	simulateCmd.Flags().Bool("broadcast", false, "Broadcast transactions to configured chains (default: false)")
 	simulateCmd.Flags().String("wasm", "", "Path or URL to a pre-built WASM binary (skips compilation)")
 	simulateCmd.Flags().String("config", "", "Override the config file path from workflow.yaml")
 	simulateCmd.Flags().Bool("no-config", false, "Simulate without a config file")
@@ -103,7 +113,9 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	simulateCmd.MarkFlagsMutuallyExclusive("config", "no-config", "default-config")
 	// Non-interactive trigger selection flags
 	simulateCmd.Flags().Int("trigger-index", -1, "Index of the trigger to run (0-based)")
-	simulateCmd.Flags().String("http-payload", "", "HTTP trigger payload as JSON string or path to JSON file (with or without @ prefix)")
+	simulateCmd.Flags().String("http-payload", "", "HTTP trigger payload as JSON string or path to JSON file")
+	simulateCmd.Flags().Int("http-trigger-port", defaultHTTPTriggerServerPort, "Port used by the local HTTP trigger server")
+	simulateCmd.Flags().Bool("listen", false, "Listen for HTTP requests or supported log triggers and run the simulator for each match (not supported by cron)")
 
 	// Register chain-type-specific CLI flags (e.g., --evm-tx-hash).
 	chain.RegisterAllCLIFlags(simulateCmd)
@@ -182,6 +194,11 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 		}
 	}
 
+	httpTriggerPort := v.GetInt("http-trigger-port")
+	if !v.IsSet("http-trigger-port") {
+		httpTriggerPort = defaultHTTPTriggerServerPort
+	}
+
 	return Inputs{
 		WasmPath:          v.GetString("wasm"),
 		WorkflowPath:      creSettings.Workflow.WorkflowArtifactSettings.WorkflowPath,
@@ -194,9 +211,12 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 		ChainTypeKeys:     ctKeys,
 		WorkflowName:      creSettings.Workflow.UserWorkflowSettings.WorkflowName,
 		NonInteractive:    v.GetBool("non-interactive"),
+		HasTriggerIndex:   v.IsSet("trigger-index"),
 		TriggerIndex:      v.GetInt("trigger-index"),
 		HTTPPayload:       v.GetString("http-payload"),
+		HTTPTriggerPort:   httpTriggerPort,
 		ChainTypeInputs:   chain.CollectAllCLIInputs(v),
+		Listen:            v.GetBool("listen"),
 		LimitsPath:        v.GetString("limits"),
 		SkipTypeChecks:    v.GetBool(cmdcommon.SkipTypeChecksCLIFlag),
 		InvocationDir:     h.runtimeContext.InvocationDir,
@@ -252,14 +272,14 @@ func (h *handler) ValidateInputs(inputs Inputs) error {
 	return nil
 }
 
-func (h *handler) Execute(inputs Inputs) error {
+func (h *handler) Execute(ctx context.Context, inputs Inputs) error {
 	var wasmFileBinary []byte
 	var err error
 
 	if inputs.WasmPath != "" {
 		if cmdcommon.IsURL(inputs.WasmPath) {
 			ui.Dim("Fetching WASM binary from URL...")
-			wasmFileBinary, err = cmdcommon.FetchURL(inputs.WasmPath)
+			wasmFileBinary, err = cmdcommon.FetchURL(ctx, inputs.WasmPath)
 			if err != nil {
 				return fmt.Errorf("failed to fetch WASM from URL: %w", err)
 			}
@@ -298,7 +318,7 @@ func (h *handler) Execute(inputs Inputs) error {
 
 		spinner := ui.NewSpinner()
 		spinner.Start("Compiling workflow...")
-		wasmFileBinary, err = cmdcommon.CompileWorkflowToWasm(resolvedWorkflowPath, cmdcommon.WorkflowCompileOptions{
+		wasmFileBinary, err = cmdcommon.CompileWorkflowToWasm(ctx, resolvedWorkflowPath, cmdcommon.WorkflowCompileOptions{
 			StripSymbols:   false,
 			SkipTypeChecks: inputs.SkipTypeChecks,
 		})
@@ -343,7 +363,7 @@ func (h *handler) Execute(inputs Inputs) error {
 	var config []byte
 	if cmdcommon.IsURL(inputs.ConfigPath) {
 		ui.Dim("Fetching config from URL...")
-		config, err = cmdcommon.FetchURL(inputs.ConfigPath)
+		config, err = cmdcommon.FetchURL(ctx, inputs.ConfigPath)
 		if err != nil {
 			return fmt.Errorf("failed to fetch config from URL: %w", err)
 		}
@@ -429,9 +449,10 @@ func run(
 		return fmt.Errorf("failed to create engine logger: %w", err)
 	}
 
-	// Channels to coordinate blocking
+	// Channels to coordinate blocking. executionFinishedCh is buffered so multiple
+	// runs (listen mode) can each signal completion without blocking the engine.
 	initializedCh := make(chan struct{})
-	executionFinishedCh := make(chan struct{})
+	executionFinishedCh := make(chan struct{}, 1)
 
 	var manualTriggerCaps *ManualTriggers
 	simulatorInitialize := func(ctx context.Context, cfg simulator.RunnerConfig) (*capabilities.Registry, []services.Service) {
@@ -466,18 +487,17 @@ func run(
 		// Register chain-agnostic cron and HTTP triggers
 		triggerLggr := lggr.Named("TriggerCapabilities")
 		var err error
-		manualTriggerCaps, err = NewManualTriggerCapabilities(ctx, triggerLggr, registry)
+		manualTriggerCaps, err = NewManualTriggerCapabilities(ctx, triggerLggr, registry, inputs.HTTPTriggerPort, simLimits)
 		if err != nil {
 			ui.Error(fmt.Sprintf("Failed to create trigger capabilities: %v", err))
 			os.Exit(1)
 		}
 		srvcs = append(srvcs, manualTriggerCaps.ManualCronTrigger, manualTriggerCaps.ManualHTTPTrigger)
 
-		// Only set Limits when non-nil to avoid the typed-nil interface trap
-		// (a nil *SimulationLimits boxed into chain.Limits compares != nil).
-		var capLimits chain.Limits
+		// nil capLimits disables enforcement.
+		var capLimits *cresettings.Workflows
 		if simLimits != nil {
-			capLimits = simLimits
+			capLimits = &simLimits.Workflows
 		}
 
 		// Register chain-type-specific capabilities
@@ -533,10 +553,14 @@ func run(
 	triggerInfoAndBeforeStart := &TriggerInfoAndBeforeStart{}
 
 	getManualTriggerCaps := func() *ManualTriggers { return manualTriggerCaps }
+	var limitsWorkflows *cresettings.Workflows
+	if simLimits != nil {
+		limitsWorkflows = &simLimits.Workflows
+	}
 	if inputs.NonInteractive {
-		triggerInfoAndBeforeStart.BeforeStart = makeBeforeStartNonInteractive(triggerInfoAndBeforeStart, inputs, getManualTriggerCaps)
+		triggerInfoAndBeforeStart.BeforeStart = makeBeforeStartNonInteractive(triggerInfoAndBeforeStart, inputs, getManualTriggerCaps, limitsWorkflows)
 	} else {
-		triggerInfoAndBeforeStart.BeforeStart = makeBeforeStartInteractive(triggerInfoAndBeforeStart, inputs, getManualTriggerCaps)
+		triggerInfoAndBeforeStart.BeforeStart = makeBeforeStartInteractive(triggerInfoAndBeforeStart, inputs, getManualTriggerCaps, limitsWorkflows)
 	}
 
 	waitFn := func(context.Context, simulator.RunnerConfig, *capabilities.Registry, []services.Service) {
@@ -551,20 +575,55 @@ func run(
 			simLogger.Error("Trigger to run not selected")
 			os.Exit(1)
 		}
-		simLogger.Info("Running trigger", "trigger", triggerInfoAndBeforeStart.TriggerToRun.GetId())
-		err := triggerInfoAndBeforeStart.TriggerFunc()
-		if err != nil {
-			simLogger.Error("Failed to run trigger", "trigger", triggerInfoAndBeforeStart.TriggerToRun.GetId(), "error", err)
-			os.Exit(1)
+
+		httpListen := inputs.Listen && triggerInfoAndBeforeStart.TriggerToRun.GetId() == "http-trigger@1.0.0-alpha"
+		listen := inputs.Listen && (httpListen || triggerInfoAndBeforeStart.ListenSupported)
+		if inputs.Listen && !listen {
+			ui.Warning("--listen is not supported for this trigger type; ignoring")
+		}
+		if httpListen {
+			runHTTPListen(ctx, inputs, triggerInfoAndBeforeStart, executionFinishedCh, simLogger)
+			return
 		}
 
-		select {
-		case <-executionFinishedCh:
-			simLogger.Info("Execution finished signal received")
-		case <-ctx.Done():
-			simLogger.Info("Received interrupt signal, stopping execution")
-		case <-time.After(WorkflowExecutionTimeout):
-			simLogger.Warn("Timeout waiting for execution to finish")
+		for iteration := 0; ; iteration++ {
+			if iteration > 0 {
+				ui.Line()
+				ui.Step(fmt.Sprintf("Listen: ready for next request (run #%d)", iteration+1))
+				// Drain any stale completion signal so we wait for the new run's result.
+				select {
+				case <-executionFinishedCh:
+				default:
+				}
+			}
+
+			simLogger.Info("Running trigger", "trigger", triggerInfoAndBeforeStart.TriggerToRun.GetId())
+			err := triggerInfoAndBeforeStart.TriggerFunc()
+			if err != nil {
+				if errors.Is(err, errHTTPTriggerRateLimited) {
+					simLogger.Warn("Trigger rate limited, skipping execution", "trigger", triggerInfoAndBeforeStart.TriggerToRun.GetId(), "limit", err)
+					if !listen {
+						return
+					}
+					continue
+				}
+				simLogger.Error("Failed to run trigger", "trigger", triggerInfoAndBeforeStart.TriggerToRun.GetId(), "error", err)
+				os.Exit(1)
+			}
+
+			select {
+			case <-executionFinishedCh:
+				simLogger.Info("Execution finished signal received")
+			case <-ctx.Done():
+				simLogger.Info("Received interrupt signal, stopping execution")
+				return
+			case <-time.After(WorkflowExecutionTimeout):
+				simLogger.Warn("Timeout waiting for execution to finish")
+			}
+
+			if !listen {
+				return
+			}
 		}
 	}
 	simulatorCleanup := func(ctx context.Context, cfg simulator.RunnerConfig, registry *capabilities.Registry, services []services.Service) {
@@ -645,7 +704,10 @@ func run(
 					ui.Error("Execution resulted in an error being returned: " + r.Error)
 				}
 				ui.Line()
-				close(executionFinishedCh)
+				select {
+				case executionFinishedCh <- struct{}{}:
+				default:
+				}
 			},
 		},
 		WorkflowSettingsCfgFn: func(cfg *cresettings.Workflows) {
@@ -666,14 +728,203 @@ func run(
 	return nil
 }
 
+func runHTTPListen(ctx context.Context, inputs Inputs, triggerInfo *TriggerInfoAndBeforeStart, executionFinishedCh <-chan struct{}, simLogger *SimulationLogger) {
+	if triggerInfo.TriggerWithPayload == nil {
+		simLogger.Error("HTTP trigger payload function not initialized")
+		os.Exit(1)
+	}
+
+	payloadCh, closeServer, err := startHTTPListenPayloadServer(ctx, inputs.HTTPTriggerPort)
+	if err != nil {
+		ui.Error(fmt.Sprintf("Failed to start HTTP trigger server: %v", err))
+		os.Exit(1)
+	}
+	defer closeServer()
+
+	runPayload := func(payload *httptypedapi.Payload) bool {
+		simLogger.Info("Running trigger", "trigger", triggerInfo.TriggerToRun.GetId())
+		if err := triggerInfo.TriggerWithPayload(payload); err != nil {
+			if errors.Is(err, errHTTPTriggerRateLimited) {
+				simLogger.Warn("Trigger rate limited, skipping execution", "trigger", triggerInfo.TriggerToRun.GetId(), "limit", err)
+				return true
+			}
+			simLogger.Error("Failed to run trigger", "trigger", triggerInfo.TriggerToRun.GetId(), "error", err)
+			os.Exit(1)
+		}
+
+		select {
+		case <-executionFinishedCh:
+			simLogger.Info("Execution finished signal received")
+		case <-ctx.Done():
+			simLogger.Info("Received interrupt signal, stopping execution")
+			return false
+		case <-time.After(WorkflowExecutionTimeout):
+			simLogger.Warn("Timeout waiting for execution to finish")
+		}
+
+		return true
+	}
+
+	iteration := 0
+	if strings.TrimSpace(inputs.HTTPPayload) != "" {
+		if triggerInfo.TriggerFunc == nil {
+			simLogger.Error("Trigger function not initialized")
+			os.Exit(1)
+		}
+		simLogger.Info("Running trigger", "trigger", triggerInfo.TriggerToRun.GetId())
+		if err := triggerInfo.TriggerFunc(); err != nil {
+			if errors.Is(err, errHTTPTriggerRateLimited) {
+				simLogger.Warn("Trigger rate limited, skipping execution", "trigger", triggerInfo.TriggerToRun.GetId(), "limit", err)
+			} else {
+				simLogger.Error("Failed to run trigger", "trigger", triggerInfo.TriggerToRun.GetId(), "error", err)
+				os.Exit(1)
+			}
+		} else {
+			select {
+			case <-executionFinishedCh:
+				simLogger.Info("Execution finished signal received")
+			case <-ctx.Done():
+				simLogger.Info("Received interrupt signal, stopping execution")
+				return
+			case <-time.After(WorkflowExecutionTimeout):
+				simLogger.Warn("Timeout waiting for execution to finish")
+			}
+			iteration = 1
+		}
+	}
+
+	for {
+		if iteration > 0 {
+			ui.Line()
+			ui.Step(fmt.Sprintf("Listen: ready for next request (run #%d)", iteration+1))
+		}
+		ui.Step(fmt.Sprintf("Waiting for HTTP request to start execution (listening on http://localhost:%d/trigger)...", inputs.HTTPTriggerPort))
+
+		var payload *httptypedapi.Payload
+		select {
+		case payload = <-payloadCh:
+		case <-ctx.Done():
+			simLogger.Info("Received interrupt signal, stopping execution")
+			return
+		}
+
+		if !runPayload(payload) {
+			return
+		}
+		iteration++
+	}
+}
+
+func startHTTPListenPayloadServer(ctx context.Context, port int) (<-chan *httptypedapi.Payload, func(), error) {
+	payloadCh := make(chan *httptypedapi.Payload, 16)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/trigger", func(w http.ResponseWriter, r *http.Request) {
+		input, err := parseHTTPTriggerRequest(r)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("error processing request: %v", err), http.StatusBadRequest)
+			return
+		}
+
+		select {
+		case payloadCh <- &httptypedapi.Payload{Input: input}:
+			w.WriteHeader(http.StatusOK)
+		default:
+			http.Error(w, "trigger queue is full", http.StatusTooManyRequests)
+		}
+	})
+
+	server := &http.Server{
+		Handler:           mux,
+		ReadHeaderTimeout: time.Second,
+	}
+	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+	if err != nil {
+		return nil, nil, err
+	}
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		if err := server.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			// Nothing to do here: startup errors are handled synchronously by
+			// net.Listen above, and shutdown uses server.Close().
+			return
+		}
+	}()
+	go func() {
+		<-ctx.Done()
+		_ = server.Close()
+	}()
+
+	closeServer := func() {
+		_ = server.Close()
+		<-done
+	}
+	return payloadCh, closeServer, nil
+}
+
+func parseHTTPTriggerRequest(req *http.Request) ([]byte, error) {
+	if req.Method != http.MethodPost {
+		return nil, errors.New("gateway expects POST request")
+	}
+
+	body, err := io.ReadAll(req.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read request body: %w", err)
+	}
+
+	var rpcRequest struct {
+		Input json.RawMessage `json:"input"`
+	}
+	if err := json.Unmarshal(body, &rpcRequest); err != nil {
+		return nil, fmt.Errorf("failed to parse request body: %w", err)
+	}
+
+	return rpcRequest.Input, nil
+}
+
 type TriggerInfoAndBeforeStart struct {
-	TriggerFunc  func() error
-	TriggerToRun *pb.TriggerSubscription
-	BeforeStart  func(ctx context.Context, cfg simulator.RunnerConfig, registry *capabilities.Registry, services []services.Service, triggerSub []*pb.TriggerSubscription)
+	TriggerFunc        func() error
+	TriggerWithPayload func(*httptypedapi.Payload) error
+	ListenSupported    bool
+	TriggerToRun       *pb.TriggerSubscription
+	BeforeStart        func(ctx context.Context, cfg simulator.RunnerConfig, registry *capabilities.Registry, services []services.Service, triggerSub []*pb.TriggerSubscription)
+}
+
+func getTriggerIndex(inputs Inputs, triggerSub []*pb.TriggerSubscription) (int, error) {
+	if len(triggerSub) == 0 {
+		return -1, errors.New("no workflow triggers found, please check your workflow source code and config")
+	}
+
+	if len(triggerSub) == 1 {
+		return 0, nil
+	}
+
+	if inputs.HasTriggerIndex {
+		return inputs.TriggerIndex, nil
+	}
+
+	opts := make([]ui.SelectOption[int], len(triggerSub))
+	for i, trigger := range triggerSub {
+		opts[i] = ui.SelectOption[int]{
+			Label: fmt.Sprintf("%s %s", trigger.GetId(), trigger.GetMethod()),
+			Value: i,
+		}
+	}
+
+	ui.Line()
+	selected, err := ui.Select("Workflow simulation ready. Please select a trigger:", opts)
+	if err != nil {
+		ui.Error(fmt.Sprintf("Trigger selection failed: %v", err))
+		os.Exit(1)
+	}
+	ui.Line()
+
+	return selected, nil
 }
 
 // makeBeforeStartInteractive builds the interactive BeforeStart closure
-func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs, manualTriggerCapsGetter func() *ManualTriggers) func(context.Context, simulator.RunnerConfig, *capabilities.Registry, []services.Service, []*pb.TriggerSubscription) {
+func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs, manualTriggerCapsGetter func() *ManualTriggers, limits *cresettings.Workflows) func(context.Context, simulator.RunnerConfig, *capabilities.Registry, []services.Service, []*pb.TriggerSubscription) {
 	return func(
 		ctx context.Context,
 		cfg simulator.RunnerConfig,
@@ -681,34 +932,16 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 		services []services.Service,
 		triggerSub []*pb.TriggerSubscription,
 	) {
-		if len(triggerSub) == 0 {
-			ui.Error("No workflow triggers found, please check your workflow source code and config")
+		triggerIndex, err := getTriggerIndex(inputs, triggerSub)
+		if err != nil {
+			ui.Error(fmt.Sprintf("Workflow initialization failed: %v", err))
 			os.Exit(1)
 		}
-
-		var triggerIndex int
-		if len(triggerSub) > 1 {
-			opts := make([]ui.SelectOption[int], len(triggerSub))
-			for i, trigger := range triggerSub {
-				opts[i] = ui.SelectOption[int]{
-					Label: fmt.Sprintf("%s %s", trigger.GetId(), trigger.GetMethod()),
-					Value: i,
-				}
-			}
-
-			ui.Line()
-			selected, err := ui.Select("Workflow simulation ready. Please select a trigger:", opts)
-			if err != nil {
-				ui.Error(fmt.Sprintf("Trigger selection failed: %v", err))
-				os.Exit(1)
-			}
-			triggerIndex = selected
-
-			holder.TriggerToRun = triggerSub[triggerIndex]
-			ui.Line()
-		} else {
-			holder.TriggerToRun = triggerSub[0]
+		if triggerIndex < 0 || triggerIndex >= len(triggerSub) {
+			ui.Error(fmt.Sprintf("Workflow initialization failed: trigger index out of range: %d", triggerIndex))
+			os.Exit(1)
 		}
+		holder.TriggerToRun = triggerSub[triggerIndex]
 
 		triggerRegistrationID := fmt.Sprintf("trigger_reg_1111111111111111111111111111111111111111111111111111111111111111_%d", triggerIndex)
 		trigger := holder.TriggerToRun.Id
@@ -733,12 +966,34 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 				return manualTriggerCaps.ManualCronTrigger.ManualTrigger(ctx, triggerRegistrationID, skipWaitSignal)
 			}
 		case "http-trigger@1.0.0-alpha":
-			payload, err := getHTTPTriggerPayload(inputs.InvocationDir)
+			payload, err := getHTTPTriggerPayloadFromInput(inputs.InvocationDir, inputs.HTTPPayload)
 			if err != nil {
 				ui.Error(fmt.Sprintf("Failed to get HTTP trigger payload: %v", err))
 				os.Exit(1)
 			}
+			if payload == nil {
+				ui.Line()
+				ui.Step("No input detected for http-trigger. Supply the payload using one of:")
+				ui.Dim("1. POST JSON to the local trigger server, example:")
+				ui.Dim(fmt.Sprintf(`     curl -X POST http://localhost:%d/trigger \`, inputs.HTTPTriggerPort))
+				ui.Dim("          -H 'Content-Type: application/json' \\")
+				ui.Dim("          -d '{\"input\":{\"key\":\"value\"}}'")
+				ui.Dim("2. Re-run with --http-payload flag:")
+				ui.Dim(`     --http-payload '{"key":"value"}'          (inline JSON)`)
+				ui.Dim(`     --http-payload ./payload.json             (path to a JSON file)`)
+				ui.Line()
+			}
 			holder.TriggerFunc = func() error {
+				// Consume any inline payload on the first call; subsequent calls
+				// (listen mode) listen on the local HTTP server.
+				p := payload
+				payload = nil
+				if p == nil {
+					ui.Step(fmt.Sprintf("Waiting for HTTP request to start execution (listening on http://localhost:%d/trigger)...", inputs.HTTPTriggerPort))
+				}
+				return manualTriggerCaps.ManualHTTPTrigger.ManualTrigger(ctx, triggerRegistrationID, p)
+			}
+			holder.TriggerWithPayload = func(payload *httptypedapi.Payload) error {
 				return manualTriggerCaps.ManualHTTPTrigger.ManualTrigger(ctx, triggerRegistrationID, payload)
 			}
 		default:
@@ -755,7 +1010,37 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 					os.Exit(1)
 				}
 
-				triggerData, err := getTriggerDataForChainType(ctx, ct, sel, inputs, true)
+				if inputs.Listen {
+					listeningCT, ok := ct.(chain.ListeningChainType)
+					if !ok {
+						continue
+					}
+					listener, err := listeningCT.NewTriggerListener(ctx, sel, chain.TriggerParams{
+						Clients:         inputs.ChainTypeClients[ct.Name()],
+						Interactive:     true,
+						Listen:          true,
+						Limits:          limits,
+						ChainTypeInputs: inputs.ChainTypeInputs,
+						TriggerPayload:  holder.TriggerToRun.GetPayload(),
+						WorkflowName:    inputs.WorkflowName,
+					})
+					if err != nil {
+						ui.Error(fmt.Sprintf("Failed to create %s trigger listener: %v", name, err))
+						os.Exit(1)
+					}
+					handled = true
+					holder.ListenSupported = true
+					holder.TriggerFunc = func() error {
+						triggerData, err := listener.Next(ctx)
+						if err != nil {
+							return err
+						}
+						return ct.ExecuteTrigger(ctx, sel, triggerRegistrationID, triggerData)
+					}
+					break
+				}
+
+				triggerData, err := getTriggerDataForChainType(ctx, ct, sel, holder.TriggerToRun, inputs, limits, true)
 				if err != nil {
 					ui.Error(fmt.Sprintf("Failed to get %s trigger data: %v", name, err))
 					os.Exit(1)
@@ -777,7 +1062,7 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 }
 
 // makeBeforeStartNonInteractive builds the non-interactive BeforeStart closure
-func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs, manualTriggerCapsGetter func() *ManualTriggers) func(context.Context, simulator.RunnerConfig, *capabilities.Registry, []services.Service, []*pb.TriggerSubscription) {
+func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs, manualTriggerCapsGetter func() *ManualTriggers, limits *cresettings.Workflows) func(context.Context, simulator.RunnerConfig, *capabilities.Registry, []services.Service, []*pb.TriggerSubscription) {
 	return func(
 		ctx context.Context,
 		cfg simulator.RunnerConfig,
@@ -807,24 +1092,29 @@ func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inp
 		case "cron-trigger@1.0.0":
 			holder.TriggerFunc = func() error {
 				skipWaitSignal := make(chan struct{}, 1)
-				if err := manualTriggerCaps.ManualCronTrigger.ManualTrigger(ctx, triggerRegistrationID, skipWaitSignal); err != nil {
-					return err
-				}
 				// With cron schedule on non-interactive mode
 				skipWaitSignal <- struct{}{}
-				return nil
+				return manualTriggerCaps.ManualCronTrigger.ManualTrigger(ctx, triggerRegistrationID, skipWaitSignal)
 			}
 		case "http-trigger@1.0.0-alpha":
-			if strings.TrimSpace(inputs.HTTPPayload) == "" {
+			if strings.TrimSpace(inputs.HTTPPayload) == "" && !inputs.Listen {
 				ui.Error("--http-payload is required for http-trigger@1.0.0-alpha in non-interactive mode")
 				os.Exit(1)
 			}
-			payload, err := getHTTPTriggerPayloadFromInput(inputs.HTTPPayload, inputs.InvocationDir)
+			payload, err := getHTTPTriggerPayloadFromInput(inputs.InvocationDir, inputs.HTTPPayload)
 			if err != nil {
 				ui.Error(fmt.Sprintf("Failed to parse HTTP trigger payload: %v", err))
 				os.Exit(1)
 			}
 			holder.TriggerFunc = func() error {
+				p := payload
+				payload = nil
+				if p == nil {
+					ui.Step(fmt.Sprintf("Waiting for HTTP request to start execution (listening on http://localhost:%d/trigger)...", inputs.HTTPTriggerPort))
+				}
+				return manualTriggerCaps.ManualHTTPTrigger.ManualTrigger(ctx, triggerRegistrationID, p)
+			}
+			holder.TriggerWithPayload = func(payload *httptypedapi.Payload) error {
 				return manualTriggerCaps.ManualHTTPTrigger.ManualTrigger(ctx, triggerRegistrationID, payload)
 			}
 		default:
@@ -841,7 +1131,37 @@ func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inp
 					os.Exit(1)
 				}
 
-				triggerData, err := getTriggerDataForChainType(ctx, ct, sel, inputs, false)
+				if inputs.Listen {
+					listeningCT, ok := ct.(chain.ListeningChainType)
+					if !ok {
+						continue
+					}
+					listener, err := listeningCT.NewTriggerListener(ctx, sel, chain.TriggerParams{
+						Clients:         inputs.ChainTypeClients[ct.Name()],
+						Interactive:     false,
+						Listen:          true,
+						Limits:          limits,
+						ChainTypeInputs: inputs.ChainTypeInputs,
+						TriggerPayload:  holder.TriggerToRun.GetPayload(),
+						WorkflowName:    inputs.WorkflowName,
+					})
+					if err != nil {
+						ui.Error(fmt.Sprintf("Failed to create %s trigger listener: %v", name, err))
+						os.Exit(1)
+					}
+					handled = true
+					holder.ListenSupported = true
+					holder.TriggerFunc = func() error {
+						triggerData, err := listener.Next(ctx)
+						if err != nil {
+							return err
+						}
+						return ct.ExecuteTrigger(ctx, sel, triggerRegistrationID, triggerData)
+					}
+					break
+				}
+
+				triggerData, err := getTriggerDataForChainType(ctx, ct, sel, holder.TriggerToRun, inputs, limits, false)
 				if err != nil {
 					ui.Error(fmt.Sprintf("Failed to get %s trigger data: %v", name, err))
 					os.Exit(1)
@@ -893,22 +1213,13 @@ func cleanupBeholder() error {
 	return nil
 }
 
-// getHTTPTriggerPayload prompts user for HTTP trigger data. Relative paths are
+// getHTTPTriggerPayloadFromInput prompts user for HTTP trigger data. Relative paths are
 // resolved against invocationDir so file references work from where the user ran
 // the command even after SetExecutionContext switches cwd to the workflow dir.
-func getHTTPTriggerPayload(invocationDir string) (*httptypedapi.Payload, error) {
-	ui.Line()
-	input, err := ui.Input("HTTP Trigger Configuration",
-		ui.WithInputDescription("Enter a file path or JSON directly for the HTTP trigger"),
-		ui.WithPlaceholder(`{"key": "value"} or ./payload.json`),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("HTTP trigger input cancelled: %w", err)
-	}
-
+func getHTTPTriggerPayloadFromInput(invocationDir, input string) (*httptypedapi.Payload, error) {
 	input = strings.TrimSpace(input)
 	if input == "" {
-		return nil, fmt.Errorf("empty input provided")
+		return nil, nil
 	}
 
 	var jsonData map[string]interface{}
@@ -927,12 +1238,14 @@ func getHTTPTriggerPayload(invocationDir string) (*httptypedapi.Payload, error) 
 			return nil, fmt.Errorf("failed to parse JSON from file %s: %w", resolvedPath, err)
 		}
 		ui.Success(fmt.Sprintf("Loaded JSON from file: %s", resolvedPath))
-	} else {
+	} else if strings.HasPrefix(input, "{") {
 		// Treat as direct JSON input
 		if err := json.Unmarshal([]byte(input), &jsonData); err != nil {
 			return nil, fmt.Errorf("failed to parse JSON: %w", err)
 		}
 		ui.Success("Parsed JSON input successfully")
+	} else {
+		return nil, fmt.Errorf("invalid JSON input: %s", input)
 	}
 
 	jsonDataBytes, err := json.Marshal(jsonData)
@@ -950,11 +1263,15 @@ func getHTTPTriggerPayload(invocationDir string) (*httptypedapi.Payload, error) 
 
 // getTriggerDataForChainType resolves trigger data for a specific chain type.
 // Each chain type defines its own trigger data format.
-func getTriggerDataForChainType(ctx context.Context, ct chain.ChainType, selector uint64, inputs Inputs, interactive bool) (interface{}, error) {
+func getTriggerDataForChainType(ctx context.Context, ct chain.ChainType, selector uint64, triggerSub *pb.TriggerSubscription, inputs Inputs, limits *cresettings.Workflows, interactive bool) (interface{}, error) {
 	return ct.ResolveTriggerData(ctx, selector, chain.TriggerParams{
 		Clients:         inputs.ChainTypeClients[ct.Name()],
 		Interactive:     interactive,
+		Listen:          inputs.Listen,
+		Limits:          limits,
 		ChainTypeInputs: inputs.ChainTypeInputs,
+		TriggerPayload:  triggerSub.GetPayload(),
+		WorkflowName:    inputs.WorkflowName,
 	})
 }
 
@@ -966,37 +1283,4 @@ func resolvePathFromInvocation(path, invocationDir string) string {
 		return path
 	}
 	return filepath.Join(invocationDir, path)
-}
-
-// getHTTPTriggerPayloadFromInput builds an HTTP trigger payload from a JSON string or a file path
-// (optionally prefixed with '@'). invocationDir is used to resolve relative paths against the
-// directory where the user invoked the CLI rather than the current working directory.
-func getHTTPTriggerPayloadFromInput(input, invocationDir string) (*httptypedapi.Payload, error) {
-	trimmed := strings.TrimSpace(input)
-	if trimmed == "" {
-		return nil, fmt.Errorf("empty http payload input")
-	}
-
-	var raw []byte
-	if strings.HasPrefix(trimmed, "@") {
-		path := resolvePathFromInvocation(strings.TrimPrefix(trimmed, "@"), invocationDir)
-		data, err := os.ReadFile(path)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read file %s: %w", path, err)
-		}
-		raw = data
-	} else {
-		resolvedPath := resolvePathFromInvocation(trimmed, invocationDir)
-		if _, err := os.Stat(resolvedPath); err == nil {
-			data, err := os.ReadFile(resolvedPath)
-			if err != nil {
-				return nil, fmt.Errorf("failed to read file %s: %w", resolvedPath, err)
-			}
-			raw = data
-		} else {
-			raw = []byte(trimmed)
-		}
-	}
-
-	return &httptypedapi.Payload{Input: raw}, nil
 }

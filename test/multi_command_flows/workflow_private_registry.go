@@ -19,6 +19,7 @@ import (
 
 	"github.com/smartcontractkit/cre-cli/internal/authvalidation"
 	"github.com/smartcontractkit/cre-cli/internal/constants"
+	"github.com/smartcontractkit/cre-cli/internal/creconfig"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/ethkeys"
@@ -55,13 +56,13 @@ func mockGetCreOrganizationInfoGraphQLPayload() map[string]any {
 	}
 }
 
-// CreateTestBearerCredentialsHome writes JWT bearer credentials under HOME/.cre for subprocess CLI tests.
+// CreateTestBearerCredentialsHome writes JWT bearer credentials under the CLI config directory for subprocess CLI tests.
 func CreateTestBearerCredentialsHome(t *testing.T) string {
 	t.Helper()
 
 	homeDir := t.TempDir()
-	creDir := filepath.Join(homeDir, ".cre")
-	require.NoError(t, os.MkdirAll(creDir, 0o700), "failed to create .cre dir")
+	creDir := filepath.Join(homeDir, creconfig.Dir)
+	require.NoError(t, os.MkdirAll(creDir, 0o700), "failed to create config dir")
 
 	jwt := createTestJWT("test-org-id")
 	creConfig := "AccessToken: " + jwt + "\n" +
@@ -70,9 +71,62 @@ func CreateTestBearerCredentialsHome(t *testing.T) string {
 		"ExpiresIn: 3600\n" +
 		"TokenType: Bearer\n"
 
-	require.NoError(t, os.WriteFile(filepath.Join(creDir, "cre.yaml"), []byte(creConfig), 0o600), "failed to write test credentials")
+	require.NoError(t, os.WriteFile(filepath.Join(creDir, credentials.ConfigFile), []byte(creConfig), 0o600), "failed to write test credentials")
 
 	return homeDir
+}
+
+// realGoCacheEnv returns GOPATH and GOMODCACHE locations outside t.TempDir()-backed HOME dirs.
+// Overriding HOME makes Go default GOPATH to $HOME/go; module files are read-only and break TempDir cleanup.
+func realGoCacheEnv(t *testing.T) (gopath, gomodcache string) {
+	t.Helper()
+
+	realHome, err := os.UserHomeDir()
+	require.NoError(t, err, "failed to get real home dir")
+
+	gopath = os.Getenv("GOPATH")
+	if gopath == "" {
+		gopath = filepath.Join(realHome, "go")
+	}
+
+	gomodcache = os.Getenv("GOMODCACHE")
+	if gomodcache == "" {
+		gomodcache = filepath.Join(gopath, "pkg", "mod")
+	}
+
+	return gopath, gomodcache
+}
+
+// pinGoCacheForTestHome keeps module cache out of temp HOME directories in the test process.
+func pinGoCacheForTestHome(t *testing.T) {
+	t.Helper()
+	gopath, gomodcache := realGoCacheEnv(t)
+	t.Setenv("GOPATH", gopath)
+	t.Setenv("GOMODCACHE", gomodcache)
+}
+
+// cliChildEnv builds subprocess env with isolated HOME for credentials and pinned Go cache paths.
+func cliChildEnv(t *testing.T, testHome string) []string {
+	t.Helper()
+	gopath, gomodcache := realGoCacheEnv(t)
+
+	childEnv := make([]string, 0, len(os.Environ())+4)
+	for _, entry := range os.Environ() {
+		if strings.HasPrefix(entry, "HOME=") ||
+			strings.HasPrefix(entry, "USERPROFILE=") ||
+			strings.HasPrefix(entry, "GOPATH=") ||
+			strings.HasPrefix(entry, "GOMODCACHE=") {
+			continue
+		}
+		childEnv = append(childEnv, entry)
+	}
+	childEnv = append(childEnv,
+		"HOME="+testHome,
+		"USERPROFILE="+testHome,
+		"GOPATH="+gopath,
+		"GOMODCACHE="+gomodcache,
+	)
+	return childEnv
 }
 
 func createTestJWT(orgID string) string {
@@ -110,6 +164,10 @@ func workflowDeployPrivateRegistry(t *testing.T, tc TestConfig) string {
 							"tenantId":         "42",
 							"defaultDonFamily": "test-don",
 							"vaultGatewayUrl":  "https://vault.example.test",
+							"capabilitiesRegistry": map[string]any{
+								"chainSelector": "6433500567565415381",
+								"address":       "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+							},
 							"registries": []map[string]any{
 								{
 									"id":               "reg-test",
@@ -239,29 +297,7 @@ func workflowDeployPrivateRegistry(t *testing.T, tc TestConfig) string {
 
 	cmd := exec.Command(CLIPath, args...)
 	testHome := CreateTestBearerCredentialsHome(t)
-
-	realHome, err := os.UserHomeDir()
-	require.NoError(t, err, "failed to get real home dir")
-
-	childEnv := make([]string, 0, len(os.Environ())+3)
-	hasGOPATH := false
-	for _, entry := range os.Environ() {
-		if strings.HasPrefix(entry, "HOME=") || strings.HasPrefix(entry, "USERPROFILE=") {
-			continue
-		}
-		if strings.HasPrefix(entry, "GOPATH=") {
-			hasGOPATH = true
-		}
-		childEnv = append(childEnv, entry)
-	}
-	childEnv = append(childEnv, "HOME="+testHome, "USERPROFILE="+testHome)
-	// When HOME is overridden, Go defaults GOPATH to $HOME/go which lands
-	// inside t.TempDir(). Go modules are read-only, so TempDir cleanup
-	// fails and marks the test as failed. Pin GOPATH to the real home.
-	if !hasGOPATH {
-		childEnv = append(childEnv, "GOPATH="+filepath.Join(realHome, "go"))
-	}
-	cmd.Env = childEnv
+	cmd.Env = cliChildEnv(t, testHome)
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
@@ -325,6 +361,10 @@ func workflowPausePrivateRegistry(t *testing.T, tc TestConfig) string {
 							"tenantId":         "42",
 							"defaultDonFamily": "test-don",
 							"vaultGatewayUrl":  "https://vault.example.test",
+							"capabilitiesRegistry": map[string]any{
+								"chainSelector": "6433500567565415381",
+								"address":       "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+							},
 							"registries": []map[string]any{
 								{
 									"id":               "reg-test",
@@ -416,26 +456,7 @@ func workflowPausePrivateRegistry(t *testing.T, tc TestConfig) string {
 
 	cmd := exec.Command(CLIPath, args...)
 	testHome := CreateTestBearerCredentialsHome(t)
-
-	realHome, err := os.UserHomeDir()
-	require.NoError(t, err, "failed to get real home dir")
-
-	childEnv := make([]string, 0, len(os.Environ())+3)
-	hasGOPATH := false
-	for _, entry := range os.Environ() {
-		if strings.HasPrefix(entry, "HOME=") || strings.HasPrefix(entry, "USERPROFILE=") {
-			continue
-		}
-		if strings.HasPrefix(entry, "GOPATH=") {
-			hasGOPATH = true
-		}
-		childEnv = append(childEnv, entry)
-	}
-	childEnv = append(childEnv, "HOME="+testHome, "USERPROFILE="+testHome)
-	if !hasGOPATH {
-		childEnv = append(childEnv, "GOPATH="+filepath.Join(realHome, "go"))
-	}
-	cmd.Env = childEnv
+	cmd.Env = cliChildEnv(t, testHome)
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
@@ -495,6 +516,10 @@ func workflowActivatePrivateRegistry(t *testing.T, tc TestConfig) string {
 							"tenantId":         "42",
 							"defaultDonFamily": "test-don",
 							"vaultGatewayUrl":  "https://vault.example.test",
+							"capabilitiesRegistry": map[string]any{
+								"chainSelector": "6433500567565415381",
+								"address":       "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+							},
 							"registries": []map[string]any{
 								{
 									"id":               "reg-test",
@@ -586,26 +611,7 @@ func workflowActivatePrivateRegistry(t *testing.T, tc TestConfig) string {
 
 	cmd := exec.Command(CLIPath, args...)
 	testHome := CreateTestBearerCredentialsHome(t)
-
-	realHome, err := os.UserHomeDir()
-	require.NoError(t, err, "failed to get real home dir")
-
-	childEnv := make([]string, 0, len(os.Environ())+3)
-	hasGOPATH := false
-	for _, entry := range os.Environ() {
-		if strings.HasPrefix(entry, "HOME=") || strings.HasPrefix(entry, "USERPROFILE=") {
-			continue
-		}
-		if strings.HasPrefix(entry, "GOPATH=") {
-			hasGOPATH = true
-		}
-		childEnv = append(childEnv, entry)
-	}
-	childEnv = append(childEnv, "HOME="+testHome, "USERPROFILE="+testHome)
-	if !hasGOPATH {
-		childEnv = append(childEnv, "GOPATH="+filepath.Join(realHome, "go"))
-	}
-	cmd.Env = childEnv
+	cmd.Env = cliChildEnv(t, testHome)
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
@@ -665,6 +671,10 @@ func workflowDeletePrivateRegistry(t *testing.T, tc TestConfig) string {
 							"tenantId":         "42",
 							"defaultDonFamily": "test-don",
 							"vaultGatewayUrl":  "https://vault.example.test",
+							"capabilitiesRegistry": map[string]any{
+								"chainSelector": "6433500567565415381",
+								"address":       "0x5FbDB2315678afecb367f032d93F642f64180aa3",
+							},
 							"registries": []map[string]any{
 								{
 									"id":               "reg-test",
@@ -744,26 +754,7 @@ func workflowDeletePrivateRegistry(t *testing.T, tc TestConfig) string {
 
 	cmd := exec.Command(CLIPath, args...)
 	testHome := CreateTestBearerCredentialsHome(t)
-
-	realHome, err := os.UserHomeDir()
-	require.NoError(t, err, "failed to get real home dir")
-
-	childEnv := make([]string, 0, len(os.Environ())+3)
-	hasGOPATH := false
-	for _, entry := range os.Environ() {
-		if strings.HasPrefix(entry, "HOME=") || strings.HasPrefix(entry, "USERPROFILE=") {
-			continue
-		}
-		if strings.HasPrefix(entry, "GOPATH=") {
-			hasGOPATH = true
-		}
-		childEnv = append(childEnv, entry)
-	}
-	childEnv = append(childEnv, "HOME="+testHome, "USERPROFILE="+testHome)
-	if !hasGOPATH {
-		childEnv = append(childEnv, "GOPATH="+filepath.Join(realHome, "go"))
-	}
-	cmd.Env = childEnv
+	cmd.Env = cliChildEnv(t, testHome)
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
@@ -855,6 +846,7 @@ func RunPrivateRegistryAuthAndSettingsFinalize(t *testing.T, envPath, blankWorkf
 	bearerHome := CreateTestBearerCredentialsHome(t)
 	t.Setenv("HOME", bearerHome)
 	t.Setenv("USERPROFILE", bearerHome)
+	pinGoCacheForTestHome(t)
 
 	logger := testutil.NewTestLogger()
 	creds, err := credentials.New(logger)
@@ -887,7 +879,7 @@ func RunPrivateRegistryAuthAndSettingsFinalize(t *testing.T, envPath, blankWorkf
 	s, err := settings.New(logger, v, cmd, "")
 	require.NoError(t, err)
 	require.NotNil(t, s)
-	require.Empty(t, s.User.EthPrivateKey, "CRE_ETH_PRIVATE_KEY must be absent")
+	require.Empty(t, s.User.PrivateKey(settings.EVM), "CRE_ETH_PRIVATE_KEY must be absent")
 	require.Equal(t, "reg-test", s.Workflow.UserWorkflowSettings.DeploymentRegistry)
 	require.Empty(t, s.Workflow.UserWorkflowSettings.WorkflowOwnerAddress, "owner is deferred until finalize when deployment-registry is set")
 	require.Empty(t, s.Workflow.UserWorkflowSettings.WorkflowOwnerType)
@@ -895,7 +887,7 @@ func RunPrivateRegistryAuthAndSettingsFinalize(t *testing.T, envPath, blankWorkf
 	tenantCtx := &tenantctx.EnvironmentContext{
 		DefaultDonFamily: "test-don",
 		Registries: []*tenantctx.Registry{
-			{ID: "reg-test", Type: "OFF_CHAIN"},
+			{ID: "reg-test", Type: string(settings.RegistryTypeOffChain)},
 		},
 	}
 	resolved, err := settings.ResolveRegistry("reg-test", tenantCtx, envSet)

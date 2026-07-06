@@ -4,7 +4,7 @@ Adds a template repository source
 
 ### Synopsis
 
-Adds one or more template repository sources to ~/.cre/template.yaml. These repositories are used by cre init to discover available templates.
+Adds one or more template repository sources to your home directory (.cre/template.yaml). These repositories are used by cre init to discover available templates.
 
 ```
 cre templates add <owner/repo[@ref]>... [flags]

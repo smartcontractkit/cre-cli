@@ -164,21 +164,66 @@ func TestResolveRegistry_OnChainMissingChainSelector(t *testing.T) {
 	assert.Contains(t, err.Error(), "has no chain_selector")
 }
 
+func TestResolveRegistry_UnknownType(t *testing.T) {
+	ctx := &tenantctx.EnvironmentContext{
+		DefaultDonFamily: "zone-a",
+		Registries: []*tenantctx.Registry{
+			{
+				ID:   "future-registry",
+				Type: "unknown",
+			},
+		},
+	}
+	_, err := ResolveRegistry("future-registry", ctx, stagingEnvSet())
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "future-registry")
+	assert.Contains(t, err.Error(), "not supported by this CLI version")
+}
+
+func TestResolveRegistry_UnknownExcludedFromAvailable(t *testing.T) {
+	ctx := &tenantctx.EnvironmentContext{
+		DefaultDonFamily: "zone-a",
+		Registries: []*tenantctx.Registry{
+			{
+				ID:   "private",
+				Type: "off-chain",
+			},
+			{
+				ID:   "future-registry",
+				Type: "unknown",
+			},
+		},
+	}
+	_, err := ResolveRegistry("does-not-exist", ctx, stagingEnvSet())
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "not found in user context")
+	assert.Contains(t, err.Error(), "private")
+	assert.NotContains(t, err.Error(), "future-registry")
+}
+
 func TestParseRegistryType(t *testing.T) {
-	tests := []struct {
+	valid := []struct {
 		input string
 		want  RegistryType
 	}{
 		{"on-chain", RegistryTypeOnChain},
 		{"off-chain", RegistryTypeOffChain},
-		{"ON-CHAIN", RegistryTypeOnChain},
-		{"OFF-CHAIN", RegistryTypeOffChain},
-		{"off_chain", RegistryTypeOffChain},
-		{"unknown", RegistryTypeOnChain},
+		{"unknown", RegistryTypeUnknown},
 	}
-	for _, tt := range tests {
+	for _, tt := range valid {
 		t.Run(tt.input, func(t *testing.T) {
-			assert.Equal(t, tt.want, ParseRegistryType(tt.input))
+			got, err := ParseRegistryType(tt.input)
+			assert.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+
+	invalid := []string{"ON-CHAIN", "on_chain", "on-chian", ""}
+	for _, input := range invalid {
+		t.Run(input, func(t *testing.T) {
+			_, err := ParseRegistryType(input)
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), "unrecognised registry type")
 		})
 	}
 }
@@ -193,4 +238,23 @@ func TestInterfaceMethods(t *testing.T) {
 	assert.Equal(t, RegistryTypeOffChain, offchain.Type())
 	assert.Equal(t, "private", offchain.ID())
 	assert.Equal(t, "zone-b", offchain.DonFamily())
+}
+
+func TestEffectiveDonFamily_TenantDefault(t *testing.T) {
+	envSet := stagingEnvSet()
+	tenantCtx := &tenantctx.EnvironmentContext{DefaultDonFamily: "tenant-zone"}
+	assert.Equal(t, "tenant-zone", EffectiveDonFamily(envSet, tenantCtx))
+}
+
+func TestEffectiveDonFamily_EnvOverridesTenant(t *testing.T) {
+	envSet := stagingEnvSet()
+	envSet.DonFamily = "from-env"
+	tenantCtx := &tenantctx.EnvironmentContext{DefaultDonFamily: "tenant-zone"}
+	assert.Equal(t, "from-env", EffectiveDonFamily(envSet, tenantCtx))
+}
+
+func TestEffectiveDonFamily_EmptyWhenNeitherSet(t *testing.T) {
+	envSet := stagingEnvSet()
+	assert.Equal(t, "", EffectiveDonFamily(envSet, nil))
+	assert.Equal(t, "", EffectiveDonFamily(envSet, &tenantctx.EnvironmentContext{}))
 }

@@ -2,7 +2,6 @@ package settings
 
 import (
 	"fmt"
-	"net/url"
 	"os"
 	"strings"
 
@@ -13,6 +12,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"github.com/smartcontractkit/cre-cli/internal/constants"
+	"github.com/smartcontractkit/cre-cli/internal/rpc"
 )
 
 // GetWorkflowPathFromFile reads workflow-path from a workflow.yaml file (same value deploy/simulate get from Settings).
@@ -167,6 +167,10 @@ func loadWorkflowSettings(logger *zerolog.Logger, v *viper.Viper, cmd *cobra.Com
 		return WorkflowSettings{}, errors.Wrap(err, "for target "+target)
 	}
 
+	if err := ValidateMultisigCompatibility(v, cmd, nil); err != nil {
+		return WorkflowSettings{}, err
+	}
+
 	// This is required because some commands still read values directly out of viper
 	// TODO: Remove this function once all access to settings no longer uses viper
 	// DEVSVCS-1561
@@ -187,6 +191,9 @@ func FinalizeWorkflowOwner(
 	resolved ResolvedRegistry,
 	derivedWorkflowOwner string,
 ) error {
+	if err := ValidateMultisigCompatibility(v, cmd, resolved); err != nil {
+		return err
+	}
 	if ShouldSkipGetOwner(cmd) {
 		return nil
 	}
@@ -277,20 +284,7 @@ func validateSettings(config *WorkflowSettings, allowUnknownChains bool) error {
 }
 
 func isValidRpcUrl(rpcURL string) error {
-	parsedURL, err := url.Parse(rpcURL)
-	if err != nil {
-		return fmt.Errorf("failed to parse RPC URL: invalid format")
-	}
-
-	// Check if the URL has a valid scheme and host
-	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
-		return fmt.Errorf("invalid scheme in RPC URL: %s", parsedURL.Scheme)
-	}
-	if parsedURL.Host == "" {
-		return fmt.Errorf("invalid host in RPC URL: %s", parsedURL.Host)
-	}
-
-	return nil
+	return rpc.IsValidURL(rpcURL)
 }
 
 func IsValidChainName(name string) error {
@@ -335,6 +329,8 @@ func ShouldSkipGetOwner(cmd *cobra.Command) bool {
 
 // ValidateDeploymentRPC ensures project settings define a valid RPC URL for chainName (e.g. the workflow
 // registry chain). It is a no-op when chainName is empty. Used during settings load and from secrets owner-key flows.
+//
+// TODO(DEVSVCS-5178)
 func ValidateDeploymentRPC(config *WorkflowSettings, chainName string) error {
 	if chainName == "" {
 		return nil
