@@ -35,7 +35,8 @@ import (
 
 	cmdcommon "github.com/smartcontractkit/cre-cli/cmd/common"
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain"
-	_ "github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain/evm" // register EVM chain family via package init
+	_ "github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain/evm"    // register EVM chain family via package init
+	_ "github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain/solana" // register Solana chain family via package init
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"

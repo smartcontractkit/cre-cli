@@ -40,6 +40,13 @@
         "Default": "10000000",
         "Values": {}
       }
+    },
+    "Solana": {
+      "ReportSizeLimit": "265b",
+      "GasLimit": {
+        "Default": "300000",
+        "Values": {}
+      }
     }
   },
   "ChainRead": {
