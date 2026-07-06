@@ -18,6 +18,7 @@ import (
 )
 
 const CreTargetEnvVar = "CRE_TARGET"
+const CreAllowInsecureRPCEnvVar = "CRE_ALLOW_INSECURE_RPC"
 
 // ChainType describes a chain family and the per-family settings the CLI
 // loads from the environment. Add a family by appending to AllChainTypes.
@@ -215,11 +216,12 @@ func LoadEnv(logger *zerolog.Logger, v *viper.Viper, envPath string) {
 	loadedEnvFilePath = ""
 	loadedEnvVars = nil
 	loadedEnvFilePath, loadedEnvVars = loadEnvFile(logger, envPath)
-	extras := []string{CreTargetEnvVar}
+	extras := []string{CreTargetEnvVar, CreAllowInsecureRPCEnvVar}
 	for _, f := range AllChainTypes {
 		extras = append(extras, f.PrivateKeyEnv)
 	}
 	bindAllVars(v, loadedEnvVars, extras...)
+	_ = v.BindEnv(Flags.AllowInsecureRPC.Name, CreAllowInsecureRPCEnvVar)
 }
 
 // LoadPublicEnv loads variables from envPath into the process environment

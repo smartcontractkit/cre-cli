@@ -1,4 +1,4 @@
-package chain
+package rpc
 
 import (
 	"fmt"
@@ -6,15 +6,26 @@ import (
 	"strings"
 )
 
-// RedactURL returns a version of the URL with path segments and query parameters
-// masked to avoid leaking secrets that may have been resolved from environment variables.
+// RedactURL returns a version of the URL with credentials masked to avoid leaking
+// secrets that may have been resolved from environment variables.
 // For example, "https://rpc.example.com/v1/my-secret-key" becomes "https://rpc.example.com/v1/***".
 func RedactURL(rawURL string) string {
 	u, err := url.Parse(rawURL)
 	if err != nil {
 		return "***"
 	}
-	// Mask the last path segment (most common location for API keys)
+
+	host := u.Host
+	if u.User != nil {
+		username := u.User.Username()
+		if username != "" {
+			host = username + ":***@" + u.Hostname()
+			if port := u.Port(); port != "" {
+				host += ":" + port
+			}
+		}
+	}
+
 	u.Path = strings.TrimRight(u.Path, "/")
 	if u.Path != "" && u.Path != "/" {
 		parts := strings.Split(u.Path, "/")
@@ -24,9 +35,9 @@ func RedactURL(rawURL string) string {
 		u.RawPath = ""
 		u.Path = strings.Join(parts, "/")
 	}
-	// Remove query params entirely
+
 	u.RawQuery = ""
 	u.Fragment = ""
-	// Use Opaque to avoid re-encoding the path
-	return fmt.Sprintf("%s://%s%s", u.Scheme, u.Host, u.Path)
+
+	return fmt.Sprintf("%s://%s%s", u.Scheme, host, u.Path)
 }

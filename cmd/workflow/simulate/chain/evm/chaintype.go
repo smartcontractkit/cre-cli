@@ -22,6 +22,7 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/settings/cresettings"
 
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain"
+	"github.com/smartcontractkit/cre-cli/internal/rpc"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
@@ -71,7 +72,7 @@ func (ct *EVMChainType) ResolveClients(v *viper.Viper) (chain.ResolvedChains, er
 			ct.log.Debug().Msgf("RPC not provided for %s; skipping", chainName)
 			continue
 		}
-		ct.log.Debug().Msgf("Using RPC for %s: %s", chainName, chain.RedactURL(rpcURL))
+		ct.log.Debug().Msgf("Using RPC for %s: %s", chainName, rpc.RedactURL(rpcURL))
 
 		c, err := ethclient.Dial(rpcURL)
 		if err != nil {
@@ -118,7 +119,7 @@ func (ct *EVMChainType) ResolveClients(v *viper.Viper) (chain.ResolvedChains, er
 			continue
 		}
 
-		ct.log.Debug().Msgf("Using RPC for experimental chain %d: %s", ec.ChainSelector, chain.RedactURL(ec.RPCURL))
+		ct.log.Debug().Msgf("Using RPC for experimental chain %d: %s", ec.ChainSelector, rpc.RedactURL(ec.RPCURL))
 		c, err := ethclient.Dial(ec.RPCURL)
 		if err != nil {
 			return chain.ResolvedChains{}, fmt.Errorf("failed to create eth client for experimental chain %d: %w", ec.ChainSelector, err)

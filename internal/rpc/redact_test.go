@@ -1,7 +1,9 @@
-package chain
+package rpc_test
 
 import (
 	"testing"
+
+	"github.com/smartcontractkit/cre-cli/internal/rpc"
 )
 
 func TestRedactURL(t *testing.T) {
@@ -35,11 +37,21 @@ func TestRedactURL(t *testing.T) {
 			raw:  "://bad",
 			want: "***",
 		},
+		{
+			name: "redacts userinfo",
+			raw:  "http://user:secret@rpc.example.com/v1/key",
+			want: "http://user:***@rpc.example.com/v1/***",
+		},
+		{
+			name: "redacts userinfo without path",
+			raw:  "http://user:secret@rpc.example.com",
+			want: "http://user:***@rpc.example.com",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := RedactURL(tt.raw)
+			got := rpc.RedactURL(tt.raw)
 			if got != tt.want {
 				t.Errorf("RedactURL(%q) = %q, want %q", tt.raw, got, tt.want)
 			}

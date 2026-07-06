@@ -149,7 +149,7 @@ func (h *Handler) CloseCapRegClient() {
 
 // EnsureDeploymentRPCForOwnerKeySecrets checks project settings for an RPC URL on the workflow registry chain (owner-key / allowlist flows only).
 func (h *Handler) EnsureDeploymentRPCForOwnerKeySecrets() error {
-	return settings.ValidateDeploymentRPC(&h.Settings.Workflow, h.EnvironmentSet.WorkflowRegistryChainName)
+	return settings.ValidateDeploymentRPC(&h.Settings.Workflow, h.EnvironmentSet.WorkflowRegistryChainName, h.Log, nil)
 }
 
 // ResolveInputs loads secrets from a YAML file.

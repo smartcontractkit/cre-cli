@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/gagliardetto/solana-go"
-	"github.com/gagliardetto/solana-go/rpc"
+	solanarpc "github.com/gagliardetto/solana-go/rpc"
 	"github.com/rs/zerolog"
 	"github.com/spf13/viper"
 
@@ -15,6 +15,7 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/settings/cresettings"
 
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain"
+	"github.com/smartcontractkit/cre-cli/internal/rpc"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 )
 
@@ -54,7 +55,7 @@ func (ct *SolanaChainType) ResolveClients(v *viper.Viper) (chain.ResolvedChains,
 			ct.log.Debug().Msgf("RPC not provided for %s; skipping", name)
 			continue
 		}
-		ct.log.Debug().Msgf("Using RPC for %s: %s", name, chain.RedactURL(rpcURL))
+		ct.log.Debug().Msgf("Using RPC for %s: %s", name, rpc.RedactURL(rpcURL))
 
 		programID, err := solana.PublicKeyFromBase58(c.Forwarder)
 		if err != nil {
@@ -69,7 +70,7 @@ func (ct *SolanaChainType) ResolveClients(v *viper.Viper) (chain.ResolvedChains,
 			return chain.ResolvedChains{}, fmt.Errorf("invalid forwarder state account for %s: %w", name, err)
 		}
 
-		clients[c.Selector] = rpc.New(rpcURL)
+		clients[c.Selector] = solanarpc.New(rpcURL)
 		forwarders[c.Selector] = c.Forwarder
 		ct.programIDs[c.Selector] = programID
 		ct.stateAccounts[c.Selector] = state

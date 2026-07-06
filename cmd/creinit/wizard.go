@@ -3,7 +3,6 @@ package creinit
 import (
 	"fmt"
 	"io"
-	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -15,6 +14,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/smartcontractkit/cre-cli/internal/constants"
+	"github.com/smartcontractkit/cre-cli/internal/rpc"
 	"github.com/smartcontractkit/cre-cli/internal/templaterepo"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 	"github.com/smartcontractkit/cre-cli/internal/validation"
@@ -1010,15 +1010,5 @@ func MissingNetworks(template *templaterepo.TemplateSummary, flagRpcURLs map[str
 
 // validateRpcURL validates that a URL is a valid HTTP/HTTPS URL.
 func validateRpcURL(rawURL string) error {
-	u, err := url.Parse(rawURL)
-	if err != nil {
-		return fmt.Errorf("invalid URL format")
-	}
-	if u.Scheme != "http" && u.Scheme != "https" {
-		return fmt.Errorf("URL must start with http:// or https://")
-	}
-	if u.Host == "" {
-		return fmt.Errorf("URL must have a host")
-	}
-	return nil
+	return rpc.IsValidURL(rawURL)
 }
