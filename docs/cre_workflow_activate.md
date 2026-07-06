@@ -27,6 +27,7 @@ cre workflow activate ./my-workflow
 ### Options inherited from parent commands
 
 ```
+      --allow-insecure-rpc     Allow non-localhost HTTP RPC URLs (insecure)
       --allow-unknown-chains   Skip chain-name validation against the chain-selectors registry (for experimental chains)
   -e, --env string             Path to .env file which contains sensitive info
       --non-interactive        Fail instead of prompting; requires all inputs via flags

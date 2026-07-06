@@ -32,13 +32,7 @@ func EvaluateCleartextRPC(rpcURL string, opts CleartextPolicyOptions) (warnMsg s
 		return "", fmt.Errorf("failed to parse RPC URL: invalid format")
 	}
 
-	if parsed.Scheme == "https" {
-		return "", nil
-	}
-	if parsed.Scheme != "http" {
-		return "", nil
-	}
-	if IsLoopbackHost(parsed.Hostname()) {
+	if parsed.Scheme == "https" || IsLoopbackHost(parsed.Hostname()) {
 		return "", nil
 	}
 

@@ -707,7 +707,7 @@ func (m wizardModel) handleEnter(msgs ...tea.Msg) (tea.Model, tea.Cmd) {
 		network := m.networks[m.rpcCursor]
 
 		if value != "" {
-			if err := validateRpcURL(value); err != nil {
+			if err := rpc.IsValidURL(value); err != nil {
 				m.err = fmt.Sprintf("Invalid URL for %s: %s", network, err.Error())
 				return m, nil
 			}
@@ -907,7 +907,7 @@ func (m wizardModel) View() string {
 				b.WriteString("\n")
 				// Real-time validation hint for RPC URL
 				if v := strings.TrimSpace(m.rpcInputs[i].Value()); v != "" {
-					if err := validateRpcURL(v); err != nil {
+					if err := rpc.IsValidURL(v); err != nil {
 						b.WriteString(m.warnStyle.Render("  " + err.Error()))
 						b.WriteString("\n")
 					}
@@ -1006,9 +1006,4 @@ func MissingNetworks(template *templaterepo.TemplateSummary, flagRpcURLs map[str
 		}
 	}
 	return missing
-}
-
-// validateRpcURL validates that a URL is a valid HTTP/HTTPS URL.
-func validateRpcURL(rawURL string) error {
-	return rpc.IsValidURL(rawURL)
 }
