@@ -26,7 +26,7 @@ jobs:
       - name: Get current fork version
         id: current
         run: |
-          CURRENT=$(grep "Upstream Version:" cmd/generate-bindings/bindings/abigen/FORK_METADATA.md | cut -d: -f2 | tr -d ' ')
+          CURRENT=$(grep "Upstream Version:" cmd/generate-bindings/evm/abigen/FORK_METADATA.md | cut -d: -f2 | tr -d ' ')
           echo "current=$CURRENT" >> "$GITHUB_OUTPUT"
           echo "Current fork version: $CURRENT"
 
@@ -109,16 +109,16 @@ jobs:
 
             ### Action Required
 
-            1. Review [abigen changes in upstream](https://github.com/ethereum/go-ethereum/commits/${latest}/accounts/abi/bind) (only the \`accounts/abi/bind\` directory matters)
-            2. Compare with our fork in \`cmd/generate-bindings/bindings/abigen/\`
+            1. Review [abigen changes in upstream](https://github.com/ethereum/go-ethereum/commits/${latest}/accounts/abi/abigen) (only the \`accounts/abi/abigen\` directory matters)
+            2. Compare with our fork in \`cmd/generate-bindings/evm/abigen/\`
             3. If relevant changes exist, sync them and update \`FORK_METADATA.md\`
             4. If no abigen changes, just update the version in \`FORK_METADATA.md\` to \`${latest}\`
             ${securitySection}
             ### Files to Review
 
-            - \`cmd/generate-bindings/bindings/abigen/bind.go\`
-            - \`cmd/generate-bindings/bindings/abigen/bindv2.go\`
-            - \`cmd/generate-bindings/bindings/abigen/template.go\`
+            - \`cmd/generate-bindings/evm/abigen/bind.go\`
+            - \`cmd/generate-bindings/evm/abigen/bindv2.go\`
+            - \`cmd/generate-bindings/evm/abigen/template.go\`
 
             ---
             ⚠️ **Note to PR author**: This is not something you need to fix. The Platform Expansion team is responsible for maintaining the abigen fork.

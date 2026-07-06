@@ -136,7 +136,33 @@ func TestLoadEnvAndSettings(t *testing.T) {
 	s, err := settings.New(logger, v, cmd, "")
 	require.NoError(t, err)
 	assert.Equal(t, "staging", s.User.TargetName)
-	assert.Equal(t, "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80", s.User.EthPrivateKey)
+	assert.Equal(t, envVars[settings.EthPrivateKeyEnvVar], s.User.PrivateKey(settings.EVM))
+}
+
+func TestLoadEnvAndSettingsCreInitPlaceholderPrivateKey(t *testing.T) {
+	envVars := map[string]string{
+		settings.CreTargetEnvVar:     "staging",
+		settings.EthPrivateKeyEnvVar: settings.DefaultEthPrivateKeyEnvPlaceholder,
+	}
+
+	workflowTemplatePath, err := filepath.Abs(TempWorkflowSettingsFile)
+	require.NoError(t, err)
+
+	projectTemplatePath, err := filepath.Abs(TempProjectSettingsFile)
+	require.NoError(t, err)
+
+	tempDir := t.TempDir()
+	restoreWorkingDirectory, err := testutil.ChangeWorkingDirectory(tempDir)
+	require.NoError(t, err)
+	defer restoreWorkingDirectory()
+
+	v, logger := createTestContext(t, envVars, tempDir)
+
+	setUpTestSettingsFiles(t, v, workflowTemplatePath, projectTemplatePath, tempDir)
+	cmd := makeCmdWithSecretsAuth("create", "browser")
+	s, err := settings.New(logger, v, cmd, "")
+	require.NoError(t, err)
+	assert.Equal(t, envVars[settings.EthPrivateKeyEnvVar], s.User.PrivateKey(settings.EVM))
 }
 
 func TestLoadEnvAndSettingsWithWorkflowSettingsFlag(t *testing.T) {
@@ -169,7 +195,7 @@ func TestLoadEnvAndSettingsWithWorkflowSettingsFlag(t *testing.T) {
 	s, err := settings.New(logger, v, cmd, "")
 	require.NoError(t, err)
 	assert.Equal(t, "staging", s.User.TargetName)
-	assert.Equal(t, "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80", s.User.EthPrivateKey)
+	assert.Equal(t, settings.NormalizeHexKey(envVars[settings.EthPrivateKeyEnvVar]), s.User.PrivateKey(settings.EVM))
 }
 
 func TestInlineEnvTakesPrecedenceOverDotEnv(t *testing.T) {
@@ -199,7 +225,7 @@ func TestInlineEnvTakesPrecedenceOverDotEnv(t *testing.T) {
 	s, err := settings.New(logger, v, cmd, "")
 	require.NoError(t, err)
 	assert.Equal(t, "staging", s.User.TargetName)
-	assert.Equal(t, "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80", s.User.EthPrivateKey)
+	assert.Equal(t, envVars[settings.EthPrivateKeyEnvVar], s.User.PrivateKey(settings.EVM))
 }
 
 func TestLoadEnvAndMergedSettings(t *testing.T) {
@@ -241,7 +267,7 @@ func TestLoadEnvAndMergedSettings(t *testing.T) {
 	rpc2 := s.Workflow.RPCs[1]
 	assert.Equal(t, "https://somethingElse.rpc.org", rpc1.Url, "First RPC URL mismatch")
 	assert.Equal(t, "https://something.rpc.org", rpc2.Url, "Second RPC URL mismatch")
-	assert.Equal(t, "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80", s.User.EthPrivateKey)
+	assert.Equal(t, envVars[settings.EthPrivateKeyEnvVar], s.User.PrivateKey(settings.EVM))
 }
 
 // helper to build a command with optional --broadcast flag and parse args
@@ -340,7 +366,7 @@ func TestOffChainDeploymentRegistryUsesDerivedOwnerWithoutPrivateKey(t *testing.
 	require.NoError(t, err)
 	assert.Equal(t, derived, s.Workflow.UserWorkflowSettings.WorkflowOwnerAddress)
 	assert.Equal(t, constants.WorkflowOwnerTypeOrgDerived, s.Workflow.UserWorkflowSettings.WorkflowOwnerType)
-	assert.Empty(t, s.User.EthPrivateKey)
+	assert.Empty(t, s.User.PrivateKey(settings.EVM))
 }
 
 func TestOffChainDeploymentRegistryMissingDerivedOwnerReturnsError(t *testing.T) {

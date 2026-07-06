@@ -48,7 +48,7 @@ func New(ctx *runtime.Context) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := common.ValidateSecretsAuthFlow(secretsAuth, ctx.EnvironmentSet.EnvName); err != nil {
+			if err := common.ValidateSecretsAuthFlow(secretsAuth); err != nil {
 				return err
 			}
 
@@ -87,6 +87,12 @@ func New(ctx *runtime.Context) *cobra.Command {
 
 // Execute performs: build request → (MSIG step 1 bundle OR EOA allowlist+post) → parse.
 func Execute(ctx context.Context, h *common.Handler, namespace string, duration time.Duration, secretsAuth string) error {
+	defer h.CloseCapRegClient()
+
+	if _, err := h.EnsureVaultValidationOrConsent(ctx); err != nil {
+		return err
+	}
+
 	if !common.IsBrowserFlow(secretsAuth) {
 		if err := h.EnsureDeploymentRPCForOwnerKeySecrets(); err != nil {
 			return err
@@ -159,7 +165,7 @@ func Execute(ctx context.Context, h *common.Handler, namespace string, duration 
 		if status != http.StatusOK {
 			return fmt.Errorf("gateway returned a non-200 status code: status_code=%d, body=%s", status, respBody)
 		}
-		return h.ParseVaultGatewayResponse(vaulttypes.MethodSecretsList, respBody)
+		return h.ParseVaultGatewayResponse(vaulttypes.MethodSecretsList, requestID, respBody)
 	}
 
 	if txOut == nil && allowlisted {

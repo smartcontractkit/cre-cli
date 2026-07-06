@@ -4,8 +4,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
+
+	chainselectors "github.com/smartcontractkit/chain-selectors"
 
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 )
@@ -30,22 +33,28 @@ func QueryIsGetTenantConfig(q string) bool {
 // MockGetTenantConfigGraphQLPayload returns a GraphQL response for getTenantConfig
 // suitable for E2E tests using the anvil-devnet workflow registry defaults.
 func MockGetTenantConfigGraphQLPayload() map[string]any {
+	return MockGetTenantConfigGraphQLPayloadWithCapReg("0x76c9cf548b4179F8901cda1f8623568b58215E62")
+}
+
+// MockGetTenantConfigGraphQLPayloadWithCapReg returns getTenantConfig with a custom CapabilitiesRegistry address.
+func MockGetTenantConfigGraphQLPayloadWithCapReg(capRegAddress string) map[string]any {
+	anvilSelector := strconv.FormatUint(chainselectors.ANVIL_DEVNET.Selector, 10)
 	return map[string]any{
 		"data": map[string]any{
 			"getTenantConfig": map[string]any{
 				"tenantId":         "test-tenant-id",
-				"defaultDonFamily": "test-don",
+				"defaultDonFamily": "zone-a",
 				"vaultGatewayUrl":  "https://vault.example.test",
 				"capabilitiesRegistry": map[string]any{
-					"chainSelector": "6433500567565415381",
-					"address":       "0x76c9cf548b4179F8901cda1f8623568b58215E62",
+					"chainSelector": anvilSelector,
+					"address":       capRegAddress,
 				},
 				"registries": []map[string]any{
 					{
 						"id":               "anvil-devnet",
 						"label":            "anvil-devnet",
 						"type":             "ON_CHAIN",
-						"chainSelector":    "6433500567565415381",
+						"chainSelector":    anvilSelector,
 						"address":          "0x5FbDB2315678afecb367f032d93F642f64180aa3",
 						"secretsAuthFlows": []string{"OWNER_KEY_SIGNING"},
 					},

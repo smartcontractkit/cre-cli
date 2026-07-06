@@ -1,10 +1,13 @@
 package credentials
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/rs/zerolog"
 
 	"github.com/smartcontractkit/cre-cli/internal/creconfig"
 	"github.com/smartcontractkit/cre-cli/internal/testutil"
@@ -436,4 +439,36 @@ func TestSecureRemove(t *testing.T) {
 			t.Fatal("expected file to be removed")
 		}
 	})
+}
+
+func TestDecodeJWTClaims_SafeDebugLogging(t *testing.T) {
+	var buf bytes.Buffer
+	logger := zerolog.New(&buf).Level(zerolog.DebugLevel)
+	token := createTestJWT(map[string]interface{}{
+		"sub":                              "user123",
+		"org_id":                           "org456",
+		"https://api.cre.chain.link/email": "test@example.com",
+		"https://api.cre.chain.link/organization_status": "FULL_ACCESS",
+	})
+
+	creds := &Credentials{
+		AuthType: AuthTypeBearer,
+		Tokens:   &CreLoginTokenSet{AccessToken: token},
+		log:      &logger,
+	}
+
+	if _, err := creds.decodeJWTClaims(); err != nil {
+		t.Fatalf("decodeJWTClaims: %v", err)
+	}
+
+	logOutput := buf.String()
+	if strings.Contains(logOutput, "test@example.com") {
+		t.Fatalf("debug log leaked email claim: %s", logOutput)
+	}
+	if !strings.Contains(logOutput, "org456") {
+		t.Fatalf("expected safe org_id in debug log, got: %s", logOutput)
+	}
+	if strings.Contains(logOutput, token) {
+		t.Fatalf("debug log leaked raw JWT token: %s", logOutput)
+	}
 }

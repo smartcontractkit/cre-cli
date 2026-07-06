@@ -163,7 +163,7 @@ func TestEVMChainType_ResolveKey(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ct := newEVMChainType()
-			s := &settings.Settings{User: settings.UserSettings{EthPrivateKey: tt.pk}}
+			s := &settings.Settings{User: settings.UserSettings{PrivateKeys: map[string]string{settings.EVM.Name: tt.pk}}}
 
 			var got interface{}
 			var err error
@@ -368,4 +368,17 @@ func TestEVMChainType_CollectCLIInputs_DefaultsOnly(t *testing.T) {
 
 	result := ct.CollectCLIInputs(v)
 	assert.Empty(t, result)
+}
+
+func TestEVMChainType_RegisterCapabilities_WrongPrivateKeyType(t *testing.T) {
+	t.Parallel()
+	ct := newEVMChainType()
+	cfg := chain.CapabilityConfig{
+		Clients:    map[uint64]chain.ChainClient{},
+		Forwarders: map[uint64]string{},
+		PrivateKey: "not-an-ecdsa-key",
+	}
+	_, err := ct.RegisterCapabilities(context.Background(), cfg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "private key is not *ecdsa.PrivateKey")
 }
