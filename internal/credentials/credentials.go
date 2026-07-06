@@ -13,6 +13,7 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/smartcontractkit/cre-cli/internal/creconfig"
+	"github.com/smartcontractkit/cre-cli/internal/redact"
 )
 
 type CreLoginTokenSet struct {
@@ -158,7 +159,9 @@ func (c *Credentials) decodeJWTClaims() (map[string]interface{}, error) {
 		return nil, fmt.Errorf("failed to unmarshal JWT claims: %w", err)
 	}
 
-	c.log.Debug().Interface("claims", claims).Msg("JWT claims decoded")
+	if safeClaims := redact.SafeJWTClaimsForLog(claims); safeClaims != nil {
+		c.log.Debug().Interface("claims", safeClaims).Msg("JWT claims decoded")
+	}
 	return claims, nil
 }
 
