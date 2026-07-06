@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/smartcontractkit/cre-cli/cmd/version"
+	"github.com/smartcontractkit/cre-cli/internal/redact"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 )
 
@@ -113,7 +114,7 @@ func buildUserEvent(cmd *cobra.Command, args []string, exitCode int, runtimeCtx 
 
 	// Extract error message if error is present (at top level)
 	if err != nil {
-		event.ErrorMessage = err.Error()
+		event.ErrorMessage = redact.ErrorMessage(err.Error())
 	}
 
 	// Collect actor information (only machineId, server populates userId/orgId from JWT)
