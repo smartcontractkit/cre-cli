@@ -22,6 +22,7 @@ import (
 	"github.com/smartcontractkit/chainlink-testing-framework/seth"
 
 	"github.com/smartcontractkit/cre-cli/internal/constants"
+	crpc "github.com/smartcontractkit/cre-cli/internal/rpc"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 )
 
@@ -76,6 +77,15 @@ func NewEthClientFromEnv(v *viper.Viper, l *zerolog.Logger, ethUrl string) (*set
 	// check configuration file then use default value
 	sethConfigPath := v.GetString(settings.SethConfigPathSettingName)
 
+	cleartextOpts := crpc.CleartextPolicyOptions{
+		AllowInsecure: v.GetBool(settings.Flags.AllowInsecureRPC.Name),
+	}
+	if warnMsg, blockErr := crpc.EvaluateCleartextRPC(ethUrl, cleartextOpts); blockErr != nil {
+		return nil, blockErr
+	} else if warnMsg != "" {
+		l.Warn().Str("url", crpc.RedactURL(ethUrl)).Msg(warnMsg)
+	}
+
 	ethChainID, err := getChainID(ethUrl)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get chain ID: %w", err)
@@ -97,7 +107,7 @@ func NewEthClientFromEnv(v *viper.Viper, l *zerolog.Logger, ethUrl string) (*set
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Seth client: %w", err)
 	}
-	l.Debug().Int64("ChainID", client.ChainID).Str("URL", client.URL).Msg("Connected to a RPC node")
+	l.Debug().Int64("ChainID", client.ChainID).Str("URL", crpc.RedactURL(client.URL)).Msg("Connected to a RPC node")
 
 	l.Debug().Msg("Loading contract interfaces")
 	err = LoadContracts(l, client)

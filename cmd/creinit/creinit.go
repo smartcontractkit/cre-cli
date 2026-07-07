@@ -3,7 +3,6 @@ package creinit
 import (
 	"fmt"
 	"maps"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,6 +13,7 @@ import (
 	"golang.org/x/term"
 
 	"github.com/smartcontractkit/cre-cli/internal/constants"
+	"github.com/smartcontractkit/cre-cli/internal/rpc"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/templateconfig"
@@ -348,10 +348,14 @@ func (h *handler) Execute(inputs Inputs) error {
 	maps.Copy(networkRPCs, inputs.RpcURLs)
 	// Validate any provided RPC URLs
 	for chain, rpcURL := range networkRPCs {
-		if rpcURL != "" {
-			if u, parseErr := url.Parse(rpcURL); parseErr != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-				return fmt.Errorf("invalid RPC URL for %s: must be a valid http/https URL", chain)
-			}
+		if rpcURL == "" {
+			continue
+		}
+		if err := rpc.IsValidURL(rpcURL); err != nil {
+			return fmt.Errorf("invalid RPC URL for %s: %w", chain, err)
+		}
+		if _, blockErr := rpc.EvaluateCleartextRPC(rpcURL, rpc.CleartextPolicyOptions{}); blockErr != nil {
+			return fmt.Errorf("invalid RPC URL for %s: %w", chain, blockErr)
 		}
 	}
 

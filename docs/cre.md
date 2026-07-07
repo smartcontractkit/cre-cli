@@ -13,6 +13,7 @@ cre [optional flags]
 ### Options
 
 ```
+      --allow-insecure-rpc     Allow non-localhost HTTP RPC URLs (insecure)
       --allow-unknown-chains   Skip chain-name validation against the chain-selectors registry (for experimental chains)
   -e, --env string             Path to .env file which contains sensitive info
   -h, --help                   help for cre
