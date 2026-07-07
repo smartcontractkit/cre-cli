@@ -14,7 +14,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/tenantctx"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
-	"github.com/smartcontractkit/cre-cli/internal/workflowrender"
+	"github.com/smartcontractkit/cre-cli/internal/workflowresolve"
 )
 
 // Handler resolves a single workflow by name via the platform search API and
@@ -85,10 +85,10 @@ func (h *Handler) Execute(ctx context.Context, allRegistries bool) error {
 			filterID = h.resolvedRegistry.ID()
 		}
 		if filterID != "" {
-			registryFilter = workflowrender.FindRegistry(h.tenantCtx.Registries, filterID)
+			registryFilter = workflowresolve.FindRegistry(h.tenantCtx.Registries, filterID)
 			if registryFilter == nil {
 				return fmt.Errorf("deployment-registry %q not found in user context; available: [%s]",
-					filterID, workflowrender.AvailableRegistryIDs(h.tenantCtx.Registries))
+					filterID, workflowresolve.AvailableRegistryIDs(h.tenantCtx.Registries))
 			}
 		}
 	}
@@ -106,10 +106,10 @@ func (h *Handler) Execute(ctx context.Context, allRegistries bool) error {
 	rows = filterByExactName(rows, workflowName)
 
 	if registryFilter != nil {
-		rows = workflowrender.FilterRowsByRegistry(rows, registryFilter, h.tenantCtx.Registries)
+		rows = workflowresolve.FilterRowsByRegistry(rows, registryFilter, h.tenantCtx.Registries)
 	}
 
-	workflowrender.PrintWorkflowTable(rows, h.tenantCtx.Registries, workflowrender.TableOptions{})
+	workflowresolve.PrintWorkflowTable(rows, h.tenantCtx.Registries, workflowresolve.TableOptions{})
 	return nil
 }
 
@@ -138,8 +138,8 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	return cmd
 }
 
-func filterByExactName(rows []workflowrender.Workflow, name string) []workflowrender.Workflow {
-	out := make([]workflowrender.Workflow, 0, len(rows))
+func filterByExactName(rows []workflowresolve.Workflow, name string) []workflowresolve.Workflow {
+	out := make([]workflowresolve.Workflow, 0, len(rows))
 	for _, r := range rows {
 		if strings.EqualFold(strings.TrimSpace(r.Name), name) {
 			out = append(out, r)
