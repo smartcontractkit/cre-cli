@@ -53,12 +53,13 @@ func TestResolveSolanaInputs_DefaultFallbacks(t *testing.T) {
 	expectedRoot, _ := filepath.EvalSymlinks(tempDir)
 	actualRoot, _ := filepath.EvalSymlinks(inputs.ProjectRoot)
 	assert.Equal(t, expectedRoot, actualRoot)
-	assert.Equal(t, "go", inputs.Language)
+	assert.True(t, inputs.GoLang)
+	assert.False(t, inputs.TypeScript)
 	expectedIdl, _ := filepath.EvalSymlinks(filepath.Join(tempDir, "contracts", "solana", "src", "idl"))
 	actualIdl, _ := filepath.EvalSymlinks(inputs.IdlPath)
 	assert.Equal(t, expectedIdl, actualIdl)
 	expectedOut, _ := filepath.EvalSymlinks(filepath.Join(tempDir, "contracts", "solana", "src", "generated"))
-	actualOut, _ := filepath.EvalSymlinks(inputs.OutPath)
+	actualOut, _ := filepath.EvalSymlinks(inputs.GoOutPath)
 	assert.Equal(t, expectedOut, actualOut)
 }
 
@@ -94,7 +95,7 @@ func TestResolveSolanaInputs_CustomOutPath(t *testing.T) {
 	inputs, err := handler.ResolveInputs(v)
 	require.NoError(t, err)
 
-	assert.Equal(t, customOut, inputs.OutPath)
+	assert.Equal(t, customOut, inputs.GoOutPath)
 }
 
 func TestProcessSolanaSingleIdl(t *testing.T) {
@@ -144,9 +145,9 @@ func TestProcessSolanaSingleIdl(t *testing.T) {
 
 	inputs := Inputs{
 		ProjectRoot: tempDir,
-		Language:    "go",
+		GoLang:      true,
 		IdlPath:     idlFile,
-		OutPath:     outDir,
+		GoOutPath:   outDir,
 	}
 
 	runtimeCtx := &runtime.Context{}
@@ -233,9 +234,9 @@ func TestProcessSolanaIdlDirectory(t *testing.T) {
 
 	inputs := Inputs{
 		ProjectRoot: tempDir,
-		Language:    "go",
+		GoLang:      true,
 		IdlPath:     idlDir,
-		OutPath:     outDir,
+		GoOutPath:   outDir,
 	}
 
 	runtimeCtx := &runtime.Context{}
@@ -271,9 +272,9 @@ func TestProcessSolanaIdlDirectory_NoIdlFiles(t *testing.T) {
 
 	inputs := Inputs{
 		ProjectRoot: tempDir,
-		Language:    "go",
+		GoLang:      true,
 		IdlPath:     idlDir,
-		OutPath:     outDir,
+		GoOutPath:   outDir,
 	}
 
 	runtimeCtx := &runtime.Context{}

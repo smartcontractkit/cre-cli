@@ -104,7 +104,7 @@ func TestLimitedEVMChainWriteReportRejectsOversizedReport(t *testing.T) {
 func TestLimitedEVMChainWriteReportRejectsOversizedGasLimit(t *testing.T) {
 	t.Parallel()
 
-	limits := chain.Limits{ReportSize: 4, GasLimit: 10}
+	limits := chain.Limits{GasLimit: 10}
 	inner := &evmClientCapabilityStub{}
 	wrapper := NewLimitedEVMChain(inner, limits)
 
