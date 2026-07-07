@@ -16,6 +16,32 @@ func TestRandomState(t *testing.T) {
 	assert.NotEqual(t, s, s2)
 }
 
+func TestAuthorizeURLWithState(t *testing.T) {
+	t.Run("adds state to URL without existing state", func(t *testing.T) {
+		out, err := AuthorizeURLWithState("https://id.example/authorize?client_id=x&response_type=code", "local-state")
+		require.NoError(t, err)
+		assert.Contains(t, out, "state=local-state")
+		assert.Contains(t, out, "client_id=x")
+	})
+
+	t.Run("replaces existing state", func(t *testing.T) {
+		out, err := AuthorizeURLWithState("https://id.example/authorize?state=platform&client_id=x", "local-state")
+		require.NoError(t, err)
+		assert.Contains(t, out, "state=local-state")
+		assert.NotContains(t, out, "state=platform")
+	})
+
+	t.Run("rejects empty state", func(t *testing.T) {
+		_, err := AuthorizeURLWithState("https://id.example/authorize", "")
+		assert.Error(t, err)
+	})
+
+	t.Run("rejects invalid URL", func(t *testing.T) {
+		_, err := AuthorizeURLWithState("://bad", "local-state")
+		assert.Error(t, err)
+	})
+}
+
 func TestStateFromAuthorizeURL(t *testing.T) {
 	s, err := StateFromAuthorizeURL("https://id.example/authorize?state=abc&client_id=x")
 	require.NoError(t, err)
