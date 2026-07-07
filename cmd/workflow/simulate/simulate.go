@@ -482,6 +482,7 @@ func run(
 	}
 
 	var manualTriggerCaps *ManualTriggers
+	var beholderStarted bool
 	simulatorInitialize := func(ctx context.Context, cfg simulator.RunnerConfig) (*capabilities.Registry, []services.Service) {
 		lggr := logger.Sugared(cfg.Lggr)
 		// Create the registry and fake capabilities with specific loggers
@@ -504,11 +505,12 @@ func run(
 
 		if cfg.EnableBeholder {
 			beholderLggr := lggr.Named("Beholder")
-			err := setupCustomBeholder(beholderLggr, verbosity, simLogger)
+			err := setupCustomBeholder(ctx, beholderLggr, verbosity, simLogger)
 			if err != nil {
 				setLifecycleErr(fmt.Errorf("failed to setup beholder: %w", err))
 				return registry, srvcs
 			}
+			beholderStarted = true
 		}
 
 		// Register chain-agnostic cron and HTTP triggers
@@ -639,7 +641,7 @@ func run(
 			}
 		}
 
-		err := cleanupBeholder()
+		err := cleanupBeholder(beholderStarted)
 		if err != nil {
 			simLogger.Warn("Failed to cleanup beholder", "error", err)
 		}
@@ -1107,11 +1109,15 @@ func getLevel(verbosity bool, defaultLevel zapcore.Level) zapcore.Level {
 }
 
 // setupCustomBeholder sets up beholder with our custom telemetry writer
-func setupCustomBeholder(lggr logger.Logger, verbosity bool, simLogger *SimulationLogger) error {
+func setupCustomBeholder(ctx context.Context, lggr logger.Logger, verbosity bool, simLogger *SimulationLogger) error {
 	writer := &telemetryWriter{lggr: lggr, verbose: verbosity, simLogger: simLogger}
 
 	client, err := beholder.NewWriterClient(writer)
 	if err != nil {
+		return err
+	}
+
+	if err := client.Start(ctx); err != nil {
 		return err
 	}
 
@@ -1120,7 +1126,11 @@ func setupCustomBeholder(lggr logger.Logger, verbosity bool, simLogger *Simulati
 	return nil
 }
 
-func cleanupBeholder() error {
+func cleanupBeholder(started bool) error {
+	if !started {
+		return nil
+	}
+
 	client := beholder.GetClient()
 	if client != nil {
 		return client.Close()
