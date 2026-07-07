@@ -432,3 +432,10 @@ replace github.com/gogo/protobuf => github.com/regen-network/protobuf v1.3.3-alp
 replace github.com/fbsobreira/gotron-sdk => github.com/smartcontractkit/chainlink-tron/relayer/gotron-sdk v0.0.5-0.20251014143056-a0c6328c91e9
 
 replace github.com/smartcontractkit/chainlink-sui => github.com/smartcontractkit/chainlink-sui v0.0.0-20260527160341-aa3adc0abf67
+
+// Local fix: FakeSolanaChain strips remaining accounts 0-1 (forwarder state +
+// authority) like the real transmitter AND rewrites the report account hash
+// for the mock forwarder, so SDK-binding WriteReport passes mock_forwarder's
+// hash check (Custom:6002) without simulation-specific workflow config.
+// Drop once merged upstream in chainlink-solana.
+replace github.com/smartcontractkit/chainlink-solana/contracts => ../chainlink-solana/contracts

@@ -74,6 +74,28 @@ Unsupported types **fail loudly** at generation time (never silently
 mis-encode): `u256`/`i256`, `COption`, data-carrying enums, tuple structs,
 generics, cyclic type references.
 
+## Simulation (`cre workflow simulate`)
+
+The simulator never writes through the real keystone forwarder (it cannot
+produce DON signatures). It writes through a per-chain **mock forwarder**
+(`cre workflow supported-chains`; wired via `FakeSolanaChain` from
+`chainlink-solana/contracts/capabilities/fakes`).
+
+Generated bindings need **no simulation-specific config**: keep the real
+forwarder state/authority in `remainingAccounts[0..1]` as for production. The
+simulator strips those two accounts and rewrites the report's embedded
+account hash for the mock forwarder before sending (the mock forwarder skips
+DON-signature verification, so the rewrite is safe).
+
+The one thing the simulator cannot do is satisfy the **receiver program's own
+caller validation**. If your receiver verifies its trusted forwarder (state
+owner / authority PDA / stored forwarder program id — the keystone pattern),
+initialize its trust anchor once against the mock forwarder program id on
+devnet and point the simulation target's config at that state. This is the
+Solana analog of deploying an EVM receiver with the documented (mock)
+forwarder address as a constructor argument. Receivers without caller
+validation simulate with the production config as-is.
+
 ## Tests
 
 Golden source-compare tests live in `tsbindgen_test.go` against
