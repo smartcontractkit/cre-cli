@@ -20,12 +20,12 @@ import (
 // Inputs holds resolved and validated flag/arg values for execution list.
 type Inputs struct {
 	// WorkflowRef is an optional workflow name or on-chain WorkflowId from the positional arg.
-	WorkflowRef string
-	Statuses    []workflowdataclient.ExecutionStatus
-	From        *time.Time
-	To          *time.Time
-	Limit       int
-	OutputFormat string
+	WorkflowRef    string
+	Statuses       []workflowdataclient.ExecutionStatus
+	From           *time.Time
+	To             *time.Time
+	Limit          int
+	OutputFormat   string
 	NonInteractive bool
 }
 

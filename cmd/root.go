@@ -565,7 +565,7 @@ func isLoadSettings(cmd *cobra.Command) bool {
 		"cre execution list":            {},
 		"cre execution status":          {},
 		"cre execution events":          {},
-		"cre execution logs":              {},
+		"cre execution logs":            {},
 		"cre workflow status":           {},
 		"cre account":                   {},
 		"cre secrets":                   {},
