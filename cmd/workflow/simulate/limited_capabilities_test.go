@@ -16,6 +16,7 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/actions/confidentialhttp"
 	customhttp "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/actions/http"
 	"github.com/smartcontractkit/chainlink-common/pkg/config"
+	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/core"
 	sdkpb "github.com/smartcontractkit/chainlink-protos/cre/go/sdk"
 	valuespb "github.com/smartcontractkit/chainlink-protos/cre/go/values/pb"
@@ -190,7 +191,7 @@ func TestLimitedConfidentialHTTPActionRejectsOversizedRequest(t *testing.T) {
 	limits.Workflows.ConfidentialHTTP.RequestSizeLimit.DefaultValue = 4
 
 	inner := &confidentialHTTPClientCapabilityStub{}
-	wrapper := NewLimitedConfidentialHTTPAction(inner, limits)
+	wrapper := NewLimitedConfidentialHTTPAction(inner, limits, logger.Test(t))
 
 	resp, err := wrapper.SendRequest(context.Background(), commonCap.RequestMetadata{}, &confidentialhttp.ConfidentialHTTPRequest{
 		Request: &confidentialhttp.HTTPRequest{Body: &confidentialhttp.HTTPRequest_BodyString{BodyString: "12345"}},
@@ -223,7 +224,7 @@ func TestLimitedConfidentialHTTPActionAppliesTimeoutAndAllowsBoundarySizedPayloa
 		},
 	}
 
-	wrapper := NewLimitedConfidentialHTTPAction(inner, limits)
+	wrapper := NewLimitedConfidentialHTTPAction(inner, limits, logger.Test(t))
 	resp, err := wrapper.SendRequest(context.Background(), commonCap.RequestMetadata{}, &confidentialhttp.ConfidentialHTTPRequest{
 		Request: &confidentialhttp.HTTPRequest{Body: &confidentialhttp.HTTPRequest_BodyBytes{BodyBytes: []byte("1234")}},
 	})
@@ -247,7 +248,7 @@ func TestLimitedConfidentialHTTPActionRejectsOversizedResponse(t *testing.T) {
 		},
 	}
 
-	wrapper := NewLimitedConfidentialHTTPAction(inner, limits)
+	wrapper := NewLimitedConfidentialHTTPAction(inner, limits, logger.Test(t))
 	resp, err := wrapper.SendRequest(context.Background(), commonCap.RequestMetadata{}, &confidentialhttp.ConfidentialHTTPRequest{})
 	require.Error(t, err)
 	assert.Nil(t, resp)
