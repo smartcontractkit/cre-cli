@@ -471,6 +471,11 @@ func newRootCommand() *cobra.Command {
 		false,
 		"Skip chain-name validation against the chain-selectors registry (for experimental chains)",
 	)
+	rootCmd.PersistentFlags().Bool(
+		settings.Flags.AllowInsecureRPC.Name,
+		false,
+		"Allow non-localhost HTTP RPC URLs (insecure)",
+	)
 	rootCmd.CompletionOptions.HiddenDefaultCmd = true
 
 	secretsCmd := secrets.New(runtimeContext)

@@ -48,6 +48,7 @@ type flagNames struct {
 	SkipConfirmation     Flag
 	ChangesetFile        Flag
 	AllowUnknownChains   Flag
+	AllowInsecureRPC     Flag
 }
 
 var Flags = flagNames{
@@ -66,6 +67,7 @@ var Flags = flagNames{
 	SkipConfirmation:     Flag{"yes", "y"},
 	ChangesetFile:        Flag{"changeset-file", ""},
 	AllowUnknownChains:   Flag{"allow-unknown-chains", ""},
+	AllowInsecureRPC:     Flag{"allow-insecure-rpc", ""},
 }
 
 func AddTxnTypeFlags(cmd *cobra.Command) {

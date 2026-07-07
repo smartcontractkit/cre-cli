@@ -37,6 +37,16 @@ func TestURL(t *testing.T) {
 			raw:  "://bad",
 			want: RedactedValue,
 		},
+		{
+			name: "redacts userinfo",
+			raw:  "http://user:secret@rpc.example.com/v1/key",
+			want: "http://user:***@rpc.example.com/v1/***",
+		},
+		{
+			name: "redacts userinfo without path",
+			raw:  "http://user:secret@rpc.example.com",
+			want: "http://user:***@rpc.example.com",
+		},
 	}
 
 	for _, tt := range tests {
