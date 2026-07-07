@@ -178,10 +178,17 @@ func (h *Handler) ExecuteBrowserVaultAuthorization(ctx context.Context, method s
 		return fmt.Errorf("could not complete the authorization request")
 	}
 
-	platformState, _ := oauth.StateFromAuthorizeURL(authURL)
+	localState, err := oauth.RandomState()
+	if err != nil {
+		return err
+	}
+	authURL, err = oauth.AuthorizeURLWithState(authURL, localState)
+	if err != nil {
+		return fmt.Errorf("could not bind OAuth state: %w", err)
+	}
 
 	codeCh := make(chan string, 1)
-	server, listener, err := oauth.NewCallbackHTTPServer(constants.AuthListenAddr, oauth.SecretsCallbackHandler(codeCh, platformState, h.Log))
+	server, listener, err := oauth.NewCallbackHTTPServer(constants.AuthListenAddr, oauth.SecretsCallbackHandler(codeCh, localState, h.Log))
 	if err != nil {
 		return fmt.Errorf("could not start local callback server: %w", err)
 	}
