@@ -5,19 +5,36 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/stretchr/testify/require"
 )
+
+var (
+	defaultGoPath     string
+	defaultGoModCache string
+)
+
+func init() {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		home = "/tmp"
+	}
+	defaultGoPath = filepath.Join(home, "go")
+	defaultGoModCache = filepath.Join(defaultGoPath, "pkg", "mod")
+}
 
 // IsolateCLIHome redirects CLI config writes (~/.cre) into a temp directory.
 // Call in tests that run the cre binary or invoke EnsureContext/FetchAndWriteContext.
 func IsolateCLIHome(t *testing.T) string {
 	t.Helper()
 
+	// Resolve Go cache paths before overriding HOME. os.UserHomeDir() follows $HOME,
+	// so reading it after t.Setenv("HOME", tempDir) would pin GOPATH inside the temp dir.
+	gopath, gomodcache := resolvedGoCachePaths()
+
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
-	PinGoCacheForTestHome(t)
+	t.Setenv("GOPATH", gopath)
+	t.Setenv("GOMODCACHE", gomodcache)
 	return home
 }
 
@@ -26,20 +43,15 @@ func IsolateCLIHome(t *testing.T) string {
 func PinGoCacheForTestHome(t *testing.T) {
 	t.Helper()
 
-	gopath, gomodcache := realGoCacheEnv(t)
+	gopath, gomodcache := resolvedGoCachePaths()
 	t.Setenv("GOPATH", gopath)
 	t.Setenv("GOMODCACHE", gomodcache)
 }
 
-func realGoCacheEnv(t *testing.T) (gopath, gomodcache string) {
-	t.Helper()
-
-	realHome, err := os.UserHomeDir()
-	require.NoError(t, err, "failed to get real home dir")
-
+func resolvedGoCachePaths() (gopath, gomodcache string) {
 	gopath = os.Getenv("GOPATH")
 	if gopath == "" {
-		gopath = filepath.Join(realHome, "go")
+		gopath = defaultGoPath
 	}
 
 	gomodcache = os.Getenv("GOMODCACHE")
@@ -54,7 +66,7 @@ func realGoCacheEnv(t *testing.T) (gopath, gomodcache string) {
 func CLIChildEnv(t *testing.T, testHome string) []string {
 	t.Helper()
 
-	gopath, gomodcache := realGoCacheEnv(t)
+	gopath, gomodcache := resolvedGoCachePaths()
 
 	childEnv := make([]string, 0, len(os.Environ())+4)
 	for _, entry := range os.Environ() {
