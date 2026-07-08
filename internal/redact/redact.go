@@ -8,6 +8,12 @@ import (
 
 const RedactedValue = "[REDACTED]"
 
+// maxFlagValueLength bounds the length of a flag value that is otherwise considered
+// safe to record. A well-formed CLI flag value (identifier, path, enum, number) is
+// always well under this; anything longer is more likely to be output, an error
+// message, or a payload that ended up in a flag's Value by accident.
+const maxFlagValueLength = 256
+
 var (
 	fullRedactFlags = map[string]struct{}{
 		"env":                    {},
@@ -16,6 +22,13 @@ var (
 		"public_key":             {},
 		"ledger-derivation-path": {},
 		"config":                 {},
+		"changeset-file":         {},
+	}
+
+	// pathRedactFlags hold filesystem paths. Only the base name is kept, since the
+	// full path can leak local directory structure or the OS username.
+	pathRedactFlags = map[string]struct{}{
+		"project-root": {},
 	}
 
 	urlValueFlags = map[string]struct{}{
@@ -31,6 +44,11 @@ var (
 	urlPattern        = regexp.MustCompile(`https?://[^\s"'<>]+`)
 
 	templateAddSensitivePattern = regexp.MustCompile(`(?i)(://|\?|ghp_[A-Za-z0-9]+|github_pat_[A-Za-z0-9_]+)`)
+
+	// suspiciousContentPattern matches text that looks like it came from command
+	// output, an error/stack trace, or an HTTP exchange rather than a value a user
+	// would type as a CLI flag.
+	suspiciousContentPattern = regexp.MustCompile(`(?i)(traceback|panic:|goroutine \d|exception|stack trace|"error"\s*:|http/1\.[01]\s+\d{3}|<html)`)
 )
 
 // Flag redacts a single CLI flag value based on flag name.
@@ -51,7 +69,32 @@ func Flag(name, value string) string {
 		return redactURLFlagValue(name, value)
 	}
 
+	if _, ok := pathRedactFlags[name]; ok {
+		return filepath.Base(value)
+	}
+
+	if looksLikeUnintendedContent(value) {
+		return RedactedValue
+	}
+
 	return value
+}
+
+// looksLikeUnintendedContent flags values that don't look like something a user
+// would type as a CLI flag - e.g. command output, an error message, or an escaped
+// HTTP payload that ended up bound to a flag's Value instead of its intended input.
+func looksLikeUnintendedContent(value string) bool {
+	if len(value) > maxFlagValueLength {
+		return true
+	}
+	if strings.ContainsAny(value, "\n\r") {
+		return true
+	}
+	trimmed := strings.TrimSpace(value)
+	if strings.HasPrefix(trimmed, "{") || strings.HasPrefix(trimmed, "[") {
+		return true
+	}
+	return suspiciousContentPattern.MatchString(value)
 }
 
 func isNonSensitiveLimitsValue(value string) bool {
@@ -106,6 +149,14 @@ func Args(action, subcommand string, args []string) []string {
 					redacted[i] = RedactedValue
 				}
 			}
+		}
+	}
+
+	// Backstop: positional args are otherwise passed through verbatim, so guard
+	// against output/error/payload text that ended up on the command line.
+	for i, arg := range redacted {
+		if arg != RedactedValue && looksLikeUnintendedContent(arg) {
+			redacted[i] = RedactedValue
 		}
 	}
 
