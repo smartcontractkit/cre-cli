@@ -95,7 +95,7 @@ func (h *Handler) Execute(ctx context.Context, allRegistries bool) error {
 
 	spinner := ui.NewSpinner()
 	spinner.Start(fmt.Sprintf("Fetching workflow %q...", workflowName))
-	rows, err := h.wdc.SearchByName(ctx, workflowName, workflowdataclient.DefaultPageSize)
+	rows, err := h.wdc.SearchByName(ctx, workflowName, workflowdataclient.DefaultPageSize, "")
 	spinner.Stop()
 	if err != nil {
 		return err

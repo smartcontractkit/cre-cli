@@ -3,6 +3,7 @@ package workflowdataclient
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/machinebox/graphql"
@@ -75,18 +76,34 @@ type listWorkflowsEnvelope struct {
 	} `json:"workflows"`
 }
 
+// ListFilter controls optional server-side filters for ListWorkflows.
+type ListFilter struct {
+	Search               string
+	WorkflowOwnerAddress string
+}
+
 // ListAll pages through the ListWorkflows query and returns all workflows.
 func (c *Client) ListAll(parent context.Context, pageSize int) ([]Workflow, error) {
-	return c.list(parent, pageSize, "")
+	return c.ListWithFilter(parent, pageSize, ListFilter{})
 }
 
 // SearchByName pages through the ListWorkflows query with the given search
-// filter (server-side contains match on workflow name).
-func (c *Client) SearchByName(parent context.Context, name string, pageSize int) ([]Workflow, error) {
-	return c.list(parent, pageSize, name)
+// filter (server-side contains match on workflow name). When ownerAddress is
+// non-empty, results are scoped to that workflow owner.
+func (c *Client) SearchByName(parent context.Context, name string, pageSize int, ownerAddress string) ([]Workflow, error) {
+	return c.ListWithFilter(parent, pageSize, ListFilter{
+		Search:               name,
+		WorkflowOwnerAddress: ownerAddress,
+	})
 }
 
-func (c *Client) list(parent context.Context, pageSize int, search string) ([]Workflow, error) {
+// ListWithFilter pages through the ListWorkflows query with optional search
+// and workflow-owner filters.
+func (c *Client) ListWithFilter(parent context.Context, pageSize int, filter ListFilter) ([]Workflow, error) {
+	return c.list(parent, pageSize, filter)
+}
+
+func (c *Client) list(parent context.Context, pageSize int, filter ListFilter) ([]Workflow, error) {
 	ctx, cancel := c.CreateServiceContextWithTimeout(parent)
 	defer cancel()
 	if pageSize <= 0 {
@@ -104,8 +121,11 @@ func (c *Client) list(parent context.Context, pageSize int, search string) ([]Wo
 				"size":   pageSize,
 			},
 		}
-		if search != "" {
-			input["search"] = search
+		if filter.Search != "" {
+			input["search"] = filter.Search
+		}
+		if owner := strings.TrimSpace(filter.WorkflowOwnerAddress); owner != "" {
+			input["workflowOwnerAddress"] = []string{owner}
 		}
 		req.Var("input", input)
 
@@ -128,6 +148,10 @@ func (c *Client) list(parent context.Context, pageSize int, search string) ([]Wo
 		}
 	}
 
-	c.log.Debug().Int("count", len(all)).Str("search", search).Msg("Listed workflows from platform")
+	c.log.Debug().
+		Int("count", len(all)).
+		Str("search", filter.Search).
+		Str("workflowOwnerAddress", filter.WorkflowOwnerAddress).
+		Msg("Listed workflows from platform")
 	return all, nil
 }

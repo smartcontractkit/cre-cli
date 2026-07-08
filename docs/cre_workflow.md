@@ -43,5 +43,6 @@ cre workflow [optional flags]
 * [cre workflow list](cre_workflow_list.md)	 - Lists workflows deployed for your organization
 * [cre workflow pause](cre_workflow_pause.md)	 - Pauses workflow on the Workflow Registry contract
 * [cre workflow simulate](cre_workflow_simulate.md)	 - Simulates a workflow
+* [cre workflow status](cre_workflow_status.md)	 - Show deployment health and execution summary for a workflow
 * [cre workflow supported-chains](cre_workflow_supported-chains.md)	 - List chains and mock forwarder addresses for your tenant
 

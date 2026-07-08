@@ -12,11 +12,14 @@ import (
 // WorkflowLookup lists workflows for name and WorkflowId resolution.
 type WorkflowLookup interface {
 	ListAll(ctx context.Context, pageSize int) ([]workflowdataclient.Workflow, error)
-	SearchByName(ctx context.Context, name string, pageSize int) ([]workflowdataclient.Workflow, error)
+	SearchByName(ctx context.Context, name string, pageSize int, ownerAddress string) ([]workflowdataclient.Workflow, error)
 }
 
 // ResolveOptions controls resolution behaviour for ambiguous workflow names.
 type ResolveOptions struct {
+	// WorkflowOwnerAddress optionally scopes name resolution to workflows owned
+	// by this address (from the selected target's workflow-owner settings).
+	WorkflowOwnerAddress string
 	// NonInteractive suppresses warnings when falling back to a non-ACTIVE workflow.
 	NonInteractive bool
 }
@@ -52,7 +55,7 @@ func resolveByWorkflowID(ctx context.Context, wdc WorkflowLookup, workflowID str
 func resolveByName(ctx context.Context, wdc WorkflowLookup, name string, opts ResolveOptions) (string, error) {
 	spinner := ui.NewSpinner()
 	spinner.Start(fmt.Sprintf("Resolving workflow %q...", name))
-	rows, err := wdc.SearchByName(ctx, name, workflowdataclient.DefaultPageSize)
+	rows, err := wdc.SearchByName(ctx, name, workflowdataclient.DefaultPageSize, opts.WorkflowOwnerAddress)
 	spinner.Stop()
 	if err != nil {
 		return "", fmt.Errorf("resolving workflow name %q: %w", name, err)
