@@ -108,6 +108,9 @@ func (h *handler) Execute(inputs Inputs) error {
 		return fmt.Errorf("cannot detect workflow language: %w", err)
 	}
 	lang := cmdcommon.GetWorkflowLanguage(workflowPath)
+	if h.runtimeContext != nil {
+		h.runtimeContext.Workflow.Language = lang
+	}
 	if lang == constants.WorkflowLanguageWasm {
 		return fmt.Errorf("workflow is already a custom build (workflow-path is %s)", currentPath)
 	}

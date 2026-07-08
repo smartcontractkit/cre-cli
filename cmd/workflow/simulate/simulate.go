@@ -277,6 +277,9 @@ func (h *handler) Execute(ctx context.Context, inputs Inputs) error {
 	var err error
 
 	if inputs.WasmPath != "" {
+		if h.runtimeContext != nil {
+			h.runtimeContext.Workflow.Language = constants.WorkflowLanguageWasm
+		}
 		if cmdcommon.IsURL(inputs.WasmPath) {
 			ui.Dim("Fetching WASM binary from URL...")
 			wasmFileBinary, err = cmdcommon.FetchURL(ctx, inputs.WasmPath)
@@ -295,9 +298,6 @@ func (h *handler) Execute(ctx context.Context, inputs Inputs) error {
 		wasmFileBinary, err = cmdcommon.EnsureRawWasm(wasmFileBinary)
 		if err != nil {
 			return fmt.Errorf("failed to decode WASM binary: %w", err)
-		}
-		if h.runtimeContext != nil {
-			h.runtimeContext.Workflow.Language = constants.WorkflowLanguageWasm
 		}
 	} else {
 		workflowDir, err := os.Getwd()
