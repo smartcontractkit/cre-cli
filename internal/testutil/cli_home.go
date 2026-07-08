@@ -7,10 +7,7 @@ import (
 	"testing"
 )
 
-var (
-	defaultGoPath     string
-	defaultGoModCache string
-)
+var defaultGoPath string
 
 func init() {
 	home, err := os.UserHomeDir()
@@ -18,7 +15,6 @@ func init() {
 		home = "/tmp"
 	}
 	defaultGoPath = filepath.Join(home, "go")
-	defaultGoModCache = filepath.Join(defaultGoPath, "pkg", "mod")
 }
 
 // IsolateCLIHome redirects CLI config writes (~/.cre) into a temp directory.
