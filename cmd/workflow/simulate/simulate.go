@@ -12,7 +12,6 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
@@ -460,9 +459,13 @@ func run(
 
 	// lifecycleErr captures the first fatal error from any hook that calls os.Exit.
 	// executionResultErr captures an error returned by the engine's execution result.
+	// listen records whether the active trigger is running in --listen mode, so the
+	// lifecycle hooks below know whether a per-execution error should end the whole
+	// session or just be reported while the simulator keeps listening for the next request.
 	var (
 		lifecycleErr       error
 		executionResultErr error
+		listen             bool
 	)
 
 	// setLifecycleErr records the first lifecycle error and cancels hookCtx so
@@ -474,13 +477,10 @@ func run(
 		hookCancel()
 	}
 
-	// Channels to coordinate blocking
+	// Channels to coordinate blocking. executionFinishedCh is buffered so multiple
+	// runs (listen mode) can each signal completion without blocking the engine.
 	initializedCh := make(chan struct{})
-	executionFinishedCh := make(chan struct{})
-	var closeExecutionFinishedOnce sync.Once
-	closeExecutionFinished := func() {
-		closeExecutionFinishedOnce.Do(func() { close(executionFinishedCh) })
-	}
+	executionFinishedCh := make(chan struct{}, 1)
 
 	var manualTriggerCaps *ManualTriggers
 	var beholderStarted bool
@@ -614,20 +614,54 @@ func run(
 			setLifecycleErr(fmt.Errorf("trigger to run not selected"))
 			return
 		}
-		simLogger.Info("Running trigger", "trigger", triggerInfoAndBeforeStart.TriggerToRun.GetId())
-		err := triggerInfoAndBeforeStart.TriggerFunc()
-		if err != nil {
-			setLifecycleErr(fmt.Errorf("failed to run trigger %s: %w", triggerInfoAndBeforeStart.TriggerToRun.GetId(), err))
+		httpListen := inputs.Listen && triggerInfoAndBeforeStart.TriggerToRun.GetId() == "http-trigger@1.0.0-alpha"
+		listen = inputs.Listen && (httpListen || triggerInfoAndBeforeStart.ListenSupported)
+		if inputs.Listen && !listen {
+			ui.Warning("--listen is not supported for this trigger type; ignoring")
+		}
+		if httpListen {
+			runHTTPListen(hookCtx, inputs, triggerInfoAndBeforeStart, executionFinishedCh, simLogger, setLifecycleErr)
 			return
 		}
 
-		select {
-		case <-executionFinishedCh:
-			simLogger.Info("Execution finished signal received")
-		case <-hookCtx.Done():
-			simLogger.Info("Received interrupt signal, stopping execution")
-		case <-time.After(WorkflowExecutionTimeout):
-			simLogger.Warn("Timeout waiting for execution to finish")
+		for iteration := 0; ; iteration++ {
+			if iteration > 0 {
+				ui.Line()
+				ui.Step(fmt.Sprintf("Listen: ready for next request (run #%d)", iteration+1))
+				// Drain any stale completion signal so we wait for the new run's result.
+				select {
+				case <-executionFinishedCh:
+				default:
+				}
+			}
+
+			simLogger.Info("Running trigger", "trigger", triggerInfoAndBeforeStart.TriggerToRun.GetId())
+			err := triggerInfoAndBeforeStart.TriggerFunc()
+			if err != nil {
+				if errors.Is(err, errHTTPTriggerRateLimited) {
+					simLogger.Warn("Trigger rate limited, skipping execution", "trigger", triggerInfoAndBeforeStart.TriggerToRun.GetId(), "limit", err)
+					if !listen {
+						return
+					}
+					continue
+				}
+				setLifecycleErr(fmt.Errorf("failed to run trigger %s: %w", triggerInfoAndBeforeStart.TriggerToRun.GetId(), err))
+				return
+			}
+
+			select {
+			case <-executionFinishedCh:
+				simLogger.Info("Execution finished signal received")
+			case <-hookCtx.Done():
+				simLogger.Info("Received interrupt signal, stopping execution")
+				return
+			case <-time.After(WorkflowExecutionTimeout):
+				simLogger.Warn("Timeout waiting for execution to finish")
+			}
+
+			if !listen {
+				return
+			}
 		}
 	}
 	simulatorCleanup := func(ctx context.Context, cfg simulator.RunnerConfig, registry *capabilities.Registry, services []services.Service) {
@@ -678,9 +712,12 @@ func run(
 				if strings.Contains(strings.ToLower(msg), "limit exceeded") {
 					errMsg += "\nThis limit mirrors a production constraint.\nUse 'cre workflow limits export' to customize limits, or --limits=none to disable."
 				}
+				// Engine-level execution errors are fatal even in --listen mode (they
+				// indicate the harness itself broke, not just a bad request), so end
+				// the whole session rather than continuing to listen.
 				// Do not print here — root.go prints the returned error once after cleanup.
 				executionResultErr = fmt.Errorf("workflow execution failed: %s", errMsg)
-				closeExecutionFinished()
+				hookCancel()
 			},
 			OnResultReceived: func(result *pb.ExecutionResult) {
 				if result == nil || result.Result == nil {
@@ -712,11 +749,20 @@ func run(
 					ui.Success("Workflow Simulation Result:")
 					ui.Print(string(j))
 				case *pb.ExecutionResult_Error:
-					// Do not print here — root.go prints the returned error once after cleanup.
-					executionResultErr = fmt.Errorf("workflow execution returned an error: %s", r.Error)
+					if listen {
+						// In listen mode a single bad request shouldn't end the session;
+						// report it and keep listening for the next one.
+						ui.Error("Execution resulted in an error being returned: " + r.Error)
+					} else {
+						// Do not print here — root.go prints the returned error once after cleanup.
+						executionResultErr = fmt.Errorf("workflow execution returned an error: %s", r.Error)
+					}
 				}
 				ui.Line()
-				closeExecutionFinished()
+				select {
+				case executionFinishedCh <- struct{}{}:
+				default:
+				}
 			},
 		},
 		WorkflowSettingsCfgFn: func(cfg *cresettings.Workflows) {
@@ -741,6 +787,97 @@ func run(
 		return executionResultErr
 	}
 	return nil
+}
+
+// runHTTPListen serves the HTTP trigger's --listen mode: it keeps a single HTTP
+// server running for the whole session and runs the trigger once per incoming
+// request, instead of exiting after the first one. onErr is called instead of
+// os.Exit when a fatal (session-ending) error occurs.
+func runHTTPListen(ctx context.Context, inputs Inputs, triggerInfo *TriggerInfoAndBeforeStart, executionFinishedCh <-chan struct{}, simLogger *SimulationLogger, onErr func(error)) {
+	if triggerInfo.TriggerWithPayload == nil {
+		onErr(fmt.Errorf("HTTP trigger payload function not initialized"))
+		return
+	}
+
+	payloadCh, closeServer, err := startHTTPListenPayloadServer(ctx, inputs.HTTPTriggerPort)
+	if err != nil {
+		onErr(fmt.Errorf("failed to start HTTP trigger server: %w", err))
+		return
+	}
+	defer closeServer()
+
+	runPayload := func(payload *httptypedapi.Payload) bool {
+		simLogger.Info("Running trigger", "trigger", triggerInfo.TriggerToRun.GetId())
+		if err := triggerInfo.TriggerWithPayload(payload); err != nil {
+			if errors.Is(err, errHTTPTriggerRateLimited) {
+				simLogger.Warn("Trigger rate limited, skipping execution", "trigger", triggerInfo.TriggerToRun.GetId(), "limit", err)
+				return true
+			}
+			onErr(fmt.Errorf("failed to run trigger %s: %w", triggerInfo.TriggerToRun.GetId(), err))
+			return false
+		}
+
+		select {
+		case <-executionFinishedCh:
+			simLogger.Info("Execution finished signal received")
+		case <-ctx.Done():
+			simLogger.Info("Received interrupt signal, stopping execution")
+			return false
+		case <-time.After(WorkflowExecutionTimeout):
+			simLogger.Warn("Timeout waiting for execution to finish")
+		}
+
+		return true
+	}
+
+	iteration := 0
+	if strings.TrimSpace(inputs.HTTPPayload) != "" {
+		if triggerInfo.TriggerFunc == nil {
+			onErr(fmt.Errorf("trigger function not initialized"))
+			return
+		}
+		simLogger.Info("Running trigger", "trigger", triggerInfo.TriggerToRun.GetId())
+		if err := triggerInfo.TriggerFunc(); err != nil {
+			if errors.Is(err, errHTTPTriggerRateLimited) {
+				simLogger.Warn("Trigger rate limited, skipping execution", "trigger", triggerInfo.TriggerToRun.GetId(), "limit", err)
+			} else {
+				onErr(fmt.Errorf("failed to run trigger %s: %w", triggerInfo.TriggerToRun.GetId(), err))
+				return
+			}
+		} else {
+			select {
+			case <-executionFinishedCh:
+				simLogger.Info("Execution finished signal received")
+			case <-ctx.Done():
+				simLogger.Info("Received interrupt signal, stopping execution")
+				return
+			case <-time.After(WorkflowExecutionTimeout):
+				simLogger.Warn("Timeout waiting for execution to finish")
+			}
+			iteration = 1
+		}
+	}
+
+	for {
+		if iteration > 0 {
+			ui.Line()
+			ui.Step(fmt.Sprintf("Listen: ready for next request (run #%d)", iteration+1))
+		}
+		ui.Step(fmt.Sprintf("Waiting for HTTP request to start execution (listening on http://localhost:%d/trigger)...", inputs.HTTPTriggerPort))
+
+		var payload *httptypedapi.Payload
+		select {
+		case payload = <-payloadCh:
+		case <-ctx.Done():
+			simLogger.Info("Received interrupt signal, stopping execution")
+			return
+		}
+
+		if !runPayload(payload) {
+			return
+		}
+		iteration++
+	}
 }
 
 func startHTTPListenPayloadServer(ctx context.Context, port int) (<-chan *httptypedapi.Payload, func(), error) {
