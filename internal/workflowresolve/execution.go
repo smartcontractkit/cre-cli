@@ -172,6 +172,10 @@ func PrintExecutionDetailTable(e workflowdataclient.Execution, failedEvents []wo
 	}
 
 	ui.Line()
+	ui.Bold("Debug further:")
+	ui.Dim(fmt.Sprintf("   cre execution events %s", e.ID))
+	ui.Dim(fmt.Sprintf("   cre execution logs   %s", e.ID))
+	ui.Line()
 }
 
 // ---- Events ----

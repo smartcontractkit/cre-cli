@@ -95,6 +95,11 @@ func PrintWorkflowStatusTable(v WorkflowStatusView) {
 				ui.Dim(fmt.Sprintf("     - %s (x%d)", err.Error, err.Count))
 			}
 		}
+		ui.Line()
+		ui.Bold("Debug further:")
+		ui.Dim(fmt.Sprintf("   cre execution status %s", e.ID))
+		ui.Dim(fmt.Sprintf("   cre execution events %s", e.ID))
+		ui.Dim(fmt.Sprintf("   cre execution logs   %s", e.ID))
 	} else if s.Status == "PENDING" {
 		ui.Line()
 		ui.Dim("   Workflow has not executed yet — it may still be activating in the DON.")

@@ -1,33 +1,31 @@
-## cre workflow status
+## cre execution logs
 
-Show deployment health and execution summary for a workflow
+Show logs emitted during a workflow execution
 
 ### Synopsis
 
-Show the full health picture of the workflow configured for the selected
---target in workflow.yaml: deployment status, activation state, execution
-success/failure counts, and the most recent execution.
-
-Useful for diagnosing the gap between registering a workflow and it
-becoming active in the DON, or for a quick health check.
+Fetch and display all log lines emitted during a workflow execution.
+Use --node to filter to a specific capability node (client-side filter).
 
 ```
-cre workflow status <workflow-folder-path> [optional flags]
+cre execution logs <execution-uuid> [optional flags]
 ```
 
 ### Examples
 
 ```
-cre workflow status ./my-workflow --target staging
-  cre workflow status ./my-workflow --target staging --output json
+cre execution logs 7f3d8a12-b1c2-4d3e-9f0a-1b2c3d4e5f6g
+  cre execution logs 7f3d8a12-b1c2-4d3e-9f0a-1b2c3d4e5f6g --node ProcessData
+  cre execution logs 7f3d8a12-b1c2-4d3e-9f0a-1b2c3d4e5f6g --output json
 ```
 
 ### Options
 
 ```
-  -h, --help            help for status
+  -h, --help            help for logs
       --json            Output as JSON (shorthand for --output=json)
-      --output string   Output format: "json" prints JSON to stdout
+      --node string     Filter logs to a specific node/capability ID (case-insensitive)
+      --output string   Output format: "json" prints a JSON array to stdout
 ```
 
 ### Options inherited from parent commands
@@ -45,5 +43,5 @@ cre workflow status ./my-workflow --target staging
 
 ### SEE ALSO
 
-* [cre workflow](cre_workflow.md)	 - Manages workflows
+* [cre execution](cre_execution.md)	 - Query workflow execution history
 

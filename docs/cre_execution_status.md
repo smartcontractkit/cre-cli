@@ -1,25 +1,21 @@
-## cre workflow status
+## cre execution status
 
-Show deployment health and execution summary for a workflow
+Show detailed status of a single execution
 
 ### Synopsis
 
-Show the full health picture of the workflow configured for the selected
---target in workflow.yaml: deployment status, activation state, execution
-success/failure counts, and the most recent execution.
-
-Useful for diagnosing the gap between registering a workflow and it
-becoming active in the DON, or for a quick health check.
+Fetch and display the full status of a workflow execution, including
+top-level errors when the execution has failed.
 
 ```
-cre workflow status <workflow-folder-path> [optional flags]
+cre execution status <execution-uuid> [optional flags]
 ```
 
 ### Examples
 
 ```
-cre workflow status ./my-workflow --target staging
-  cre workflow status ./my-workflow --target staging --output json
+cre execution status 7f3d8a12-b1c2-4d3e-9f0a-1b2c3d4e5f6g
+  cre execution status 7f3d8a12-b1c2-4d3e-9f0a-1b2c3d4e5f6g --output json
 ```
 
 ### Options
@@ -45,5 +41,5 @@ cre workflow status ./my-workflow --target staging
 
 ### SEE ALSO
 
-* [cre workflow](cre_workflow.md)	 - Manages workflows
+* [cre execution](cre_execution.md)	 - Query workflow execution history
 
