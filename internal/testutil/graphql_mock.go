@@ -76,6 +76,8 @@ func MockGetTenantConfigGraphQLPayloadWithCapReg(capRegAddress string) map[strin
 // It sets EnvVarGraphQLURL so CLI commands use this server. Caller must defer srv.Close().
 func NewGraphQLMockServerGetOrganization(t *testing.T) *httptest.Server {
 	t.Helper()
+	IsolateCLIHome(t)
+
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/graphql") && r.Method == http.MethodPost {
 			var req struct {
