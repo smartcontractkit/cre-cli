@@ -1,6 +1,7 @@
 package common
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -28,8 +29,13 @@ func IsURL(s string) bool {
 }
 
 // FetchURL performs an HTTP GET and returns the response body bytes.
-func FetchURL(url string) ([]byte, error) {
-	resp, err := http.Get(url) //nolint:gosec,noctx
+func FetchURL(ctx context.Context, url string) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("HTTP GET %s: %w", url, err)
+	}
+
+	resp, err := http.DefaultClient.Do(req) //nolint:gosec
 	if err != nil {
 		return nil, fmt.Errorf("HTTP GET %s: %w", url, err)
 	}

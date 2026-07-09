@@ -1,6 +1,7 @@
 package pause
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/rs/zerolog"
@@ -8,6 +9,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/smartcontractkit/cre-cli/cmd/client"
+	workflowcommon "github.com/smartcontractkit/cre-cli/cmd/workflow/common"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
@@ -45,7 +47,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 			if err := handler.ValidateInputs(); err != nil {
 				return err
 			}
-			return handler.Execute()
+			return handler.Execute(cmd.Context())
 		},
 	}
 
@@ -63,6 +65,7 @@ type handler struct {
 	runtimeContext *runtime.Context
 
 	validated bool
+	execCtx   context.Context
 }
 
 func newHandler(ctx *runtime.Context) *handler {
@@ -106,7 +109,9 @@ func (h *handler) ValidateInputs() error {
 	return nil
 }
 
-func (h *handler) Execute() error {
+func (h *handler) Execute(ctx context.Context) error {
+	h.execCtx = ctx
+
 	if !h.validated {
 		return fmt.Errorf("handler inputs not validated")
 	}
@@ -119,7 +124,13 @@ func (h *handler) Execute() error {
 		return fmt.Errorf("missing required flags for --non-interactive mode")
 	}
 
-	h.displayWorkflowDetails()
+	workflowcommon.DisplayWorkflowDetails(
+		h.settings,
+		h.runtimeContext,
+		"Pausing",
+		h.inputs.WorkflowName,
+		h.inputs.WorkflowOwner,
+	)
 
 	strategy, err := newRegistryPauseStrategy(h.runtimeContext.ResolvedRegistry, h)
 	if err != nil {
@@ -143,12 +154,4 @@ func (h *handler) resolveWorkflowOwner(registryType settings.RegistryType) (stri
 	}
 
 	return owner, nil
-}
-
-func (h *handler) displayWorkflowDetails() {
-	ui.Line()
-	ui.Title(fmt.Sprintf("Pausing Workflow: %s", h.inputs.WorkflowName))
-	ui.Dim(fmt.Sprintf("Target:        %s", h.settings.User.TargetName))
-	ui.Dim(fmt.Sprintf("Owner Address: %s", h.inputs.WorkflowOwner))
-	ui.Line()
 }

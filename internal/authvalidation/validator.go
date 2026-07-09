@@ -3,6 +3,7 @@ package authvalidation
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/machinebox/graphql"
 	"github.com/rs/zerolog"
@@ -30,6 +31,7 @@ type ValidationResult struct {
 type Validator struct {
 	gqlClient *graphqlclient.Client
 	log       *zerolog.Logger
+	timeout   time.Duration
 }
 
 // NewValidator creates a new credential validator
@@ -38,13 +40,25 @@ func NewValidator(creds *credentials.Credentials, environmentSet *environments.E
 	return &Validator{
 		gqlClient: gqlClient,
 		log:       log,
+		timeout:   time.Minute,
 	}
+}
+
+func (v *Validator) SetServiceTimeout(timeout time.Duration) {
+	v.timeout = timeout
+}
+
+func (v *Validator) CreateServiceContextWithTimeout(parent context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(parent, v.timeout) //nolint:gosec // G118 -- cancel is deferred by callers
 }
 
 // ValidateCredentials validates the provided credentials by making a lightweight GraphQL query
 // and returns organization info including the derived workflow owner.
 // The GraphQL client automatically handles token refresh if needed.
 func (v *Validator) ValidateCredentials(validationCtx context.Context, creds *credentials.Credentials) (*ValidationResult, error) {
+	ctx, cancel := v.CreateServiceContextWithTimeout(validationCtx)
+	defer cancel()
+
 	if creds == nil {
 		return nil, fmt.Errorf("credentials not provided")
 	}
@@ -62,7 +76,7 @@ func (v *Validator) ValidateCredentials(validationCtx context.Context, creds *cr
 		} `json:"getCreOrganizationInfo"`
 	}
 
-	if err := v.gqlClient.Execute(validationCtx, req, &respEnvelope); err != nil {
+	if err := v.gqlClient.Execute(ctx, req, &respEnvelope); err != nil {
 		return nil, fmt.Errorf("authentication failed: unable to retrieve organization info. Your account may not be fully set up yet — please try again in a few minutes: %w", err)
 	}
 

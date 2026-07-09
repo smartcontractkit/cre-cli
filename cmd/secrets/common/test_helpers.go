@@ -2,6 +2,7 @@ package common
 
 import (
 	"bytes"
+	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -29,6 +30,7 @@ func newMockHandler(t *testing.T) (*Handler, *MockClientFactory, *ecdsa.PrivateK
 		OwnerAddress:   "0xabc",
 		EnvironmentSet: &environments.EnvironmentSet{},
 		Credentials:    &credentials.Credentials{},
+		execCtx:        context.Background(),
 	}
 	return h, mockClientFactory, privateKey
 }
@@ -43,8 +45,8 @@ func (m *MockClientFactory) GetSkipConfirmation() bool {
 	panic("not used in these tests")
 }
 
-func (m *MockClientFactory) NewWorkflowRegistryV2Client() (*client.WorkflowRegistryV2Client, error) {
-	args := m.Called()
+func (m *MockClientFactory) NewWorkflowRegistryV2Client(ctx context.Context) (*client.WorkflowRegistryV2Client, error) {
+	args := m.Called(ctx)
 	var c *client.WorkflowRegistryV2Client
 	if v := args.Get(0); v != nil {
 		c = v.(*client.WorkflowRegistryV2Client)

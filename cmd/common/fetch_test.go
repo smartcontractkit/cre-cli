@@ -1,6 +1,7 @@
 package common
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -42,7 +43,7 @@ func TestFetchURL(t *testing.T) {
 		}))
 		defer srv.Close()
 
-		data, err := FetchURL(srv.URL)
+		data, err := FetchURL(context.Background(), srv.URL)
 		require.NoError(t, err)
 		assert.Equal(t, body, data)
 	})
@@ -53,13 +54,13 @@ func TestFetchURL(t *testing.T) {
 		}))
 		defer srv.Close()
 
-		_, err := FetchURL(srv.URL)
+		_, err := FetchURL(context.Background(), srv.URL)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "returned status 404")
 	})
 
 	t.Run("unreachable host", func(t *testing.T) {
-		_, err := FetchURL("http://127.0.0.1:1")
+		_, err := FetchURL(context.Background(), "http://127.0.0.1:1")
 		require.Error(t, err)
 	})
 }

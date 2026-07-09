@@ -37,11 +37,11 @@ func New(ctx *runtime.Context) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := common.ValidateSecretsAuthFlow(secretsAuth, ctx.EnvironmentSet.EnvName); err != nil {
+			if err := common.ValidateSecretsAuthFlow(secretsAuth); err != nil {
 				return err
 			}
 
-			h, err := common.NewHandler(ctx, secretsFilePath)
+			h, err := common.NewHandler(cmd.Context(), ctx, secretsFilePath, secretsAuth)
 			if err != nil {
 				return err
 			}
@@ -66,12 +66,13 @@ func New(ctx *runtime.Context) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			defer common.ZeroUpsertSecretValues(inputs)
 
 			if err := h.ValidateInputs(inputs); err != nil {
 				return err
 			}
 
-			return h.Execute(inputs, vaulttypes.MethodSecretsCreate, duration, secretsAuth)
+			return h.Execute(cmd.Context(), inputs, vaulttypes.MethodSecretsCreate, duration, secretsAuth)
 		},
 	}
 

@@ -55,25 +55,26 @@ func vaultPermissionForMethod(method string) (string, error) {
 }
 
 func digestHexString(digest [32]byte) string {
-	return "0x" + hex.EncodeToString(digest[:])
+	return hex.EncodeToString(digest[:])
 }
 
 // executeBrowserUpsert handles secrets create/update when the user signs in with their organization account.
 // It encrypts the payload, binds a digest, requests a platform authorization URL, completes OAuth in the browser,
 // exchanges the code for a short-lived vault JWT, and POSTs the same JSON-RPC body to the gateway with Bearer auth.
-// Login tokens in ~/.cre/cre.yaml are not modified; that session stays separate from this vault-only token.
+// Login tokens in the CLI credentials file are not modified; that session stays separate from this vault-only token.
 func (h *Handler) executeBrowserUpsert(ctx context.Context, inputs UpsertSecretsInputs, method string) error {
 	if h.Credentials.AuthType == credentials.AuthTypeApiKey {
 		return fmt.Errorf("this sign-in flow requires an interactive login; API keys are not supported")
 	}
-	orgID := h.Credentials.OrgID
-	if orgID == "" {
-		return fmt.Errorf("organization information is missing from your session; sign in again or use owner-key-signing")
+
+	owner, err := h.ResolveVaultIdentifierOwnerForAuth(SecretsAuthBrowser)
+	if err != nil {
+		return err
 	}
 
 	ui.Dim("Using your account to authorize vault access for your organization...")
 
-	encSecrets, err := h.EncryptSecretsForBrowserOrg(inputs, orgID)
+	encSecrets, err := h.EncryptSecrets(inputs, owner)
 	if err != nil {
 		return fmt.Errorf("failed to encrypt secrets: %w", err)
 	}
@@ -127,12 +128,12 @@ func (h *Handler) executeBrowserUpsert(ctx context.Context, inputs UpsertSecrets
 		return fmt.Errorf("unsupported method %q (expected %q or %q)", method, vaulttypes.MethodSecretsCreate, vaulttypes.MethodSecretsUpdate)
 	}
 
-	return h.ExecuteBrowserVaultAuthorization(ctx, method, digest, requestBody)
+	return h.ExecuteBrowserVaultAuthorization(ctx, method, digest, requestBody, owner)
 }
 
 // ExecuteBrowserVaultAuthorization completes platform OAuth for a vault JSON-RPC digest (create/update/delete/list),
 // then POSTs the same request body to the gateway with the vault JWT in the Authorization header.
-func (h *Handler) ExecuteBrowserVaultAuthorization(ctx context.Context, method string, digest [32]byte, requestBody []byte) error {
+func (h *Handler) ExecuteBrowserVaultAuthorization(ctx context.Context, method string, digest [32]byte, requestBody []byte, workflowOwner string) error {
 	if h.Credentials.AuthType == credentials.AuthTypeApiKey {
 		return fmt.Errorf("this sign-in flow requires an interactive login; API keys are not supported")
 	}
@@ -158,8 +159,8 @@ func (h *Handler) ExecuteBrowserVaultAuthorization(ctx context.Context, method s
 		"requestDigest": digestHexString(digest),
 		"permission":    perm,
 	}
-	// Optional: bind authorization to workflow owner when configured (omit if unset).
-	if w := strings.TrimSpace(h.OwnerAddress); w != "" {
+	// Bind authorization to the JWT-derived workflow owner so digests align with gateway validation.
+	if w := strings.TrimSpace(workflowOwner); w != "" {
 		reqVars["workflowOwnerAddress"] = w
 	}
 	gqlReq.Var("request", reqVars)
@@ -177,10 +178,17 @@ func (h *Handler) ExecuteBrowserVaultAuthorization(ctx context.Context, method s
 		return fmt.Errorf("could not complete the authorization request")
 	}
 
-	platformState, _ := oauth.StateFromAuthorizeURL(authURL)
+	localState, err := oauth.RandomState()
+	if err != nil {
+		return err
+	}
+	authURL, err = oauth.AuthorizeURLWithState(authURL, localState)
+	if err != nil {
+		return fmt.Errorf("could not bind OAuth state: %w", err)
+	}
 
 	codeCh := make(chan string, 1)
-	server, listener, err := oauth.NewCallbackHTTPServer(constants.AuthListenAddr, oauth.SecretsCallbackHandler(codeCh, platformState, h.Log))
+	server, listener, err := oauth.NewCallbackHTTPServer(constants.AuthListenAddr, oauth.SecretsCallbackHandler(codeCh, localState, h.Log))
 	if err != nil {
 		return fmt.Errorf("could not start local callback server: %w", err)
 	}
@@ -223,7 +231,7 @@ func (h *Handler) ExecuteBrowserVaultAuthorization(ctx context.Context, method s
 	})
 	var exchangeResp struct {
 		ExchangeAuthCodeToToken struct {
-			AccessToken string `json:"accessToken"`
+			AccessToken string `json:"accessToken"` // #nosec G117 -- matches OAuth token exchange response field
 			ExpiresIn   int    `json:"expiresIn"`
 		} `json:"exchangeAuthCodeToToken"`
 	}
@@ -239,6 +247,11 @@ func (h *Handler) ExecuteBrowserVaultAuthorization(ctx context.Context, method s
 
 // postVaultGatewayWithBearer POSTs the digest-bound JSON-RPC body with the vault JWT and parses the gateway response.
 func (h *Handler) postVaultGatewayWithBearer(method string, requestBody []byte, accessToken string) error {
+	requestID, err := jsonRPCRequestID(requestBody)
+	if err != nil {
+		return err
+	}
+
 	ui.Dim("Submitting request to vault gateway...")
 	respBody, status, err := h.Gw.PostWithBearer(requestBody, accessToken)
 	if err != nil {
@@ -247,5 +260,18 @@ func (h *Handler) postVaultGatewayWithBearer(method string, requestBody []byte, 
 	if status != http.StatusOK {
 		return fmt.Errorf("gateway returned a non-200 status code: status_code=%d, body=%s", status, respBody)
 	}
-	return h.ParseVaultGatewayResponse(method, respBody)
+	return h.ParseVaultGatewayResponse(method, requestID, respBody)
+}
+
+func jsonRPCRequestID(body []byte) (string, error) {
+	var req struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(body, &req); err != nil {
+		return "", fmt.Errorf("failed to parse jsonrpc request id: %w", err)
+	}
+	if req.ID == "" {
+		return "", fmt.Errorf("jsonrpc request id is empty")
+	}
+	return req.ID, nil
 }

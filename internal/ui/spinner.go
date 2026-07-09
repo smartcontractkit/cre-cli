@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 
 	"github.com/charmbracelet/bubbles/spinner"
@@ -129,7 +130,13 @@ func (s *Spinner) Start(message string) {
 	s.quitCh = make(chan struct{})
 
 	model := newSpinnerModel(message)
-	s.program = tea.NewProgram(model, tea.WithOutput(os.Stderr))
+	// Pass an empty reader so bubbletea does not take stdin and call
+	// term.MakeRaw on it. With raw mode on, the terminal driver no longer
+	// translates Ctrl+C into SIGINT — so signal.NotifyContext would never
+	// fire and long-running operations (e.g. waiting for an EVM log event)
+	// could not be interrupted. The spinner only needs its own ticker to
+	// animate; it never reads user input.
+	s.program = tea.NewProgram(model, tea.WithOutput(os.Stderr), tea.WithInput(strings.NewReader("")))
 
 	// Run the program in a goroutine
 	go func() {

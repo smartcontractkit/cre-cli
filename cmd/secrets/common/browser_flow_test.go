@@ -42,7 +42,7 @@ func TestVaultPermissionForMethod(t *testing.T) {
 func TestDigestHexString(t *testing.T) {
 	var d [32]byte
 	copy(d[:], []byte{1, 2, 3})
-	assert.Equal(t, "0x0102030000000000000000000000000000000000000000000000000000000000", digestHexString(d))
+	assert.Equal(t, "0102030000000000000000000000000000000000000000000000000000000000", digestHexString(d))
 }
 
 // TestBrowserFlowPKCE checks PKCE S256 (RFC 7636) used by the browser secrets authorization step.
@@ -97,7 +97,7 @@ func TestPostVaultGatewayWithBearer_ListParsesResponse(t *testing.T) {
 		},
 	}
 
-	err := h.postVaultGatewayWithBearer(vaulttypes.MethodSecretsList, []byte(`{}`), "t")
+	err := h.postVaultGatewayWithBearer(vaulttypes.MethodSecretsList, []byte(`{"jsonrpc":"2.0","id":"1","method":"x"}`), "t")
 	w.Close()
 	os.Stdout = oldStdout
 	var out strings.Builder
@@ -115,7 +115,7 @@ func TestPostVaultGatewayWithBearer_GatewayNon200(t *testing.T) {
 		},
 	}
 
-	err := h.postVaultGatewayWithBearer(vaulttypes.MethodSecretsDelete, []byte(`{}`), "t")
+	err := h.postVaultGatewayWithBearer(vaulttypes.MethodSecretsDelete, []byte(`{"jsonrpc":"2.0","id":"1","method":"x"}`), "t")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "non-200")
 	assert.Contains(t, err.Error(), "403")
@@ -129,7 +129,7 @@ func TestPostVaultGatewayWithBearer_InvalidJSONRPC(t *testing.T) {
 		},
 	}
 
-	err := h.postVaultGatewayWithBearer(vaulttypes.MethodSecretsUpdate, []byte(`{}`), "t")
+	err := h.postVaultGatewayWithBearer(vaulttypes.MethodSecretsUpdate, []byte(`{"jsonrpc":"2.0","id":"1","method":"x"}`), "t")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unmarshal")
 }

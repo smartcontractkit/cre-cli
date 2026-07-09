@@ -144,6 +144,26 @@ func TestNewEnvironmentSet_FallbackAndOverrides(t *testing.T) {
 
 }
 
+func TestNewEnvironmentSet_DonFamilyFromEnvVarOnly(t *testing.T) {
+	ff := &fileFormat{Envs: map[string]EnvironmentSet{
+		"STAGING": {
+			AuthBase: "https://staging.example",
+		},
+	}}
+
+	t.Setenv(EnvVarDonFamily, "")
+	set := NewEnvironmentSet(ff, "STAGING")
+	if set.DonFamily != "" {
+		t.Errorf("DonFamily = %q; want empty when env var unset", set.DonFamily)
+	}
+
+	t.Setenv(EnvVarDonFamily, "zone-b")
+	set = NewEnvironmentSet(ff, "STAGING")
+	if set.DonFamily != "zone-b" {
+		t.Errorf("DonFamily = %q; want zone-b from env var", set.DonFamily)
+	}
+}
+
 func loadEnvironmentFile(path string) (*fileFormat, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {

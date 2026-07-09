@@ -12,13 +12,39 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
+	"github.com/smartcontractkit/chainlink-common/keystore/corekeys"
+
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
-// sensitive information (not in configuration file)
-const (
-	EthPrivateKeyEnvVar = "CRE_ETH_PRIVATE_KEY"
-	CreTargetEnvVar     = "CRE_TARGET"
+const CreTargetEnvVar = "CRE_TARGET"
+const CreAllowInsecureRPCEnvVar = "CRE_ALLOW_INSECURE_RPC"
+
+// ChainType describes a chain family and the per-family settings the CLI
+// loads from the environment. Add a family by appending to AllChainTypes.
+type ChainType struct {
+	Name          string
+	PrivateKeyEnv string
+}
+
+var (
+	EVM = ChainType{
+		Name:          string(corekeys.EVM),
+		PrivateKeyEnv: "CRE_ETH_PRIVATE_KEY",
+	}
+	Solana = ChainType{
+		Name:          string(corekeys.Solana),
+		PrivateKeyEnv: "CRE_SOLANA_PRIVATE_KEY",
+	}
+
+	AllChainTypes = []ChainType{EVM, Solana}
+)
+
+// Backwards-compat aliases; prefer EVM.PrivateKeyEnv / Aptos.PrivateKeyEnv /
+// Solana.PrivateKeyEnv.
+var (
+	EthPrivateKeyEnvVar    = EVM.PrivateKeyEnv
+	SolanaPrivateKeyEnvVar = Solana.PrivateKeyEnv
 )
 
 // State tracked by LoadEnv / LoadPublicEnv so downstream code (e.g. build
@@ -56,9 +82,16 @@ type Settings struct {
 
 // UserSettings stores user-specific configurations.
 type UserSettings struct {
-	TargetName    string
-	EthPrivateKey string
-	EthUrl        string
+	TargetName  string
+	PrivateKeys map[string]string // keyed by ChainType.Name
+}
+
+// PrivateKey returns the signing key for the given chain, or "" if unset.
+func (u UserSettings) PrivateKey(f ChainType) string {
+	if u.PrivateKeys == nil {
+		return ""
+	}
+	return u.PrivateKeys[f.Name]
 }
 
 // New initializes and loads settings from YAML config files and the environment.
@@ -101,13 +134,15 @@ func New(logger *zerolog.Logger, v *viper.Viper, cmd *cobra.Command, registryCha
 		return nil, err
 	}
 
-	rawPrivKey := v.GetString(EthPrivateKeyEnvVar)
-	normPrivKey := NormalizeHexKey(rawPrivKey)
+	privateKeys := make(map[string]string, len(AllChainTypes))
+	for _, f := range AllChainTypes {
+		privateKeys[f.Name] = NormalizeHexKey(v.GetString(f.PrivateKeyEnv))
+	}
 
 	return &Settings{
 		User: UserSettings{
-			EthPrivateKey: normPrivKey,
-			TargetName:    target,
+			PrivateKeys: privateKeys,
+			TargetName:  target,
 		},
 		Workflow:        workflowSettings,
 		StorageSettings: storageSettings,
@@ -115,8 +150,11 @@ func New(logger *zerolog.Logger, v *viper.Viper, cmd *cobra.Command, registryCha
 	}, nil
 }
 
-// loadEnvFile loads the file at envPath into the process environment via
-// godotenv.Overload and returns the path + parsed vars on success.
+// loadEnvFile loads the file at envPath into the process environment and
+// returns the path + parsed vars on success.
+// Plain values override any pre-existing shell env var (Overload semantics).
+// Values beginning with "op://" are intentionally skipped so that secrets
+// resolved by `op run` are not clobbered by the unresolved reference.
 // If envPath is empty or loading fails, appropriate messages are logged
 // and ("", nil) is returned.
 func loadEnvFile(logger *zerolog.Logger, envPath string) (string, map[string]string) {
@@ -127,7 +165,8 @@ func loadEnvFile(logger *zerolog.Logger, envPath string) (string, map[string]str
 		return "", nil
 	}
 
-	if err := godotenv.Overload(envPath); err != nil {
+	vars, err := godotenv.Read(envPath)
+	if err != nil {
 		logger.Error().Str("path", envPath).Err(err).Msg(
 			"Not able to load configuration from environment file. " +
 				"CLI tool will read and verify individual environment variables (they MUST be exported). " +
@@ -135,7 +174,21 @@ func loadEnvFile(logger *zerolog.Logger, envPath string) (string, map[string]str
 		return "", nil
 	}
 
-	vars, _ := godotenv.Read(envPath)
+	for k, v := range vars {
+		if strings.HasPrefix(v, "op://") {
+			// Leave the value already in the environment (resolved by `op run`) untouched.
+			logger.Debug().Str("key", k).Msg(
+				fmt.Sprintf("Skipping op:// reference in env file; use `op run --env-file %s -- cre ...` to resolve 1Password secrets", envPath))
+			continue
+		}
+		err = os.Setenv(k, v)
+		if err != nil {
+			logger.Error().Str("key", k).Err(err).Msg(
+				"Failed to set environment variable; CLI tool will read and verify individual environment variables (they MUST be exported). " +
+					"If the file is present, please check that it follows the correct format: https://dotenvx.com/docs/env-file")
+		}
+	}
+
 	return envPath, vars
 }
 
@@ -163,7 +216,12 @@ func LoadEnv(logger *zerolog.Logger, v *viper.Viper, envPath string) {
 	loadedEnvFilePath = ""
 	loadedEnvVars = nil
 	loadedEnvFilePath, loadedEnvVars = loadEnvFile(logger, envPath)
-	bindAllVars(v, loadedEnvVars, EthPrivateKeyEnvVar, CreTargetEnvVar)
+	extras := []string{CreTargetEnvVar, CreAllowInsecureRPCEnvVar}
+	for _, f := range AllChainTypes {
+		extras = append(extras, f.PrivateKeyEnv)
+	}
+	bindAllVars(v, loadedEnvVars, extras...)
+	_ = v.BindEnv(Flags.AllowInsecureRPC.Name, CreAllowInsecureRPCEnvVar)
 }
 
 // LoadPublicEnv loads variables from envPath into the process environment

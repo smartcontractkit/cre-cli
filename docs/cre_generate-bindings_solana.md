@@ -1,0 +1,51 @@
+## cre generate-bindings solana
+
+Generate bindings from contract IDL
+
+### Synopsis
+
+This command generates bindings from contract IDL files.
+Supports Solana chain family with Go and TypeScript languages.
+The target language is auto-detected from project files, or can be
+specified explicitly with --language.
+For Go, each contract gets its own package subdirectory to avoid naming
+conflicts: data_storage.json generates bindings in generated/data_storage/.
+For TypeScript, each contract generates a flat <Program>.ts + <Program>_mock.ts
+pair plus an index.ts barrel.
+
+```
+cre generate-bindings solana [optional flags]
+```
+
+### Examples
+
+```
+  cre generate-bindings solana
+```
+
+### Options
+
+```
+  -h, --help                  help for solana
+  -i, --idl string            Path to IDL directory (defaults to contracts/solana/src/idl/)
+  -l, --language string       Target language: go, typescript (auto-detected from project files when omitted)
+  -o, --out string            Path to output directory (defaults to contracts/solana/src/generated/ for Go, contracts/solana/ts/generated/ for TypeScript)
+  -p, --project-root string   Path to project root directory (defaults to current directory)
+```
+
+### Options inherited from parent commands
+
+```
+      --allow-insecure-rpc     Allow non-localhost HTTP RPC URLs (insecure)
+      --allow-unknown-chains   Skip chain-name validation against the chain-selectors registry (for experimental chains)
+  -e, --env string             Path to .env file which contains sensitive info
+      --non-interactive        Fail instead of prompting; requires all inputs via flags
+  -E, --public-env string      Path to .env.public file which contains shared, non-sensitive build config
+  -T, --target string          Use target settings from YAML config
+  -v, --verbose                Run command in VERBOSE mode
+```
+
+### SEE ALSO
+
+* [cre generate-bindings](cre_generate-bindings.md)	 - Generate bindings for contracts
+

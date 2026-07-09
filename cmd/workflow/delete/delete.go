@@ -1,6 +1,7 @@
 package delete
 
 import (
+	"context"
 	"fmt"
 	"io"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/smartcontractkit/cre-cli/cmd/client"
+	workflowcommon "github.com/smartcontractkit/cre-cli/cmd/workflow/common"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
@@ -43,7 +45,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return handler.Execute()
+			return handler.Execute(cmd.Context())
 		},
 	}
 
@@ -65,6 +67,7 @@ type handler struct {
 	runtimeContext *runtime.Context
 
 	validated bool
+	execCtx   context.Context
 }
 
 func newHandler(ctx *runtime.Context, stdin io.Reader) *handler {
@@ -127,13 +130,25 @@ func (h *handler) ValidateInputs() error {
 	return nil
 }
 
-func (h *handler) Execute() error {
+func (h *handler) Execute(ctx context.Context) error {
+	if !h.validated {
+		return fmt.Errorf("handler inputs not validated")
+	}
+
+	h.execCtx = ctx
+
 	adapter, err := newRegistryDeleteStrategy(h.runtimeContext.ResolvedRegistry, h)
 	if err != nil {
 		return err
 	}
 
-	h.displayWorkflowDetails()
+	workflowcommon.DisplayWorkflowDetails(
+		h.settings,
+		h.runtimeContext,
+		"Deleting",
+		h.inputs.WorkflowName,
+		h.inputs.WorkflowOwner,
+	)
 
 	workflows, err := adapter.FetchWorkflows()
 	if err != nil {
@@ -211,12 +226,4 @@ func (h *handler) askForWorkflowDeletionConfirmation(expectedWorkflowName string
 	}
 
 	return result == expectedWorkflowName, nil
-}
-
-func (h *handler) displayWorkflowDetails() {
-	ui.Line()
-	ui.Title(fmt.Sprintf("Deleting Workflow: %s", h.inputs.WorkflowName))
-	ui.Dim(fmt.Sprintf("Target:        %s", h.settings.User.TargetName))
-	ui.Dim(fmt.Sprintf("Owner Address: %s", h.inputs.WorkflowOwner))
-	ui.Line()
 }

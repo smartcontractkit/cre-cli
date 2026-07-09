@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/smartcontractkit/cre-cli/internal/creconfig"
 	"github.com/smartcontractkit/cre-cli/internal/templaterepo"
 	"github.com/smartcontractkit/cre-cli/internal/testutil"
 )
@@ -59,7 +60,8 @@ func TestLoadTemplateSourcesFromConfigFile(t *testing.T) {
 	homeDir := t.TempDir()
 	t.Setenv("HOME", homeDir)
 
-	configDir := filepath.Join(homeDir, ".cre")
+	configDir, err := creconfig.DirPath()
+	require.NoError(t, err)
 	require.NoError(t, os.MkdirAll(configDir, 0750))
 
 	configContent := `templateRepositories:
@@ -68,7 +70,7 @@ func TestLoadTemplateSourcesFromConfigFile(t *testing.T) {
     ref: release
 `
 	require.NoError(t, os.WriteFile(
-		filepath.Join(configDir, "template.yaml"),
+		filepath.Join(configDir, TemplateConfigFile),
 		[]byte(configContent),
 		0600,
 	))
@@ -94,8 +96,9 @@ func TestSaveTemplateSources(t *testing.T) {
 	require.NoError(t, SaveTemplateSources(sources))
 
 	// Verify file exists
-	configPath := filepath.Join(homeDir, ".cre", "template.yaml")
-	_, err := os.Stat(configPath)
+	configPath, err := creconfig.FilePath(TemplateConfigFile)
+	require.NoError(t, err)
+	_, err = os.Stat(configPath)
 	require.NoError(t, err)
 
 	// Verify content by loading back

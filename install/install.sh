@@ -3,7 +3,7 @@
 # This is a universal installer script for 'cre'.
 # It detects the OS and architecture, then downloads the correct binary.
 #
-# Usage: curl -sSL https://cre.chain.link/install.sh | bash
+# Usage: curl -sSL https://app.chain.link/install.sh | bash
 
 set -e # Exit immediately if a command exits with a non-zero status.
 
@@ -29,6 +29,170 @@ fail() {
 # Function to check for required commands.
 check_command() {
   command -v "$1" >/dev/null 2>&1 || fail "Required command '$1' is not installed."
+}
+
+# CRE_RELEASE_PUBLIC_KEY - must stay in sync with install/public_key.asc (prodsec-owned).
+write_release_public_key() {
+  local key_file=$1
+  cat >"$key_file" <<'CRE_RELEASE_PUBLIC_KEY'
+-----BEGIN PGP PUBLIC KEY BLOCK-----
+
+mQINBGjJhYEDEACcUl1IfB6dKn5VhvbP2LOctUwq/qr81RZmpdADixM9183GJ1JR
+2mO0abYAuEdqsA8px7vhkgcL/yigMgGKrWbKzV+Zvcrb9+fLQoLxvG5KVFil7zJn
++9qwmxsvjlUB8VmikxyXBO7E7uxVj2iJWZX22R/k9d4t1lmHG9ewBf+5A7oNrU1P
+j8nN0N0UwFgcJp70A5y6j20AJ97SFhUtVGtcaClObtCiPryVUgttdqOniIDBHJQH
+OAhQdZmkYYCjnMT/sJyuY7IZzPoJhRioU60pBD/mJPgdwdl0rxCby/lAPffQIh2+
+yakKnHerb6Y1T8m1Xjj+iawRcr6Y9Cr4yhoRawqX1F3DziK2/35RNIY24JyXP8/y
+hADOk/gHkigepl17pbZmGIDTUoZEUVb1iRo1/3x9PVWOP1FCbRvJ9B1PrcbwCcZ3
+5bTReX77ZyIrirapAZ2cCqFiTxxaAgoYAZrcOBr7dlJlPJYue84nzLSFnA1llBHc
+/KN8IYf5Qud6HEMs9hO4ESCT+CKy2Ng9H4WpiA8ArL0txOIkJ5mx26CavFbyJRnk
+IUrQ4HxXgj12yQetBNbI7ysJMuaLneomva3HuQ7zb9/chC05qiaQWXDhQpvKN+0i
+AvXiSPU5B29LNzFQO6Srxh0an1Rl+kakNlZMbN4pXvMiVoxR/ecBkPowNwARAQAB
+tDNDUkUgPGNyZUBzbWFydGNvbnRyYWN0LmNvbT4gKExpbnV4IEdQRyBTaWduaW5n
+IEtleSmJAnMEEAMJAF0FAmjJhYE0HENSRSA8Y3JlQHNtYXJ0Y29udHJhY3QuY29t
+PiAoTGludXggR1BHIFNpZ25pbmcgS2V5KRYhBIJEkQLLuJ7ZvuEaSEZFvBQEwvPd
+Ah4DAhsDBBUICQoACgkQRkW8FATC890a8Q/+LJXi64znLkZei+VK7wQzlRW6Mo13
+U2BzNd5ZWMqWrU5LomSU4uDHQkGBEx9CCCfRcIv6bdbM9Iga6yzFSIv8HZxgb6tL
+bP2/Ly9+cgqUGTQ5ChBrs68DiTxAS4skSSP7ap5pL/TLp+Qc8AUN2XhlRJz0HLTO
+bZoz5fBTKBOBAKNz2zu8uWYdijx9cX1YPr2HsuT/HF9dcmSDRXY0nSkvebWcSN8s
+Tu/g22eBrQkiNRjqsRuxdxG1SQHL+Qq5DK6xRc7KUVaZCjBTnGLXaMPhFxwZkvW7
+PTa21XRW/f2bTDR/vxpjwN9n5yFOxnm4pWiJEW1jodXzIhMNDqsJTGsk+N+4kT8k
+0rAoHd0D1pmo8jQXLG2FldP359JDfZMR10S1Lv7uBhPsgj9vUA4uWsy7Prf5H9zo
+JTQ3B/xVi0LYYKveu/Nm3VvXJY53vfAWmIn6s0iLrTrlSrZuglfK70HnMJv5a6jc
+BcyE563wmJKVjLK8ZqggPYdOaeVZfy0k4wmyupVjNU0O5GxMUg7dANmtu8bDHUBU
+MBo06MuHpthkdM1DHxnpBLw0YsWzumpEpVZatASWfZ5o1pxm/PB4KR6rsY4bdnoD
+wUlRxURvO/I2jQJPacYrw24pb7ufRs9MXqQEUEbSpXRBs5CbBADw2qRcr7vrZnze
+a8cULyg4Y65LBeU=
+=cKUx
+-----END PGP PUBLIC KEY BLOCK-----
+CRE_RELEASE_PUBLIC_KEY
+}
+
+is_unsafe_archive_entry() {
+  local entry=$1
+  case "$entry" in
+    ../* | */../* | */.. | .. | /* | \\*)
+      return 0
+      ;;
+  esac
+  return 1
+}
+
+safe_extract_archive() {
+  local archive_path=$1
+  local dest_dir=$2
+  local expected_member=$3
+
+  if echo "$archive_path" | grep -qE '\.tar\.gz$'; then
+    check_command "tar"
+    local members
+    members=$(tar -tzf "$archive_path") || fail "Failed to list tar archive members."
+
+    local member_count=0
+    local matched_member=""
+    while IFS= read -r entry; do
+      [ -n "$entry" ] || continue
+      if is_unsafe_archive_entry "$entry"; then
+        fail "Unsafe tar entry: $entry"
+      fi
+      member_count=$((member_count + 1))
+      if [ "$entry" = "$expected_member" ]; then
+        matched_member=$entry
+      elif [ "${entry%/}" = "$expected_member" ]; then
+        matched_member="${entry%/}"
+      fi
+    done <<<"$members"
+
+    if [ "$member_count" -ne 1 ]; then
+      fail "Expected exactly one archive member, found $member_count."
+    fi
+    if [ -z "$matched_member" ]; then
+      fail "Expected archive member $expected_member not found."
+    fi
+
+    tar -xzf "$archive_path" -C "$dest_dir" "$matched_member" ||
+      fail "Failed to extract $matched_member from archive."
+    return
+  fi
+
+  if echo "$archive_path" | grep -qE '\.zip$'; then
+    check_command "unzip"
+    local members
+    members=$(unzip -Z1 "$archive_path") || fail "Failed to list zip archive members."
+
+    local member_count=0
+    local matched_member=""
+    while IFS= read -r entry; do
+      [ -n "$entry" ] || continue
+      if is_unsafe_archive_entry "$entry"; then
+        fail "Unsafe zip entry: $entry"
+      fi
+      member_count=$((member_count + 1))
+      if [ "$entry" = "$expected_member" ]; then
+        matched_member=$entry
+      elif [ "${entry%/}" = "$expected_member" ]; then
+        matched_member="${entry%/}"
+      fi
+    done <<<"$members"
+
+    if [ "$member_count" -ne 1 ]; then
+      fail "Expected exactly one archive member, found $member_count."
+    fi
+    if [ -z "$matched_member" ]; then
+      fail "Expected archive member $expected_member not found."
+    fi
+
+    unzip -oq "$archive_path" -d "$dest_dir" "$matched_member" ||
+      fail "Failed to extract $matched_member from archive."
+    return
+  fi
+
+  fail "Unknown archive format: $archive_path"
+}
+
+verify_linux_gpg_signature() {
+  local bin_path=$1
+  local sig_path=$2
+  local key_file=$3
+
+  check_command "gpg"
+
+  gpg --batch --import "$key_file" >/dev/null 2>&1 ||
+    fail "Failed to import release public key."
+
+  local gpg_out
+  gpg_out=$(gpg --batch --status-fd=1 --verify "$sig_path" "$bin_path" 2>&1) ||
+    fail "GPG signature verification failed."
+
+  echo "$gpg_out" | grep -q '\[GNUPG:\] VALIDSIG' ||
+    fail "GPG signature verification failed: no valid signature."
+  echo "$gpg_out" | grep -q 'cre@smartcontract.com' ||
+    fail "GPG signature verification failed: unexpected signer."
+}
+
+verify_darwin_codesign() {
+  local bin_path=$1
+
+  codesign --verify --strict --identifier com.smartcontract.cre.cli "$bin_path" ||
+    fail "codesign verification failed."
+}
+
+verify_release_binary() {
+  local bin_path=$1
+  local sig_path=$2
+  local key_file=$3
+
+  case "$PLATFORM" in
+    linux)
+      verify_linux_gpg_signature "$bin_path" "$sig_path" "$key_file"
+      ;;
+    darwin)
+      verify_darwin_codesign "$bin_path"
+      ;;
+    *)
+      fail "Unsupported platform for release verification: $PLATFORM"
+      ;;
+  esac
 }
 
 tildify() {
@@ -167,24 +331,33 @@ fi
 DOWNLOAD_URL="https://github.com/$github_repo/releases/download/$LATEST_TAG/$ASSET"
 
 TMP_DIR=$(mktemp -d)
+trap 'rm -rf "$TMP_DIR"' EXIT
 ARCHIVE_PATH="$TMP_DIR/$ASSET"
 
 curl --fail --location --progress-bar "$DOWNLOAD_URL" --output "$ARCHIVE_PATH" || fail "Failed to download asset from $DOWNLOAD_URL"
 
-# 5. Extract archive and locate the binary
-if echo "$ASSET" | grep -qE '\.tar\.gz$'; then
-  check_command "tar"
-  tar -xzf "$ARCHIVE_PATH" -C "$TMP_DIR"
-elif echo "$ASSET" | grep -qE '\.zip$'; then
-  check_command "unzip"
-  unzip -oq "$ARCHIVE_PATH" -d "$TMP_DIR"
-else
-  fail "Unknown archive format: $ASSET"
+EXPECTED_BIN_NAME="${cli_name}_${LATEST_TAG}_${PLATFORM}_${ARCH_NAME}"
+TMP_CRE_BIN="$TMP_DIR/$EXPECTED_BIN_NAME"
+PUBLIC_KEY_FILE="$TMP_DIR/public_key.asc"
+SIG_PATH=""
+
+if [ "$PLATFORM" = "linux" ]; then
+  check_command "gpg"
+  SIG_ASSET="${cli_name}_${PLATFORM}_${ARCH_NAME}.sig"
+  SIG_URL="https://github.com/$github_repo/releases/download/$LATEST_TAG/$SIG_ASSET"
+  SIG_PATH="$TMP_DIR/$SIG_ASSET"
+  curl --fail --location --progress-bar "$SIG_URL" --output "$SIG_PATH" ||
+    fail "Failed to download signature from $SIG_URL"
+  write_release_public_key "$PUBLIC_KEY_FILE"
 fi
 
-TMP_CRE_BIN="$TMP_DIR/${cli_name}_${LATEST_TAG}_${PLATFORM}_${ARCH_NAME}"
+# 5. Extract archive and verify release authenticity before install
+safe_extract_archive "$ARCHIVE_PATH" "$TMP_DIR" "$EXPECTED_BIN_NAME"
 
 [ -f "$TMP_CRE_BIN" ] || fail "Binary $TMP_CRE_BIN not found after extraction."
+
+verify_release_binary "$TMP_CRE_BIN" "$SIG_PATH" "$PUBLIC_KEY_FILE"
+
 chmod +x "$TMP_CRE_BIN"
 
 # 6. Install the Binary (moving into place)
@@ -198,9 +371,6 @@ fi
 
 # 7. Check that the binary runs
 "$cre_bin" version || fail "$cli_name installation failed."
-
-# Cleanup
-rm -rf "$TMP_DIR"
 
 # 8. Post-install dependency checks (Go & Bun)
 echo

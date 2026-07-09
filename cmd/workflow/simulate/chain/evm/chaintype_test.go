@@ -118,18 +118,18 @@ func TestEVMChainType_ResolveKey(t *testing.T) {
 			checkD1:    true,
 		},
 		{
-			name:       "too-short key, non-broadcast, falls back + warns",
-			pk:         "ab",
-			broadcast:  false,
-			wantStderr: "Using default private key",
-			checkD1:    true,
+			name:        "too-short but valid-hex key, non-broadcast, invalid-length hard error",
+			pk:          "ab",
+			broadcast:   false,
+			wantErr:     true,
+			errContains: "invalid private key: expected 64 hex characters",
 		},
 		{
 			name:        "invalid hex, broadcast, hard error",
 			pk:          "notahex",
 			broadcast:   true,
 			wantErr:     true,
-			errContains: "failed to parse private key, required to broadcast",
+			errContains: "a private key is required for --broadcast mode",
 		},
 		{
 			name:        "empty key, broadcast, hard error",
@@ -156,14 +156,14 @@ func TestEVMChainType_ResolveKey(t *testing.T) {
 			pk:          "ab",
 			broadcast:   true,
 			wantErr:     true,
-			errContains: "required to broadcast",
+			errContains: "invalid private key: expected 64 hex characters",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ct := newEVMChainType()
-			s := &settings.Settings{User: settings.UserSettings{EthPrivateKey: tt.pk}}
+			s := &settings.Settings{User: settings.UserSettings{PrivateKeys: map[string]string{settings.EVM.Name: tt.pk}}}
 
 			var got interface{}
 			var err error
@@ -368,4 +368,17 @@ func TestEVMChainType_CollectCLIInputs_DefaultsOnly(t *testing.T) {
 
 	result := ct.CollectCLIInputs(v)
 	assert.Empty(t, result)
+}
+
+func TestEVMChainType_RegisterCapabilities_WrongPrivateKeyType(t *testing.T) {
+	t.Parallel()
+	ct := newEVMChainType()
+	cfg := chain.CapabilityConfig{
+		Clients:    map[uint64]chain.ChainClient{},
+		Forwarders: map[uint64]string{},
+		PrivateKey: "not-an-ecdsa-key",
+	}
+	_, err := ct.RegisterCapabilities(context.Background(), cfg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "private key is not *ecdsa.PrivateKey")
 }

@@ -4,7 +4,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"math/big"
 	"sync"
 	"time"
 
@@ -12,6 +11,7 @@ import (
 
 	"github.com/smartcontractkit/cre-cli/cmd/client"
 	cmdCommon "github.com/smartcontractkit/cre-cli/cmd/common"
+	workflowcommon "github.com/smartcontractkit/cre-cli/cmd/workflow/common"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/types"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
@@ -35,7 +35,7 @@ func newOnchainRegistryDeleteStrategy(h *handler) (*onchainRegistryDeleteStrateg
 	a.wg.Add(1)
 	go func() {
 		defer a.wg.Done()
-		wrc, err := h.clientFactory.NewWorkflowRegistryV2Client()
+		wrc, err := h.clientFactory.NewWorkflowRegistryV2Client(h.execCtx)
 		if err != nil {
 			a.initErr = fmt.Errorf("failed to create workflow registry client: %w", err)
 			return
@@ -56,7 +56,7 @@ func (a *onchainRegistryDeleteStrategy) FetchWorkflows() ([]WorkflowToDelete, er
 	workflowName := h.inputs.WorkflowName
 	workflowOwner := common.HexToAddress(h.inputs.WorkflowOwner)
 
-	allWorkflows, err := a.wrc.GetWorkflowListByOwnerAndName(workflowOwner, workflowName, big.NewInt(0), big.NewInt(100))
+	allWorkflows, err := workflowcommon.FetchAllWorkflowsByOwnerAndName(h.execCtx, a.wrc, workflowOwner, workflowName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get workflow list: %w", err)
 	}
@@ -82,8 +82,11 @@ func (a *onchainRegistryDeleteStrategy) DeleteWorkflows(workflows []WorkflowToDe
 	h := a.h
 	var errs []error
 	for _, wf := range workflows {
-		workflowID := wf.RawID.([32]byte)
-		txOut, err := a.wrc.DeleteWorkflow(workflowID)
+		workflowID, ok := wf.RawID.([32]byte)
+		if !ok {
+			return fmt.Errorf("unexpected RawID type for workflow %s: %T", wf.ID, wf.RawID)
+		}
+		txOut, err := a.wrc.DeleteWorkflow(h.execCtx, workflowID)
 		if err != nil {
 			h.log.Error().
 				Err(err).

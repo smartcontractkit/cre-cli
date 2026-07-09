@@ -70,11 +70,11 @@ func New(ctx *runtime.Context) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := common.ValidateSecretsAuthFlow(secretsAuth, ctx.EnvironmentSet.EnvName); err != nil {
+			if err := common.ValidateSecretsAuthFlow(secretsAuth); err != nil {
 				return err
 			}
 
-			h, err := common.NewHandler(ctx, secretsFilePath)
+			h, err := common.NewHandler(cmd.Context(), ctx, secretsFilePath, secretsAuth)
 			if err != nil {
 				return err
 			}
@@ -103,7 +103,7 @@ func New(ctx *runtime.Context) *cobra.Command {
 				return err
 			}
 
-			return Execute(h, inputs, duration, secretsAuth)
+			return Execute(cmd.Context(), h, inputs, duration, secretsAuth)
 		},
 	}
 
@@ -116,22 +116,27 @@ func New(ctx *runtime.Context) *cobra.Command {
 // Two paths:
 //   - MSIG step 1: build request, compute digest, write bundle, print steps
 //   - EOA: allowlist if needed, then POST to gateway
-func Execute(h *common.Handler, inputs DeleteSecretsInputs, duration time.Duration, secretsAuth string) error {
+func Execute(ctx context.Context, h *common.Handler, inputs DeleteSecretsInputs, duration time.Duration, secretsAuth string) error {
+	defer h.CloseCapRegClient()
+
+	if _, err := h.EnsureVaultValidationOrConsent(ctx); err != nil {
+		return err
+	}
+
 	if !common.IsBrowserFlow(secretsAuth) {
 		if err := h.EnsureDeploymentRPCForOwnerKeySecrets(); err != nil {
 			return err
 		}
-	}
-
-	spinner := ui.NewSpinner()
-	spinner.Start("Verifying ownership...")
-	if err := h.EnsureOwnerLinkedOrFail(); err != nil {
+		spinner := ui.NewSpinner()
+		spinner.Start("Verifying ownership...")
+		if err := h.EnsureOwnerLinkedOrFail(ctx); err != nil {
+			spinner.Stop()
+			return err
+		}
 		spinner.Stop()
-		return err
 	}
-	spinner.Stop()
 
-	owner, err := h.ResolveEffectiveOwner()
+	owner, err := h.ResolveVaultIdentifierOwnerForAuth(secretsAuth)
 	if err != nil {
 		return err
 	}
@@ -172,7 +177,7 @@ func Execute(h *common.Handler, inputs DeleteSecretsInputs, duration time.Durati
 
 	if common.IsBrowserFlow(secretsAuth) {
 		ui.Dim("Using your account to authorize vault access for this delete request...")
-		return h.ExecuteBrowserVaultAuthorization(context.Background(), vaulttypes.MethodSecretsDelete, digest, requestBody)
+		return h.ExecuteBrowserVaultAuthorization(context.Background(), vaulttypes.MethodSecretsDelete, digest, requestBody, owner)
 	}
 
 	gatewayPost := func() error {
@@ -183,18 +188,18 @@ func Execute(h *common.Handler, inputs DeleteSecretsInputs, duration time.Durati
 		if status != http.StatusOK {
 			return fmt.Errorf("gateway returned a non-200 status code: status_code=%d, body=%s", status, respBody)
 		}
-		return h.ParseVaultGatewayResponse(vaulttypes.MethodSecretsDelete, respBody)
+		return h.ParseVaultGatewayResponse(vaulttypes.MethodSecretsDelete, requestID, respBody)
 	}
 
-	ownerAddr := ethcommon.HexToAddress(h.OwnerAddress)
+	ownerAddr := ethcommon.HexToAddress(owner)
 
-	allowlisted, err := h.Wrc.IsRequestAllowlisted(ownerAddr, digest)
+	allowlisted, err := h.Wrc.IsRequestAllowlisted(ctx, ownerAddr, digest)
 	if err != nil {
 		return fmt.Errorf("allowlist check failed: %w", err)
 	}
 	var txOut *client.TxOutput
 	if !allowlisted {
-		if txOut, err = h.Wrc.AllowlistRequest(digest, duration); err != nil {
+		if txOut, err = h.Wrc.AllowlistRequest(ctx, digest, duration); err != nil {
 			return fmt.Errorf("allowlist request failed: %w", err)
 		}
 	} else {
