@@ -4,8 +4,9 @@ Show deployment health and execution summary for a workflow
 
 ### Synopsis
 
-Show the full health picture of a workflow: deployment status, activation
-state, execution success/failure counts, and the most recent execution.
+Show the full health picture of the workflow configured for the selected
+--target in workflow.yaml: deployment status, activation state, execution
+success/failure counts, and the most recent execution.
 
 Useful for diagnosing the gap between registering a workflow and it
 becoming active in the DON, or for a quick health check.
