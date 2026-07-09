@@ -2,7 +2,6 @@ package simulate
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"google.golang.org/protobuf/proto"
@@ -13,8 +12,6 @@ import (
 	confhttpserver "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/actions/confidentialhttp/server"
 	customhttp "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/actions/http"
 	httpserver "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/actions/http/server"
-	evmcappb "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/chain-capabilities/evm"
-	evmserver "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/chain-capabilities/evm/server"
 	consensusserver "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/consensus/server"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/core"
 	sdkpb "github.com/smartcontractkit/chainlink-protos/cre/go/sdk"
@@ -41,7 +38,8 @@ func (l *LimitedHTTPAction) SendRequest(ctx context.Context, metadata commonCap.
 	reqLimit := l.limits.HTTPRequestSizeLimit()
 	if reqLimit > 0 && len(input.GetBody()) > reqLimit {
 		return nil, caperrors.NewPublicUserError(
-			fmt.Errorf("simulation limit exceeded: HTTP request body size %d bytes exceeds limit of %d bytes", len(input.GetBody()), reqLimit),
+			limitExceeded(LimitHTTPRequest, "HTTP request body", uint64(len(input.GetBody())), uint64(reqLimit), true,
+				"Reduce the request payload in your http_action step"),
 			caperrors.ResourceExhausted,
 		)
 	}
@@ -64,7 +62,8 @@ func (l *LimitedHTTPAction) SendRequest(ctx context.Context, metadata commonCap.
 	respLimit := l.limits.HTTPResponseSizeLimit()
 	if resp != nil && resp.Response != nil && respLimit > 0 && len(resp.Response.GetBody()) > respLimit {
 		return nil, caperrors.NewPublicUserError(
-			fmt.Errorf("simulation limit exceeded: HTTP response body size %d bytes exceeds limit of %d bytes", len(resp.Response.GetBody()), respLimit),
+			limitExceeded(LimitHTTPResponse, "HTTP response body", uint64(len(resp.Response.GetBody())), uint64(respLimit), true,
+				"The upstream returned an oversized response; filter or paginate before consuming"),
 			caperrors.ResourceExhausted,
 		)
 	}
@@ -104,7 +103,8 @@ func (l *LimitedConfidentialHTTPAction) SendRequest(ctx context.Context, metadat
 		reqSize := len(input.GetRequest().GetBodyString()) + len(input.GetRequest().GetBodyBytes())
 		if reqSize > reqLimit {
 			return nil, caperrors.NewPublicUserError(
-				fmt.Errorf("simulation limit exceeded: confidential HTTP request body size %d bytes exceeds limit of %d bytes", reqSize, reqLimit),
+				limitExceeded(LimitConfHTTPRequest, "Confidential HTTP request body", uint64(reqSize), uint64(reqLimit), true,
+					"Reduce the payload to the confidential_http_action step"),
 				caperrors.ResourceExhausted,
 			)
 		}
@@ -128,7 +128,8 @@ func (l *LimitedConfidentialHTTPAction) SendRequest(ctx context.Context, metadat
 	respLimit := l.limits.ConfHTTPResponseSizeLimit()
 	if resp != nil && resp.Response != nil && respLimit > 0 && len(resp.Response.GetBody()) > respLimit {
 		return nil, caperrors.NewPublicUserError(
-			fmt.Errorf("simulation limit exceeded: confidential HTTP response body size %d bytes exceeds limit of %d bytes", len(resp.Response.GetBody()), respLimit),
+			limitExceeded(LimitConfHTTPResponse, "Confidential HTTP response body", uint64(len(resp.Response.GetBody())), uint64(respLimit), true,
+				"The upstream returned an oversized response; filter before consuming"),
 			caperrors.ResourceExhausted,
 		)
 	}
@@ -170,7 +171,8 @@ func (l *LimitedConsensusNoDAG) Simple(ctx context.Context, metadata commonCap.R
 		inputSize := proto.Size(input)
 		if inputSize > obsLimit {
 			return nil, caperrors.NewPublicUserError(
-				fmt.Errorf("simulation limit exceeded: consensus observation size %d bytes exceeds limit of %d bytes", inputSize, obsLimit),
+				limitExceeded(LimitConsensusObservation, "Consensus observation", uint64(inputSize), uint64(obsLimit), true, //nolint:gosec // proto.Size always returns non-negative
+					"Reduce data passed as observations to the consensus step"),
 				caperrors.ResourceExhausted,
 			)
 		}
@@ -192,93 +194,4 @@ func (l *LimitedConsensusNoDAG) Description() string             { return l.inne
 func (l *LimitedConsensusNoDAG) Ready() error                    { return l.inner.Ready() }
 func (l *LimitedConsensusNoDAG) Initialise(ctx context.Context, deps core.StandardCapabilitiesDependencies) error {
 	return l.inner.Initialise(ctx, deps)
-}
-
-// --- LimitedEVMChain ---
-
-// LimitedEVMChain wraps an evmserver.ClientCapability and enforces chain write
-// report size and gas limits from SimulationLimits.
-type LimitedEVMChain struct {
-	inner  evmserver.ClientCapability
-	limits *SimulationLimits
-}
-
-var _ evmserver.ClientCapability = (*LimitedEVMChain)(nil)
-
-func NewLimitedEVMChain(inner evmserver.ClientCapability, limits *SimulationLimits) *LimitedEVMChain {
-	return &LimitedEVMChain{inner: inner, limits: limits}
-}
-
-func (l *LimitedEVMChain) WriteReport(ctx context.Context, metadata commonCap.RequestMetadata, input *evmcappb.WriteReportRequest) (*commonCap.ResponseAndMetadata[*evmcappb.WriteReportReply], caperrors.Error) {
-	// Check report size
-	reportLimit := l.limits.ChainWriteReportSizeLimit()
-	if reportLimit > 0 && input.Report != nil && len(input.Report.RawReport) > reportLimit {
-		return nil, caperrors.NewPublicUserError(
-			fmt.Errorf("simulation limit exceeded: chain write report size %d bytes exceeds limit of %d bytes", len(input.Report.RawReport), reportLimit),
-			caperrors.ResourceExhausted,
-		)
-	}
-
-	// Check gas limit
-	gasLimit := l.limits.ChainWriteEVMGasLimit()
-	if gasLimit > 0 && input.GasConfig != nil && input.GasConfig.GasLimit > gasLimit {
-		return nil, caperrors.NewPublicUserError(
-			fmt.Errorf("simulation limit exceeded: EVM gas limit %d exceeds maximum of %d", input.GasConfig.GasLimit, gasLimit),
-			caperrors.ResourceExhausted,
-		)
-	}
-
-	return l.inner.WriteReport(ctx, metadata, input)
-}
-
-// All other methods delegate to the inner capability.
-func (l *LimitedEVMChain) CallContract(ctx context.Context, metadata commonCap.RequestMetadata, input *evmcappb.CallContractRequest) (*commonCap.ResponseAndMetadata[*evmcappb.CallContractReply], caperrors.Error) {
-	return l.inner.CallContract(ctx, metadata, input)
-}
-
-func (l *LimitedEVMChain) FilterLogs(ctx context.Context, metadata commonCap.RequestMetadata, input *evmcappb.FilterLogsRequest) (*commonCap.ResponseAndMetadata[*evmcappb.FilterLogsReply], caperrors.Error) {
-	return l.inner.FilterLogs(ctx, metadata, input)
-}
-
-func (l *LimitedEVMChain) BalanceAt(ctx context.Context, metadata commonCap.RequestMetadata, input *evmcappb.BalanceAtRequest) (*commonCap.ResponseAndMetadata[*evmcappb.BalanceAtReply], caperrors.Error) {
-	return l.inner.BalanceAt(ctx, metadata, input)
-}
-
-func (l *LimitedEVMChain) EstimateGas(ctx context.Context, metadata commonCap.RequestMetadata, input *evmcappb.EstimateGasRequest) (*commonCap.ResponseAndMetadata[*evmcappb.EstimateGasReply], caperrors.Error) {
-	return l.inner.EstimateGas(ctx, metadata, input)
-}
-
-func (l *LimitedEVMChain) GetTransactionByHash(ctx context.Context, metadata commonCap.RequestMetadata, input *evmcappb.GetTransactionByHashRequest) (*commonCap.ResponseAndMetadata[*evmcappb.GetTransactionByHashReply], caperrors.Error) {
-	return l.inner.GetTransactionByHash(ctx, metadata, input)
-}
-
-func (l *LimitedEVMChain) GetTransactionReceipt(ctx context.Context, metadata commonCap.RequestMetadata, input *evmcappb.GetTransactionReceiptRequest) (*commonCap.ResponseAndMetadata[*evmcappb.GetTransactionReceiptReply], caperrors.Error) {
-	return l.inner.GetTransactionReceipt(ctx, metadata, input)
-}
-
-func (l *LimitedEVMChain) HeaderByNumber(ctx context.Context, metadata commonCap.RequestMetadata, input *evmcappb.HeaderByNumberRequest) (*commonCap.ResponseAndMetadata[*evmcappb.HeaderByNumberReply], caperrors.Error) {
-	return l.inner.HeaderByNumber(ctx, metadata, input)
-}
-
-func (l *LimitedEVMChain) RegisterLogTrigger(ctx context.Context, triggerID string, metadata commonCap.RequestMetadata, input *evmcappb.FilterLogTriggerRequest) (<-chan commonCap.TriggerAndId[*evmcappb.Log], caperrors.Error) {
-	return l.inner.RegisterLogTrigger(ctx, triggerID, metadata, input)
-}
-
-func (l *LimitedEVMChain) UnregisterLogTrigger(ctx context.Context, triggerID string, metadata commonCap.RequestMetadata, input *evmcappb.FilterLogTriggerRequest) caperrors.Error {
-	return l.inner.UnregisterLogTrigger(ctx, triggerID, metadata, input)
-}
-
-func (l *LimitedEVMChain) ChainSelector() uint64           { return l.inner.ChainSelector() }
-func (l *LimitedEVMChain) Start(ctx context.Context) error { return l.inner.Start(ctx) }
-func (l *LimitedEVMChain) Close() error                    { return l.inner.Close() }
-func (l *LimitedEVMChain) HealthReport() map[string]error  { return l.inner.HealthReport() }
-func (l *LimitedEVMChain) Name() string                    { return l.inner.Name() }
-func (l *LimitedEVMChain) Description() string             { return l.inner.Description() }
-func (l *LimitedEVMChain) Ready() error                    { return l.inner.Ready() }
-func (l *LimitedEVMChain) Initialise(ctx context.Context, deps core.StandardCapabilitiesDependencies) error {
-	return l.inner.Initialise(ctx, deps)
-}
-
-func (l *LimitedEVMChain) AckEvent(ctx context.Context, triggerId string, eventId string, method string) caperrors.Error {
-	return l.inner.AckEvent(ctx, triggerId, eventId, method)
 }

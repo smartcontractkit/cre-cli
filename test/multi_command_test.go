@@ -1,9 +1,12 @@
 package test
 
 import (
+	"fmt"
+	"path/filepath"
 	"sync"
 	"testing"
 
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 
 	chainselectors "github.com/smartcontractkit/chain-selectors"
@@ -11,6 +14,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
+	testcontracts "github.com/smartcontractkit/cre-cli/test/contracts"
 	"github.com/smartcontractkit/cre-cli/test/multi_command_flows"
 )
 
@@ -120,6 +124,35 @@ func TestMultiCommandHappyPaths(t *testing.T) {
 		multi_command_flows.RunHappyPath3bWorkflow(t, tc)
 	})
 
+	// Private registry (off-chain): no CRE_ETH_PRIVATE_KEY; org-derived owner from mock GQL,
+	// settings load + finalize, then full CLI lifecycle (see multi_command_flows.RunPrivateRegistryE2E).
+	t.Run("WorkflowPrivateRegistry_E2E", func(t *testing.T) {
+		anvilProc, testEthUrl := initTestEnv(t, "anvil-state.json")
+		defer StopAnvil(anvilProc)
+
+		t.Setenv(environments.EnvVarEnv, "STAGING")
+
+		t.Setenv(environments.EnvVarWorkflowRegistryAddress, "0x5FbDB2315678afecb367f032d93F642f64180aa3")
+		t.Setenv(environments.EnvVarWorkflowRegistryChainName, chainselectors.ANVIL_DEVNET.Name)
+		t.Setenv(environments.EnvVarDonFamily, "test-don")
+
+		tc := NewTestConfig(t)
+
+		require.NoError(t, createCliEnvFile(tc.EnvFile, ""), "failed to create env file without private key")
+		require.NoError(t, createProjectSettingsFile(tc.ProjectDirectory+"project.yaml", "", testEthUrl), "failed to create project.yaml")
+		require.NoError(t, createWorkflowDirectory(tc.ProjectDirectory, "private-registry-happy-path-workflow", "", "blank_workflow"), "failed to create workflow directory")
+
+		v := viper.New()
+		v.SetConfigFile(filepath.Join(tc.ProjectDirectory, "blank_workflow", constants.DefaultWorkflowSettingsFileName))
+		require.NoError(t, v.ReadInConfig())
+		v.Set(fmt.Sprintf("%s.user-workflow.deployment-registry", SettingsTarget), "reg-test")
+		require.NoError(t, v.WriteConfig())
+
+		t.Cleanup(tc.Cleanup(t))
+
+		multi_command_flows.RunPrivateRegistryE2E(t, tc, tc.EnvFile, filepath.Join(tc.ProjectDirectory, "blank_workflow"))
+	})
+
 	// Run Account Happy Path: Link -> List -> Unlink -> List (verify unlinked)
 	t.Run("AccountHappyPath_LinkListUnlinkList", func(t *testing.T) {
 		anvilProc, testEthUrl := initTestEnv(t, "anvil-state.json")
@@ -153,6 +186,9 @@ func TestMultiCommandHappyPaths(t *testing.T) {
 		t.Setenv("TESTID_ENV", "testval")
 		t.Setenv("TESTID_ENV_UPDATED", "testval2")
 
+		sethClient := testcontracts.NewSethClientWithContracts(t, L, testEthUrl, constants.TestAnvilChainID, SethConfigPath)
+		capRegAddr := testcontracts.DeployVaultCapabilitiesRegistry(t, sethClient, multi_command_flows.VaultPublicKeyHex, "zone-a")
+
 		tc := NewTestConfig(t)
 
 		// Use linked Address3 + its key
@@ -161,7 +197,7 @@ func TestMultiCommandHappyPaths(t *testing.T) {
 		t.Cleanup(tc.Cleanup(t))
 
 		// Run secrets happy path workflow
-		multi_command_flows.RunSecretsHappyPath(t, tc, chainselectors.ANVIL_DEVNET.Name)
+		multi_command_flows.RunSecretsHappyPath(t, tc, chainselectors.ANVIL_DEVNET.Name, capRegAddr.Hex())
 	})
 
 	// Run Secrets List with Unsigned

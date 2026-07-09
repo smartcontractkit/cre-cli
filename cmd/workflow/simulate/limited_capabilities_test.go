@@ -15,7 +15,6 @@ import (
 	caperrors "github.com/smartcontractkit/chainlink-common/pkg/capabilities/errors"
 	"github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/actions/confidentialhttp"
 	customhttp "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/actions/http"
-	evmcappb "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/chain-capabilities/evm"
 	"github.com/smartcontractkit/chainlink-common/pkg/config"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/core"
 	sdkpb "github.com/smartcontractkit/chainlink-protos/cre/go/sdk"
@@ -88,62 +87,6 @@ func (s *consensusCapabilityStub) Report(ctx context.Context, metadata commonCap
 	return nil, nil
 }
 
-type evmClientCapabilityStub struct {
-	capabilityBaseStub
-	writeReportFn    func(context.Context, commonCap.RequestMetadata, *evmcappb.WriteReportRequest) (*commonCap.ResponseAndMetadata[*evmcappb.WriteReportReply], caperrors.Error)
-	writeReportCalls int
-}
-
-func (s *evmClientCapabilityStub) CallContract(context.Context, commonCap.RequestMetadata, *evmcappb.CallContractRequest) (*commonCap.ResponseAndMetadata[*evmcappb.CallContractReply], caperrors.Error) {
-	return nil, nil
-}
-
-func (s *evmClientCapabilityStub) FilterLogs(context.Context, commonCap.RequestMetadata, *evmcappb.FilterLogsRequest) (*commonCap.ResponseAndMetadata[*evmcappb.FilterLogsReply], caperrors.Error) {
-	return nil, nil
-}
-
-func (s *evmClientCapabilityStub) BalanceAt(context.Context, commonCap.RequestMetadata, *evmcappb.BalanceAtRequest) (*commonCap.ResponseAndMetadata[*evmcappb.BalanceAtReply], caperrors.Error) {
-	return nil, nil
-}
-
-func (s *evmClientCapabilityStub) EstimateGas(context.Context, commonCap.RequestMetadata, *evmcappb.EstimateGasRequest) (*commonCap.ResponseAndMetadata[*evmcappb.EstimateGasReply], caperrors.Error) {
-	return nil, nil
-}
-
-func (s *evmClientCapabilityStub) GetTransactionByHash(context.Context, commonCap.RequestMetadata, *evmcappb.GetTransactionByHashRequest) (*commonCap.ResponseAndMetadata[*evmcappb.GetTransactionByHashReply], caperrors.Error) {
-	return nil, nil
-}
-
-func (s *evmClientCapabilityStub) GetTransactionReceipt(context.Context, commonCap.RequestMetadata, *evmcappb.GetTransactionReceiptRequest) (*commonCap.ResponseAndMetadata[*evmcappb.GetTransactionReceiptReply], caperrors.Error) {
-	return nil, nil
-}
-
-func (s *evmClientCapabilityStub) HeaderByNumber(context.Context, commonCap.RequestMetadata, *evmcappb.HeaderByNumberRequest) (*commonCap.ResponseAndMetadata[*evmcappb.HeaderByNumberReply], caperrors.Error) {
-	return nil, nil
-}
-
-func (s *evmClientCapabilityStub) RegisterLogTrigger(context.Context, string, commonCap.RequestMetadata, *evmcappb.FilterLogTriggerRequest) (<-chan commonCap.TriggerAndId[*evmcappb.Log], caperrors.Error) {
-	return nil, nil
-}
-
-func (s *evmClientCapabilityStub) UnregisterLogTrigger(context.Context, string, commonCap.RequestMetadata, *evmcappb.FilterLogTriggerRequest) caperrors.Error {
-	return nil
-}
-
-func (s *evmClientCapabilityStub) WriteReport(ctx context.Context, metadata commonCap.RequestMetadata, input *evmcappb.WriteReportRequest) (*commonCap.ResponseAndMetadata[*evmcappb.WriteReportReply], caperrors.Error) {
-	s.writeReportCalls++
-	if s.writeReportFn != nil {
-		return s.writeReportFn(ctx, metadata, input)
-	}
-	return nil, nil
-}
-
-func (s *evmClientCapabilityStub) AckEvent(context.Context, string, string, string) caperrors.Error {
-	return nil
-}
-
-func (s *evmClientCapabilityStub) ChainSelector() uint64 { return 0 }
-
 func newTestLimits(t *testing.T) *SimulationLimits {
 	t.Helper()
 	limits, err := DefaultLimits()
@@ -163,7 +106,7 @@ func TestLimitedHTTPActionRejectsOversizedRequest(t *testing.T) {
 	resp, err := wrapper.SendRequest(context.Background(), commonCap.RequestMetadata{}, &customhttp.Request{Body: []byte("12345")})
 	require.Error(t, err)
 	assert.Nil(t, resp)
-	assert.Contains(t, err.Error(), "HTTP request body size 5 bytes exceeds limit of 4 bytes")
+	assert.Contains(t, err.Error(), "HTTP request body of 5 bytes exceeds the simulation limit of 4 bytes")
 	assert.Equal(t, 0, inner.sendRequestCalls)
 }
 
@@ -215,7 +158,7 @@ func TestLimitedHTTPActionRejectsOversizedResponse(t *testing.T) {
 	resp, err := wrapper.SendRequest(context.Background(), commonCap.RequestMetadata{}, &customhttp.Request{})
 	require.Error(t, err)
 	assert.Nil(t, resp)
-	assert.Contains(t, err.Error(), "HTTP response body size 4 bytes exceeds limit of 3 bytes")
+	assert.Contains(t, err.Error(), "HTTP response body of 4 bytes exceeds the simulation limit of 3 bytes")
 	assert.Equal(t, 1, inner.sendRequestCalls)
 }
 
@@ -254,7 +197,7 @@ func TestLimitedConfidentialHTTPActionRejectsOversizedRequest(t *testing.T) {
 	})
 	require.Error(t, err)
 	assert.Nil(t, resp)
-	assert.Contains(t, err.Error(), "confidential HTTP request body size 5 bytes exceeds limit of 4 bytes")
+	assert.Contains(t, err.Error(), "Confidential HTTP request body of 5 bytes exceeds the simulation limit of 4 bytes")
 	assert.Equal(t, 0, inner.sendRequestCalls)
 }
 
@@ -308,7 +251,7 @@ func TestLimitedConfidentialHTTPActionRejectsOversizedResponse(t *testing.T) {
 	resp, err := wrapper.SendRequest(context.Background(), commonCap.RequestMetadata{}, &confidentialhttp.ConfidentialHTTPRequest{})
 	require.Error(t, err)
 	assert.Nil(t, resp)
-	assert.Contains(t, err.Error(), "confidential HTTP response body size 4 bytes exceeds limit of 3 bytes")
+	assert.Contains(t, err.Error(), "Confidential HTTP response body of 4 bytes exceeds the simulation limit of 3 bytes")
 	assert.Equal(t, 1, inner.sendRequestCalls)
 }
 
@@ -328,7 +271,7 @@ func TestLimitedConsensusNoDAGSimpleRejectsOversizedObservation(t *testing.T) {
 	resp, err := wrapper.Simple(context.Background(), commonCap.RequestMetadata{}, input)
 	require.Error(t, err)
 	assert.Nil(t, resp)
-	assert.Contains(t, err.Error(), "consensus observation size")
+	assert.Contains(t, err.Error(), "Consensus observation of")
 	assert.Equal(t, 0, inner.simpleCalls)
 }
 
@@ -375,67 +318,4 @@ func TestLimitedConsensusNoDAGReportDelegates(t *testing.T) {
 	require.NoError(t, err)
 	assert.Same(t, expectedResp, resp)
 	assert.Equal(t, 1, inner.reportCalls)
-}
-
-func TestLimitedEVMChainWriteReportRejectsOversizedReport(t *testing.T) {
-	t.Parallel()
-
-	limits := newTestLimits(t)
-	limits.Workflows.ChainWrite.ReportSizeLimit.DefaultValue = 4
-
-	inner := &evmClientCapabilityStub{}
-	wrapper := NewLimitedEVMChain(inner, limits)
-
-	resp, err := wrapper.WriteReport(context.Background(), commonCap.RequestMetadata{}, &evmcappb.WriteReportRequest{
-		Report: &sdkpb.ReportResponse{RawReport: []byte("12345")},
-	})
-	require.Error(t, err)
-	assert.Nil(t, resp)
-	assert.Contains(t, err.Error(), "chain write report size 5 bytes exceeds limit of 4 bytes")
-	assert.Equal(t, 0, inner.writeReportCalls)
-}
-
-func TestLimitedEVMChainWriteReportRejectsOversizedGasLimit(t *testing.T) {
-	t.Parallel()
-
-	limits := newTestLimits(t)
-	limits.Workflows.ChainWrite.EVM.GasLimit.Default.DefaultValue = 10
-
-	inner := &evmClientCapabilityStub{}
-	wrapper := NewLimitedEVMChain(inner, limits)
-
-	resp, err := wrapper.WriteReport(context.Background(), commonCap.RequestMetadata{}, &evmcappb.WriteReportRequest{
-		GasConfig: &evmcappb.GasConfig{GasLimit: 11},
-	})
-	require.Error(t, err)
-	assert.Nil(t, resp)
-	assert.Contains(t, err.Error(), "EVM gas limit 11 exceeds maximum of 10")
-	assert.Equal(t, 0, inner.writeReportCalls)
-}
-
-func TestLimitedEVMChainWriteReportDelegatesOnBoundaryValues(t *testing.T) {
-	t.Parallel()
-
-	limits := newTestLimits(t)
-	limits.Workflows.ChainWrite.ReportSizeLimit.DefaultValue = 4
-	limits.Workflows.ChainWrite.EVM.GasLimit.Default.DefaultValue = 10
-
-	input := &evmcappb.WriteReportRequest{
-		Report:    &sdkpb.ReportResponse{RawReport: []byte("1234")},
-		GasConfig: &evmcappb.GasConfig{GasLimit: 10},
-	}
-	expectedResp := &commonCap.ResponseAndMetadata[*evmcappb.WriteReportReply]{Response: &evmcappb.WriteReportReply{}}
-
-	inner := &evmClientCapabilityStub{
-		writeReportFn: func(_ context.Context, _ commonCap.RequestMetadata, got *evmcappb.WriteReportRequest) (*commonCap.ResponseAndMetadata[*evmcappb.WriteReportReply], caperrors.Error) {
-			assert.Same(t, input, got)
-			return expectedResp, nil
-		},
-	}
-
-	wrapper := NewLimitedEVMChain(inner, limits)
-	resp, err := wrapper.WriteReport(context.Background(), commonCap.RequestMetadata{}, input)
-	require.NoError(t, err)
-	assert.Same(t, expectedResp, resp)
-	assert.Equal(t, 1, inner.writeReportCalls)
 }

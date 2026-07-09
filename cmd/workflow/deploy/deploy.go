@@ -5,17 +5,15 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"sync"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
 	"github.com/smartcontractkit/cre-cli/cmd/client"
 	cmdcommon "github.com/smartcontractkit/cre-cli/cmd/common"
+	workflowcommon "github.com/smartcontractkit/cre-cli/cmd/workflow/common"
 	"github.com/smartcontractkit/cre-cli/internal/accessrequest"
-	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
@@ -39,11 +37,9 @@ type Inputs struct {
 	OutputPath   string `validate:"omitempty,filepath,ascii,max=97" cli:"--output"`
 	WasmPath     string `validate:"omitempty,file,ascii,max=2048" cli:"--wasm"`
 
-	WorkflowRegistryContractAddress   string `validate:"required"`
-	WorkflowRegistryContractChainName string `validate:"required"`
-
 	OwnerLabel       string `validate:"omitempty"`
 	SkipConfirmation bool
+	NonInteractive   bool
 	// SkipTypeChecks passes --skip-type-checks to cre-compile for TypeScript workflows.
 	SkipTypeChecks bool
 }
@@ -68,8 +64,7 @@ type handler struct {
 	wrc              *client.WorkflowRegistryV2Client
 	runtimeContext   *runtime.Context
 	accessRequester  *accessrequest.Requester
-
-	validated bool
+	validated        bool
 
 	// URL-fetched data for WorkflowID computation when --wasm or --config are URLs.
 	urlBinaryData []byte
@@ -78,9 +73,6 @@ type handler struct {
 	// existingWorkflowStatus stores the status of an existing workflow when updating.
 	// nil means this is a new workflow, otherwise it contains the current status (0=active, 1=paused).
 	existingWorkflowStatus *uint8
-
-	wg     sync.WaitGroup
-	wrcErr error
 }
 
 var defaultOutputPath = "./binary.wasm.br.b64"
@@ -132,28 +124,11 @@ func newHandler(ctx *runtime.Context, stdin io.Reader) *handler {
 		credentials:      ctx.Credentials,
 		environmentSet:   ctx.EnvironmentSet,
 		workflowArtifact: &workflowArtifact{},
-		wrc:              nil,
 		runtimeContext:   ctx,
 		accessRequester:  accessrequest.NewRequester(ctx.Credentials, ctx.EnvironmentSet, ctx.Logger),
-		validated:        false,
-		wg:               sync.WaitGroup{},
-		wrcErr:           nil,
 	}
 
 	return &h
-}
-
-func (h *handler) initWorkflowRegistryClient() {
-	h.wg.Add(1)
-	go func() {
-		defer h.wg.Done()
-		wrc, err := h.clientFactory.NewWorkflowRegistryV2Client()
-		if err != nil {
-			h.wrcErr = fmt.Errorf("failed to create workflow registry client: %w", err)
-			return
-		}
-		h.wrc = wrc
-	}()
 }
 
 func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
@@ -163,17 +138,22 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 		configURL = &url
 	}
 
+	resolvedWorkflowOwner, err := h.resolveWorkflowOwner(h.runtimeContext.ResolvedRegistry.Type())
+	if err != nil {
+		return Inputs{}, fmt.Errorf("failed to resolve workflow owner: %w", err)
+	}
+
 	workflowTag := h.settings.Workflow.UserWorkflowSettings.WorkflowName
 	if len(workflowTag) > 32 {
 		workflowTag = workflowTag[:32]
 	}
 
-	return Inputs{
+	inputs := Inputs{
 		WorkflowName:  h.settings.Workflow.UserWorkflowSettings.WorkflowName,
-		WorkflowOwner: h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress,
+		WorkflowOwner: resolvedWorkflowOwner,
 		WorkflowTag:   workflowTag,
 		ConfigURL:     configURL,
-		DonFamily:     h.environmentSet.DonFamily,
+		DonFamily:     h.runtimeContext.ResolvedRegistry.DonFamily(),
 
 		WorkflowPath: h.settings.Workflow.WorkflowArtifactSettings.WorkflowPath,
 		KeepAlive:    false,
@@ -182,12 +162,13 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 		OutputPath: v.GetString("output"),
 		WasmPath:   v.GetString("wasm"),
 
-		WorkflowRegistryContractChainName: h.environmentSet.WorkflowRegistryChainName,
-		WorkflowRegistryContractAddress:   h.environmentSet.WorkflowRegistryAddress,
-		OwnerLabel:                        v.GetString("owner-label"),
-		SkipConfirmation:                  v.GetBool(settings.Flags.SkipConfirmation.Name),
-		SkipTypeChecks:                    v.GetBool(cmdcommon.SkipTypeChecksCLIFlag),
-	}, nil
+		OwnerLabel:       v.GetString("owner-label"),
+		SkipConfirmation: v.GetBool(settings.Flags.SkipConfirmation.Name),
+		NonInteractive:   v.GetBool(settings.Flags.NonInteractive.Name),
+		SkipTypeChecks:   v.GetBool(cmdcommon.SkipTypeChecksCLIFlag),
+	}
+
+	return inputs, nil
 }
 
 func (h *handler) ValidateInputs() error {
@@ -224,6 +205,10 @@ func (h *handler) ValidateInputs() error {
 }
 
 func (h *handler) Execute(ctx context.Context) error {
+	if !h.validated {
+		return fmt.Errorf("handler inputs not validated")
+	}
+
 	deployAccess, err := h.credentials.GetDeploymentAccessStatus()
 	if err != nil {
 		return fmt.Errorf("failed to check deployment access: %w", err)
@@ -233,21 +218,85 @@ func (h *handler) Execute(ctx context.Context) error {
 		return h.accessRequester.PromptAndSubmitRequest(ctx)
 	}
 
-	h.initWorkflowRegistryClient()
+	adapter, err := newRegistryDeployStrategy(ctx, h.runtimeContext.ResolvedRegistry, h)
+	if err != nil {
+		return err
+	}
 
-	h.displayWorkflowDetails()
+	if err := h.prepareArtifacts(ctx); err != nil {
+		return err
+	}
+
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	if err := adapter.RunPreDeployChecks(ctx); err != nil {
+		if errors.Is(err, errDeployHalted) {
+			return nil
+		}
+		return err
+	}
+
+	exists, existingStatus, err := adapter.CheckWorkflowExists(ctx,
+		h.inputs.WorkflowOwner,
+		h.inputs.WorkflowName,
+		h.inputs.WorkflowTag,
+		h.workflowArtifact.WorkflowID,
+	)
+	if err != nil {
+		if errors.Is(err, errWorkflowUnchanged) {
+			return err
+		}
+		return fmt.Errorf("failed to check if workflow exists: %w", err)
+	}
+	h.existingWorkflowStatus = existingStatus
+	if exists {
+		if err := confirmWorkflowOverwrite(h.inputs.WorkflowName, h.inputs.SkipConfirmation, h.inputs.NonInteractive); err != nil {
+			return err
+		}
+	}
+
+	ui.Line()
+	ui.Dim("Uploading files...")
+	if err := h.uploadArtifacts(ctx); err != nil {
+		return fmt.Errorf("failed to upload workflow: %w", err)
+	}
+
+	err = adapter.Upsert(ctx)
+	if err == nil {
+		warnIfPausedWorkflowUpdate(h.existingWorkflowStatus)
+	}
+	return err
+}
+
+// prepareArtifacts handles compile/fetch, artifact preparation, and hashing.
+// Artifact upload is deferred to the deploy service so it runs after any
+// existing-workflow update confirmation.
+func (h *handler) prepareArtifacts(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	workflowcommon.DisplayWorkflowDetails(
+		h.settings,
+		h.runtimeContext,
+		"Deploying",
+		h.inputs.WorkflowName,
+		h.inputs.WorkflowOwner,
+	)
 
 	if cmdcommon.IsURL(h.inputs.WasmPath) {
 		h.inputs.BinaryURL = h.inputs.WasmPath
 		ui.Dim("Fetching binary from URL for workflow ID computation...")
-		fetched, err := cmdcommon.FetchURL(h.inputs.WasmPath)
+		fetched, err := cmdcommon.FetchURL(ctx, h.inputs.WasmPath)
 		if err != nil {
 			return fmt.Errorf("failed to fetch binary from URL: %w", err)
 		}
 		h.urlBinaryData = fetched
 		ui.Success(fmt.Sprintf("Using binary URL: %s", h.inputs.WasmPath))
 	} else {
-		if err := h.Compile(); err != nil {
+		if err := h.Compile(ctx); err != nil {
 			return fmt.Errorf("failed to compile workflow: %w", err)
 		}
 	}
@@ -257,7 +306,7 @@ func (h *handler) Execute(ctx context.Context) error {
 		h.inputs.ConfigURL = &url
 		h.inputs.ConfigPath = ""
 		ui.Dim("Fetching config from URL for workflow ID computation...")
-		fetched, err := cmdcommon.FetchURL(url)
+		fetched, err := cmdcommon.FetchURL(ctx, url)
 		if err != nil {
 			return fmt.Errorf("failed to fetch config from URL: %w", err)
 		}
@@ -265,7 +314,7 @@ func (h *handler) Execute(ctx context.Context) error {
 		ui.Success(fmt.Sprintf("Using config URL: %s", url))
 	}
 
-	if err := h.PrepareWorkflowArtifact(); err != nil {
+	if err := h.PrepareWorkflowArtifact(h.inputs.WorkflowOwner); err != nil {
 		return fmt.Errorf("failed to prepare workflow artifact: %w", err)
 	}
 
@@ -275,93 +324,52 @@ func (h *handler) Execute(ctx context.Context) error {
 
 	h.runtimeContext.Workflow.ID = h.workflowArtifact.WorkflowID
 
-	h.wg.Wait()
-	if h.wrcErr != nil {
-		return h.wrcErr
+	return nil
+}
+
+// resolveWorkflowOwner returns the effective owner address for workflow ID computation.
+// For private registry deploys, the derived workflow owner from the runtime context is used.
+// For onchain deploys, the configured WorkflowOwner address is used directly.
+func (h *handler) resolveWorkflowOwner(registryType settings.RegistryType) (string, error) {
+	if registryType != settings.RegistryTypeOffChain {
+		return h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress, nil
 	}
 
-	ui.Line()
-	ui.Dim("Verifying ownership...")
-	if h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerType == constants.WorkflowOwnerTypeMSIG {
-		halt, err := h.autoLinkMSIGAndExit()
+	owner := h.runtimeContext.DerivedWorkflowOwner
+	if owner == "" {
+		return "", fmt.Errorf("derived workflow owner is not available; ensure authentication succeeded")
+	}
+
+	return owner, nil
+}
+
+func confirmWorkflowOverwrite(workflowName string, skipConfirmation, nonInteractive bool) error {
+	ui.Warning(fmt.Sprintf("Workflow %s already exists", workflowName))
+	ui.Dim("This will update the existing workflow.")
+
+	if nonInteractive && !skipConfirmation {
+		ui.ErrorWithSuggestions(
+			"Non-interactive mode requires all inputs via flags",
+			[]string{"--yes"},
+		)
+		return fmt.Errorf("missing required flags for --non-interactive mode")
+	}
+
+	if !skipConfirmation {
+		confirm, err := ui.Confirm("Are you sure you want to overwrite the workflow?")
 		if err != nil {
-			return fmt.Errorf("failed to check/handle MSIG owner link status: %w", err)
-		}
-		if halt {
-			return nil
-		}
-	} else {
-		if err := h.ensureOwnerLinkedOrFail(); err != nil {
 			return err
 		}
-	}
-
-	existsErr := h.workflowExists()
-	if existsErr != nil {
-		if existsErr.Error() == "workflow with name "+h.inputs.WorkflowName+" already exists" {
-			ui.Warning(fmt.Sprintf("Workflow %s already exists", h.inputs.WorkflowName))
-			ui.Dim("This will update the existing workflow.")
-			// Ask for user confirmation before updating existing workflow
-			if !h.inputs.SkipConfirmation {
-				confirm, err := ui.Confirm("Are you sure you want to overwrite the workflow?")
-				if err != nil {
-					return err
-				}
-				if !confirm {
-					return errors.New("deployment cancelled by user")
-				}
-			}
-		} else {
-			return existsErr
+		if !confirm {
+			return errors.New("deployment cancelled by user")
 		}
 	}
 
-	if err := checkUserDonLimitBeforeDeploy(
-		h.wrc,
-		h.wrc,
-		common.HexToAddress(h.inputs.WorkflowOwner),
-		h.inputs.DonFamily,
-		h.inputs.WorkflowName,
-		h.inputs.KeepAlive,
-		h.existingWorkflowStatus,
-	); err != nil {
-		return err
-	}
-
-	ui.Line()
-	ui.Dim("Uploading files...")
-	if err := h.uploadArtifacts(); err != nil {
-		return fmt.Errorf("failed to upload workflow: %w", err)
-	}
-	ui.Line()
-	ui.Dim("Preparing deployment transaction...")
-	if err := h.upsert(); err != nil {
-		return fmt.Errorf("failed to register workflow: %w", err)
-	}
 	return nil
 }
 
-func (h *handler) workflowExists() error {
-	workflow, err := h.wrc.GetWorkflow(common.HexToAddress(h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress), h.inputs.WorkflowName, h.inputs.WorkflowTag)
-	if err != nil {
-		return err
+func warnIfPausedWorkflowUpdate(status *uint8) {
+	if status != nil && *status == workflowStatusPaused {
+		ui.Warning("Your workflow is paused and has been updated")
 	}
-	if workflow.WorkflowId == [32]byte(common.Hex2Bytes(h.workflowArtifact.WorkflowID)) {
-		return fmt.Errorf("workflow with id %s already exists", h.workflowArtifact.WorkflowID)
-
-	}
-	if workflow.WorkflowName == h.inputs.WorkflowName {
-		status := workflow.Status
-		h.existingWorkflowStatus = &status
-		return fmt.Errorf("workflow with name %s already exists", h.inputs.WorkflowName)
-	}
-	return nil
-}
-
-func (h *handler) displayWorkflowDetails() {
-	ui.Line()
-	ui.Title(fmt.Sprintf("Deploying Workflow: %s", h.inputs.WorkflowName))
-	ui.Dim(fmt.Sprintf("Target:        %s", h.settings.User.TargetName))
-	ui.Dim(fmt.Sprintf("Owner Address: %s", h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress))
-	ui.Line()
 }

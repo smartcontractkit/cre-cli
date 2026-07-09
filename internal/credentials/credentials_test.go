@@ -1,14 +1,17 @@
 package credentials
 
 import (
-	"encoding/base64"
-	"encoding/json"
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/rs/zerolog"
+
+	"github.com/smartcontractkit/cre-cli/internal/creconfig"
 	"github.com/smartcontractkit/cre-cli/internal/testutil"
+	"github.com/smartcontractkit/cre-cli/internal/testutil/testjwt"
 )
 
 func TestNew_Default(t *testing.T) {
@@ -43,8 +46,8 @@ func TestNew_WithConfigFile(t *testing.T) {
 	tDir := t.TempDir()
 	t.Setenv("HOME", tDir)
 
-	dir := filepath.Join(tDir, ConfigDir)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	dir, err := creconfig.EnsureDir()
+	if err != nil {
 		t.Fatalf("failed to create config dir: %v", err)
 	}
 	file := filepath.Join(dir, ConfigFile)
@@ -86,31 +89,13 @@ TokenType:  "file-type"
 	}
 }
 
-// Helper function to create a JWT token with custom claims
-func createTestJWT(t *testing.T, claims map[string]interface{}) string {
-	t.Helper()
-
-	// JWT header (doesn't matter for our tests)
-	header := map[string]string{"alg": "HS256", "typ": "JWT"}
-	headerJSON, _ := json.Marshal(header)
-	headerEncoded := base64.RawURLEncoding.EncodeToString(headerJSON)
-
-	// JWT payload with claims
-	claimsJSON, err := json.Marshal(claims)
-	if err != nil {
-		t.Fatalf("failed to marshal claims: %v", err)
-	}
-	claimsEncoded := base64.RawURLEncoding.EncodeToString(claimsJSON)
-
-	// JWT signature (doesn't need to be valid for our tests)
-	signature := base64.RawURLEncoding.EncodeToString([]byte("fake-signature"))
-
-	return headerEncoded + "." + claimsEncoded + "." + signature
+func createTestJWT(claims map[string]interface{}) string {
+	return testjwt.CreateTestJWTWithClaims(claims)
 }
 
 func TestGetOrgID_BearerWithOrgID(t *testing.T) {
 	logger := testutil.NewTestLogger()
-	token := createTestJWT(t, map[string]interface{}{
+	token := createTestJWT(map[string]interface{}{
 		"sub":    "user123",
 		"org_id": "org_abc123",
 	})
@@ -132,7 +117,7 @@ func TestGetOrgID_BearerWithOrgID(t *testing.T) {
 
 func TestGetOrgID_MissingClaim(t *testing.T) {
 	logger := testutil.NewTestLogger()
-	token := createTestJWT(t, map[string]interface{}{
+	token := createTestJWT(map[string]interface{}{
 		"sub": "user123",
 	})
 
@@ -153,7 +138,7 @@ func TestGetOrgID_MissingClaim(t *testing.T) {
 
 func TestGetOrgID_EmptyClaim(t *testing.T) {
 	logger := testutil.NewTestLogger()
-	token := createTestJWT(t, map[string]interface{}{
+	token := createTestJWT(map[string]interface{}{
 		"sub":    "user123",
 		"org_id": "",
 	})
@@ -260,7 +245,7 @@ func TestCheckIsUngatedOrganization_JWTWithFullAccess(t *testing.T) {
 				tc.namespace + "organization_roles":  "ROOT",
 			}
 
-			token := createTestJWT(t, claims)
+			token := createTestJWT(claims)
 
 			creds := &Credentials{
 				AuthType: AuthTypeBearer,
@@ -289,7 +274,7 @@ func TestCheckIsUngatedOrganization_JWTWithMissingClaim(t *testing.T) {
 		// organization_status claim is missing
 	}
 
-	token := createTestJWT(t, claims)
+	token := createTestJWT(claims)
 
 	creds := &Credentials{
 		AuthType: AuthTypeBearer,
@@ -317,7 +302,7 @@ func TestCheckIsUngatedOrganization_JWTWithEmptyStatus(t *testing.T) {
 		"https://api.cre.chain.link/organization_status": "",
 	}
 
-	token := createTestJWT(t, claims)
+	token := createTestJWT(claims)
 
 	creds := &Credentials{
 		AuthType: AuthTypeBearer,
@@ -345,7 +330,7 @@ func TestCheckIsUngatedOrganization_JWTWithGatedStatus(t *testing.T) {
 		"https://api.cre.chain.link/organization_status": "GATED",
 	}
 
-	token := createTestJWT(t, claims)
+	token := createTestJWT(claims)
 
 	creds := &Credentials{
 		AuthType: AuthTypeBearer,
@@ -373,7 +358,7 @@ func TestCheckIsUngatedOrganization_JWTWithRestrictedStatus(t *testing.T) {
 		"https://api.cre.chain.link/organization_status": "RESTRICTED",
 	}
 
-	token := createTestJWT(t, claims)
+	token := createTestJWT(claims)
 
 	creds := &Credentials{
 		AuthType: AuthTypeBearer,
@@ -428,5 +413,62 @@ func TestCheckIsUngatedOrganization_InvalidJWTFormat(t *testing.T) {
 				t.Error("expected error for invalid JWT format, got nil")
 			}
 		})
+	}
+}
+
+func TestSecureRemove(t *testing.T) {
+	t.Run("missing file is no-op", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "missing.yaml")
+		if err := SecureRemove(path); err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+	})
+
+	t.Run("overwrites with zeroes before delete", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), ConfigFile)
+		secret := []byte("AccessToken: super-secret-token\n")
+		if err := os.WriteFile(path, secret, 0o600); err != nil {
+			t.Fatalf("write file: %v", err)
+		}
+
+		if err := SecureRemove(path); err != nil {
+			t.Fatalf("SecureRemove: %v", err)
+		}
+
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatal("expected file to be removed")
+		}
+	})
+}
+
+func TestDecodeJWTClaims_SafeDebugLogging(t *testing.T) {
+	var buf bytes.Buffer
+	logger := zerolog.New(&buf).Level(zerolog.DebugLevel)
+	token := createTestJWT(map[string]interface{}{
+		"sub":                              "user123",
+		"org_id":                           "org456",
+		"https://api.cre.chain.link/email": "test@example.com",
+		"https://api.cre.chain.link/organization_status": "FULL_ACCESS",
+	})
+
+	creds := &Credentials{
+		AuthType: AuthTypeBearer,
+		Tokens:   &CreLoginTokenSet{AccessToken: token},
+		log:      &logger,
+	}
+
+	if _, err := creds.decodeJWTClaims(); err != nil {
+		t.Fatalf("decodeJWTClaims: %v", err)
+	}
+
+	logOutput := buf.String()
+	if strings.Contains(logOutput, "test@example.com") {
+		t.Fatalf("debug log leaked email claim: %s", logOutput)
+	}
+	if !strings.Contains(logOutput, "org456") {
+		t.Fatalf("expected safe org_id in debug log, got: %s", logOutput)
+	}
+	if strings.Contains(logOutput, token) {
+		t.Fatalf("debug log leaked raw JWT token: %s", logOutput)
 	}
 }

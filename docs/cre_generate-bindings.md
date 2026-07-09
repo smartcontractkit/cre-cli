@@ -1,49 +1,33 @@
 ## cre generate-bindings
 
-Generate bindings from contract ABI
+Generate bindings for contracts
 
 ### Synopsis
 
-This command generates bindings from contract ABI files.
-Supports EVM chain family with Go and TypeScript languages.
-The target language is auto-detected from project files, or can be
-specified explicitly with --language.
-Each contract gets its own package subdirectory to avoid naming conflicts.
-For example, IERC20.abi generates bindings in generated/ierc20/ package.
-
-Both raw ABI files (*.abi) and JSON artifact files (*.json) are supported.
-For JSON files the ABI is read from the top-level "abi" field.
-
-```
-cre generate-bindings <chain-family> [optional flags]
-```
-
-### Examples
-
-```
-  cre generate-bindings evm
-```
+The generate-bindings command allows you to generate bindings for contracts.
 
 ### Options
 
 ```
-  -a, --abi string            Path to ABI directory (defaults to contracts/{chain-family}/src/abi/). Supports *.abi and *.json files
-  -h, --help                  help for generate-bindings
-  -l, --language string       Target language: go, typescript (auto-detected from project files when omitted)
-  -k, --pkg string            Base package name (each contract gets its own subdirectory) (default "bindings")
-  -p, --project-root string   Path to project root directory (defaults to current directory)
+  -h, --help   help for generate-bindings
 ```
 
 ### Options inherited from parent commands
 
 ```
-  -e, --env string          Path to .env file which contains sensitive info
-  -E, --public-env string   Path to .env.public file which contains shared, non-sensitive build config
-  -T, --target string       Use target settings from YAML config
-  -v, --verbose             Run command in VERBOSE mode
+      --allow-insecure-rpc     Allow non-localhost HTTP RPC URLs (insecure)
+      --allow-unknown-chains   Skip chain-name validation against the chain-selectors registry (for experimental chains)
+  -e, --env string             Path to .env file which contains sensitive info
+      --non-interactive        Fail instead of prompting; requires all inputs via flags
+  -R, --project-root string    Path to the project root
+  -E, --public-env string      Path to .env.public file which contains shared, non-sensitive build config
+  -T, --target string          Use target settings from YAML config
+  -v, --verbose                Run command in VERBOSE mode
 ```
 
 ### SEE ALSO
 
 * [cre](cre.md)	 - CRE CLI tool
+* [cre generate-bindings evm](cre_generate-bindings_evm.md)	 - Generate bindings from contract ABI
+* [cre generate-bindings solana](cre_generate-bindings_solana.md)	 - Generate bindings from contract IDL
 

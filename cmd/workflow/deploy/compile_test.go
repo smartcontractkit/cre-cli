@@ -1,6 +1,7 @@
 package deploy
 
 import (
+	"context"
 	"encoding/base64"
 	"errors"
 	"io"
@@ -51,10 +52,8 @@ func TestCompileCmd(t *testing.T) {
 			{
 				name: "Invalid ConfigPath",
 				cmd: Inputs{
-					WorkflowPath:                      "testdata/test_workflow.yaml",
-					ConfigPath:                        "nonexistent.yaml",
-					WorkflowRegistryContractAddress:   "0x1234567890123456789012345678901234567890",
-					WorkflowRegistryContractChainName: "ethereum-testnet-sepolia",
+					WorkflowPath: "testdata/test_workflow.yaml",
+					ConfigPath:   "nonexistent.yaml",
 				},
 				WorkflowOwnerType: constants.WorkflowOwnerTypeEOA,
 				wantError:         true,
@@ -64,10 +63,8 @@ func TestCompileCmd(t *testing.T) {
 			{
 				name: "Non-ASCII ConfigPath",
 				cmd: Inputs{
-					WorkflowPath:                      "testdata/test_workflow.yaml",
-					ConfigPath:                        "./testdata/đuveč.yaml",
-					WorkflowRegistryContractAddress:   "0x1234567890123456789012345678901234567890",
-					WorkflowRegistryContractChainName: "ethereum-testnet-sepolia",
+					WorkflowPath: "testdata/test_workflow.yaml",
+					ConfigPath:   "./testdata/đuveč.yaml",
 				},
 				WorkflowOwnerType: constants.WorkflowOwnerTypeEOA,
 				wantError:         true,
@@ -77,10 +74,8 @@ func TestCompileCmd(t *testing.T) {
 			{
 				name: "Non-ASCII OutputPath",
 				cmd: Inputs{
-					WorkflowPath:                      "testdata/test_workflow.yaml",
-					OutputPath:                        "outputŠČ.yaml",
-					WorkflowRegistryContractAddress:   "0x1234567890123456789012345678901234567890",
-					WorkflowRegistryContractChainName: "ethereum-testnet-sepolia",
+					WorkflowPath: "testdata/test_workflow.yaml",
+					OutputPath:   "outputŠČ.yaml",
 				},
 				WorkflowOwnerType: constants.WorkflowOwnerTypeEOA,
 				wantError:         true,
@@ -177,13 +172,11 @@ func TestCompileCmd(t *testing.T) {
 			defer simulatedEnvironment.Close()
 
 			err := runCompile(simulatedEnvironment, Inputs{
-				WorkflowName:                      "test_workflow",
-				WorkflowOwner:                     chainsim.TestAddress,
-				DonFamily:                         "test_label",
-				WorkflowPath:                      filepath.Join("testdata", "malformed_workflow", "main.go"),
-				OutputPath:                        outputPath,
-				WorkflowRegistryContractAddress:   "0x1234567890123456789012345678901234567890",
-				WorkflowRegistryContractChainName: "ethereum-testnet-sepolia",
+				WorkflowName:  "test_workflow",
+				WorkflowOwner: chainsim.TestAddress,
+				DonFamily:     "test_label",
+				WorkflowPath:  filepath.Join("testdata", "malformed_workflow", "main.go"),
+				OutputPath:    outputPath,
 			}, constants.WorkflowOwnerTypeEOA)
 			require.Error(t, err)
 			assert.ErrorContains(t, err, "failed to compile workflow")
@@ -195,13 +188,11 @@ func TestCompileCmd(t *testing.T) {
 func TestCompileOutputMatchesUnderlying(t *testing.T) {
 	simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
 	baseInputs := Inputs{
-		WorkflowName:                      "test_workflow",
-		WorkflowOwner:                     chainsim.TestAddress,
-		DonFamily:                         "test_label",
-		WorkflowPath:                      filepath.Join("testdata", "basic_workflow", "main.go"),
-		ConfigPath:                        filepath.Join("testdata", "basic_workflow", "config.yml"),
-		WorkflowRegistryContractAddress:   "0x1234567890123456789012345678901234567890",
-		WorkflowRegistryContractChainName: "ethereum-testnet-sepolia",
+		WorkflowName:  "test_workflow",
+		WorkflowOwner: chainsim.TestAddress,
+		DonFamily:     "test_label",
+		WorkflowPath:  filepath.Join("testdata", "basic_workflow", "main.go"),
+		ConfigPath:    filepath.Join("testdata", "basic_workflow", "config.yml"),
 	}
 
 	t.Run("default output path", func(t *testing.T) {
@@ -238,6 +229,7 @@ func createTestSettings(workflowOwnerAddress, workflowOwnerType, workflowName, w
 				WorkflowOwnerAddress string `mapstructure:"workflow-owner-address" yaml:"workflow-owner-address"`
 				WorkflowOwnerType    string `mapstructure:"workflow-owner-type" yaml:"workflow-owner-type"`
 				WorkflowName         string `mapstructure:"workflow-name" yaml:"workflow-name"`
+				DeploymentRegistry   string `mapstructure:"deployment-registry" yaml:"deployment-registry"`
 			}{
 				WorkflowOwnerAddress: workflowOwnerAddress,
 				WorkflowOwnerType:    workflowOwnerType,
@@ -275,12 +267,11 @@ func runCompile(simulatedEnvironment *chainsim.SimulatedEnvironment, inputs Inpu
 	handler.settings = ctx.Settings
 
 	handler.inputs = inputs
-	err := handler.ValidateInputs()
-	if err != nil {
+	if err := handler.ValidateInputs(); err != nil {
 		return err
 	}
 
-	return handler.Compile()
+	return handler.Compile(context.Background())
 }
 
 // outputPathWithExtensions returns the path with .wasm.br.b64 appended as in Compile().
@@ -295,7 +286,7 @@ func outputPathWithExtensions(path string) string {
 // file content equals CompileWorkflowToWasm(workflowPath) + brotli + base64.
 func assertCompileOutputMatchesUnderlying(t *testing.T, simulatedEnvironment *chainsim.SimulatedEnvironment, inputs Inputs, ownerType string) {
 	t.Helper()
-	wasm, err := cmdcommon.CompileWorkflowToWasm(inputs.WorkflowPath, cmdcommon.WorkflowCompileOptions{
+	wasm, err := cmdcommon.CompileWorkflowToWasm(context.Background(), inputs.WorkflowPath, cmdcommon.WorkflowCompileOptions{
 		StripSymbols:   true,
 		SkipTypeChecks: inputs.SkipTypeChecks,
 	})
@@ -329,14 +320,12 @@ func TestCompileWithWasmPath(t *testing.T) {
 		t.Cleanup(func() { _ = os.Remove(outputPath) })
 
 		inputs := Inputs{
-			WorkflowName:                      "test_workflow",
-			WorkflowOwner:                     chainsim.TestAddress,
-			DonFamily:                         "test_label",
-			WorkflowPath:                      filepath.Join("testdata", "basic_workflow", "main.go"),
-			WasmPath:                          wasmFile,
-			OutputPath:                        outputPath,
-			WorkflowRegistryContractAddress:   "0x1234567890123456789012345678901234567890",
-			WorkflowRegistryContractChainName: "ethereum-testnet-sepolia",
+			WorkflowName:  "test_workflow",
+			WorkflowOwner: chainsim.TestAddress,
+			DonFamily:     "test_label",
+			WorkflowPath:  filepath.Join("testdata", "basic_workflow", "main.go"),
+			WasmPath:      wasmFile,
+			OutputPath:    outputPath,
 		}
 
 		err := runCompile(simulatedEnvironment, inputs, constants.WorkflowOwnerTypeEOA)
@@ -373,14 +362,12 @@ func TestCompileWithWasmPath(t *testing.T) {
 		t.Cleanup(func() { _ = os.Remove(outputPath) })
 
 		inputs := Inputs{
-			WorkflowName:                      "test_workflow",
-			WorkflowOwner:                     chainsim.TestAddress,
-			DonFamily:                         "test_label",
-			WorkflowPath:                      filepath.Join("testdata", "basic_workflow", "main.go"),
-			WasmPath:                          wasmFile,
-			OutputPath:                        outputPath,
-			WorkflowRegistryContractAddress:   "0x1234567890123456789012345678901234567890",
-			WorkflowRegistryContractChainName: "ethereum-testnet-sepolia",
+			WorkflowName:  "test_workflow",
+			WorkflowOwner: chainsim.TestAddress,
+			DonFamily:     "test_label",
+			WorkflowPath:  filepath.Join("testdata", "basic_workflow", "main.go"),
+			WasmPath:      wasmFile,
+			OutputPath:    outputPath,
 		}
 
 		err = runCompile(simulatedEnvironment, inputs, constants.WorkflowOwnerTypeEOA)
@@ -412,13 +399,11 @@ func TestCompileWithWasmPath(t *testing.T) {
 		)
 		handler.settings = ctx.Settings
 		handler.inputs = Inputs{
-			WorkflowName:                      "test_workflow",
-			WorkflowOwner:                     chainsim.TestAddress,
-			DonFamily:                         "test_label",
-			WorkflowPath:                      filepath.Join("testdata", "basic_workflow", "main.go"),
-			WasmPath:                          "/nonexistent/path/to/file.wasm",
-			WorkflowRegistryContractAddress:   "0x1234567890123456789012345678901234567890",
-			WorkflowRegistryContractChainName: "ethereum-testnet-sepolia",
+			WorkflowName:  "test_workflow",
+			WorkflowOwner: chainsim.TestAddress,
+			DonFamily:     "test_label",
+			WorkflowPath:  filepath.Join("testdata", "basic_workflow", "main.go"),
+			WasmPath:      "/nonexistent/path/to/file.wasm",
 		}
 
 		err := handler.ValidateInputs()
@@ -441,18 +426,16 @@ func TestCompileWithWasmPath(t *testing.T) {
 		)
 		handler.settings = ctx.Settings
 		handler.inputs = Inputs{
-			WorkflowName:                      "test_workflow",
-			WorkflowOwner:                     chainsim.TestAddress,
-			DonFamily:                         "test_label",
-			WorkflowPath:                      filepath.Join("testdata", "basic_workflow", "main.go"),
-			WasmPath:                          "https://example.com/binary.wasm",
-			WorkflowRegistryContractAddress:   "0x1234567890123456789012345678901234567890",
-			WorkflowRegistryContractChainName: "ethereum-testnet-sepolia",
+			WorkflowName:  "test_workflow",
+			WorkflowOwner: chainsim.TestAddress,
+			DonFamily:     "test_label",
+			WorkflowPath:  filepath.Join("testdata", "basic_workflow", "main.go"),
+			WasmPath:      "https://example.com/binary.wasm",
 		}
 		handler.validated = true
 
 		// Compile() with URL wasm should return nil (skips compile entirely).
-		err := handler.Compile()
+		err := handler.Compile(context.Background())
 		require.NoError(t, err)
 	})
 
@@ -477,7 +460,7 @@ func TestCompileWithWasmPath(t *testing.T) {
 		handler.urlBinaryData = wasmContent
 		handler.workflowArtifact = &workflowArtifact{}
 
-		err := handler.PrepareWorkflowArtifact()
+		err := handler.PrepareWorkflowArtifact(chainsim.TestAddress)
 		require.NoError(t, err)
 		assert.NotEmpty(t, handler.workflowArtifact.WorkflowID)
 		assert.Nil(t, handler.workflowArtifact.BinaryData, "BinaryData should be nil for URL case")
@@ -508,7 +491,7 @@ func TestCompileWithWasmPath(t *testing.T) {
 		handler.urlConfigData = configContent
 		handler.workflowArtifact = &workflowArtifact{}
 
-		err = handler.PrepareWorkflowArtifact()
+		err = handler.PrepareWorkflowArtifact(chainsim.TestAddress)
 		require.NoError(t, err)
 		assert.NotEmpty(t, handler.workflowArtifact.WorkflowID)
 		assert.Nil(t, handler.workflowArtifact.ConfigData, "ConfigData should be nil for URL case")
@@ -525,6 +508,11 @@ func TestCustomWasmWorkflowRunsMakeBuild(t *testing.T) {
 	_ = os.Remove(wasmPath)
 	t.Cleanup(func() { _ = os.Remove(wasmPath) })
 
+	require.NoError(t, os.MkdirAll(filepath.Dir(wasmPath), 0o755))
+	// ValidateInputs requires a readable workflow path; seed a minimal wasm header so make can replace the binary.
+	minimalWasm := append([]byte{0x00, 0x61, 0x73, 0x6d}, make([]byte, 8)...)
+	require.NoError(t, os.WriteFile(wasmPath, minimalWasm, 0600))
+
 	simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
 	defer simulatedEnvironment.Close()
 
@@ -532,14 +520,12 @@ func TestCustomWasmWorkflowRunsMakeBuild(t *testing.T) {
 	t.Cleanup(func() { _ = os.Remove(outputPath) })
 
 	inputs := Inputs{
-		WorkflowName:                      "custom_wasm_workflow",
-		WorkflowOwner:                     chainsim.TestAddress,
-		DonFamily:                         "test_label",
-		WorkflowPath:                      wasmPath,
-		ConfigPath:                        filepath.Join(customWasmDir, "config.yml"),
-		WorkflowRegistryContractAddress:   "0x1234567890123456789012345678901234567890",
-		WorkflowRegistryContractChainName: "ethereum-testnet-sepolia",
-		OutputPath:                        outputPath,
+		WorkflowName:  "custom_wasm_workflow",
+		WorkflowOwner: chainsim.TestAddress,
+		DonFamily:     "test_label",
+		WorkflowPath:  wasmPath,
+		ConfigPath:    filepath.Join(customWasmDir, "config.yml"),
+		OutputPath:    outputPath,
 	}
 
 	// runCompile calls ValidateInputs then Compile; CompileWorkflowToWasm runs make build internally. No manual make build.

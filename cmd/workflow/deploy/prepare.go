@@ -42,7 +42,7 @@ func (h *handler) prepareWorkflowConfig() ([]byte, error) {
 	return configData, nil
 }
 
-func (h *handler) PrepareWorkflowArtifact() error {
+func (h *handler) PrepareWorkflowArtifact(workflowOwner string) error {
 	var binaryForID []byte
 
 	if h.urlBinaryData != nil {
@@ -76,7 +76,7 @@ func (h *handler) PrepareWorkflowArtifact() error {
 		h.workflowArtifact.ConfigData = configData
 	}
 
-	workflowID, err := workflowUtils.GenerateWorkflowIDFromStrings(h.inputs.WorkflowOwner, h.inputs.WorkflowName, binaryForID, configData, "")
+	workflowID, err := workflowUtils.GenerateWorkflowIDFromStrings(workflowOwner, h.inputs.WorkflowName, binaryForID, configData, "")
 	if err != nil {
 		return fmt.Errorf("failed to generate workflow ID: %w", err)
 	}

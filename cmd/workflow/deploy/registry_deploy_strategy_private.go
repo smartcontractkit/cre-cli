@@ -1,0 +1,127 @@
+package deploy
+
+import (
+	"context"
+	"fmt"
+	"strings"
+
+	"github.com/smartcontractkit/cre-cli/internal/client/graphqlclient"
+	"github.com/smartcontractkit/cre-cli/internal/client/privateregistryclient"
+	"github.com/smartcontractkit/cre-cli/internal/ui"
+)
+
+// privateRegistryDeployStrategy deploys workflows to the private workflow registry
+// via GraphQL. Ownership linking and onchain prechecks are not applicable.
+type privateRegistryDeployStrategy struct {
+	h   *handler
+	prc *privateregistryclient.Client
+}
+
+func newPrivateRegistryDeployStrategy(h *handler) *privateRegistryDeployStrategy {
+	return &privateRegistryDeployStrategy{h: h}
+}
+
+func (a *privateRegistryDeployStrategy) ensureClient() {
+	if a.prc == nil {
+		gql := graphqlclient.New(a.h.credentials, a.h.environmentSet, a.h.log)
+		a.prc = privateregistryclient.New(gql, a.h.log)
+	}
+}
+
+func (a *privateRegistryDeployStrategy) RunPreDeployChecks(_ context.Context) error {
+	return nil
+}
+
+func (a *privateRegistryDeployStrategy) CheckWorkflowExists(ctx context.Context, _, workflowName, _, workflowID string) (bool, *uint8, error) {
+	a.ensureClient()
+
+	workflow, err := a.prc.GetWorkflowByName(ctx, workflowName)
+	if err == nil {
+		if workflow.WorkflowID == workflowID {
+			return true, offchainStatusToUint8(workflow.Status), fmt.Errorf("workflow with id %s is already registered and unchanged; re-deployment skipped: %w", workflowID, errWorkflowUnchanged)
+		}
+		return true, offchainStatusToUint8(workflow.Status), nil
+	}
+	if isWorkflowNotFoundError(err) {
+		return false, nil, nil
+	}
+
+	return false, nil, err
+}
+
+func (a *privateRegistryDeployStrategy) Upsert(ctx context.Context) error {
+	a.ensureClient()
+
+	h := a.h
+	input := h.buildPrivateRegistryInput()
+
+	ui.Line()
+	ui.Dim(fmt.Sprintf("Registering workflow in private registry (workflowID: %s)...", input.WorkflowID))
+
+	result, err := a.prc.UpsertWorkflowInRegistry(ctx, input)
+	if err != nil {
+		return fmt.Errorf("failed to register workflow in private registry: %w", err)
+	}
+
+	ui.Success("Workflow registered in private registry")
+	ui.Line()
+	ui.Bold("Details:")
+	ui.Dim(fmt.Sprintf("   Registry:         %s", h.runtimeContext.ResolvedRegistry.ID()))
+	ui.Dim(fmt.Sprintf("   DON Family:       %s", h.inputs.DonFamily))
+	ui.Dim(fmt.Sprintf("   Workflow Name:    %s", result.WorkflowName))
+	ui.Dim(fmt.Sprintf("   Workflow ID:      %s", result.WorkflowID))
+	ui.Dim(fmt.Sprintf("   Status:           %s", privateregistryclient.FormatStatus(result.Status)))
+	ui.Dim(fmt.Sprintf("   Binary URL:       %s", result.BinaryURL))
+	if result.ConfigURL != "" {
+		ui.Dim(fmt.Sprintf("   Config URL:       %s", result.ConfigURL))
+	}
+	if result.Owner != "" {
+		ui.Dim(fmt.Sprintf("   Owner:            %s", result.Owner))
+	}
+
+	return nil
+}
+
+func (h *handler) buildPrivateRegistryInput() privateregistryclient.OffchainWorkflowInput {
+	status := privateregistryclient.WorkflowStatusActive
+	if h.existingWorkflowStatus != nil && *h.existingWorkflowStatus == workflowStatusPaused {
+		status = privateregistryclient.WorkflowStatusPaused
+	}
+
+	input := privateregistryclient.OffchainWorkflowInput{
+		WorkflowID:   h.workflowArtifact.WorkflowID,
+		Status:       status,
+		WorkflowName: h.inputs.WorkflowName,
+		BinaryURL:    h.inputs.BinaryURL,
+		DonFamily:    h.inputs.DonFamily,
+	}
+
+	if configURL := h.inputs.ResolveConfigURL(""); configURL != "" {
+		input.ConfigURL = &configURL
+	}
+
+	if h.inputs.WorkflowTag != "" {
+		tag := h.inputs.WorkflowTag
+		input.Tag = &tag
+	}
+
+	return input
+}
+
+func isWorkflowNotFoundError(err error) bool {
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "not found")
+}
+
+func offchainStatusToUint8(status privateregistryclient.OffchainWorkflowStatus) *uint8 {
+	switch status {
+	case privateregistryclient.WorkflowStatusActive:
+		v := uint8(0)
+		return &v
+	case privateregistryclient.WorkflowStatusPaused:
+		v := uint8(1)
+		return &v
+	default:
+		return nil
+	}
+}
