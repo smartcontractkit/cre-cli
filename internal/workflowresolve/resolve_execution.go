@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/smartcontractkit/cre-cli/internal/client/workflowdataclient"
-	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
 // ExecutionLookup resolves executions by on-chain id.
@@ -19,10 +18,7 @@ func ResolveExecutionUUID(ctx context.Context, wdc ExecutionLookup, arg string) 
 		return arg, nil
 	}
 	if LooksLikeOnChainExecutionID(arg) {
-		spinner := ui.NewSpinner()
-		spinner.Start(fmt.Sprintf("Resolving execution ID %q...", arg))
 		exec, err := wdc.FindExecutionByOnChainID(ctx, arg)
-		spinner.Stop()
 		if err != nil {
 			return "", err
 		}
