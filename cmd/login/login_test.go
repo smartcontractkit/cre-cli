@@ -1,6 +1,8 @@
 package login
 
 import (
+	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -10,12 +12,84 @@ import (
 	"testing"
 
 	"github.com/rs/zerolog"
+	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
+	"github.com/smartcontractkit/cre-cli/internal/creconfig"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
+	"github.com/smartcontractkit/cre-cli/internal/oauth"
+	"github.com/smartcontractkit/cre-cli/internal/tenantctx"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
+
+func TestFetchTenantConfig_GQLError_ReturnsError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"errors": []map[string]string{{"message": "unauthorized"}},
+		})
+	}))
+	defer srv.Close()
+
+	tmp := t.TempDir()
+	t.Setenv("HOME", tmp)
+	log := zerolog.Nop()
+	h := &handler{
+		log: &log,
+		environmentSet: &environments.EnvironmentSet{
+			EnvName:    "STAGING",
+			GraphQLURL: srv.URL,
+		},
+	}
+
+	tokenSet := &credentials.CreLoginTokenSet{
+		AccessToken: "test-access-token",
+		IDToken:     "test-id-token",
+		ExpiresIn:   3600,
+		TokenType:   "Bearer",
+	}
+
+	err := h.fetchTenantConfig(context.Background(), tokenSet)
+	if err == nil {
+		t.Fatal("expected error when GQL fetch fails")
+	}
+	if !strings.Contains(err.Error(), "fetch user context") {
+		t.Errorf("expected fetch user context error, got: %v", err)
+	}
+
+	contextPath, err := creconfig.FilePath(tenantctx.ContextFile)
+	if err != nil {
+		t.Fatalf("failed to resolve context path: %v", err)
+	}
+	if _, statErr := os.Stat(contextPath); statErr == nil {
+		t.Errorf("expected %s not to be written on fetch failure", tenantctx.ContextFile)
+	}
+}
+
+func TestLogin_NonInteractive_ReturnsError(t *testing.T) {
+	// Create a parent command with the global --non-interactive persistent flag,
+	// since in production this flag is defined on the root command.
+	root := &cobra.Command{Use: "cre"}
+	root.PersistentFlags().Bool("non-interactive", false, "")
+	loginCmd := New(nil)
+	root.AddCommand(loginCmd)
+
+	root.SetArgs([]string{"login", "--non-interactive"})
+	root.SetOut(io.Discard)
+	root.SetErr(io.Discard)
+
+	err := root.Execute()
+	if err == nil {
+		t.Fatal("expected error when --non-interactive is set")
+	}
+	if !strings.Contains(err.Error(), "non-interactive mode") {
+		t.Errorf("expected error to mention non-interactive mode, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "CRE_API_KEY") {
+		t.Errorf("expected error to mention CRE_API_KEY, got: %v", err)
+	}
+}
 
 func TestSaveCredentials_WritesYAML(t *testing.T) {
 	tmp := t.TempDir()
@@ -33,7 +107,10 @@ func TestSaveCredentials_WritesYAML(t *testing.T) {
 		t.Fatalf("saveCredentials error: %v", err)
 	}
 
-	path := filepath.Join(tmp, credentials.ConfigDir, credentials.ConfigFile)
+	path, err := creconfig.FilePath(credentials.ConfigFile)
+	if err != nil {
+		t.Fatalf("failed to resolve config path: %v", err)
+	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("cannot read config file: %v", err)
@@ -51,9 +128,9 @@ func TestSaveCredentials_WritesYAML(t *testing.T) {
 }
 
 func TestGeneratePKCE_ReturnsValidChallenge(t *testing.T) {
-	verifier, challenge, err := generatePKCE()
+	verifier, challenge, err := oauth.GeneratePKCE()
 	if err != nil {
-		t.Fatalf("generatePKCE error: %v", err)
+		t.Fatalf("GeneratePKCE error: %v", err)
 	}
 	if verifier == "" || challenge == "" {
 		t.Error("PKCE verifier or challenge is empty")
@@ -61,8 +138,14 @@ func TestGeneratePKCE_ReturnsValidChallenge(t *testing.T) {
 }
 
 func TestRandomState_IsRandomAndNonEmpty(t *testing.T) {
-	state1 := randomState()
-	state2 := randomState()
+	state1, err := oauth.RandomState()
+	if err != nil {
+		t.Fatalf("RandomState: %v", err)
+	}
+	state2, err := oauth.RandomState()
+	if err != nil {
+		t.Fatalf("RandomState: %v", err)
+	}
 	if state1 == "" || state2 == "" {
 		t.Error("randomState returned empty string")
 	}
@@ -72,16 +155,16 @@ func TestRandomState_IsRandomAndNonEmpty(t *testing.T) {
 }
 
 func TestOpenBrowser_UnsupportedOS(t *testing.T) {
-	err := openBrowser("http://example.com", "plan9")
+	err := oauth.OpenBrowser("http://example.com", "plan9")
 	if err == nil || !strings.Contains(err.Error(), "unsupported OS") {
 		t.Errorf("expected unsupported OS error, got %v", err)
 	}
 }
 
 func TestServeEmbeddedHTML_ErrorOnMissingFile(t *testing.T) {
-	h := &handler{log: &zerolog.Logger{}, spinner: ui.NewSpinner()}
+	log := zerolog.Nop()
 	w := httptest.NewRecorder()
-	h.serveEmbeddedHTML(w, "htmlPages/doesnotexist.html", http.StatusOK)
+	oauth.ServeEmbeddedHTML(&log, w, "htmlPages/doesnotexist.html", http.StatusOK)
 	resp := w.Result()
 	if resp.StatusCode != http.StatusInternalServerError {
 		t.Errorf("expected 500 error, got %d", resp.StatusCode)
@@ -274,12 +357,11 @@ func TestCallbackHandler_GenericAuth0Error(t *testing.T) {
 
 func TestServeWaitingPage(t *testing.T) {
 	logger := zerolog.Nop()
-	h := &handler{log: &logger, spinner: ui.NewSpinner()}
 
 	w := httptest.NewRecorder()
 	redirectURL := "https://auth.example.com/authorize?client_id=test&state=abc123"
 
-	h.serveWaitingPage(w, redirectURL)
+	oauth.ServeWaitingPage(&logger, w, redirectURL)
 
 	resp := w.Result()
 	body, _ := io.ReadAll(resp.Body)

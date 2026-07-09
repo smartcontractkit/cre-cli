@@ -9,11 +9,10 @@ import (
 	"fmt"
 	"log/slog"
 	"math/big"
-	"time"
-
 	"por_workflow/contracts/evm/src/generated/balance_reader"
 	"por_workflow/contracts/evm/src/generated/ierc20"
 	"por_workflow/contracts/evm/src/generated/reserve_manager"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/shopspring/decimal"
@@ -199,7 +198,6 @@ func fetchNativeTokenBalance(runtime cre.Runtime, evmCfg EVMConfig, tokenHolderA
 	balances, err := balanceReader.GetNativeBalances(runtime, balance_reader.GetNativeBalancesInput{
 		Addresses: []common.Address{common.Address(tokenAddress)},
 	}, big.NewInt(4)).Await()
-
 	if err != nil {
 		logger.Error("Could not read from contract", "contract_chain", evmCfg.ChainName, "err", err.Error())
 		return nil, err
@@ -271,7 +269,6 @@ func updateReserves(config *Config, runtime cre.Runtime, totalSupply *big.Int, t
 		TotalMinted:  totalSupply,
 		TotalReserve: totalReserveScaled,
 	}, nil).Await()
-
 	if err != nil {
 		logger.Error("WriteReport await failed", "error", err, "errorType", fmt.Sprintf("%T", err))
 		return fmt.Errorf("failed to write report: %w", err)
@@ -285,8 +282,8 @@ func fetchPOR(config *Config, logger *slog.Logger, sendRequester *http.SendReque
 	httpActionOut, err := sendRequester.SendRequest(&http.Request{
 		Method: "GET",
 		Url:    config.URL,
-		Headers: map[string]string{
-			"Authorization": "Basic test-api", // not secret.
+		MultiHeaders: map[string]*http.HeaderValues{
+			"Authorization": {Values: []string{"Basic test-api"}}, // not secret
 		},
 	}).Await()
 	if err != nil {

@@ -1,13 +1,13 @@
 package list
 
 import (
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
@@ -36,7 +36,23 @@ func New(ctx *runtime.Context) *cobra.Command {
 		Use:   "list",
 		Short: "Lists secret identifiers for the current owner address in the given namespace.",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			h, err := common.NewHandler(ctx, "")
+			if ctx.Viper.GetBool(settings.Flags.NonInteractive.Name) && !ctx.Viper.GetBool(settings.Flags.SkipConfirmation.Name) {
+				ui.ErrorWithSuggestions(
+					"Non-interactive mode requires all inputs via flags",
+					[]string{"--yes"},
+				)
+				return fmt.Errorf("missing required flags for --non-interactive mode")
+			}
+
+			secretsAuth, err := cmd.Flags().GetString("secrets-auth")
+			if err != nil {
+				return err
+			}
+			if err := common.ValidateSecretsAuthFlow(secretsAuth); err != nil {
+				return err
+			}
+
+			h, err := common.NewHandler(cmd.Context(), ctx, "", secretsAuth)
 			if err != nil {
 				return err
 			}
@@ -58,12 +74,7 @@ func New(ctx *runtime.Context) *cobra.Command {
 				return fmt.Errorf("invalid --timeout: must be greater than 0 and less than %dh (%dd)", maxHours, maxDays)
 			}
 
-			return Execute(
-				h,
-				namespace,
-				duration,
-				ctx.Settings.Workflow.UserWorkflowSettings.WorkflowOwnerType,
-			)
+			return Execute(cmd.Context(), h, namespace, duration, secretsAuth)
 		},
 	}
 
@@ -75,25 +86,34 @@ func New(ctx *runtime.Context) *cobra.Command {
 }
 
 // Execute performs: build request → (MSIG step 1 bundle OR EOA allowlist+post) → parse.
-func Execute(h *common.Handler, namespace string, duration time.Duration, ownerType string) error {
-	spinner := ui.NewSpinner()
-	spinner.Start("Verifying ownership...")
-	if err := h.EnsureOwnerLinkedOrFail(); err != nil {
-		spinner.Stop()
+func Execute(ctx context.Context, h *common.Handler, namespace string, duration time.Duration, secretsAuth string) error {
+	defer h.CloseCapRegClient()
+
+	if _, err := h.EnsureVaultValidationOrConsent(ctx); err != nil {
 		return err
 	}
-	spinner.Stop()
+
+	if !common.IsBrowserFlow(secretsAuth) {
+		if err := h.EnsureDeploymentRPCForOwnerKeySecrets(); err != nil {
+			return err
+		}
+		spinner := ui.NewSpinner()
+		spinner.Start("Verifying ownership...")
+		if err := h.EnsureOwnerLinkedOrFail(ctx); err != nil {
+			spinner.Stop()
+			return err
+		}
+		spinner.Stop()
+	}
 
 	if namespace == "" {
 		namespace = "main"
 	}
 
-	// Validate and canonicalize owner address (checksummed)
-	owner := strings.TrimSpace(h.OwnerAddress)
-	if !ethcommon.IsHexAddress(owner) {
-		return fmt.Errorf("invalid owner address: %q", h.OwnerAddress)
+	owner, err := h.ResolveVaultIdentifierOwnerForAuth(secretsAuth)
+	if err != nil {
+		return err
 	}
-	owner = ethcommon.HexToAddress(owner).Hex()
 
 	// Fresh request ID
 	requestID := uuid.New().String()
@@ -119,15 +139,20 @@ func Execute(h *common.Handler, namespace string, duration time.Duration, ownerT
 		return fmt.Errorf("failed to marshal JSON-RPC request: %w", err)
 	}
 
+	if common.IsBrowserFlow(secretsAuth) {
+		ui.Dim("Using your account to authorize vault access for this list request...")
+		return h.ExecuteBrowserVaultAuthorization(context.Background(), vaulttypes.MethodSecretsList, digest, body, owner)
+	}
+
 	ownerAddr := ethcommon.HexToAddress(owner)
 
-	allowlisted, err := h.Wrc.IsRequestAllowlisted(ownerAddr, digest)
+	allowlisted, err := h.Wrc.IsRequestAllowlisted(ctx, ownerAddr, digest)
 	if err != nil {
 		return fmt.Errorf("allowlist check failed: %w", err)
 	}
 	var txOut *client.TxOutput
 	if !allowlisted {
-		if txOut, err = h.Wrc.AllowlistRequest(digest, duration); err != nil {
+		if txOut, err = h.Wrc.AllowlistRequest(ctx, digest, duration); err != nil {
 			return fmt.Errorf("allowlist request failed: %w", err)
 		}
 	}
@@ -140,7 +165,7 @@ func Execute(h *common.Handler, namespace string, duration time.Duration, ownerT
 		if status != http.StatusOK {
 			return fmt.Errorf("gateway returned a non-200 status code: status_code=%d, body=%s", status, respBody)
 		}
-		return h.ParseVaultGatewayResponse(vaulttypes.MethodSecretsList, respBody)
+		return h.ParseVaultGatewayResponse(vaulttypes.MethodSecretsList, requestID, respBody)
 	}
 
 	if txOut == nil && allowlisted {

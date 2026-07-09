@@ -53,11 +53,11 @@ func TestSelectOptionStruct(t *testing.T) {
 
 func TestSelectOptionStringType(t *testing.T) {
 	opts := []SelectOption[string]{
-		{Label: "Go", Value: "golang"},
+		{Label: "Go", Value: "go"},
 		{Label: "TS", Value: "typescript"},
 	}
 
-	assert.Equal(t, "golang", opts[0].Value)
+	assert.Equal(t, "go", opts[0].Value)
 	assert.Equal(t, "typescript", opts[1].Value)
 }
 

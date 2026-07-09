@@ -11,6 +11,9 @@ import (
 
 	"github.com/rs/zerolog"
 	"gopkg.in/yaml.v2"
+
+	"github.com/smartcontractkit/cre-cli/internal/creconfig"
+	"github.com/smartcontractkit/cre-cli/internal/redact"
 )
 
 type CreLoginTokenSet struct {
@@ -26,6 +29,7 @@ type Credentials struct {
 	APIKey      string            `yaml:"api_key"` // #nosec G117 -- credential stored in secure config file
 	AuthType    string            `yaml:"auth_type"`
 	IsValidated bool              `yaml:"-"`
+	OrgID       string            `yaml:"-"`
 	log         *zerolog.Logger
 }
 
@@ -33,7 +37,6 @@ const (
 	CreApiKeyVar   = "CRE_API_KEY"
 	AuthTypeApiKey = "api-key"
 	AuthTypeBearer = "bearer"
-	ConfigDir      = ".cre"
 	ConfigFile     = "cre.yaml"
 
 	// DeploymentAccessStatusFullAccess indicates the organization has full deployment access
@@ -60,11 +63,10 @@ func New(logger *zerolog.Logger) (*Credentials, error) {
 		return cfg, nil
 	}
 
-	home, err := os.UserHomeDir()
+	path, err := creconfig.FilePath(ConfigFile)
 	if err != nil {
 		return cfg, nil
 	}
-	path := filepath.Join(home, ConfigDir, ConfigFile)
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("you are not logged in, run cre login and try again")
@@ -80,17 +82,13 @@ func New(logger *zerolog.Logger) (*Credentials, error) {
 }
 
 func SaveCredentials(tokenSet *CreLoginTokenSet) error {
-	home, err := os.UserHomeDir()
+	dir, err := creconfig.EnsureDir()
 	if err != nil {
-		return fmt.Errorf("get home dir: %w", err)
-	}
-	dir := filepath.Join(home, ConfigDir)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return fmt.Errorf("create config dir: %w", err)
+		return err
 	}
 
 	path := filepath.Join(dir, ConfigFile)
-	data, err := yaml.Marshal(tokenSet)
+	data, err := yaml.Marshal(tokenSet) //nolint:gosec // G117 -- intentionally persisting tokens to secure config file
 	if err != nil {
 		return fmt.Errorf("marshal token set: %w", err)
 	}
@@ -105,6 +103,87 @@ func SaveCredentials(tokenSet *CreLoginTokenSet) error {
 	return nil
 }
 
+// SecureRemove overwrites a file with zeroes before deleting it.
+func SecureRemove(path string) error {
+	f, err := os.OpenFile(path, os.O_RDWR, 0)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+
+	info, err := f.Stat()
+	if err != nil {
+		_ = f.Close()
+		return err
+	}
+
+	size := info.Size()
+	if size > 0 {
+		zeros := make([]byte, size)
+		if _, err := f.WriteAt(zeros, 0); err != nil {
+			_ = f.Close()
+			return err
+		}
+		if err := f.Sync(); err != nil {
+			_ = f.Close()
+			return err
+		}
+	}
+
+	if err := f.Close(); err != nil {
+		return err
+	}
+	return os.Remove(path)
+}
+
+// decodeJWTClaims extracts the claims map from the access token JWT payload.
+func (c *Credentials) decodeJWTClaims() (map[string]interface{}, error) {
+	if c.Tokens == nil || c.Tokens.AccessToken == "" {
+		return nil, fmt.Errorf("no access token available")
+	}
+
+	parts := strings.Split(c.Tokens.AccessToken, ".")
+	if len(parts) < 2 {
+		return nil, fmt.Errorf("invalid JWT token format")
+	}
+
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode JWT payload: %w", err)
+	}
+
+	var claims map[string]interface{}
+	if err := json.Unmarshal(payload, &claims); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal JWT claims: %w", err)
+	}
+
+	if safeClaims := redact.SafeJWTClaimsForLog(claims); safeClaims != nil {
+		c.log.Debug().Interface("claims", safeClaims).Msg("JWT claims decoded")
+	}
+	return claims, nil
+}
+
+// GetOrgID returns the organization ID from the access token.
+func (c *Credentials) GetOrgID() (string, error) {
+	if c.AuthType == AuthTypeApiKey {
+		return "", fmt.Errorf("org_id is not available for API key authentication")
+	}
+
+	claims, err := c.decodeJWTClaims()
+	if err != nil {
+		return "", err
+	}
+
+	orgID, ok := claims["org_id"].(string)
+	if !ok || orgID == "" {
+		return "", fmt.Errorf("org_id claim not found in access token")
+	}
+
+	return orgID, nil
+}
+
 // GetDeploymentAccessStatus returns the deployment access status for the organization.
 // This can be used to check and display whether the user has deployment access.
 func (c *Credentials) GetDeploymentAccessStatus() (*DeploymentAccess, error) {
@@ -117,30 +196,10 @@ func (c *Credentials) GetDeploymentAccessStatus() (*DeploymentAccess, error) {
 	}
 
 	// For JWT bearer tokens, we need to parse the token and check the organization_status claim
-	if c.Tokens == nil || c.Tokens.AccessToken == "" {
-		return nil, fmt.Errorf("no access token available")
-	}
-
-	// Parse the JWT to extract claims
-	parts := strings.Split(c.Tokens.AccessToken, ".")
-	if len(parts) < 2 {
-		return nil, fmt.Errorf("invalid JWT token format")
-	}
-
-	// Decode the payload (second part of the JWT)
-	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	claims, err := c.decodeJWTClaims()
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode JWT payload: %w", err)
+		return nil, err
 	}
-
-	// Parse claims into a map
-	var claims map[string]interface{}
-	if err := json.Unmarshal(payload, &claims); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal JWT claims: %w", err)
-	}
-
-	// Log all claims for debugging
-	c.log.Debug().Interface("claims", claims).Msg("JWT claims decoded")
 
 	// Dynamically find the organization_status claim by looking for any key ending with "organization_status"
 	var orgStatus string

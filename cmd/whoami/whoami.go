@@ -96,6 +96,7 @@ func (h *Handler) Execute(ctx context.Context) error {
 
 	ui.Line()
 	ui.Title("Account Details")
+	ui.EnvContext(h.environmentSet.EnvLabel())
 
 	details := fmt.Sprintf("Organization ID:   %s\nOrganization Name: %s",
 		respEnvelope.GetOrganization.OrganizationID,

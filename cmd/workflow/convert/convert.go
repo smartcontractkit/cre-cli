@@ -19,12 +19,13 @@ import (
 
 const (
 	wasmWorkflowPath = "./wasm/workflow.wasm"
-	convertWarning   = "This will convert your workflow to a custom (self-compiled) build. This cannot be undone by the CLI. Continue?"
+	convertWarning   = "This will convert your workflow to a custom build that uses a Makefile. This cannot be undone by the CLI. Continue?"
 )
 
 type Inputs struct {
 	WorkflowFolder string
 	Force          bool
+	NonInteractive bool
 }
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
@@ -36,10 +37,12 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 		Args:    cobra.ExactArgs(1),
 		Example: `cre workflow custom-build ./my-workflow`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			nonInteractive, _ := cmd.Flags().GetBool(settings.Flags.NonInteractive.Name)
 			handler := newHandler(runtimeContext)
 			inputs := Inputs{
 				WorkflowFolder: args[0],
 				Force:          force,
+				NonInteractive: nonInteractive,
 			}
 			return handler.Execute(inputs)
 		},
@@ -105,10 +108,20 @@ func (h *handler) Execute(inputs Inputs) error {
 		return fmt.Errorf("cannot detect workflow language: %w", err)
 	}
 	lang := cmdcommon.GetWorkflowLanguage(workflowPath)
+	if h.runtimeContext != nil {
+		h.runtimeContext.Workflow.Language = lang
+	}
 	if lang == constants.WorkflowLanguageWasm {
 		return fmt.Errorf("workflow is already a custom build (workflow-path is %s)", currentPath)
 	}
 
+	if inputs.NonInteractive && !inputs.Force {
+		ui.ErrorWithSuggestions(
+			"Non-interactive mode requires all inputs via flags",
+			[]string{"--force"},
+		)
+		return fmt.Errorf("missing required flags for --non-interactive mode")
+	}
 	if !inputs.Force {
 		confirmed, err := h.confirmFn(convertWarning, ui.WithLabels("Yes", "No"))
 		if err != nil {
@@ -152,7 +165,7 @@ export GOARCH := wasm
 export CGO_ENABLED := 0
 
 build:
-	go build -o wasm/workflow.wasm -trimpath -ldflags="-buildid= -w -s" .
+	go build -o wasm/workflow.wasm -trimpath -buildvcs=false -mod=readonly -ldflags="-buildid= -w -s" .
 `
 }
 
@@ -168,9 +181,10 @@ func makefileContent(workflowDir, lang string, mainFile string) (string, error) 
 }
 
 func makefileContentTS(_, mainFile string) (string, error) {
-	return fmt.Sprintf(`.PHONY: build
+	return fmt.Sprintf(`# Append %s after wasm/workflow.wasm to skip TypeScript typecheck (not recommended for production).
+.PHONY: build
 
 build:
 	bun cre-compile %s wasm/workflow.wasm
-`, mainFile), nil
+`, cmdcommon.SkipTypeChecksFlag, mainFile), nil
 }

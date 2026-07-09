@@ -70,6 +70,16 @@ func Dim(text string) {
 	fmt.Println(DimStyle.Render("  " + text))
 }
 
+// EnvContext prints a dim "Environment: <label>" line when the label is
+// non-empty. Pass the result of EnvironmentSet.EnvLabel() -- it will be
+// empty for PRODUCTION (the default), so this is a no-op in that case.
+func EnvContext(envLabel string) {
+	if envLabel == "" {
+		return
+	}
+	Dim(fmt.Sprintf("Environment: %s", envLabel))
+}
+
 // Step prints a step instruction (Light Blue - visible)
 func Step(text string) {
 	fmt.Println(StepStyle.Render(text))

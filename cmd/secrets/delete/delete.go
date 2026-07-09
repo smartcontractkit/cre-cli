@@ -1,6 +1,7 @@
 package delete
 
 import (
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -55,9 +56,25 @@ func New(ctx *runtime.Context) *cobra.Command {
 		Example: "cre secrets delete my-secrets.yaml",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if ctx.Viper.GetBool(settings.Flags.NonInteractive.Name) && !ctx.Viper.GetBool(settings.Flags.SkipConfirmation.Name) {
+				ui.ErrorWithSuggestions(
+					"Non-interactive mode requires all inputs via flags",
+					[]string{"--yes"},
+				)
+				return fmt.Errorf("missing required flags for --non-interactive mode")
+			}
+
 			secretsFilePath := args[0]
 
-			h, err := common.NewHandler(ctx, secretsFilePath)
+			secretsAuth, err := cmd.Flags().GetString("secrets-auth")
+			if err != nil {
+				return err
+			}
+			if err := common.ValidateSecretsAuthFlow(secretsAuth); err != nil {
+				return err
+			}
+
+			h, err := common.NewHandler(cmd.Context(), ctx, secretsFilePath, secretsAuth)
 			if err != nil {
 				return err
 			}
@@ -78,7 +95,6 @@ func New(ctx *runtime.Context) *cobra.Command {
 				return fmt.Errorf("invalid --timeout: must be greater than 0 and less than %dh (%dd)", maxHours, maxDays)
 			}
 
-			// Parse & validate YAML input
 			inputs, err := ResolveDeleteInputs(secretsFilePath)
 			if err != nil {
 				return err
@@ -87,8 +103,7 @@ func New(ctx *runtime.Context) *cobra.Command {
 				return err
 			}
 
-			// Two-path logic: MSIG step 1 (bundle) or EOA (allowlist + post)
-			return Execute(h, inputs, duration, ctx.Settings.Workflow.UserWorkflowSettings.WorkflowOwnerType)
+			return Execute(cmd.Context(), h, inputs, duration, secretsAuth)
 		},
 	}
 
@@ -101,23 +116,31 @@ func New(ctx *runtime.Context) *cobra.Command {
 // Two paths:
 //   - MSIG step 1: build request, compute digest, write bundle, print steps
 //   - EOA: allowlist if needed, then POST to gateway
-func Execute(h *common.Handler, inputs DeleteSecretsInputs, duration time.Duration, ownerType string) error {
-	spinner := ui.NewSpinner()
-	spinner.Start("Verifying ownership...")
-	if err := h.EnsureOwnerLinkedOrFail(); err != nil {
-		spinner.Stop()
+func Execute(ctx context.Context, h *common.Handler, inputs DeleteSecretsInputs, duration time.Duration, secretsAuth string) error {
+	defer h.CloseCapRegClient()
+
+	if _, err := h.EnsureVaultValidationOrConsent(ctx); err != nil {
 		return err
 	}
-	spinner.Stop()
 
-	// Validate and canonicalize owner address
-	owner := strings.TrimSpace(h.OwnerAddress)
-	if !ethcommon.IsHexAddress(owner) {
-		return fmt.Errorf("invalid owner address: %q", h.OwnerAddress)
+	if !common.IsBrowserFlow(secretsAuth) {
+		if err := h.EnsureDeploymentRPCForOwnerKeySecrets(); err != nil {
+			return err
+		}
+		spinner := ui.NewSpinner()
+		spinner.Start("Verifying ownership...")
+		if err := h.EnsureOwnerLinkedOrFail(ctx); err != nil {
+			spinner.Stop()
+			return err
+		}
+		spinner.Stop()
 	}
-	owner = ethcommon.HexToAddress(owner).Hex() // checksummed string
 
-	// Prepare the list of SecretIdentifiers to be deleted.
+	owner, err := h.ResolveVaultIdentifierOwnerForAuth(secretsAuth)
+	if err != nil {
+		return err
+	}
+
 	ptrIDs := make([]*vault.SecretIdentifier, len(inputs))
 	for i, item := range inputs {
 		ptrIDs[i] = &vault.SecretIdentifier{
@@ -152,6 +175,11 @@ func Execute(h *common.Handler, inputs DeleteSecretsInputs, duration time.Durati
 		return fmt.Errorf("failed to calculate request digest: %w", err)
 	}
 
+	if common.IsBrowserFlow(secretsAuth) {
+		ui.Dim("Using your account to authorize vault access for this delete request...")
+		return h.ExecuteBrowserVaultAuthorization(context.Background(), vaulttypes.MethodSecretsDelete, digest, requestBody, owner)
+	}
+
 	gatewayPost := func() error {
 		respBody, status, err := h.Gw.Post(requestBody)
 		if err != nil {
@@ -160,18 +188,18 @@ func Execute(h *common.Handler, inputs DeleteSecretsInputs, duration time.Durati
 		if status != http.StatusOK {
 			return fmt.Errorf("gateway returned a non-200 status code: status_code=%d, body=%s", status, respBody)
 		}
-		return h.ParseVaultGatewayResponse(vaulttypes.MethodSecretsDelete, respBody)
+		return h.ParseVaultGatewayResponse(vaulttypes.MethodSecretsDelete, requestID, respBody)
 	}
 
-	ownerAddr := ethcommon.HexToAddress(h.OwnerAddress)
+	ownerAddr := ethcommon.HexToAddress(owner)
 
-	allowlisted, err := h.Wrc.IsRequestAllowlisted(ownerAddr, digest)
+	allowlisted, err := h.Wrc.IsRequestAllowlisted(ctx, ownerAddr, digest)
 	if err != nil {
 		return fmt.Errorf("allowlist check failed: %w", err)
 	}
 	var txOut *client.TxOutput
 	if !allowlisted {
-		if txOut, err = h.Wrc.AllowlistRequest(digest, duration); err != nil {
+		if txOut, err = h.Wrc.AllowlistRequest(ctx, digest, duration); err != nil {
 			return fmt.Errorf("allowlist request failed: %w", err)
 		}
 	} else {

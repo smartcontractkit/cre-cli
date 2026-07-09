@@ -9,6 +9,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/smartcontractkit/cre-cli/internal/creconfig"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
@@ -17,8 +18,8 @@ import (
 
 func setupCredentialFile(t *testing.T, home string, token string) {
 	t.Helper()
-	dir := filepath.Join(home, credentials.ConfigDir)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
+	dir, err := creconfig.EnsureDir()
+	if err != nil {
 		t.Fatalf("failed to create config dir: %v", err)
 	}
 	path := filepath.Join(dir, credentials.ConfigFile)
@@ -31,7 +32,7 @@ func setupCredentialFile(t *testing.T, home string, token string) {
 		TokenType:    "Bearer",
 	}
 
-	data, err := yaml.Marshal(&tokens)
+	data, err := yaml.Marshal(&tokens) //nolint:gosec // G117 -- test data, not real credentials
 	if err != nil {
 		t.Fatalf("failed to marshal token set: %v", err)
 	}
@@ -71,6 +72,7 @@ func TestExecute_SuccessRevocationAndRemoval(t *testing.T) {
 	var received bool
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		received = true
+		r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 		if err := r.ParseForm(); err != nil {
 			t.Errorf("failed to parse form: %v", err)
 		}
@@ -111,7 +113,10 @@ func TestExecute_SuccessRevocationAndRemoval(t *testing.T) {
 		t.Error("expected revocation request, but none received")
 	}
 
-	credPath := filepath.Join(tDir, credentials.ConfigDir, credentials.ConfigFile)
+	credPath, err := creconfig.FilePath(credentials.ConfigFile)
+	if err != nil {
+		t.Fatalf("failed to resolve credentials path: %v", err)
+	}
 	if _, err := os.Stat(credPath); !os.IsNotExist(err) {
 		t.Errorf("expected credentials file to be removed, but it exists")
 	}
@@ -151,7 +156,10 @@ func TestExecute_RevocationFails_StillRemovesFile(t *testing.T) {
 		t.Fatalf("expected no error despite revocation failure, got %v", err)
 	}
 
-	credPath := filepath.Join(tDir, credentials.ConfigDir, credentials.ConfigFile)
+	credPath, err := creconfig.FilePath(credentials.ConfigFile)
+	if err != nil {
+		t.Fatalf("failed to resolve credentials path: %v", err)
+	}
 	if _, err := os.Stat(credPath); !os.IsNotExist(err) {
 		t.Errorf("expected credentials file to be removed, but it exists")
 	}

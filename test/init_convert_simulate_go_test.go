@@ -75,29 +75,27 @@ func TestE2EInit_ConvertToCustomBuild_Go(t *testing.T) {
 	mainStr = strings.Replace(mainStr, "\t// Your logic here..."+nl+nl+"\treturn &ExecutionResult{Result: fmt.Sprintf(\"Fired at %s\", scheduledTime)}, nil",
 		"\treturn &ExecutionResult{Result: fmt.Sprintf(\"Fired at %s\", scheduledTime), FlagProof: FlagProof}, nil", 1)
 
-	require.NoError(t, os.WriteFile(mainPath, []byte(mainStr), 0600))
-
+	require.NoError(t, os.WriteFile(mainPath, []byte(mainStr), 0600)) //nolint:gosec // G703 -- test paths in temp dir
 	constA := `//go:build customFlag
 
 package main
 
 const FlagProof = "set"
 `
-	require.NoError(t, os.WriteFile(filepath.Join(workflowDirectory, "constA.go"), []byte(constA), 0600))
-
+	require.NoError(t, os.WriteFile(filepath.Join(workflowDirectory, "constA.go"), []byte(constA), 0600)) //nolint:gosec // G703
 	constB := `//go:build !customFlag
 
 package main
 
 const FlagProof = "unset"
 `
-	require.NoError(t, os.WriteFile(filepath.Join(workflowDirectory, "constB.go"), []byte(constB), 0600))
+	require.NoError(t, os.WriteFile(filepath.Join(workflowDirectory, "constB.go"), []byte(constB), 0600)) //nolint:gosec // G703
 
 	makefilePath := filepath.Join(workflowDirectory, "Makefile")
 	makefile, err := os.ReadFile(makefilePath)
 	require.NoError(t, err)
 	makefileStr := strings.Replace(string(makefile), "go build -o", "go build -tags $(FLAG) -o", 1)
-	require.NoError(t, os.WriteFile(makefilePath, []byte(makefileStr), 0600))
+	require.NoError(t, os.WriteFile(makefilePath, []byte(makefileStr), 0600)) //nolint:gosec // G703 -- test paths in temp dir
 
 	convertGoBuildWithFlagAndAssert(t, projectRoot, workflowDirectory, workflowName, "FLAG=customFlag", "set", "FlagProof")
 	convertGoBuildWithFlagAndAssert(t, projectRoot, workflowDirectory, workflowName, "FLAG=differentFlag", "unset", "FlagProof")
@@ -110,6 +108,7 @@ func convertGoBuildWithFlagAndAssert(t *testing.T, projectRoot, workflowDir, wor
 	cmd := exec.Command(CLIPath, "workflow", "simulate", workflowName,
 		"--project-root", projectRoot,
 		"--non-interactive", "--trigger-index=0",
+		"--target=staging-settings",
 	)
 	cmd.Dir = projectRoot
 	cmd.Stdout = &stdout

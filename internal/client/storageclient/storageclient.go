@@ -20,24 +20,20 @@ import (
 )
 
 type Client struct {
-	graphql                 *graphqlclient.Client
-	workflowRegistryAddress string
-	workflowOwnerAddress    string
-	chainSelector           uint64
-	log                     *zerolog.Logger
-	serviceTimeout          time.Duration
-	httpTimeout             time.Duration
+	graphql              *graphqlclient.Client
+	workflowOwnerAddress string
+	log                  *zerolog.Logger
+	serviceTimeout       time.Duration
+	httpTimeout          time.Duration
 }
 
-func New(graphql *graphqlclient.Client, workflowRegistryAddress string, workflowOwnerAddress string, chainSelector uint64, log *zerolog.Logger) *Client {
+func New(graphql *graphqlclient.Client, workflowOwnerAddress string, log *zerolog.Logger) *Client {
 	return &Client{
-		graphql:                 graphql,
-		workflowRegistryAddress: workflowRegistryAddress,
-		workflowOwnerAddress:    workflowOwnerAddress,
-		chainSelector:           chainSelector,
-		log:                     log,
-		serviceTimeout:          time.Minute * 2,
-		httpTimeout:             time.Minute * 1,
+		graphql:              graphql,
+		workflowOwnerAddress: workflowOwnerAddress,
+		log:                  log,
+		serviceTimeout:       time.Minute,
+		httpTimeout:          time.Minute,
 	}
 }
 
@@ -73,15 +69,15 @@ func (c *Client) SetHTTPTimeout(timeout time.Duration) {
 	c.httpTimeout = timeout
 }
 
-func (c *Client) CreateServiceContextWithTimeout() (context.Context, context.CancelFunc) {
-	return context.WithTimeout(context.Background(), c.serviceTimeout)
+func (c *Client) CreateServiceContextWithTimeout(parent context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(parent, c.serviceTimeout) //nolint:gosec // G118 -- cancel is deferred by all callers
 }
 
-func (c *Client) CreateHttpContextWithTimeout() (context.Context, context.CancelFunc) {
-	return context.WithTimeout(context.Background(), c.httpTimeout)
+func (c *Client) CreateHttpContextWithTimeout(parent context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(parent, c.httpTimeout) //nolint:gosec // G118 -- cancel is deferred by all callers
 }
 
-func (c *Client) GeneratePostUrlForArtifact(workflowId string, artifactType ArtifactType, content []byte) (GeneratePresignedPostUrlForArtifactResponse, error) {
+func (c *Client) GeneratePostUrlForArtifact(ctx context.Context, workflowId string, artifactType ArtifactType, content []byte) (GeneratePresignedPostUrlForArtifactResponse, error) {
 	const mutation = `
 mutation GeneratePresignedPostUrlForArtifact($artifact: GeneratePresignedPostUrlRequest!) {
   generatePresignedPostUrlForArtifact(artifact: $artifact) {
@@ -95,12 +91,10 @@ mutation GeneratePresignedPostUrlForArtifact($artifact: GeneratePresignedPostUrl
 	contentHash := calculateContentHash(content)
 	req := graphql.NewRequest(mutation)
 	reqVariables := map[string]any{
-		"workflowId":              workflowId,
-		"artifactType":            artifactType,
-		"contentHash":             contentHash,
-		"workflowOwnerAddress":    c.workflowOwnerAddress,
-		"workflowRegistryAddress": c.workflowRegistryAddress,
-		"chainSelector":           fmt.Sprintf("%v", c.chainSelector),
+		"workflowId":           workflowId,
+		"artifactType":         artifactType,
+		"contentHash":          contentHash,
+		"workflowOwnerAddress": c.workflowOwnerAddress,
 	}
 	req.Var("artifact", reqVariables)
 
@@ -108,7 +102,7 @@ mutation GeneratePresignedPostUrlForArtifact($artifact: GeneratePresignedPostUrl
 		GeneratePresignedPostUrlForArtifact GeneratePresignedPostUrlForArtifactResponse `json:"generatePresignedPostUrlForArtifact"`
 	}
 
-	ctx, cancel := c.CreateServiceContextWithTimeout()
+	ctx, cancel := c.CreateServiceContextWithTimeout(ctx)
 	defer cancel()
 
 	if err := c.graphql.
@@ -122,7 +116,7 @@ mutation GeneratePresignedPostUrlForArtifact($artifact: GeneratePresignedPostUrl
 	return container.GeneratePresignedPostUrlForArtifact, nil
 }
 
-func (c *Client) GenerateUnsignedGetUrlForArtifact(workflowId string, artifactType ArtifactType) (GenerateUnsignedGetUrlForArtifactResponse, error) {
+func (c *Client) GenerateUnsignedGetUrlForArtifact(ctx context.Context, workflowId string, artifactType ArtifactType) (GenerateUnsignedGetUrlForArtifactResponse, error) {
 	const mutation = `
 mutation GenerateUnsignedGetUrlForArtifact($artifact: GenerateUnsignedGetUrlRequest!) {
   generateUnsignedGetUrlForArtifact(artifact: $artifact) {
@@ -131,10 +125,8 @@ mutation GenerateUnsignedGetUrlForArtifact($artifact: GenerateUnsignedGetUrlRequ
 }`
 	req := graphql.NewRequest(mutation)
 	reqVariables := map[string]any{
-		"workflowId":              workflowId,
-		"artifactType":            artifactType,
-		"workflowRegistryAddress": c.workflowRegistryAddress,
-		"chainSelector":           fmt.Sprintf("%v", c.chainSelector),
+		"workflowId":   workflowId,
+		"artifactType": artifactType,
 	}
 	req.Var("artifact", reqVariables)
 
@@ -142,7 +134,7 @@ mutation GenerateUnsignedGetUrlForArtifact($artifact: GenerateUnsignedGetUrlRequ
 		GenerateUnsignedGetUrlForArtifact GenerateUnsignedGetUrlForArtifactResponse `json:"generateUnsignedGetUrlForArtifact"`
 	}
 
-	ctx, cancel := c.CreateServiceContextWithTimeout()
+	ctx, cancel := c.CreateServiceContextWithTimeout(ctx)
 	defer cancel()
 
 	if err := c.graphql.
@@ -162,7 +154,7 @@ func calculateContentHash(content []byte) string {
 	return contentHash
 }
 
-func (c *Client) UploadToOrigin(g GeneratePresignedPostUrlForArtifactResponse, content []byte, contentType string) error {
+func (c *Client) UploadToOrigin(ctx context.Context, g GeneratePresignedPostUrlForArtifactResponse, content []byte, contentType string) error {
 	c.log.Debug().Str("URL", g.PresignedPostURL).Msg("Uploading content to origin")
 
 	var b bytes.Buffer
@@ -205,7 +197,7 @@ func (c *Client) UploadToOrigin(g GeneratePresignedPostUrlForArtifactResponse, c
 		return err
 	}
 
-	ctx, cancel := c.CreateHttpContextWithTimeout()
+	ctx, cancel := c.CreateHttpContextWithTimeout(ctx)
 	defer cancel()
 
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", g.PresignedPostURL, &b)
@@ -239,10 +231,14 @@ func (c *Client) UploadToOrigin(g GeneratePresignedPostUrlForArtifactResponse, c
 }
 
 func (c *Client) UploadArtifactWithRetriesAndGetURL(
+	ctx context.Context,
 	workflowID string,
 	artifactType ArtifactType,
 	content []byte,
 	contentType string) (GenerateUnsignedGetUrlForArtifactResponse, error) {
+	if err := ctx.Err(); err != nil {
+		return GenerateUnsignedGetUrlForArtifactResponse{}, err
+	}
 	if len(workflowID) == 0 {
 		return GenerateUnsignedGetUrlForArtifactResponse{}, fmt.Errorf("workflowID is empty")
 	}
@@ -259,7 +255,7 @@ func (c *Client) UploadArtifactWithRetriesAndGetURL(
 	err := retry.Do(
 		func() error {
 			var err error
-			g, err = c.GeneratePostUrlForArtifact(workflowID, artifactType, content)
+			g, err = c.GeneratePostUrlForArtifact(ctx, workflowID, artifactType, content)
 			if err != nil {
 				if strings.Contains(err.Error(), "already exists") {
 					shouldUpload = false
@@ -272,6 +268,7 @@ func (c *Client) UploadArtifactWithRetriesAndGetURL(
 		},
 		retry.Attempts(3),
 		retry.LastErrorOnly(true),
+		retry.Context(ctx),
 	)
 	if err != nil {
 		c.log.Error().Err(err).Msg("Failed to generate presigned post URL for artifact")
@@ -284,10 +281,11 @@ func (c *Client) UploadArtifactWithRetriesAndGetURL(
 	if shouldUpload {
 		err = retry.Do(
 			func() error {
-				return c.UploadToOrigin(g, content, contentType)
+				return c.UploadToOrigin(ctx, g, content, contentType)
 			},
 			retry.Attempts(3),
 			retry.LastErrorOnly(true),
+			retry.Context(ctx),
 		)
 		if err != nil {
 			c.log.Error().Err(err).Msg("Failed to upload content to origin")
@@ -298,7 +296,7 @@ func (c *Client) UploadArtifactWithRetriesAndGetURL(
 	var g2 GenerateUnsignedGetUrlForArtifactResponse
 	err = retry.Do(
 		func() error {
-			g2, err = c.GenerateUnsignedGetUrlForArtifact(workflowID, artifactType)
+			g2, err = c.GenerateUnsignedGetUrlForArtifact(ctx, workflowID, artifactType)
 			if err != nil {
 				return fmt.Errorf("generate unsigned get url: %w", err)
 			}
@@ -306,6 +304,7 @@ func (c *Client) UploadArtifactWithRetriesAndGetURL(
 		},
 		retry.Attempts(3),
 		retry.LastErrorOnly(true),
+		retry.Context(ctx),
 	)
 	if err != nil {
 		c.log.Error().Err(err).Msg("Failed to generate unsigned get URL for artifact")

@@ -1,6 +1,7 @@
 package common
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -9,23 +10,53 @@ import (
 	"strings"
 
 	"github.com/smartcontractkit/cre-cli/internal/constants"
+	"github.com/smartcontractkit/cre-cli/internal/settings"
+	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
 const makefileName = "Makefile"
 
 var defaultWasmOutput = filepath.Join("wasm", "workflow.wasm")
 
+const (
+	// SkipTypeChecksFlag is passed through to cre-compile for TypeScript workflows (matches @chainlink/cre-sdk).
+	SkipTypeChecksFlag = "--skip-type-checks"
+	// SkipTypeChecksCLIFlag is the Cobra/Viper flag name (no leading dashes).
+	SkipTypeChecksCLIFlag = "skip-type-checks"
+)
+
+// WorkflowCompileOptions configures workflow compilation for CompileWorkflowToWasm.
+type WorkflowCompileOptions struct {
+	// StripSymbols, when true, strips debug symbols from Go WASM builds (smaller binary for deploy).
+	StripSymbols bool
+	// SkipTypeChecks, when true, passes SkipTypeChecksFlag to cre-compile for TypeScript workflows.
+	SkipTypeChecks bool
+}
+
 // getBuildCmd returns a single step that builds the workflow and returns the WASM bytes.
-func getBuildCmd(workflowRootFolder, mainFile, language string) (func() ([]byte, error), error) {
+func getBuildCmd(ctx context.Context, workflowRootFolder, mainFile, language string, opts WorkflowCompileOptions) (func() ([]byte, error), error) {
 	tmpPath := filepath.Join(workflowRootFolder, ".cre_build_tmp.wasm")
 	switch language {
 	case constants.WorkflowLanguageTypeScript:
-		cmd := exec.Command("bun", "cre-compile", mainFile, tmpPath)
+		args := []string{"cre-compile", mainFile, tmpPath}
+		if opts.SkipTypeChecks {
+			args = append(args, SkipTypeChecksFlag)
+		}
+		cmd := exec.CommandContext(ctx, "bun", args...)
 		cmd.Dir = workflowRootFolder
 		return func() ([]byte, error) {
 			out, err := cmd.CombinedOutput()
 			if err != nil {
-				return nil, fmt.Errorf("%w\nbuild output:\n%s", err, strings.TrimSpace(string(out)))
+				outStr := strings.TrimSpace(string(out))
+				if strings.Contains(outStr, "Script not found") && strings.Contains(outStr, "cre-compile") {
+					return nil, fmt.Errorf("TypeScript compilation failed: 'cre-compile' command not found.\n\n" +
+						"The 'cre-compile' tool is provided by the @chainlink/cre-sdk package.\n\n" +
+						"To fix:\n" +
+						"  • Run 'bun install' in your project to install dependencies\n" +
+						"  • Update your project dependencies with 'cre update <workflow-folder>'\n" +
+						"  • If starting fresh, use 'cre workflow init' to scaffold a properly configured workflow")
+				}
+				return nil, fmt.Errorf("%w\nbuild output:\n%s", err, outStr)
 			}
 			b, err := os.ReadFile(tmpPath)
 			_ = os.Remove(tmpPath)
@@ -33,11 +64,17 @@ func getBuildCmd(workflowRootFolder, mainFile, language string) (func() ([]byte,
 		}, nil
 	case constants.WorkflowLanguageGolang:
 		// Build the package (.) so all .go files (main.go, workflow.go, etc.) are compiled together
-		cmd := exec.Command(
+		ldflags := "-buildid="
+		if opts.StripSymbols {
+			ldflags = "-buildid= -w -s"
+		}
+		cmd := exec.CommandContext(ctx,
 			"go", "build",
 			"-o", tmpPath,
 			"-trimpath",
-			"-ldflags=-buildid= -w -s",
+			"-buildvcs=false",
+			"-mod=readonly",
+			"-ldflags="+ldflags,
 			".",
 		)
 		cmd.Dir = workflowRootFolder
@@ -56,7 +93,7 @@ func getBuildCmd(workflowRootFolder, mainFile, language string) (func() ([]byte,
 		if err != nil {
 			return nil, err
 		}
-		makeCmd := exec.Command("make", "build")
+		makeCmd := exec.CommandContext(ctx, "make", "build")
 		makeCmd.Dir = makeRoot
 		builtPath := filepath.Join(makeRoot, defaultWasmOutput)
 		return func() ([]byte, error) {
@@ -68,11 +105,17 @@ func getBuildCmd(workflowRootFolder, mainFile, language string) (func() ([]byte,
 		}, nil
 	default:
 		// Build the package (.) so all .go files are compiled together
-		cmd := exec.Command(
+		ldflags := "-buildid="
+		if opts.StripSymbols {
+			ldflags = "-buildid= -w -s"
+		}
+		cmd := exec.CommandContext(ctx,
 			"go", "build",
 			"-o", tmpPath,
 			"-trimpath",
-			"-ldflags=-buildid= -w -s",
+			"-buildvcs=false",
+			"-mod=readonly",
+			"-ldflags="+ldflags,
 			".",
 		)
 		cmd.Dir = workflowRootFolder
@@ -90,8 +133,10 @@ func getBuildCmd(workflowRootFolder, mainFile, language string) (func() ([]byte,
 }
 
 // CompileWorkflowToWasm compiles the workflow at workflowPath and returns the WASM binary.
-// It runs the sequence of commands from getBuildCmds (make build + copy for WASM, or single build for Go/TS), then reads the temp WASM file.
-func CompileWorkflowToWasm(workflowPath string) ([]byte, error) {
+// opts.StripSymbols: for Go builds, true strips debug symbols (deploy); false keeps them (simulate).
+// opts.SkipTypeChecks: for TypeScript, passes SkipTypeChecksFlag to cre-compile.
+// For custom Makefile WASM builds, StripSymbols and SkipTypeChecks have no effect.
+func CompileWorkflowToWasm(ctx context.Context, workflowPath string, opts WorkflowCompileOptions) ([]byte, error) {
 	workflowRootFolder, workflowMainFile, err := WorkflowPathRootAndMain(workflowPath)
 	if err != nil {
 		return nil, fmt.Errorf("workflow path: %w", err)
@@ -114,6 +159,7 @@ func CompileWorkflowToWasm(workflowPath string) ([]byte, error) {
 		if err := EnsureTool("go"); err != nil {
 			return nil, errors.New("go toolchain is required for Go workflows but was not found in PATH; install from https://go.dev/dl")
 		}
+		warnGOTOOLCHAIN()
 	case constants.WorkflowLanguageWasm:
 		if err := EnsureTool("make"); err != nil {
 			return nil, errors.New("make is required for WASM workflows but was not found in PATH")
@@ -122,7 +168,7 @@ func CompileWorkflowToWasm(workflowPath string) ([]byte, error) {
 		return nil, fmt.Errorf("unsupported workflow language for file %s", workflowMainFile)
 	}
 
-	buildStep, err := getBuildCmd(workflowRootFolder, workflowMainFile, language)
+	buildStep, err := getBuildCmd(ctx, workflowRootFolder, workflowMainFile, language, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -131,6 +177,25 @@ func CompileWorkflowToWasm(workflowPath string) ([]byte, error) {
 		return nil, fmt.Errorf("failed to compile workflow: %w", err)
 	}
 	return wasm, nil
+}
+
+func warnGOTOOLCHAIN() {
+	tc := os.Getenv("GOTOOLCHAIN")
+	if tc == "" {
+		ui.Warning("GOTOOLCHAIN is not set; the build may not be reproducible across environments. Set it in your .env.public file (e.g. GOTOOLCHAIN=go1.25.3).")
+		return
+	}
+
+	envFile := settings.LoadedPublicEnvFilePath()
+	if envFile == "" {
+		ui.Warning(fmt.Sprintf("GOTOOLCHAIN=%s is set, but no .env.public file was loaded. The build will not be reproducible for others without the same environment variable.", tc))
+		return
+	}
+
+	envVars := settings.LoadedPublicEnvVars()
+	if _, ok := envVars["GOTOOLCHAIN"]; !ok {
+		ui.Warning(fmt.Sprintf("GOTOOLCHAIN=%s is set, but is not in %s. The build will not be reproducible for others without the same environment variable.", tc, envFile))
+	}
 }
 
 // findMakefileRoot walks up from dir and returns the first directory that contains a Makefile.

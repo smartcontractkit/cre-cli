@@ -2,57 +2,68 @@ package login
 
 import (
 	"context"
-	"crypto/rand"
-	"crypto/sha256"
-	"embed"
-	"encoding/base64"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net"
 	"net/http"
 	"net/url"
-	"os/exec"
 	rt "runtime"
 	"strings"
 	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 
+	"github.com/smartcontractkit/cre-cli/internal/client/graphqlclient"
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
+	"github.com/smartcontractkit/cre-cli/internal/oauth"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
+	"github.com/smartcontractkit/cre-cli/internal/settings"
+	"github.com/smartcontractkit/cre-cli/internal/tenantctx"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
 var (
-	httpClient  = &http.Client{Timeout: 10 * time.Second}
-	errorPage   = "htmlPages/error.html"
-	successPage = "htmlPages/success.html"
-	waitingPage = "htmlPages/waiting.html"
-	stylePage   = "htmlPages/output.css"
-
 	// OrgMembershipErrorSubstring is the error message substring returned by Auth0
 	// when a user doesn't belong to any organization during the auth flow.
 	// This typically happens during sign-up when the organization hasn't been created yet.
 	OrgMembershipErrorSubstring = "user does not belong to any organization"
 )
 
-//go:embed htmlPages/*.html
-//go:embed htmlPages/*.css
-var htmlFiles embed.FS
-
 func New(runtimeCtx *runtime.Context) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "login",
 		Short: "Start authentication flow",
-		Long:  "Opens browser for user login and saves credentials.",
-		Args:  cobra.NoArgs,
+		Long: `Opens a browser for interactive login and saves credentials.
+
+For non-interactive environments (CI/CD, automation, AI agents), set the
+CRE_API_KEY environment variable instead:
+
+  export CRE_API_KEY=<your-api-key>
+
+API keys can be created at https://app.chain.link (see Account Settings).
+When CRE_API_KEY is set, all commands that require authentication will use
+it automatically — no login needed.`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			v := viper.New()
+			if err := v.BindPFlags(cmd.Flags()); err != nil {
+				return err
+			}
+			if v.GetBool(settings.Flags.NonInteractive.Name) {
+				ui.ErrorWithSuggestions(
+					"Login requires a browser and is not available in non-interactive mode",
+					[]string{
+						"Set CRE_API_KEY environment variable instead: export CRE_API_KEY=<your-api-key>",
+						"API keys can be created at https://app.chain.link (Account Settings)",
+					},
+				)
+				return fmt.Errorf("login is not supported in non-interactive mode, use CRE_API_KEY instead")
+			}
 			h := newHandler(runtimeCtx)
-			return h.execute()
+			return h.execute(cmd.Context())
 		},
 	}
 
@@ -61,9 +72,9 @@ func New(runtimeCtx *runtime.Context) *cobra.Command {
 
 // Run executes the login flow directly without going through Cobra.
 // This is useful for prompting login from other commands when auth is required.
-func Run(runtimeCtx *runtime.Context) error {
+func Run(ctx context.Context, runtimeCtx *runtime.Context) error {
 	h := newHandler(runtimeCtx)
-	return h.execute()
+	return h.execute(ctx)
 }
 
 type handler struct {
@@ -85,7 +96,7 @@ func newHandler(ctx *runtime.Context) *handler {
 	}
 }
 
-func (h *handler) execute() error {
+func (h *handler) execute(ctx context.Context) error {
 	// Welcome message (no spinner yet)
 	ui.Title("CRE Login")
 	ui.Line()
@@ -100,7 +111,7 @@ func (h *handler) execute() error {
 
 	// Use spinner for the token exchange
 	h.spinner.Start("Exchanging authorization code...")
-	tokenSet, err := h.exchangeCodeForTokens(context.Background(), code)
+	tokenSet, err := oauth.ExchangeAuthorizationCode(ctx, nil, h.environmentSet, code, h.lastPKCEVerifier, "", "")
 	if err != nil {
 		h.spinner.StopAll()
 		h.log.Error().Err(err).Msg("code exchange failed")
@@ -114,11 +125,18 @@ func (h *handler) execute() error {
 		return err
 	}
 
+	h.spinner.Update("Fetching user context...")
+	if err := h.fetchTenantConfig(ctx, tokenSet); err != nil {
+		h.spinner.StopAll()
+		return fmt.Errorf("failed to fetch user context: %w", err)
+	}
+
 	// Stop spinner before final output
 	h.spinner.Stop()
 
 	ui.Line()
 	ui.Success("Login completed successfully!")
+	ui.EnvContext(h.environmentSet.EnvLabel())
 	ui.Line()
 
 	// Show next steps in a styled box
@@ -154,13 +172,18 @@ func (h *handler) startAuthFlow() (string, error) {
 		}
 	}()
 
-	verifier, challenge, err := generatePKCE()
+	verifier, challenge, err := oauth.GeneratePKCE()
 	if err != nil {
 		h.spinner.Stop()
 		return "", err
 	}
 	h.lastPKCEVerifier = verifier
-	h.lastState = randomState()
+	state, err := oauth.RandomState()
+	if err != nil {
+		h.spinner.Stop()
+		return "", err
+	}
+	h.lastState = state
 
 	authURL := h.buildAuthURL(challenge, h.lastState)
 
@@ -172,7 +195,7 @@ func (h *handler) startAuthFlow() (string, error) {
 	ui.URL(authURL)
 	ui.Line()
 
-	if err := openBrowser(authURL, rt.GOOS); err != nil {
+	if err := oauth.OpenBrowser(authURL, rt.GOOS); err != nil {
 		ui.Warning("Could not open browser automatically")
 		ui.Dim("Please open the URL above in your browser")
 		ui.Line()
@@ -191,19 +214,7 @@ func (h *handler) startAuthFlow() (string, error) {
 }
 
 func (h *handler) setupServer(codeCh chan string) (*http.Server, net.Listener, error) {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/callback", h.callbackHandler(codeCh))
-
-	// TODO: Add a fallback port in case the default port is in use
-	listener, err := net.Listen("tcp", constants.AuthListenAddr)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to listen on %s: %w", constants.AuthListenAddr, err)
-	}
-
-	return &http.Server{
-		Handler:           mux,
-		ReadHeaderTimeout: 5 * time.Second,
-	}, listener, nil
+	return oauth.NewCallbackHTTPServer(constants.AuthListenAddr, h.callbackHandler(codeCh))
 }
 
 func (h *handler) callbackHandler(codeCh chan string) http.HandlerFunc {
@@ -217,118 +228,56 @@ func (h *handler) callbackHandler(codeCh chan string) http.HandlerFunc {
 			if strings.Contains(errorDesc, OrgMembershipErrorSubstring) {
 				if h.retryCount >= maxOrgNotFoundRetries {
 					h.log.Error().Int("retries", h.retryCount).Msg("organization setup timed out after maximum retries")
-					h.serveEmbeddedHTML(w, errorPage, http.StatusBadRequest)
+					oauth.ServeEmbeddedHTML(h.log, w, oauth.PageError, http.StatusBadRequest)
 					return
 				}
 
 				// Generate new authentication credentials for the retry
-				verifier, challenge, err := generatePKCE()
+				verifier, challenge, err := oauth.GeneratePKCE()
 				if err != nil {
 					h.log.Error().Err(err).Msg("failed to prepare authentication retry")
-					h.serveEmbeddedHTML(w, errorPage, http.StatusInternalServerError)
+					oauth.ServeEmbeddedHTML(h.log, w, oauth.PageError, http.StatusInternalServerError)
 					return
 				}
 				h.lastPKCEVerifier = verifier
-				h.lastState = randomState()
+				st, err := oauth.RandomState()
+				if err != nil {
+					h.log.Error().Err(err).Msg("failed to generate OAuth state for retry")
+					oauth.ServeEmbeddedHTML(h.log, w, oauth.PageError, http.StatusInternalServerError)
+					return
+				}
+				h.lastState = st
 				h.retryCount++
 
 				// Build the new auth URL for redirect
 				authURL := h.buildAuthURL(challenge, h.lastState)
 
 				h.log.Debug().Int("attempt", h.retryCount).Int("max", maxOrgNotFoundRetries).Msg("organization setup in progress, retrying")
-				h.serveWaitingPage(w, authURL)
+				oauth.ServeWaitingPage(h.log, w, authURL)
 				return
 			}
 
 			// Generic Auth0 error
 			h.log.Error().Str("error", errorParam).Str("description", errorDesc).Msg("auth error in callback")
-			h.serveEmbeddedHTML(w, errorPage, http.StatusBadRequest)
+			oauth.ServeEmbeddedHTML(h.log, w, oauth.PageError, http.StatusBadRequest)
 			return
 		}
 
 		if st := r.URL.Query().Get("state"); st == "" || h.lastState == "" || st != h.lastState {
 			h.log.Error().Msg("invalid state in response")
-			h.serveEmbeddedHTML(w, errorPage, http.StatusBadRequest)
+			oauth.ServeEmbeddedHTML(h.log, w, oauth.PageError, http.StatusBadRequest)
 			return
 		}
 		code := r.URL.Query().Get("code")
 		if code == "" {
 			h.log.Error().Msg("no code in response")
-			h.serveEmbeddedHTML(w, errorPage, http.StatusBadRequest)
+			oauth.ServeEmbeddedHTML(h.log, w, oauth.PageError, http.StatusBadRequest)
 			return
 		}
 
-		h.serveEmbeddedHTML(w, successPage, http.StatusOK)
+		oauth.ServeEmbeddedHTML(h.log, w, oauth.PageSuccess, http.StatusOK)
 		codeCh <- code
 	}
-}
-
-func (h *handler) serveEmbeddedHTML(w http.ResponseWriter, filePath string, status int) {
-	htmlContent, err := htmlFiles.ReadFile(filePath)
-	if err != nil {
-		h.log.Error().Err(err).Str("file", filePath).Msg("failed to read embedded HTML file")
-		h.sendHTTPError(w)
-		return
-	}
-
-	cssContent, err := htmlFiles.ReadFile(stylePage)
-	if err != nil {
-		h.log.Error().Err(err).Str("file", stylePage).Msg("failed to read embedded CSS file")
-		h.sendHTTPError(w)
-		return
-	}
-
-	modified := strings.Replace(
-		string(htmlContent),
-		`<link rel="stylesheet" href="./output.css" />`,
-		fmt.Sprintf("<style>%s</style>", string(cssContent)),
-		1,
-	)
-
-	w.Header().Set("Content-Type", "text/html")
-	w.WriteHeader(status)
-	if _, err := w.Write([]byte(modified)); err != nil {
-		h.log.Error().Err(err).Msg("failed to write HTML response")
-	}
-}
-
-// serveWaitingPage serves the waiting page with the redirect URL injected.
-// This is used when handling organization membership errors during sign-up flow.
-func (h *handler) serveWaitingPage(w http.ResponseWriter, redirectURL string) {
-	htmlContent, err := htmlFiles.ReadFile(waitingPage)
-	if err != nil {
-		h.log.Error().Err(err).Str("file", waitingPage).Msg("failed to read waiting page HTML file")
-		h.sendHTTPError(w)
-		return
-	}
-
-	cssContent, err := htmlFiles.ReadFile(stylePage)
-	if err != nil {
-		h.log.Error().Err(err).Str("file", stylePage).Msg("failed to read embedded CSS file")
-		h.sendHTTPError(w)
-		return
-	}
-
-	// Inject CSS inline
-	modified := strings.Replace(
-		string(htmlContent),
-		`<link rel="stylesheet" href="./output.css" />`,
-		fmt.Sprintf("<style>%s</style>", string(cssContent)),
-		1,
-	)
-
-	// Inject the redirect URL
-	modified = strings.Replace(modified, "{{REDIRECT_URL}}", redirectURL, 1)
-
-	w.Header().Set("Content-Type", "text/html")
-	w.WriteHeader(http.StatusOK)
-	if _, err := w.Write([]byte(modified)); err != nil {
-		h.log.Error().Err(err).Msg("failed to write waiting page response")
-	}
-}
-
-func (h *handler) sendHTTPError(w http.ResponseWriter) {
-	http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 }
 
 func (h *handler) buildAuthURL(codeChallenge, state string) string {
@@ -347,69 +296,17 @@ func (h *handler) buildAuthURL(codeChallenge, state string) string {
 	return h.environmentSet.AuthBase + constants.AuthAuthorizePath + "?" + params.Encode()
 }
 
-func (h *handler) exchangeCodeForTokens(ctx context.Context, code string) (*credentials.CreLoginTokenSet, error) {
-	form := url.Values{}
-	form.Set("grant_type", "authorization_code")
-	form.Set("client_id", h.environmentSet.ClientID)
-	form.Set("code", code)
-	form.Set("redirect_uri", constants.AuthRedirectURI)
-	form.Set("code_verifier", h.lastPKCEVerifier)
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, h.environmentSet.AuthBase+constants.AuthTokenPath, strings.NewReader(form.Encode()))
-	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
+func (h *handler) fetchTenantConfig(ctx context.Context, tokenSet *credentials.CreLoginTokenSet) error {
+	creds := &credentials.Credentials{
+		Tokens:   tokenSet,
+		AuthType: credentials.AuthTypeBearer,
 	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	gqlClient := graphqlclient.New(creds, h.environmentSet, h.log)
 
-	resp, err := httpClient.Do(req) // #nosec G704 -- URL is from trusted environment config
-	if err != nil {
-		return nil, fmt.Errorf("perform request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-	if err != nil {
-		return nil, fmt.Errorf("read response: %w", err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("status %d: %s", resp.StatusCode, body)
+	envName := h.environmentSet.EnvName
+	if envName == "" {
+		envName = environments.DefaultEnv
 	}
 
-	var tokenSet credentials.CreLoginTokenSet
-	if err := json.Unmarshal(body, &tokenSet); err != nil {
-		return nil, fmt.Errorf("unmarshal token set: %w", err)
-	}
-	return &tokenSet, nil
-}
-
-func openBrowser(urlStr string, goos string) error {
-	switch goos {
-	case "darwin":
-		return exec.Command("open", urlStr).Start()
-	case "linux":
-		return exec.Command("xdg-open", urlStr).Start()
-	case "windows":
-		return exec.Command("rundll32", "url.dll,FileProtocolHandler", urlStr).Start()
-	default:
-		return fmt.Errorf("unsupported OS: %s", goos)
-	}
-}
-
-func generatePKCE() (verifier, challenge string, err error) {
-	b := make([]byte, 32)
-	if _, err = rand.Read(b); err != nil {
-		return "", "", err
-	}
-	verifier = base64.RawURLEncoding.EncodeToString(b)
-	sum := sha256.Sum256([]byte(verifier))
-	challenge = base64.RawURLEncoding.EncodeToString(sum[:])
-	return verifier, challenge, nil
-}
-
-func randomState() string {
-	b := make([]byte, 16)
-	if _, err := rand.Read(b); err != nil {
-		return fmt.Sprintf("%d", time.Now().UnixNano())
-	}
-	return base64.RawURLEncoding.EncodeToString(b)
+	return tenantctx.FetchAndWriteContext(ctx, gqlClient, envName, h.log)
 }

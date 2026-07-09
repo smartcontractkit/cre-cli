@@ -37,10 +37,11 @@ func New(ctx *runtime.Context) *cobra.Command {
 				return fmt.Errorf("execute expects a bundle .json file; got %q", ext)
 			}
 
-			h, err := common.NewHandler(ctx, bundlePath)
+			h, err := common.NewHandler(cmd.Context(), ctx, bundlePath, common.SecretsAuthOnchain)
 			if err != nil {
 				return err
 			}
+			defer h.CloseCapRegClient()
 
 			// Load the bundle, error if missing fields in json
 			b, err := common.LoadBundle(bundlePath)
@@ -65,9 +66,17 @@ func New(ctx *runtime.Context) *cobra.Command {
 				return fmt.Errorf("invalid bundle digest: %w", err)
 			}
 
+			if err := h.EnsureDeploymentRPCForOwnerKeySecrets(); err != nil {
+				return err
+			}
+
+			if _, err := h.EnsureVaultValidationOrConsent(cmd.Context()); err != nil {
+				return err
+			}
+
 			ownerAddr := ethcommon.HexToAddress(h.OwnerAddress)
 
-			allowlisted, err := h.Wrc.IsRequestAllowlisted(ownerAddr, digest)
+			allowlisted, err := h.Wrc.IsRequestAllowlisted(cmd.Context(), ownerAddr, digest)
 			if err != nil {
 				return fmt.Errorf("allowlist check failed: %w", err)
 			}
@@ -85,11 +94,12 @@ func New(ctx *runtime.Context) *cobra.Command {
 			}
 
 			// Parse & print results according to the bundle method
-			return h.ParseVaultGatewayResponse(b.Method, respBody)
+			return h.ParseVaultGatewayResponse(b.Method, b.RequestID, respBody)
 		},
 	}
 
 	settings.AddTxnTypeFlags(cmd)
+	settings.AddSkipConfirmation(cmd)
 
 	return cmd
 }

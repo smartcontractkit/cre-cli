@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
+	"golang.org/x/term"
 
 	"github.com/smartcontractkit/cre-cli/cmd/account"
 	"github.com/smartcontractkit/cre-cli/cmd/client"
@@ -19,18 +20,22 @@ import (
 	generatebindings "github.com/smartcontractkit/cre-cli/cmd/generate-bindings"
 	"github.com/smartcontractkit/cre-cli/cmd/login"
 	"github.com/smartcontractkit/cre-cli/cmd/logout"
+	"github.com/smartcontractkit/cre-cli/cmd/registry"
 	"github.com/smartcontractkit/cre-cli/cmd/secrets"
+	"github.com/smartcontractkit/cre-cli/cmd/templates"
 	"github.com/smartcontractkit/cre-cli/cmd/update"
 	"github.com/smartcontractkit/cre-cli/cmd/version"
 	"github.com/smartcontractkit/cre-cli/cmd/whoami"
 	"github.com/smartcontractkit/cre-cli/cmd/workflow"
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/context"
+	"github.com/smartcontractkit/cre-cli/internal/creconfig"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/logger"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/telemetry"
+	"github.com/smartcontractkit/cre-cli/internal/tenantctx"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 	intupdate "github.com/smartcontractkit/cre-cli/internal/update"
 )
@@ -124,7 +129,7 @@ func newRootCommand() *cobra.Command {
 				return fmt.Errorf("failed to bind flags: %w", err)
 			}
 
-			// Update log level if verbose flag is set — must happen before spinner starts
+			// Update log level if verbose flag is set — must happen before everything else
 			if verbose := v.GetBool(settings.Flags.Verbose.Name); verbose {
 				ui.SetVerbose(true)
 				newLogger := log.Level(zerolog.DebugLevel)
@@ -134,6 +139,14 @@ func newRootCommand() *cobra.Command {
 				runtimeContext.Logger = &newLogger
 				runtimeContext.ClientFactory = client.NewFactory(&newLogger, v)
 			}
+
+			log = runtimeContext.Logger
+
+			settings.ResolveAndLoadBothEnvFiles(
+				log, v,
+				settings.Flags.CliEnvFile.Name, constants.DefaultEnvFileName,
+				settings.Flags.CliPublicEnvFile.Name, constants.DefaultPublicEnvFileName,
+			)
 
 			// Start the global spinner for commands that do initialization work
 			spinner := ui.GlobalSpinner()
@@ -164,10 +177,38 @@ func newRootCommand() *cobra.Command {
 						spinner.Stop()
 					}
 
-					// Prompt user to login
+					if errors.Is(err, runtime.ErrValidationFailed) {
+						// Credentials exist but validation failed (likely network).
+						// Do NOT prompt for re-login -- that causes an infinite loop.
+						ui.Line()
+						if runtimeContext.EnvironmentSet != nil && runtimeContext.EnvironmentSet.RequiresVPN() {
+							ui.ErrorWithSuggestions("Credential validation failed", []string{
+								fmt.Sprintf("The %s environment requires Tailscale VPN.", runtimeContext.EnvironmentSet.EnvName),
+								"Ensure Tailscale is connected to the smartcontract.com network, then retry.",
+							})
+						} else {
+							ui.Error("Credential validation failed")
+						}
+						ui.EnvContext(runtimeContext.EnvironmentSet.EnvLabel())
+						ui.Line()
+						return fmt.Errorf("authentication required: %w", err)
+					}
+
+					// No credentials on disk -- prompt user to login
 					ui.Line()
 					ui.Warning("You are not logged in")
+					ui.EnvContext(runtimeContext.EnvironmentSet.EnvLabel())
 					ui.Line()
+
+					// In non-TTY environments (CI/CD, piped stdin, AI agents),
+					// skip the interactive prompt and return an actionable error.
+					if !term.IsTerminal(int(os.Stdin.Fd())) { //nolint:gosec // os.Stdin.Fd() is always 0; overflow is impossible
+						ui.ErrorWithSuggestions("Authentication required: not logged in and no CRE_API_KEY set", []string{
+							"Run 'cre login' interactively, or",
+							"Set CRE_API_KEY environment variable for non-interactive use",
+						})
+						return fmt.Errorf("authentication required: %w", err)
+					}
 
 					runLogin, formErr := ui.Confirm("Would you like to login now?",
 						ui.WithLabels("Yes, login", "No, cancel"),
@@ -182,7 +223,7 @@ func newRootCommand() *cobra.Command {
 
 					// Run login flow
 					ui.Line()
-					if loginErr := login.Run(runtimeContext); loginErr != nil {
+					if loginErr := login.Run(cmd.Context(), runtimeContext); loginErr != nil {
 						return fmt.Errorf("login failed: %w", loginErr)
 					}
 
@@ -190,6 +231,21 @@ func newRootCommand() *cobra.Command {
 					// the original command. The user needs to re-run their command
 					// now that credentials are available.
 					return errLoginCompleted
+				}
+
+				// Ensure user context exists (fetches via GQL if missing, supports API key and bearer)
+				if showSpinner {
+					spinner.Update("Loading user context...")
+				}
+				if err := runtimeContext.AttachTenantContext(cmd.Context()); err != nil {
+					if showSpinner {
+						spinner.Stop()
+					}
+					ui.ErrorWithSuggestions("Failed to load user context", []string{
+						"Run `cre login` to fetch your user context",
+						fmt.Sprintf("Ensure %s exists and is readable", creconfig.FilePathHint(tenantctx.ContextFile)),
+					})
+					return fmt.Errorf("user context required: %w", err)
 				}
 
 				// Check if organization is ungated for commands that require it
@@ -209,6 +265,11 @@ func newRootCommand() *cobra.Command {
 				if showSpinner {
 					spinner.Update("Loading settings...")
 				}
+				// Capture the invocation directory before SetExecutionContext changes it.
+				if invocationDir, err := os.Getwd(); err == nil {
+					runtimeContext.InvocationDir = invocationDir
+				}
+
 				// Set execution context (project root + workflow directory if applicable)
 				projectRootFlag := runtimeContext.Viper.GetString(settings.Flags.ProjectRoot.Name)
 				if err := context.SetExecutionContext(cmd, args, projectRootFlag, rootLogger); err != nil {
@@ -218,12 +279,71 @@ func newRootCommand() *cobra.Command {
 					return err
 				}
 
-				err := runtimeContext.AttachSettings(cmd, isLoadDeploymentRPC(cmd))
+				// Stop spinner before AttachSettings — it may prompt for target selection
+				if showSpinner {
+					spinner.Stop()
+				}
+
+				err := runtimeContext.AttachSettings(cmd, false)
 				if err != nil {
-					if showSpinner {
-						spinner.Stop()
-					}
 					return fmt.Errorf("%w", err)
+				}
+
+				if cmd.CommandPath() == "cre workflow hash" &&
+					runtimeContext.Settings != nil &&
+					strings.EqualFold(runtimeContext.Settings.Workflow.UserWorkflowSettings.DeploymentRegistry, "private") &&
+					runtimeContext.TenantContext == nil {
+					if showSpinner {
+						spinner.Update("Loading credentials...")
+					}
+					err := runtimeContext.AttachCredentials(cmd.Context(), shouldSkipValidation(cmd))
+					if err != nil {
+						ui.Warning("Failed to load credentials for workflow hash")
+					} else {
+						if showSpinner {
+							spinner.Update("Loading user context...")
+						}
+						if err := runtimeContext.AttachTenantContext(cmd.Context()); err != nil {
+							if showSpinner {
+								spinner.Stop()
+							}
+							ui.ErrorWithSuggestions("Failed to load user context", []string{
+								"Run `cre login` to fetch your user context",
+								fmt.Sprintf("Ensure %s exists and is readable", creconfig.FilePathHint(tenantctx.ContextFile)),
+							})
+							return fmt.Errorf("user context required: %w", err)
+						}
+					}
+				}
+
+				shouldResolveRegistry := true
+				if cmd.Name() == "hash" &&
+					runtimeContext.TenantContext == nil &&
+					runtimeContext.Settings != nil &&
+					runtimeContext.Settings.Workflow.UserWorkflowSettings.DeploymentRegistry != "" {
+					shouldResolveRegistry = false
+				}
+
+				if shouldResolveRegistry {
+					if err := runtimeContext.AttachResolvedRegistry(); err != nil {
+						return err
+					}
+				}
+
+				if isRegistryRPCCommand(cmd) {
+					if err := runtimeContext.ValidateOnchainRegistryRPC(); err != nil {
+						return fmt.Errorf("failed to load settings: %w", err)
+					}
+				}
+
+				if err := runtimeContext.FinalizeDeferredWorkflowOwner(cmd); err != nil {
+					return err
+				}
+
+				// Restart spinner for remaining initialization
+				if showSpinner {
+					spinner = ui.NewSpinner()
+					spinner.Start("Loading settings...")
 				}
 			}
 
@@ -304,8 +424,15 @@ func newRootCommand() *cobra.Command {
 	rootCmd.PersistentFlags().StringP(
 		settings.Flags.CliEnvFile.Name,
 		settings.Flags.CliEnvFile.Short,
-		constants.DefaultEnvFileName,
+		"",
 		fmt.Sprintf("Path to %s file which contains sensitive info", constants.DefaultEnvFileName),
+	)
+	// public env file flag is present for every subcommand
+	rootCmd.PersistentFlags().StringP(
+		settings.Flags.CliPublicEnvFile.Name,
+		settings.Flags.CliPublicEnvFile.Short,
+		"",
+		fmt.Sprintf("Path to %s file which contains shared, non-sensitive build config", constants.DefaultPublicEnvFileName),
 	)
 	// project root path flag is present for every subcommand
 	rootCmd.PersistentFlags().StringP(
@@ -328,6 +455,27 @@ func newRootCommand() *cobra.Command {
 		"",
 		"Use target settings from YAML config",
 	)
+	// non-interactive flag is present for every subcommand
+	rootCmd.PersistentFlags().Bool(
+		settings.Flags.NonInteractive.Name,
+		false,
+		"Fail instead of prompting; requires all inputs via flags",
+	)
+	// allow-unknown-chains skips chain-name validation against the chain-selectors
+	// registry so experimental chains can be configured and tested before they are
+	// added upstream. The chain name is still passed through verbatim to RPC and
+	// selector lookups, which will surface their own errors if the chain is truly
+	// unknown to downstream callers.
+	rootCmd.PersistentFlags().Bool(
+		settings.Flags.AllowUnknownChains.Name,
+		false,
+		"Skip chain-name validation against the chain-selectors registry (for experimental chains)",
+	)
+	rootCmd.PersistentFlags().Bool(
+		settings.Flags.AllowInsecureRPC.Name,
+		false,
+		"Allow non-localhost HTTP RPC URLs (insecure)",
+	)
 	rootCmd.CompletionOptions.HiddenDefaultCmd = true
 
 	secretsCmd := secrets.New(runtimeContext)
@@ -340,18 +488,24 @@ func newRootCommand() *cobra.Command {
 	accountCmd := account.New(runtimeContext)
 	whoamiCmd := whoami.New(runtimeContext)
 	updateCmd := update.New(runtimeContext)
+	templatesCmd := templates.New(runtimeContext)
+	registryCmd := registry.New(runtimeContext)
 
 	secretsCmd.RunE = helpRunE
 	workflowCmd.RunE = helpRunE
 	accountCmd.RunE = helpRunE
+	templatesCmd.RunE = helpRunE
+	registryCmd.RunE = helpRunE
 
 	// Define groups (order controls display order)
 	rootCmd.AddGroup(&cobra.Group{ID: "getting-started", Title: "Getting Started"})
 	rootCmd.AddGroup(&cobra.Group{ID: "account", Title: "Account"})
 	rootCmd.AddGroup(&cobra.Group{ID: "workflow", Title: "Workflow"})
 	rootCmd.AddGroup(&cobra.Group{ID: "secret", Title: "Secret"})
+	rootCmd.AddGroup(&cobra.Group{ID: "registry", Title: "Registry"})
 
 	initCmd.GroupID = "getting-started"
+	templatesCmd.GroupID = "getting-started"
 
 	loginCmd.GroupID = "account"
 	logoutCmd.GroupID = "account"
@@ -360,6 +514,7 @@ func newRootCommand() *cobra.Command {
 
 	secretsCmd.GroupID = "secret"
 	workflowCmd.GroupID = "workflow"
+	registryCmd.GroupID = "registry"
 
 	rootCmd.AddCommand(
 		initCmd,
@@ -370,8 +525,10 @@ func newRootCommand() *cobra.Command {
 		whoamiCmd,
 		secretsCmd,
 		workflowCmd,
+		registryCmd,
 		genBindingsCmd,
 		updateCmd,
+		templatesCmd,
 	)
 
 	return rootCmd
@@ -380,25 +537,38 @@ func newRootCommand() *cobra.Command {
 func isLoadSettings(cmd *cobra.Command) bool {
 	// It is not expected to have the settings file when running the following commands
 	var excludedCommands = map[string]struct{}{
-		"cre version":               {},
-		"cre login":                 {},
-		"cre logout":                {},
-		"cre whoami":                {},
-		"cre account access":        {},
-		"cre account list-key":      {},
-		"cre init":                  {},
-		"cre generate-bindings":     {},
-		"cre completion bash":       {},
-		"cre completion fish":       {},
-		"cre completion powershell": {},
-		"cre completion zsh":        {},
-		"cre help":                  {},
-		"cre update":                {},
-		"cre workflow":              {},
-		"cre workflow custom-build": {},
-		"cre account":               {},
-		"cre secrets":               {},
-		"cre":                       {},
+		"cre version":                   {},
+		"cre login":                     {},
+		"cre logout":                    {},
+		"cre whoami":                    {},
+		"cre account access":            {},
+		"cre account list-key":          {},
+		"cre init":                      {},
+		"cre generate-bindings":         {},
+		"cre generate-bindings evm":     {},
+		"cre generate-bindings solana":  {},
+		"cre completion bash":           {},
+		"cre completion fish":           {},
+		"cre completion powershell":     {},
+		"cre completion zsh":            {},
+		"cre help":                      {},
+		"cre update":                    {},
+		"cre workflow":                  {},
+		"cre workflow supported-chains": {},
+		"cre workflow custom-build":     {},
+		"cre workflow limits":           {},
+		"cre workflow limits export":    {},
+		"cre workflow build":            {},
+		"cre workflow list":             {},
+		"cre account":                   {},
+		"cre secrets":                   {},
+		"cre templates":                 {},
+		"cre templates list":            {},
+		"cre templates add":             {},
+		"cre templates remove":          {},
+		"cre registry":                  {},
+		"cre registry list":             {},
+		"cre":                           {},
 	}
 
 	_, exists := excludedCommands[cmd.CommandPath()]
@@ -408,27 +578,41 @@ func isLoadSettings(cmd *cobra.Command) bool {
 func isLoadCredentials(cmd *cobra.Command) bool {
 	// It is not expected to have the credentials loaded when running the following commands
 	var excludedCommands = map[string]struct{}{
-		"cre version":               {},
-		"cre login":                 {},
-		"cre logout":                {},
-		"cre completion bash":       {},
-		"cre completion fish":       {},
-		"cre completion powershell": {},
-		"cre completion zsh":        {},
-		"cre help":                  {},
-		"cre generate-bindings":     {},
-		"cre update":                {},
-		"cre workflow":              {},
-		"cre account":               {},
-		"cre secrets":               {},
-		"cre":                       {},
+		"cre version":                  {},
+		"cre login":                    {},
+		"cre logout":                   {},
+		"cre completion bash":          {},
+		"cre completion fish":          {},
+		"cre completion powershell":    {},
+		"cre completion zsh":           {},
+		"cre help":                     {},
+		"cre generate-bindings":        {},
+		"cre generate-bindings evm":    {},
+		"cre generate-bindings solana": {},
+		"cre update":                   {},
+		"cre workflow":                 {},
+		"cre workflow limits":          {},
+		"cre workflow limits export":   {},
+		"cre account":                  {},
+		"cre secrets":                  {},
+		"cre workflow build":           {},
+		"cre workflow hash":            {},
+		"cre templates":                {},
+		"cre templates list":           {},
+		"cre templates add":            {},
+		"cre templates remove":         {},
+		"cre":                          {},
 	}
 
 	_, exists := excludedCommands[cmd.CommandPath()]
 	return !exists
 }
 
-func isLoadDeploymentRPC(cmd *cobra.Command) bool {
+// isRegistryRPCCommand returns true for commands that interact with the workflow
+// registry and require a validated RPC URL when the resolved registry is on-chain.
+// RPC validation is deferred until after registry resolution so that off-chain
+// (private) registry deployments are not forced to supply an on-chain RPC URL.
+func isRegistryRPCCommand(cmd *cobra.Command) bool {
 	var includedCommands = map[string]struct{}{
 		"cre workflow deploy":    {},
 		"cre workflow pause":     {},
@@ -436,11 +620,6 @@ func isLoadDeploymentRPC(cmd *cobra.Command) bool {
 		"cre workflow delete":    {},
 		"cre account link-key":   {},
 		"cre account unlink-key": {},
-		"cre secrets create":     {},
-		"cre secrets delete":     {},
-		"cre secrets execute":    {},
-		"cre secrets list":       {},
-		"cre secrets update":     {},
 	}
 	_, exists := includedCommands[cmd.CommandPath()]
 	return exists
@@ -472,20 +651,28 @@ func shouldShowSpinner(cmd *cobra.Command) bool {
 	// Don't show spinner for commands that don't do async work
 	// or commands that have their own interactive UI (like init)
 	var excludedCommands = map[string]struct{}{
-		"cre":                       {},
-		"cre version":               {},
-		"cre help":                  {},
-		"cre completion bash":       {},
-		"cre completion fish":       {},
-		"cre completion powershell": {},
-		"cre completion zsh":        {},
-		"cre init":                  {}, // Has its own Huh forms UI
-		"cre login":                 {}, // Has its own interactive flow
-		"cre logout":                {},
-		"cre update":                {},
-		"cre workflow":              {}, // Just shows help
-		"cre account":               {}, // Just shows help
-		"cre secrets":               {}, // Just shows help
+		"cre":                        {},
+		"cre version":                {},
+		"cre help":                   {},
+		"cre completion bash":        {},
+		"cre completion fish":        {},
+		"cre completion powershell":  {},
+		"cre completion zsh":         {},
+		"cre init":                   {}, // Has its own Huh forms UI
+		"cre login":                  {}, // Has its own interactive flow
+		"cre logout":                 {},
+		"cre update":                 {},
+		"cre workflow":               {}, // Just shows help
+		"cre workflow limits":        {}, // Just shows help
+		"cre workflow limits export": {}, // Static data, no project needed
+		"cre account":                {}, // Just shows help
+		"cre workflow build":         {}, // Offline command, no async init
+		"cre workflow hash":          {}, // Offline command, has own spinner
+		"cre secrets":                {}, // Just shows help
+		"cre templates":              {}, // Just shows help
+		"cre templates list":         {},
+		"cre templates add":          {},
+		"cre templates remove":       {},
 	}
 
 	_, exists := excludedCommands[cmd.CommandPath()]

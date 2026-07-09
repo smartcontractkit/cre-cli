@@ -39,6 +39,7 @@ type Inputs struct {
 	WorkflowOwner                   string `validate:"workflow_owner"`
 	WorkflowRegistryContractAddress string `validate:"required"`
 	SkipConfirmation                bool
+	NonInteractive                  bool
 }
 
 type initiateUnlinkingResponse struct {
@@ -60,6 +61,7 @@ type handler struct {
 	stdin          io.Reader
 	environmentSet *environments.EnvironmentSet
 	wrc            *client.WorkflowRegistryV2Client
+	execCtx        context.Context
 
 	validated bool
 
@@ -82,7 +84,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 			if err := h.ValidateInputs(in); err != nil {
 				return err
 			}
-			return h.Execute(in)
+			return h.Execute(cmd.Context(), in)
 		},
 	}
 	settings.AddTxnTypeFlags(cmd)
@@ -91,28 +93,28 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 }
 
 func newHandler(ctx *runtime.Context, stdin io.Reader) *handler {
-	h := handler{
+	return &handler{
 		settings:       ctx.Settings,
 		credentials:    ctx.Credentials,
 		clientFactory:  ctx.ClientFactory,
 		log:            ctx.Logger,
 		environmentSet: ctx.EnvironmentSet,
 		stdin:          stdin,
-		wg:             sync.WaitGroup{},
-		wrcErr:         nil,
 	}
+}
+
+func (h *handler) initWorkflowRegistryClient() error {
 	h.wg.Add(1)
 	go func() {
 		defer h.wg.Done()
-		wrc, err := h.clientFactory.NewWorkflowRegistryV2Client()
+		wrc, err := h.clientFactory.NewWorkflowRegistryV2Client(h.execCtx)
 		if err != nil {
 			h.wrcErr = fmt.Errorf("failed to create workflow registry client: %w", err)
 			return
 		}
 		h.wrc = wrc
 	}()
-
-	return &h
+	return nil
 }
 
 func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
@@ -120,6 +122,7 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 		WorkflowOwner:                   h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress,
 		WorkflowRegistryContractAddress: h.environmentSet.WorkflowRegistryAddress,
 		SkipConfirmation:                v.GetBool(settings.Flags.SkipConfirmation.Name),
+		NonInteractive:                  v.GetBool(settings.Flags.NonInteractive.Name),
 	}, nil
 }
 
@@ -135,9 +138,14 @@ func (h *handler) ValidateInputs(in Inputs) error {
 	return nil
 }
 
-func (h *handler) Execute(in Inputs) error {
+func (h *handler) Execute(ctx context.Context, in Inputs) error {
 	if !h.validated {
 		return fmt.Errorf("inputs not validated")
+	}
+
+	h.execCtx = ctx
+	if err := h.initWorkflowRegistryClient(); err != nil {
+		return err
 	}
 
 	h.displayDetails()
@@ -158,6 +166,14 @@ func (h *handler) Execute(in Inputs) error {
 		return nil
 	}
 
+	// Check non-interactive mode
+	if in.NonInteractive && !in.SkipConfirmation {
+		ui.ErrorWithSuggestions(
+			"Non-interactive mode requires all inputs via flags",
+			[]string{"--yes"},
+		)
+		return fmt.Errorf("missing required flags for --non-interactive mode")
+	}
 	// Check if confirmation should be skipped
 	if !in.SkipConfirmation {
 		ui.Warning("Unlink is a destructive action that will wipe out all workflows registered under your owner address.")
@@ -171,7 +187,7 @@ func (h *handler) Execute(in Inputs) error {
 		}
 	}
 
-	resp, err := h.callInitiateUnlinking(context.Background(), in)
+	resp, err := h.callInitiateUnlinking(h.execCtx, in)
 	if err != nil {
 		return err
 	}
@@ -245,10 +261,10 @@ func (h *handler) unlinkOwner(owner string, resp initiateUnlinkingResponse) erro
 	}
 
 	addr := common.HexToAddress(owner)
-	if err := h.wrc.CanUnlinkOwner(addr, ts, sigBytes); err != nil {
+	if err := h.wrc.CanUnlinkOwner(h.execCtx, addr, ts, sigBytes); err != nil {
 		return fmt.Errorf("unlink request verification failed: %w", err)
 	}
-	txOut, err := h.wrc.UnlinkOwner(addr, ts, sigBytes)
+	txOut, err := h.wrc.UnlinkOwner(h.execCtx, addr, ts, sigBytes)
 	if err != nil {
 		return fmt.Errorf("UnlinkOwner failed: %w", err)
 	}
@@ -336,7 +352,7 @@ func (h *handler) unlinkOwner(owner string, resp initiateUnlinkingResponse) erro
 func (h *handler) checkIfAlreadyLinked() (bool, error) {
 	ownerAddr := common.HexToAddress(h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress)
 
-	linked, err := h.wrc.IsOwnerLinked(ownerAddr)
+	linked, err := h.wrc.IsOwnerLinked(h.execCtx, ownerAddr)
 	if err != nil {
 		return false, fmt.Errorf("failed to check owner link status: %w", err)
 	}
