@@ -39,8 +39,14 @@ jobs:
       contents: read
       actions: read
     steps:
+      - name: Checkout the repo
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # actions/checkout@v4.2.2
+
       - name: ci-lint-misc
         uses: smartcontractkit/.github/actions/ci-lint-misc@01d931b0455a754d12e7143cc54a5a3521a8f6f6 # ci-lint-misc@0.1.4
+
+      - name: Verify install.sh embedded release public key
+        run: bash install/check_embedded_key.sh
 
   ci-test-unit:
     runs-on: ubuntu-latest
