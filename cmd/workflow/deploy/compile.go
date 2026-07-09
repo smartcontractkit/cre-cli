@@ -17,6 +17,9 @@ func (h *handler) Compile(ctx context.Context) error {
 
 	// URL wasm is handled directly in Execute(); nothing to compile or write locally.
 	if cmdcommon.IsURL(h.inputs.WasmPath) {
+		if h.runtimeContext != nil {
+			h.runtimeContext.Workflow.Language = constants.WorkflowLanguageWasm
+		}
 		return nil
 	}
 
@@ -29,13 +32,13 @@ func (h *handler) Compile(ctx context.Context) error {
 	var err error
 
 	if h.inputs.WasmPath != "" {
+		if h.runtimeContext != nil {
+			h.runtimeContext.Workflow.Language = constants.WorkflowLanguageWasm
+		}
 		ui.Dim("Reading pre-built WASM binary...")
 		wasmFile, err = os.ReadFile(h.inputs.WasmPath)
 		if err != nil {
 			return fmt.Errorf("failed to read WASM binary from %s: %w", h.inputs.WasmPath, err)
-		}
-		if h.runtimeContext != nil {
-			h.runtimeContext.Workflow.Language = constants.WorkflowLanguageWasm
 		}
 		h.log.Debug().Str("path", h.inputs.WasmPath).Msg("Loaded pre-built WASM binary")
 

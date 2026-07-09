@@ -142,15 +142,15 @@ type getLatestDeploymentEnvelope struct {
 
 // GetWorkflowSummary fetches extended workflow details including execution health.
 func (c *Client) GetWorkflowSummary(parent context.Context, uuid string, from time.Time) (*WorkflowSummary, error) {
-	summary, err := c.getWorkflowSummary(parent, uuid, from, getWorkflowQuery)
+	summary, err := c.fetchWorkflowSummaryWithQuery(parent, uuid, from, getWorkflowQuery)
 	if err != nil && isNonNullGraphQLError(err) {
 		c.log.Debug().Msg("GetWorkflow executionCountByStatus unavailable; retrying without breakdown fields")
-		return c.getWorkflowSummary(parent, uuid, from, getWorkflowQueryWithoutExecutionBreakdown)
+		return c.fetchWorkflowSummaryWithQuery(parent, uuid, from, getWorkflowQueryWithoutExecutionBreakdown)
 	}
 	return summary, err
 }
 
-func (c *Client) getWorkflowSummary(parent context.Context, uuid string, from time.Time, query string) (*WorkflowSummary, error) {
+func (c *Client) fetchWorkflowSummaryWithQuery(parent context.Context, uuid string, from time.Time, query string) (*WorkflowSummary, error) {
 	ctx, cancel := c.CreateServiceContextWithTimeout(parent)
 	defer cancel()
 
