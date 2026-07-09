@@ -29,6 +29,7 @@ func PrintWorkflowStatusTable(v WorkflowStatusView) {
 
 	ui.Bold(fmt.Sprintf("Workflow: %s", s.Name))
 	ui.Dim(fmt.Sprintf("   Workflow ID:    %s", s.WorkflowID))
+	ui.Dim(fmt.Sprintf("   Owner:          %s", s.OwnerAddress))
 	ui.Dim(fmt.Sprintf("   Status:         %s%s", s.Status, deploymentStatusHint(s.Status)))
 	ui.Dim(fmt.Sprintf("   Registry:       %s", regID))
 	if matched != nil && RegistryEligibleForContractRows(matched) && matched.Address != nil {
@@ -73,12 +74,6 @@ func PrintWorkflowStatusTable(v WorkflowStatusView) {
 		ui.Dim("   No deployment record found")
 	}
 
-	ui.Line()
-	ui.Bold("Execution summary")
-	ui.Dim(fmt.Sprintf("   Total:          %d", s.ExecutionCount))
-	ui.Dim(fmt.Sprintf("   Success:        %d", s.SuccessCount))
-	ui.Dim(fmt.Sprintf("   Failure:        %d", s.FailureCount))
-
 	if v.LastExecution != nil {
 		e := v.LastExecution
 		ui.Line()
@@ -115,12 +110,10 @@ func PrintWorkflowStatusJSON(v WorkflowStatusView) error {
 		"workflow": map[string]any{
 			"name":           s.Name,
 			"workflowId":     s.WorkflowID,
+			"ownerAddress":   s.OwnerAddress,
 			"status":         s.Status,
 			"registeredAt":   s.RegisteredAt.UTC().Format(time.RFC3339),
 			"lastExecutedAt": timeOrNil(s.ExecutedAt),
-			"executionCount": s.ExecutionCount,
-			"successCount":   s.SuccessCount,
-			"failureCount":   s.FailureCount,
 		},
 	}
 

@@ -3,7 +3,7 @@
 # It detects the architecture, downloads the correct .exe,
 # and adds it to the user's PATH.
 #
-# Usage: irm https://cre.chain.link/install.ps1 | iex
+# Usage: irm https://app.chain.link/install.ps1 | iex
 
 # --- Configuration ---
 $ErrorActionPreference = "Stop" # Exit script on any error
