@@ -77,11 +77,13 @@ func (h *Handler) Execute(ctx context.Context, inputs Inputs) error {
 	wg.Wait()
 
 	if execErr == nil && exec.Status == workflowdataclient.ExecutionStatusFailure {
-		failStatus := "failure"
-		failEvents, _ = h.wdc.ListExecutionEvents(ctx, workflowdataclient.ListEventsInput{
+		failEvents, err = h.wdc.ListExecutionEvents(ctx, workflowdataclient.ListEventsInput{
 			ExecutionUUID: uuid,
-			Status:        &failStatus,
+			Status:        new(string(workflowdataclient.ExecutionStatusFailure)),
 		})
+		if err != nil {
+			return err
+		}
 	}
 
 	spinner.Stop()
