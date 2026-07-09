@@ -8,7 +8,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"strings"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -26,39 +25,6 @@ import (
 
 func strPtr(s string) *string { return &s }
 
-// workflowServer starts an httptest.Server that responds to ListWorkflows
-// with the provided pages (each call advances through pages) and records the
-// raw request bodies so tests can assert the GQL variables that were sent.
-type workflowServer struct {
-	*httptest.Server
-	requests []string
-}
-
-func newWorkflowServer(t *testing.T, pages [][]map[string]string, totalCount int) *workflowServer {
-	t.Helper()
-	ws := &workflowServer{}
-	var call atomic.Int32
-	ws.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		body, _ := io.ReadAll(r.Body)
-		ws.requests = append(ws.requests, string(body))
-		idx := int(call.Add(1)) - 1
-		w.Header().Set("Content-Type", "application/json")
-		var data []map[string]string
-		if idx < len(pages) {
-			data = pages[idx]
-		}
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"data": map[string]any{
-				"workflows": map[string]any{
-					"count": totalCount,
-					"data":  data,
-				},
-			},
-		})
-	}))
-	return ws
-}
-
 // buildSettings returns a minimal *settings.Settings populated with the
 // workflow-name and deployment-registry under the "staging" target.
 func buildSettings(workflowName, deploymentRegistry string) *settings.Settings {
@@ -70,7 +36,7 @@ func buildSettings(workflowName, deploymentRegistry string) *settings.Settings {
 	return s
 }
 
-func newHandlerWithServer(t *testing.T, rtCtx *runtime.Context, srv *workflowServer) *cmdget.Handler {
+func newHandlerWithServer(t *testing.T, rtCtx *runtime.Context, srv *httptest.Server) *cmdget.Handler {
 	t.Helper()
 	logger := zerolog.Nop()
 	creds := &credentials.Credentials{AuthType: credentials.AuthTypeApiKey, APIKey: "test-key"}
@@ -97,22 +63,6 @@ func captureStdout(t *testing.T, fn func()) string {
 	fn()
 	w.Close()
 	os.Stdout = old
-	var buf strings.Builder
-	_, _ = io.Copy(&buf, r)
-	return buf.String()
-}
-
-func captureStderr(t *testing.T, fn func()) string {
-	t.Helper()
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	old := os.Stderr
-	os.Stderr = w
-	fn()
-	w.Close()
-	os.Stderr = old
 	var buf strings.Builder
 	_, _ = io.Copy(&buf, r)
 	return buf.String()
@@ -265,7 +215,7 @@ func TestExecute_FiltersByDeploymentRegistry(t *testing.T) {
 		},
 		Settings: buildSettingsWithOwner("alpha", "0xowner"),
 	}
-	h := newHandlerWithServer(t, rtCtx, &workflowServer{Server: srv})
+	h := newHandlerWithServer(t, rtCtx, srv)
 
 	out := captureStdout(t, func() {
 		if err := h.Execute(context.Background(), cmdget.Inputs{}); err != nil {
@@ -327,7 +277,7 @@ func TestExecute_AllRegistriesWithMultipleActiveErrors(t *testing.T) {
 		},
 		Settings: buildSettingsWithOwner("alpha", "0xowner"),
 	}
-	h := newHandlerWithServer(t, rtCtx, &workflowServer{Server: srv})
+	h := newHandlerWithServer(t, rtCtx, srv)
 
 	err := h.Execute(context.Background(), cmdget.Inputs{AllRegistries: true})
 	if err == nil || !strings.Contains(err.Error(), "multiple ACTIVE workflows") {
@@ -407,7 +357,7 @@ func TestExecute_ExactNameMatchNarrowsSearch(t *testing.T) {
 		},
 		Settings: buildSettingsWithOwner("alpha", "0xowner"),
 	}
-	h := newHandlerWithServer(t, rtCtx, &workflowServer{Server: srv})
+	h := newHandlerWithServer(t, rtCtx, srv)
 
 	out := captureStdout(t, func() {
 		if err := h.Execute(context.Background(), cmdget.Inputs{}); err != nil {
@@ -441,7 +391,7 @@ func TestExecute_NoMatchReturnsError(t *testing.T) {
 		},
 		Settings: buildSettingsWithOwner("alpha", "0xowner"),
 	}
-	h := newHandlerWithServer(t, rtCtx, &workflowServer{Server: srv})
+	h := newHandlerWithServer(t, rtCtx, srv)
 
 	err := h.Execute(context.Background(), cmdget.Inputs{})
 	if err == nil || !strings.Contains(err.Error(), `no workflow found with name "alpha"`) {
@@ -518,9 +468,9 @@ func TestExecute_WorkflowNotFound(t *testing.T) {
 		TenantContext: &tenantctx.EnvironmentContext{
 			Registries: []*tenantctx.Registry{{ID: "private", Type: "off-chain"}},
 		},
-		Settings:       buildSettingsWithOwner("missing-workflow", "0xowner"),
+		Settings: buildSettingsWithOwner("missing-workflow", "0xowner"),
 	}
-	h := newHandlerWithServer(t, rtCtx, &workflowServer{Server: srv})
+	h := newHandlerWithServer(t, rtCtx, srv)
 
 	err := h.Execute(context.Background(), cmdget.Inputs{})
 	if err == nil || !strings.Contains(err.Error(), `no workflow found with name "missing-workflow"`) {
@@ -624,9 +574,9 @@ func TestExecute_JSONOutput(t *testing.T) {
 		TenantContext: &tenantctx.EnvironmentContext{
 			Registries: []*tenantctx.Registry{{ID: "private", Type: "off-chain"}},
 		},
-		Settings:       buildSettingsWithOwner("my-workflow", "0xowner"),
+		Settings: buildSettingsWithOwner("my-workflow", "0xowner"),
 	}
-	h := newHandlerWithServer(t, rtCtx, &workflowServer{Server: srv})
+	h := newHandlerWithServer(t, rtCtx, srv)
 
 	out := captureStdout(t, func() {
 		if err := h.Execute(context.Background(), cmdget.Inputs{OutputFormat: "json"}); err != nil {
@@ -649,7 +599,7 @@ func TestExecute_JSONOutput(t *testing.T) {
 	if workflow["ownerAddress"] != "0xowner" {
 		t.Errorf("expected ownerAddress 0xowner, got %v", workflow["ownerAddress"])
 	}
-	if _, ok := workflow["executionCount"]; ok {
+	if _, hasExecCount := workflow["executionCount"]; hasExecCount {
 		t.Errorf("executionCount should not be in JSON output")
 	}
 
@@ -734,9 +684,9 @@ func TestExecute_ContinuesWhenDeploymentUnavailable(t *testing.T) {
 		TenantContext: &tenantctx.EnvironmentContext{
 			Registries: []*tenantctx.Registry{{ID: "private", Type: "off-chain"}},
 		},
-		Settings:       buildSettingsWithOwner("my-workflow", "0xowner"),
+		Settings: buildSettingsWithOwner("my-workflow", "0xowner"),
 	}
-	h := newHandlerWithServer(t, rtCtx, &workflowServer{Server: srv})
+	h := newHandlerWithServer(t, rtCtx, srv)
 
 	out := captureStdout(t, func() {
 		if err := h.Execute(context.Background(), cmdget.Inputs{OutputFormat: "json"}); err != nil {
