@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -17,15 +19,34 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/workflowresolve"
 )
 
+// Inputs holds resolved and validated flag values for workflow get.
+type Inputs struct {
+	AllRegistries bool
+	OutputFormat  string
+}
+
+func resolveInputs(allRegistries bool, outputFormat string, jsonFlag bool) (Inputs, error) {
+	outputFormat, err := workflowresolve.ResolveOutputFormat(outputFormat, jsonFlag)
+	if err != nil {
+		return Inputs{}, err
+	}
+	return Inputs{
+		AllRegistries: allRegistries,
+		OutputFormat:  outputFormat,
+	}, nil
+}
+
 // Handler resolves a single workflow by name via the platform search API and
-// prints the matching rows. It filters to the workflow's configured
-// deployment-registry by default; that filter can be disabled with --all-registries.
+// prints deployment health and the most recent execution. Results are filtered
+// to the workflow's configured deployment-registry by default; pass
+// --all-registries to resolve across every registry.
 type Handler struct {
-	credentials      *credentials.Credentials
-	tenantCtx        *tenantctx.EnvironmentContext
-	settings         *settings.Settings
-	resolvedRegistry settings.ResolvedRegistry
-	wdc              *workflowdataclient.Client
+	credentials          *credentials.Credentials
+	tenantCtx            *tenantctx.EnvironmentContext
+	settings             *settings.Settings
+	resolvedRegistry     settings.ResolvedRegistry
+	derivedWorkflowOwner string
+	wdc                  *workflowdataclient.Client
 }
 
 // NewHandler builds a Handler backed by a real WorkflowDataClient.
@@ -33,11 +54,12 @@ func NewHandler(ctx *runtime.Context) *Handler {
 	gql := graphqlclient.New(ctx.Credentials, ctx.EnvironmentSet, ctx.Logger)
 	wdc := workflowdataclient.New(gql, ctx.Logger)
 	return &Handler{
-		credentials:      ctx.Credentials,
-		tenantCtx:        ctx.TenantContext,
-		settings:         ctx.Settings,
-		resolvedRegistry: ctx.ResolvedRegistry,
-		wdc:              wdc,
+		credentials:          ctx.Credentials,
+		tenantCtx:            ctx.TenantContext,
+		settings:             ctx.Settings,
+		resolvedRegistry:     ctx.ResolvedRegistry,
+		derivedWorkflowOwner: ctx.DerivedWorkflowOwner,
+		wdc:                  wdc,
 	}
 }
 
@@ -45,18 +67,18 @@ func NewHandler(ctx *runtime.Context) *Handler {
 // (for testing).
 func NewHandlerWithClient(ctx *runtime.Context, wdc *workflowdataclient.Client) *Handler {
 	return &Handler{
-		credentials:      ctx.Credentials,
-		tenantCtx:        ctx.TenantContext,
-		settings:         ctx.Settings,
-		resolvedRegistry: ctx.ResolvedRegistry,
-		wdc:              wdc,
+		credentials:          ctx.Credentials,
+		tenantCtx:            ctx.TenantContext,
+		settings:             ctx.Settings,
+		resolvedRegistry:     ctx.ResolvedRegistry,
+		derivedWorkflowOwner: ctx.DerivedWorkflowOwner,
+		wdc:                  wdc,
 	}
 }
 
-// Execute searches the platform for workflows whose name matches the value in
-// the target's user-workflow settings. When allRegistries is false (default),
-// results are filtered to the workflow's configured deployment-registry.
-func (h *Handler) Execute(ctx context.Context, allRegistries bool) error {
+// Execute resolves the workflow configured for the selected --target and prints
+// deployment health and the most recent execution.
+func (h *Handler) Execute(ctx context.Context, inputs Inputs) error {
 	if h.tenantCtx == nil {
 		return fmt.Errorf("user context not available — run `cre login` and retry")
 	}
@@ -72,69 +94,175 @@ func (h *Handler) Execute(ctx context.Context, allRegistries bool) error {
 		return fmt.Errorf("workflow-name is not set for target %q in workflow.yaml", h.settings.User.TargetName)
 	}
 
-	// Resolve which registry to filter by (if any). When --all-registries is
-	// set we skip the filter entirely. Otherwise we use the deployment-registry
-	// from workflow.yaml; the registry-resolution pass that runs earlier
-	// already validated the value against the tenant context, so we look it
-	// up by ID here for a plain *tenantctx.Registry handle to pass to the
-	// filter.
-	var registryFilter *tenantctx.Registry
-	if !allRegistries {
-		filterID := strings.TrimSpace(h.settings.Workflow.UserWorkflowSettings.DeploymentRegistry)
-		if filterID == "" && h.resolvedRegistry != nil {
-			filterID = h.resolvedRegistry.ID()
-		}
-		if filterID != "" {
-			registryFilter = workflowresolve.FindRegistry(h.tenantCtx.Registries, filterID)
-			if registryFilter == nil {
-				return fmt.Errorf("deployment-registry %q not found in user context; available: [%s]",
-					filterID, workflowresolve.AvailableRegistryIDs(h.tenantCtx.Registries))
-			}
-		}
-	}
-
-	spinner := ui.NewSpinner()
-	spinner.Start(fmt.Sprintf("Fetching workflow %q...", workflowName))
-	rows, err := h.wdc.SearchByName(ctx, workflowName, workflowdataclient.DefaultPageSize)
-	spinner.Stop()
+	owner, err := workflowresolve.ResolveWorkflowOwnerAddress(h.settings, h.resolvedRegistry, h.derivedWorkflowOwner)
 	if err != nil {
 		return err
 	}
 
-	// The platform search uses a contains-style match; narrow to an exact
-	// (case-insensitive) name match so `get foo` does not surface `foo-staging`.
-	rows = filterByExactName(rows, workflowName)
+	uuid, err := h.resolveWorkflowUUID(ctx, inputs, workflowName, owner)
+	if err != nil {
+		return err
+	}
 
+	spinner := ui.NewSpinner()
+	spinner.Start("Fetching workflow details...")
+
+	now := time.Now().UTC()
+	from := now.AddDate(-1, 0, 0) // 1-year lookback — mirrors Explorer behaviour
+
+	var (
+		summary                        *workflowdataclient.WorkflowSummary
+		deployment                     *workflowdataclient.WorkflowDeploymentRecord
+		executions                     []workflowdataclient.Execution
+		summaryErr, deployErr, execErr error
+		wg                             sync.WaitGroup
+	)
+
+	wg.Add(3)
+	go func() {
+		defer wg.Done()
+		summary, summaryErr = h.wdc.GetWorkflowSummary(ctx, uuid, from)
+	}()
+	go func() {
+		defer wg.Done()
+		deployment, deployErr = h.wdc.GetLatestDeployment(ctx, uuid, from, now)
+	}()
+	go func() {
+		defer wg.Done()
+		executions, execErr = h.wdc.ListExecutions(ctx, workflowdataclient.ListExecutionsInput{
+			WorkflowUUID: &uuid,
+			Limit:        1,
+		})
+	}()
+	wg.Wait()
+	spinner.Stop()
+
+	if summaryErr != nil {
+		return summaryErr
+	}
+	if execErr != nil {
+		return execErr
+	}
+	if deployErr != nil {
+		deployment = nil
+		ui.Warning(fmt.Sprintf("Could not fetch deployment record: %s", deployErr.Error()))
+	}
+
+	var lastExec *workflowdataclient.Execution
+	if len(executions) > 0 {
+		lastExec = &executions[0]
+	}
+
+	view := workflowresolve.WorkflowStatusView{
+		Summary:       summary,
+		Deployment:    deployment,
+		DeploymentErr: deployErr,
+		LastExecution: lastExec,
+		Registries:    h.tenantCtx.Registries,
+	}
+
+	if inputs.OutputFormat == workflowresolve.OutputFormatJSON {
+		return workflowresolve.PrintWorkflowStatusJSON(view)
+	}
+	workflowresolve.PrintWorkflowStatusTable(view)
+	return nil
+}
+
+func (h *Handler) registryFilter(inputs Inputs) (*tenantctx.Registry, error) {
+	if inputs.AllRegistries {
+		return nil, nil
+	}
+	filterID := strings.TrimSpace(h.settings.Workflow.UserWorkflowSettings.DeploymentRegistry)
+	if filterID == "" && h.resolvedRegistry != nil {
+		filterID = h.resolvedRegistry.ID()
+	}
+	if filterID == "" {
+		return nil, nil
+	}
+	registryFilter := workflowresolve.FindRegistry(h.tenantCtx.Registries, filterID)
+	if registryFilter == nil {
+		return nil, fmt.Errorf("deployment-registry %q not found in user context; available: [%s]",
+			filterID, workflowresolve.AvailableRegistryIDs(h.tenantCtx.Registries))
+	}
+	return registryFilter, nil
+}
+
+func (h *Handler) resolveWorkflowUUID(ctx context.Context, inputs Inputs, workflowName, owner string) (string, error) {
+	registryFilter, err := h.registryFilter(inputs)
+	if err != nil {
+		return "", err
+	}
+
+	spinner := ui.NewSpinner()
+	spinner.Start(fmt.Sprintf("Resolving workflow %q...", workflowName))
+	rows, err := h.wdc.SearchByName(ctx, workflowName, workflowdataclient.DefaultPageSize, owner)
+	spinner.Stop()
+	if err != nil {
+		return "", fmt.Errorf("resolving workflow name %q: %w", workflowName, err)
+	}
+
+	rows = filterByExactName(rows, workflowName)
 	if registryFilter != nil {
 		rows = workflowresolve.FilterRowsByRegistry(rows, registryFilter, h.tenantCtx.Registries)
 	}
 
-	workflowresolve.PrintWorkflowTable(rows, h.tenantCtx.Registries, workflowresolve.TableOptions{})
-	return nil
+	if len(rows) == 0 {
+		return "", fmt.Errorf("no workflow found with name %q", workflowName)
+	}
+
+	var active []workflowresolve.Workflow
+	for _, r := range rows {
+		if strings.EqualFold(r.Status, "ACTIVE") {
+			active = append(active, r)
+		}
+	}
+	if len(active) == 1 {
+		if active[0].UUID == "" {
+			return "", fmt.Errorf("workflow %q resolved but has no platform UUID", workflowName)
+		}
+		return active[0].UUID, nil
+	}
+	if len(active) > 1 {
+		return "", fmt.Errorf("multiple ACTIVE workflows named %q found; narrow the deployment-registry in workflow.yaml or pass --all-registries", workflowName)
+	}
+
+	if rows[0].UUID == "" {
+		return "", fmt.Errorf("workflow %q resolved but has no platform UUID", workflowName)
+	}
+	ui.Warning(fmt.Sprintf("No ACTIVE deployment for workflow %q; using the first match (status: %s)", workflowName, rows[0].Status))
+	return rows[0].UUID, nil
 }
 
 // New returns the cobra command.
 func New(runtimeContext *runtime.Context) *cobra.Command {
 	var allRegistries bool
+	var outputFormat string
+	var jsonFlag bool
 
 	cmd := &cobra.Command{
 		Use:   "get <workflow-folder-path>",
-		Short: "Shows metadata for the workflow configured in workflow.yaml",
+		Short: "Show deployment health and recent execution for the workflow in workflow.yaml",
 		Long: `Looks up the workflow whose name is configured for the selected --target in ` +
-			`workflow.yaml and prints its metadata from the CRE platform. By default results ` +
-			`are filtered to the workflow's configured deployment-registry; pass --all-registries ` +
-			`to show matches from every registry.`,
+			`workflow.yaml and prints deployment health and the most recent execution from ` +
+			`the CRE platform. By default resolution is scoped to the workflow's configured ` +
+			`deployment-registry; pass --all-registries to resolve across every registry.`,
 		Example: `cre workflow get ./my-workflow --target staging
-  cre workflow get ./my-workflow --target staging --all-registries`,
+  cre workflow get ./my-workflow --target staging --all-registries
+  cre workflow get ./my-workflow --target staging --output json`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return NewHandler(runtimeContext).Execute(cmd.Context(), allRegistries)
+			inputs, err := resolveInputs(allRegistries, outputFormat, jsonFlag)
+			if err != nil {
+				return err
+			}
+			return NewHandler(runtimeContext).Execute(cmd.Context(), inputs)
 		},
 	}
 
 	cmd.Flags().BoolVar(&allRegistries, "all-registries", false,
-		"Do not filter results by the workflow's deployment-registry")
-
+		"Resolve the workflow across every registry instead of the configured deployment-registry")
+	cmd.Flags().StringVar(&outputFormat, "output", "", `Output format: "json" prints JSON to stdout`)
+	cmd.Flags().BoolVar(&jsonFlag, "json", false, "Output as JSON (shorthand for --output=json)")
 	return cmd
 }
 

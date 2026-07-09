@@ -72,6 +72,50 @@ func TestGetWorkflowSummary_NotFound(t *testing.T) {
 	assert.Contains(t, err.Error(), `workflow "missing" not found`)
 }
 
+func TestGetWorkflowSummary_FallsBackWhenExecutionBreakdownUnavailable(t *testing.T) {
+	registered := time.Date(2026, 1, 10, 12, 0, 0, 0, time.UTC)
+	from := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	var calls int
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if calls == 1 {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"errors": []map[string]any{{
+					"message": "the requested element is null which the schema does not allow",
+				}},
+			})
+			return
+		}
+
+		gqlData(w, map[string]any{
+			"workflow": map[string]any{
+				"data": map[string]any{
+					"uuid":           "wf-uuid-1",
+					"name":           "my-workflow",
+					"workflowId":     "abc123onchain",
+					"ownerAddress":   "0xowner",
+					"status":         "ACTIVE",
+					"workflowSource": "private",
+					"registeredAt":   registered.Format(time.RFC3339),
+					"executionCount": 7,
+				},
+			},
+		})
+	}))
+	defer srv.Close()
+
+	client := newTestClient(t, srv.URL)
+	got, err := client.GetWorkflowSummary(context.Background(), "wf-uuid-1", from)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Equal(t, 7, got.ExecutionCount)
+	assert.Equal(t, 0, got.SuccessCount)
+	assert.Equal(t, 0, got.FailureCount)
+	assert.Equal(t, 2, calls)
+}
+
 func TestGetLatestDeployment_ReturnsMostRecent(t *testing.T) {
 	deployed := time.Date(2026, 1, 10, 11, 55, 0, 0, time.UTC)
 	from := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)

@@ -20,7 +20,7 @@ func (s stubWorkflowLookup) ListAll(_ context.Context, _ int) ([]workflowdatacli
 	return s.listAll, nil
 }
 
-func (s stubWorkflowLookup) SearchByName(_ context.Context, _ string, _ int) ([]workflowdataclient.Workflow, error) {
+func (s stubWorkflowLookup) SearchByName(_ context.Context, _ string, _ int, _ string) ([]workflowdataclient.Workflow, error) {
 	return s.searchByName, nil
 }
 

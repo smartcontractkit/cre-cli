@@ -3,6 +3,7 @@ package workflowdataclient
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/machinebox/graphql"
@@ -54,6 +55,26 @@ query GetWorkflow($input: WorkflowInput!) {
         success
         failure
       }
+    }
+  }
+}
+`
+
+// getWorkflowQueryWithoutExecutionBreakdown omits executionCountByStatus for
+// platform versions where GetWorkflow does not populate that non-null field.
+const getWorkflowQueryWithoutExecutionBreakdown = `
+query GetWorkflow($input: WorkflowInput!) {
+  workflow(input: $input) {
+    data {
+      uuid
+      name
+      workflowId
+      ownerAddress
+      status
+      workflowSource
+      registeredAt
+      executedAt
+      executionCount
     }
   }
 }
@@ -121,10 +142,19 @@ type getLatestDeploymentEnvelope struct {
 
 // GetWorkflowSummary fetches extended workflow details including execution health.
 func (c *Client) GetWorkflowSummary(parent context.Context, uuid string, from time.Time) (*WorkflowSummary, error) {
+	summary, err := c.fetchWorkflowSummaryWithQuery(parent, uuid, from, getWorkflowQuery)
+	if err != nil && isNonNullGraphQLError(err) {
+		c.log.Debug().Msg("GetWorkflow executionCountByStatus unavailable; retrying without breakdown fields")
+		return c.fetchWorkflowSummaryWithQuery(parent, uuid, from, getWorkflowQueryWithoutExecutionBreakdown)
+	}
+	return summary, err
+}
+
+func (c *Client) fetchWorkflowSummaryWithQuery(parent context.Context, uuid string, from time.Time, query string) (*WorkflowSummary, error) {
 	ctx, cancel := c.CreateServiceContextWithTimeout(parent)
 	defer cancel()
 
-	req := graphql.NewRequest(getWorkflowQuery)
+	req := graphql.NewRequest(query)
 	req.Var("input", map[string]any{
 		"uuid": uuid,
 		"from": from.UTC().Format(time.RFC3339),
@@ -153,6 +183,10 @@ func (c *Client) GetWorkflowSummary(parent context.Context, uuid string, from ti
 		SuccessCount:   g.ExecutionCountByStatus.Success,
 		FailureCount:   g.ExecutionCountByStatus.Failure,
 	}, nil
+}
+
+func isNonNullGraphQLError(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "the requested element is null")
 }
 
 // GetLatestDeployment fetches the most recent deployment record for a workflow.
