@@ -106,7 +106,7 @@ func TestLimitedHTTPActionRejectsOversizedRequest(t *testing.T) {
 	resp, err := wrapper.SendRequest(context.Background(), commonCap.RequestMetadata{}, &customhttp.Request{Body: []byte("12345")})
 	require.Error(t, err)
 	assert.Nil(t, resp)
-	assert.Contains(t, err.Error(), "HTTP request body size 5 bytes exceeds limit of 4 bytes")
+	assert.Contains(t, err.Error(), "HTTP request body of 5 bytes exceeds the simulation limit of 4 bytes")
 	assert.Equal(t, 0, inner.sendRequestCalls)
 }
 
@@ -158,7 +158,7 @@ func TestLimitedHTTPActionRejectsOversizedResponse(t *testing.T) {
 	resp, err := wrapper.SendRequest(context.Background(), commonCap.RequestMetadata{}, &customhttp.Request{})
 	require.Error(t, err)
 	assert.Nil(t, resp)
-	assert.Contains(t, err.Error(), "HTTP response body size 4 bytes exceeds limit of 3 bytes")
+	assert.Contains(t, err.Error(), "HTTP response body of 4 bytes exceeds the simulation limit of 3 bytes")
 	assert.Equal(t, 1, inner.sendRequestCalls)
 }
 
@@ -197,7 +197,7 @@ func TestLimitedConfidentialHTTPActionRejectsOversizedRequest(t *testing.T) {
 	})
 	require.Error(t, err)
 	assert.Nil(t, resp)
-	assert.Contains(t, err.Error(), "confidential HTTP request body size 5 bytes exceeds limit of 4 bytes")
+	assert.Contains(t, err.Error(), "Confidential HTTP request body of 5 bytes exceeds the simulation limit of 4 bytes")
 	assert.Equal(t, 0, inner.sendRequestCalls)
 }
 
@@ -251,7 +251,7 @@ func TestLimitedConfidentialHTTPActionRejectsOversizedResponse(t *testing.T) {
 	resp, err := wrapper.SendRequest(context.Background(), commonCap.RequestMetadata{}, &confidentialhttp.ConfidentialHTTPRequest{})
 	require.Error(t, err)
 	assert.Nil(t, resp)
-	assert.Contains(t, err.Error(), "confidential HTTP response body size 4 bytes exceeds limit of 3 bytes")
+	assert.Contains(t, err.Error(), "Confidential HTTP response body of 4 bytes exceeds the simulation limit of 3 bytes")
 	assert.Equal(t, 1, inner.sendRequestCalls)
 }
 
@@ -271,7 +271,7 @@ func TestLimitedConsensusNoDAGSimpleRejectsOversizedObservation(t *testing.T) {
 	resp, err := wrapper.Simple(context.Background(), commonCap.RequestMetadata{}, input)
 	require.Error(t, err)
 	assert.Nil(t, resp)
-	assert.Contains(t, err.Error(), "consensus observation size")
+	assert.Contains(t, err.Error(), "Consensus observation of")
 	assert.Equal(t, 0, inner.simpleCalls)
 }
 
