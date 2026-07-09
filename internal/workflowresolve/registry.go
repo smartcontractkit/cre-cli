@@ -1,4 +1,4 @@
-// Package workflowrender contains helpers for matching platform workflow
+// Package workflowresolve contains helpers for matching platform workflow
 // rows to registries in the tenant context and rendering them as a table.
 // It is shared by the workflow list and get commands.
 //
@@ -6,7 +6,7 @@
 // "private"), a "contract:<chainSelector>:<0x…>" tuple for on-chain rows, or
 // a "grpc:<…>" string for off-chain rows — so direct equality with the
 // context registry id only works in the first case.
-package workflowrender
+package workflowresolve
 
 import (
 	"strings"
