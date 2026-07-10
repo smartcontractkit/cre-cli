@@ -127,7 +127,6 @@ func TestStatus_FailureShowsErrors(t *testing.T) {
 }
 
 func TestStatus_TableShowsDebugHints(t *testing.T) {
-	t.Parallel()
 	started := time.Date(2026, 5, 29, 14, 0, 5, 0, time.UTC)
 	finished := time.Date(2026, 5, 29, 14, 0, 17, 0, time.UTC)
 
