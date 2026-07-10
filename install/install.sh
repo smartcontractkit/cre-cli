@@ -302,6 +302,13 @@ case "$ARCH" in
     ;;
 esac
 
+if command -v brew >/dev/null 2>&1; then
+  echo "Homebrew detected. You can install cre with:"
+  echo "  brew tap smartcontractkit/cre-cli https://github.com/smartcontractkit/cre-cli"
+  echo "  brew install cre"
+  echo
+fi
+
 if [[ ! -d $bin_dir ]]; then
     mkdir -p "$bin_dir" ||
         fail "Failed to create install directory \"$bin_dir\""
