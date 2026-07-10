@@ -48,6 +48,9 @@ jobs:
       - name: Verify install.sh embedded release public key
         run: bash install/check_embedded_key.sh
 
+      - name: Verify install.sh linux asset suffix helpers
+        run: bash install/linux_asset_suffix_test.sh
+
   ci-test-unit:
     runs-on: ubuntu-latest
     permissions:

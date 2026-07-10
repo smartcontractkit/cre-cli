@@ -6,6 +6,6 @@ const (
 	codesignIdentifier  = "com.smartcontract.cre.cli"
 )
 
-func getSigAssetName(platform, archName string) string {
-	return "cre_" + platform + "_" + archName + ".sig"
+func getSigAssetName(platform, archName, linuxSuffix string) string {
+	return "cre_" + platform + "_" + archName + linuxSuffix + ".sig"
 }
