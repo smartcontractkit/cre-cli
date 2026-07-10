@@ -618,6 +618,9 @@ func TestExecute_JSONOutput(t *testing.T) {
 	if lastExec["uuid"] != "exec-uuid-1" {
 		t.Errorf("expected exec uuid, got %v", lastExec["uuid"])
 	}
+	if strings.Contains(out, "Debug further:") || strings.Contains(out, "cre execution") {
+		t.Errorf("JSON output must not contain discovery hints:\n%s", out)
+	}
 }
 
 func TestExecute_ContinuesWhenDeploymentUnavailable(t *testing.T) {
