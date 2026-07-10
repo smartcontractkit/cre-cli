@@ -18,7 +18,7 @@ func TestRun_abortsWhenSignatureVerificationFails(t *testing.T) {
 	httpmock.ActivateNonDefault(httpClient)
 	t.Cleanup(httpmock.DeactivateAndReset)
 
-	asset, platform, archName, err := getAssetName()
+	asset, platform, archName, linuxSuffix, err := getAssetName()
 	require.NoError(t, err)
 
 	tag := "v99.0.0-test"
@@ -39,7 +39,7 @@ func TestRun_abortsWhenSignatureVerificationFails(t *testing.T) {
 	)
 
 	if platform == "linux" {
-		sigAsset := getSigAssetName(platform, archName)
+		sigAsset := getSigAssetName(platform, archName, linuxSuffix)
 		sigURL := "https://github.com/smartcontractkit/cre-cli/releases/download/" + tag + "/" + sigAsset
 		httpmock.RegisterResponder("GET", sigURL,
 			func(_ *http.Request) (*http.Response, error) {

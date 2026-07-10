@@ -195,6 +195,52 @@ verify_release_binary() {
   esac
 }
 
+LINUX_LDD235_SUFFIX="_ldd2-35"
+LINUX_GLIBC_THRESHOLD="2.36"
+
+parse_glibc_version_from_ldd_output() {
+  local output=$1
+  local first_line version
+
+  first_line=$(printf '%s' "$output" | head -n1)
+  version=$(printf '%s' "$first_line" | grep -oE '[0-9]+\.[0-9]+' | tail -n1)
+  if [ -z "$version" ]; then
+    return 1
+  fi
+  printf '%s' "$version"
+}
+
+version_lt() {
+  local left=$1
+  local right=$2
+  [ "$(printf '%s\n' "$left" "$right" | sort -V | head -n1)" = "$left" ] && [ "$left" != "$right" ]
+}
+
+linux_asset_suffix() {
+  local ldd_output version
+
+  if [ "$PLATFORM" != "linux" ]; then
+    printf ''
+    return
+  fi
+
+  ldd_output=$(ldd --version 2>/dev/null | head -n1) || {
+    printf ''
+    return
+  }
+
+  version=$(parse_glibc_version_from_ldd_output "$ldd_output") || {
+    printf ''
+    return
+  }
+
+  if version_lt "$version" "$LINUX_GLIBC_THRESHOLD"; then
+    printf '%s' "$LINUX_LDD235_SUFFIX"
+  else
+    printf ''
+  fi
+}
+
 tildify() {
     if [[ $1 = $HOME/* ]]; then
         local replacement=\~/
@@ -321,7 +367,15 @@ else
 fi
 
 # 4. Construct Download URL and Download asset
-ASSET="${cli_name}_${PLATFORM}_${ARCH_NAME}"
+LINUX_SUFFIX=""
+if [ "$PLATFORM" = "linux" ]; then
+  LINUX_SUFFIX=$(linux_asset_suffix)
+  if [ -n "$LINUX_SUFFIX" ]; then
+    echo "Using glibc-compatible build for older Linux (ldd2-35)..."
+  fi
+fi
+
+ASSET="${cli_name}_${PLATFORM}_${ARCH_NAME}${LINUX_SUFFIX}"
 # Determine the file extension based on OS
 if [ "$PLATFORM" = "linux" ]; then
   ASSET="${ASSET}.tar.gz"
@@ -343,7 +397,7 @@ SIG_PATH=""
 
 if [ "$PLATFORM" = "linux" ]; then
   check_command "gpg"
-  SIG_ASSET="${cli_name}_${PLATFORM}_${ARCH_NAME}.sig"
+  SIG_ASSET="${cli_name}_${PLATFORM}_${ARCH_NAME}${LINUX_SUFFIX}.sig"
   SIG_URL="https://github.com/$github_repo/releases/download/$LATEST_TAG/$SIG_ASSET"
   SIG_PATH="$TMP_DIR/$SIG_ASSET"
   curl --fail --location --progress-bar "$SIG_URL" --output "$SIG_PATH" ||
