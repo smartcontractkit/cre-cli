@@ -49,7 +49,9 @@ func TestParseGlibcVersionFromLddOutput(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
-			require.Equal(t, tt.want, got.String())
+			want, err := semver.NewVersion(tt.want)
+			require.NoError(t, err)
+			require.True(t, got.Equal(want))
 		})
 	}
 }
