@@ -2,7 +2,7 @@
 
 This document tracks blockers for submitting `cre` to [homebrew-core](https://github.com/Homebrew/homebrew-core) so users can run `brew install cre` without a tap.
 
-The in-repo formula at [Formula/cre.rb](../Formula/cre.rb) is the supported distribution path until these prerequisites are met.
+The in-repo formula at [Formula/cre.rb](Formula/cre.rb) is the supported distribution path until these prerequisites are met.
 
 ## Current blockers
 

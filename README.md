@@ -45,7 +45,7 @@ To upgrade a Homebrew install:
 brew upgrade cre
 ```
 
-For a future `homebrew-core` submission, see [docs/homebrew-core-prerequisites.md](docs/homebrew-core-prerequisites.md).
+For a future `homebrew-core` submission, see [homebrew-core-prerequisites.md](homebrew-core-prerequisites.md).
 
 ### Developer Installation
 
