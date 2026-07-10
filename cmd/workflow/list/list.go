@@ -112,6 +112,16 @@ func (h *Handler) Execute(ctx context.Context, inputs Inputs) error {
 		IncludeDeleted:           inputs.IncludeDeleted,
 	})
 
+	if len(rows) > 0 {
+		ui.Bold("Inspect executions:")
+		ui.Dim("   cre execution list <workflow-id-or-name>")
+		ui.Dim("   cre execution list <workflow-id-or-name> --status FAILURE")
+		ui.Dim("   cre execution status <execution-id>")
+		ui.Dim("   cre execution events  <execution-id>")
+		ui.Dim("   cre execution logs    <execution-id>")
+		ui.Line()
+	}
+
 	return nil
 }
 

@@ -122,4 +122,42 @@ func TestStatus_FailureShowsErrors(t *testing.T) {
 	errs, _ := result["errors"].([]any)
 	require.Len(t, errs, 1)
 	assert.Contains(t, errs[0].(map[string]any)["error"], "Invalid JSON")
+	assert.NotContains(t, out, "Debug further:")
+	assert.NotContains(t, out, "cre execution")
+}
+
+func TestStatus_TableShowsDebugHints(t *testing.T) {
+	started := time.Date(2026, 5, 29, 14, 0, 5, 0, time.UTC)
+	finished := time.Date(2026, 5, 29, 14, 0, 17, 0, time.UTC)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gqlRespond(w, map[string]any{
+			"workflowExecution": map[string]any{
+				"data": map[string]any{
+					"uuid":         "exec-uuid-1",
+					"workflowUUID": "wf-uuid-1",
+					"workflowName": "Price-Feed",
+					"workflowId":   "abc123onchain",
+					"status":       "SUCCESS",
+					"startedAt":    started.Format(time.RFC3339),
+					"finishedAt":   finished.Format(time.RFC3339),
+					"errors":       []any{},
+				},
+			},
+		})
+	}))
+	t.Cleanup(srv.Close)
+
+	h := execStatus.NewHandlerWithClient(rtCtxFor(t, srv.URL), wdcFor(t, srv.URL))
+
+	out := captureStdout(t, func() {
+		err := h.Execute(context.Background(), execStatus.Inputs{
+			ExecutionRef: "05ace5cf-85ae-448b-9f42-270d42974d35",
+		})
+		require.NoError(t, err)
+	})
+
+	assert.Contains(t, out, "Debug further:")
+	assert.Contains(t, out, "cre execution events")
+	assert.Contains(t, out, "cre execution logs")
 }
