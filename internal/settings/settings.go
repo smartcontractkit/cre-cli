@@ -183,7 +183,7 @@ func loadEnvFile(logger *zerolog.Logger, envPath string) (string, map[string]str
 		}
 		err = os.Setenv(k, v)
 		if err != nil {
-			logger.Error().Str("key", k).Str("value", v).Err(err).Msg(
+			logger.Error().Str("key", k).Err(err).Msg(
 				"Failed to set environment variable; CLI tool will read and verify individual environment variables (they MUST be exported). " +
 					"If the file is present, please check that it follows the correct format: https://dotenvx.com/docs/env-file")
 		}

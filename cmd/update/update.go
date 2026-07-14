@@ -57,7 +57,7 @@ func getLatestTag() (string, error) {
 	return info.TagName, nil
 }
 
-func getAssetName() (asset string, platform string, archName string, err error) {
+func getAssetName() (asset string, platform string, archName string, linuxSuffix string, err error) {
 	osName := osruntime.GOOS
 	arch := osruntime.GOARCH
 	var ext string
@@ -68,11 +68,12 @@ func getAssetName() (asset string, platform string, archName string, err error) 
 	case "linux":
 		platform = "linux"
 		ext = ".tar.gz"
+		linuxSuffix = linuxAssetSuffix()
 	case "windows":
 		platform = "windows"
 		ext = ".zip"
 	default:
-		return "", "", "", fmt.Errorf("unsupported OS: %s", osName)
+		return "", "", "", "", fmt.Errorf("unsupported OS: %s", osName)
 	}
 	switch arch {
 	case "amd64", "x86_64":
@@ -84,10 +85,10 @@ func getAssetName() (asset string, platform string, archName string, err error) 
 			archName = "arm64"
 		}
 	default:
-		return "", "", "", fmt.Errorf("unsupported architecture: %s", arch)
+		return "", "", "", "", fmt.Errorf("unsupported architecture: %s", arch)
 	}
-	asset = fmt.Sprintf("%s_%s_%s%s", cliName, platform, archName, ext)
-	return asset, platform, archName, nil
+	asset = fmt.Sprintf("%s_%s_%s%s%s", cliName, platform, archName, linuxSuffix, ext)
+	return asset, platform, archName, linuxSuffix, nil
 }
 
 func downloadFile(url, dest, message string) error {
@@ -335,7 +336,7 @@ func Run(currentVersion string) error {
 	}
 
 	// If we're here, an update is needed.
-	asset, platform, archName, err := getAssetName()
+	asset, platform, archName, linuxSuffix, err := getAssetName()
 	if err != nil {
 		spinner.Stop()
 		return fmt.Errorf("error determining asset name: %w", err)
@@ -369,7 +370,7 @@ func Run(currentVersion string) error {
 
 	var sigPath string
 	if platform == "linux" {
-		sigAsset := getSigAssetName(platform, archName)
+		sigAsset := getSigAssetName(platform, archName, linuxSuffix)
 		sigPath = filepath.Join(tmpDir, sigAsset)
 		sigURL := fmt.Sprintf("https://github.com/%s/releases/download/%s/%s", repo, tag, sigAsset)
 		sigDownloadMsg := fmt.Sprintf("Downloading signature for %s...", tag)

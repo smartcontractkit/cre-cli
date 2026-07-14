@@ -97,7 +97,7 @@ func TestLimitedEVMChainWriteReportRejectsOversizedReport(t *testing.T) {
 	})
 	require.Error(t, err)
 	assert.Nil(t, resp)
-	assert.Contains(t, err.Error(), "chain write report size 5 bytes exceeds limit of 4 bytes")
+	assert.Contains(t, err.Error(), "EVM chain write report of 5 bytes exceeds the simulation limit of 4 bytes")
 	assert.Equal(t, 0, inner.writeReportCalls)
 }
 
@@ -113,7 +113,7 @@ func TestLimitedEVMChainWriteReportRejectsOversizedGasLimit(t *testing.T) {
 	})
 	require.Error(t, err)
 	assert.Nil(t, resp)
-	assert.Contains(t, err.Error(), "EVM gas limit 11 exceeds maximum of 10")
+	assert.Contains(t, err.Error(), "EVM gas of 11 gas units exceeds the simulation limit of 10 gas units")
 	assert.Equal(t, 0, inner.writeReportCalls)
 }
 

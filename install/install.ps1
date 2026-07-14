@@ -3,7 +3,7 @@
 # It detects the architecture, downloads the correct .exe,
 # and adds it to the user's PATH.
 #
-# Usage: irm https://cre.chain.link/install.ps1 | iex
+# Usage: irm https://app.chain.link/install.ps1 | iex
 
 # --- Configuration ---
 $ErrorActionPreference = "Stop" # Exit script on any error
@@ -114,7 +114,87 @@ function Test-BunDependency {
     }
 }
 
-# --- Main Installation Logic ---
+function Test-ReleaseAuthenticode {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$FilePath
+    )
+
+    $signature = Get-AuthenticodeSignature -FilePath $FilePath
+    if ($signature.Status -ne 'Valid') {
+        Fail "authenticode status: $($signature.Status)"
+    }
+    if (-not $signature.SignerCertificate) {
+        Fail "missing signer certificate"
+    }
+    if ($signature.SignerCertificate.Subject -notlike '*SmartContract*') {
+        Fail "unexpected signer: $($signature.SignerCertificate.Subject)"
+    }
+}
+
+function Test-UnsafeZipEntry {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$EntryName
+    )
+
+    if ($EntryName -match '\.\.') {
+        return $true
+    }
+    if ($EntryName -match '^[/\\]') {
+        return $true
+    }
+    return $false
+}
+
+function Extract-ExpectedZipEntry {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ZipPath,
+        [Parameter(Mandatory = $true)]
+        [string]$ExpectedEntryName,
+        [Parameter(Mandatory = $true)]
+        [string]$DestPath
+    )
+
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $zip = [System.IO.Compression.ZipFile]::OpenRead($ZipPath)
+    try {
+        $matches = @()
+        foreach ($entry in $zip.Entries) {
+            if (Test-UnsafeZipEntry -EntryName $entry.FullName) {
+                throw "Unsafe zip entry: $($entry.FullName)"
+            }
+            if ($entry.Name -eq $ExpectedEntryName) {
+                $matches += $entry
+            }
+        }
+
+        if ($matches.Count -ne 1) {
+            throw "Expected exactly one zip entry named $ExpectedEntryName, found $($matches.Count)."
+        }
+
+        $entry = $matches[0]
+        $parent = Split-Path -Parent $DestPath
+        if (-not (Test-Path -Path $parent)) {
+            New-Item -ItemType Directory -Path $parent | Out-Null
+        }
+
+        $entryStream = $entry.Open()
+        try {
+            $destStream = [System.IO.File]::Create($DestPath)
+            try {
+                $entryStream.CopyTo($destStream)
+            } finally {
+                $destStream.Dispose()
+            }
+        } finally {
+            $entryStream.Dispose()
+        }
+    } finally {
+        $zip.Dispose()
+    }
+}
 
 try {
     # 1. Detect Architecture
@@ -149,15 +229,14 @@ try {
     Write-Host "Downloading from $DownloadUrl..."
     Invoke-WebRequest -Uri $DownloadUrl -OutFile $ZipPath
 
-    Write-Host "Extracting $CliName.exe from zip..."
-    Add-Type -AssemblyName System.IO.Compression.FileSystem
-    [System.IO.Compression.ZipFile]::ExtractToDirectory($ZipPath, $TempDir)
+    $ExpectedExeName = "$($CliName)_$($LatestTag)_windows_$($ArchName).exe"
+    $ExtractedExePath = Join-Path $TempDir $ExpectedExeName
 
-    # Find the extracted exe (assume only one .exe in the zip)
-    $ExtractedExe = Get-ChildItem -Path $TempDir -Filter "*.exe" | Select-Object -First 1
-    if (-not $ExtractedExe) {
-        throw "No .exe file found in the extracted zip archive."
-    }
+    Write-Host "Extracting $ExpectedExeName from zip..."
+    Extract-ExpectedZipEntry -ZipPath $ZipPath -ExpectedEntryName $ExpectedExeName -DestPath $ExtractedExePath
+
+    Write-Host "Verifying release signature..."
+    Test-ReleaseAuthenticode -FilePath $ExtractedExePath
 
     # Create installation directory if it doesn't exist
     if (-not (Test-Path -Path $InstallDir)) {
@@ -166,7 +245,7 @@ try {
 
     # Copy the exe to the install directory and rename
     $ExePath = Join-Path $InstallDir "$($CliName).exe"
-    Copy-Item -Path $ExtractedExe.FullName -Destination $ExePath -Force
+    Copy-Item -Path $ExtractedExePath -Destination $ExePath -Force
 
     # Clean up temp directory
     Remove-Item -Path $TempDir -Recurse -Force

@@ -25,6 +25,7 @@ cre workflow list
 ```
   -h, --help              help for list
       --include-deleted   Include workflows in DELETED status
+      --json              Output as JSON (shorthand for --output=json)
       --output string     Output format: "json" prints a JSON array to stdout
       --registry string   Filter by registry ID from user context
 ```
