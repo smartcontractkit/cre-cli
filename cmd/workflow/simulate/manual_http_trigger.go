@@ -17,6 +17,7 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	"github.com/smartcontractkit/chainlink-common/pkg/services"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/core"
+	"github.com/smartcontractkit/chainlink-common/pkg/workflows"
 	"github.com/smartcontractkit/chainlink/v2/core/services/workflows/events"
 )
 
@@ -125,8 +126,10 @@ func (f *ManualHTTPTriggerService) ManualTrigger(ctx context.Context, triggerID 
 		}
 	}
 
+	// triggerIndex defaults to zero in simulation
+	var triggerIndex int
 	triggerEvent := f.createManualTriggerEvent(payload)
-	workflowExecutionID, err := events.GenerateExecutionID(workflowID, triggerEvent.Id)
+	workflowExecutionID, err := workflows.GenerateExecutionIDWithTriggerIndex(workflowID, triggerEvent.Id, triggerIndex)
 	if err != nil {
 		f.lggr.Errorw("failed to generate execution ID", "err", err)
 		workflowExecutionID = ""
