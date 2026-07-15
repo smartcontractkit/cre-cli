@@ -80,6 +80,11 @@ type Inputs struct {
 	// SetExecutionContext changes it to the workflow directory. Used to resolve file
 	// paths entered interactively or via flags relative to where the user ran the command.
 	InvocationDir string `validate:"-"`
+	// WorkflowFolderName is the name of the workflow's directory (i.e. the argument
+	// the user passes to `cre workflow simulate`). Unlike WorkflowName (the Workflow
+	// Registry name from workflow.yaml, which can differ), this is what should be
+	// used to render restart-command hints so they match what the user actually typed.
+	WorkflowFolderName string `validate:"-"`
 }
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
@@ -199,27 +204,36 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 		httpTriggerPort = defaultHTTPTriggerServerPort
 	}
 
+	// At this point SetExecutionContext has already chdir'd into the workflow
+	// directory, so its basename is the argument the user passed to
+	// `cre workflow simulate`.
+	workflowFolderName := ""
+	if cwd, err := os.Getwd(); err == nil {
+		workflowFolderName = filepath.Base(cwd)
+	}
+
 	return Inputs{
-		WasmPath:          v.GetString("wasm"),
-		WorkflowPath:      creSettings.Workflow.WorkflowArtifactSettings.WorkflowPath,
-		ConfigPath:        cmdcommon.ResolveConfigPath(v, creSettings.Workflow.WorkflowArtifactSettings.ConfigPath),
-		SecretsPath:       creSettings.Workflow.WorkflowArtifactSettings.SecretsPath,
-		EngineLogs:        v.GetBool("engine-logs"),
-		Broadcast:         v.GetBool("broadcast"),
-		ChainTypeClients:  ctClients,
-		ChainTypeResolved: ctResolved,
-		ChainTypeKeys:     ctKeys,
-		WorkflowName:      creSettings.Workflow.UserWorkflowSettings.WorkflowName,
-		NonInteractive:    v.GetBool("non-interactive"),
-		HasTriggerIndex:   v.IsSet("trigger-index"),
-		TriggerIndex:      v.GetInt("trigger-index"),
-		HTTPPayload:       v.GetString("http-payload"),
-		HTTPTriggerPort:   httpTriggerPort,
-		ChainTypeInputs:   chain.CollectAllCLIInputs(v),
-		Listen:            v.GetBool("listen"),
-		LimitsPath:        v.GetString("limits"),
-		SkipTypeChecks:    v.GetBool(cmdcommon.SkipTypeChecksCLIFlag),
-		InvocationDir:     h.runtimeContext.InvocationDir,
+		WasmPath:           v.GetString("wasm"),
+		WorkflowPath:       creSettings.Workflow.WorkflowArtifactSettings.WorkflowPath,
+		ConfigPath:         cmdcommon.ResolveConfigPath(v, creSettings.Workflow.WorkflowArtifactSettings.ConfigPath),
+		SecretsPath:        creSettings.Workflow.WorkflowArtifactSettings.SecretsPath,
+		EngineLogs:         v.GetBool("engine-logs"),
+		Broadcast:          v.GetBool("broadcast"),
+		ChainTypeClients:   ctClients,
+		ChainTypeResolved:  ctResolved,
+		ChainTypeKeys:      ctKeys,
+		WorkflowName:       creSettings.Workflow.UserWorkflowSettings.WorkflowName,
+		NonInteractive:     v.GetBool("non-interactive"),
+		HasTriggerIndex:    v.IsSet("trigger-index"),
+		TriggerIndex:       v.GetInt("trigger-index"),
+		HTTPPayload:        v.GetString("http-payload"),
+		HTTPTriggerPort:    httpTriggerPort,
+		ChainTypeInputs:    chain.CollectAllCLIInputs(v),
+		Listen:             v.GetBool("listen"),
+		LimitsPath:         v.GetString("limits"),
+		SkipTypeChecks:     v.GetBool(cmdcommon.SkipTypeChecksCLIFlag),
+		InvocationDir:      h.runtimeContext.InvocationDir,
+		WorkflowFolderName: workflowFolderName,
 	}, nil
 }
 
@@ -1076,7 +1090,7 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 						Limits:          limits,
 						ChainTypeInputs: inputs.ChainTypeInputs,
 						TriggerPayload:  holder.TriggerToRun.GetPayload(),
-						WorkflowName:    inputs.WorkflowName,
+						WorkflowName:    inputs.WorkflowFolderName,
 					})
 					if err != nil {
 						ui.Error(fmt.Sprintf("Failed to create %s trigger listener: %v", name, err))
@@ -1199,7 +1213,7 @@ func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inp
 						Limits:          limits,
 						ChainTypeInputs: inputs.ChainTypeInputs,
 						TriggerPayload:  holder.TriggerToRun.GetPayload(),
-						WorkflowName:    inputs.WorkflowName,
+						WorkflowName:    inputs.WorkflowFolderName,
 					})
 					if err != nil {
 						ui.Error(fmt.Sprintf("Failed to create %s trigger listener: %v", name, err))
@@ -1335,7 +1349,7 @@ func getTriggerDataForChainType(ctx context.Context, ct chain.ChainType, selecto
 		Limits:          limits,
 		ChainTypeInputs: inputs.ChainTypeInputs,
 		TriggerPayload:  triggerSub.GetPayload(),
-		WorkflowName:    inputs.WorkflowName,
+		WorkflowName:    inputs.WorkflowFolderName,
 	})
 }
 
