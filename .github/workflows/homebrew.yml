@@ -41,6 +41,8 @@ jobs:
     name: Validate Homebrew Formula (${{ matrix.os }})
     if: github.event_name == 'pull_request'
     runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
