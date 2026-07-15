@@ -15,10 +15,11 @@ import (
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain"
 )
 
-// SolanaChainCapabilities holds the per-selector FakeSolanaChain instances
-// created for simulation.
+// SolanaChainCapabilities holds the per-selector Solana chains created for
+// simulation. Each is a ManualSolanaChain wrapping the fake chain so the
+// simulator can fire log triggers manually.
 type SolanaChainCapabilities struct {
-	SolanaChains map[uint64]*solanafakes.FakeSolanaChain
+	SolanaChains map[uint64]*ManualSolanaChain
 }
 
 // NewSolanaChainCapabilities builds FakeSolanaChain instances for every
@@ -35,7 +36,7 @@ func NewSolanaChainCapabilities(
 	dryRunChainWrite bool,
 	limits chain.Limits,
 ) (*SolanaChainCapabilities, error) {
-	chains := make(map[uint64]*solanafakes.FakeSolanaChain)
+	chains := make(map[uint64]*ManualSolanaChain)
 	for sel, client := range clients {
 		programID, ok := forwarderProgramIDs[sel]
 		if !ok {
@@ -52,11 +53,12 @@ func NewSolanaChainCapabilities(
 			return nil, fmt.Errorf("new FakeSolanaChain for selector %d: %w", sel, err)
 		}
 		capability := NewLimitedSolanaChain(fc, limits)
-		server := solanaserver.NewClientServer(capability)
+		manual := NewManualSolanaChain(capability)
+		server := solanaserver.NewClientServer(manual)
 		if err := registry.Add(ctx, server); err != nil {
 			return nil, fmt.Errorf("register solana capability for selector %d: %w", sel, err)
 		}
-		chains[sel] = fc
+		chains[sel] = manual
 	}
 	return &SolanaChainCapabilities{SolanaChains: chains}, nil
 }

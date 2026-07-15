@@ -3,6 +3,7 @@ package solana
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/gagliardetto/solana-go"
@@ -11,6 +12,7 @@ import (
 	"github.com/spf13/viper"
 
 	corekeys "github.com/smartcontractkit/chainlink-common/keystore/corekeys"
+	solcap "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/chain-capabilities/solana"
 	"github.com/smartcontractkit/chainlink-common/pkg/services"
 	"github.com/smartcontractkit/chainlink-common/pkg/settings/cresettings"
 
@@ -19,10 +21,19 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 )
 
+// CLI input keys consumed from chain.TriggerParams.ChainTypeInputs.
+const (
+	TriggerInputTxSig      = "solana-tx-sig"
+	TriggerInputEventIndex = "solana-event-index"
+)
+
 func init() {
 	chain.Register(string(corekeys.Solana), func(lggr *zerolog.Logger) chain.ChainType {
 		return &SolanaChainType{log: lggr}
-	}, nil)
+	}, []chain.CLIFlagDef{
+		{Name: TriggerInputTxSig, Description: "Solana trigger transaction signature (base58)", FlagType: chain.CLIFlagString},
+		{Name: TriggerInputEventIndex, Description: "Solana trigger event index (0-based, among 'Program data:' events in the tx)", DefaultValue: "-1", FlagType: chain.CLIFlagInt},
+	})
 }
 
 // SolanaChainType implements chain.ChainType for Solana.
@@ -109,8 +120,37 @@ func (ct *SolanaChainType) ResolveKey(s *settings.Settings, broadcast bool) (int
 	return nil, fmt.Errorf("CRE_SOLANA_PRIVATE_KEY must be a 64-byte base58 keypair")
 }
 
-func (ct *SolanaChainType) ResolveTriggerData(_ context.Context, _ uint64, _ chain.TriggerParams) (interface{}, error) {
-	return nil, fmt.Errorf("solana: no trigger surface")
+// ResolveTriggerData fetches the Solana log payload for the given selector by
+// replaying a known transaction (--solana-tx-sig + --solana-event-index).
+// Replay works in both interactive and non-interactive modes for deterministic
+// testing / CI. There is no live-listen path yet.
+func (ct *SolanaChainType) ResolveTriggerData(ctx context.Context, selector uint64, params chain.TriggerParams) (interface{}, error) {
+	clientIface, ok := params.Clients[selector]
+	if !ok {
+		return nil, fmt.Errorf("no RPC configured for chain selector %d", selector)
+	}
+	client, ok := clientIface.(*solanarpc.Client)
+	if !ok {
+		return nil, fmt.Errorf("invalid client type for Solana chain selector %d", selector)
+	}
+
+	sig := strings.TrimSpace(params.ChainTypeInputs[TriggerInputTxSig])
+	eventIndexStr := strings.TrimSpace(params.ChainTypeInputs[TriggerInputEventIndex])
+	if sig == "" {
+		return nil, fmt.Errorf("--%s and --%s are required for Solana log triggers", TriggerInputTxSig, TriggerInputEventIndex)
+	}
+	if eventIndexStr == "" {
+		return nil, fmt.Errorf("--%s is required when --%s is provided", TriggerInputEventIndex, TriggerInputTxSig)
+	}
+	eventIndex, err := strconv.ParseUint(eventIndexStr, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid --%s %q: %w", TriggerInputEventIndex, eventIndexStr, err)
+	}
+
+	if params.Interactive {
+		printSolanaTriggerReplayHeader(selector, sig, eventIndex)
+	}
+	return GetSolanaTriggerLogFromValues(ctx, client, sig, eventIndex)
 }
 
 func (ct *SolanaChainType) RegisterCapabilities(ctx context.Context, cfg chain.CapabilityConfig) ([]services.Service, error) {
@@ -157,8 +197,19 @@ func (ct *SolanaChainType) RegisterCapabilities(ctx context.Context, cfg chain.C
 	return out, nil
 }
 
-func (ct *SolanaChainType) ExecuteTrigger(_ context.Context, _ uint64, _ string, _ interface{}) error {
-	return fmt.Errorf("solana: no trigger surface")
+func (ct *SolanaChainType) ExecuteTrigger(ctx context.Context, selector uint64, registrationID string, triggerData interface{}) error {
+	if ct.solanaChains == nil {
+		return fmt.Errorf("solana: capabilities not registered")
+	}
+	solanaChain := ct.solanaChains.SolanaChains[selector]
+	if solanaChain == nil {
+		return fmt.Errorf("no Solana chain initialized for selector %d", selector)
+	}
+	log, ok := triggerData.(*solcap.Log)
+	if !ok {
+		return fmt.Errorf("solana: trigger data is not *solana.Log")
+	}
+	return solanaChain.ManualTrigger(ctx, registrationID, log)
 }
 
 func (ct *SolanaChainType) Supports(selector uint64) bool {
@@ -176,8 +227,15 @@ func (ct *SolanaChainType) RunHealthCheck(resolved chain.ResolvedChains) error {
 	return RunRPCHealthCheck(resolved.Clients, resolved.ExperimentalSelectors)
 }
 
-func (ct *SolanaChainType) CollectCLIInputs(_ *viper.Viper) map[string]string {
-	return map[string]string{}
+func (ct *SolanaChainType) CollectCLIInputs(v *viper.Viper) map[string]string {
+	inputs := map[string]string{}
+	if sig := strings.TrimSpace(v.GetString(TriggerInputTxSig)); sig != "" {
+		inputs[TriggerInputTxSig] = sig
+	}
+	if idx := v.GetInt(TriggerInputEventIndex); idx >= 0 {
+		inputs[TriggerInputEventIndex] = strconv.Itoa(idx)
+	}
+	return inputs
 }
 
 func ExtractLimits(w *cresettings.Workflows) chain.Limits {
