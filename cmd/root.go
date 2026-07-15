@@ -17,6 +17,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/cmd/account"
 	"github.com/smartcontractkit/cre-cli/cmd/client"
 	"github.com/smartcontractkit/cre-cli/cmd/creinit"
+	executioncmd "github.com/smartcontractkit/cre-cli/cmd/execution"
 	generatebindings "github.com/smartcontractkit/cre-cli/cmd/generate-bindings"
 	"github.com/smartcontractkit/cre-cli/cmd/login"
 	"github.com/smartcontractkit/cre-cli/cmd/logout"
@@ -480,6 +481,7 @@ func newRootCommand() *cobra.Command {
 
 	secretsCmd := secrets.New(runtimeContext)
 	workflowCmd := workflow.New(runtimeContext)
+	executionCmd := executioncmd.New(runtimeContext)
 	versionCmd := version.New(runtimeContext)
 	loginCmd := login.New(runtimeContext)
 	logoutCmd := logout.New(runtimeContext)
@@ -493,6 +495,7 @@ func newRootCommand() *cobra.Command {
 
 	secretsCmd.RunE = helpRunE
 	workflowCmd.RunE = helpRunE
+	executionCmd.RunE = helpRunE
 	accountCmd.RunE = helpRunE
 	templatesCmd.RunE = helpRunE
 	registryCmd.RunE = helpRunE
@@ -501,6 +504,7 @@ func newRootCommand() *cobra.Command {
 	rootCmd.AddGroup(&cobra.Group{ID: "getting-started", Title: "Getting Started"})
 	rootCmd.AddGroup(&cobra.Group{ID: "account", Title: "Account"})
 	rootCmd.AddGroup(&cobra.Group{ID: "workflow", Title: "Workflow"})
+	rootCmd.AddGroup(&cobra.Group{ID: "execution", Title: "Execution"})
 	rootCmd.AddGroup(&cobra.Group{ID: "secret", Title: "Secret"})
 	rootCmd.AddGroup(&cobra.Group{ID: "registry", Title: "Registry"})
 
@@ -514,6 +518,7 @@ func newRootCommand() *cobra.Command {
 
 	secretsCmd.GroupID = "secret"
 	workflowCmd.GroupID = "workflow"
+	executionCmd.GroupID = "execution"
 	registryCmd.GroupID = "registry"
 
 	rootCmd.AddCommand(
@@ -525,6 +530,7 @@ func newRootCommand() *cobra.Command {
 		whoamiCmd,
 		secretsCmd,
 		workflowCmd,
+		executionCmd,
 		registryCmd,
 		genBindingsCmd,
 		updateCmd,
@@ -560,6 +566,11 @@ func isLoadSettings(cmd *cobra.Command) bool {
 		"cre workflow limits export":    {},
 		"cre workflow build":            {},
 		"cre workflow list":             {},
+		"cre execution":                 {},
+		"cre execution list":            {},
+		"cre execution status":          {},
+		"cre execution events":          {},
+		"cre execution logs":            {},
 		"cre account":                   {},
 		"cre secrets":                   {},
 		"cre templates":                 {},
@@ -591,6 +602,7 @@ func isLoadCredentials(cmd *cobra.Command) bool {
 		"cre generate-bindings solana": {},
 		"cre update":                   {},
 		"cre workflow":                 {},
+		"cre execution":                {},
 		"cre workflow limits":          {},
 		"cre workflow limits export":   {},
 		"cre account":                  {},
@@ -663,6 +675,7 @@ func shouldShowSpinner(cmd *cobra.Command) bool {
 		"cre logout":                 {},
 		"cre update":                 {},
 		"cre workflow":               {}, // Just shows help
+		"cre execution":              {}, // Just shows help
 		"cre workflow limits":        {}, // Just shows help
 		"cre workflow limits export": {}, // Static data, no project needed
 		"cre account":                {}, // Just shows help

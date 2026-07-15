@@ -27,6 +27,7 @@ cre [optional flags]
 ### SEE ALSO
 
 * [cre account](cre_account.md)	 - Manage account and request deploy access
+* [cre execution](cre_execution.md)	 - Query workflow execution history
 * [cre generate-bindings](cre_generate-bindings.md)	 - Generate bindings for contracts
 * [cre init](cre_init.md)	 - Initialize a new cre project (recommended starting point)
 * [cre login](cre_login.md)	 - Start authentication flow
