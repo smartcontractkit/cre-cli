@@ -66,7 +66,7 @@ func (r *Requester) PromptAndSubmitRequest(ctx context.Context) error {
 		huh.NewGroup(
 			huh.NewText().
 				Title("Briefly describe your use case").
-				Description("What are you building with CRE?").
+				Description("If possible, include your repository to help us validate your request.").
 				CharLimit(1500).
 				Value(&useCase).
 				Validate(func(s string) error {
@@ -95,7 +95,8 @@ func (r *Requester) PromptAndSubmitRequest(ctx context.Context) error {
 	ui.Line()
 	ui.Success("Access request submitted successfully!")
 	ui.Line()
-	ui.Print("Our team will review your request and get back to you via email shortly.")
+	ui.Print("Thanks for applying.")
+	ui.Print("We're carefully reviewing each request to ensure we can provide the best experience. If your request is approved, we'll contact you with next steps.")
 	ui.Line()
 
 	return nil
