@@ -423,7 +423,7 @@ func TestInitExecuteFlows(t *testing.T) {
 	}
 }
 
-func TestInsideExistingProjectAddsWorkflow(t *testing.T) {
+func TestInitInsideExistingProjectExits(t *testing.T) {
 	sim := chainsim.NewSimulatedEnvironment(t)
 	defer sim.Close()
 
@@ -449,17 +449,9 @@ func TestInsideExistingProjectAddsWorkflow(t *testing.T) {
 	h := newHandlerWithRegistry(sim.NewRuntimeContext(), newMockRegistry())
 
 	require.NoError(t, h.ValidateInputs(inputs))
-	require.NoError(t, h.Execute(inputs))
-
-	require.FileExists(t, constants.DefaultProjectSettingsFileName)
-	require.FileExists(t, constants.DefaultEnvFileName)
-
-	validateInitProjectStructure(
-		t,
-		".",
-		"wf-inside-existing-project",
-		GetTemplateFileListGo(),
-	)
+	err = h.Execute(inputs)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "already inside an existing project")
 }
 
 func TestInitWithTypescriptTemplateSkipsGoScaffold(t *testing.T) {
@@ -970,7 +962,7 @@ func TestInitRespectsProjectRootFlag(t *testing.T) {
 	require.Empty(t, entries, "CWD should be untouched when -R is provided")
 }
 
-func TestInitProjectRootFlagFindsExistingProject(t *testing.T) {
+func TestInitProjectRootFlagFindsExistingProjectExits(t *testing.T) {
 	sim := chainsim.NewSimulatedEnvironment(t)
 	defer sim.Close()
 
@@ -1003,13 +995,7 @@ func TestInitProjectRootFlagFindsExistingProject(t *testing.T) {
 
 	h := newHandlerWithRegistry(ctx, newMockRegistry())
 	require.NoError(t, h.ValidateInputs(inputs))
-	require.NoError(t, h.Execute(inputs))
-
-	// Workflow should be scaffolded into the existing project
-	validateInitProjectStructure(
-		t,
-		existingProject,
-		"new-workflow",
-		GetTemplateFileListGo(),
-	)
+	err = h.Execute(inputs)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "already inside an existing project")
 }

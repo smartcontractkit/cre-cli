@@ -196,7 +196,10 @@ func (h *handler) Execute(inputs Inputs) error {
 
 	// Detect if we're in an existing project
 	existingProjectRoot, _, existingErr := h.findExistingProject(startDir)
-	isNewProject := existingErr != nil
+	if existingErr == nil {
+		return fmt.Errorf("already inside an existing project at %q; 'cre init' cannot be used to add a workflow to an existing project, as it would overwrite existing project files such as secrets.yaml", existingProjectRoot)
+	}
+	isNewProject := true
 
 	// Create the registry if not injected (normal flow)
 	if h.registry == nil {
