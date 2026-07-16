@@ -13,7 +13,6 @@ import (
 	"google.golang.org/protobuf/types/known/durationpb"
 
 	solcap "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/chain-capabilities/solana"
-
 	logpollertypes "github.com/smartcontractkit/chainlink-solana/pkg/solana/logpoller/types"
 )
 
