@@ -124,7 +124,7 @@ func NewFakeActionCapabilities(ctx context.Context, lggr logger.Logger, registry
 	confHTTPAction := fakes.NewDirectConfidentialHTTPAction(lggr, secretsPath)
 	var confHTTPCap confhttpserver.ClientCapability = confHTTPAction
 	if limits != nil {
-		confHTTPCap = NewLimitedConfidentialHTTPAction(confHTTPAction, limits)
+		confHTTPCap = NewLimitedConfidentialHTTPAction(confHTTPAction, limits, lggr)
 	}
 	confHTTPActionServer := confhttpserver.NewClientServer(confHTTPCap)
 	if err := registry.Add(ctx, confHTTPActionServer); err != nil {
