@@ -38,7 +38,7 @@ type anchorEvent struct {
 // GetSolanaTriggerLogFromValues fetches a confirmed transaction by signature and
 // builds a solcap.Log from the eventIndex-th Anchor event ("Program data:" log
 // line). Used by the deterministic replay path (both interactive and CI).
-func GetSolanaTriggerLogFromValues(ctx context.Context, client *solanarpc.Client, sigStr string, eventIndex uint64) (*solcap.Log, error) {
+func GetSolanaTriggerLog(ctx context.Context, client *solanarpc.Client, sigStr string, eventIndex uint64) (*solcap.Log, error) {
 	return getSolanaTriggerLogFromValues(ctx, client, sigStr, eventIndex, nil)
 }
 
@@ -46,7 +46,7 @@ func GetSolanaTriggerLogFromValues(ctx context.Context, client *solanarpc.Client
 // signature and builds a solcap.Log using the registered trigger filter. CPI
 // filters are replayed from transaction inner instructions; all other filters
 // use the regular Anchor "Program data:" log path.
-func GetSolanaTriggerLogFromValuesWithFilter(ctx context.Context, client *solanarpc.Client, sigStr string, eventIndex uint64, filter *solcap.FilterLogTriggerRequest) (*solcap.Log, error) {
+func GetSolanaTriggerLogWithFilter(ctx context.Context, client *solanarpc.Client, sigStr string, eventIndex uint64, filter *solcap.FilterLogTriggerRequest) (*solcap.Log, error) {
 	return getSolanaTriggerLogFromValues(ctx, client, sigStr, eventIndex, filter)
 }
 

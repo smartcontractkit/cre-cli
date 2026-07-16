@@ -158,7 +158,7 @@ func (ct *SolanaChainType) ResolveTriggerData(ctx context.Context, selector uint
 			return nil, fmt.Errorf("failed to decode Solana log trigger config: %w", err)
 		}
 	}
-	return GetSolanaTriggerLogFromValuesWithFilter(ctx, client, sig, eventIndex, filter)
+	return GetSolanaTriggerLogWithFilter(ctx, client, sig, eventIndex, filter)
 }
 
 func (ct *SolanaChainType) RegisterCapabilities(ctx context.Context, cfg chain.CapabilityConfig) ([]services.Service, error) {
