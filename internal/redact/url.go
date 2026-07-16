@@ -6,13 +6,26 @@ import (
 	"strings"
 )
 
-// URL returns a version of rawURL with the last path segment and query parameters
-// masked to avoid leaking secrets that may be embedded in RPC or asset URLs.
+// URL returns a version of rawURL with credentials masked to avoid leaking secrets
+// that may be embedded in RPC or asset URLs.
+// For example, "https://rpc.example.com/v1/my-secret-key" becomes "https://rpc.example.com/v1/***".
 func URL(rawURL string) string {
 	u, err := url.Parse(rawURL)
 	if err != nil {
 		return RedactedValue
 	}
+
+	host := u.Host
+	if u.User != nil {
+		username := u.User.Username()
+		if username != "" {
+			host = username + ":***@" + u.Hostname()
+			if port := u.Port(); port != "" {
+				host += ":" + port
+			}
+		}
+	}
+
 	u.Path = strings.TrimRight(u.Path, "/")
 	if u.Path != "" && u.Path != "/" {
 		parts := strings.Split(u.Path, "/")
@@ -24,5 +37,5 @@ func URL(rawURL string) string {
 	}
 	u.RawQuery = ""
 	u.Fragment = ""
-	return fmt.Sprintf("%s://%s%s", u.Scheme, u.Host, u.Path)
+	return fmt.Sprintf("%s://%s%s", u.Scheme, host, u.Path)
 }

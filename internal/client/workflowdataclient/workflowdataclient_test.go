@@ -148,6 +148,47 @@ func TestListAll_Pagination(t *testing.T) {
 	assert.Equal(t, int32(2), callCount.Load(), "expected exactly 2 HTTP calls for 2 pages")
 }
 
+func TestSearchByName_OwnerAddress(t *testing.T) {
+	const owner = "c96ca1860ed10e4a484a3f1b39b86769ae7e9772"
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+		vars, _ := body["variables"].(map[string]any)
+		input, _ := vars["input"].(map[string]any)
+		owners, _ := input["workflowOwnerAddress"].([]any)
+		require.Len(t, owners, 1)
+		assert.Equal(t, owner, owners[0])
+		assert.Equal(t, "my-workflow", input["search"])
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data": map[string]any{
+				"workflows": map[string]any{
+					"count": 1,
+					"data": []map[string]string{
+						{
+							"uuid":           "wf-1",
+							"name":           "my-workflow",
+							"workflowId":     "1010101010101010101010101010101010101010101010101010101010101010",
+							"ownerAddress":   owner,
+							"status":         "ACTIVE",
+							"workflowSource": "private",
+						},
+					},
+				},
+			},
+		})
+	}))
+	defer srv.Close()
+
+	client := newTestClient(t, srv.URL)
+	got, err := client.SearchByName(context.Background(), "my-workflow", DefaultPageSize, owner)
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	assert.Equal(t, owner, got[0].OwnerAddress)
+}
+
 func TestListAll_GQLError(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

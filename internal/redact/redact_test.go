@@ -1,6 +1,7 @@
 package redact
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -37,6 +38,16 @@ func TestURL(t *testing.T) {
 			raw:  "://bad",
 			want: RedactedValue,
 		},
+		{
+			name: "redacts userinfo",
+			raw:  "http://user:secret@rpc.example.com/v1/key",
+			want: "http://user:***@rpc.example.com/v1/***",
+		},
+		{
+			name: "redacts userinfo without path",
+			raw:  "http://user:secret@rpc.example.com",
+			want: "http://user:***@rpc.example.com",
+		},
 	}
 
 	for _, tt := range tests {
@@ -66,6 +77,13 @@ func TestFlag(t *testing.T) {
 		{name: "wasm remote url", flagName: "wasm", value: "https://cdn.example.com/wasm/secret", want: "https://cdn.example.com/wasm/***"},
 		{name: "benign flag", flagName: "verbose", value: "true", want: "true"},
 		{name: "empty value", flagName: "env", value: "", want: ""},
+		{name: "changeset file path", flagName: "changeset-file", value: "./changeset.yaml", want: RedactedValue},
+		{name: "project root basename", flagName: "project-root", value: "/home/user/my-project", want: "my-project"},
+		{name: "unintended json blob on arbitrary flag", flagName: "owner-label", value: `{"key":"value"}`, want: RedactedValue},
+		{name: "unintended multiline output on arbitrary flag", flagName: "run", value: "line one\nline two", want: RedactedValue},
+		{name: "unintended stack trace on arbitrary flag", flagName: "run", value: "panic: runtime error", want: RedactedValue},
+		{name: "unintended oversized value on arbitrary flag", flagName: "run", value: strings.Repeat("a", maxFlagValueLength+1), want: RedactedValue},
+		{name: "benign free-form value passes through", flagName: "owner-label", value: "my-team", want: "my-team"},
 	}
 
 	for _, tt := range tests {
@@ -110,6 +128,20 @@ func TestArgs(t *testing.T) {
 			subcommand: "get",
 			args:       []string{"my-workflow"},
 			want:       []string{"my-workflow"},
+		},
+		{
+			name:       "unintended json blob arg redacted",
+			action:     "workflow",
+			subcommand: "get",
+			args:       []string{`{"unexpected":"payload"}`},
+			want:       []string{RedactedValue},
+		},
+		{
+			name:       "unintended multiline arg redacted",
+			action:     "workflow",
+			subcommand: "get",
+			args:       []string{"line one\nline two"},
+			want:       []string{RedactedValue},
 		},
 	}
 

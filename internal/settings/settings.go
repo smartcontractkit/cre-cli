@@ -18,6 +18,7 @@ import (
 )
 
 const CreTargetEnvVar = "CRE_TARGET"
+const CreAllowInsecureRPCEnvVar = "CRE_ALLOW_INSECURE_RPC"
 
 // ChainType describes a chain family and the per-family settings the CLI
 // loads from the environment. Add a family by appending to AllChainTypes.
@@ -182,7 +183,7 @@ func loadEnvFile(logger *zerolog.Logger, envPath string) (string, map[string]str
 		}
 		err = os.Setenv(k, v)
 		if err != nil {
-			logger.Error().Str("key", k).Str("value", v).Err(err).Msg(
+			logger.Error().Str("key", k).Err(err).Msg(
 				"Failed to set environment variable; CLI tool will read and verify individual environment variables (they MUST be exported). " +
 					"If the file is present, please check that it follows the correct format: https://dotenvx.com/docs/env-file")
 		}
@@ -215,11 +216,12 @@ func LoadEnv(logger *zerolog.Logger, v *viper.Viper, envPath string) {
 	loadedEnvFilePath = ""
 	loadedEnvVars = nil
 	loadedEnvFilePath, loadedEnvVars = loadEnvFile(logger, envPath)
-	extras := []string{CreTargetEnvVar}
+	extras := []string{CreTargetEnvVar, CreAllowInsecureRPCEnvVar}
 	for _, f := range AllChainTypes {
 		extras = append(extras, f.PrivateKeyEnv)
 	}
 	bindAllVars(v, loadedEnvVars, extras...)
+	_ = v.BindEnv(Flags.AllowInsecureRPC.Name, CreAllowInsecureRPCEnvVar)
 }
 
 // LoadPublicEnv loads variables from envPath into the process environment
