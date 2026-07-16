@@ -2,13 +2,17 @@ package solana
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/binary"
 	"fmt"
 	"math"
+	"regexp"
 	"strings"
 
 	"github.com/gagliardetto/solana-go"
 	solanarpc "github.com/gagliardetto/solana-go/rpc"
+	"google.golang.org/protobuf/types/known/anypb"
 
 	solcap "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/chain-capabilities/solana"
 
@@ -19,6 +23,12 @@ import (
 // anchorEventLogPrefix is the log line prefix Anchor uses for emitted events
 // (sol_log_data), carrying the base64-encoded event payload.
 const anchorEventLogPrefix = "Program data: "
+
+const (
+	anchorCPIMethodName       = "anchor:event"
+	cpiMethodDiscriminatorLen = 8
+	cpiEventVecLenPrefixLen   = 4
+)
 
 // anchorEvent is a single decoded "Program data:" event, attributed to the
 // program that was executing when it was emitted.
@@ -31,6 +41,18 @@ type anchorEvent struct {
 // builds a solcap.Log from the eventIndex-th Anchor event ("Program data:" log
 // line). Used by the deterministic replay path (both interactive and CI).
 func GetSolanaTriggerLogFromValues(ctx context.Context, client *solanarpc.Client, sigStr string, eventIndex uint64) (*solcap.Log, error) {
+	return getSolanaTriggerLogFromValues(ctx, client, sigStr, eventIndex, nil)
+}
+
+// GetSolanaTriggerLogFromValuesWithFilter fetches a confirmed transaction by
+// signature and builds a solcap.Log using the registered trigger filter. CPI
+// filters are replayed from transaction inner instructions; all other filters
+// use the regular Anchor "Program data:" log path.
+func GetSolanaTriggerLogFromValuesWithFilter(ctx context.Context, client *solanarpc.Client, sigStr string, eventIndex uint64, filter *solcap.FilterLogTriggerRequest) (*solcap.Log, error) {
+	return getSolanaTriggerLogFromValues(ctx, client, sigStr, eventIndex, filter)
+}
+
+func getSolanaTriggerLogFromValues(ctx context.Context, client *solanarpc.Client, sigStr string, eventIndex uint64, filter *solcap.FilterLogTriggerRequest) (*solcap.Log, error) {
 	sigStr = strings.TrimSpace(sigStr)
 	if sigStr == "" {
 		return nil, fmt.Errorf("transaction signature cannot be empty")
@@ -56,6 +78,27 @@ func GetSolanaTriggerLogFromValues(ctx context.Context, client *solanarpc.Client
 		return nil, fmt.Errorf("transaction %s failed on-chain and emitted no usable events: %v", sigStr, res.Meta.Err)
 	}
 
+	if filter.GetCpiFilterConfig() != nil {
+		if res.Transaction == nil {
+			return nil, fmt.Errorf("transaction %s has no transaction body", sigStr)
+		}
+		tx, err := res.Transaction.GetTransaction()
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode transaction %s: %w", sigStr, err)
+		}
+		events, err := extractSolanaCPIEvents(tx, res.Meta, filter)
+		if err != nil {
+			return nil, err
+		}
+		if len(events) == 0 {
+			return nil, fmt.Errorf("transaction %s emitted no matching CPI events", sigStr)
+		}
+		if eventIndex >= uint64(len(events)) {
+			return nil, fmt.Errorf("event index %d out of range, transaction emitted %d matching CPI event(s)", eventIndex, len(events))
+		}
+		return solanaEventToLog(events[eventIndex], sig, res, eventIndex)
+	}
+
 	events, err := parseAnchorEvents(res.Meta.LogMessages)
 	if err != nil {
 		return nil, err
@@ -67,7 +110,14 @@ func GetSolanaTriggerLogFromValues(ctx context.Context, client *solanarpc.Client
 		return nil, fmt.Errorf("event index %d out of range, transaction emitted %d event(s)", eventIndex, len(events))
 	}
 
-	ev := events[eventIndex]
+	if eventIndex > math.MaxInt64 {
+		return nil, fmt.Errorf("event index %d exceeds int64 maximum", eventIndex)
+	}
+
+	return solanaEventToLog(events[eventIndex], sig, res, eventIndex)
+}
+
+func solanaEventToLog(ev anchorEvent, sig solana.Signature, res *solanarpc.GetTransactionResult, eventIndex uint64) (*solcap.Log, error) {
 	if eventIndex > math.MaxInt64 {
 		return nil, fmt.Errorf("event index %d exceeds int64 maximum", eventIndex)
 	}
@@ -89,6 +139,184 @@ func GetSolanaTriggerLogFromValues(ctx context.Context, client *solanarpc.Client
 		log.BlockTimestamp = uint64(res.BlockTime.Time().Unix()) // #nosec G115 -- unix seconds
 	}
 	return log, nil
+}
+
+func extractSolanaCPIEvents(tx *solana.Transaction, meta *solanarpc.TransactionMeta, filter *solcap.FilterLogTriggerRequest) ([]anchorEvent, error) {
+	cfg := filter.GetCpiFilterConfig()
+	if cfg == nil {
+		return nil, nil
+	}
+	if len(filter.GetAddress()) != solana.PublicKeyLength {
+		return nil, fmt.Errorf("CPI filter source address must be %d bytes, got %d", solana.PublicKeyLength, len(filter.GetAddress()))
+	}
+	if len(cfg.GetDestAddress()) != solana.PublicKeyLength {
+		return nil, fmt.Errorf("CPI filter destination address must be %d bytes, got %d", solana.PublicKeyLength, len(cfg.GetDestAddress()))
+	}
+	if len(cfg.GetMethodName()) == 0 {
+		return nil, fmt.Errorf("CPI filter method name cannot be empty")
+	}
+	if tx == nil {
+		return nil, fmt.Errorf("transaction is nil")
+	}
+	if meta == nil {
+		return nil, fmt.Errorf("transaction metadata is nil")
+	}
+
+	sourceProgram := solana.PublicKeyFromBytes(filter.GetAddress())
+	destProgram := solana.PublicKeyFromBytes(cfg.GetDestAddress())
+	methodSig := cpiMethodDiscriminator(string(cfg.GetMethodName()))
+	allAccountKeys := allSolanaAccountKeys(tx, meta)
+	if len(allAccountKeys) == 0 {
+		return nil, nil
+	}
+
+	var events []anchorEvent
+	for _, inner := range meta.InnerInstructions {
+		if int(inner.Index) >= len(tx.Message.Instructions) {
+			continue
+		}
+		outerInstruction := tx.Message.Instructions[inner.Index]
+		if int(outerInstruction.ProgramIDIndex) >= len(allAccountKeys) {
+			continue
+		}
+
+		outerProgram := allAccountKeys[outerInstruction.ProgramIDIndex]
+		programAtStackHeight := map[uint16]solana.PublicKey{
+			1: outerProgram,
+		}
+
+		for _, ix := range inner.Instructions {
+			if int(ix.ProgramIDIndex) >= len(allAccountKeys) {
+				continue
+			}
+			currentDestProgram := allAccountKeys[ix.ProgramIDIndex]
+			if ix.StackHeight > 0 {
+				programAtStackHeight[ix.StackHeight] = currentDestProgram
+			}
+			if currentDestProgram != destProgram {
+				continue
+			}
+
+			data := []byte(ix.Data)
+			if len(data) <= cpiMethodDiscriminatorLen || !bytesEqual(data[:cpiMethodDiscriminatorLen], methodSig[:]) {
+				continue
+			}
+
+			currentSourceProgram, ok := cpiSourceProgram(ix.StackHeight, programAtStackHeight, outerProgram)
+			if !ok || currentSourceProgram != sourceProgram {
+				continue
+			}
+
+			eventData, ok := cpiEventData(data, string(cfg.GetMethodName()))
+			if !ok || len(eventData) == 0 {
+				continue
+			}
+			events = append(events, anchorEvent{programID: currentSourceProgram, data: eventData})
+		}
+	}
+
+	return events, nil
+}
+
+func allSolanaAccountKeys(tx *solana.Transaction, meta *solanarpc.TransactionMeta) []solana.PublicKey {
+	if tx == nil {
+		return nil
+	}
+	capacity := len(tx.Message.AccountKeys)
+	if meta != nil {
+		capacity += len(meta.LoadedAddresses.Writable) + len(meta.LoadedAddresses.ReadOnly)
+	}
+	allKeys := make([]solana.PublicKey, 0, capacity)
+	allKeys = append(allKeys, tx.Message.AccountKeys...)
+	if meta != nil {
+		allKeys = append(allKeys, meta.LoadedAddresses.Writable...)
+		allKeys = append(allKeys, meta.LoadedAddresses.ReadOnly...)
+	}
+	return allKeys
+}
+
+func cpiSourceProgram(stackHeight uint16, programAtStackHeight map[uint16]solana.PublicKey, outerProgram solana.PublicKey) (solana.PublicKey, bool) {
+	switch {
+	case stackHeight > 1:
+		source, ok := programAtStackHeight[stackHeight-1]
+		return source, ok
+	case stackHeight == 1:
+		return solana.PublicKey{}, false
+	default:
+		return outerProgram, true
+	}
+}
+
+func cpiEventData(data []byte, methodName string) ([]byte, bool) {
+	if methodName == anchorCPIMethodName {
+		if len(data) <= cpiMethodDiscriminatorLen {
+			return nil, false
+		}
+		return data[cpiMethodDiscriminatorLen:], true
+	}
+
+	offset := cpiMethodDiscriminatorLen + cpiEventVecLenPrefixLen
+	if len(data) < offset {
+		return nil, false
+	}
+	declaredLen := binary.LittleEndian.Uint32(data[cpiMethodDiscriminatorLen:offset])
+	if declaredLen == 0 {
+		return nil, false
+	}
+	remaining := len(data) - offset
+	if int(declaredLen) != remaining {
+		return nil, false
+	}
+	return data[offset:], true
+}
+
+func cpiMethodDiscriminator(methodName string) [cpiMethodDiscriminatorLen]byte {
+	if methodName == anchorCPIMethodName {
+		sum := sha256.Sum256([]byte(anchorCPIMethodName))
+		var sig [cpiMethodDiscriminatorLen]byte
+		copy(sig[:], sum[:cpiMethodDiscriminatorLen])
+		for i, j := 0, len(sig)-1; i < j; i, j = i+1, j-1 {
+			sig[i], sig[j] = sig[j], sig[i]
+		}
+		return sig
+	}
+
+	sum := sha256.Sum256([]byte("global:" + toSnakeCase(methodName)))
+	var sig [cpiMethodDiscriminatorLen]byte
+	copy(sig[:], sum[:cpiMethodDiscriminatorLen])
+	return sig
+}
+
+func toSnakeCase(s string) string {
+	s = regexp.MustCompile(`([a-z0-9])([A-Z])`).ReplaceAllString(s, `${1}_${2}`)
+	s = regexp.MustCompile(`([A-Z]+)([A-Z][a-z])`).ReplaceAllString(s, `${1}_${2}`)
+	return strings.ToLower(s)
+}
+
+func bytesEqual(a, b []byte) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// decodeLogTriggerConfig unmarshals the TriggerSubscription's Any payload into
+// the Solana FilterLogTriggerRequest message. Returns an error if the payload is
+// missing or of the wrong message type.
+func decodeLogTriggerConfig(payload *anypb.Any) (*solcap.FilterLogTriggerRequest, error) {
+	if payload == nil {
+		return nil, fmt.Errorf("trigger subscription has no payload")
+	}
+	cfg := &solcap.FilterLogTriggerRequest{}
+	if err := payload.UnmarshalTo(cfg); err != nil {
+		return nil, fmt.Errorf("payload is not a FilterLogTriggerRequest: %w", err)
+	}
+	return cfg, nil
 }
 
 // parseAnchorEvents walks the transaction log messages, tracking the program

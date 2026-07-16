@@ -3,11 +3,17 @@ package solana
 import (
 	"context"
 	"encoding/base64"
+	"encoding/binary"
 	"testing"
 
 	"github.com/gagliardetto/solana-go"
+	solanarpc "github.com/gagliardetto/solana-go/rpc"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/types/known/anypb"
+	"google.golang.org/protobuf/types/known/durationpb"
+
+	solcap "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/chain-capabilities/solana"
 )
 
 func mustPubkey(t *testing.T) solana.PublicKey {
@@ -69,4 +75,150 @@ func TestGetSolanaTriggerLogFromValues_Validation(t *testing.T) {
 	_, err = GetSolanaTriggerLogFromValues(context.Background(), nil, "not-base58!!", 0)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid transaction signature")
+}
+
+func TestExtractSolanaCPIEvents_AnchorEvent(t *testing.T) {
+	t.Parallel()
+
+	source := mustPubkey(t)
+	dest := mustPubkey(t)
+	other := mustPubkey(t)
+	eventData := append([]byte{1, 2, 3, 4, 5, 6, 7, 8}, []byte("payload")...)
+	methodSig := cpiMethodDiscriminator(anchorCPIMethodName)
+	instructionData := append(methodSig[:], eventData...)
+
+	tx := &solana.Transaction{
+		Message: solana.Message{
+			AccountKeys: []solana.PublicKey{source, dest, other},
+			Instructions: []solana.CompiledInstruction{
+				{ProgramIDIndex: 0},
+			},
+		},
+	}
+	meta := &solanarpc.TransactionMeta{
+		InnerInstructions: []solanarpc.InnerInstruction{
+			{
+				Index: 0,
+				Instructions: []solanarpc.CompiledInstruction{
+					{ProgramIDIndex: 2, Data: solana.Base58(instructionData), StackHeight: 2},
+					{ProgramIDIndex: 1, Data: solana.Base58(instructionData), StackHeight: 2},
+				},
+			},
+		},
+	}
+	filter := &solcap.FilterLogTriggerRequest{
+		Address: source.Bytes(),
+		CpiFilterConfig: &solcap.CPIFilterConfig{
+			DestAddress: dest.Bytes(),
+			MethodName:  []byte(anchorCPIMethodName),
+		},
+	}
+
+	events, err := extractSolanaCPIEvents(tx, meta, filter)
+	require.NoError(t, err)
+	require.Len(t, events, 1)
+	assert.Equal(t, source, events[0].programID)
+	assert.Equal(t, eventData, events[0].data)
+}
+
+func TestExtractSolanaCPIEvents_VecEncodedMethod(t *testing.T) {
+	t.Parallel()
+
+	source := mustPubkey(t)
+	dest := mustPubkey(t)
+	eventData := []byte("legacy-cpi-event")
+	methodSig := cpiMethodDiscriminator("cpiEvent")
+	instructionData := append([]byte{}, methodSig[:]...)
+	instructionData = binary.LittleEndian.AppendUint32(instructionData, uint32(len(eventData))) // #nosec G115 -- test fixture length
+	instructionData = append(instructionData, eventData...)
+
+	tx := &solana.Transaction{
+		Message: solana.Message{
+			AccountKeys: []solana.PublicKey{source, dest},
+			Instructions: []solana.CompiledInstruction{
+				{ProgramIDIndex: 0},
+			},
+		},
+	}
+	meta := &solanarpc.TransactionMeta{
+		InnerInstructions: []solanarpc.InnerInstruction{
+			{
+				Index: 0,
+				Instructions: []solanarpc.CompiledInstruction{
+					{ProgramIDIndex: 1, Data: solana.Base58(instructionData)},
+				},
+			},
+		},
+	}
+	filter := &solcap.FilterLogTriggerRequest{
+		Address: source.Bytes(),
+		CpiFilterConfig: &solcap.CPIFilterConfig{
+			DestAddress: dest.Bytes(),
+			MethodName:  []byte("cpiEvent"),
+		},
+	}
+
+	events, err := extractSolanaCPIEvents(tx, meta, filter)
+	require.NoError(t, err)
+	require.Len(t, events, 1)
+	assert.Equal(t, source, events[0].programID)
+	assert.Equal(t, eventData, events[0].data)
+}
+
+func TestExtractSolanaCPIEvents_Validation(t *testing.T) {
+	t.Parallel()
+
+	source := mustPubkey(t)
+	dest := mustPubkey(t)
+	tx := &solana.Transaction{}
+	meta := &solanarpc.TransactionMeta{}
+
+	_, err := extractSolanaCPIEvents(tx, meta, &solcap.FilterLogTriggerRequest{
+		Address: []byte{0x01},
+		CpiFilterConfig: &solcap.CPIFilterConfig{
+			DestAddress: dest.Bytes(),
+			MethodName:  []byte(anchorCPIMethodName),
+		},
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "source address must be 32 bytes")
+
+	_, err = extractSolanaCPIEvents(tx, meta, &solcap.FilterLogTriggerRequest{
+		Address: source.Bytes(),
+		CpiFilterConfig: &solcap.CPIFilterConfig{
+			DestAddress: []byte{0x01},
+			MethodName:  []byte(anchorCPIMethodName),
+		},
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "destination address must be 32 bytes")
+
+	_, err = extractSolanaCPIEvents(tx, meta, &solcap.FilterLogTriggerRequest{
+		Address: source.Bytes(),
+		CpiFilterConfig: &solcap.CPIFilterConfig{
+			DestAddress: dest.Bytes(),
+		},
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "method name cannot be empty")
+}
+
+func TestDecodeLogTriggerConfig(t *testing.T) {
+	t.Parallel()
+
+	_, err := decodeLogTriggerConfig(nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no payload")
+
+	wrong, err := anypb.New(durationpb.New(0))
+	require.NoError(t, err)
+	_, err = decodeLogTriggerConfig(wrong)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "FilterLogTriggerRequest")
+
+	msg, err := anypb.New(&solcap.FilterLogTriggerRequest{EventName: "MessageEmitted"})
+	require.NoError(t, err)
+	cfg, err := decodeLogTriggerConfig(msg)
+	require.NoError(t, err)
+	assert.Equal(t, "MessageEmitted", cfg.GetEventName())
 }

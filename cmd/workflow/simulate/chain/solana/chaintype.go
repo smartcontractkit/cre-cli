@@ -150,7 +150,15 @@ func (ct *SolanaChainType) ResolveTriggerData(ctx context.Context, selector uint
 	if params.Interactive {
 		printSolanaTriggerReplayHeader(selector, sig, eventIndex)
 	}
-	return GetSolanaTriggerLogFromValues(ctx, client, sig, eventIndex)
+
+	var filter *solcap.FilterLogTriggerRequest
+	if params.TriggerPayload != nil {
+		filter, err = decodeLogTriggerConfig(params.TriggerPayload)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode Solana log trigger config: %w", err)
+		}
+	}
+	return GetSolanaTriggerLogFromValuesWithFilter(ctx, client, sig, eventIndex, filter)
 }
 
 func (ct *SolanaChainType) RegisterCapabilities(ctx context.Context, cfg chain.CapabilityConfig) ([]services.Service, error) {
