@@ -15,11 +15,11 @@ import (
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain"
 )
 
-// SolanaChainCapabilities holds the per-selector Solana chains created for
-// simulation. Each is a ManualSolanaChain wrapping the fake chain so the
-// simulator can fire log triggers manually.
+// SolanaChainCapabilities holds the per-selector FakeSolanaChain instances
+// created for simulation. The fake owns the log-trigger callback channels and
+// exposes ManualTrigger so the simulator can fire events manually.
 type SolanaChainCapabilities struct {
-	SolanaChains map[uint64]*ManualSolanaChain
+	SolanaChains map[uint64]*solanafakes.FakeSolanaChain
 }
 
 // NewSolanaChainCapabilities builds FakeSolanaChain instances for every
@@ -36,7 +36,7 @@ func NewSolanaChainCapabilities(
 	dryRunChainWrite bool,
 	limits chain.Limits,
 ) (*SolanaChainCapabilities, error) {
-	chains := make(map[uint64]*ManualSolanaChain)
+	chains := make(map[uint64]*solanafakes.FakeSolanaChain)
 	for sel, client := range clients {
 		programID, ok := forwarderProgramIDs[sel]
 		if !ok {
@@ -52,13 +52,15 @@ func NewSolanaChainCapabilities(
 		if err != nil {
 			return nil, fmt.Errorf("new FakeSolanaChain for selector %d: %w", sel, err)
 		}
+		// LimitedSolanaChain enforces write limits and delegates RegisterLogTrigger
+		// down to the fake, so the fake owns the trigger callback channel that
+		// ManualTrigger later pushes to.
 		capability := NewLimitedSolanaChain(fc, limits)
-		manual := NewManualSolanaChain(capability)
-		server := solanaserver.NewClientServer(manual)
+		server := solanaserver.NewClientServer(capability)
 		if err := registry.Add(ctx, server); err != nil {
 			return nil, fmt.Errorf("register solana capability for selector %d: %w", sel, err)
 		}
-		chains[sel] = manual
+		chains[sel] = fc
 	}
 	return &SolanaChainCapabilities{SolanaChains: chains}, nil
 }
