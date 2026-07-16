@@ -16,8 +16,7 @@ import (
 )
 
 // SolanaChainCapabilities holds the per-selector FakeSolanaChain instances
-// created for simulation. The fake owns the log-trigger callback channels and
-// exposes ManualTrigger so the simulator can fire events manually.
+// created for simulation.
 type SolanaChainCapabilities struct {
 	SolanaChains map[uint64]*solanafakes.FakeSolanaChain
 }
@@ -52,9 +51,6 @@ func NewSolanaChainCapabilities(
 		if err != nil {
 			return nil, fmt.Errorf("new FakeSolanaChain for selector %d: %w", sel, err)
 		}
-		// LimitedSolanaChain enforces write limits and delegates RegisterLogTrigger
-		// down to the fake, so the fake owns the trigger callback channel that
-		// ManualTrigger later pushes to.
 		capability := NewLimitedSolanaChain(fc, limits)
 		server := solanaserver.NewClientServer(capability)
 		if err := registry.Add(ctx, server); err != nil {

@@ -3,7 +3,6 @@ package solana
 import (
 	"context"
 	"encoding/base64"
-	"encoding/binary"
 	"testing"
 
 	"github.com/gagliardetto/solana-go"
@@ -111,50 +110,6 @@ func TestExtractSolanaCPIEvents_AnchorEvent(t *testing.T) {
 		CpiFilterConfig: &solcap.CPIFilterConfig{
 			DestAddress: dest.Bytes(),
 			MethodName:  []byte(anchorCPIMethodName),
-		},
-	}
-
-	events, err := extractSolanaCPIEvents(tx, meta, filter)
-	require.NoError(t, err)
-	require.Len(t, events, 1)
-	assert.Equal(t, source, events[0].programID)
-	assert.Equal(t, eventData, events[0].data)
-}
-
-func TestExtractSolanaCPIEvents_VecEncodedMethod(t *testing.T) {
-	t.Parallel()
-
-	source := mustPubkey(t)
-	dest := mustPubkey(t)
-	eventData := []byte("legacy-cpi-event")
-	methodSig := cpiMethodDiscriminator("cpiEvent")
-	instructionData := append([]byte{}, methodSig[:]...)
-	instructionData = binary.LittleEndian.AppendUint32(instructionData, uint32(len(eventData))) // #nosec G115 -- test fixture length
-	instructionData = append(instructionData, eventData...)
-
-	tx := &solana.Transaction{
-		Message: solana.Message{
-			AccountKeys: []solana.PublicKey{source, dest},
-			Instructions: []solana.CompiledInstruction{
-				{ProgramIDIndex: 0},
-			},
-		},
-	}
-	meta := &solanarpc.TransactionMeta{
-		InnerInstructions: []solanarpc.InnerInstruction{
-			{
-				Index: 0,
-				Instructions: []solanarpc.CompiledInstruction{
-					{ProgramIDIndex: 1, Data: solana.Base58(instructionData)},
-				},
-			},
-		},
-	}
-	filter := &solcap.FilterLogTriggerRequest{
-		Address: source.Bytes(),
-		CpiFilterConfig: &solcap.CPIFilterConfig{
-			DestAddress: dest.Bytes(),
-			MethodName:  []byte("cpiEvent"),
 		},
 	}
 

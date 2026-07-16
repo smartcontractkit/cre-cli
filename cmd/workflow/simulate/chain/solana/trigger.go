@@ -1,13 +1,12 @@
 package solana
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
-	"encoding/binary"
 	"fmt"
 	"math"
-	"regexp"
 	"strings"
 
 	"github.com/gagliardetto/solana-go"
@@ -27,7 +26,6 @@ const anchorEventLogPrefix = "Program data: "
 const (
 	anchorCPIMethodName       = "anchor:event"
 	cpiMethodDiscriminatorLen = 8
-	cpiEventVecLenPrefixLen   = 4
 )
 
 // anchorEvent is a single decoded "Program data:" event, attributed to the
@@ -108,10 +106,6 @@ func getSolanaTriggerLogFromValues(ctx context.Context, client *solanarpc.Client
 	}
 	if eventIndex >= uint64(len(events)) {
 		return nil, fmt.Errorf("event index %d out of range, transaction emitted %d event(s)", eventIndex, len(events))
-	}
-
-	if eventIndex > math.MaxInt64 {
-		return nil, fmt.Errorf("event index %d exceeds int64 maximum", eventIndex)
 	}
 
 	return solanaEventToLog(events[eventIndex], sig, res, eventIndex)
@@ -198,7 +192,7 @@ func extractSolanaCPIEvents(tx *solana.Transaction, meta *solanarpc.TransactionM
 			}
 
 			data := []byte(ix.Data)
-			if len(data) <= cpiMethodDiscriminatorLen || !bytesEqual(data[:cpiMethodDiscriminatorLen], methodSig[:]) {
+			if len(data) <= cpiMethodDiscriminatorLen || !bytes.Equal(data[:cpiMethodDiscriminatorLen], methodSig[:]) {
 				continue
 			}
 
@@ -247,62 +241,27 @@ func cpiSourceProgram(stackHeight uint16, programAtStackHeight map[uint16]solana
 	}
 }
 
+// cpiEventData strips the anchor:event CPI method discriminator, returning the
+// remaining bytes as the event payload. cre-sdk-go's AnchorCPILogTriggerConfig
+// always uses this method name, so no other CPI dispatch convention is supported.
 func cpiEventData(data []byte, methodName string) ([]byte, bool) {
-	if methodName == anchorCPIMethodName {
-		if len(data) <= cpiMethodDiscriminatorLen {
-			return nil, false
-		}
-		return data[cpiMethodDiscriminatorLen:], true
-	}
-
-	offset := cpiMethodDiscriminatorLen + cpiEventVecLenPrefixLen
-	if len(data) < offset {
+	if methodName != anchorCPIMethodName || len(data) <= cpiMethodDiscriminatorLen {
 		return nil, false
 	}
-	declaredLen := binary.LittleEndian.Uint32(data[cpiMethodDiscriminatorLen:offset])
-	if declaredLen == 0 {
-		return nil, false
-	}
-	remaining := len(data) - offset
-	if int(declaredLen) != remaining {
-		return nil, false
-	}
-	return data[offset:], true
+	return data[cpiMethodDiscriminatorLen:], true
 }
 
+// cpiMethodDiscriminator computes the anchor:event self-CPI discriminator
+// (sha256("anchor:event")[:8], byte-reversed). Only anchorCPIMethodName is
+// supported, matching cre-sdk-go's AnchorCPILogTriggerConfig.
 func cpiMethodDiscriminator(methodName string) [cpiMethodDiscriminatorLen]byte {
-	if methodName == anchorCPIMethodName {
-		sum := sha256.Sum256([]byte(anchorCPIMethodName))
-		var sig [cpiMethodDiscriminatorLen]byte
-		copy(sig[:], sum[:cpiMethodDiscriminatorLen])
-		for i, j := 0, len(sig)-1; i < j; i, j = i+1, j-1 {
-			sig[i], sig[j] = sig[j], sig[i]
-		}
-		return sig
-	}
-
-	sum := sha256.Sum256([]byte("global:" + toSnakeCase(methodName)))
+	sum := sha256.Sum256([]byte(anchorCPIMethodName))
 	var sig [cpiMethodDiscriminatorLen]byte
 	copy(sig[:], sum[:cpiMethodDiscriminatorLen])
+	for i, j := 0, len(sig)-1; i < j; i, j = i+1, j-1 {
+		sig[i], sig[j] = sig[j], sig[i]
+	}
 	return sig
-}
-
-func toSnakeCase(s string) string {
-	s = regexp.MustCompile(`([a-z0-9])([A-Z])`).ReplaceAllString(s, `${1}_${2}`)
-	s = regexp.MustCompile(`([A-Z]+)([A-Z][a-z])`).ReplaceAllString(s, `${1}_${2}`)
-	return strings.ToLower(s)
-}
-
-func bytesEqual(a, b []byte) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
 }
 
 // decodeLogTriggerConfig unmarshals the TriggerSubscription's Any payload into
