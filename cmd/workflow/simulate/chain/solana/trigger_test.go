@@ -13,7 +13,11 @@ import (
 	"google.golang.org/protobuf/types/known/durationpb"
 
 	solcap "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/chain-capabilities/solana"
+
+	logpollertypes "github.com/smartcontractkit/chainlink-solana/pkg/solana/logpoller/types"
 )
+
+const testAnchorEventLogPrefix = "Program data: "
 
 func mustPubkey(t *testing.T) solana.PublicKey {
 	t.Helper()
@@ -33,9 +37,9 @@ func TestParseAnchorEvents_AttributesEmittingProgram(t *testing.T) {
 	logs := []string{
 		"Program " + prog.String() + " invoke [1]",
 		"Program log: Instruction: DoThing",
-		anchorEventLogPrefix + base64.StdEncoding.EncodeToString(ev0),
+		testAnchorEventLogPrefix + base64.StdEncoding.EncodeToString(ev0),
 		"Program " + inner.String() + " invoke [2]",
-		anchorEventLogPrefix + base64.StdEncoding.EncodeToString(ev1),
+		testAnchorEventLogPrefix + base64.StdEncoding.EncodeToString(ev1),
 		"Program " + inner.String() + " success",
 		"Program " + prog.String() + " success",
 	}
@@ -83,7 +87,7 @@ func TestExtractSolanaCPIEvents_AnchorEvent(t *testing.T) {
 	dest := mustPubkey(t)
 	other := mustPubkey(t)
 	eventData := append([]byte{1, 2, 3, 4, 5, 6, 7, 8}, []byte("payload")...)
-	methodSig := cpiMethodDiscriminator(anchorCPIMethodName)
+	methodSig := logpollertypes.AnchorCPIEventDiscriminator()
 	instructionData := append(methodSig[:], eventData...)
 
 	tx := &solana.Transaction{
@@ -109,7 +113,7 @@ func TestExtractSolanaCPIEvents_AnchorEvent(t *testing.T) {
 		Address: source.Bytes(),
 		CpiFilterConfig: &solcap.CPIFilterConfig{
 			DestAddress: dest.Bytes(),
-			MethodName:  []byte(anchorCPIMethodName),
+			MethodName:  []byte(logpollertypes.AnchorCPIMethodName),
 		},
 	}
 
@@ -132,7 +136,7 @@ func TestExtractSolanaCPIEvents_Validation(t *testing.T) {
 		Address: []byte{0x01},
 		CpiFilterConfig: &solcap.CPIFilterConfig{
 			DestAddress: dest.Bytes(),
-			MethodName:  []byte(anchorCPIMethodName),
+			MethodName:  []byte(logpollertypes.AnchorCPIMethodName),
 		},
 	})
 	require.Error(t, err)
@@ -142,7 +146,7 @@ func TestExtractSolanaCPIEvents_Validation(t *testing.T) {
 		Address: source.Bytes(),
 		CpiFilterConfig: &solcap.CPIFilterConfig{
 			DestAddress: []byte{0x01},
-			MethodName:  []byte(anchorCPIMethodName),
+			MethodName:  []byte(logpollertypes.AnchorCPIMethodName),
 		},
 	})
 	require.Error(t, err)

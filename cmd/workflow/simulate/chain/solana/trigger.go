@@ -1,9 +1,7 @@
 package solana
 
 import (
-	"bytes"
 	"context"
-	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
 	"math"
@@ -14,19 +12,16 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 
 	solcap "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/chain-capabilities/solana"
+	"github.com/smartcontractkit/chainlink-common/pkg/logger"
+
+	"github.com/smartcontractkit/chainlink-solana/pkg/solana/logpoller"
+	logpollertypes "github.com/smartcontractkit/chainlink-solana/pkg/solana/logpoller/types"
 
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
-// anchorEventLogPrefix is the log line prefix Anchor uses for emitted events
-// (sol_log_data), carrying the base64-encoded event payload.
-const anchorEventLogPrefix = "Program data: "
-
-const (
-	anchorCPIMethodName       = "anchor:event"
-	cpiMethodDiscriminatorLen = 8
-)
+const cpiMethodDiscriminatorLen = logpollertypes.EventSignatureLength
 
 // anchorEvent is a single decoded "Program data:" event, attributed to the
 // program that was executing when it was emitted.
@@ -156,10 +151,14 @@ func extractSolanaCPIEvents(tx *solana.Transaction, meta *solanarpc.TransactionM
 		return nil, fmt.Errorf("transaction metadata is nil")
 	}
 
+	if string(cfg.GetMethodName()) != logpollertypes.AnchorCPIMethodName {
+		return nil, fmt.Errorf("unsupported CPI method name %q, only %q is supported", cfg.GetMethodName(), logpollertypes.AnchorCPIMethodName)
+	}
+
 	sourceProgram := solana.PublicKeyFromBytes(filter.GetAddress())
 	destProgram := solana.PublicKeyFromBytes(cfg.GetDestAddress())
-	methodSig := cpiMethodDiscriminator(string(cfg.GetMethodName()))
-	allAccountKeys := allSolanaAccountKeys(tx, meta)
+	methodSig := logpollertypes.AnchorCPIEventDiscriminator()
+	allAccountKeys := logpoller.GetAllAccountKeys(tx, meta)
 	if len(allAccountKeys) == 0 {
 		return nil, nil
 	}
@@ -192,7 +191,7 @@ func extractSolanaCPIEvents(tx *solana.Transaction, meta *solanarpc.TransactionM
 			}
 
 			data := []byte(ix.Data)
-			if len(data) <= cpiMethodDiscriminatorLen || !bytes.Equal(data[:cpiMethodDiscriminatorLen], methodSig[:]) {
+			if len(data) <= cpiMethodDiscriminatorLen || logpollertypes.EventSignature(data[:cpiMethodDiscriminatorLen]) != methodSig {
 				continue
 			}
 
@@ -201,7 +200,7 @@ func extractSolanaCPIEvents(tx *solana.Transaction, meta *solanarpc.TransactionM
 				continue
 			}
 
-			eventData, ok := cpiEventData(data, string(cfg.GetMethodName()))
+			eventData, ok := logpoller.ExtractAnchorCPIEventData(logger.Sugared(logger.Nop()), data)
 			if !ok || len(eventData) == 0 {
 				continue
 			}
@@ -210,23 +209,6 @@ func extractSolanaCPIEvents(tx *solana.Transaction, meta *solanarpc.TransactionM
 	}
 
 	return events, nil
-}
-
-func allSolanaAccountKeys(tx *solana.Transaction, meta *solanarpc.TransactionMeta) []solana.PublicKey {
-	if tx == nil {
-		return nil
-	}
-	capacity := len(tx.Message.AccountKeys)
-	if meta != nil {
-		capacity += len(meta.LoadedAddresses.Writable) + len(meta.LoadedAddresses.ReadOnly)
-	}
-	allKeys := make([]solana.PublicKey, 0, capacity)
-	allKeys = append(allKeys, tx.Message.AccountKeys...)
-	if meta != nil {
-		allKeys = append(allKeys, meta.LoadedAddresses.Writable...)
-		allKeys = append(allKeys, meta.LoadedAddresses.ReadOnly...)
-	}
-	return allKeys
 }
 
 func cpiSourceProgram(stackHeight uint16, programAtStackHeight map[uint16]solana.PublicKey, outerProgram solana.PublicKey) (solana.PublicKey, bool) {
@@ -239,29 +221,6 @@ func cpiSourceProgram(stackHeight uint16, programAtStackHeight map[uint16]solana
 	default:
 		return outerProgram, true
 	}
-}
-
-// cpiEventData strips the anchor:event CPI method discriminator, returning the
-// remaining bytes as the event payload. cre-sdk-go's AnchorCPILogTriggerConfig
-// always uses this method name, so no other CPI dispatch convention is supported.
-func cpiEventData(data []byte, methodName string) ([]byte, bool) {
-	if methodName != anchorCPIMethodName || len(data) <= cpiMethodDiscriminatorLen {
-		return nil, false
-	}
-	return data[cpiMethodDiscriminatorLen:], true
-}
-
-// cpiMethodDiscriminator computes the anchor:event self-CPI discriminator
-// (sha256("anchor:event")[:8], byte-reversed). Only anchorCPIMethodName is
-// supported, matching cre-sdk-go's AnchorCPILogTriggerConfig.
-func cpiMethodDiscriminator(methodName string) [cpiMethodDiscriminatorLen]byte {
-	sum := sha256.Sum256([]byte(anchorCPIMethodName))
-	var sig [cpiMethodDiscriminatorLen]byte
-	copy(sig[:], sum[:cpiMethodDiscriminatorLen])
-	for i, j := 0, len(sig)-1; i < j; i, j = i+1, j-1 {
-		sig[i], sig[j] = sig[j], sig[i]
-	}
-	return sig
 }
 
 // decodeLogTriggerConfig unmarshals the TriggerSubscription's Any payload into
@@ -278,36 +237,26 @@ func decodeLogTriggerConfig(payload *anypb.Any) (*solcap.FilterLogTriggerRequest
 	return cfg, nil
 }
 
-// parseAnchorEvents walks the transaction log messages, tracking the program
-// invocation stack so each "Program data:" event is attributed to the program
-// that emitted it. Returns events in emission order.
+// parseAnchorEvents decodes the transaction's "Program data:" log lines via
+// chainlink-solana's own log poller parser (the same one used to detect
+// on-chain events in production), then flattens its per-instruction grouping
+// into a single emission-ordered event list.
 func parseAnchorEvents(logs []string) ([]anchorEvent, error) {
-	var stack []solana.PublicKey
-	var events []anchorEvent
+	outputs, err := logpoller.ParseProgramLogs(logs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse program logs: %w", err)
+	}
 
-	for _, line := range logs {
-		switch {
-		case strings.HasPrefix(line, "Program ") && strings.Contains(line, " invoke ["):
-			// "Program <pubkey> invoke [n]"
-			fields := strings.Fields(line)
-			if len(fields) >= 2 {
-				if pk, err := solana.PublicKeyFromBase58(fields[1]); err == nil {
-					stack = append(stack, pk)
-				}
+	var events []anchorEvent
+	for _, out := range outputs {
+		for _, ev := range out.Events {
+			pid, err := solana.PublicKeyFromBase58(ev.Program)
+			if err != nil {
+				return nil, fmt.Errorf("invalid emitting program address %q: %w", ev.Program, err)
 			}
-		case strings.HasPrefix(line, "Program ") && (strings.HasSuffix(line, " success") || strings.Contains(line, " failed")):
-			if len(stack) > 0 {
-				stack = stack[:len(stack)-1]
-			}
-		case strings.HasPrefix(line, anchorEventLogPrefix):
-			b64 := strings.TrimPrefix(line, anchorEventLogPrefix)
-			data, err := base64.StdEncoding.DecodeString(strings.TrimSpace(b64))
+			data, err := base64.StdEncoding.DecodeString(ev.Data)
 			if err != nil {
 				return nil, fmt.Errorf("failed to base64-decode event data: %w", err)
-			}
-			var pid solana.PublicKey
-			if len(stack) > 0 {
-				pid = stack[len(stack)-1]
 			}
 			events = append(events, anchorEvent{programID: pid, data: data})
 		}
