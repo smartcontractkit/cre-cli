@@ -32,10 +32,19 @@
   },
   "ChainWrite": {
     "TargetsLimit": "10",
+    "ReportSizeLimit": "50kb",
     "EVM": {
-      "ReportSizeLimit": "5kb",
+      "TransactionGasLimit": "10000000",
+      "ReportSizeLimit": "50000",
       "GasLimit": {
         "Default": "10000000",
+        "Values": {}
+      }
+    },
+    "Solana": {
+      "ReportSizeLimit": "265b",
+      "GasLimit": {
+        "Default": "300000",
         "Values": {}
       }
     },

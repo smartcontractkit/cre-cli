@@ -6,7 +6,6 @@ package data_storage
 import (
 	"bytes"
 	"encoding/binary"
-
 	sdk "github.com/smartcontractkit/chainlink-protos/cre/go/sdk"
 	solana "github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/solana"
 	bindings "github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/solana/bindings"

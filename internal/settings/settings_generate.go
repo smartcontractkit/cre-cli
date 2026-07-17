@@ -28,10 +28,11 @@ var gitIgnoreTemplateContent string
 var workflowSettingsTemplateContent string
 
 type ProjectEnv struct {
-	FilePath        string
-	GitHubAPIToken  string
-	EthPrivateKey   string
-	AptosPrivateKey string
+	FilePath         string
+	GitHubAPIToken   string
+	EthPrivateKey    string
+	SolanaPrivateKey string
+	AptosPrivateKey  string
 }
 
 func GetDefaultReplacements() map[string]string {
@@ -119,9 +120,10 @@ func GenerateProjectEnvFile(workingDirectory string) (string, error) {
 	}
 
 	replacements := map[string]string{
-		"GithubApiToken":  "your-github-token",
-		"EthPrivateKey":   "your-eth-private-key",
-		"AptosPrivateKey": "your-aptos-private-key",
+		"GithubApiToken":   "your-github-token",
+		"EthPrivateKey":    DefaultEthPrivateKeyEnvPlaceholder,
+		"SolanaPrivateKey": "your-solana-private-key",
+		"AptosPrivateKey":  "your-aptos-private-key",
 	}
 
 	if err := GenerateFileFromTemplate(outputPath, ProjectEnvironmentTemplateContent, replacements); err != nil {

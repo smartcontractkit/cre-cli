@@ -16,6 +16,21 @@ func RandomState() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(b), nil
 }
 
+// AuthorizeURLWithState sets or replaces the OAuth "state" query parameter on an authorize URL.
+func AuthorizeURLWithState(rawURL, state string) (string, error) {
+	if state == "" {
+		return "", fmt.Errorf("oauth: state must not be empty")
+	}
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return "", err
+	}
+	q := u.Query()
+	q.Set("state", state)
+	u.RawQuery = q.Encode()
+	return u.String(), nil
+}
+
 // StateFromAuthorizeURL returns the OAuth "state" query parameter from an authorize URL, if present.
 func StateFromAuthorizeURL(raw string) (string, error) {
 	u, err := url.Parse(raw)

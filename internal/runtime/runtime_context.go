@@ -153,7 +153,7 @@ func (ctx *Context) ValidateOnchainRegistryRPC() error {
 	if ctx.ResolvedRegistry != nil && ctx.ResolvedRegistry.Type() == settings.RegistryTypeOffChain {
 		return nil
 	}
-	return settings.ValidateDeploymentRPC(&ctx.Settings.Workflow, ctx.EnvironmentSet.WorkflowRegistryChainName)
+	return settings.ValidateDeploymentRPC(&ctx.Settings.Workflow, ctx.EnvironmentSet.WorkflowRegistryChainName, ctx.Logger, nil)
 }
 
 // AttachResolvedRegistry resolves the deployment-registry from workflow

@@ -12,6 +12,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -34,8 +35,9 @@ import (
 
 	cmdcommon "github.com/smartcontractkit/cre-cli/cmd/common"
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain"
-	_ "github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain/aptos" // register Aptos chain family via package init
-	_ "github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain/evm"   // register EVM chain family via package init
+	_ "github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain/aptos"  // register Aptos chain family via package init
+	_ "github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain/evm"    // register EVM chain family via package init
+	_ "github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain/solana" // register Solana chain family via package init
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
@@ -45,6 +47,7 @@ import (
 )
 
 const WorkflowExecutionTimeout = 5 * time.Minute
+const defaultHTTPTriggerServerPort = 2000
 
 type Inputs struct {
 	WasmPath     string `validate:"omitempty,file,ascii,max=97" cli:"--wasm"`
@@ -66,6 +69,7 @@ type Inputs struct {
 	HasTriggerIndex bool
 	TriggerIndex    int               `validate:"-"`
 	HTTPPayload     string            `validate:"-"` // JSON string or /path/to/file.json
+	HTTPTriggerPort int               `validate:"min=1,max=65535"`
 	ChainTypeInputs map[string]string `validate:"-"` // CLI-supplied chain-type-specific trigger inputs
 	// Listen keeps the HTTP trigger server running after each execution so it can
 	// process additional requests until the user interrupts (ctrl-C).
@@ -78,6 +82,11 @@ type Inputs struct {
 	// SetExecutionContext changes it to the workflow directory. Used to resolve file
 	// paths entered interactively or via flags relative to where the user ran the command.
 	InvocationDir string `validate:"-"`
+	// WorkflowFolderName is the name of the workflow's directory (i.e. the argument
+	// the user passes to `cre workflow simulate`). Unlike WorkflowName (the Workflow
+	// Registry name from workflow.yaml, which can differ), this is what should be
+	// used to render restart-command hints so they match what the user actually typed.
+	WorkflowFolderName string `validate:"-"`
 }
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
@@ -112,7 +121,8 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	// Non-interactive trigger selection flags
 	simulateCmd.Flags().Int("trigger-index", -1, "Index of the trigger to run (0-based)")
 	simulateCmd.Flags().String("http-payload", "", "HTTP trigger payload as JSON string or path to JSON file")
-	simulateCmd.Flags().Bool("listen", false, "Listen for HTTP requests or supported log triggers and run the simulator for each match")
+	simulateCmd.Flags().Int("http-trigger-port", defaultHTTPTriggerServerPort, "Port used by the local HTTP trigger server")
+	simulateCmd.Flags().Bool("listen", false, "Listen for HTTP requests or supported log triggers and run the simulator for each match (not supported by cron)")
 
 	// Register chain-type-specific CLI flags (e.g., --evm-tx-hash).
 	chain.RegisterAllCLIFlags(simulateCmd)
@@ -191,26 +201,41 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 		}
 	}
 
+	httpTriggerPort := v.GetInt("http-trigger-port")
+	if !v.IsSet("http-trigger-port") {
+		httpTriggerPort = defaultHTTPTriggerServerPort
+	}
+
+	// At this point SetExecutionContext has already chdir'd into the workflow
+	// directory, so its basename is the argument the user passed to
+	// `cre workflow simulate`.
+	workflowFolderName := ""
+	if cwd, err := os.Getwd(); err == nil {
+		workflowFolderName = filepath.Base(cwd)
+	}
+
 	return Inputs{
-		WasmPath:          v.GetString("wasm"),
-		WorkflowPath:      creSettings.Workflow.WorkflowArtifactSettings.WorkflowPath,
-		ConfigPath:        cmdcommon.ResolveConfigPath(v, creSettings.Workflow.WorkflowArtifactSettings.ConfigPath),
-		SecretsPath:       creSettings.Workflow.WorkflowArtifactSettings.SecretsPath,
-		EngineLogs:        v.GetBool("engine-logs"),
-		Broadcast:         v.GetBool("broadcast"),
-		ChainTypeClients:  ctClients,
-		ChainTypeResolved: ctResolved,
-		ChainTypeKeys:     ctKeys,
-		WorkflowName:      creSettings.Workflow.UserWorkflowSettings.WorkflowName,
-		NonInteractive:    v.GetBool("non-interactive"),
-		HasTriggerIndex:   v.IsSet("trigger-index"),
-		TriggerIndex:      v.GetInt("trigger-index"),
-		HTTPPayload:       v.GetString("http-payload"),
-		ChainTypeInputs:   chain.CollectAllCLIInputs(v),
-		Listen:            v.GetBool("listen"),
-		LimitsPath:        v.GetString("limits"),
-		SkipTypeChecks:    v.GetBool(cmdcommon.SkipTypeChecksCLIFlag),
-		InvocationDir:     h.runtimeContext.InvocationDir,
+		WasmPath:           v.GetString("wasm"),
+		WorkflowPath:       creSettings.Workflow.WorkflowArtifactSettings.WorkflowPath,
+		ConfigPath:         cmdcommon.ResolveConfigPath(v, creSettings.Workflow.WorkflowArtifactSettings.ConfigPath),
+		SecretsPath:        creSettings.Workflow.WorkflowArtifactSettings.SecretsPath,
+		EngineLogs:         v.GetBool("engine-logs"),
+		Broadcast:          v.GetBool("broadcast"),
+		ChainTypeClients:   ctClients,
+		ChainTypeResolved:  ctResolved,
+		ChainTypeKeys:      ctKeys,
+		WorkflowName:       creSettings.Workflow.UserWorkflowSettings.WorkflowName,
+		NonInteractive:     v.GetBool("non-interactive"),
+		HasTriggerIndex:    v.IsSet("trigger-index"),
+		TriggerIndex:       v.GetInt("trigger-index"),
+		HTTPPayload:        v.GetString("http-payload"),
+		HTTPTriggerPort:    httpTriggerPort,
+		ChainTypeInputs:    chain.CollectAllCLIInputs(v),
+		Listen:             v.GetBool("listen"),
+		LimitsPath:         v.GetString("limits"),
+		SkipTypeChecks:     v.GetBool(cmdcommon.SkipTypeChecksCLIFlag),
+		InvocationDir:      h.runtimeContext.InvocationDir,
+		WorkflowFolderName: workflowFolderName,
 	}, nil
 }
 
@@ -268,6 +293,9 @@ func (h *handler) Execute(ctx context.Context, inputs Inputs) error {
 	var err error
 
 	if inputs.WasmPath != "" {
+		if h.runtimeContext != nil {
+			h.runtimeContext.Workflow.Language = constants.WorkflowLanguageWasm
+		}
 		if cmdcommon.IsURL(inputs.WasmPath) {
 			ui.Dim("Fetching WASM binary from URL...")
 			wasmFileBinary, err = cmdcommon.FetchURL(ctx, inputs.WasmPath)
@@ -286,9 +314,6 @@ func (h *handler) Execute(ctx context.Context, inputs Inputs) error {
 		wasmFileBinary, err = cmdcommon.EnsureRawWasm(wasmFileBinary)
 		if err != nil {
 			return fmt.Errorf("failed to decode WASM binary: %w", err)
-		}
-		if h.runtimeContext != nil {
-			h.runtimeContext.Workflow.Language = constants.WorkflowLanguageWasm
 		}
 	} else {
 		workflowDir, err := os.Getwd()
@@ -332,7 +357,8 @@ func (h *handler) Execute(ctx context.Context, inputs Inputs) error {
 	if simLimits != nil {
 		binaryLimit := simLimits.WASMBinarySize()
 		if binaryLimit > 0 && len(wasmFileBinary) > binaryLimit {
-			return fmt.Errorf("WASM binary size %d bytes exceeds limit of %d bytes", len(wasmFileBinary), binaryLimit)
+			return limitExceeded(LimitWASMBinary, "WASM binary", uint64(len(wasmFileBinary)), uint64(binaryLimit), true,
+				"Reduce compiled binary size (strip symbols, enable size-optimized build)")
 		}
 
 		compressedLimit := simLimits.WASMCompressedBinarySize()
@@ -342,7 +368,8 @@ func (h *handler) Execute(ctx context.Context, inputs Inputs) error {
 				return fmt.Errorf("failed to compress brotli: %w", err)
 			}
 			if len(compressed) > compressedLimit {
-				return fmt.Errorf("WASM compressed binary size %d bytes exceeds limit of %d bytes", len(compressed), compressedLimit)
+				return limitExceeded(LimitWASMCompressedBinary, "WASM compressed binary", uint64(len(compressed)), uint64(compressedLimit), true,
+					"Reduce compiled binary size — even compressed it exceeds the limit")
 			}
 		}
 
@@ -384,7 +411,7 @@ func (h *handler) Execute(ctx context.Context, inputs Inputs) error {
 	}
 
 	// Set up context for signal handling
-	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT, syscall.SIGKILL)
+	ctx, cancel := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT, syscall.SIGKILL)
 	defer cancel()
 
 	// if logger instance is set to DEBUG, that means verbosity flag is set by the user
@@ -440,12 +467,39 @@ func run(
 		return fmt.Errorf("failed to create engine logger: %w", err)
 	}
 
+	// hookCtx is canceled whenever a fatal error occurs inside a lifecycle hook
+	// that cannot return an error directly (e.g. simulatorInitialize, BeforeStart).
+	// Canceling it unblocks the waitFn and causes Run() to stop.
+	hookCtx, hookCancel := context.WithCancel(ctx)
+	defer hookCancel()
+
+	// lifecycleErr captures the first fatal error from any hook that calls os.Exit.
+	// executionResultErr captures an error returned by the engine's execution result.
+	// listen records whether the active trigger is running in --listen mode, so the
+	// lifecycle hooks below know whether a per-execution error should end the whole
+	// session or just be reported while the simulator keeps listening for the next request.
+	var (
+		lifecycleErr       error
+		executionResultErr error
+		listen             bool
+	)
+
+	// setLifecycleErr records the first lifecycle error and cancels hookCtx so
+	// all blocking selects unblock and Run() returns promptly.
+	setLifecycleErr := func(err error) {
+		if lifecycleErr == nil {
+			lifecycleErr = err
+		}
+		hookCancel()
+	}
+
 	// Channels to coordinate blocking. executionFinishedCh is buffered so multiple
 	// runs (listen mode) can each signal completion without blocking the engine.
 	initializedCh := make(chan struct{})
 	executionFinishedCh := make(chan struct{}, 1)
 
 	var manualTriggerCaps *ManualTriggers
+	var beholderStarted bool
 	simulatorInitialize := func(ctx context.Context, cfg simulator.RunnerConfig) (*capabilities.Registry, []services.Service) {
 		lggr := logger.Sugared(cfg.Lggr)
 		// Create the registry and fake capabilities with specific loggers
@@ -459,8 +513,8 @@ func run(
 			bs := simulator.NewBillingService(billingLggr)
 			err := bs.Start(ctx)
 			if err != nil {
-				ui.Error(fmt.Sprintf("Failed to start billing service: %v", err))
-				os.Exit(1)
+				setLifecycleErr(fmt.Errorf("failed to start billing service: %w", err))
+				return registry, srvcs
 			}
 
 			srvcs = append(srvcs, bs)
@@ -468,20 +522,21 @@ func run(
 
 		if cfg.EnableBeholder {
 			beholderLggr := lggr.Named("Beholder")
-			err := setupCustomBeholder(beholderLggr, verbosity, simLogger)
+			err := setupCustomBeholder(ctx, beholderLggr, verbosity, simLogger)
 			if err != nil {
-				ui.Error(fmt.Sprintf("Failed to setup beholder: %v", err))
-				os.Exit(1)
+				setLifecycleErr(fmt.Errorf("failed to setup beholder: %w", err))
+				return registry, srvcs
 			}
+			beholderStarted = true
 		}
 
 		// Register chain-agnostic cron and HTTP triggers
 		triggerLggr := lggr.Named("TriggerCapabilities")
 		var err error
-		manualTriggerCaps, err = NewManualTriggerCapabilities(ctx, triggerLggr, registry)
+		manualTriggerCaps, err = NewManualTriggerCapabilities(ctx, triggerLggr, registry, inputs.HTTPTriggerPort, simLimits)
 		if err != nil {
-			ui.Error(fmt.Sprintf("Failed to create trigger capabilities: %v", err))
-			os.Exit(1)
+			setLifecycleErr(fmt.Errorf("failed to create trigger capabilities: %w", err))
+			return registry, srvcs
 		}
 		srvcs = append(srvcs, manualTriggerCaps.ManualCronTrigger, manualTriggerCaps.ManualHTTPTrigger)
 
@@ -508,8 +563,8 @@ func run(
 				Logger:     triggerLggr,
 			})
 			if err != nil {
-				ui.Error(fmt.Sprintf("Failed to register %s capabilities: %v", name, err))
-				os.Exit(1)
+				setLifecycleErr(fmt.Errorf("failed to register %s capabilities: %w", name, err))
+				return registry, srvcs
 			}
 			srvcs = append(srvcs, ctSrvcs...)
 		}
@@ -518,21 +573,21 @@ func run(
 		computeLggr := lggr.Named("ActionsCapabilities")
 		computeCaps, err := NewFakeActionCapabilities(ctx, computeLggr, registry, inputs.SecretsPath, simLimits)
 		if err != nil {
-			ui.Error(fmt.Sprintf("Failed to create compute capabilities: %v", err))
-			os.Exit(1)
+			setLifecycleErr(fmt.Errorf("failed to create compute capabilities: %w", err))
+			return registry, srvcs
 		}
 
 		// Start trigger capabilities
 		if err := manualTriggerCaps.Start(ctx); err != nil {
-			ui.Error(fmt.Sprintf("Failed to start trigger: %v", err))
-			os.Exit(1)
+			setLifecycleErr(fmt.Errorf("failed to start trigger capabilities: %w", err))
+			return registry, srvcs
 		}
 
 		// Start compute capabilities
 		for _, cap := range computeCaps {
 			if err = cap.Start(ctx); err != nil {
-				ui.Error(fmt.Sprintf("Failed to start capability: %v", err))
-				os.Exit(1)
+				setLifecycleErr(fmt.Errorf("failed to start capability %s: %w", cap.Name(), err))
+				return registry, srvcs
 			}
 		}
 
@@ -544,32 +599,44 @@ func run(
 	triggerInfoAndBeforeStart := &TriggerInfoAndBeforeStart{}
 
 	getManualTriggerCaps := func() *ManualTriggers { return manualTriggerCaps }
+	var limitsWorkflows *cresettings.Workflows
+	if simLimits != nil {
+		limitsWorkflows = &simLimits.Workflows
+	}
 	if inputs.NonInteractive {
-		triggerInfoAndBeforeStart.BeforeStart = makeBeforeStartNonInteractive(triggerInfoAndBeforeStart, inputs, getManualTriggerCaps)
+		triggerInfoAndBeforeStart.BeforeStart = makeBeforeStartNonInteractive(triggerInfoAndBeforeStart, inputs, getManualTriggerCaps, setLifecycleErr, limitsWorkflows)
 	} else {
-		triggerInfoAndBeforeStart.BeforeStart = makeBeforeStartInteractive(triggerInfoAndBeforeStart, inputs, getManualTriggerCaps)
+		triggerInfoAndBeforeStart.BeforeStart = makeBeforeStartInteractive(triggerInfoAndBeforeStart, inputs, getManualTriggerCaps, setLifecycleErr, limitsWorkflows)
 	}
 
 	waitFn := func(context.Context, simulator.RunnerConfig, *capabilities.Registry, []services.Service) {
-		<-initializedCh
+		// Wait for the engine to initialize, or bail out if a lifecycle error occurred.
+		select {
+		case <-initializedCh:
+		case <-hookCtx.Done():
+			return
+		}
+
+		if lifecycleErr != nil {
+			return
+		}
 
 		// Manual trigger execution
 		if triggerInfoAndBeforeStart.TriggerFunc == nil {
-			simLogger.Error("Trigger function not initialized")
-			os.Exit(1)
+			setLifecycleErr(fmt.Errorf("trigger function not initialized"))
+			return
 		}
 		if triggerInfoAndBeforeStart.TriggerToRun == nil {
-			simLogger.Error("Trigger to run not selected")
-			os.Exit(1)
+			setLifecycleErr(fmt.Errorf("trigger to run not selected"))
+			return
 		}
-
 		httpListen := inputs.Listen && triggerInfoAndBeforeStart.TriggerToRun.GetId() == "http-trigger@1.0.0-alpha"
-		listen := inputs.Listen && (httpListen || triggerInfoAndBeforeStart.ListenSupported)
+		listen = inputs.Listen && (httpListen || triggerInfoAndBeforeStart.ListenSupported)
 		if inputs.Listen && !listen {
 			ui.Warning("--listen is not supported for this trigger type; ignoring")
 		}
 		if httpListen {
-			runHTTPListen(ctx, inputs, triggerInfoAndBeforeStart, executionFinishedCh, simLogger)
+			runHTTPListen(hookCtx, inputs, triggerInfoAndBeforeStart, executionFinishedCh, simLogger, setLifecycleErr)
 			return
 		}
 
@@ -587,14 +654,21 @@ func run(
 			simLogger.Info("Running trigger", "trigger", triggerInfoAndBeforeStart.TriggerToRun.GetId())
 			err := triggerInfoAndBeforeStart.TriggerFunc()
 			if err != nil {
-				simLogger.Error("Failed to run trigger", "trigger", triggerInfoAndBeforeStart.TriggerToRun.GetId(), "error", err)
-				os.Exit(1)
+				if errors.Is(err, errHTTPTriggerRateLimited) {
+					simLogger.Warn("Trigger rate limited, skipping execution", "trigger", triggerInfoAndBeforeStart.TriggerToRun.GetId(), "limit", err)
+					if !listen {
+						return
+					}
+					continue
+				}
+				setLifecycleErr(fmt.Errorf("failed to run trigger %s: %w", triggerInfoAndBeforeStart.TriggerToRun.GetId(), err))
+				return
 			}
 
 			select {
 			case <-executionFinishedCh:
 				simLogger.Info("Execution finished signal received")
-			case <-ctx.Done():
+			case <-hookCtx.Done():
 				simLogger.Info("Received interrupt signal, stopping execution")
 				return
 			case <-time.After(WorkflowExecutionTimeout):
@@ -618,12 +692,15 @@ func run(
 			}
 		}
 
-		err := cleanupBeholder()
+		err := cleanupBeholder(beholderStarted)
 		if err != nil {
 			simLogger.Warn("Failed to cleanup beholder", "error", err)
 		}
 	}
 	emptyHook := func(context.Context, simulator.RunnerConfig, *capabilities.Registry, []services.Service) {}
+
+	// Acknowledge confidential (TEE) execution once, the first time a TEE handler runs.
+	var teeAckOnce sync.Once
 
 	simulator.NewRunner(&simulator.RunnerHooks{
 		Initialize:  simulatorInitialize,
@@ -632,28 +709,52 @@ func run(
 		AfterRun:    emptyHook,
 		Cleanup:     simulatorCleanup,
 		Finally:     emptyHook,
-	}).Run(ctx, inputs.WorkflowName, binary, config, secrets, simulator.RunnerConfig{
+	}).Run(hookCtx, inputs.WorkflowName, binary, config, secrets, simulator.RunnerConfig{
 		EnableBeholder: true,
 		EnableBilling:  false,
 		Lggr:           engineLog,
 		LifecycleHooks: v2.LifecycleHooks{
 			OnInitialized: func(err error) {
 				if err != nil {
-					simLogger.Error("Failed to initialize simulator", "error", err)
-					os.Exit(1)
+					setLifecycleErr(fmt.Errorf("failed to initialize simulator: %w", err))
+					return
 				}
 				simLogger.Info("Simulator Initialized")
 				ui.Line()
 				close(initializedCh)
 			},
+			OnRequirementsSet: func(_ string, requirements *pb.Requirements) {
+				if requirements.GetTee() == nil {
+					return
+				}
+				teeAckOnce.Do(func() {
+					ui.Line()
+					ui.Bold("Confidential (TEE) execution")
+					ui.Dim("This workflow declares a TEE handler (HandlerInTee). In production it runs inside a " +
+						teeRequirementSummary(requirements.GetTee()) + " enclave, where secrets are decrypted and " +
+						"are not visible to node operators. The simulator runs the same workflow logic locally, " +
+						"without a real enclave or attestation.")
+					ui.Line()
+				})
+			},
 			OnExecutionError: func(msg string) {
-				ui.Error("Workflow execution failed:")
-				ui.Print(msg)
-				os.Exit(1)
+				errMsg := msg
+				// Engine-enforced limits (e.g. call count limits) produce "limit exceeded"
+				// errors but don't go through our capability wrappers, so they lack the
+				// remediation hint. Detect and append it here.
+				if strings.Contains(strings.ToLower(msg), "limit exceeded") {
+					errMsg += "\nThis limit mirrors a production constraint.\nUse 'cre workflow limits export' to customize limits, or --limits=none to disable."
+				}
+				// Engine-level execution errors are fatal even in --listen mode (they
+				// indicate the harness itself broke, not just a bad request), so end
+				// the whole session rather than continuing to listen.
+				// Do not print here — root.go prints the returned error once after cleanup.
+				executionResultErr = fmt.Errorf("workflow execution failed: %s", errMsg)
+				hookCancel()
 			},
 			OnResultReceived: func(result *pb.ExecutionResult) {
 				if result == nil || result.Result == nil {
-					// OnExecutionError will print the error message of the crash.
+					// OnExecutionError will handle the crash message.
 					return
 				}
 
@@ -681,7 +782,14 @@ func run(
 					ui.Success("Workflow Simulation Result:")
 					ui.Print(string(j))
 				case *pb.ExecutionResult_Error:
-					ui.Error("Execution resulted in an error being returned: " + r.Error)
+					if listen {
+						// In listen mode a single bad request shouldn't end the session;
+						// report it and keep listening for the next one.
+						ui.Error("Execution resulted in an error being returned: " + r.Error)
+					} else {
+						// Do not print here — root.go prints the returned error once after cleanup.
+						executionResultErr = fmt.Errorf("workflow execution returned an error: %s", r.Error)
+					}
 				}
 				ui.Line()
 				select {
@@ -705,27 +813,69 @@ func run(
 		},
 	})
 
+	if lifecycleErr != nil {
+		return lifecycleErr
+	}
+	if executionResultErr != nil {
+		return executionResultErr
+	}
 	return nil
 }
 
-func runHTTPListen(ctx context.Context, inputs Inputs, triggerInfo *TriggerInfoAndBeforeStart, executionFinishedCh <-chan struct{}, simLogger *SimulationLogger) {
+// teeRequirementSummary renders a short human-readable description of a TEE
+// requirement (type and regions) for the confidential-execution acknowledgement.
+func teeRequirementSummary(tee *pb.Tee) string {
+	if tee == nil {
+		return "TEE"
+	}
+	if ttr := tee.GetTeeTypesAndRegions(); ttr != nil {
+		var parts []string
+		for _, tr := range ttr.GetTeeTypeAndRegions() {
+			name := strings.TrimPrefix(tr.GetType().String(), "TEE_TYPE_")
+			if regions := tr.GetRegions(); len(regions) > 0 {
+				parts = append(parts, fmt.Sprintf("%s (%s)", name, strings.Join(regions, ", ")))
+			} else {
+				parts = append(parts, name)
+			}
+		}
+		if len(parts) > 0 {
+			return strings.Join(parts, ", ")
+		}
+	}
+	if r := tee.GetAnyRegions(); r != nil {
+		if regions := r.GetRegions(); len(regions) > 0 {
+			return "TEE (" + strings.Join(regions, ", ") + ")"
+		}
+	}
+	return "TEE"
+}
+
+// runHTTPListen serves the HTTP trigger's --listen mode: it keeps a single HTTP
+// server running for the whole session and runs the trigger once per incoming
+// request, instead of exiting after the first one. onErr is called instead of
+// os.Exit when a fatal (session-ending) error occurs.
+func runHTTPListen(ctx context.Context, inputs Inputs, triggerInfo *TriggerInfoAndBeforeStart, executionFinishedCh <-chan struct{}, simLogger *SimulationLogger, onErr func(error)) {
 	if triggerInfo.TriggerWithPayload == nil {
-		simLogger.Error("HTTP trigger payload function not initialized")
-		os.Exit(1)
+		onErr(fmt.Errorf("HTTP trigger payload function not initialized"))
+		return
 	}
 
-	payloadCh, closeServer, err := startHTTPListenPayloadServer(ctx, httpTriggerServerPort)
+	payloadCh, closeServer, err := startHTTPListenPayloadServer(ctx, inputs.HTTPTriggerPort)
 	if err != nil {
-		ui.Error(fmt.Sprintf("Failed to start HTTP trigger server: %v", err))
-		os.Exit(1)
+		onErr(fmt.Errorf("failed to start HTTP trigger server: %w", err))
+		return
 	}
 	defer closeServer()
 
 	runPayload := func(payload *httptypedapi.Payload) bool {
 		simLogger.Info("Running trigger", "trigger", triggerInfo.TriggerToRun.GetId())
 		if err := triggerInfo.TriggerWithPayload(payload); err != nil {
-			simLogger.Error("Failed to run trigger", "trigger", triggerInfo.TriggerToRun.GetId(), "error", err)
-			os.Exit(1)
+			if errors.Is(err, errHTTPTriggerRateLimited) {
+				simLogger.Warn("Trigger rate limited, skipping execution", "trigger", triggerInfo.TriggerToRun.GetId(), "limit", err)
+				return true
+			}
+			onErr(fmt.Errorf("failed to run trigger %s: %w", triggerInfo.TriggerToRun.GetId(), err))
+			return false
 		}
 
 		select {
@@ -744,24 +894,29 @@ func runHTTPListen(ctx context.Context, inputs Inputs, triggerInfo *TriggerInfoA
 	iteration := 0
 	if strings.TrimSpace(inputs.HTTPPayload) != "" {
 		if triggerInfo.TriggerFunc == nil {
-			simLogger.Error("Trigger function not initialized")
-			os.Exit(1)
+			onErr(fmt.Errorf("trigger function not initialized"))
+			return
 		}
 		simLogger.Info("Running trigger", "trigger", triggerInfo.TriggerToRun.GetId())
 		if err := triggerInfo.TriggerFunc(); err != nil {
-			simLogger.Error("Failed to run trigger", "trigger", triggerInfo.TriggerToRun.GetId(), "error", err)
-			os.Exit(1)
+			if errors.Is(err, errHTTPTriggerRateLimited) {
+				simLogger.Warn("Trigger rate limited, skipping execution", "trigger", triggerInfo.TriggerToRun.GetId(), "limit", err)
+			} else {
+				onErr(fmt.Errorf("failed to run trigger %s: %w", triggerInfo.TriggerToRun.GetId(), err))
+				return
+			}
+		} else {
+			select {
+			case <-executionFinishedCh:
+				simLogger.Info("Execution finished signal received")
+			case <-ctx.Done():
+				simLogger.Info("Received interrupt signal, stopping execution")
+				return
+			case <-time.After(WorkflowExecutionTimeout):
+				simLogger.Warn("Timeout waiting for execution to finish")
+			}
+			iteration = 1
 		}
-		select {
-		case <-executionFinishedCh:
-			simLogger.Info("Execution finished signal received")
-		case <-ctx.Done():
-			simLogger.Info("Received interrupt signal, stopping execution")
-			return
-		case <-time.After(WorkflowExecutionTimeout):
-			simLogger.Warn("Timeout waiting for execution to finish")
-		}
-		iteration = 1
 	}
 
 	for {
@@ -769,7 +924,7 @@ func runHTTPListen(ctx context.Context, inputs Inputs, triggerInfo *TriggerInfoA
 			ui.Line()
 			ui.Step(fmt.Sprintf("Listen: ready for next request (run #%d)", iteration+1))
 		}
-		ui.Step(fmt.Sprintf("Waiting for HTTP request to start execution (listening on http://localhost:%d/trigger)...", httpTriggerServerPort))
+		ui.Step(fmt.Sprintf("Waiting for HTTP request to start execution (listening on http://localhost:%d/trigger)...", inputs.HTTPTriggerPort))
 
 		var payload *httptypedapi.Payload
 		select {
@@ -862,40 +1017,10 @@ type TriggerInfoAndBeforeStart struct {
 	BeforeStart        func(ctx context.Context, cfg simulator.RunnerConfig, registry *capabilities.Registry, services []services.Service, triggerSub []*pb.TriggerSubscription)
 }
 
-func getTriggerIndex(inputs Inputs, triggerSub []*pb.TriggerSubscription) (int, error) {
-	if len(triggerSub) == 0 {
-		return -1, errors.New("no workflow triggers found, please check your workflow source code and config")
-	}
-
-	if len(triggerSub) == 1 {
-		return 0, nil
-	}
-
-	if inputs.HasTriggerIndex {
-		return inputs.TriggerIndex, nil
-	}
-
-	opts := make([]ui.SelectOption[int], len(triggerSub))
-	for i, trigger := range triggerSub {
-		opts[i] = ui.SelectOption[int]{
-			Label: fmt.Sprintf("%s %s", trigger.GetId(), trigger.GetMethod()),
-			Value: i,
-		}
-	}
-
-	ui.Line()
-	selected, err := ui.Select("Workflow simulation ready. Please select a trigger:", opts)
-	if err != nil {
-		ui.Error(fmt.Sprintf("Trigger selection failed: %v", err))
-		os.Exit(1)
-	}
-	ui.Line()
-
-	return selected, nil
-}
-
-// makeBeforeStartInteractive builds the interactive BeforeStart closure
-func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs, manualTriggerCapsGetter func() *ManualTriggers) func(context.Context, simulator.RunnerConfig, *capabilities.Registry, []services.Service, []*pb.TriggerSubscription) {
+// makeBeforeStartInteractive builds the interactive BeforeStart closure.
+// onErr is called instead of os.Exit when a fatal error occurs; it records
+// the error and cancels the hook context so Run() unblocks and returns.
+func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs, manualTriggerCapsGetter func() *ManualTriggers, onErr func(error), limits *cresettings.Workflows) func(context.Context, simulator.RunnerConfig, *capabilities.Registry, []services.Service, []*pb.TriggerSubscription) {
 	return func(
 		ctx context.Context,
 		cfg simulator.RunnerConfig,
@@ -903,14 +1028,33 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 		services []services.Service,
 		triggerSub []*pb.TriggerSubscription,
 	) {
-		triggerIndex, err := getTriggerIndex(inputs, triggerSub)
-		if err != nil {
-			ui.Error(fmt.Sprintf("Workflow initialization failed: %v", err))
-			os.Exit(1)
+		if len(triggerSub) == 0 {
+			onErr(fmt.Errorf("no workflow triggers found; check your workflow source code and config"))
+			return
 		}
-		if triggerIndex < 0 || triggerIndex >= len(triggerSub) {
-			ui.Error(fmt.Sprintf("Workflow initialization failed: trigger index out of range: %d", triggerIndex))
-			os.Exit(1)
+
+		var triggerIndex int
+		if len(triggerSub) > 1 {
+			opts := make([]ui.SelectOption[int], len(triggerSub))
+			for i, trigger := range triggerSub {
+				opts[i] = ui.SelectOption[int]{
+					Label: fmt.Sprintf("%s %s", trigger.GetId(), trigger.GetMethod()),
+					Value: i,
+				}
+			}
+
+			ui.Line()
+			selected, err := ui.Select("Workflow simulation ready. Please select a trigger:", opts)
+			if err != nil {
+				onErr(fmt.Errorf("trigger selection failed: %w", err))
+				return
+			}
+			triggerIndex = selected
+
+			holder.TriggerToRun = triggerSub[triggerIndex]
+			ui.Line()
+		} else {
+			holder.TriggerToRun = triggerSub[0]
 		}
 		holder.TriggerToRun = triggerSub[triggerIndex]
 
@@ -939,14 +1083,14 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 		case "http-trigger@1.0.0-alpha":
 			payload, err := getHTTPTriggerPayloadFromInput(inputs.InvocationDir, inputs.HTTPPayload)
 			if err != nil {
-				ui.Error(fmt.Sprintf("Failed to get HTTP trigger payload: %v", err))
-				os.Exit(1)
+				onErr(fmt.Errorf("failed to get HTTP trigger payload: %w", err))
+				return
 			}
 			if payload == nil {
 				ui.Line()
 				ui.Step("No input detected for http-trigger. Supply the payload using one of:")
 				ui.Dim("1. POST JSON to the local trigger server, example:")
-				ui.Dim(fmt.Sprintf(`     curl -X POST http://localhost:%d/trigger \`, httpTriggerServerPort))
+				ui.Dim(fmt.Sprintf(`     curl -X POST http://localhost:%d/trigger \`, inputs.HTTPTriggerPort))
 				ui.Dim("          -H 'Content-Type: application/json' \\")
 				ui.Dim("          -d '{\"input\":{\"key\":\"value\"}}'")
 				ui.Dim("2. Re-run with --http-payload flag:")
@@ -960,7 +1104,7 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 				p := payload
 				payload = nil
 				if p == nil {
-					ui.Step(fmt.Sprintf("Waiting for HTTP request to start execution (listening on http://localhost:%d/trigger)...", httpTriggerServerPort))
+					ui.Step(fmt.Sprintf("Waiting for HTTP request to start execution (listening on http://localhost:%d/trigger)...", inputs.HTTPTriggerPort))
 				}
 				return manualTriggerCaps.ManualHTTPTrigger.ManualTrigger(ctx, triggerRegistrationID, p)
 			}
@@ -977,8 +1121,8 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 				}
 
 				if !ct.Supports(sel) {
-					ui.Error(fmt.Sprintf("%s unsupported or misconfigured chain for selector %d", name, sel))
-					os.Exit(1)
+					onErr(fmt.Errorf("%s unsupported or misconfigured chain for selector %d", name, sel))
+					return
 				}
 
 				if inputs.Listen {
@@ -990,9 +1134,10 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 						Clients:         inputs.ChainTypeClients[ct.Name()],
 						Interactive:     true,
 						Listen:          true,
+						Limits:          limits,
 						ChainTypeInputs: inputs.ChainTypeInputs,
 						TriggerPayload:  holder.TriggerToRun.GetPayload(),
-						WorkflowName:    inputs.WorkflowName,
+						WorkflowName:    inputs.WorkflowFolderName,
 					})
 					if err != nil {
 						ui.Error(fmt.Sprintf("Failed to create %s trigger listener: %v", name, err))
@@ -1010,10 +1155,10 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 					break
 				}
 
-				triggerData, err := getTriggerDataForChainType(ctx, ct, sel, holder.TriggerToRun, inputs, true)
+				triggerData, err := getTriggerDataForChainType(ctx, ct, sel, holder.TriggerToRun, inputs, limits, true)
 				if err != nil {
-					ui.Error(fmt.Sprintf("Failed to get %s trigger data: %v", name, err))
-					os.Exit(1)
+					onErr(fmt.Errorf("failed to get %s trigger data: %w", name, err))
+					return
 				}
 
 				handled = true
@@ -1024,15 +1169,17 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 			}
 
 			if !handled {
-				ui.Error(fmt.Sprintf("Unsupported trigger type: %s", holder.TriggerToRun.Id))
-				os.Exit(1)
+				onErr(fmt.Errorf("unsupported trigger type: %s", holder.TriggerToRun.Id))
+				return
 			}
 		}
 	}
 }
 
-// makeBeforeStartNonInteractive builds the non-interactive BeforeStart closure
-func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs, manualTriggerCapsGetter func() *ManualTriggers) func(context.Context, simulator.RunnerConfig, *capabilities.Registry, []services.Service, []*pb.TriggerSubscription) {
+// makeBeforeStartNonInteractive builds the non-interactive BeforeStart closure.
+// onErr is called instead of os.Exit when a fatal error occurs; it records
+// the error and cancels the hook context so Run() unblocks and returns.
+func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs, manualTriggerCapsGetter func() *ManualTriggers, onErr func(error), limits *cresettings.Workflows) func(context.Context, simulator.RunnerConfig, *capabilities.Registry, []services.Service, []*pb.TriggerSubscription) {
 	return func(
 		ctx context.Context,
 		cfg simulator.RunnerConfig,
@@ -1041,16 +1188,16 @@ func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inp
 		triggerSub []*pb.TriggerSubscription,
 	) {
 		if len(triggerSub) == 0 {
-			ui.Error("No workflow triggers found, please check your workflow source code and config")
-			os.Exit(1)
+			onErr(fmt.Errorf("no workflow triggers found; check your workflow source code and config"))
+			return
 		}
 		if inputs.TriggerIndex < 0 {
-			ui.Error("--trigger-index is required when --non-interactive is enabled")
-			os.Exit(1)
+			onErr(fmt.Errorf("--trigger-index is required when --non-interactive is enabled"))
+			return
 		}
 		if inputs.TriggerIndex >= len(triggerSub) {
-			ui.Error(fmt.Sprintf("Invalid --trigger-index %d; available range: 0-%d", inputs.TriggerIndex, len(triggerSub)-1))
-			os.Exit(1)
+			onErr(fmt.Errorf("invalid --trigger-index %d; available range: 0-%d", inputs.TriggerIndex, len(triggerSub)-1))
+			return
 		}
 
 		holder.TriggerToRun = triggerSub[inputs.TriggerIndex]
@@ -1067,20 +1214,20 @@ func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inp
 				return manualTriggerCaps.ManualCronTrigger.ManualTrigger(ctx, triggerRegistrationID, skipWaitSignal)
 			}
 		case "http-trigger@1.0.0-alpha":
-			if strings.TrimSpace(inputs.HTTPPayload) == "" && !inputs.Listen {
-				ui.Error("--http-payload is required for http-trigger@1.0.0-alpha in non-interactive mode")
-				os.Exit(1)
+			if strings.TrimSpace(inputs.HTTPPayload) == "" {
+				onErr(fmt.Errorf("--http-payload is required for http-trigger@1.0.0-alpha in non-interactive mode"))
+				return
 			}
 			payload, err := getHTTPTriggerPayloadFromInput(inputs.InvocationDir, inputs.HTTPPayload)
 			if err != nil {
-				ui.Error(fmt.Sprintf("Failed to parse HTTP trigger payload: %v", err))
-				os.Exit(1)
+				onErr(fmt.Errorf("failed to parse HTTP trigger payload: %w", err))
+				return
 			}
 			holder.TriggerFunc = func() error {
 				p := payload
 				payload = nil
 				if p == nil {
-					ui.Step(fmt.Sprintf("Waiting for HTTP request to start execution (listening on http://localhost:%d/trigger)...", httpTriggerServerPort))
+					ui.Step(fmt.Sprintf("Waiting for HTTP request to start execution (listening on http://localhost:%d/trigger)...", inputs.HTTPTriggerPort))
 				}
 				return manualTriggerCaps.ManualHTTPTrigger.ManualTrigger(ctx, triggerRegistrationID, p)
 			}
@@ -1097,8 +1244,8 @@ func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inp
 				}
 
 				if !ct.Supports(sel) {
-					ui.Error(fmt.Sprintf("%s unsupported or misconfigured chain for selector %d", name, sel))
-					os.Exit(1)
+					onErr(fmt.Errorf("%s unsupported or misconfigured chain for selector %d", name, sel))
+					return
 				}
 
 				if inputs.Listen {
@@ -1110,9 +1257,10 @@ func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inp
 						Clients:         inputs.ChainTypeClients[ct.Name()],
 						Interactive:     false,
 						Listen:          true,
+						Limits:          limits,
 						ChainTypeInputs: inputs.ChainTypeInputs,
 						TriggerPayload:  holder.TriggerToRun.GetPayload(),
-						WorkflowName:    inputs.WorkflowName,
+						WorkflowName:    inputs.WorkflowFolderName,
 					})
 					if err != nil {
 						ui.Error(fmt.Sprintf("Failed to create %s trigger listener: %v", name, err))
@@ -1130,10 +1278,10 @@ func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inp
 					break
 				}
 
-				triggerData, err := getTriggerDataForChainType(ctx, ct, sel, holder.TriggerToRun, inputs, false)
+				triggerData, err := getTriggerDataForChainType(ctx, ct, sel, holder.TriggerToRun, inputs, limits, false)
 				if err != nil {
-					ui.Error(fmt.Sprintf("Failed to get %s trigger data: %v", name, err))
-					os.Exit(1)
+					onErr(fmt.Errorf("failed to get %s trigger data: %w", name, err))
+					return
 				}
 
 				handled = true
@@ -1144,8 +1292,8 @@ func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inp
 			}
 
 			if !handled {
-				ui.Error(fmt.Sprintf("Unsupported trigger type: %s", holder.TriggerToRun.Id))
-				os.Exit(1)
+				onErr(fmt.Errorf("unsupported trigger type: %s", holder.TriggerToRun.Id))
+				return
 			}
 		}
 	}
@@ -1160,11 +1308,15 @@ func getLevel(verbosity bool, defaultLevel zapcore.Level) zapcore.Level {
 }
 
 // setupCustomBeholder sets up beholder with our custom telemetry writer
-func setupCustomBeholder(lggr logger.Logger, verbosity bool, simLogger *SimulationLogger) error {
+func setupCustomBeholder(ctx context.Context, lggr logger.Logger, verbosity bool, simLogger *SimulationLogger) error {
 	writer := &telemetryWriter{lggr: lggr, verbose: verbosity, simLogger: simLogger}
 
 	client, err := beholder.NewWriterClient(writer)
 	if err != nil {
+		return err
+	}
+
+	if err := client.Start(ctx); err != nil {
 		return err
 	}
 
@@ -1173,7 +1325,11 @@ func setupCustomBeholder(lggr logger.Logger, verbosity bool, simLogger *Simulati
 	return nil
 }
 
-func cleanupBeholder() error {
+func cleanupBeholder(started bool) error {
+	if !started {
+		return nil
+	}
+
 	client := beholder.GetClient()
 	if client != nil {
 		return client.Close()
@@ -1232,14 +1388,15 @@ func getHTTPTriggerPayloadFromInput(invocationDir, input string) (*httptypedapi.
 
 // getTriggerDataForChainType resolves trigger data for a specific chain type.
 // Each chain type defines its own trigger data format.
-func getTriggerDataForChainType(ctx context.Context, ct chain.ChainType, selector uint64, triggerSub *pb.TriggerSubscription, inputs Inputs, interactive bool) (interface{}, error) {
+func getTriggerDataForChainType(ctx context.Context, ct chain.ChainType, selector uint64, triggerSub *pb.TriggerSubscription, inputs Inputs, limits *cresettings.Workflows, interactive bool) (interface{}, error) {
 	return ct.ResolveTriggerData(ctx, selector, chain.TriggerParams{
 		Clients:         inputs.ChainTypeClients[ct.Name()],
 		Interactive:     interactive,
 		Listen:          inputs.Listen,
+		Limits:          limits,
 		ChainTypeInputs: inputs.ChainTypeInputs,
 		TriggerPayload:  triggerSub.GetPayload(),
-		WorkflowName:    inputs.WorkflowName,
+		WorkflowName:    inputs.WorkflowFolderName,
 	})
 }
 

@@ -165,7 +165,7 @@ func Execute(ctx context.Context, h *common.Handler, namespace string, duration 
 		if status != http.StatusOK {
 			return fmt.Errorf("gateway returned a non-200 status code: status_code=%d, body=%s", status, respBody)
 		}
-		return h.ParseVaultGatewayResponse(vaulttypes.MethodSecretsList, respBody)
+		return h.ParseVaultGatewayResponse(vaulttypes.MethodSecretsList, requestID, respBody)
 	}
 
 	if txOut == nil && allowlisted {

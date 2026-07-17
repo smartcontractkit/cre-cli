@@ -343,7 +343,6 @@ func (h *handler) processAbiDirectory(inputs Inputs) error {
 		indexContent += "// Code generated — DO NOT EDIT.\n"
 		for _, name := range generatedContracts {
 			indexContent += fmt.Sprintf("export * from './%s'\n", name)
-			indexContent += fmt.Sprintf("export * from './%s_mock'\n", name)
 		}
 		if err := os.WriteFile(indexPath, []byte(indexContent), 0o600); err != nil {
 			return fmt.Errorf("failed to write index.ts: %w", err)

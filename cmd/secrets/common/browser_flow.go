@@ -178,10 +178,17 @@ func (h *Handler) ExecuteBrowserVaultAuthorization(ctx context.Context, method s
 		return fmt.Errorf("could not complete the authorization request")
 	}
 
-	platformState, _ := oauth.StateFromAuthorizeURL(authURL)
+	localState, err := oauth.RandomState()
+	if err != nil {
+		return err
+	}
+	authURL, err = oauth.AuthorizeURLWithState(authURL, localState)
+	if err != nil {
+		return fmt.Errorf("could not bind OAuth state: %w", err)
+	}
 
 	codeCh := make(chan string, 1)
-	server, listener, err := oauth.NewCallbackHTTPServer(constants.AuthListenAddr, oauth.SecretsCallbackHandler(codeCh, platformState, h.Log))
+	server, listener, err := oauth.NewCallbackHTTPServer(constants.AuthListenAddr, oauth.SecretsCallbackHandler(codeCh, localState, h.Log))
 	if err != nil {
 		return fmt.Errorf("could not start local callback server: %w", err)
 	}
@@ -240,6 +247,11 @@ func (h *Handler) ExecuteBrowserVaultAuthorization(ctx context.Context, method s
 
 // postVaultGatewayWithBearer POSTs the digest-bound JSON-RPC body with the vault JWT and parses the gateway response.
 func (h *Handler) postVaultGatewayWithBearer(method string, requestBody []byte, accessToken string) error {
+	requestID, err := jsonRPCRequestID(requestBody)
+	if err != nil {
+		return err
+	}
+
 	ui.Dim("Submitting request to vault gateway...")
 	respBody, status, err := h.Gw.PostWithBearer(requestBody, accessToken)
 	if err != nil {
@@ -248,5 +260,18 @@ func (h *Handler) postVaultGatewayWithBearer(method string, requestBody []byte, 
 	if status != http.StatusOK {
 		return fmt.Errorf("gateway returned a non-200 status code: status_code=%d, body=%s", status, respBody)
 	}
-	return h.ParseVaultGatewayResponse(method, respBody)
+	return h.ParseVaultGatewayResponse(method, requestID, respBody)
+}
+
+func jsonRPCRequestID(body []byte) (string, error) {
+	var req struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(body, &req); err != nil {
+		return "", fmt.Errorf("failed to parse jsonrpc request id: %w", err)
+	}
+	if req.ID == "" {
+		return "", fmt.Errorf("jsonrpc request id is empty")
+	}
+	return req.ID, nil
 }

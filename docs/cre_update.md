@@ -2,6 +2,16 @@
 
 Update the cre CLI to the latest version
 
+### Synopsis
+
+Update the cre CLI to the latest version
+
+Release signatures are verified using the public key published by the CRE team.
+
+On Linux, the signature is verified using GPG.
+On macOS, the signature is verified using codesign.
+On Windows, the signature is verified using Authenticode.
+
 ```
 cre update [optional flags]
 ```
@@ -15,6 +25,7 @@ cre update [optional flags]
 ### Options inherited from parent commands
 
 ```
+      --allow-insecure-rpc     Allow non-localhost HTTP RPC URLs (insecure)
       --allow-unknown-chains   Skip chain-name validation against the chain-selectors registry (for experimental chains)
   -e, --env string             Path to .env file which contains sensitive info
       --non-interactive        Fail instead of prompting; requires all inputs via flags

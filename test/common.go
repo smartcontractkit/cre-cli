@@ -22,6 +22,7 @@ import (
 
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
+	"github.com/smartcontractkit/cre-cli/internal/testutil"
 )
 
 var (
@@ -71,6 +72,8 @@ type TestConfig struct {
 }
 
 func NewTestConfig(t *testing.T) *TestConfig {
+	testutil.IsolateCLIHome(t)
+
 	uid := "test-" + uuid.New().String()
 	err := os.MkdirAll(fmt.Sprintf("/tmp/%s", uid), 0755)
 	if err != nil {

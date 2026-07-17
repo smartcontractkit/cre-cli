@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/pflag"
 
 	"github.com/smartcontractkit/cre-cli/internal/creconfig"
+	"github.com/smartcontractkit/cre-cli/internal/redact"
 )
 
 const MachineIDFile = "machine_id"
@@ -80,10 +81,9 @@ func collectFlags(cmd *cobra.Command) []KeyValuePair {
 		// Only include flags that were explicitly set by the user
 		// This avoids cluttering telemetry with default values
 		if flag.Changed {
-			value := flag.Value.String()
 			flags = append(flags, KeyValuePair{
 				Key:   flag.Name,
-				Value: value,
+				Value: redact.Flag(flag.Name, flag.Value.String()),
 			})
 		}
 	})
@@ -106,7 +106,7 @@ func CollectCommandInfo(cmd *cobra.Command, args []string) CommandInfo {
 	}
 
 	// Collect args (only positional arguments, not flags)
-	info.Args = args
+	info.Args = redact.Args(info.Action, info.Subcommand, args)
 
 	// Collect flags as key-value pairs (only flags explicitly set by user)
 	info.Flags = collectFlags(cmd)
