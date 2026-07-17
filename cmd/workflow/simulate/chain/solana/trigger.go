@@ -22,24 +22,15 @@ import (
 
 const cpiMethodDiscriminatorLen = logpollertypes.EventSignatureLength
 
-// anchorEvent is a single decoded "Program data:" event, attributed to the
-// program that was executing when it was emitted.
 type anchorEvent struct {
 	programID solana.PublicKey
 	data      []byte
 }
 
-// GetSolanaTriggerLogFromValues fetches a confirmed transaction by signature and
-// builds a solcap.Log from the eventIndex-th Anchor event ("Program data:" log
-// line). Used by the deterministic replay path (both interactive and CI).
 func GetSolanaTriggerLog(ctx context.Context, client *solanarpc.Client, sigStr string, eventIndex uint64) (*solcap.Log, error) {
 	return getSolanaTriggerLogFromValues(ctx, client, sigStr, eventIndex, nil)
 }
 
-// GetSolanaTriggerLogFromValuesWithFilter fetches a confirmed transaction by
-// signature and builds a solcap.Log using the registered trigger filter. CPI
-// filters are replayed from transaction inner instructions; all other filters
-// use the regular Anchor "Program data:" log path.
 func GetSolanaTriggerLogWithFilter(ctx context.Context, client *solanarpc.Client, sigStr string, eventIndex uint64, filter *solcap.FilterLogTriggerRequest) (*solcap.Log, error) {
 	return getSolanaTriggerLogFromValues(ctx, client, sigStr, eventIndex, filter)
 }
@@ -117,9 +108,6 @@ func solanaEventToLog(ev anchorEvent, sig solana.Signature, res *solanarpc.GetTr
 		BlockNumber: int64(res.Slot), // #nosec G115 -- slot fits int64 in practice
 		LogIndex:    int64(eventIndex),
 	}
-	// Anchor prefixes event data with an 8-byte discriminator that identifies the
-	// event type; surface it as EventSig (kept in Data as well so the workflow can
-	// decode the full payload).
 	if len(ev.data) >= 8 {
 		log.EventSig = ev.data[:8]
 	}
@@ -222,9 +210,6 @@ func cpiSourceProgram(stackHeight uint16, programAtStackHeight map[uint16]solana
 	}
 }
 
-// decodeLogTriggerConfig unmarshals the TriggerSubscription's Any payload into
-// the Solana FilterLogTriggerRequest message. Returns an error if the payload is
-// missing or of the wrong message type.
 func decodeLogTriggerConfig(payload *anypb.Any) (*solcap.FilterLogTriggerRequest, error) {
 	if payload == nil {
 		return nil, fmt.Errorf("trigger subscription has no payload")
@@ -237,8 +222,7 @@ func decodeLogTriggerConfig(payload *anypb.Any) (*solcap.FilterLogTriggerRequest
 }
 
 // parseAnchorEvents decodes the transaction's "Program data:" log lines via
-// chainlink-solana's own log poller parser (the same one used to detect
-// on-chain events in production), then flattens its per-instruction grouping
+// chainlink-solana's own log poller parser then flattens its per-instruction grouping
 // into a single emission-ordered event list.
 func parseAnchorEvents(logs []string) ([]anchorEvent, error) {
 	outputs, err := logpoller.ParseProgramLogs(logs)
@@ -263,8 +247,6 @@ func parseAnchorEvents(logs []string) ([]anchorEvent, error) {
 	return events, nil
 }
 
-// printSolanaTriggerReplayHeader prints the "what's about to happen" summary for
-// the replay path, mirroring the EVM equivalent.
 func printSolanaTriggerReplayHeader(selector uint64, sig string, eventIndex uint64) {
 	ui.Line()
 	ui.Print(ui.RenderBold("Solana log trigger selected."))

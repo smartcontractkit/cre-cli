@@ -25,9 +25,6 @@ func newSolanaChainType() *SolanaChainType {
 	return &SolanaChainType{log: &lg}
 }
 
-// newTestFakeSolanaChain builds a FakeSolanaChain with a lazily-connecting RPC
-// client (no network calls happen during construction or ManualTrigger), so it
-// can be wired into a SolanaChainType for ExecuteTrigger plumbing tests.
 func newTestFakeSolanaChain(t *testing.T, selector uint64) *solanafakes.FakeSolanaChain {
 	t.Helper()
 	fc, err := solanafakes.NewFakeSolanaChain(

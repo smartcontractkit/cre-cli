@@ -121,9 +121,7 @@ func (ct *SolanaChainType) ResolveKey(s *settings.Settings, broadcast bool) (int
 }
 
 // ResolveTriggerData fetches the Solana log payload for the given selector by
-// replaying a known transaction (--solana-tx-sig + --solana-event-index).
-// Replay works in both interactive and non-interactive modes for deterministic
-// testing / CI. There is no live-listen path yet.
+// replaying a known transaction.
 func (ct *SolanaChainType) ResolveTriggerData(ctx context.Context, selector uint64, params chain.TriggerParams) (interface{}, error) {
 	clientIface, ok := params.Clients[selector]
 	if !ok {
