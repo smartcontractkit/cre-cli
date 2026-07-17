@@ -21,9 +21,9 @@ cre generate-bindings solana --language go
 
 Defaults:
 
-|            | IDL input                         | Output                                                                                 |
-| ---------- | --------------------------------- | -------------------------------------------------------------------------------------- |
-| Go         | `contracts/solana/src/idl/*.json` | `contracts/solana/src/generated/<program>/` (one package per program)                  |
+| | IDL input | Output |
+|---|---|---|
+| Go | `contracts/solana/src/idl/*.json` | `contracts/solana/src/generated/<program>/` (one package per program) |
 | TypeScript | `contracts/solana/src/idl/*.json` | `contracts/solana/ts/generated/<Program>.ts` + `<Program>_mock.ts` + `index.ts` barrel |
 
 `--out` overrides the output directory for the selected language (rejected when
@@ -51,7 +51,8 @@ generators emit:
 - a program mock (`new<Program>Mock`) that intercepts `writeReport` in the
   test framework.
 
-Native Anchor instruction builders and account fetchers are **not** generated for TypeScript: they are unreachable through the CRE capability.
+Native Anchor instruction builders and account fetchers are **not** generated
+for TypeScript: they are unreachable through the CRE capability.
 
 The wire format mirrors the Go bindings (`cre-sdk-go` solana `bindings` package):
 
@@ -62,20 +63,20 @@ report request: EncoderName="solana", SigningAlgo="ecdsa", HashingAlgo="keccak25
 
 ## TypeScript type coverage (v1)
 
-| Anchor type         | TypeScript | Codec                                                |
-| ------------------- | ---------- | ---------------------------------------------------- |
-| bool                | boolean    | `getBooleanCodec()`                                  |
-| u8…u32 / i8…i32     | number     | `getU8Codec()`…                                      |
-| u64/u128 / i64/i128 | bigint     | `getU64Codec()`…                                     |
-| f32 / f64           | number     | `getF32Codec()` / `getF64Codec()`                    |
-| string              | string     | `addCodecSizePrefix(getUtf8Codec(), getU32Codec())`  |
-| bytes               | Uint8Array | `addCodecSizePrefix(getBytesCodec(), getU32Codec())` |
-| pubkey              | Address    | `getAddressCodec()`                                  |
-| vec\<T\>            | T[]        | `getArrayCodec(inner, { size: getU32Codec() })`      |
-| array\<T, N\>       | T[]        | `getArrayCodec(inner, { size: N })`                  |
-| option\<T\>         | T \| null  | `getNullableCodec(inner)`                            |
-| defined struct      | type ref   | generated codec const                                |
-| enum (scalar)       | TS enum    | `getEnumCodec(Enum)` (u8 tag)                        |
+| Anchor type | TypeScript | Codec |
+|---|---|---|
+| bool | boolean | `getBooleanCodec()` |
+| u8…u32 / i8…i32 | number | `getU8Codec()`… |
+| u64/u128 / i64/i128 | bigint | `getU64Codec()`… |
+| f32 / f64 | number | `getF32Codec()` / `getF64Codec()` |
+| string | string | `addCodecSizePrefix(getUtf8Codec(), getU32Codec())` |
+| bytes | Uint8Array | `addCodecSizePrefix(getBytesCodec(), getU32Codec())` |
+| pubkey | Address | `getAddressCodec()` |
+| vec\<T\> | T[] | `getArrayCodec(inner, { size: getU32Codec() })` |
+| array\<T, N\> | T[] | `getArrayCodec(inner, { size: N })` |
+| option\<T\> | T \| null | `getNullableCodec(inner)` |
+| defined struct | type ref | generated codec const |
+| enum (scalar) | TS enum | `getEnumCodec(Enum)` (u8 tag) |
 
 Unsupported types **fail loudly** at generation time (never silently
 mis-encode): `u256`/`i256`, `COption`, data-carrying enums, tuple structs,

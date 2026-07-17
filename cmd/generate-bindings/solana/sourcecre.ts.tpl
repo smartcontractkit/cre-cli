@@ -272,4 +272,32 @@ export class {{.ClassName}} {
     )
   }
 {{- end}}
+{{- range .Triggers}}
+
+  /**
+   * Registers a typed log trigger for {{.Name}} events. The trigger
+   * output is adapted to the decoded {{.Name}} data alongside the raw log.
+   * Pass opts.cpi for events emitted via Anchor's emit_cpi!.
+   */
+  logTrigger{{.Name}}Log(
+    filterName: string,
+    filters: {{.Name}}Filters[] = [],
+    opts?: SolanaLogTriggerOptions,
+  ): Trigger<SolanaLog, SolanaDecodedLog<{{.TypeName}}>> {
+    const config: SolanaFilterLogTriggerRequestJson = {
+      name: filterName,
+      address: bytesToBase64(this.programId),
+      eventName: '{{.EventName}}',
+      contractIdlJson: {{$.IdlB64Const}},
+      subkeys: encode{{.Name}}Subkeys(filters),
+    }
+    if (opts?.cpi) {
+      config.cpiFilterConfig = anchorCPILogTriggerConfig(this.programId)
+    }
+    return adaptTrigger(this.client.logTrigger(config), (log) => ({
+      log,
+      data: decode{{.Name}}Event(log.data),
+    }))
+  }
+{{- end}}
 }
