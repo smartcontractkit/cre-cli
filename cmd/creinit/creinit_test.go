@@ -35,7 +35,12 @@ func (m *mockRegistry) GetTemplate(name string, refresh bool) (*templaterepo.Tem
 	return nil, fmt.Errorf("template %q not found", name)
 }
 
-func (m *mockRegistry) ScaffoldTemplate(tmpl *templaterepo.TemplateSummary, destDir, workflowName string, onProgress func(string)) error {
+func pathExistsForTest(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+func (m *mockRegistry) ScaffoldTemplate(tmpl *templaterepo.TemplateSummary, destDir, workflowName string, preserveExisting bool, onProgress func(string)) error {
 	var files map[string]string
 	if tmpl.Language == constants.WorkflowLanguageGolang {
 		files = map[string]string{
@@ -106,11 +111,17 @@ func (m *mockRegistry) ScaffoldTemplate(tmpl *templaterepo.TemplateSummary, dest
 			rpcsBlock += fmt.Sprintf("    - chain-name: %s\n      url: https://default-rpc.example.com\n", n)
 		}
 		projectYAML := fmt.Sprintf("staging-settings:\n  rpcs:\n%sproduction-settings:\n  rpcs:\n%s", rpcsBlock, rpcsBlock)
-		if err := os.WriteFile(filepath.Join(destDir, "project.yaml"), []byte(projectYAML), 0600); err != nil {
-			return err
+		projectYAMLPath := filepath.Join(destDir, "project.yaml")
+		if !preserveExisting || !pathExistsForTest(projectYAMLPath) {
+			if err := os.WriteFile(projectYAMLPath, []byte(projectYAML), 0600); err != nil {
+				return err
+			}
 		}
-		if err := os.WriteFile(filepath.Join(destDir, ".env"), []byte("GITHUB_API_TOKEN=test-token\nETH_PRIVATE_KEY=test-key\n"), 0600); err != nil {
-			return err
+		envPath := filepath.Join(destDir, ".env")
+		if !preserveExisting || !pathExistsForTest(envPath) {
+			if err := os.WriteFile(envPath, []byte("GITHUB_API_TOKEN=test-token\nETH_PRIVATE_KEY=test-key\n"), 0600); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -423,7 +434,7 @@ func TestInitExecuteFlows(t *testing.T) {
 	}
 }
 
-func TestInitInsideExistingProjectExits(t *testing.T) {
+func TestInsideExistingProjectAddsWorkflow(t *testing.T) {
 	sim := chainsim.NewSimulatedEnvironment(t)
 	defer sim.Close()
 
@@ -449,9 +460,17 @@ func TestInitInsideExistingProjectExits(t *testing.T) {
 	h := newHandlerWithRegistry(sim.NewRuntimeContext(), newMockRegistry())
 
 	require.NoError(t, h.ValidateInputs(inputs))
-	err = h.Execute(inputs)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "already inside an existing project")
+	require.NoError(t, h.Execute(inputs))
+
+	require.FileExists(t, constants.DefaultProjectSettingsFileName)
+	require.FileExists(t, constants.DefaultEnvFileName)
+
+	validateInitProjectStructure(
+		t,
+		".",
+		"wf-inside-existing-project",
+		GetTemplateFileListGo(),
+	)
 }
 
 func TestInitWithTypescriptTemplateSkipsGoScaffold(t *testing.T) {
@@ -962,7 +981,7 @@ func TestInitRespectsProjectRootFlag(t *testing.T) {
 	require.Empty(t, entries, "CWD should be untouched when -R is provided")
 }
 
-func TestInitProjectRootFlagFindsExistingProjectExits(t *testing.T) {
+func TestInitProjectRootFlagFindsExistingProject(t *testing.T) {
 	sim := chainsim.NewSimulatedEnvironment(t)
 	defer sim.Close()
 
@@ -995,7 +1014,13 @@ func TestInitProjectRootFlagFindsExistingProjectExits(t *testing.T) {
 
 	h := newHandlerWithRegistry(ctx, newMockRegistry())
 	require.NoError(t, h.ValidateInputs(inputs))
-	err = h.Execute(inputs)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "already inside an existing project")
+	require.NoError(t, h.Execute(inputs))
+
+	// Workflow should be scaffolded into the existing project
+	validateInitProjectStructure(
+		t,
+		existingProject,
+		"new-workflow",
+		GetTemplateFileListGo(),
+	)
 }
