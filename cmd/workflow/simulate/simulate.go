@@ -12,6 +12,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -80,6 +81,11 @@ type Inputs struct {
 	// SetExecutionContext changes it to the workflow directory. Used to resolve file
 	// paths entered interactively or via flags relative to where the user ran the command.
 	InvocationDir string `validate:"-"`
+	// WorkflowFolderName is the name of the workflow's directory (i.e. the argument
+	// the user passes to `cre workflow simulate`). Unlike WorkflowName (the Workflow
+	// Registry name from workflow.yaml, which can differ), this is what should be
+	// used to render restart-command hints so they match what the user actually typed.
+	WorkflowFolderName string `validate:"-"`
 }
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
@@ -199,27 +205,36 @@ func (h *handler) ResolveInputs(v *viper.Viper, creSettings *settings.Settings) 
 		httpTriggerPort = defaultHTTPTriggerServerPort
 	}
 
+	// At this point SetExecutionContext has already chdir'd into the workflow
+	// directory, so its basename is the argument the user passed to
+	// `cre workflow simulate`.
+	workflowFolderName := ""
+	if cwd, err := os.Getwd(); err == nil {
+		workflowFolderName = filepath.Base(cwd)
+	}
+
 	return Inputs{
-		WasmPath:          v.GetString("wasm"),
-		WorkflowPath:      creSettings.Workflow.WorkflowArtifactSettings.WorkflowPath,
-		ConfigPath:        cmdcommon.ResolveConfigPath(v, creSettings.Workflow.WorkflowArtifactSettings.ConfigPath),
-		SecretsPath:       creSettings.Workflow.WorkflowArtifactSettings.SecretsPath,
-		EngineLogs:        v.GetBool("engine-logs"),
-		Broadcast:         v.GetBool("broadcast"),
-		ChainTypeClients:  ctClients,
-		ChainTypeResolved: ctResolved,
-		ChainTypeKeys:     ctKeys,
-		WorkflowName:      creSettings.Workflow.UserWorkflowSettings.WorkflowName,
-		NonInteractive:    v.GetBool("non-interactive"),
-		HasTriggerIndex:   v.IsSet("trigger-index"),
-		TriggerIndex:      v.GetInt("trigger-index"),
-		HTTPPayload:       v.GetString("http-payload"),
-		HTTPTriggerPort:   httpTriggerPort,
-		ChainTypeInputs:   chain.CollectAllCLIInputs(v),
-		Listen:            v.GetBool("listen"),
-		LimitsPath:        v.GetString("limits"),
-		SkipTypeChecks:    v.GetBool(cmdcommon.SkipTypeChecksCLIFlag),
-		InvocationDir:     h.runtimeContext.InvocationDir,
+		WasmPath:           v.GetString("wasm"),
+		WorkflowPath:       creSettings.Workflow.WorkflowArtifactSettings.WorkflowPath,
+		ConfigPath:         cmdcommon.ResolveConfigPath(v, creSettings.Workflow.WorkflowArtifactSettings.ConfigPath),
+		SecretsPath:        creSettings.Workflow.WorkflowArtifactSettings.SecretsPath,
+		EngineLogs:         v.GetBool("engine-logs"),
+		Broadcast:          v.GetBool("broadcast"),
+		ChainTypeClients:   ctClients,
+		ChainTypeResolved:  ctResolved,
+		ChainTypeKeys:      ctKeys,
+		WorkflowName:       creSettings.Workflow.UserWorkflowSettings.WorkflowName,
+		NonInteractive:     v.GetBool("non-interactive"),
+		HasTriggerIndex:    v.IsSet("trigger-index"),
+		TriggerIndex:       v.GetInt("trigger-index"),
+		HTTPPayload:        v.GetString("http-payload"),
+		HTTPTriggerPort:    httpTriggerPort,
+		ChainTypeInputs:    chain.CollectAllCLIInputs(v),
+		Listen:             v.GetBool("listen"),
+		LimitsPath:         v.GetString("limits"),
+		SkipTypeChecks:     v.GetBool(cmdcommon.SkipTypeChecksCLIFlag),
+		InvocationDir:      h.runtimeContext.InvocationDir,
+		WorkflowFolderName: workflowFolderName,
 	}, nil
 }
 
@@ -683,6 +698,9 @@ func run(
 	}
 	emptyHook := func(context.Context, simulator.RunnerConfig, *capabilities.Registry, []services.Service) {}
 
+	// Acknowledge confidential (TEE) execution once, the first time a TEE handler runs.
+	var teeAckOnce sync.Once
+
 	simulator.NewRunner(&simulator.RunnerHooks{
 		Initialize:  simulatorInitialize,
 		BeforeStart: triggerInfoAndBeforeStart.BeforeStart,
@@ -703,6 +721,20 @@ func run(
 				simLogger.Info("Simulator Initialized")
 				ui.Line()
 				close(initializedCh)
+			},
+			OnRequirementsSet: func(_ string, requirements *pb.Requirements) {
+				if requirements.GetTee() == nil {
+					return
+				}
+				teeAckOnce.Do(func() {
+					ui.Line()
+					ui.Bold("Confidential (TEE) execution")
+					ui.Dim("This workflow declares a TEE handler (HandlerInTee). In production it runs inside a " +
+						teeRequirementSummary(requirements.GetTee()) + " enclave, where secrets are decrypted and " +
+						"are not visible to node operators. The simulator runs the same workflow logic locally, " +
+						"without a real enclave or attestation.")
+					ui.Line()
+				})
 			},
 			OnExecutionError: func(msg string) {
 				errMsg := msg
@@ -787,6 +819,34 @@ func run(
 		return executionResultErr
 	}
 	return nil
+}
+
+// teeRequirementSummary renders a short human-readable description of a TEE
+// requirement (type and regions) for the confidential-execution acknowledgement.
+func teeRequirementSummary(tee *pb.Tee) string {
+	if tee == nil {
+		return "TEE"
+	}
+	if ttr := tee.GetTeeTypesAndRegions(); ttr != nil {
+		var parts []string
+		for _, tr := range ttr.GetTeeTypeAndRegions() {
+			name := strings.TrimPrefix(tr.GetType().String(), "TEE_TYPE_")
+			if regions := tr.GetRegions(); len(regions) > 0 {
+				parts = append(parts, fmt.Sprintf("%s (%s)", name, strings.Join(regions, ", ")))
+			} else {
+				parts = append(parts, name)
+			}
+		}
+		if len(parts) > 0 {
+			return strings.Join(parts, ", ")
+		}
+	}
+	if r := tee.GetAnyRegions(); r != nil {
+		if regions := r.GetRegions(); len(regions) > 0 {
+			return "TEE (" + strings.Join(regions, ", ") + ")"
+		}
+	}
+	return "TEE"
 }
 
 // runHTTPListen serves the HTTP trigger's --listen mode: it keeps a single HTTP
@@ -1076,7 +1136,7 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 						Limits:          limits,
 						ChainTypeInputs: inputs.ChainTypeInputs,
 						TriggerPayload:  holder.TriggerToRun.GetPayload(),
-						WorkflowName:    inputs.WorkflowName,
+						WorkflowName:    inputs.WorkflowFolderName,
 					})
 					if err != nil {
 						ui.Error(fmt.Sprintf("Failed to create %s trigger listener: %v", name, err))
@@ -1199,7 +1259,7 @@ func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inp
 						Limits:          limits,
 						ChainTypeInputs: inputs.ChainTypeInputs,
 						TriggerPayload:  holder.TriggerToRun.GetPayload(),
-						WorkflowName:    inputs.WorkflowName,
+						WorkflowName:    inputs.WorkflowFolderName,
 					})
 					if err != nil {
 						ui.Error(fmt.Sprintf("Failed to create %s trigger listener: %v", name, err))
@@ -1335,7 +1395,7 @@ func getTriggerDataForChainType(ctx context.Context, ct chain.ChainType, selecto
 		Limits:          limits,
 		ChainTypeInputs: inputs.ChainTypeInputs,
 		TriggerPayload:  triggerSub.GetPayload(),
-		WorkflowName:    inputs.WorkflowName,
+		WorkflowName:    inputs.WorkflowFolderName,
 	})
 }
 
