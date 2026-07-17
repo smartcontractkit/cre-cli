@@ -13,24 +13,13 @@ import (
 
 const vaultValidationSkippedWarning = "Vault gateway validation skipped; the encryption key and response signatures will not be verified independently of the gateway."
 
-// vaultValidationGateEnabled toggles CapabilitiesRegistry RPC resolution and consent
-// before secrets commands.
-const vaultValidationGateEnabled = false
-
-// vaultValidationGateEnabled toggles CapabilitiesRegistry RPC resolution and consent
-// before secrets commands.
 // EnsureVaultValidationOrConsent resolves CapabilitiesRegistry RPC settings and either
 // enables on-chain validation (skipValidation=false) or obtains explicit consent to
 // proceed without validation. The result is cached for the lifetime of the Handler so
+// encrypt and response parsing in the same command only prompt once.
 func (h *Handler) EnsureVaultValidationOrConsent(ctx context.Context) (skipValidation bool, err error) {
 	if h.vaultValidationDecided {
 		return h.skipVaultValidation, nil
-	}
-
-	if !vaultValidationGateEnabled {
-		h.skipVaultValidation = true
-		h.vaultValidationDecided = true
-		return true, nil
 	}
 
 	rpcURL, chainName, ok, err := settings.ResolveCapabilitiesRegistryRPC(h.Viper, h.TenantContext)

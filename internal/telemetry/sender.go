@@ -11,6 +11,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/client/graphqlclient"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
+	"github.com/smartcontractkit/cre-cli/internal/redact"
 )
 
 const (
@@ -76,7 +77,7 @@ func SendEvent(ctx context.Context, event UserEventInput, creds *credentials.Cre
 	err := client.Execute(sendCtx, req, &resp)
 
 	if err != nil {
-		debugLog("telemetry request failed: %v", err)
+		debugLog("telemetry request failed: %v", redact.ErrorMessage(err.Error()))
 	} else {
 		debugLog("telemetry request succeeded: success=%v, message=%s", resp.ReportUserEvent.Success, resp.ReportUserEvent.Message)
 	}

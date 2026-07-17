@@ -30,12 +30,16 @@ func TestDefaultLimitsAndExportDefaultLimitsJSON(t *testing.T) {
 	assert.Equal(t, 125_000, limits.ConfHTTPRequestSizeLimit())
 	assert.Equal(t, 500_000, limits.ConfHTTPResponseSizeLimit())
 	assert.Equal(t, 25_000, limits.ConsensusObservationSizeLimit())
-	assert.Equal(t, 5_000, limits.EVMChainWriteReportSizeLimit())
+	assert.Equal(t, 50_000, limits.EVMChainWriteReportSizeLimit())
 	assert.Equal(t, 5_000, limits.AptosChainWriteReportSizeLimit())
 	assert.Equal(t, uint64(10_000_000), limits.EVMChainWriteGasLimit())
 	assert.Equal(t, uint64(2_000_000), limits.AptosChainWriteGasLimit())
 	assert.Equal(t, 100_000_000, limits.WASMBinarySize())
 	assert.Equal(t, 20_000_000, limits.WASMCompressedBinarySize())
+	assert.InDelta(t, 1.0/30.0, float64(limits.HTTPTriggerRateLimit().Limit), 0.000001)
+	assert.Equal(t, 1, limits.HTTPTriggerRateLimit().Burst)
+	assert.InDelta(t, 1.0/6.0, float64(limits.LogTriggerEventRateLimit().Limit), 0.000001)
+	assert.Equal(t, 10, limits.LogTriggerEventRateLimit().Burst)
 	assert.Equal(t, 50, limits.Workflows.ExecutionConcurrencyLimit.DefaultValue)
 	assert.InDelta(t, 1.0/30.0, float64(limits.Workflows.HTTPTrigger.RateLimit.DefaultValue.Limit), 0.000001)
 	assert.Equal(t, 1, limits.Workflows.HTTPTrigger.RateLimit.DefaultValue.Burst)
@@ -51,7 +55,11 @@ func TestLoadLimitsParsesCustomFileAndPreservesDefaultsForUnsetFields(t *testing
 			"ConnectionTimeout": "2s"
 		},
 		"ChainWrite": {
-			"EVM": {"ReportSizeLimit": "9kb", "GasLimit": {"Default": "1234567"}},
+			"ReportSizeLimit": "9kb",
+			"EVM": {
+				"ReportSizeLimit": "9kb",
+				"GasLimit": {"Default": "1234567"}
+			},
 			"Aptos": {"ReportSizeLimit": "11kb", "GasLimit": {"Default": "7654321"}}
 		},
 		"CRONTrigger": {
@@ -63,7 +71,7 @@ func TestLoadLimitsParsesCustomFileAndPreservesDefaultsForUnsetFields(t *testing
 	require.NoError(t, err)
 
 	assert.Equal(t, 7_000, limits.HTTPRequestSizeLimit())
-	assert.Equal(t, 100_000, limits.HTTPResponseSizeLimit(), "unset values should keep embedded defaults")
+	assert.Equal(t, 100_000, limits.HTTPResponseSizeLimit(), "unset values should keep cresettings defaults")
 	assert.Equal(t, 9_000, limits.EVMChainWriteReportSizeLimit())
 	assert.Equal(t, 11_000, limits.AptosChainWriteReportSizeLimit())
 	assert.Equal(t, uint64(1_234_567), limits.EVMChainWriteGasLimit())
@@ -191,6 +199,6 @@ func TestSimulationLimitsSummaryIncludesKeyLimitValues(t *testing.T) {
 	assert.Contains(t, summary, "HTTP: req=120kb resp=250kb timeout=10s")
 	assert.Contains(t, summary, "ConfHTTP: req=125kb resp=500kb timeout=1m30s")
 	assert.Contains(t, summary, "Consensus obs=25kb")
-	assert.Contains(t, summary, "ChainWrite evm_report=5kb evm_gas=10000000 aptos_report=5kb aptos_gas=2000000")
+	assert.Contains(t, summary, "ChainWrite evm_report=50kb evm_gas=10000000 solana_report=265b solana_cu=300000 aptos_report=5kb aptos_gas=2000000")
 	assert.Contains(t, summary, "WASM binary=100mb compressed=20mb")
 }

@@ -25,6 +25,7 @@ cre workflow list
 ```
   -h, --help              help for list
       --include-deleted   Include workflows in DELETED status
+      --json              Output as JSON (shorthand for --output=json)
       --output string     Output format: "json" prints a JSON array to stdout
       --registry string   Filter by registry ID from user context
 ```
@@ -32,6 +33,7 @@ cre workflow list
 ### Options inherited from parent commands
 
 ```
+      --allow-insecure-rpc     Allow non-localhost HTTP RPC URLs (insecure)
       --allow-unknown-chains   Skip chain-name validation against the chain-selectors registry (for experimental chains)
   -e, --env string             Path to .env file which contains sensitive info
       --non-interactive        Fail instead of prompting; requires all inputs via flags

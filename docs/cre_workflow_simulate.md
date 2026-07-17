@@ -28,8 +28,9 @@ cre workflow simulate ./my-workflow
       --evm-tx-hash string           EVM trigger transaction hash (0x...)
   -h, --help                         help for simulate
       --http-payload string          HTTP trigger payload as JSON string or path to JSON file
+      --http-trigger-port int        Port used by the local HTTP trigger server (default 2000)
       --limits string                Production limits to enforce during simulation: 'default' for prod defaults, path to a limits JSON file (e.g. from 'cre workflow limits export'), or 'none' to disable (default "default")
-      --listen                       Listen for HTTP requests or supported log triggers and run the simulator for each match
+      --listen                       Listen for HTTP requests or supported log triggers and run the simulator for each match (not supported by cron)
       --no-config                    Simulate without a config file
       --skip-type-checks             Skip TypeScript project typecheck during compilation (passes --skip-type-checks to cre-compile)
       --trigger-index int            Index of the trigger to run (0-based) (default -1)
@@ -39,6 +40,7 @@ cre workflow simulate ./my-workflow
 ### Options inherited from parent commands
 
 ```
+      --allow-insecure-rpc     Allow non-localhost HTTP RPC URLs (insecure)
       --allow-unknown-chains   Skip chain-name validation against the chain-selectors registry (for experimental chains)
   -e, --env string             Path to .env file which contains sensitive info
       --non-interactive        Fail instead of prompting; requires all inputs via flags
@@ -50,4 +52,5 @@ cre workflow simulate ./my-workflow
 
 ### SEE ALSO
 
-- [cre workflow](cre_workflow.md) - Manages workflows
+* [cre workflow](cre_workflow.md)	 - Manages workflows
+

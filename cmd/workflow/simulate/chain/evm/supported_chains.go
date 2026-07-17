@@ -134,6 +134,7 @@ var SupportedChains = []chain.ChainConfig{
 
 	// DTCC
 	{Selector: chainselectors.DTCC_TESTNET_ANDESITE.Selector, Forwarder: "0x6E9EE680ef59ef64Aa8C7371279c27E496b5eDc1"},
+	{Selector: chainselectors.DTCC_MAINNET_APPCHAIN.Selector, Forwarder: "0xBefF2190E6F56C108cD748844Bbd18D4a70F1E21"},
 
 	// ADI
 	{Selector: chainselectors.ADI_TESTNET.Selector, Forwarder: "0x9eF6468C5f37b976E57d52054c693269479A784d"},
@@ -141,4 +142,10 @@ var SupportedChains = []chain.ChainConfig{
 
 	// Rhyolite (private testnet)
 	{Selector: chainselectors.PRIVATE_TESTNET_RHYOLITE.Selector, Forwarder: "0xBefF2190E6F56C108cD748844Bbd18D4a70F1E21"},
+
+	// Pumice (private testnet)
+	{Selector: chainselectors.PRIVATE_TESTNET_PUMICE.Selector, Forwarder: "0xBefF2190E6F56C108cD748844Bbd18D4a70F1E21"},
+
+	// Quartzite (private testnet)
+	{Selector: chainselectors.PRIVATE_TESTNET_QUARTZITE.Selector, Forwarder: "0xBefF2190E6F56C108cD748844Bbd18D4a70F1E21"},
 }

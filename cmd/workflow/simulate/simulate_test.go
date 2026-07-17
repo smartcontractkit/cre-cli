@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -98,8 +99,10 @@ func TestBlankWorkflowSimulation(t *testing.T) {
 		Settings: &settings.Settings{
 			Workflow: workflowSettings,
 			User: settings.UserSettings{
-				TargetName:  "staging-settings",
-				PrivateKeys: map[string]string{settings.EVM.Name: "88888845d8761ca4a8cefb324c89702f12114ffbd0c47222f12aac0ad6538888"},
+				TargetName: "staging-settings",
+				PrivateKeys: map[string]string{
+					settings.EVM.Name: "88888845d8761ca4a8cefb324c89702f12114ffbd0c47222f12aac0ad6538888",
+				},
 			},
 		},
 	}
@@ -151,7 +154,9 @@ func createSimulateTestSettings(workflowName, workflowPath, configPath string) *
 			},
 		},
 		User: settings.UserSettings{
-			PrivateKeys: map[string]string{settings.EVM.Name: "88888845d8761ca4a8cefb324c89702f12114ffbd0c47222f12aac0ad6538888"},
+			PrivateKeys: map[string]string{
+				settings.EVM.Name: "88888845d8761ca4a8cefb324c89702f12114ffbd0c47222f12aac0ad6538888",
+			},
 		},
 	}
 }
@@ -256,6 +261,45 @@ func TestSimulateResolveInputs_WasmFlag(t *testing.T) {
 	})
 }
 
+func TestSimulateResolveInputs_HTTPTriggerPort(t *testing.T) {
+	t.Parallel()
+
+	t.Run("default port when flag unset", func(t *testing.T) {
+		t.Parallel()
+		v := createSimulateTestViper(t)
+		creSettings := createSimulateTestSettings("test-workflow", "main.go", "")
+
+		runtimeCtx := &runtime.Context{
+			Logger:   testutil.NewTestLogger(),
+			Viper:    v,
+			Settings: creSettings,
+		}
+		h := newHandler(runtimeCtx)
+
+		inputs, err := h.ResolveInputs(v, creSettings)
+		require.NoError(t, err)
+		assert.Equal(t, defaultHTTPTriggerServerPort, inputs.HTTPTriggerPort)
+	})
+
+	t.Run("flag overrides default", func(t *testing.T) {
+		t.Parallel()
+		v := createSimulateTestViper(t)
+		v.Set("http-trigger-port", 3210)
+		creSettings := createSimulateTestSettings("test-workflow", "main.go", "")
+
+		runtimeCtx := &runtime.Context{
+			Logger:   testutil.NewTestLogger(),
+			Viper:    v,
+			Settings: creSettings,
+		}
+		h := newHandler(runtimeCtx)
+
+		inputs, err := h.ResolveInputs(v, creSettings)
+		require.NoError(t, err)
+		assert.Equal(t, 3210, inputs.HTTPTriggerPort)
+	})
+}
+
 func TestSimulateValidateInputs_URLBypass(t *testing.T) {
 	t.Parallel()
 
@@ -268,10 +312,11 @@ func TestSimulateValidateInputs_URLBypass(t *testing.T) {
 	h := newHandler(runtimeCtx)
 
 	inputs := Inputs{
-		WorkflowPath: tmpFile,
-		ConfigPath:   "https://example.com/config.yaml",
-		WasmPath:     "https://example.com/binary.wasm",
-		WorkflowName: "test-workflow",
+		WorkflowPath:    tmpFile,
+		ConfigPath:      "https://example.com/config.yaml",
+		WasmPath:        "https://example.com/binary.wasm",
+		HTTPTriggerPort: defaultHTTPTriggerServerPort,
+		WorkflowName:    "test-workflow",
 	}
 
 	err := h.ValidateInputs(inputs)
@@ -487,12 +532,12 @@ func TestNonInteractiveCronTriggerDoesNotBlockOnSchedule(t *testing.T) {
 	require.Nil(t, capErr)
 
 	holder := &TriggerInfoAndBeforeStart{}
-	inputs := Inputs{TriggerIndex: triggerIndex}
+	inputs := Inputs{TriggerIndex: triggerIndex, HTTPTriggerPort: defaultHTTPTriggerServerPort}
 	manualTriggers := &ManualTriggers{ManualCronTrigger: cronSvc}
 
 	beforeStart := makeBeforeStartNonInteractive(holder, inputs, func() *ManualTriggers {
 		return manualTriggers
-	})
+	}, func(err error) { require.NoError(t, err, "unexpected BeforeStart error") }, nil)
 
 	triggerSub := []*pb.TriggerSubscription{{Id: "cron-trigger@1.0.0"}}
 	beforeStart(ctx, simulator.RunnerConfig{}, nil, nil, triggerSub)
@@ -507,6 +552,94 @@ func TestNonInteractiveCronTriggerDoesNotBlockOnSchedule(t *testing.T) {
 	case <-time.After(3 * time.Second):
 		t.Fatal("TriggerFunc blocked waiting for cron schedule; skipWaitSignal must be sent before ManualTrigger is called")
 	}
+}
+
+// newTestRuntimeCtx returns a minimal runtime.Context sufficient for Execute()
+// to run through the pre-flight checks without panicking.
+func newTestRuntimeCtx(t *testing.T) *runtime.Context {
+	t.Helper()
+	return &runtime.Context{
+		Logger:   testutil.NewTestLogger(),
+		Viper:    viper.New(),
+		Settings: &settings.Settings{},
+	}
+}
+
+// TestExecuteWASMBinarySizeLimitReturnsTypedError verifies that the WASM
+// binary pre-flight check returns a *LimitExceededError (not os.Exit) so that
+// the CLI root can capture it in telemetry.EmitCommandEvent.
+func TestExecuteWASMBinarySizeLimitReturnsTypedError(t *testing.T) {
+	t.Parallel()
+
+	limits, err := DefaultLimits()
+	require.NoError(t, err)
+	binaryLimit := limits.WASMBinarySize()
+	require.Positive(t, binaryLimit)
+
+	// Write a fake WASM binary with a valid magic header, 1 byte over the limit.
+	// EnsureRawWasm passes data through unchanged when it starts with the WASM magic.
+	wasmMagic := []byte{0x00, 0x61, 0x73, 0x6d}
+	oversized := make([]byte, binaryLimit+1)
+	copy(oversized, wasmMagic)
+	dir := t.TempDir()
+	wasmPath := filepath.Join(dir, "workflow.wasm")
+	require.NoError(t, os.WriteFile(wasmPath, oversized, 0o600))
+
+	h := newHandler(newTestRuntimeCtx(t))
+	execErr := h.Execute(context.Background(), Inputs{
+		WasmPath:     wasmPath,
+		WorkflowPath: ".",
+		WorkflowName: "test-wf",
+		LimitsPath:   "default",
+	})
+	require.Error(t, execErr)
+
+	var limitErr *LimitExceededError
+	require.True(t, errors.As(execErr, &limitErr), "expected *LimitExceededError, got %T: %v", execErr, execErr)
+	assert.Equal(t, LimitWASMBinary, limitErr.Kind)
+	assert.Contains(t, limitErr.Error(), "production")
+	assert.Contains(t, limitErr.Error(), "--limits=none")
+	assert.Contains(t, limitErr.Error(), "cre workflow limits export")
+}
+
+// TestExecuteWASMCompressedBinarySizeLimitReturnsTypedError verifies that the
+// brotli-compressed size pre-flight check returns a *LimitExceededError.
+// It uses a custom limits file with a 1-byte compressed limit so any binary
+// triggers the check without needing to generate incompressible data.
+func TestExecuteWASMCompressedBinarySizeLimitReturnsTypedError(t *testing.T) {
+	t.Parallel()
+
+	// Write a custom limits file that sets the compressed size limit to 1 byte.
+	// Any WASM binary will exceed this after brotli compression.
+	limitsJSON := `{"WASMCompressedBinarySizeLimit": "1b"}`
+	dir := t.TempDir()
+	limitsPath := filepath.Join(dir, "limits.json")
+	require.NoError(t, os.WriteFile(limitsPath, []byte(limitsJSON), 0o600))
+
+	// Validate that the limits file is parseable.
+	_, err := LoadLimits(limitsPath)
+	require.NoError(t, err, "custom limits file must be valid")
+
+	// A minimal valid WASM binary (just the magic header + version).
+	wasmMagic := []byte{0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00}
+	wasmPath := filepath.Join(dir, "workflow.wasm")
+	require.NoError(t, os.WriteFile(wasmPath, wasmMagic, 0o600))
+
+	h := newHandler(newTestRuntimeCtx(t))
+	execErr := h.Execute(context.Background(), Inputs{
+		WasmPath:     wasmPath,
+		WorkflowPath: ".",
+		WorkflowName: "test-wf",
+		LimitsPath:   limitsPath,
+	})
+	require.Error(t, execErr)
+
+	var limitErr *LimitExceededError
+	require.True(t, errors.As(execErr, &limitErr), "expected *LimitExceededError, got %T: %v", execErr, execErr)
+	assert.Equal(t, LimitWASMCompressedBinary, limitErr.Kind)
+	assert.Contains(t, limitErr.Error(), "production")
+	assert.Contains(t, limitErr.Error(), "--limits=none")
+	assert.Contains(t, limitErr.Error(), "cre workflow limits export")
 }
 
 func TestHTTPListenPayloadServerAcceptsMultipleRequests(t *testing.T) {
@@ -526,7 +659,7 @@ func TestHTTPListenPayloadServerAcceptsMultipleRequests(t *testing.T) {
 		require.NoError(t, err)
 		req.Header.Set("Content-Type", "application/json")
 
-		resp, err := http.DefaultClient.Do(req)
+		resp, err := http.DefaultClient.Do(req) // #nosec G704 -- URL targets localhost test server
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 		require.NoError(t, resp.Body.Close())
@@ -545,7 +678,7 @@ func TestHTTPListenPayloadServerAcceptsMultipleRequests(t *testing.T) {
 func TestManualHTTPTriggerEventsHaveUniqueIDs(t *testing.T) {
 	t.Parallel()
 
-	svc := NewManualHTTPTriggerService(logger.Test(t))
+	svc := NewManualHTTPTriggerService(logger.Test(t), defaultHTTPTriggerServerPort, nil)
 	first := svc.createManualTriggerEvent(nil)
 	second := svc.createManualTriggerEvent(nil)
 
@@ -561,7 +694,9 @@ func TestSimulateConfigFlagsMutuallyExclusive(t *testing.T) {
 		Viper:  viper.New(),
 		Settings: &settings.Settings{
 			User: settings.UserSettings{
-				PrivateKeys: map[string]string{settings.EVM.Name: "88888845d8761ca4a8cefb324c89702f12114ffbd0c47222f12aac0ad6538888"},
+				PrivateKeys: map[string]string{
+					settings.EVM.Name: "88888845d8761ca4a8cefb324c89702f12114ffbd0c47222f12aac0ad6538888",
+				},
 			},
 		},
 	}

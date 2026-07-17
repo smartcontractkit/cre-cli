@@ -17,9 +17,12 @@ import (
 
 	corekeys "github.com/smartcontractkit/chainlink-common/keystore/corekeys"
 	evmpb "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/chain-capabilities/evm"
+	"github.com/smartcontractkit/chainlink-common/pkg/config"
 	"github.com/smartcontractkit/chainlink-common/pkg/services"
+	"github.com/smartcontractkit/chainlink-common/pkg/settings/cresettings"
 
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain"
+	"github.com/smartcontractkit/cre-cli/internal/rpc"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
@@ -69,7 +72,7 @@ func (ct *EVMChainType) ResolveClients(v *viper.Viper) (chain.ResolvedChains, er
 			ct.log.Debug().Msgf("RPC not provided for %s; skipping", chainName)
 			continue
 		}
-		ct.log.Debug().Msgf("Using RPC for %s: %s", chainName, chain.RedactURL(rpcURL))
+		ct.log.Debug().Msgf("Using RPC for %s: %s", chainName, rpc.RedactURL(rpcURL))
 
 		c, err := ethclient.Dial(rpcURL)
 		if err != nil {
@@ -116,7 +119,7 @@ func (ct *EVMChainType) ResolveClients(v *viper.Viper) (chain.ResolvedChains, er
 			continue
 		}
 
-		ct.log.Debug().Msgf("Using RPC for experimental chain %d: %s", ec.ChainSelector, chain.RedactURL(ec.RPCURL))
+		ct.log.Debug().Msgf("Using RPC for experimental chain %d: %s", ec.ChainSelector, rpc.RedactURL(ec.RPCURL))
 		c, err := ethclient.Dial(ec.RPCURL)
 		if err != nil {
 			return chain.ResolvedChains{}, fmt.Errorf("failed to create eth client for experimental chain %d: %w", ec.ChainSelector, err)
@@ -212,15 +215,17 @@ func (ct *EVMChainType) NewTriggerListener(ctx context.Context, selector uint64,
 	if strings.TrimSpace(params.ChainTypeInputs[TriggerInputTxHash]) != "" {
 		return nil, fmt.Errorf("--listen cannot be combined with --%s for EVM log triggers", TriggerInputTxHash)
 	}
+	eventRateLimit := eventRateLimitFromLimits(params.Limits)
 
 	cfg, err := decodeLogTriggerConfig(params.TriggerPayload)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode EVM log trigger config: %w", err)
 	}
 	return NewEVMLogTriggerListener(ctx, client, WaitForLogConfig{
-		Selector:     selector,
-		Filter:       cfg,
-		WorkflowName: params.WorkflowName,
+		Selector:       selector,
+		Filter:         cfg,
+		WorkflowName:   params.WorkflowName,
+		EventRateLimit: eventRateLimit,
 	})
 }
 
@@ -248,7 +253,7 @@ func (ct *EVMChainType) ResolveKey(creSettings *settings.Settings, broadcast boo
 	if err != nil {
 		// If the user explicitly set a key that looks like a hex string but is
 		// malformed (wrong length, invalid chars), always error with guidance.
-		// Skip placeholder values like "your-eth-private-key" from the default .env template.
+		// Skip placeholder values like DefaultEthPrivateKeyEnvPlaceholder from the default .env template.
 		evmKey := creSettings.User.PrivateKey(settings.EVM)
 		if evmKey != "" && isHexString(evmKey) {
 			return nil, fmt.Errorf(
@@ -360,8 +365,17 @@ func (ct *EVMChainType) ResolveTriggerData(ctx context.Context, selector uint64,
 		return nil, fmt.Errorf("failed to decode EVM log trigger config: %w", err)
 	}
 	return WaitForEVMTriggerLog(ctx, client, WaitForLogConfig{
-		Selector:     selector,
-		Filter:       cfg,
-		WorkflowName: params.WorkflowName,
+		Selector:       selector,
+		Filter:         cfg,
+		WorkflowName:   params.WorkflowName,
+		EventRateLimit: eventRateLimitFromLimits(params.Limits),
 	})
+}
+
+func eventRateLimitFromLimits(limits *cresettings.Workflows) *config.Rate {
+	if limits == nil {
+		return nil
+	}
+	rate := limits.LogTrigger.EventRateLimit.DefaultValue
+	return &rate
 }

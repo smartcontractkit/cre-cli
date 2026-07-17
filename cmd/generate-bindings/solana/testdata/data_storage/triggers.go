@@ -5,7 +5,6 @@ package data_storage
 
 import (
 	"fmt"
-
 	solanago "github.com/gagliardetto/solana-go"
 	solana "github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/solana"
 	bindings "github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/solana/bindings"

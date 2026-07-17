@@ -29,14 +29,14 @@ func NewLimitedEVMChain(inner evmserver.ClientCapability, limits chain.Limits) *
 func (l *LimitedEVMChain) WriteReport(ctx context.Context, metadata commonCap.RequestMetadata, input *evmcappb.WriteReportRequest) (*commonCap.ResponseAndMetadata[*evmcappb.WriteReportReply], caperrors.Error) {
 	if l.limits.ReportSize > 0 && input.Report != nil && len(input.Report.RawReport) > l.limits.ReportSize {
 		return nil, caperrors.NewPublicUserError(
-			fmt.Errorf("simulation limit exceeded: chain write report size %d bytes exceeds limit of %d bytes", len(input.Report.RawReport), l.limits.ReportSize),
+			fmt.Errorf("EVM chain write report of %d bytes exceeds the simulation limit of %d bytes. This limit mirrors a production constraint.\nReduce the report size written to chain. Use 'cre workflow limits export' to customize limits, or --limits=none to disable", len(input.Report.RawReport), l.limits.ReportSize),
 			caperrors.ResourceExhausted,
 		)
 	}
 
 	if l.limits.GasLimit > 0 && input.GasConfig != nil && input.GasConfig.GasLimit > l.limits.GasLimit {
 		return nil, caperrors.NewPublicUserError(
-			fmt.Errorf("simulation limit exceeded: EVM gas limit %d exceeds maximum of %d", input.GasConfig.GasLimit, l.limits.GasLimit),
+			fmt.Errorf("EVM gas of %d gas units exceeds the simulation limit of %d gas units. This limit mirrors a production constraint.\nReduce gas_config.gas_limit in your chain write step. Use 'cre workflow limits export' to customize limits, or --limits=none to disable", input.GasConfig.GasLimit, l.limits.GasLimit),
 			caperrors.ResourceExhausted,
 		)
 	}
