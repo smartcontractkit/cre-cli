@@ -19,6 +19,7 @@ import (
 
 	workflow_registry_v2_wrapper "github.com/smartcontractkit/chainlink-evm/gethwrappers/workflow/generated/workflow_registry_wrapper_v2"
 
+	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/testutil/chainsim"
 	"github.com/smartcontractkit/cre-cli/internal/validation"
 )
@@ -862,6 +863,86 @@ func TestWarnExistingPausedWorkflowUpdate(t *testing.T) {
 		assert.Contains(t, out, "Your workflow is paused")
 		assert.Contains(t, out, "and has been updated")
 	})
+}
+
+func TestWarnIfProductionWorkflowWithoutMultisig(t *testing.T) {
+	// Do not use t.Parallel: stderr redirection uses package-global os.Stderr.
+
+	captureStderr := func(f func()) string {
+		t.Helper()
+		old := os.Stderr
+		r, w, err := os.Pipe()
+		require.NoError(t, err)
+		os.Stderr = w
+
+		f()
+
+		require.NoError(t, w.Close())
+		os.Stderr = old
+
+		var buf bytes.Buffer
+		_, copyErr := io.Copy(&buf, r)
+		require.NoError(t, copyErr)
+		require.NoError(t, r.Close())
+		return buf.String()
+	}
+
+	newWarningHandler := func(target, ownerType string) *handler {
+		s := createTestSettings(
+			chainsim.TestAddress,
+			ownerType,
+			"test_workflow",
+			"testdata/basic_workflow/main.go",
+			"",
+		)
+		s.User.TargetName = target
+		return &handler{settings: s}
+	}
+
+	t.Run("prints warning for production EOA deploy", func(t *testing.T) {
+		h := newWarningHandler("production-settings", constants.WorkflowOwnerTypeEOA)
+		out := captureStderr(h.warnIfProductionWorkflowWithoutMultisig)
+
+		assert.Contains(t, out, "Production workflow deploy is using private-key ownership")
+		assert.Contains(t, out, "--unsigned")
+	})
+
+	t.Run("does not warn for staging EOA deploy", func(t *testing.T) {
+		h := newWarningHandler("staging-settings", constants.WorkflowOwnerTypeEOA)
+		out := captureStderr(h.warnIfProductionWorkflowWithoutMultisig)
+
+		assert.Empty(t, strings.TrimSpace(out))
+	})
+
+	t.Run("does not warn for production MSIG deploy", func(t *testing.T) {
+		h := newWarningHandler("production-settings", constants.WorkflowOwnerTypeMSIG)
+		out := captureStderr(h.warnIfProductionWorkflowWithoutMultisig)
+
+		assert.Empty(t, strings.TrimSpace(out))
+	})
+}
+
+func TestIsProductionTarget(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		target string
+		want   bool
+	}{
+		{target: "production", want: true},
+		{target: "production-settings", want: true},
+		{target: "production-jovay", want: true},
+		{target: "jovay-production", want: true},
+		{target: "staging-settings", want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.target, func(t *testing.T) {
+			t.Parallel()
+
+			assert.Equal(t, tt.want, isProductionTarget(tt.target))
+		})
+	}
 }
 
 func TestCheckUserDonLimitBeforeDeploy(t *testing.T) {
