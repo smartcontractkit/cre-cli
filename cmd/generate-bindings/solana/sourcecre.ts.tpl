@@ -10,22 +10,47 @@ import {
 import { getAddressCodec, type Address } from '@solana/addresses'
 {{- end}}
 import {
+{{- if .Events}}
+  adaptTrigger,
+  anchorCPILogTriggerConfig,
+  bytesToBase64,
+{{- end}}
   bytesToHex,
   calculateAccountsHash,
   encodeBorshVecU32,
   encodeForwarderReport,
   prepareSolanaReportRequest,
+{{- if .UsesFloatSubkey}}
+  prepareSubkeyFloatValue,
+{{- end}}
+{{- if .UsesSubkeyValue}}
+  prepareSubkeyValue,
+{{- end}}
   type Runtime,
   type SolanaAccountMeta,
   SolanaClient,
   solanaAccountMetasToJson,
   solanaAddressToBytes,
   type SolanaComputeConfig,
+{{- if .Events}}
+  type SolanaDecodedLog,
+  type SolanaFilterLogTriggerRequestJson,
+  type SolanaLog,
+  type SolanaLogTriggerOptions,
+  type SolanaSubkeyConfigJson,
+  type SolanaValueComparatorJson,
+  type Trigger,
+{{- end}}
 } from '@chainlink/cre-sdk'
 
 export const {{.ProgramIDConst}} = '{{.ProgramID}}'
 
 export const {{.IdlConst}} = {{.IdlJSON}} as const
+{{- if .Events}}
+
+// Base64 of the compact IDL JSON, passed to log triggers as contractIdlJson.
+const {{.IdlB64Const}} = '{{.IdlB64}}'
+{{- end}}
 {{- if or .Accounts .Events}}
 
 const DISCRIMINATOR_SIZE = 8
@@ -110,6 +135,49 @@ export const parseAnyEvent = (data: Uint8Array): {{range $i, $e := .Events}}{{if
 {{- end}}
   throw new Error(`unknown event discriminator: [${Array.from(disc).join(', ')}]`)
 }
+{{- end}}
+{{- range .Triggers}}
+
+/**
+ * Optional filter values for {{.Name}} log triggers. Set a field to filter on
+ * that value (OR across filter rows). Leave unset for wildcard. Only top-level
+ * scalar fields with supported subkey encodings are auto-filterable — nested
+ * structs, vecs, arrays, bool, u128, and i128 need a manual SubkeyConfig.
+ */
+{{- if .FilterFields}}
+export type {{.Name}}Filters = {
+{{- range .FilterFields}}
+  {{.Name}}?: {{.TSType}} | null
+{{- end}}
+}
+
+export const encode{{.Name}}Subkeys = (filters: {{.Name}}Filters[]): SolanaSubkeyConfigJson[] => {
+{{- range .FilterFields}}
+  const {{.Name}}Comparers: SolanaValueComparatorJson[] = []
+{{- end}}
+  for (const f of filters) {
+{{- range .FilterFields}}
+    if (f.{{.Name}} != null) {
+      {{.Name}}Comparers.push({
+        operator: 'COMPARISON_OPERATOR_EQ',
+        value: bytesToBase64({{.EncodeExpr}}),
+      })
+    }
+{{- end}}
+  }
+  const subkeys: SolanaSubkeyConfigJson[] = []
+{{- range .FilterFields}}
+  if ({{.Name}}Comparers.length > 0) {
+    subkeys.push({ path: ['{{.PathName}}'], comparers: {{.Name}}Comparers })
+  }
+{{- end}}
+  return subkeys
+}
+{{- else}}
+export type {{.Name}}Filters = Record<string, never>
+
+export const encode{{.Name}}Subkeys = (_filters: {{.Name}}Filters[]): SolanaSubkeyConfigJson[] => []
+{{- end}}
 {{- end}}
 {{- if or .Accounts .Events}}
 {{end}}

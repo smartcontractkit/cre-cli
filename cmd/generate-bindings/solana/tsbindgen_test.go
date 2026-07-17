@@ -141,6 +141,111 @@ func TestGenerateBindingsTS_DispatchFunctions(t *testing.T) {
 	assert.Contains(t, source, "unknown event discriminator")
 }
 
+func TestGenerateBindingsTS_LogTriggers(t *testing.T) {
+	outDir := t.TempDir()
+	_, err := GenerateBindingsTS(
+		filepath.Join("testdata", "contracts", "idl", "data_storage.json"),
+		"data_storage",
+		outDir,
+	)
+	require.NoError(t, err)
+
+	content, err := os.ReadFile(filepath.Join(outDir, "DataStorage.ts"))
+	require.NoError(t, err)
+	source := string(content)
+
+	// Per-event filters type, subkey encoder, and typed trigger method.
+	assert.Contains(t, source, "export type AccessLoggedFilters = {")
+	assert.Contains(t, source, "caller?: Address | null")
+	assert.Contains(t, source, "export const encodeAccessLoggedSubkeys = (filters: AccessLoggedFilters[]): SolanaSubkeyConfigJson[] =>")
+	assert.Contains(t, source, "logTriggerAccessLoggedLog(")
+	assert.Contains(t, source, "): Trigger<SolanaLog, SolanaDecodedLog<AccessLogged>> {")
+	// Subkey paths use the Go bindings' PascalCase names.
+	assert.Contains(t, source, "subkeys.push({ path: ['Caller'], comparers: callerComparers })")
+	// Pubkey filter values are converted from base58 before encoding.
+	assert.Contains(t, source, "value: bytesToBase64(solanaAddressToBytes(f.caller))")
+	// The compact IDL is embedded once as base64 and sent as contractIdlJson.
+	assert.Contains(t, source, "const DATA_STORAGE_IDL_BASE64 = '")
+	assert.Contains(t, source, "contractIdlJson: DATA_STORAGE_IDL_BASE64,")
+	// CPI opt-in wires the anchor:event self-CPI filter.
+	assert.Contains(t, source, "config.cpiFilterConfig = anchorCPILogTriggerConfig(this.programId)")
+	// The decoded data rides along with the raw log.
+	assert.Contains(t, source, "data: decodeAccessLoggedEvent(log.data),")
+	// Non-filterable fields (vec, defined) are excluded from DynamicEvent filters.
+	assert.NotContains(t, source, "userData?:")
+	assert.NotContains(t, source, "metadataArray?:")
+	// An event with no filterable fields still gets a trigger with empty filters.
+	assert.Contains(t, source, "export type NoFieldsFilters = Record<string, never>")
+	assert.Contains(t, source, "export const encodeNoFieldsSubkeys = (_filters: NoFieldsFilters[]): SolanaSubkeyConfigJson[] => []")
+	assert.Contains(t, source, "logTriggerNoFieldsLog(")
+
+	// An IDL without events must not emit trigger code or its imports.
+	fmOut := t.TempDir()
+	_, err = GenerateBindingsTS(
+		filepath.Join("testdata", "contracts", "idl", "feature_matrix.json"),
+		"feature_matrix",
+		fmOut,
+	)
+	require.NoError(t, err)
+	fmContent, err := os.ReadFile(filepath.Join(fmOut, "FeatureMatrix.ts"))
+	require.NoError(t, err)
+	assert.NotContains(t, string(fmContent), "logTrigger")
+	assert.NotContains(t, string(fmContent), "anchorCPILogTriggerConfig")
+	assert.NotContains(t, string(fmContent), "prepareSubkeyValue")
+}
+
+func TestGenerateBindingsTS_TriggerFilterEncodings(t *testing.T) {
+	idl := `{
+  "address": "ECL8142j2YQAvs9R9geSsRnkVH2wLEi7soJCRyJ74cfL",
+  "metadata": {"name": "encodings", "version": "0.1.0", "spec": "0.1.0"},
+  "instructions": [
+    {"name": "on_report", "discriminator": [214,173,18,221,173,148,151,208], "accounts": [], "args": []}
+  ],
+  "accounts": [],
+  "events": [{"name": "Mixed", "discriminator": [1,2,3,4,5,6,7,8]}],
+  "errors": [],
+  "types": [{"name": "Mixed", "type": {"kind": "struct", "fields": [
+    {"name": "small", "type": "u8"},
+    {"name": "amount", "type": "u64"},
+    {"name": "ratio", "type": "f64"},
+    {"name": "maybe_tag", "type": {"option": "string"}},
+    {"name": "flag", "type": "bool"},
+    {"name": "huge", "type": "u128"},
+    {"name": "blob", "type": "bytes"},
+    {"name": "list", "type": {"vec": "u8"}},
+    {"name": "fixed", "type": {"array": ["u8", 32]}}
+  ]}}]
+}`
+	idlPath := filepath.Join(t.TempDir(), "encodings.json")
+	require.NoError(t, os.WriteFile(idlPath, []byte(idl), 0o600))
+
+	outDir := t.TempDir()
+	_, err := GenerateBindingsTS(idlPath, "encodings", outDir)
+	require.NoError(t, err)
+
+	content, err := os.ReadFile(filepath.Join(outDir, "Encodings.ts"))
+	require.NoError(t, err)
+	source := string(content)
+
+	// Scalar filter fields with their subkey encoders.
+	assert.Contains(t, source, "small?: number | null")
+	assert.Contains(t, source, "amount?: bigint | null")
+	assert.Contains(t, source, "ratio?: number | null")
+	assert.Contains(t, source, "blob?: Uint8Array | null")
+	// Option is unwrapped for the filter value type.
+	assert.Contains(t, source, "maybeTag?: string | null")
+	assert.Contains(t, source, "value: bytesToBase64(prepareSubkeyValue(f.amount))")
+	assert.Contains(t, source, "value: bytesToBase64(prepareSubkeyFloatValue(f.ratio))")
+	assert.Contains(t, source, "prepareSubkeyFloatValue,")
+	// Subkey paths use the Go bindings' PascalCase names.
+	assert.Contains(t, source, "path: ['MaybeTag']")
+	// bool, u128, vec, and fixed arrays are not auto-filterable.
+	assert.NotContains(t, source, "flag?:")
+	assert.NotContains(t, source, "huge?:")
+	assert.NotContains(t, source, "list?:")
+	assert.NotContains(t, source, "fixed?:")
+}
+
 func TestGenerateBindingsTS_FailLoud(t *testing.T) {
 	cases := []struct {
 		name      string
