@@ -865,7 +865,7 @@ func TestWarnExistingPausedWorkflowUpdate(t *testing.T) {
 	})
 }
 
-func TestWarnIfProductionWorkflowWithoutMultisig(t *testing.T) {
+func TestWarnIfDeployingWithPrivateKey(t *testing.T) {
 	// Do not use t.Parallel: stderr redirection uses package-global os.Stderr.
 
 	captureStderr := func(f func()) string {
@@ -887,7 +887,7 @@ func TestWarnIfProductionWorkflowWithoutMultisig(t *testing.T) {
 		return buf.String()
 	}
 
-	newWarningHandler := func(target, ownerType string) *handler {
+	newWarningHandler := func(ownerType string) *handler {
 		s := createTestSettings(
 			chainsim.TestAddress,
 			ownerType,
@@ -895,54 +895,30 @@ func TestWarnIfProductionWorkflowWithoutMultisig(t *testing.T) {
 			"testdata/basic_workflow/main.go",
 			"",
 		)
-		s.User.TargetName = target
 		return &handler{settings: s}
 	}
 
-	t.Run("prints warning for production EOA deploy", func(t *testing.T) {
-		h := newWarningHandler("production-settings", constants.WorkflowOwnerTypeEOA)
-		out := captureStderr(h.warnIfProductionWorkflowWithoutMultisig)
+	t.Run("prints warning for EOA deploy", func(t *testing.T) {
+		h := newWarningHandler(constants.WorkflowOwnerTypeEOA)
+		out := captureStderr(h.warnIfDeployingWithPrivateKey)
 
-		assert.Contains(t, out, "Production workflow deploy is using private-key ownership")
+		assert.Contains(t, out, "Workflow deploy is using private-key ownership")
 		assert.Contains(t, out, "--unsigned")
 	})
 
-	t.Run("does not warn for staging EOA deploy", func(t *testing.T) {
-		h := newWarningHandler("staging-settings", constants.WorkflowOwnerTypeEOA)
-		out := captureStderr(h.warnIfProductionWorkflowWithoutMultisig)
+	t.Run("does not warn for MSIG deploy", func(t *testing.T) {
+		h := newWarningHandler(constants.WorkflowOwnerTypeMSIG)
+		out := captureStderr(h.warnIfDeployingWithPrivateKey)
 
 		assert.Empty(t, strings.TrimSpace(out))
 	})
 
-	t.Run("does not warn for production MSIG deploy", func(t *testing.T) {
-		h := newWarningHandler("production-settings", constants.WorkflowOwnerTypeMSIG)
-		out := captureStderr(h.warnIfProductionWorkflowWithoutMultisig)
+	t.Run("does not warn for org-derived deploy", func(t *testing.T) {
+		h := newWarningHandler(constants.WorkflowOwnerTypeOrgDerived)
+		out := captureStderr(h.warnIfDeployingWithPrivateKey)
 
 		assert.Empty(t, strings.TrimSpace(out))
 	})
-}
-
-func TestIsProductionTarget(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		target string
-		want   bool
-	}{
-		{target: "production", want: true},
-		{target: "production-settings", want: true},
-		{target: "production-jovay", want: true},
-		{target: "jovay-production", want: true},
-		{target: "staging-settings", want: false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.target, func(t *testing.T) {
-			t.Parallel()
-
-			assert.Equal(t, tt.want, isProductionTarget(tt.target))
-		})
-	}
 }
 
 func TestCheckUserDonLimitBeforeDeploy(t *testing.T) {

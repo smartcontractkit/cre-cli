@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strings"
 
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
@@ -220,7 +219,7 @@ func (h *handler) Execute(ctx context.Context) error {
 		return h.accessRequester.PromptAndSubmitRequest(ctx)
 	}
 
-	h.warnIfProductionWorkflowWithoutMultisig()
+	h.warnIfDeployingWithPrivateKey()
 
 	adapter, err := newRegistryDeployStrategy(ctx, h.runtimeContext.ResolvedRegistry, h)
 	if err != nil {
@@ -378,17 +377,9 @@ func warnIfPausedWorkflowUpdate(status *uint8) {
 	}
 }
 
-func (h *handler) warnIfProductionWorkflowWithoutMultisig() {
-	if !isProductionTarget(h.settings.User.TargetName) {
-		return
-	}
+func (h *handler) warnIfDeployingWithPrivateKey() {
 	if h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerType != constants.WorkflowOwnerTypeEOA {
 		return
 	}
-	ui.Warning("Production workflow deploy is using private-key ownership. Use multi-sig ownership with --unsigned or --changeset for production deployments.")
-}
-
-func isProductionTarget(target string) bool {
-	normalized := strings.ToLower(strings.TrimSpace(target))
-	return strings.Contains(normalized, "production")
+	ui.Warning("Workflow deploy is using private-key ownership. Use multi-sig ownership with --unsigned or --changeset for more secure deployments.")
 }
