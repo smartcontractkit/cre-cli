@@ -12,6 +12,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -697,6 +698,9 @@ func run(
 	}
 	emptyHook := func(context.Context, simulator.RunnerConfig, *capabilities.Registry, []services.Service) {}
 
+	// Acknowledge confidential (TEE) execution once, the first time a TEE handler runs.
+	var teeAckOnce sync.Once
+
 	simulator.NewRunner(&simulator.RunnerHooks{
 		Initialize:  simulatorInitialize,
 		BeforeStart: triggerInfoAndBeforeStart.BeforeStart,
@@ -717,6 +721,20 @@ func run(
 				simLogger.Info("Simulator Initialized")
 				ui.Line()
 				close(initializedCh)
+			},
+			OnRequirementsSet: func(_ string, requirements *pb.Requirements) {
+				if requirements.GetTee() == nil {
+					return
+				}
+				teeAckOnce.Do(func() {
+					ui.Line()
+					ui.Bold("Confidential (TEE) execution")
+					ui.Dim("This workflow declares a TEE handler (HandlerInTee). In production it runs inside a " +
+						teeRequirementSummary(requirements.GetTee()) + " enclave, where secrets are decrypted and " +
+						"are not visible to node operators. The simulator runs the same workflow logic locally, " +
+						"without a real enclave or attestation.")
+					ui.Line()
+				})
 			},
 			OnExecutionError: func(msg string) {
 				errMsg := msg
@@ -801,6 +819,34 @@ func run(
 		return executionResultErr
 	}
 	return nil
+}
+
+// teeRequirementSummary renders a short human-readable description of a TEE
+// requirement (type and regions) for the confidential-execution acknowledgement.
+func teeRequirementSummary(tee *pb.Tee) string {
+	if tee == nil {
+		return "TEE"
+	}
+	if ttr := tee.GetTeeTypesAndRegions(); ttr != nil {
+		var parts []string
+		for _, tr := range ttr.GetTeeTypeAndRegions() {
+			name := strings.TrimPrefix(tr.GetType().String(), "TEE_TYPE_")
+			if regions := tr.GetRegions(); len(regions) > 0 {
+				parts = append(parts, fmt.Sprintf("%s (%s)", name, strings.Join(regions, ", ")))
+			} else {
+				parts = append(parts, name)
+			}
+		}
+		if len(parts) > 0 {
+			return strings.Join(parts, ", ")
+		}
+	}
+	if r := tee.GetAnyRegions(); r != nil {
+		if regions := r.GetRegions(); len(regions) > 0 {
+			return "TEE (" + strings.Join(regions, ", ") + ")"
+		}
+	}
+	return "TEE"
 }
 
 // runHTTPListen serves the HTTP trigger's --listen mode: it keeps a single HTTP
