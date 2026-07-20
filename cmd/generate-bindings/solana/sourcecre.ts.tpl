@@ -139,11 +139,10 @@ export class {{.ClassName}} {
    * into the report — this must match what the on-chain forwarder hashes, which
    * is [forwarderState, forwarderAuthority, ...receiverAccounts].
    *
-   * The forwarder does NOT strip indices 0/1; it re-derives forwarderState and
+   * The forwarder re-derives forwarderState and
    * forwarderAuthority from its own accounts and PREPENDS them to the accounts
    * it receives before CPI-ing into the receiver. So we send only indices 2+
-   * (the receiver-specific accounts) — sending 0/1 too would double them and
-   * break the account-hash check (InvalidAccountHash).
+   * (the receiver-specific accounts).
    */
   writeReport(
     runtime: Runtime<unknown>,

@@ -70,9 +70,11 @@ func creWriteReportFromStructs(exportedAccountName string, g *Generator) Code {
 	code.Comment("    [\"forwarder\", forwarderState, receiverProgram] under the forwarder program ID.")
 	code.Comment("  - Index 2+: receiver-specific accounts required by the target program.")
 	code.Comment("")
-	code.Comment("The full slice is hashed (via CalculateAccountsHash) into the report and forwarded")
-	code.Comment("as WriteCreReportRequest.RemainingAccounts. The on-chain forwarder strips indices 0 and 1")
-	code.Comment("before CPI-ing into the receiver, so they must be present and correctly ordered.")
+	code.Comment("The full slice (indices 0..n) is hashed via CalculateAccountsHash into the report — this")
+	code.Comment("must equal what the forwarder hashes: [forwarderState, forwarderAuthority, ...receiverAccounts].")
+	code.Comment("The forwarder re-derives forwarderState + forwarderAuthority from")
+	code.Comment("its own accounts and PREPENDS them before CPI. So only indices 2+ are sent as")
+	code.Comment("WriteCreReportRequest.RemainingAccounts; indices 0/1 must still be present here for the hash.")
 	code.Line()
 	code.Func().
 		Params(Id("c").Op("*").Id(tools.ToCamelUpper(g.options.Package))). // method receiver
@@ -129,6 +131,8 @@ func creWriteReportFromStructs(exportedAccountName string, g *Generator) Code {
 			// 		Report:      report,
 			// 	})
 			// })
+			block.Add(creForwardedRemainingAccounts())
+
 			block.Return(
 				Qual(PkgCRE, "ThenPromise").Call(
 					Id("promise"),
@@ -170,6 +174,23 @@ func creEncodeBorshVecU32() Code {
 	return st
 }
 
+// creForwardedRemainingAccounts emits the local `forwardedRemainingAccounts`, the
+// subset of remainingAccounts actually sent to the forwarder. The full list is
+// hashed into the report (CalculateAccountsHash), but the on-chain forwarder
+// re-derives and PREPENDS forwarderState + forwarderAuthority itself, so we must
+// send only the receiver-specific accounts (indices 2+); sending 0/1 too would
+// double them and fail the forwarder's account-hash check (InvalidAccountHash).
+func creForwardedRemainingAccounts() Code {
+	st := Empty()
+	st.Comment(`Send only the receiver-specific accounts (indices 2+): the forwarder re-derives`)
+	st.Comment(`and prepends forwarderState + forwarderAuthority. The full list is still hashed above.`)
+	st.Id("forwardedRemainingAccounts").Op(":=").Id("remainingAccounts").Index(Empty(), Lit(0)).Line()
+	st.If(Len(Id("remainingAccounts")).Op(">").Lit(2)).Block(
+		Id("forwardedRemainingAccounts").Op("=").Id("remainingAccounts").Index(Lit(2), Empty()),
+	).Line()
+	return st
+}
+
 // WriteReportFromBorshEncodedVec forwards a CRE report whose inner payload is EncodeBorshVecU32(elementPayloads).
 func creWriteReportFromBorshEncodedVec(g *Generator) Code {
 	pkg := tools.ToCamelUpper(g.options.Package)
@@ -206,6 +227,7 @@ func creWriteReportFromBorshEncodedVec(g *Generator) Code {
 					Id("HashingAlgo"):    Lit("keccak256"),
 				}),
 			).Line()
+			block.Add(creForwardedRemainingAccounts())
 			block.Return(Qual(PkgCRE, "ThenPromise").Call(Id("promise"), creWriteReportFromStructsLambda()))
 		})
 	return code
@@ -274,7 +296,7 @@ func creWriteReportFromStructsLambda() *Statement {
 					Op("&").Qual(PkgSolanaCre, "WriteCreReportRequest").Values(Dict{
 						Id("Receiver"):          Id("ProgramID").Dot("Bytes").Call(),
 						Id("Report"):            Id("report"),
-						Id("RemainingAccounts"): Id("remainingAccounts"),
+						Id("RemainingAccounts"): Id("forwardedRemainingAccounts"),
 						Id("ComputeConfig"):     Id("computeConfig"),
 					}),
 				),

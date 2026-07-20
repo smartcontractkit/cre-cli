@@ -67,11 +67,16 @@ func (c *DataStorage) WriteReportFromBorshEncodedVec(runtime cre.Runtime, elemen
 		SigningAlgo:    "ecdsa",
 	})
 
+	// Send only the receiver-specific accounts (indices 2+): the forwarder re-derives // and prepends forwarderState + forwarderAuthority. The full list is still hashed above. forwardedRemainingAccounts := remainingAccounts [:0]
+	if len(remainingAccounts) > 2 {
+		forwardedRemainingAccounts = remainingAccounts[2:]
+	}
+
 	return cre.ThenPromise(promise, func(report *cre.Report) cre.Promise[*solana.WriteReportReply] {
 		return c.client.WriteReport(runtime, &solana.WriteCreReportRequest{
 			ComputeConfig:     computeConfig,
 			Receiver:          ProgramID.Bytes(),
-			RemainingAccounts: remainingAccounts,
+			RemainingAccounts: forwardedRemainingAccounts,
 			Report:            report,
 		})
 	})

@@ -134,9 +134,14 @@ export class FeatureMatrix {
    *     ["forwarder", forwarderState, receiverProgram] under the forwarder program ID.
    *   - Index 2+: receiver-specific accounts required by the target program.
    *
-   * The full account list is hashed (via calculateAccountsHash) into the report.
-   * The on-chain forwarder strips indices 0 and 1 before CPI-ing into the
-   * receiver, so they must be present and correctly ordered.
+   * The full account list (indices 0..n) is hashed via calculateAccountsHash
+   * into the report — this must match what the on-chain forwarder hashes, which
+   * is [forwarderState, forwarderAuthority, ...receiverAccounts].
+   *
+   * The forwarder re-derives forwarderState and
+   * forwarderAuthority from its own accounts and PREPENDS them to the accounts
+   * it receives before CPI-ing into the receiver. So we send only indices 2+
+   * (the receiver-specific accounts).
    */
   writeReport(
     runtime: Runtime<unknown>,
@@ -157,7 +162,7 @@ export class FeatureMatrix {
 
     return this.client
       .writeReport(runtime, {
-        remainingAccounts: solanaAccountMetasToJson(remainingAccounts),
+        remainingAccounts: solanaAccountMetasToJson(remainingAccounts.slice(2)),
         receiver: bytesToHex(this.programId),
         computeConfig,
         report,

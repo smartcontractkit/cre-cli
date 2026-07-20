@@ -79,7 +79,7 @@ func (c *Codec) EncodeAccessLoggedStruct(in AccessLogged) ([]byte, error) {
 	return in.Marshal()
 }
 
-// WriteReportFromAccessLogged encodes the input struct, hashes the provided accounts, // generates a signed report, and submits it via WriteReport. //  // remainingAccounts must follow the keystone-forwarder account layout: //   - Index 0: forwarderState – the forwarder program's state account. //   - Index 1: forwarderAuthority – PDA derived from seeds //     ["forwarder", forwarderState, receiverProgram] under the forwarder program ID. //   - Index 2+: receiver-specific accounts required by the target program. //  // The full slice is hashed (via CalculateAccountsHash) into the report and forwarded // as WriteCreReportRequest.RemainingAccounts. The on-chain forwarder strips indices 0 and 1 // before CPI-ing into the receiver, so they must be present and correctly ordered.
+// WriteReportFromAccessLogged encodes the input struct, hashes the provided accounts, // generates a signed report, and submits it via WriteReport. //  // remainingAccounts must follow the keystone-forwarder account layout: //   - Index 0: forwarderState – the forwarder program's state account. //   - Index 1: forwarderAuthority – PDA derived from seeds //     ["forwarder", forwarderState, receiverProgram] under the forwarder program ID. //   - Index 2+: receiver-specific accounts required by the target program. //  // The full slice (indices 0..n) is hashed via CalculateAccountsHash into the report — this // must equal what the forwarder hashes: [forwarderState, forwarderAuthority, ...receiverAccounts]. // The forwarder re-derives forwarderState + forwarderAuthority from // its own accounts and PREPENDS them before CPI. So only indices 2+ are sent as // WriteCreReportRequest.RemainingAccounts; indices 0/1 must still be present here for the hash.
 func (c *DataStorage) WriteReportFromAccessLogged(
 	runtime cre.Runtime,
 	input AccessLogged,
@@ -109,11 +109,16 @@ func (c *DataStorage) WriteReportFromAccessLogged(
 		SigningAlgo:    "ecdsa",
 	})
 
+	// Send only the receiver-specific accounts (indices 2+): the forwarder re-derives // and prepends forwarderState + forwarderAuthority. The full list is still hashed above. forwardedRemainingAccounts := remainingAccounts [:0]
+	if len(remainingAccounts) > 2 {
+		forwardedRemainingAccounts = remainingAccounts[2:]
+	}
+
 	return cre.ThenPromise(promise, func(report *cre.Report) cre.Promise[*solana.WriteReportReply] {
 		return c.client.WriteReport(runtime, &solana.WriteCreReportRequest{
 			ComputeConfig:     computeConfig,
 			Receiver:          ProgramID.Bytes(),
-			RemainingAccounts: remainingAccounts,
+			RemainingAccounts: forwardedRemainingAccounts,
 			Report:            report,
 		})
 	})
@@ -211,7 +216,7 @@ func (c *Codec) EncodeDataAccountStruct(in DataAccount) ([]byte, error) {
 	return in.Marshal()
 }
 
-// WriteReportFromDataAccount encodes the input struct, hashes the provided accounts, // generates a signed report, and submits it via WriteReport. //  // remainingAccounts must follow the keystone-forwarder account layout: //   - Index 0: forwarderState – the forwarder program's state account. //   - Index 1: forwarderAuthority – PDA derived from seeds //     ["forwarder", forwarderState, receiverProgram] under the forwarder program ID. //   - Index 2+: receiver-specific accounts required by the target program. //  // The full slice is hashed (via CalculateAccountsHash) into the report and forwarded // as WriteCreReportRequest.RemainingAccounts. The on-chain forwarder strips indices 0 and 1 // before CPI-ing into the receiver, so they must be present and correctly ordered.
+// WriteReportFromDataAccount encodes the input struct, hashes the provided accounts, // generates a signed report, and submits it via WriteReport. //  // remainingAccounts must follow the keystone-forwarder account layout: //   - Index 0: forwarderState – the forwarder program's state account. //   - Index 1: forwarderAuthority – PDA derived from seeds //     ["forwarder", forwarderState, receiverProgram] under the forwarder program ID. //   - Index 2+: receiver-specific accounts required by the target program. //  // The full slice (indices 0..n) is hashed via CalculateAccountsHash into the report — this // must equal what the forwarder hashes: [forwarderState, forwarderAuthority, ...receiverAccounts]. // The forwarder re-derives forwarderState + forwarderAuthority from // its own accounts and PREPENDS them before CPI. So only indices 2+ are sent as // WriteCreReportRequest.RemainingAccounts; indices 0/1 must still be present here for the hash.
 func (c *DataStorage) WriteReportFromDataAccount(
 	runtime cre.Runtime,
 	input DataAccount,
@@ -241,11 +246,16 @@ func (c *DataStorage) WriteReportFromDataAccount(
 		SigningAlgo:    "ecdsa",
 	})
 
+	// Send only the receiver-specific accounts (indices 2+): the forwarder re-derives // and prepends forwarderState + forwarderAuthority. The full list is still hashed above. forwardedRemainingAccounts := remainingAccounts [:0]
+	if len(remainingAccounts) > 2 {
+		forwardedRemainingAccounts = remainingAccounts[2:]
+	}
+
 	return cre.ThenPromise(promise, func(report *cre.Report) cre.Promise[*solana.WriteReportReply] {
 		return c.client.WriteReport(runtime, &solana.WriteCreReportRequest{
 			ComputeConfig:     computeConfig,
 			Receiver:          ProgramID.Bytes(),
-			RemainingAccounts: remainingAccounts,
+			RemainingAccounts: forwardedRemainingAccounts,
 			Report:            report,
 		})
 	})
@@ -365,7 +375,7 @@ func (c *Codec) EncodeDynamicEventStruct(in DynamicEvent) ([]byte, error) {
 	return in.Marshal()
 }
 
-// WriteReportFromDynamicEvent encodes the input struct, hashes the provided accounts, // generates a signed report, and submits it via WriteReport. //  // remainingAccounts must follow the keystone-forwarder account layout: //   - Index 0: forwarderState – the forwarder program's state account. //   - Index 1: forwarderAuthority – PDA derived from seeds //     ["forwarder", forwarderState, receiverProgram] under the forwarder program ID. //   - Index 2+: receiver-specific accounts required by the target program. //  // The full slice is hashed (via CalculateAccountsHash) into the report and forwarded // as WriteCreReportRequest.RemainingAccounts. The on-chain forwarder strips indices 0 and 1 // before CPI-ing into the receiver, so they must be present and correctly ordered.
+// WriteReportFromDynamicEvent encodes the input struct, hashes the provided accounts, // generates a signed report, and submits it via WriteReport. //  // remainingAccounts must follow the keystone-forwarder account layout: //   - Index 0: forwarderState – the forwarder program's state account. //   - Index 1: forwarderAuthority – PDA derived from seeds //     ["forwarder", forwarderState, receiverProgram] under the forwarder program ID. //   - Index 2+: receiver-specific accounts required by the target program. //  // The full slice (indices 0..n) is hashed via CalculateAccountsHash into the report — this // must equal what the forwarder hashes: [forwarderState, forwarderAuthority, ...receiverAccounts]. // The forwarder re-derives forwarderState + forwarderAuthority from // its own accounts and PREPENDS them before CPI. So only indices 2+ are sent as // WriteCreReportRequest.RemainingAccounts; indices 0/1 must still be present here for the hash.
 func (c *DataStorage) WriteReportFromDynamicEvent(
 	runtime cre.Runtime,
 	input DynamicEvent,
@@ -395,11 +405,16 @@ func (c *DataStorage) WriteReportFromDynamicEvent(
 		SigningAlgo:    "ecdsa",
 	})
 
+	// Send only the receiver-specific accounts (indices 2+): the forwarder re-derives // and prepends forwarderState + forwarderAuthority. The full list is still hashed above. forwardedRemainingAccounts := remainingAccounts [:0]
+	if len(remainingAccounts) > 2 {
+		forwardedRemainingAccounts = remainingAccounts[2:]
+	}
+
 	return cre.ThenPromise(promise, func(report *cre.Report) cre.Promise[*solana.WriteReportReply] {
 		return c.client.WriteReport(runtime, &solana.WriteCreReportRequest{
 			ComputeConfig:     computeConfig,
 			Receiver:          ProgramID.Bytes(),
-			RemainingAccounts: remainingAccounts,
+			RemainingAccounts: forwardedRemainingAccounts,
 			Report:            report,
 		})
 	})
@@ -463,7 +478,7 @@ func (c *Codec) EncodeNoFieldsStruct(in NoFields) ([]byte, error) {
 	return in.Marshal()
 }
 
-// WriteReportFromNoFields encodes the input struct, hashes the provided accounts, // generates a signed report, and submits it via WriteReport. //  // remainingAccounts must follow the keystone-forwarder account layout: //   - Index 0: forwarderState – the forwarder program's state account. //   - Index 1: forwarderAuthority – PDA derived from seeds //     ["forwarder", forwarderState, receiverProgram] under the forwarder program ID. //   - Index 2+: receiver-specific accounts required by the target program. //  // The full slice is hashed (via CalculateAccountsHash) into the report and forwarded // as WriteCreReportRequest.RemainingAccounts. The on-chain forwarder strips indices 0 and 1 // before CPI-ing into the receiver, so they must be present and correctly ordered.
+// WriteReportFromNoFields encodes the input struct, hashes the provided accounts, // generates a signed report, and submits it via WriteReport. //  // remainingAccounts must follow the keystone-forwarder account layout: //   - Index 0: forwarderState – the forwarder program's state account. //   - Index 1: forwarderAuthority – PDA derived from seeds //     ["forwarder", forwarderState, receiverProgram] under the forwarder program ID. //   - Index 2+: receiver-specific accounts required by the target program. //  // The full slice (indices 0..n) is hashed via CalculateAccountsHash into the report — this // must equal what the forwarder hashes: [forwarderState, forwarderAuthority, ...receiverAccounts]. // The forwarder re-derives forwarderState + forwarderAuthority from // its own accounts and PREPENDS them before CPI. So only indices 2+ are sent as // WriteCreReportRequest.RemainingAccounts; indices 0/1 must still be present here for the hash.
 func (c *DataStorage) WriteReportFromNoFields(
 	runtime cre.Runtime,
 	input NoFields,
@@ -493,11 +508,16 @@ func (c *DataStorage) WriteReportFromNoFields(
 		SigningAlgo:    "ecdsa",
 	})
 
+	// Send only the receiver-specific accounts (indices 2+): the forwarder re-derives // and prepends forwarderState + forwarderAuthority. The full list is still hashed above. forwardedRemainingAccounts := remainingAccounts [:0]
+	if len(remainingAccounts) > 2 {
+		forwardedRemainingAccounts = remainingAccounts[2:]
+	}
+
 	return cre.ThenPromise(promise, func(report *cre.Report) cre.Promise[*solana.WriteReportReply] {
 		return c.client.WriteReport(runtime, &solana.WriteCreReportRequest{
 			ComputeConfig:     computeConfig,
 			Receiver:          ProgramID.Bytes(),
-			RemainingAccounts: remainingAccounts,
+			RemainingAccounts: forwardedRemainingAccounts,
 			Report:            report,
 		})
 	})
@@ -584,7 +604,7 @@ func (c *Codec) EncodeUpdateReservesStruct(in UpdateReserves) ([]byte, error) {
 	return in.Marshal()
 }
 
-// WriteReportFromUpdateReserves encodes the input struct, hashes the provided accounts, // generates a signed report, and submits it via WriteReport. //  // remainingAccounts must follow the keystone-forwarder account layout: //   - Index 0: forwarderState – the forwarder program's state account. //   - Index 1: forwarderAuthority – PDA derived from seeds //     ["forwarder", forwarderState, receiverProgram] under the forwarder program ID. //   - Index 2+: receiver-specific accounts required by the target program. //  // The full slice is hashed (via CalculateAccountsHash) into the report and forwarded // as WriteCreReportRequest.RemainingAccounts. The on-chain forwarder strips indices 0 and 1 // before CPI-ing into the receiver, so they must be present and correctly ordered.
+// WriteReportFromUpdateReserves encodes the input struct, hashes the provided accounts, // generates a signed report, and submits it via WriteReport. //  // remainingAccounts must follow the keystone-forwarder account layout: //   - Index 0: forwarderState – the forwarder program's state account. //   - Index 1: forwarderAuthority – PDA derived from seeds //     ["forwarder", forwarderState, receiverProgram] under the forwarder program ID. //   - Index 2+: receiver-specific accounts required by the target program. //  // The full slice (indices 0..n) is hashed via CalculateAccountsHash into the report — this // must equal what the forwarder hashes: [forwarderState, forwarderAuthority, ...receiverAccounts]. // The forwarder re-derives forwarderState + forwarderAuthority from // its own accounts and PREPENDS them before CPI. So only indices 2+ are sent as // WriteCreReportRequest.RemainingAccounts; indices 0/1 must still be present here for the hash.
 func (c *DataStorage) WriteReportFromUpdateReserves(
 	runtime cre.Runtime,
 	input UpdateReserves,
@@ -614,11 +634,16 @@ func (c *DataStorage) WriteReportFromUpdateReserves(
 		SigningAlgo:    "ecdsa",
 	})
 
+	// Send only the receiver-specific accounts (indices 2+): the forwarder re-derives // and prepends forwarderState + forwarderAuthority. The full list is still hashed above. forwardedRemainingAccounts := remainingAccounts [:0]
+	if len(remainingAccounts) > 2 {
+		forwardedRemainingAccounts = remainingAccounts[2:]
+	}
+
 	return cre.ThenPromise(promise, func(report *cre.Report) cre.Promise[*solana.WriteReportReply] {
 		return c.client.WriteReport(runtime, &solana.WriteCreReportRequest{
 			ComputeConfig:     computeConfig,
 			Receiver:          ProgramID.Bytes(),
-			RemainingAccounts: remainingAccounts,
+			RemainingAccounts: forwardedRemainingAccounts,
 			Report:            report,
 		})
 	})
@@ -705,7 +730,7 @@ func (c *Codec) EncodeUserDataStruct(in UserData) ([]byte, error) {
 	return in.Marshal()
 }
 
-// WriteReportFromUserData encodes the input struct, hashes the provided accounts, // generates a signed report, and submits it via WriteReport. //  // remainingAccounts must follow the keystone-forwarder account layout: //   - Index 0: forwarderState – the forwarder program's state account. //   - Index 1: forwarderAuthority – PDA derived from seeds //     ["forwarder", forwarderState, receiverProgram] under the forwarder program ID. //   - Index 2+: receiver-specific accounts required by the target program. //  // The full slice is hashed (via CalculateAccountsHash) into the report and forwarded // as WriteCreReportRequest.RemainingAccounts. The on-chain forwarder strips indices 0 and 1 // before CPI-ing into the receiver, so they must be present and correctly ordered.
+// WriteReportFromUserData encodes the input struct, hashes the provided accounts, // generates a signed report, and submits it via WriteReport. //  // remainingAccounts must follow the keystone-forwarder account layout: //   - Index 0: forwarderState – the forwarder program's state account. //   - Index 1: forwarderAuthority – PDA derived from seeds //     ["forwarder", forwarderState, receiverProgram] under the forwarder program ID. //   - Index 2+: receiver-specific accounts required by the target program. //  // The full slice (indices 0..n) is hashed via CalculateAccountsHash into the report — this // must equal what the forwarder hashes: [forwarderState, forwarderAuthority, ...receiverAccounts]. // The forwarder re-derives forwarderState + forwarderAuthority from // its own accounts and PREPENDS them before CPI. So only indices 2+ are sent as // WriteCreReportRequest.RemainingAccounts; indices 0/1 must still be present here for the hash.
 func (c *DataStorage) WriteReportFromUserData(
 	runtime cre.Runtime,
 	input UserData,
@@ -735,11 +760,16 @@ func (c *DataStorage) WriteReportFromUserData(
 		SigningAlgo:    "ecdsa",
 	})
 
+	// Send only the receiver-specific accounts (indices 2+): the forwarder re-derives // and prepends forwarderState + forwarderAuthority. The full list is still hashed above. forwardedRemainingAccounts := remainingAccounts [:0]
+	if len(remainingAccounts) > 2 {
+		forwardedRemainingAccounts = remainingAccounts[2:]
+	}
+
 	return cre.ThenPromise(promise, func(report *cre.Report) cre.Promise[*solana.WriteReportReply] {
 		return c.client.WriteReport(runtime, &solana.WriteCreReportRequest{
 			ComputeConfig:     computeConfig,
 			Receiver:          ProgramID.Bytes(),
-			RemainingAccounts: remainingAccounts,
+			RemainingAccounts: forwardedRemainingAccounts,
 			Report:            report,
 		})
 	})
