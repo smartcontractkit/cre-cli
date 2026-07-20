@@ -63,7 +63,7 @@ it automatically — no login needed.`,
 				return fmt.Errorf("login is not supported in non-interactive mode, use CRE_API_KEY instead")
 			}
 			h := newHandler(runtimeCtx)
-			return h.execute()
+			return h.execute(cmd.Context())
 		},
 	}
 
@@ -72,9 +72,9 @@ it automatically — no login needed.`,
 
 // Run executes the login flow directly without going through Cobra.
 // This is useful for prompting login from other commands when auth is required.
-func Run(runtimeCtx *runtime.Context) error {
+func Run(ctx context.Context, runtimeCtx *runtime.Context) error {
 	h := newHandler(runtimeCtx)
-	return h.execute()
+	return h.execute(ctx)
 }
 
 type handler struct {
@@ -96,7 +96,7 @@ func newHandler(ctx *runtime.Context) *handler {
 	}
 }
 
-func (h *handler) execute() error {
+func (h *handler) execute(ctx context.Context) error {
 	// Welcome message (no spinner yet)
 	ui.Title("CRE Login")
 	ui.Line()
@@ -111,7 +111,7 @@ func (h *handler) execute() error {
 
 	// Use spinner for the token exchange
 	h.spinner.Start("Exchanging authorization code...")
-	tokenSet, err := oauth.ExchangeAuthorizationCode(context.Background(), nil, h.environmentSet, code, h.lastPKCEVerifier, "", "")
+	tokenSet, err := oauth.ExchangeAuthorizationCode(ctx, nil, h.environmentSet, code, h.lastPKCEVerifier, "", "")
 	if err != nil {
 		h.spinner.StopAll()
 		h.log.Error().Err(err).Msg("code exchange failed")
@@ -126,8 +126,9 @@ func (h *handler) execute() error {
 	}
 
 	h.spinner.Update("Fetching user context...")
-	if err := h.fetchTenantConfig(tokenSet); err != nil {
-		h.log.Debug().Err(err).Msgf("failed to fetch user context — %s not written", tenantctx.ContextFile)
+	if err := h.fetchTenantConfig(ctx, tokenSet); err != nil {
+		h.spinner.StopAll()
+		return fmt.Errorf("failed to fetch user context: %w", err)
 	}
 
 	// Stop spinner before final output
@@ -295,7 +296,7 @@ func (h *handler) buildAuthURL(codeChallenge, state string) string {
 	return h.environmentSet.AuthBase + constants.AuthAuthorizePath + "?" + params.Encode()
 }
 
-func (h *handler) fetchTenantConfig(tokenSet *credentials.CreLoginTokenSet) error {
+func (h *handler) fetchTenantConfig(ctx context.Context, tokenSet *credentials.CreLoginTokenSet) error {
 	creds := &credentials.Credentials{
 		Tokens:   tokenSet,
 		AuthType: credentials.AuthTypeBearer,
@@ -307,5 +308,5 @@ func (h *handler) fetchTenantConfig(tokenSet *credentials.CreLoginTokenSet) erro
 		envName = environments.DefaultEnv
 	}
 
-	return tenantctx.FetchAndWriteContext(context.Background(), gqlClient, envName, h.log)
+	return tenantctx.FetchAndWriteContext(ctx, gqlClient, envName, h.log)
 }

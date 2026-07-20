@@ -18,6 +18,7 @@ import (
 )
 
 const CreTargetEnvVar = "CRE_TARGET"
+const CreAllowInsecureRPCEnvVar = "CRE_ALLOW_INSECURE_RPC"
 
 // ChainType describes a chain family and the per-family settings the CLI
 // loads from the environment. Add a family by appending to AllChainTypes.
@@ -35,14 +36,20 @@ var (
 		Name:          string(corekeys.Aptos),
 		PrivateKeyEnv: "CRE_APTOS_PRIVATE_KEY",
 	}
+	Solana = ChainType{
+		Name:          string(corekeys.Solana),
+		PrivateKeyEnv: "CRE_SOLANA_PRIVATE_KEY",
+	}
 
-	AllChainTypes = []ChainType{EVM, Aptos}
+	AllChainTypes = []ChainType{EVM, Aptos, Solana}
 )
 
-// Backwards-compat aliases; prefer EVM.PrivateKeyEnv / Aptos.PrivateKeyEnv.
+// Backwards-compat aliases; prefer EVM.PrivateKeyEnv / Aptos.PrivateKeyEnv /
+// Solana.PrivateKeyEnv.
 var (
-	EthPrivateKeyEnvVar   = EVM.PrivateKeyEnv
-	AptosPrivateKeyEnvVar = Aptos.PrivateKeyEnv
+	EthPrivateKeyEnvVar    = EVM.PrivateKeyEnv
+	AptosPrivateKeyEnvVar  = Aptos.PrivateKeyEnv
+	SolanaPrivateKeyEnvVar = Solana.PrivateKeyEnv
 )
 
 // State tracked by LoadEnv / LoadPublicEnv so downstream code (e.g. build
@@ -139,8 +146,8 @@ func New(logger *zerolog.Logger, v *viper.Viper, cmd *cobra.Command, registryCha
 
 	return &Settings{
 		User: UserSettings{
-			TargetName:  target,
 			PrivateKeys: privateKeys,
+			TargetName:  target,
 		},
 		Workflow:        workflowSettings,
 		StorageSettings: storageSettings,
@@ -181,7 +188,7 @@ func loadEnvFile(logger *zerolog.Logger, envPath string) (string, map[string]str
 		}
 		err = os.Setenv(k, v)
 		if err != nil {
-			logger.Error().Str("key", k).Str("value", v).Err(err).Msg(
+			logger.Error().Str("key", k).Err(err).Msg(
 				"Failed to set environment variable; CLI tool will read and verify individual environment variables (they MUST be exported). " +
 					"If the file is present, please check that it follows the correct format: https://dotenvx.com/docs/env-file")
 		}
@@ -214,11 +221,12 @@ func LoadEnv(logger *zerolog.Logger, v *viper.Viper, envPath string) {
 	loadedEnvFilePath = ""
 	loadedEnvVars = nil
 	loadedEnvFilePath, loadedEnvVars = loadEnvFile(logger, envPath)
-	extras := []string{CreTargetEnvVar}
+	extras := []string{CreTargetEnvVar, CreAllowInsecureRPCEnvVar}
 	for _, f := range AllChainTypes {
 		extras = append(extras, f.PrivateKeyEnv)
 	}
 	bindAllVars(v, loadedEnvVars, extras...)
+	_ = v.BindEnv(Flags.AllowInsecureRPC.Name, CreAllowInsecureRPCEnvVar)
 }
 
 // LoadPublicEnv loads variables from envPath into the process environment

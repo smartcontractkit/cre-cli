@@ -243,6 +243,9 @@ func TestExecute_WithMock_PrintsWorkflowBlocks(t *testing.T) {
 		"4040404040404040404040404040404040404040",
 		"PAUSED",
 		"contract:999888777666555444333:0xabababababababababababababababababababab",
+		"Inspect executions:",
+		"cre execution list <workflow-id-or-name>",
+		"cre execution status <execution-id>",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output missing %q:\n%s", want, out)
@@ -678,6 +681,9 @@ func TestExecute_JSONOutput_PrintsToStdout(t *testing.T) {
 	}
 	if result[0]["status"] != "ACTIVE" {
 		t.Errorf("expected status=ACTIVE for alpha, got %v", result[0]["status"])
+	}
+	if strings.Contains(out, "Inspect executions:") || strings.Contains(out, "cre execution") {
+		t.Errorf("JSON output must not contain discovery hints:\n%s", out)
 	}
 }
 

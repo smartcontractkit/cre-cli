@@ -1,6 +1,7 @@
 package chainsim
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -36,11 +37,11 @@ func DeployWorkflowRegistry(t *testing.T, ethClient *seth.Client, chain *Simulat
 	}
 	workflowRegistryClient := client.NewWorkflowRegistryV2Client(logger, ethClient, deployedContract.Address.Hex(), txcConfig)
 
-	err = workflowRegistryClient.UpdateAllowedSigners([]common.Address{common.HexToAddress(TestAddress)}, true)
+	err = workflowRegistryClient.UpdateAllowedSigners(context.Background(), []common.Address{common.HexToAddress(TestAddress)}, true)
 	chain.Backend.Commit()
 	require.NoError(t, err, "Failed to update authorized addresses")
 
-	err = workflowRegistryClient.SetDonLimit("zone-a", 1000, 100)
+	err = workflowRegistryClient.SetDonLimit(context.Background(), "zone-a", 1000, 100)
 	chain.Backend.Commit()
 	require.NoError(t, err, "Failed to update allowed DONs")
 
@@ -63,7 +64,7 @@ func linkOwner(wrc *client.WorkflowRegistryV2Client) error {
 
 	const LinkRequestType uint8 = 0
 
-	version, err := wrc.TypeAndVersion()
+	version, err := wrc.TypeAndVersion(context.Background())
 	if err != nil {
 		return err
 	}
@@ -113,7 +114,7 @@ func linkOwner(wrc *client.WorkflowRegistryV2Client) error {
 
 	//t.Logf("v: %d, r: %s, s: %s", v, r.Text(16), s.Text(16))
 
-	_, err = wrc.LinkOwner(validityTimestamp, common.HexToHash(ownershipProof), signature)
+	_, err = wrc.LinkOwner(context.Background(), validityTimestamp, common.HexToHash(ownershipProof), signature)
 	if err != nil {
 		return err
 	}

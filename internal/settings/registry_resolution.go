@@ -5,15 +5,17 @@ import (
 	"strings"
 
 	"github.com/smartcontractkit/cre-cli/internal/environments"
+	"github.com/smartcontractkit/cre-cli/internal/registrytype"
 	"github.com/smartcontractkit/cre-cli/internal/tenantctx"
 )
 
 // RegistryType distinguishes between on-chain and off-chain workflow registries.
-type RegistryType string
+type RegistryType = registrytype.Type
 
 const (
-	RegistryTypeOnChain  RegistryType = "on-chain"
-	RegistryTypeOffChain RegistryType = "off-chain"
+	RegistryTypeOnChain  = registrytype.OnChain
+	RegistryTypeOffChain = registrytype.OffChain
+	RegistryTypeUnknown  = registrytype.Unknown
 )
 
 // ResolvedRegistry is the interface implemented by both OnChainRegistry and
@@ -68,6 +70,19 @@ func (r *OffChainRegistry) ID() string         { return r.id }
 func (r *OffChainRegistry) Type() RegistryType { return RegistryTypeOffChain }
 func (r *OffChainRegistry) DonFamily() string  { return r.donFamily }
 
+// EffectiveDonFamily prefers envSet.DonFamily (CRE_CLI_DON_FAMILY at load); otherwise tenantCtx.DefaultDonFamily.
+func EffectiveDonFamily(envSet *environments.EnvironmentSet, tenantCtx *tenantctx.EnvironmentContext) string {
+	if envSet != nil {
+		if v := strings.TrimSpace(envSet.DonFamily); v != "" {
+			return v
+		}
+	}
+	if tenantCtx != nil {
+		return strings.TrimSpace(tenantCtx.DefaultDonFamily)
+	}
+	return ""
+}
+
 // ResolveRegistry maps an optional deployment-registry value to a concrete
 // ResolvedRegistry. When deploymentRegistry is empty the static EnvironmentSet
 // values are used (backwards-compatible default). When set, it is looked up in
@@ -78,7 +93,7 @@ func ResolveRegistry(
 	envSet *environments.EnvironmentSet,
 ) (ResolvedRegistry, error) {
 	if deploymentRegistry == "" {
-		return defaultFromEnvironmentSet(envSet), nil
+		return defaultFromEnvironmentSet(envSet, tenantCtx), nil
 	}
 
 	if tenantCtx == nil {
@@ -91,46 +106,55 @@ func ResolveRegistry(
 			deploymentRegistry, availableIDs(tenantCtx.Registries))
 	}
 
-	if ParseRegistryType(reg.Type) == RegistryTypeOffChain {
-		return NewOffChainRegistry(reg.ID, tenantCtx.DefaultDonFamily), nil
-	}
-
-	if reg.Address == nil || *reg.Address == "" {
-		return nil, fmt.Errorf("on-chain registry %q has no address in user context", reg.ID)
-	}
-
-	if reg.ChainSelector == nil {
-		return nil, fmt.Errorf("on-chain registry %q has no chain_selector in user context", reg.ID)
-	}
-	chainName, err := ChainNameFromSelectorString(*reg.ChainSelector)
+	regType, err := ParseRegistryType(reg.Type)
 	if err != nil {
 		return nil, fmt.Errorf("registry %q: %w", reg.ID, err)
 	}
 
-	return NewOnChainRegistry(
-		reg.ID,
-		*reg.Address,
-		chainName,
-		tenantCtx.DefaultDonFamily,
-		envSet.WorkflowRegistryChainExplorerURL,
-	), nil
-}
+	switch regType {
+	case RegistryTypeOffChain:
+		return NewOffChainRegistry(reg.ID, EffectiveDonFamily(envSet, tenantCtx)), nil
+	case RegistryTypeOnChain:
+		if reg.Address == nil || *reg.Address == "" {
+			return nil, fmt.Errorf("on-chain registry %q has no address in user context", reg.ID)
+		}
 
-// ParseRegistryType converts a raw type string from user context to a
-// RegistryType. Unknown values default to on-chain.
-func ParseRegistryType(raw string) RegistryType {
-	if strings.EqualFold(raw, string(RegistryTypeOffChain)) || strings.EqualFold(raw, "off_chain") {
-		return RegistryTypeOffChain
+		if reg.ChainSelector == nil {
+			return nil, fmt.Errorf("on-chain registry %q has no chain_selector in user context", reg.ID)
+		}
+		chainName, err := ChainNameFromSelectorString(*reg.ChainSelector)
+		if err != nil {
+			return nil, fmt.Errorf("registry %q: %w", reg.ID, err)
+		}
+
+		return NewOnChainRegistry(
+			reg.ID,
+			*reg.Address,
+			chainName,
+			EffectiveDonFamily(envSet, tenantCtx),
+			envSet.WorkflowRegistryChainExplorerURL,
+		), nil
+	case RegistryTypeUnknown:
+		return nil, fmt.Errorf(
+			"registry %q is not supported by this CLI version (unrecognised type from server); run `cre login` after upgrading or choose a different deployment-registry",
+			reg.ID,
+		)
+	default:
+		return nil, fmt.Errorf("registry %q: %w", reg.ID, fmt.Errorf("unrecognised registry type %q", regType))
 	}
-	return RegistryTypeOnChain
 }
 
-func defaultFromEnvironmentSet(envSet *environments.EnvironmentSet) *OnChainRegistry {
+// ParseRegistryType converts a raw type string from user context to a RegistryType.
+func ParseRegistryType(raw string) (RegistryType, error) {
+	return registrytype.Parse(raw)
+}
+
+func defaultFromEnvironmentSet(envSet *environments.EnvironmentSet, tenantCtx *tenantctx.EnvironmentContext) *OnChainRegistry {
 	return NewOnChainRegistry(
 		fmt.Sprintf("onchain:%s", envSet.WorkflowRegistryChainName),
 		envSet.WorkflowRegistryAddress,
 		envSet.WorkflowRegistryChainName,
-		envSet.DonFamily,
+		EffectiveDonFamily(envSet, tenantCtx),
 		envSet.WorkflowRegistryChainExplorerURL,
 	)
 }
@@ -147,6 +171,10 @@ func findRegistry(registries []*tenantctx.Registry, id string) *tenantctx.Regist
 func availableIDs(registries []*tenantctx.Registry) string {
 	ids := make([]string, 0, len(registries))
 	for _, r := range registries {
+		regType, err := ParseRegistryType(r.Type)
+		if err != nil || regType == RegistryTypeUnknown {
+			continue
+		}
 		ids = append(ids, r.ID)
 	}
 	return strings.Join(ids, ", ")

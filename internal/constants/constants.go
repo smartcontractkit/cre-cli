@@ -58,10 +58,11 @@ const (
 	WorkflowLanguageWasm       = "wasm"
 
 	// SDK dependency versions (used by generate-bindings and go module init)
-	SdkVersion              = "v1.7.0"
-	EVMCapabilitiesVersion  = "v1.0.0-beta.9"
-	HTTPCapabilitiesVersion = "v1.3.0"
-	CronCapabilitiesVersion = "v1.3.0"
+	SdkVersion                = "v1.15.0"
+	EVMCapabilitiesVersion    = "v1.0.0-beta.15"
+	HTTPCapabilitiesVersion   = "v1.3.0"
+	CronCapabilitiesVersion   = "v1.3.0"
+	SolanaCapabilitiesVersion = "v0.1.0-beta.1"
 
 	TestAddress      = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
 	TestAddress2     = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"

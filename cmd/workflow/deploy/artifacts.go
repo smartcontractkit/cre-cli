@@ -1,6 +1,7 @@
 package deploy
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/smartcontractkit/cre-cli/internal/client/graphqlclient"
@@ -8,7 +9,11 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
-func (h *handler) uploadArtifacts() error {
+func (h *handler) uploadArtifacts(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	if h.workflowArtifact == nil {
 		return fmt.Errorf("workflowArtifact is nil")
 	}
@@ -46,7 +51,7 @@ func (h *handler) uploadArtifacts() error {
 	if !binaryFromURL {
 		ui.Success(fmt.Sprintf("Loaded binary from: %s", h.inputs.OutputPath))
 		binaryResp, err := storageClient.UploadArtifactWithRetriesAndGetURL(
-			workflowID, storageclient.ArtifactTypeBinary, binaryData, "application/octet-stream")
+			ctx, workflowID, storageclient.ArtifactTypeBinary, binaryData, "application/octet-stream")
 		if err != nil {
 			return fmt.Errorf("uploading binary artifact: %w", err)
 		}
@@ -59,7 +64,7 @@ func (h *handler) uploadArtifacts() error {
 		ui.Success(fmt.Sprintf("Loaded config from: %s", h.inputs.ConfigPath))
 		var err error
 		configURL, err = storageClient.UploadArtifactWithRetriesAndGetURL(
-			workflowID, storageclient.ArtifactTypeConfig, configData, "text/plain")
+			ctx, workflowID, storageclient.ArtifactTypeConfig, configData, "text/plain")
 		if err != nil {
 			return fmt.Errorf("uploading config artifact: %w", err)
 		}

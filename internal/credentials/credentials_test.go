@@ -1,11 +1,15 @@
 package credentials
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/rs/zerolog"
+
+	"github.com/smartcontractkit/cre-cli/internal/creconfig"
 	"github.com/smartcontractkit/cre-cli/internal/testutil"
 	"github.com/smartcontractkit/cre-cli/internal/testutil/testjwt"
 )
@@ -42,8 +46,8 @@ func TestNew_WithConfigFile(t *testing.T) {
 	tDir := t.TempDir()
 	t.Setenv("HOME", tDir)
 
-	dir := filepath.Join(tDir, ConfigDir)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	dir, err := creconfig.EnsureDir()
+	if err != nil {
 		t.Fatalf("failed to create config dir: %v", err)
 	}
 	file := filepath.Join(dir, ConfigFile)
@@ -409,5 +413,62 @@ func TestCheckIsUngatedOrganization_InvalidJWTFormat(t *testing.T) {
 				t.Error("expected error for invalid JWT format, got nil")
 			}
 		})
+	}
+}
+
+func TestSecureRemove(t *testing.T) {
+	t.Run("missing file is no-op", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "missing.yaml")
+		if err := SecureRemove(path); err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+	})
+
+	t.Run("overwrites with zeroes before delete", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), ConfigFile)
+		secret := []byte("AccessToken: super-secret-token\n")
+		if err := os.WriteFile(path, secret, 0o600); err != nil {
+			t.Fatalf("write file: %v", err)
+		}
+
+		if err := SecureRemove(path); err != nil {
+			t.Fatalf("SecureRemove: %v", err)
+		}
+
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatal("expected file to be removed")
+		}
+	})
+}
+
+func TestDecodeJWTClaims_SafeDebugLogging(t *testing.T) {
+	var buf bytes.Buffer
+	logger := zerolog.New(&buf).Level(zerolog.DebugLevel)
+	token := createTestJWT(map[string]interface{}{
+		"sub":                              "user123",
+		"org_id":                           "org456",
+		"https://api.cre.chain.link/email": "test@example.com",
+		"https://api.cre.chain.link/organization_status": "FULL_ACCESS",
+	})
+
+	creds := &Credentials{
+		AuthType: AuthTypeBearer,
+		Tokens:   &CreLoginTokenSet{AccessToken: token},
+		log:      &logger,
+	}
+
+	if _, err := creds.decodeJWTClaims(); err != nil {
+		t.Fatalf("decodeJWTClaims: %v", err)
+	}
+
+	logOutput := buf.String()
+	if strings.Contains(logOutput, "test@example.com") {
+		t.Fatalf("debug log leaked email claim: %s", logOutput)
+	}
+	if !strings.Contains(logOutput, "org456") {
+		t.Fatalf("expected safe org_id in debug log, got: %s", logOutput)
+	}
+	if strings.Contains(logOutput, token) {
+		t.Fatalf("debug log leaked raw JWT token: %s", logOutput)
 	}
 }

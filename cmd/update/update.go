@@ -57,7 +57,7 @@ func getLatestTag() (string, error) {
 	return info.TagName, nil
 }
 
-func getAssetName() (asset string, platform string, err error) {
+func getAssetName() (asset string, platform string, archName string, linuxSuffix string, err error) {
 	osName := osruntime.GOOS
 	arch := osruntime.GOARCH
 	var ext string
@@ -68,13 +68,13 @@ func getAssetName() (asset string, platform string, err error) {
 	case "linux":
 		platform = "linux"
 		ext = ".tar.gz"
+		linuxSuffix = linuxAssetSuffix()
 	case "windows":
 		platform = "windows"
 		ext = ".zip"
 	default:
-		return "", "", fmt.Errorf("unsupported OS: %s", osName)
+		return "", "", "", "", fmt.Errorf("unsupported OS: %s", osName)
 	}
-	var archName string
 	switch arch {
 	case "amd64", "x86_64":
 		archName = "amd64"
@@ -85,10 +85,10 @@ func getAssetName() (asset string, platform string, err error) {
 			archName = "arm64"
 		}
 	default:
-		return "", "", fmt.Errorf("unsupported architecture: %s", arch)
+		return "", "", "", "", fmt.Errorf("unsupported architecture: %s", arch)
 	}
-	asset = fmt.Sprintf("%s_%s_%s%s", cliName, platform, archName, ext)
-	return asset, platform, nil
+	asset = fmt.Sprintf("%s_%s_%s%s%s", cliName, platform, archName, linuxSuffix, ext)
+	return asset, platform, archName, linuxSuffix, nil
 }
 
 func downloadFile(url, dest, message string) error {
@@ -336,7 +336,7 @@ func Run(currentVersion string) error {
 	}
 
 	// If we're here, an update is needed.
-	asset, _, err := getAssetName()
+	asset, platform, archName, linuxSuffix, err := getAssetName()
 	if err != nil {
 		spinner.Stop()
 		return fmt.Errorf("error determining asset name: %w", err)
@@ -368,6 +368,24 @@ func Run(currentVersion string) error {
 		return fmt.Errorf("extraction failed: %w", err)
 	}
 
+	var sigPath string
+	if platform == "linux" {
+		sigAsset := getSigAssetName(platform, archName, linuxSuffix)
+		sigPath = filepath.Join(tmpDir, sigAsset)
+		sigURL := fmt.Sprintf("https://github.com/%s/releases/download/%s/%s", repo, tag, sigAsset)
+		sigDownloadMsg := fmt.Sprintf("Downloading signature for %s...", tag)
+		if err := downloadFile(sigURL, sigPath, sigDownloadMsg); err != nil {
+			spinner.Stop()
+			return fmt.Errorf("signature download failed: %w", err)
+		}
+	}
+
+	spinner.Update("Verifying release signature...")
+	if err := verifyReleaseBinary(binPath, sigPath); err != nil {
+		spinner.Stop()
+		return fmt.Errorf("release signature verification failed: %w", err)
+	}
+
 	spinner.Update("Installing...")
 	if err := os.Chmod(binPath, 0755); err != nil {
 		spinner.Stop()
@@ -396,6 +414,13 @@ func New(_ *runtime.Context) *cobra.Command { // <-- No longer uses rt
 	var versionCmd = &cobra.Command{
 		Use:   "update",
 		Short: "Update the cre CLI to the latest version",
+		Long: `Update the cre CLI to the latest version
+
+Release signatures are verified using the public key published by the CRE team.
+
+On Linux, the signature is verified using GPG.
+On macOS, the signature is verified using codesign.
+On Windows, the signature is verified using Authenticode.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return Run(version.Version)
 		},

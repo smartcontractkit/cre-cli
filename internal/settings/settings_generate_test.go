@@ -1,6 +1,7 @@
 package settings
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,6 +12,23 @@ import (
 
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 )
+
+func TestProjectEnvTemplateUsesEthPrivateKeyPlaceholder(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	outputPath := filepath.Join(tmpDir, constants.DefaultEnvFileName)
+
+	err := GenerateFileFromTemplate(outputPath, ProjectEnvironmentTemplateContent, map[string]string{
+		"GithubApiToken": "your-github-token",
+		"EthPrivateKey":  DefaultEthPrivateKeyEnvPlaceholder,
+	})
+	require.NoError(t, err)
+
+	content, err := os.ReadFile(outputPath)
+	require.NoError(t, err)
+	assert.Contains(t, string(content), fmt.Sprintf("CRE_ETH_PRIVATE_KEY=%s", DefaultEthPrivateKeyEnvPlaceholder))
+}
 
 func TestBuildRPCsListYAML(t *testing.T) {
 	t.Run("with networks and URLs", func(t *testing.T) {

@@ -99,6 +99,8 @@ func applyEngineLimits(cfg *cresettings.Workflows, limits *SimulationLimits) {
 	cfg.ChainWrite.EVM.GasLimit = src.ChainWrite.EVM.GasLimit
 	cfg.ChainWrite.Aptos.ReportSizeLimit = src.ChainWrite.Aptos.ReportSizeLimit
 	cfg.ChainWrite.Aptos.GasLimit = src.ChainWrite.Aptos.GasLimit
+	cfg.ChainWrite.Solana.ReportSizeLimit = src.ChainWrite.Solana.ReportSizeLimit
+	cfg.ChainWrite.Solana.GasLimit = src.ChainWrite.Solana.GasLimit
 
 	// NOTE: ChainAllowed is NOT overridden — simulation keeps allow-all
 }
@@ -110,6 +112,7 @@ func disableEngineLimits(cfg *cresettings.Workflows) {
 	maxSize := settings.Setting[config.Size]{DefaultValue: math.MaxInt32}
 	maxDuration := settings.Setting[time.Duration]{DefaultValue: 24 * time.Hour}
 	maxGas := settings.Setting[uint64]{DefaultValue: math.MaxUint64}
+	maxGas32 := settings.Setting[uint32]{DefaultValue: math.MaxUint32}
 
 	// Execution limits
 	cfg.ExecutionTimeout = maxDuration
@@ -162,6 +165,8 @@ func disableEngineLimits(cfg *cresettings.Workflows) {
 	cfg.ChainWrite.EVM.GasLimit.Default = maxGas
 	cfg.ChainWrite.Aptos.ReportSizeLimit = maxSize
 	cfg.ChainWrite.Aptos.GasLimit.Default = maxGas
+	cfg.ChainWrite.Solana.ReportSizeLimit = maxSize
+	cfg.ChainWrite.Solana.GasLimit.Default = maxGas32
 
 	// ChainRead limits
 	cfg.ChainRead.CallLimit = maxInt
@@ -216,6 +221,26 @@ func (l *SimulationLimits) AptosChainWriteGasLimit() uint64 {
 	return l.Workflows.ChainWrite.Aptos.GasLimit.Default.DefaultValue
 }
 
+// SolanaChainWriteReportSizeLimit returns the Solana chain write report size limit in bytes.
+func (l *SimulationLimits) SolanaChainWriteReportSizeLimit() int {
+	return int(l.Workflows.ChainWrite.Solana.ReportSizeLimit.DefaultValue)
+}
+
+// SolanaChainWriteComputeLimit returns the default Solana chain write compute unit limit.
+func (l *SimulationLimits) SolanaChainWriteComputeLimit() uint32 {
+	return l.Workflows.ChainWrite.Solana.GasLimit.Default.DefaultValue
+}
+
+// HTTPTriggerRateLimit returns the HTTP trigger event rate limit.
+func (l *SimulationLimits) HTTPTriggerRateLimit() config.Rate {
+	return l.Workflows.HTTPTrigger.RateLimit.DefaultValue
+}
+
+// LogTriggerEventRateLimit returns the log trigger event rate limit.
+func (l *SimulationLimits) LogTriggerEventRateLimit() config.Rate {
+	return l.Workflows.LogTrigger.EventRateLimit.DefaultValue
+}
+
 // WASMBinarySize returns the WASM binary size limit in bytes.
 func (l *SimulationLimits) WASMBinarySize() int {
 	return int(l.Workflows.WASMBinarySizeLimit.DefaultValue)
@@ -230,7 +255,7 @@ func (l *SimulationLimits) WASMCompressedBinarySize() int {
 func (l *SimulationLimits) LimitsSummary() string {
 	w := &l.Workflows
 	return fmt.Sprintf(
-		"HTTP: req=%s resp=%s timeout=%s | ConfHTTP: req=%s resp=%s timeout=%s | Consensus obs=%s | ChainWrite evm_report=%s evm_gas=%d aptos_report=%s aptos_gas=%d | WASM binary=%s compressed=%s",
+		"HTTP: req=%s resp=%s timeout=%s | ConfHTTP: req=%s resp=%s timeout=%s | Consensus obs=%s | ChainWrite evm_report=%s evm_gas=%d aptos_report=%s aptos_gas=%d solana_report=%s solana_cu=%d | WASM binary=%s compressed=%s",
 		w.HTTPAction.RequestSizeLimit.DefaultValue,
 		w.HTTPAction.ResponseSizeLimit.DefaultValue,
 		w.HTTPAction.ConnectionTimeout.DefaultValue,
@@ -242,6 +267,8 @@ func (l *SimulationLimits) LimitsSummary() string {
 		w.ChainWrite.EVM.GasLimit.Default.DefaultValue,
 		w.ChainWrite.Aptos.ReportSizeLimit.DefaultValue,
 		w.ChainWrite.Aptos.GasLimit.Default.DefaultValue,
+		w.ChainWrite.Solana.ReportSizeLimit.DefaultValue,
+		w.ChainWrite.Solana.GasLimit.Default.DefaultValue,
 		w.WASMBinarySizeLimit.DefaultValue,
 		w.WASMCompressedBinarySizeLimit.DefaultValue,
 	)

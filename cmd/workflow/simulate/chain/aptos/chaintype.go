@@ -15,6 +15,7 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/services"
 
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain"
+	"github.com/smartcontractkit/cre-cli/internal/rpc"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
@@ -53,7 +54,7 @@ func (ct *AptosChainType) ResolveClients(v *viper.Viper) (chain.ResolvedChains, 
 			ct.log.Debug().Msgf("RPC not provided for %s; skipping", name)
 			continue
 		}
-		ct.log.Debug().Msgf("Using RPC for %s: %s", name, chain.RedactURL(rpcURL))
+		ct.log.Debug().Msgf("Using RPC for %s: %s", name, rpc.RedactURL(rpcURL))
 		client, err := aptos.NewClient(aptos.NetworkConfig{NodeUrl: rpcURL})
 		if err != nil {
 			ui.Warning(fmt.Sprintf("Failed to build Aptos client for %s: %v", name, err))
@@ -93,7 +94,7 @@ func (ct *AptosChainType) ResolveClients(v *viper.Viper) (chain.ResolvedChains, 
 			}
 			continue
 		}
-		ct.log.Debug().Msgf("Using RPC for experimental aptos chain %d: %s", ec.ChainSelector, chain.RedactURL(ec.RPCURL))
+		ct.log.Debug().Msgf("Using RPC for experimental aptos chain %d: %s", ec.ChainSelector, rpc.RedactURL(ec.RPCURL))
 		client, err := aptos.NewClient(aptos.NetworkConfig{NodeUrl: ec.RPCURL})
 		if err != nil {
 			return chain.ResolvedChains{}, fmt.Errorf("failed to create aptos client for experimental chain %d: %w", ec.ChainSelector, err)

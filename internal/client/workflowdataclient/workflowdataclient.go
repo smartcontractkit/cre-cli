@@ -3,6 +3,8 @@ package workflowdataclient
 import (
 	"context"
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/machinebox/graphql"
 	"github.com/rs/zerolog"
@@ -14,6 +16,7 @@ const DefaultPageSize = 100
 
 // Workflow is a workflow row returned by the platform list API.
 type Workflow struct {
+	UUID           string
 	Name           string
 	WorkflowID     string
 	OwnerAddress   string
@@ -25,17 +28,27 @@ type Workflow struct {
 type Client struct {
 	graphql *graphqlclient.Client
 	log     *zerolog.Logger
+	timeout time.Duration
 }
 
 // New creates a WorkflowDataClient backed by the provided GraphQL client.
 func New(gql *graphqlclient.Client, log *zerolog.Logger) *Client {
-	return &Client{graphql: gql, log: log}
+	return &Client{graphql: gql, log: log, timeout: time.Minute}
+}
+
+func (c *Client) SetServiceTimeout(timeout time.Duration) {
+	c.timeout = timeout
+}
+
+func (c *Client) CreateServiceContextWithTimeout(parent context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(parent, c.timeout) //nolint:gosec // G118 -- cancel is deferred by callers
 }
 
 const listWorkflowsQuery = `
 query ListWorkflows($input: WorkflowsInput!) {
   workflows(input: $input) {
     data {
+      uuid
       name
       workflowId
       ownerAddress
@@ -48,6 +61,7 @@ query ListWorkflows($input: WorkflowsInput!) {
 `
 
 type gqlWorkflow struct {
+	UUID           string `json:"uuid"`
 	Name           string `json:"name"`
 	WorkflowID     string `json:"workflowId"`
 	OwnerAddress   string `json:"ownerAddress"`
@@ -62,18 +76,36 @@ type listWorkflowsEnvelope struct {
 	} `json:"workflows"`
 }
 
+// ListFilter controls optional server-side filters for ListWorkflows.
+type ListFilter struct {
+	Search               string
+	WorkflowOwnerAddress string
+}
+
 // ListAll pages through the ListWorkflows query and returns all workflows.
-func (c *Client) ListAll(ctx context.Context, pageSize int) ([]Workflow, error) {
-	return c.list(ctx, pageSize, "")
+func (c *Client) ListAll(parent context.Context, pageSize int) ([]Workflow, error) {
+	return c.ListWithFilter(parent, pageSize, ListFilter{})
 }
 
 // SearchByName pages through the ListWorkflows query with the given search
-// filter (server-side contains match on workflow name).
-func (c *Client) SearchByName(ctx context.Context, name string, pageSize int) ([]Workflow, error) {
-	return c.list(ctx, pageSize, name)
+// filter (server-side contains match on workflow name). When ownerAddress is
+// non-empty, results are scoped to that workflow owner.
+func (c *Client) SearchByName(parent context.Context, name string, pageSize int, ownerAddress string) ([]Workflow, error) {
+	return c.ListWithFilter(parent, pageSize, ListFilter{
+		Search:               name,
+		WorkflowOwnerAddress: ownerAddress,
+	})
 }
 
-func (c *Client) list(ctx context.Context, pageSize int, search string) ([]Workflow, error) {
+// ListWithFilter pages through the ListWorkflows query with optional search
+// and workflow-owner filters.
+func (c *Client) ListWithFilter(parent context.Context, pageSize int, filter ListFilter) ([]Workflow, error) {
+	return c.list(parent, pageSize, filter)
+}
+
+func (c *Client) list(parent context.Context, pageSize int, filter ListFilter) ([]Workflow, error) {
+	ctx, cancel := c.CreateServiceContextWithTimeout(parent)
+	defer cancel()
 	if pageSize <= 0 {
 		pageSize = DefaultPageSize
 	}
@@ -89,8 +121,11 @@ func (c *Client) list(ctx context.Context, pageSize int, search string) ([]Workf
 				"size":   pageSize,
 			},
 		}
-		if search != "" {
-			input["search"] = search
+		if filter.Search != "" {
+			input["search"] = filter.Search
+		}
+		if owner := strings.TrimSpace(filter.WorkflowOwnerAddress); owner != "" {
+			input["workflowOwnerAddress"] = []string{owner}
 		}
 		req.Var("input", input)
 
@@ -113,6 +148,10 @@ func (c *Client) list(ctx context.Context, pageSize int, search string) ([]Workf
 		}
 	}
 
-	c.log.Debug().Int("count", len(all)).Str("search", search).Msg("Listed workflows from platform")
+	c.log.Debug().
+		Int("count", len(all)).
+		Str("search", filter.Search).
+		Str("workflowOwnerAddress", filter.WorkflowOwnerAddress).
+		Msg("Listed workflows from platform")
 	return all, nil
 }

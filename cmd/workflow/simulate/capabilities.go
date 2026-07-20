@@ -12,6 +12,7 @@ import (
 	consensusserver "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/consensus/server"
 	crontrigger "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/triggers/cron/server"
 	httptrigger "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/triggers/http/server"
+	"github.com/smartcontractkit/chainlink-common/pkg/config"
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	"github.com/smartcontractkit/chainlink-common/pkg/services"
 	"github.com/smartcontractkit/chainlink/v2/core/capabilities"
@@ -21,12 +22,12 @@ import (
 // ManualTriggers holds chain-agnostic trigger services used in simulation.
 type ManualTriggers struct {
 	ManualCronTrigger *fakes.ManualCronTriggerService
-	ManualHTTPTrigger *fakes.ManualHTTPTriggerService
+	ManualHTTPTrigger *ManualHTTPTriggerService
 }
 
 // NewManualTriggerCapabilities creates and registers cron and HTTP trigger capabilities.
 // These are chain-agnostic and shared across all chain types.
-func NewManualTriggerCapabilities(ctx context.Context, lggr logger.Logger, registry *capabilities.Registry) (*ManualTriggers, error) {
+func NewManualTriggerCapabilities(ctx context.Context, lggr logger.Logger, registry *capabilities.Registry, httpTriggerPort int, limits *SimulationLimits) (*ManualTriggers, error) {
 	manualCronTrigger, err := fakes.NewManualCronTriggerService(lggr)
 	if err != nil {
 		return nil, err
@@ -36,7 +37,12 @@ func NewManualTriggerCapabilities(ctx context.Context, lggr logger.Logger, regis
 		return nil, err
 	}
 
-	manualHTTPTrigger := fakes.NewManualHTTPTriggerService(lggr)
+	var httpTriggerRateLimit *config.Rate
+	if limits != nil {
+		rate := limits.HTTPTriggerRateLimit()
+		httpTriggerRateLimit = &rate
+	}
+	manualHTTPTrigger := NewManualHTTPTriggerService(lggr, httpTriggerPort, httpTriggerRateLimit)
 	manualHTTPTriggerServer := httptrigger.NewHTTPServer(manualHTTPTrigger)
 	if err := registry.Add(ctx, manualHTTPTriggerServer); err != nil {
 		return nil, err
@@ -118,7 +124,7 @@ func NewFakeActionCapabilities(ctx context.Context, lggr logger.Logger, registry
 	confHTTPAction := fakes.NewDirectConfidentialHTTPAction(lggr, secretsPath)
 	var confHTTPCap confhttpserver.ClientCapability = confHTTPAction
 	if limits != nil {
-		confHTTPCap = NewLimitedConfidentialHTTPAction(confHTTPAction, limits)
+		confHTTPCap = NewLimitedConfidentialHTTPAction(confHTTPAction, limits, lggr)
 	}
 	confHTTPActionServer := confhttpserver.NewClientServer(confHTTPCap)
 	if err := registry.Add(ctx, confHTTPActionServer); err != nil {

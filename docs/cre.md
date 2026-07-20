@@ -13,19 +13,22 @@ cre [optional flags]
 ### Options
 
 ```
-  -e, --env string            Path to .env file which contains sensitive info
-  -h, --help                  help for cre
-      --non-interactive       Fail instead of prompting; requires all inputs via flags
-  -R, --project-root string   Path to the project root
-  -E, --public-env string     Path to .env.public file which contains shared, non-sensitive build config
-  -T, --target string         Use target settings from YAML config
-  -v, --verbose               Run command in VERBOSE mode
+      --allow-insecure-rpc     Allow non-localhost HTTP RPC URLs (insecure)
+      --allow-unknown-chains   Skip chain-name validation against the chain-selectors registry (for experimental chains)
+  -e, --env string             Path to .env file which contains sensitive info
+  -h, --help                   help for cre
+      --non-interactive        Fail instead of prompting; requires all inputs via flags
+  -R, --project-root string    Path to the project root
+  -E, --public-env string      Path to .env.public file which contains shared, non-sensitive build config
+  -T, --target string          Use target settings from YAML config
+  -v, --verbose                Run command in VERBOSE mode
 ```
 
 ### SEE ALSO
 
 * [cre account](cre_account.md)	 - Manage account and request deploy access
-* [cre generate-bindings](cre_generate-bindings.md)	 - Generate bindings from contract ABI
+* [cre execution](cre_execution.md)	 - Query workflow execution history
+* [cre generate-bindings](cre_generate-bindings.md)	 - Generate bindings for contracts
 * [cre init](cre_init.md)	 - Initialize a new cre project (recommended starting point)
 * [cre login](cre_login.md)	 - Start authentication flow
 * [cre logout](cre_logout.md)	 - Revoke authentication tokens and remove local credentials

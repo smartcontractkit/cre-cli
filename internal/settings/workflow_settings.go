@@ -2,7 +2,6 @@ package settings
 
 import (
 	"fmt"
-	"net/url"
 	"os"
 	"strings"
 
@@ -13,6 +12,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"github.com/smartcontractkit/cre-cli/internal/constants"
+	"github.com/smartcontractkit/cre-cli/internal/rpc"
 )
 
 // GetWorkflowPathFromFile reads workflow-path from a workflow.yaml file (same value deploy/simulate get from Settings).
@@ -159,12 +159,16 @@ func loadWorkflowSettings(logger *zerolog.Logger, v *viper.Viper, cmd *cobra.Com
 		workflowSettings.RPCs[i].Url = resolved
 	}
 
-	if err := ValidateDeploymentRPC(&workflowSettings, registryChainName); err != nil {
+	if err := ValidateDeploymentRPC(&workflowSettings, registryChainName, logger, nil); err != nil {
 		return WorkflowSettings{}, errors.Wrap(err, "for target "+target)
 	}
 
-	if err := validateSettings(&workflowSettings); err != nil {
+	if err := validateSettings(logger, v, cmd, &workflowSettings, v.GetBool(Flags.AllowUnknownChains.Name)); err != nil {
 		return WorkflowSettings{}, errors.Wrap(err, "for target "+target)
+	}
+
+	if err := ValidateMultisigCompatibility(v, cmd, nil); err != nil {
+		return WorkflowSettings{}, err
 	}
 
 	// This is required because some commands still read values directly out of viper
@@ -187,6 +191,9 @@ func FinalizeWorkflowOwner(
 	resolved ResolvedRegistry,
 	derivedWorkflowOwner string,
 ) error {
+	if err := ValidateMultisigCompatibility(v, cmd, resolved); err != nil {
+		return err
+	}
 	if ShouldSkipGetOwner(cmd) {
 		return nil
 	}
@@ -260,13 +267,52 @@ func flattenWorkflowSettingsToViper(v *viper.Viper, target string, effectiveWork
 	return nil
 }
 
-func validateSettings(config *WorkflowSettings) error {
+func validateSettings(logger *zerolog.Logger, v *viper.Viper, cmd *cobra.Command, config *WorkflowSettings, allowUnknownChains bool) error {
+	cleartextOpts := cleartextPolicyOptions(v)
+
 	// TODO validate that all chain names mentioned for the contracts above have a matching URL specified
-	for _, rpc := range config.RPCs {
-		if err := isValidRpcUrl(rpc.Url); err != nil {
-			return errors.Wrap(err, "invalid rpc url for "+rpc.ChainName)
+	for _, rpcEndpoint := range config.RPCs {
+		if err := isValidRpcUrl(rpcEndpoint.Url); err != nil {
+			return errors.Wrap(err, "invalid rpc url for "+rpcEndpoint.ChainName)
 		}
-		if err := IsValidChainName(rpc.ChainName); err != nil {
+		if err := ValidateRPCCleartext(logger, rpcEndpoint.ChainName, rpcEndpoint.Url, cleartextOpts); err != nil {
+			return err
+		}
+		if allowUnknownChains {
+			continue
+		}
+		if err := IsValidChainName(rpcEndpoint.ChainName); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func cleartextPolicyOptions(v *viper.Viper) rpc.CleartextPolicyOptions {
+	return rpc.CleartextPolicyOptions{
+		AllowInsecure: v.GetBool(Flags.AllowInsecureRPC.Name),
+	}
+}
+
+func ValidateRPCCleartext(logger *zerolog.Logger, chainName, rpcURL string, opts rpc.CleartextPolicyOptions) error {
+	warnMsg, blockErr := rpc.EvaluateCleartextRPC(rpcURL, opts)
+	if blockErr != nil {
+		return errors.Wrapf(blockErr, "invalid rpc url for %s", chainName)
+	}
+	if warnMsg != "" && logger != nil {
+		logger.Warn().
+			Str("chain", chainName).
+			Str("url", rpc.RedactURL(rpcURL)).
+			Msg(warnMsg)
+	}
+	return nil
+}
+
+// ValidateSettingsCleartext validates cleartext RPC policy for all configured RPC URLs.
+func ValidateSettingsCleartext(logger *zerolog.Logger, v *viper.Viper, config *WorkflowSettings) error {
+	cleartextOpts := cleartextPolicyOptions(v)
+	for _, rpcEndpoint := range config.RPCs {
+		if err := ValidateRPCCleartext(logger, rpcEndpoint.ChainName, rpcEndpoint.Url, cleartextOpts); err != nil {
 			return err
 		}
 	}
@@ -274,20 +320,7 @@ func validateSettings(config *WorkflowSettings) error {
 }
 
 func isValidRpcUrl(rpcURL string) error {
-	parsedURL, err := url.Parse(rpcURL)
-	if err != nil {
-		return fmt.Errorf("failed to parse RPC URL: invalid format")
-	}
-
-	// Check if the URL has a valid scheme and host
-	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
-		return fmt.Errorf("invalid scheme in RPC URL: %s", parsedURL.Scheme)
-	}
-	if parsedURL.Host == "" {
-		return fmt.Errorf("invalid host in RPC URL: %s", parsedURL.Host)
-	}
-
-	return nil
+	return rpc.IsValidURL(rpcURL)
 }
 
 func IsValidChainName(name string) error {
@@ -332,17 +365,21 @@ func ShouldSkipGetOwner(cmd *cobra.Command) bool {
 
 // ValidateDeploymentRPC ensures project settings define a valid RPC URL for chainName (e.g. the workflow
 // registry chain). It is a no-op when chainName is empty. Used during settings load and from secrets owner-key flows.
-func ValidateDeploymentRPC(config *WorkflowSettings, chainName string) error {
+//
+// When cleartext is non-nil, cleartext RPC policy is enforced for the deployment RPC URL.
+//
+// TODO(DEVSVCS-5178)
+func ValidateDeploymentRPC(config *WorkflowSettings, chainName string, logger *zerolog.Logger, cleartext *rpc.CleartextPolicyOptions) error {
 	if chainName == "" {
 		return nil
 	}
 	deploymentRPCFound := false
 	deploymentRPCURL := ""
 	commonError := " - required to deploy CRE workflows"
-	for _, rpc := range config.RPCs {
-		if rpc.ChainName == chainName {
+	for _, rpcEndpoint := range config.RPCs {
+		if rpcEndpoint.ChainName == chainName {
 			deploymentRPCFound = true
-			deploymentRPCURL = rpc.Url
+			deploymentRPCURL = rpcEndpoint.Url
 			break
 		}
 	}
@@ -351,6 +388,11 @@ func ValidateDeploymentRPC(config *WorkflowSettings, chainName string) error {
 	}
 	if err := isValidRpcUrl(deploymentRPCURL); err != nil {
 		return errors.Wrap(err, "invalid RPC URL for "+chainName+commonError)
+	}
+	if cleartext != nil {
+		if err := ValidateRPCCleartext(logger, chainName, deploymentRPCURL, *cleartext); err != nil {
+			return errors.Wrap(err, "invalid RPC URL for "+chainName+commonError)
+		}
 	}
 	return nil
 }

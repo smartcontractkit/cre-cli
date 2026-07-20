@@ -3,7 +3,6 @@ package creinit
 import (
 	"fmt"
 	"io"
-	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -15,6 +14,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/smartcontractkit/cre-cli/internal/constants"
+	"github.com/smartcontractkit/cre-cli/internal/rpc"
 	"github.com/smartcontractkit/cre-cli/internal/templaterepo"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 	"github.com/smartcontractkit/cre-cli/internal/validation"
@@ -707,7 +707,7 @@ func (m wizardModel) handleEnter(msgs ...tea.Msg) (tea.Model, tea.Cmd) {
 		network := m.networks[m.rpcCursor]
 
 		if value != "" {
-			if err := validateRpcURL(value); err != nil {
+			if err := rpc.IsValidURL(value); err != nil {
 				m.err = fmt.Sprintf("Invalid URL for %s: %s", network, err.Error())
 				return m, nil
 			}
@@ -907,7 +907,7 @@ func (m wizardModel) View() string {
 				b.WriteString("\n")
 				// Real-time validation hint for RPC URL
 				if v := strings.TrimSpace(m.rpcInputs[i].Value()); v != "" {
-					if err := validateRpcURL(v); err != nil {
+					if err := rpc.IsValidURL(v); err != nil {
 						b.WriteString(m.warnStyle.Render("  " + err.Error()))
 						b.WriteString("\n")
 					}
@@ -1006,19 +1006,4 @@ func MissingNetworks(template *templaterepo.TemplateSummary, flagRpcURLs map[str
 		}
 	}
 	return missing
-}
-
-// validateRpcURL validates that a URL is a valid HTTP/HTTPS URL.
-func validateRpcURL(rawURL string) error {
-	u, err := url.Parse(rawURL)
-	if err != nil {
-		return fmt.Errorf("invalid URL format")
-	}
-	if u.Scheme != "http" && u.Scheme != "https" {
-		return fmt.Errorf("URL must start with http:// or https://")
-	}
-	if u.Host == "" {
-		return fmt.Errorf("URL must have a host")
-	}
-	return nil
 }

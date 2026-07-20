@@ -25,7 +25,6 @@ const (
 	EnvVarWorkflowRegistryChainName        = "CRE_CLI_WORKFLOW_REGISTRY_CHAIN_NAME"
 	EnvVarWorkflowRegistryChainExplorerURL = "CRE_CLI_WORKFLOW_REGISTRY_CHAIN_EXPLORER_URL"
 	EnvVarDonFamily                        = "CRE_CLI_DON_FAMILY"
-	EnvVarSecretsOrgOwned                  = "CRE_CLI_SECRETS_ORG_OWNED"
 
 	DefaultEnv     = "PRODUCTION"
 	StagingEnv     = "STAGING"
@@ -47,8 +46,7 @@ type EnvironmentSet struct {
 	WorkflowRegistryAddress          string `yaml:"CRE_CLI_WORKFLOW_REGISTRY_ADDRESS"`
 	WorkflowRegistryChainName        string `yaml:"CRE_CLI_WORKFLOW_REGISTRY_CHAIN_NAME"`
 	WorkflowRegistryChainExplorerURL string `yaml:"CRE_CLI_WORKFLOW_REGISTRY_CHAIN_EXPLORER_URL"`
-	DonFamily                        string `yaml:"CRE_CLI_DON_FAMILY"`
-	SecretsOrgOwned                  bool   `yaml:"CRE_CLI_SECRETS_ORG_OWNED"`
+	DonFamily                        string `yaml:"-"`
 }
 
 // RequiresVPN returns true if the GraphQL endpoint is on a private network
@@ -101,7 +99,6 @@ func NewEnvironmentSet(ff *fileFormat, envName string) *EnvironmentSet {
 	wrAddress := os.Getenv(EnvVarWorkflowRegistryAddress)
 	wrChainName := os.Getenv(EnvVarWorkflowRegistryChainName)
 	donFamily := os.Getenv(EnvVarDonFamily)
-	secretsOrgOwned := os.Getenv(EnvVarSecretsOrgOwned)
 
 	set.EnvName = envName
 	if authBase != "" {
@@ -130,9 +127,6 @@ func NewEnvironmentSet(ff *fileFormat, envName string) *EnvironmentSet {
 	}
 	if donFamily != "" {
 		set.DonFamily = donFamily
-	}
-	if secretsOrgOwned != "" {
-		set.SecretsOrgOwned = strings.EqualFold(secretsOrgOwned, "true")
 	}
 
 	newEnvironmentSetWarningsOnce.Do(func() {
@@ -169,9 +163,6 @@ func NewEnvironmentSet(ff *fileFormat, envName string) *EnvironmentSet {
 		}
 		if donFamily != "" {
 			ui.Warning(fmt.Sprintf("%s set, using %s", EnvVarDonFamily, donFamily))
-		}
-		if secretsOrgOwned != "" {
-			ui.Warning(fmt.Sprintf("%s set, using %s", EnvVarSecretsOrgOwned, secretsOrgOwned))
 		}
 	})
 

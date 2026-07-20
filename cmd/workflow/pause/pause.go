@@ -1,6 +1,7 @@
 package pause
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/rs/zerolog"
@@ -46,7 +47,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 			if err := handler.ValidateInputs(); err != nil {
 				return err
 			}
-			return handler.Execute()
+			return handler.Execute(cmd.Context())
 		},
 	}
 
@@ -64,6 +65,7 @@ type handler struct {
 	runtimeContext *runtime.Context
 
 	validated bool
+	execCtx   context.Context
 }
 
 func newHandler(ctx *runtime.Context) *handler {
@@ -107,7 +109,9 @@ func (h *handler) ValidateInputs() error {
 	return nil
 }
 
-func (h *handler) Execute() error {
+func (h *handler) Execute(ctx context.Context) error {
+	h.execCtx = ctx
+
 	if !h.validated {
 		return fmt.Errorf("handler inputs not validated")
 	}
