@@ -12,7 +12,6 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
@@ -698,9 +697,6 @@ func run(
 	}
 	emptyHook := func(context.Context, simulator.RunnerConfig, *capabilities.Registry, []services.Service) {}
 
-	// Acknowledge confidential (TEE) execution once, the first time a TEE handler runs.
-	var teeAckOnce sync.Once
-
 	simulator.NewRunner(&simulator.RunnerHooks{
 		Initialize:  simulatorInitialize,
 		BeforeStart: triggerInfoAndBeforeStart.BeforeStart,
@@ -722,20 +718,7 @@ func run(
 				ui.Line()
 				close(initializedCh)
 			},
-			OnRequirementsSet: func(_ string, requirements *pb.Requirements) {
-				if requirements.GetTee() == nil {
-					return
-				}
-				teeAckOnce.Do(func() {
-					ui.Line()
-					ui.Bold("Confidential (TEE) execution")
-					ui.Dim("This workflow declares a TEE handler (HandlerInTee). In production it runs inside a " +
-						teeRequirementSummary(requirements.GetTee()) + " enclave, where secrets are decrypted and " +
-						"are not visible to node operators. The simulator runs the same workflow logic locally, " +
-						"without a real enclave or attestation.")
-					ui.Line()
-				})
-			},
+			OnRequirementsSet: logRequirements,
 			OnExecutionError: func(msg string) {
 				errMsg := msg
 				// Engine-enforced limits (e.g. call count limits) produce "limit exceeded"
@@ -1407,4 +1390,91 @@ func resolvePathFromInvocation(path, invocationDir string) string {
 		return path
 	}
 	return filepath.Join(invocationDir, path)
+}
+
+func logRequirements(_ string, requirements *pb.Requirements) {
+	if requirements.Tee == nil || requirements.Tee.Item == nil {
+		return
+	}
+
+	msg := &strings.Builder{}
+	isError := false
+	isWarn := false
+
+	switch teet := requirements.Tee.Item.(type) {
+	case *pb.Tee_AnyRegions:
+		msg.WriteString("Handler requested TEE Execution")
+		regionString(teet.AnyRegions.Regions, msg)
+	case *pb.Tee_TeeTypesAndRegions:
+		tsrs := teet.TeeTypesAndRegions.TeeTypeAndRegions
+		if len(tsrs) == 0 {
+			msg.WriteString("Workflow specifies of a specific type, but no types were provided. This is likely a mistake in the workflow definition. Simulation will proceed\n")
+			isError = true
+		}
+
+		anyValid := false
+		msg.WriteString("Trigger requested TEE Execution your trigger will run in one of the following Tees:\n")
+		for _, trs := range tsrs {
+			if trs.Type == pb.TeeType_TEE_TYPE_UNSPECIFIED {
+				msg.WriteString("Unspecified TEE type in TEE selection will not match any TEEs, use any tee in your SDK instead\n")
+				isWarn = true
+			} else {
+				anyValid = true
+				teeTypeRegionString(trs, msg)
+			}
+		}
+
+		if !anyValid {
+			msg.WriteString("No valid TEEs found in the requested TEEs\n")
+			isError = true
+		}
+
+	default:
+		fmt.Fprintf(msg, "unknown TEE requirement type %T, try updating the CLI and re-running the workflow\n", teet)
+		isError = true
+	}
+
+	msg.WriteString("The simulator is not a real TEE, and is meant to debug.\n")
+	msg.WriteString("Do not use it for sensitive information.\n")
+	msg.WriteString("During real execution, user logs for this trigger will not be visible, and will not leave the TEE.\n")
+	msg.WriteString("They are presented in the simulator for debugging only.\n")
+	if isError {
+		ui.Error(msg.String())
+		os.Exit(1)
+	} else if isWarn {
+		ui.Warning(msg.String())
+	} else {
+		ui.Box(msg.String())
+	}
+
+	ui.Line()
+}
+
+func teeTypeRegionString(tr *pb.TeeTypeAndRegions, sb *strings.Builder) (isWarn, isError bool) {
+	switch tr.Type {
+	case pb.TeeType_TEE_TYPE_AWS_NITRO:
+		sb.WriteString("\t- AWS Nitro")
+	default:
+		isWarn = true
+		fmt.Fprintf(sb, "\t- Unknown %d", tr.Type)
+	}
+
+	regionString(tr.Regions, sb)
+	return
+}
+
+func regionString(regions []string, sb *strings.Builder) {
+	if len(regions) == 0 {
+		sb.WriteString("\n")
+		return
+	} else if len(regions) == 1 {
+		sb.WriteString(" in ")
+		sb.WriteString(regions[0])
+		sb.WriteString("\n")
+		return
+	}
+
+	sb.WriteString(" in one of these regions: ")
+	sb.WriteString(strings.Join(regions, ", "))
+	sb.WriteString("\n")
 }
