@@ -27,10 +27,6 @@ type anchorEvent struct {
 	data      []byte
 }
 
-func GetSolanaTriggerLog(ctx context.Context, client *solanarpc.Client, sigStr string, eventIndex uint64) (*solcap.Log, error) {
-	return getSolanaTriggerLogFromValues(ctx, client, sigStr, eventIndex, nil)
-}
-
 func GetSolanaTriggerLogWithFilter(ctx context.Context, client *solanarpc.Client, sigStr string, eventIndex uint64, filter *solcap.FilterLogTriggerRequest) (*solcap.Log, error) {
 	return getSolanaTriggerLogFromValues(ctx, client, sigStr, eventIndex, filter)
 }

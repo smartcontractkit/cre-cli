@@ -70,11 +70,11 @@ func TestParseAnchorEvents_NoEvents(t *testing.T) {
 func TestGetSolanaTriggerLogFromValues_Validation(t *testing.T) {
 	t.Parallel()
 
-	_, err := GetSolanaTriggerLog(context.Background(), nil, "  ", 0)
+	_, err := GetSolanaTriggerLogWithFilter(context.Background(), nil, "  ", 0, nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "signature cannot be empty")
 
-	_, err = GetSolanaTriggerLog(context.Background(), nil, "not-base58!!", 0)
+	_, err = GetSolanaTriggerLogWithFilter(context.Background(), nil, "not-base58!!", 0, nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid transaction signature")
 }
