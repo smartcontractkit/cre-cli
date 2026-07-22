@@ -85,7 +85,7 @@ func TestSolanaChainType_ResolveTriggerData_MissingInputs(t *testing.T) {
 		{
 			name:            "missing event index",
 			chainTypeInputs: map[string]string{TriggerInputTxSig: "3sig"},
-			errContains:     "--solana-event-index is required when --solana-tx-sig is provided",
+			errContains:     "--solana-tx-sig and --solana-event-index are required",
 		},
 		{
 			name: "invalid event index",

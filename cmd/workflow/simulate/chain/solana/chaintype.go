@@ -134,11 +134,10 @@ func (ct *SolanaChainType) ResolveTriggerData(ctx context.Context, selector uint
 
 	sig := strings.TrimSpace(params.ChainTypeInputs[TriggerInputTxSig])
 	eventIndexStr := strings.TrimSpace(params.ChainTypeInputs[TriggerInputEventIndex])
-	if sig == "" {
+	// Unlike EVM, Solana has no live-listen fallback: --solana-tx-sig and
+	// --solana-event-index are always required for Solana log triggers.
+	if sig == "" || eventIndexStr == "" {
 		return nil, fmt.Errorf("--%s and --%s are required for Solana log triggers", TriggerInputTxSig, TriggerInputEventIndex)
-	}
-	if eventIndexStr == "" {
-		return nil, fmt.Errorf("--%s is required when --%s is provided", TriggerInputEventIndex, TriggerInputTxSig)
 	}
 	eventIndex, err := strconv.ParseUint(eventIndexStr, 10, 64)
 	if err != nil {
