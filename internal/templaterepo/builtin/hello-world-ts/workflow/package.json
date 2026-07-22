@@ -8,7 +8,7 @@
   },
   "license": "UNLICENSED",
   "dependencies": {
-    "@chainlink/cre-sdk": "^1.16.0"
+    "@chainlink/cre-sdk": "1.17.0-alpha.solana-log-trigger.1"
   },
   "devDependencies": {
     "typescript": "5.9.3"
