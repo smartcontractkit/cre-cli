@@ -20,8 +20,6 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
-const cpiMethodDiscriminatorLen = logpollertypes.EventSignatureLength
-
 type anchorEvent struct {
 	programID solana.PublicKey
 	data      []byte
@@ -138,72 +136,31 @@ func extractSolanaCPIEvents(tx *solana.Transaction, meta *solanarpc.TransactionM
 		return nil, fmt.Errorf("unsupported CPI method name %q, only %q is supported", cfg.GetMethodName(), logpollertypes.AnchorCPIMethodName)
 	}
 
-	sourceProgram := solana.PublicKeyFromBytes(filter.GetAddress())
-	destProgram := solana.PublicKeyFromBytes(cfg.GetDestAddress())
-	methodSig := logpollertypes.AnchorCPIEventDiscriminator()
-	allAccountKeys := logpoller.GetAllAccountKeys(tx, meta)
-	if len(allAccountKeys) == 0 {
-		return nil, nil
+	cpiFilter := logpollertypes.Filter{
+		Address: logpollertypes.PublicKey(solana.PublicKeyFromBytes(filter.GetAddress())),
+		ExtraFilterConfig: logpollertypes.ExtraFilterConfig{
+			DestProgram:     logpollertypes.PublicKey(solana.PublicKeyFromBytes(cfg.GetDestAddress())),
+			MethodSignature: logpollertypes.AnchorCPIEventDiscriminator(),
+		},
 	}
 
-	var events []anchorEvent
-	for _, inner := range meta.InnerInstructions {
-		if int(inner.Index) >= len(tx.Message.Instructions) {
-			continue
+	extractor := logpoller.NewCPIEventExtractor(logger.Sugared(logger.Nop()))
+	extractor.AddFilter(cpiFilter)
+
+	programEvents := extractor.ExtractCPIEvents(tx, meta, logpollertypes.BlockData{})
+	events := make([]anchorEvent, 0, len(programEvents))
+	for _, pe := range programEvents {
+		programID, err := solana.PublicKeyFromBase58(pe.Program)
+		if err != nil {
+			return nil, fmt.Errorf("invalid CPI event source program %q: %w", pe.Program, err)
 		}
-		outerInstruction := tx.Message.Instructions[inner.Index]
-		if int(outerInstruction.ProgramIDIndex) >= len(allAccountKeys) {
-			continue
+		data, err := base64.StdEncoding.DecodeString(pe.Data)
+		if err != nil {
+			return nil, fmt.Errorf("failed to base64-decode CPI event data: %w", err)
 		}
-
-		outerProgram := allAccountKeys[outerInstruction.ProgramIDIndex]
-		programAtStackHeight := map[uint16]solana.PublicKey{
-			1: outerProgram,
-		}
-
-		for _, ix := range inner.Instructions {
-			if int(ix.ProgramIDIndex) >= len(allAccountKeys) {
-				continue
-			}
-			currentDestProgram := allAccountKeys[ix.ProgramIDIndex]
-			if ix.StackHeight > 0 {
-				programAtStackHeight[ix.StackHeight] = currentDestProgram
-			}
-			if currentDestProgram != destProgram {
-				continue
-			}
-
-			data := []byte(ix.Data)
-			if len(data) <= cpiMethodDiscriminatorLen || logpollertypes.EventSignature(data[:cpiMethodDiscriminatorLen]) != methodSig {
-				continue
-			}
-
-			currentSourceProgram, ok := cpiSourceProgram(ix.StackHeight, programAtStackHeight, outerProgram)
-			if !ok || currentSourceProgram != sourceProgram {
-				continue
-			}
-
-			eventData, ok := logpoller.ExtractAnchorCPIEventData(logger.Sugared(logger.Nop()), data)
-			if !ok || len(eventData) == 0 {
-				continue
-			}
-			events = append(events, anchorEvent{programID: currentSourceProgram, data: eventData})
-		}
+		events = append(events, anchorEvent{programID: programID, data: data})
 	}
-
 	return events, nil
-}
-
-func cpiSourceProgram(stackHeight uint16, programAtStackHeight map[uint16]solana.PublicKey, outerProgram solana.PublicKey) (solana.PublicKey, bool) {
-	switch {
-	case stackHeight > 1:
-		source, ok := programAtStackHeight[stackHeight-1]
-		return source, ok
-	case stackHeight == 1:
-		return solana.PublicKey{}, false
-	default:
-		return outerProgram, true
-	}
 }
 
 func decodeLogTriggerConfig(payload *anypb.Any) (*solcap.FilterLogTriggerRequest, error) {
