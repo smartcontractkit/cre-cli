@@ -96,7 +96,7 @@ type handler struct {
 type RegistryInterface interface {
 	ListTemplates(refresh bool) ([]templaterepo.TemplateSummary, error)
 	GetTemplate(name string, refresh bool) (*templaterepo.TemplateSummary, error)
-	ScaffoldTemplate(tmpl *templaterepo.TemplateSummary, destDir, workflowName string, onProgress func(string)) error
+	ScaffoldTemplate(tmpl *templaterepo.TemplateSummary, destDir, workflowName string, preserveExisting bool, onProgress func(string)) error
 }
 
 func newHandler(ctx *runtime.Context) *handler {
@@ -362,7 +362,7 @@ func (h *handler) Execute(inputs Inputs) error {
 	// Scaffold the template first — remote templates include project.yaml, .env, etc.
 	scaffoldSpinner := ui.NewSpinner()
 	scaffoldSpinner.Start("Scaffolding template...")
-	err = h.registry.ScaffoldTemplate(selectedTemplate, projectRoot, workflowName, func(msg string) {
+	err = h.registry.ScaffoldTemplate(selectedTemplate, projectRoot, workflowName, !isNewProject, func(msg string) {
 		scaffoldSpinner.Update(msg)
 	})
 	scaffoldSpinner.Stop()

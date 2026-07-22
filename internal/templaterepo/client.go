@@ -173,7 +173,7 @@ func (c *Client) DiscoverTemplatesWithSHA(source RepoSource) (*DiscoverTemplates
 
 // DownloadAndExtractTemplate downloads the repo tarball and extracts only files
 // under the given templatePath, applying exclude patterns.
-func (c *Client) DownloadAndExtractTemplate(source RepoSource, templatePath, destDir string, exclude []string, onProgress func(string)) error {
+func (c *Client) DownloadAndExtractTemplate(source RepoSource, templatePath, destDir string, exclude []string, preserveExisting bool, onProgress func(string)) error {
 	tarballURL := fmt.Sprintf("https://api.github.com/repos/%s/%s/tarball/%s",
 		source.Owner, source.Repo, source.Ref)
 
@@ -206,17 +206,17 @@ func (c *Client) DownloadAndExtractTemplate(source RepoSource, templatePath, des
 		onProgress("Extracting template files...")
 	}
 
-	return c.extractTarball(resp.Body, templatePath, destDir, exclude)
+	return c.extractTarball(resp.Body, templatePath, destDir, exclude, preserveExisting)
 }
 
 // DownloadAndExtractTemplateFromCache extracts from a cached tarball file.
-func (c *Client) DownloadAndExtractTemplateFromCache(tarballPath, templatePath, destDir string, exclude []string) error {
+func (c *Client) DownloadAndExtractTemplateFromCache(tarballPath, templatePath, destDir string, exclude []string, preserveExisting bool) error {
 	f, err := os.Open(tarballPath)
 	if err != nil {
 		return fmt.Errorf("failed to open cached tarball: %w", err)
 	}
 	defer f.Close()
-	return c.extractTarball(f, templatePath, destDir, exclude)
+	return c.extractTarball(f, templatePath, destDir, exclude, preserveExisting)
 }
 
 // DownloadTarball downloads the repo tarball to a local file and returns the path.
@@ -330,7 +330,10 @@ func (c *Client) fetchTemplateMetadata(source RepoSource, path string) (*Templat
 }
 
 // extractTarball reads a gzip+tar stream and extracts files under templatePath to destDir.
-func (c *Client) extractTarball(r io.Reader, templatePath, destDir string, exclude []string) error {
+// When preserveExisting is true, files that already exist at the target path are left
+// untouched instead of being overwritten (used when adding a workflow to an existing project,
+// so project-level files like secrets.yaml or project.yaml are not clobbered).
+func (c *Client) extractTarball(r io.Reader, templatePath, destDir string, exclude []string, preserveExisting bool) error {
 	gz, err := gzip.NewReader(r)
 	if err != nil {
 		return fmt.Errorf("failed to create gzip reader: %w", err)
@@ -414,6 +417,13 @@ func (c *Client) extractTarball(r io.Reader, templatePath, destDir string, exclu
 				return fmt.Errorf("failed to create directory %s: %w", targetPath, err)
 			}
 		case tar.TypeReg:
+			if preserveExisting {
+				if _, statErr := os.Stat(targetPath); statErr == nil {
+					c.logger.Debug().Msgf("Preserving existing file, skipping: %s", targetPath)
+					continue
+				}
+			}
+
 			c.logger.Debug().Msgf("Extracting file: %s -> %s", name, targetPath)
 			if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
 				return fmt.Errorf("failed to create parent directory: %w", err)
