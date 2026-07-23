@@ -517,14 +517,15 @@ func TestInitWithRpcUrlFlags(t *testing.T) {
 	require.NoError(t, err)
 	defer restoreCwd()
 
+	rpcURLs := map[string]string{
+		"ethereum-testnet-sepolia": "https://sepolia.example.com",
+		"ethereum-mainnet":         "https://mainnet.example.com",
+	}
 	inputs := Inputs{
 		ProjectName:        "rpcProj",
 		TemplateName:       "test-multichain",
 		WorkflowName:       "rpc-workflow",
-		RpcURLs:            map[string]string{
-			"ethereum-testnet-sepolia": "https://sepolia.example.com",
-			"ethereum-mainnet":         "https://mainnet.example.com",
-		},
+		RpcURLs:            rpcURLs,
 		DeploymentRegistry: "private",
 	}
 
