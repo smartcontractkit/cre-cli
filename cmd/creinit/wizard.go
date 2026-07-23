@@ -16,6 +16,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/rpc"
 	"github.com/smartcontractkit/cre-cli/internal/templaterepo"
+	"github.com/smartcontractkit/cre-cli/internal/tenantctx"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 	"github.com/smartcontractkit/cre-cli/internal/validation"
 )
@@ -83,6 +84,21 @@ func (f languageFilter) next() languageFilter {
 	default:
 		return filterAll
 	}
+}
+
+// sortRegistries sorts registries: private (off-chain) first, everything else after.
+func sortRegistries(registries []*tenantctx.Registry) []*tenantctx.Registry {
+	priority := func(r *tenantctx.Registry) int {
+		if strings.EqualFold(r.Type, "off-chain") {
+			return 0
+		}
+		return 1
+	}
+	sorted := slices.Clone(registries)
+	slices.SortStableFunc(sorted, func(a, b *tenantctx.Registry) int {
+		return priority(a) - priority(b)
+	})
+	return sorted
 }
 
 // sortTemplates sorts templates: built-in first, then by kind, then alphabetical by title.
@@ -257,6 +273,7 @@ const (
 	stepTemplateConfirm
 	stepNetworkRPCs
 	stepWorkflowName
+	stepRegistry
 	stepDone
 )
 
@@ -289,6 +306,12 @@ type wizardModel struct {
 
 	// Pre-provided RPC URLs from flags
 	flagRpcURLs map[string]string
+
+	// Registry selection
+	registries         []*tenantctx.Registry
+	registryCursor     int
+	selectedRegistryID string
+	skipRegistry       bool
 
 	// Flags to skip steps
 	skipProjectName  bool
@@ -327,12 +350,13 @@ type WizardResult struct {
 	WorkflowName     string
 	SelectedTemplate *templaterepo.TemplateSummary
 	NetworkRPCs      map[string]string // chain-name -> rpc-url
+	RegistryID       string            // selected deployment-registry ID
 	OverwriteDir     bool              // user confirmed directory overwrite in wizard
 	Completed        bool
 	Cancelled        bool
 }
 
-func newWizardModel(inputs Inputs, isNewProject bool, startDir string, templates []templaterepo.TemplateSummary, preselected *templaterepo.TemplateSummary) wizardModel {
+func newWizardModel(inputs Inputs, isNewProject bool, startDir string, templates []templaterepo.TemplateSummary, preselected *templaterepo.TemplateSummary, registries []*tenantctx.Registry) wizardModel {
 	// Project name input
 	pi := textinput.New()
 	pi.Placeholder = constants.DefaultProjectName
@@ -373,6 +397,7 @@ func newWizardModel(inputs Inputs, isNewProject bool, startDir string, templates
 		flagRpcURLs:   flagRPCs,
 		startDir:      startDir,
 		isNewProject:  isNewProject,
+		registries:    registries,
 
 		// Styles
 		logoStyle:     lipgloss.NewStyle().Foreground(lipgloss.Color(ui.ColorBlue500)).Bold(true),
@@ -405,6 +430,16 @@ func newWizardModel(inputs Inputs, isNewProject bool, startDir string, templates
 	if inputs.WorkflowName != "" {
 		m.workflowName = inputs.WorkflowName
 		m.skipWorkflowName = true
+	}
+
+	if inputs.DeploymentRegistry != "" {
+		m.selectedRegistryID = inputs.DeploymentRegistry
+		m.skipRegistry = true
+	} else if len(registries) == 0 {
+		m.skipRegistry = true
+	} else {
+		// Sort: off-chain (private) registries first so the default cursor lands on them.
+		m.registries = sortRegistries(registries)
 	}
 
 	// Start at the right step
@@ -507,6 +542,12 @@ func (m *wizardModel) advanceToNextStep() {
 				continue
 			}
 			m.workflowInput.Focus()
+			return
+		case stepRegistry:
+			if m.skipRegistry {
+				m.step++
+				continue
+			}
 			return
 		case stepDone:
 			m.completed = true
@@ -618,6 +659,27 @@ func (m wizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+		if m.step == stepRegistry {
+			switch msg.String() {
+			case "ctrl+c", "esc":
+				m.cancelled = true
+				return m, tea.Quit
+			case "up", "k":
+				if m.registryCursor > 0 {
+					m.registryCursor--
+				}
+				return m, nil
+			case "down", "j":
+				if m.registryCursor < len(m.registries)-1 {
+					m.registryCursor++
+				}
+				return m, nil
+			case "enter":
+				return m.handleEnter()
+			}
+			return m, nil
+		}
+
 		switch msg.String() {
 		case "ctrl+c", "esc":
 			m.cancelled = true
@@ -641,9 +703,7 @@ func (m wizardModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case stepTemplate:
 		// Forward non-key messages (e.g. FilterMatchesMsg) to the list
 		m.templateList, cmd = m.templateList.Update(msg)
-	case stepTemplateConfirm:
-		// Nothing to update
-	case stepDone:
+	case stepTemplateConfirm, stepRegistry, stepDone:
 		// Nothing to update
 	}
 
@@ -738,6 +798,13 @@ func (m wizardModel) handleEnter(msgs ...tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.workflowName = value
+		m.step++
+		m.advanceToNextStep()
+
+	case stepRegistry:
+		if m.registryCursor < len(m.registries) {
+			m.selectedRegistryID = m.registries[m.registryCursor].ID
+		}
 		m.step++
 		m.advanceToNextStep()
 
@@ -931,6 +998,28 @@ func (m wizardModel) View() string {
 			}
 		}
 
+	case stepRegistry:
+		b.WriteString(m.promptStyle.Render("  Deployment registry"))
+		b.WriteString("\n")
+		b.WriteString(m.dimStyle.Render("  Private registries are hosted by Chainlink — no gas needed, ideal for quick testing."))
+		b.WriteString("\n")
+		b.WriteString(m.dimStyle.Render("  On-chain registries require gas and a Web3 key — ideal for production and multisig ownership."))
+		b.WriteString("\n\n")
+		for i, reg := range m.registries {
+			regType := reg.Type
+			label := reg.Label
+			if label == "" {
+				label = reg.ID
+			}
+			typeTag := m.tagStyle.Render("[" + regType + "]")
+			if i == m.registryCursor {
+				cursor := m.cursorStyle.Render(">")
+				fmt.Fprintf(&b, "  %s %s %s\n", cursor, typeTag, m.selectedStyle.Render(label))
+			} else {
+				fmt.Fprintf(&b, "    %s %s\n", typeTag, m.dimStyle.Render(label))
+			}
+		}
+
 	case stepDone:
 		// Nothing to render
 	}
@@ -967,6 +1056,7 @@ func (m wizardModel) Result() WizardResult {
 		WorkflowName:     m.workflowName,
 		SelectedTemplate: m.selectedTemplate,
 		NetworkRPCs:      m.networkRPCs,
+		RegistryID:       m.selectedRegistryID,
 		OverwriteDir:     m.overwriteDir,
 		Completed:        m.completed,
 		Cancelled:        m.cancelled,
@@ -974,8 +1064,8 @@ func (m wizardModel) Result() WizardResult {
 }
 
 // RunWizard runs the interactive wizard and returns the result.
-func RunWizard(inputs Inputs, isNewProject bool, startDir string, templates []templaterepo.TemplateSummary, preselected *templaterepo.TemplateSummary) (WizardResult, error) {
-	m := newWizardModel(inputs, isNewProject, startDir, templates, preselected)
+func RunWizard(inputs Inputs, isNewProject bool, startDir string, templates []templaterepo.TemplateSummary, preselected *templaterepo.TemplateSummary, registries []*tenantctx.Registry) (WizardResult, error) {
+	m := newWizardModel(inputs, isNewProject, startDir, templates, preselected, registries)
 
 	// Check if all steps are skipped
 	if m.completed {

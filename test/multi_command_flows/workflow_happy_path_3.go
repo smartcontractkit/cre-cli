@@ -19,8 +19,8 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/testutil"
 )
 
-// workflowInit runs cre init to initialize a new workflow project from scratch
-func workflowInit(t *testing.T, projectRootFlag, projectName, workflowName string) (output string, gqlURL string) {
+// workflowInitWithRegistry runs cre init with a specific deployment registry
+func workflowInitWithRegistry(t *testing.T, projectRootFlag, projectName, workflowName, registry string) (output string, gqlURL string) {
 	t.Helper()
 
 	// Set up mock GraphQL server for authentication validation
@@ -59,6 +59,7 @@ func workflowInit(t *testing.T, projectRootFlag, projectName, workflowName strin
 		"--project-name", projectName,
 		"--workflow-name", workflowName,
 		"--template", "hello-world-go", // Use the built-in Go template
+		"--deployment-registry", registry,
 	}
 
 	cmd := exec.Command(CLIPath, args...)
@@ -363,8 +364,8 @@ func RunHappyPath3aWorkflow(t *testing.T, tc TestConfig, projectName, ownerAddre
 
 	workflowName := "happy-path-3a-workflow"
 
-	// Step 1: Initialize new project with workflow
-	initOut, gqlURL := workflowInit(t, tc.GetProjectRootFlag(), projectName, workflowName)
+	// Step 1: Initialize new project with workflow using on-chain registry (required for --unsigned)
+	initOut, gqlURL := workflowInitWithRegistry(t, tc.GetProjectRootFlag(), projectName, workflowName, "onchain:anvil-devnet")
 	require.Contains(t, initOut, "Project created successfully", "expected init to succeed.\nCLI OUTPUT:\n%s", initOut)
 
 	// Build the project root flag pointing to the newly created project
