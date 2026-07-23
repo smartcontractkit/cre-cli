@@ -22,6 +22,10 @@ A Go/Cobra-based command-line tool for building, testing, and managing Chainlink
 
 ## Installation
 
+> **CRE end users:** to install the released CLI (with instructions for verifying
+> the bootstrap script against published checksums), see [install/README.md](install/README.md).
+> The steps below are for building the CLI from source as a developer.
+
 1. Clone the repository:
 
     ```bash
