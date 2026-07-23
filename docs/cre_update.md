@@ -19,7 +19,8 @@ cre update [optional flags]
 ### Options
 
 ```
-  -h, --help   help for update
+  -f, --force   Proceed with the update even if the current or latest version cannot be parsed for comparison
+  -h, --help    help for update
 ```
 
 ### Options inherited from parent commands
