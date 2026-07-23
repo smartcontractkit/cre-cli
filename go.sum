@@ -1257,8 +1257,8 @@ github.com/smartcontractkit/cld-changesets v0.4.0 h1:S6yNRj6FssyyKbxLHTbC9X9U4qs
 github.com/smartcontractkit/cld-changesets v0.4.0/go.mod h1:4wOfnbSP8Ior/75QWLbtDntamSA/81SYcXzctBSx9CY=
 github.com/smartcontractkit/cre-sdk-go v1.14.0 h1:z+s0/lYEcuSxeD4T4HwUt6nzsExC4ZrLxIbDA/4P5P8=
 github.com/smartcontractkit/cre-sdk-go v1.14.0/go.mod h1:UMLoodi89ntBJa4clFLC4dMCbP2v9U7Xi9pK0256CsY=
-github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm v1.0.0-beta.14 h1:mqQUX+E9sDzt8ElIoK81FQ/LQXfrgRPGP6crJxevTrc=
-github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm v1.0.0-beta.14/go.mod h1:81slrYkVYt1FI0nGNkvzgoWMAG5mBc4R5coqygSw+Ik=
+github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm v1.0.0-beta.10-capdev.1 h1:b9IJ0XNks6I50myeQMyp86iAiW6FRjogiEUzT4SZwHw=
+github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm v1.0.0-beta.10-capdev.1/go.mod h1:DAC99+IO2/7v1osIUqo7ggpJb2dSGP2PCKcJ/CNdDtg=
 github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/solana v0.1.0-beta.1 h1:VTpFjEhGpFJKnl+B5vH/obnWUjRKeo1dSISP+FIL/eY=
 github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/solana v0.1.0-beta.1/go.mod h1:IHCd8wnWeL9yLVHkOTB2MxIuFE+Zil8Gw2jrrfPPU9Y=
 github.com/smartcontractkit/freeport v0.1.3-0.20250828155247-add56fa28aad h1:lgHxTHuzJIF3Vj6LSMOnjhqKgRqYW+0MV2SExtCYL1Q=
