@@ -16,11 +16,38 @@
 A Go/Cobra-based command-line tool for building, testing, and managing Chainlink Runtime Environment (CRE) workflows. This repository contains the CLI source code and developer tooling.
 
 - [Installation](#installation)
+- [End-user Installation](#end-user-installation)
 - [Developer Commands](#developer-commands)
 - [CRE Commands](#commands)
 - [Legal Notice](#legal-notice)
 
 ## Installation
+
+### End-user Installation
+
+Install the latest release with Homebrew:
+
+```bash
+brew tap smartcontractkit/cre-cli https://github.com/smartcontractkit/cre-cli
+brew install cre
+cre version
+```
+
+Or use the universal installer:
+
+```bash
+curl -sSL https://app.chain.link/install.sh | bash
+```
+
+To upgrade a Homebrew install:
+
+```bash
+brew upgrade cre
+```
+
+For a future `homebrew-core` submission, see [homebrew-core-prerequisites.md](homebrew-core-prerequisites.md).
+
+### Developer Installation
 
 1. Clone the repository:
 

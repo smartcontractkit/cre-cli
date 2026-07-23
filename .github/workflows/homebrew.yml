@@ -1,0 +1,73 @@
+name: Homebrew
+
+on:
+  release:
+    types: [published]
+  pull_request:
+    paths:
+      - Formula/**
+      - .github/workflows/homebrew.yml
+
+jobs:
+  update-formula:
+    name: Update Homebrew Formula
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # actions/checkout@v4.2.2
+        with:
+          ref: main
+
+      - name: Update Formula
+        run: ./scripts/update-homebrew-formula.sh "${{ github.event.release.tag_name }}"
+
+      - name: Commit and Push Formula Update
+        run: |
+          if git diff --quiet -- Formula/cre.rb; then
+            echo "Formula already up to date."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula/cre.rb
+          git commit -m "chore(homebrew): update cre formula to ${{ github.event.release.tag_name }}"
+          git push
+
+  validate-formula:
+    name: Validate Homebrew Formula (${{ matrix.os }})
+    if: github.event_name == 'pull_request'
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macOS
+            runner: macos-latest
+          - os: Linux
+            runner: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # actions/checkout@v4.2.2
+
+      - name: Set up Homebrew
+        if: matrix.os == 'Linux'
+        run: echo "/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin" >> "$GITHUB_PATH"
+
+      - name: Install Formula
+        env:
+          HOMEBREW_NO_REQUIRE_TAP_TRUST: 1
+        run: |
+          brew tap smartcontractkit/cre-cli "${{ github.workspace }}"
+          brew install smartcontractkit/cre-cli/cre
+
+      - name: Test Formula
+        run: brew test cre
+
+      - name: Audit Formula
+        run: brew audit --strict cre
