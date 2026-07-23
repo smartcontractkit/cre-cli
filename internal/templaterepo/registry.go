@@ -79,13 +79,13 @@ func (r *Registry) GetTemplate(name string, refresh bool) (*TemplateSummary, err
 
 // ScaffoldTemplate downloads and extracts a template into destDir,
 // then renames the template's workflow directory to the user's workflow name.
-func (r *Registry) ScaffoldTemplate(tmpl *TemplateSummary, destDir, workflowName string, onProgress func(string)) error {
+func (r *Registry) ScaffoldTemplate(tmpl *TemplateSummary, destDir, workflowName string, preserveExisting bool, onProgress func(string)) error {
 	// Handle built-in templates directly from embedded FS
 	if tmpl.BuiltIn {
 		if onProgress != nil {
 			onProgress("Scaffolding built-in template...")
 		}
-		return ScaffoldBuiltIn(r.logger, tmpl.Name, destDir, workflowName)
+		return ScaffoldBuiltIn(r.logger, tmpl.Name, destDir, workflowName, preserveExisting)
 	}
 
 	if onProgress != nil {
@@ -97,7 +97,7 @@ func (r *Registry) ScaffoldTemplate(tmpl *TemplateSummary, destDir, workflowName
 	if treeSHA != "" && r.cache.IsTarballCached(tmpl.Source, treeSHA) {
 		r.logger.Debug().Msg("Using cached tarball")
 		tarballPath := r.cache.TarballPath(tmpl.Source, treeSHA)
-		err := r.client.DownloadAndExtractTemplateFromCache(tarballPath, tmpl.Path, destDir, tmpl.Exclude)
+		err := r.client.DownloadAndExtractTemplateFromCache(tarballPath, tmpl.Path, destDir, tmpl.Exclude, preserveExisting)
 		if err == nil {
 			return r.maybeRenameWorkflowDir(tmpl, destDir, workflowName)
 		}
@@ -112,7 +112,7 @@ func (r *Registry) ScaffoldTemplate(tmpl *TemplateSummary, destDir, workflowName
 	if err := r.client.DownloadTarball(tmpl.Source, tarballPath); err != nil {
 		// Fall back to streaming download without caching
 		r.logger.Debug().Msg("Falling back to streaming download")
-		err = r.client.DownloadAndExtractTemplate(tmpl.Source, tmpl.Path, destDir, tmpl.Exclude, onProgress)
+		err = r.client.DownloadAndExtractTemplate(tmpl.Source, tmpl.Path, destDir, tmpl.Exclude, preserveExisting, onProgress)
 		if err != nil {
 			return fmt.Errorf("failed to download template: %w", err)
 		}
@@ -123,7 +123,7 @@ func (r *Registry) ScaffoldTemplate(tmpl *TemplateSummary, destDir, workflowName
 		onProgress("Extracting template files...")
 	}
 
-	err := r.client.DownloadAndExtractTemplateFromCache(tarballPath, tmpl.Path, destDir, tmpl.Exclude)
+	err := r.client.DownloadAndExtractTemplateFromCache(tarballPath, tmpl.Path, destDir, tmpl.Exclude, preserveExisting)
 	if err != nil {
 		return fmt.Errorf("failed to extract template: %w", err)
 	}
