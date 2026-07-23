@@ -521,7 +521,7 @@ func TestInitWithRpcUrlFlags(t *testing.T) {
 		ProjectName:        "rpcProj",
 		TemplateName:       "test-multichain",
 		WorkflowName:       "rpc-workflow",
-		RpcURLs: map[string]string{
+		RpcURLs:            map[string]string{
 			"ethereum-testnet-sepolia": "https://sepolia.example.com",
 			"ethereum-mainnet":         "https://mainnet.example.com",
 		},

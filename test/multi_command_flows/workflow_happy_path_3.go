@@ -19,11 +19,6 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/testutil"
 )
 
-// workflowInit runs cre init to initialize a new workflow project from scratch
-func workflowInit(t *testing.T, projectRootFlag, projectName, workflowName string) (output string, gqlURL string) {
-	return workflowInitWithRegistry(t, projectRootFlag, projectName, workflowName, "private")
-}
-
 // workflowInitWithRegistry runs cre init with a specific deployment registry
 func workflowInitWithRegistry(t *testing.T, projectRootFlag, projectName, workflowName, registry string) (output string, gqlURL string) {
 	t.Helper()
