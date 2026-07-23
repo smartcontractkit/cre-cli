@@ -416,10 +416,11 @@ func TestInitExecuteFlows(t *testing.T) {
 			defer restoreCwd()
 
 			inputs := Inputs{
-				ProjectName:  tc.projectNameFlag,
-				TemplateName: tc.templateNameFlag,
-				WorkflowName: tc.workflowNameFlag,
-				RpcURLs:      tc.rpcURLs,
+				ProjectName:        tc.projectNameFlag,
+				TemplateName:       tc.templateNameFlag,
+				WorkflowName:       tc.workflowNameFlag,
+				RpcURLs:            tc.rpcURLs,
+				DeploymentRegistry: "private",
 			}
 
 			ctx := sim.NewRuntimeContext()
@@ -451,10 +452,11 @@ func TestInsideExistingProjectAddsWorkflow(t *testing.T) {
 	_ = os.Remove(constants.DefaultEnvFileName)
 
 	inputs := Inputs{
-		ProjectName:  "",
-		TemplateName: "test-go",
-		WorkflowName: "wf-inside-existing-project",
-		RpcURLs:      map[string]string{"ethereum-testnet-sepolia": "https://rpc.example.com"},
+		ProjectName:        "",
+		TemplateName:       "test-go",
+		WorkflowName:       "wf-inside-existing-project",
+		RpcURLs:            map[string]string{"ethereum-testnet-sepolia": "https://rpc.example.com"},
+		DeploymentRegistry: "private",
 	}
 
 	h := newHandlerWithRegistry(sim.NewRuntimeContext(), newMockRegistry())
@@ -483,9 +485,10 @@ func TestInitWithTypescriptTemplateSkipsGoScaffold(t *testing.T) {
 	defer restoreCwd()
 
 	inputs := Inputs{
-		ProjectName:  "tsProj",
-		TemplateName: "test-ts",
-		WorkflowName: "ts-workflow-01",
+		ProjectName:        "tsProj",
+		TemplateName:       "test-ts",
+		WorkflowName:       "ts-workflow-01",
+		DeploymentRegistry: "private",
 	}
 
 	h := newHandlerWithRegistry(sim.NewRuntimeContext(), newMockRegistry())
@@ -515,13 +518,14 @@ func TestInitWithRpcUrlFlags(t *testing.T) {
 	defer restoreCwd()
 
 	inputs := Inputs{
-		ProjectName:  "rpcProj",
-		TemplateName: "test-multichain",
-		WorkflowName: "rpc-workflow",
+		ProjectName:        "rpcProj",
+		TemplateName:       "test-multichain",
+		WorkflowName:       "rpc-workflow",
 		RpcURLs: map[string]string{
 			"ethereum-testnet-sepolia": "https://sepolia.example.com",
 			"ethereum-mainnet":         "https://mainnet.example.com",
 		},
+		DeploymentRegistry: "private",
 	}
 
 	h := newHandlerWithRegistry(sim.NewRuntimeContext(), newMockRegistry())
@@ -554,9 +558,10 @@ func TestInitNoNetworksFallsBackToDefault(t *testing.T) {
 	// Built-in template has no project.yaml from scaffold,
 	// so the CLI generates one with default networks.
 	inputs := Inputs{
-		ProjectName:  "defaultProj",
-		TemplateName: "hello-world-go",
-		WorkflowName: "default-wf",
+		ProjectName:        "defaultProj",
+		TemplateName:       "hello-world-go",
+		WorkflowName:       "default-wf",
+		DeploymentRegistry: "private",
 	}
 
 	h := newHandlerWithRegistry(sim.NewRuntimeContext(), newMockRegistry())
@@ -583,9 +588,10 @@ func TestInitRemoteTemplateKeepsProjectYAML(t *testing.T) {
 	// Remote template (test-ts) has no Networks — mock creates project.yaml with default chain.
 	// CLI should preserve the template's project.yaml (no patching needed since no user RPCs).
 	inputs := Inputs{
-		ProjectName:  "remoteProj",
-		TemplateName: "test-ts",
-		WorkflowName: "ts-wf",
+		ProjectName:        "remoteProj",
+		TemplateName:       "test-ts",
+		WorkflowName:       "ts-wf",
+		DeploymentRegistry: "private",
 	}
 
 	h := newHandlerWithRegistry(sim.NewRuntimeContext(), newMockRegistry())
@@ -618,13 +624,14 @@ func TestInitProjectDirTemplateRpcPatching(t *testing.T) {
 	// Template with ProjectDir set AND Networks — the bug was that RPC URLs
 	// were silently dropped because the patching was inside the ProjectDir=="" block.
 	inputs := Inputs{
-		ProjectName:  "projectDirProj",
-		TemplateName: "starter-with-projectdir",
-		WorkflowName: "my-workflow",
+		ProjectName:        "projectDirProj",
+		TemplateName:       "starter-with-projectdir",
+		WorkflowName:       "my-workflow",
 		RpcURLs: map[string]string{
 			"ethereum-testnet-sepolia": "https://sepolia.custom.com",
 			"ethereum-mainnet":         "https://mainnet.custom.com",
 		},
+		DeploymentRegistry: "private",
 	}
 
 	h := newHandlerWithRegistry(sim.NewRuntimeContext(), newMockRegistry())
@@ -655,9 +662,10 @@ func TestTemplateNotFound(t *testing.T) {
 	defer restoreCwd()
 
 	inputs := Inputs{
-		ProjectName:  "proj",
-		TemplateName: "nonexistent-template",
-		WorkflowName: "wf",
+		ProjectName:        "proj",
+		TemplateName:       "nonexistent-template",
+		WorkflowName:       "wf",
+		DeploymentRegistry: "private",
 	}
 
 	h := newHandlerWithRegistry(sim.NewRuntimeContext(), newMockRegistry())
@@ -679,10 +687,11 @@ func TestMultiWorkflowNoRename(t *testing.T) {
 
 	// Multi-workflow template: no --workflow-name needed, dirs stay as declared
 	inputs := Inputs{
-		ProjectName:  "multiProj",
-		TemplateName: "bring-your-own-data-go",
-		WorkflowName: "",
-		RpcURLs:      map[string]string{"ethereum-testnet-sepolia": "https://rpc.example.com"},
+		ProjectName:        "multiProj",
+		TemplateName:       "bring-your-own-data-go",
+		WorkflowName:       "",
+		RpcURLs:            map[string]string{"ethereum-testnet-sepolia": "https://rpc.example.com"},
+		DeploymentRegistry: "private",
 	}
 
 	h := newHandlerWithRegistry(sim.NewRuntimeContext(), newMockRegistry())
@@ -713,10 +722,11 @@ func TestMultiWorkflowIgnoresWorkflowNameFlag(t *testing.T) {
 
 	// Multi-workflow with --workflow-name flag: flag should be ignored
 	inputs := Inputs{
-		ProjectName:  "multiProj2",
-		TemplateName: "bring-your-own-data-go",
-		WorkflowName: "test-rename",
-		RpcURLs:      map[string]string{"ethereum-testnet-sepolia": "https://rpc.example.com"},
+		ProjectName:        "multiProj2",
+		TemplateName:       "bring-your-own-data-go",
+		WorkflowName:       "test-rename",
+		RpcURLs:            map[string]string{"ethereum-testnet-sepolia": "https://rpc.example.com"},
+		DeploymentRegistry: "private",
 	}
 
 	h := newHandlerWithRegistry(sim.NewRuntimeContext(), newMockRegistry())
@@ -748,9 +758,10 @@ func TestSingleWorkflowDefaultFromTemplate(t *testing.T) {
 	// Note: We must provide a workflow name to avoid the TTY prompt in tests.
 	// Instead, we verify the default logic by providing it explicitly.
 	inputs := Inputs{
-		ProjectName:  "singleProj",
-		TemplateName: "kv-store-go",
-		WorkflowName: "my-workflow", // same as template's workflows[0].dir
+		ProjectName:        "singleProj",
+		TemplateName:       "kv-store-go",
+		WorkflowName:       "my-workflow", // same as template's workflows[0].dir
+		DeploymentRegistry: "private",
 	}
 
 	h := newHandlerWithRegistry(sim.NewRuntimeContext(), newMockRegistry())
@@ -797,9 +808,10 @@ func TestSingleWorkflowRenameWithFlag(t *testing.T) {
 
 	// Single workflow with --workflow-name: should rename to user's choice
 	inputs := Inputs{
-		ProjectName:  "renameProj",
-		TemplateName: "kv-store-go",
-		WorkflowName: "counter",
+		ProjectName:        "renameProj",
+		TemplateName:       "kv-store-go",
+		WorkflowName:       "counter",
+		DeploymentRegistry: "private",
 	}
 
 	h := newHandlerWithRegistry(sim.NewRuntimeContext(), newMockRegistry())
@@ -827,9 +839,10 @@ func TestBuiltInTemplateBackwardsCompat(t *testing.T) {
 
 	// Built-in template has no Workflows field — should use existing heuristic
 	inputs := Inputs{
-		ProjectName:  "builtinProj",
-		TemplateName: "hello-world-go",
-		WorkflowName: "hello-wf",
+		ProjectName:        "builtinProj",
+		TemplateName:       "hello-world-go",
+		WorkflowName:       "hello-wf",
+		DeploymentRegistry: "private",
 	}
 
 	h := newHandlerWithRegistry(sim.NewRuntimeContext(), newMockRegistry())
@@ -906,11 +919,12 @@ func TestNonInteractiveMissingFlags(t *testing.T) {
 	defer restoreCwd()
 
 	inputs := Inputs{
-		ProjectName:    "proj",
-		TemplateName:   "test-multichain",
-		WorkflowName:   "",
-		NonInteractive: true,
-		RpcURLs:        map[string]string{},
+		ProjectName:        "proj",
+		TemplateName:       "test-multichain",
+		WorkflowName:       "",
+		NonInteractive:     true,
+		RpcURLs:            map[string]string{},
+		DeploymentRegistry: "private",
 	}
 
 	h := newHandlerWithRegistry(sim.NewRuntimeContext(), newMockRegistry())
@@ -959,11 +973,12 @@ func TestInitRespectsProjectRootFlag(t *testing.T) {
 	targetDir := t.TempDir()
 
 	inputs := Inputs{
-		ProjectName:  "myproj",
-		TemplateName: "test-go",
-		WorkflowName: "mywf",
-		RpcURLs:      map[string]string{"ethereum-testnet-sepolia": "https://rpc.example.com"},
-		ProjectRoot:  targetDir,
+		ProjectName:        "myproj",
+		TemplateName:       "test-go",
+		WorkflowName:       "mywf",
+		RpcURLs:            map[string]string{"ethereum-testnet-sepolia": "https://rpc.example.com"},
+		ProjectRoot:        targetDir,
+		DeploymentRegistry: "private",
 	}
 
 	ctx := sim.NewRuntimeContext()
@@ -1004,11 +1019,12 @@ func TestInitProjectRootFlagFindsExistingProject(t *testing.T) {
 	))
 
 	inputs := Inputs{
-		ProjectName:  "",
-		TemplateName: "test-go",
-		WorkflowName: "new-workflow",
-		RpcURLs:      map[string]string{"ethereum-testnet-sepolia": "https://rpc.example.com"},
-		ProjectRoot:  existingProject,
+		ProjectName:        "",
+		TemplateName:       "test-go",
+		WorkflowName:       "new-workflow",
+		RpcURLs:            map[string]string{"ethereum-testnet-sepolia": "https://rpc.example.com"},
+		ProjectRoot:        existingProject,
+		DeploymentRegistry: "private",
 	}
 
 	ctx := sim.NewRuntimeContext()
