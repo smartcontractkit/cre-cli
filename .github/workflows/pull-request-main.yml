@@ -51,6 +51,9 @@ jobs:
       - name: Verify install.sh linux asset suffix helpers
         run: bash install/linux_asset_suffix_test.sh
 
+      - name: Verify install.sh tag parsing helpers
+        run: bash install/tag_parse_test.sh
+
   ci-test-unit:
     runs-on: ubuntu-latest
     permissions:

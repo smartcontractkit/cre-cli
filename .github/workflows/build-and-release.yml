@@ -409,6 +409,9 @@ jobs:
       contents: write
       id-token: write
     steps:
+      - name: Checkout the repo
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # actions/checkout@v4.2.2
+
       - name: Download Build Artifacts for linux/amd64
         uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # actions/download-artifact@v4.1.8
         with:
@@ -476,6 +479,10 @@ jobs:
 
             # Windows amd64 zip
             echo "cre_${VERSION}_windows_amd64.zip: $(shasum -a 256 ./windows_amd64/cre_${VERSION}_windows_amd64.zip | awk '{print $1}')"
+
+            # Bootstrap install scripts
+            echo "install.sh: $(shasum -a 256 ./install/install.sh | awk '{print $1}')"
+            echo "install.ps1: $(shasum -a 256 ./install/install.ps1 | awk '{print $1}')"
           } >> checksums.txt
 
           # Display checksums for verification
@@ -612,6 +619,28 @@ jobs:
           asset_path: ./windows_amd64/cre_${{ github.ref_name }}_windows_amd64.zip
           asset_name: cre_windows_amd64.zip
           asset_content_type: application/octet-stream
+
+      # Upload bootstrap install script (bash)
+      - name: Upload Release Asset for install.sh
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./install/install.sh
+          asset_name: install.sh
+          asset_content_type: text/x-shellscript
+
+      # Upload bootstrap install script (PowerShell)
+      - name: Upload Release Asset for install.ps1
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./install/install.ps1
+          asset_name: install.ps1
+          asset_content_type: text/plain
 
       # Upload Checksums
       - name: Upload Checksums

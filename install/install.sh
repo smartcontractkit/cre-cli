@@ -241,6 +241,25 @@ linux_asset_suffix() {
   fi
 }
 
+# Extract the tag_name from a GitHub release JSON payload. Prefer jq for real
+# structured parsing; fall back to an anchored sed that works on minified JSON.
+extract_tag_name() {
+  local json=$1
+  if command -v jq >/dev/null 2>&1; then
+    printf '%s' "$json" | jq -r '.tag_name // empty'
+  else
+    printf '%s' "$json" |
+      sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' |
+      head -n1
+  fi
+}
+
+# Fail closed on anything that is not a plausible release tag (vMAJOR.MINOR.PATCH
+# with optional pre-release/build suffix).
+is_valid_tag() {
+  printf '%s' "$1" | grep -Eq '^v?[0-9]+\.[0-9]+\.[0-9]+([-.+][0-9A-Za-z.-]+)*$'
+}
+
 tildify() {
     if [[ $1 = $HOME/* ]]; then
         local replacement=\~/
@@ -355,15 +374,22 @@ fi
 
 # 3. Determine the Latest Version from GitHub Releases
 check_command "curl"
-LATEST_TAG=$(curl -s "https://api.github.com/repos/$github_repo/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+API_RESPONSE=$(curl -fsSL "https://api.github.com/repos/$github_repo/releases/latest") ||
+  fail "Could not reach GitHub to determine the latest release version."
+LATEST_TAG=$(extract_tag_name "$API_RESPONSE")
 if [ -z "$LATEST_TAG" ]; then
   fail "Could not fetch the latest release version from GitHub."
 fi
 
-if [[ $# = 0 ]]; then
-  echo "Installing $cli_name version $LATEST_TAG for $PLATFORM/$ARCH_NAME..."
-else
+# Allow an explicit tag override (existing behavior), but validate it too.
+if [[ $# -ne 0 ]]; then
   LATEST_TAG=$1
+fi
+
+is_valid_tag "$LATEST_TAG" || fail "Refusing to install: invalid release tag '$LATEST_TAG'."
+
+if [[ $# -eq 0 ]]; then
+  echo "Installing $cli_name version $LATEST_TAG for $PLATFORM/$ARCH_NAME..."
 fi
 
 # 4. Construct Download URL and Download asset

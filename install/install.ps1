@@ -132,6 +132,19 @@ function Test-ReleaseAuthenticode {
     }
 }
 
+function Test-ValidTag {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Tag
+    )
+
+    # Fail closed on anything that is not a plausible release tag
+    # (vMAJOR.MINOR.PATCH with optional pre-release/build suffix).
+    if ($Tag -notmatch '^v?\d+\.\d+\.\d+([-.+][0-9A-Za-z.-]+)*$') {
+        Fail "Refusing to install: invalid release tag '$Tag'."
+    }
+}
+
 function Test-UnsafeZipEntry {
     param(
         [Parameter(Mandatory = $true)]
@@ -214,6 +227,7 @@ try {
     if (-not $LatestTag) {
         throw "Could not determine the latest release tag from GitHub."
     }
+    Test-ValidTag $LatestTag
     Write-Host "Latest version is $LatestTag."
 
     # 3. Construct Download URL and Destination Path
