@@ -184,6 +184,31 @@ func (c *Credentials) GetOrgID() (string, error) {
 	return orgID, nil
 }
 
+// GetEmail returns the authenticated user's email address from the access token.
+// It is not available for API key authentication.
+func (c *Credentials) GetEmail() (string, error) {
+	if c.AuthType == AuthTypeApiKey {
+		return "", fmt.Errorf("email is not available for API key authentication")
+	}
+
+	claims, err := c.decodeJWTClaims()
+	if err != nil {
+		return "", err
+	}
+
+	// The email claim is namespaced (e.g. "https://api.cre.chain.link/email"),
+	// so find it by looking for any key ending with "email".
+	for key, value := range claims {
+		if strings.HasSuffix(key, "email") {
+			if email, ok := value.(string); ok && email != "" {
+				return email, nil
+			}
+		}
+	}
+
+	return "", fmt.Errorf("email claim not found in access token")
+}
+
 // GetDeploymentAccessStatus returns the deployment access status for the organization.
 // This can be used to check and display whether the user has deployment access.
 func (c *Credentials) GetDeploymentAccessStatus() (*DeploymentAccess, error) {
