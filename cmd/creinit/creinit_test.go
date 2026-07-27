@@ -625,9 +625,9 @@ func TestInitProjectDirTemplateRpcPatching(t *testing.T) {
 	// Template with ProjectDir set AND Networks — the bug was that RPC URLs
 	// were silently dropped because the patching was inside the ProjectDir=="" block.
 	inputs := Inputs{
-		ProjectName:        "projectDirProj",
-		TemplateName:       "starter-with-projectdir",
-		WorkflowName:       "my-workflow",
+		ProjectName:  "projectDirProj",
+		TemplateName: "starter-with-projectdir",
+		WorkflowName: "my-workflow",
 		RpcURLs: map[string]string{
 			"ethereum-testnet-sepolia": "https://sepolia.custom.com",
 			"ethereum-mainnet":         "https://mainnet.custom.com",
