@@ -2,6 +2,7 @@ package solana
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -101,7 +102,7 @@ func (ct *SolanaChainType) ResolveKey(s *settings.Settings, broadcast bool) (int
 	// will fail when the RPC tries to access a non-existent signer account.
 	// Solution: Mandate CRE_SOLANA_PRIVATE_KEY for all Solana workflow simulations.
 	if raw == "" {
-		return nil, fmt.Errorf(
+		return nil, errors.New(
 			"CRE_SOLANA_PRIVATE_KEY is required for Solana workflow simulation.\n\n" +
 				"The Solana test network requires the transmitter account (derived from your private key) to exist and be funded on-chain.\n\n" +
 				"If you already have a Solana CLI keypair, point the variable at the file:\n\n" +
@@ -115,7 +116,7 @@ func (ct *SolanaChainType) ResolveKey(s *settings.Settings, broadcast bool) (int
 				"and then point the variable at the file:\n\n" +
 				"  CRE_SOLANA_PRIVATE_KEY=~/.config/solana/id.json\n\n" +
 				"A base58-encoded 64-byte keypair is also accepted:\n\n" +
-				"  CRE_SOLANA_PRIVATE_KEY=4wBqpZM9xaSheZzJSMawUHDgZ7miWfSsxmeRUJ1s...",
+				"  CRE_SOLANA_PRIVATE_KEY=4wBqpZM9xaSheZzJSMawUHDgZ7miWfSsx...meRUJ1s",
 		)
 	}
 
