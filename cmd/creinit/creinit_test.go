@@ -35,7 +35,12 @@ func (m *mockRegistry) GetTemplate(name string, refresh bool) (*templaterepo.Tem
 	return nil, fmt.Errorf("template %q not found", name)
 }
 
-func (m *mockRegistry) ScaffoldTemplate(tmpl *templaterepo.TemplateSummary, destDir, workflowName string, onProgress func(string)) error {
+func pathExistsForTest(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+func (m *mockRegistry) ScaffoldTemplate(tmpl *templaterepo.TemplateSummary, destDir, workflowName string, preserveExisting bool, onProgress func(string)) error {
 	var files map[string]string
 	if tmpl.Language == constants.WorkflowLanguageGolang {
 		files = map[string]string{
@@ -106,11 +111,17 @@ func (m *mockRegistry) ScaffoldTemplate(tmpl *templaterepo.TemplateSummary, dest
 			rpcsBlock += fmt.Sprintf("    - chain-name: %s\n      url: https://default-rpc.example.com\n", n)
 		}
 		projectYAML := fmt.Sprintf("staging-settings:\n  rpcs:\n%sproduction-settings:\n  rpcs:\n%s", rpcsBlock, rpcsBlock)
-		if err := os.WriteFile(filepath.Join(destDir, "project.yaml"), []byte(projectYAML), 0600); err != nil {
-			return err
+		projectYAMLPath := filepath.Join(destDir, "project.yaml")
+		if !preserveExisting || !pathExistsForTest(projectYAMLPath) {
+			if err := os.WriteFile(projectYAMLPath, []byte(projectYAML), 0600); err != nil {
+				return err
+			}
 		}
-		if err := os.WriteFile(filepath.Join(destDir, ".env"), []byte("GITHUB_API_TOKEN=test-token\nETH_PRIVATE_KEY=test-key\n"), 0600); err != nil {
-			return err
+		envPath := filepath.Join(destDir, ".env")
+		if !preserveExisting || !pathExistsForTest(envPath) {
+			if err := os.WriteFile(envPath, []byte("GITHUB_API_TOKEN=test-token\nETH_PRIVATE_KEY=test-key\n"), 0600); err != nil {
+				return err
+			}
 		}
 	}
 

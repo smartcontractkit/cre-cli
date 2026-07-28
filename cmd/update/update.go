@@ -300,8 +300,9 @@ func replaceSelf(newBin string) error {
 	return os.Rename(newBin, self)
 }
 
-// Run accepts the currentVersion string
-func Run(currentVersion string) error {
+// Run accepts the currentVersion string and a force flag that overrides the
+// fail-closed behavior when versions cannot be compared.
+func Run(currentVersion string, force bool) error {
 	spinner := ui.NewSpinner()
 	spinner.Start("Checking for updates...")
 
@@ -322,9 +323,17 @@ func Run(currentVersion string) error {
 	latestSemVer, errLatest := semver.NewVersion(cleanedLatest)
 
 	if errCurrent != nil || errLatest != nil {
-		// If we can't parse either version, fall back to just updating.
+		// If we can't parse either version, fail closed to avoid an unintended
+		// downgrade or version jump, unless the user explicitly opts in with --force.
 		spinner.Stop()
-		ui.Warning(fmt.Sprintf("Could not compare versions (current: '%s', latest: '%s'). Proceeding with update.", cleanedCurrent, cleanedLatest))
+		if !force {
+			ui.ErrorWithSuggestions(
+				fmt.Sprintf("Could not compare versions (current: '%s', latest: '%s'); refusing to update to avoid an unintended downgrade or version jump.", cleanedCurrent, cleanedLatest),
+				[]string{"Re-run with --force to update anyway"},
+			)
+			return fmt.Errorf("unable to parse version for comparison (current: %q, latest: %q)", cleanedCurrent, cleanedLatest)
+		}
+		ui.Warning(fmt.Sprintf("Could not compare versions (current: '%s', latest: '%s'). Proceeding due to --force.", cleanedCurrent, cleanedLatest))
 		spinner.Start("Updating...")
 	} else {
 		// Compare versions
@@ -411,6 +420,7 @@ func Run(currentVersion string) error {
 
 // New is modified to use the version package
 func New(_ *runtime.Context) *cobra.Command { // <-- No longer uses rt
+	var force bool
 	var versionCmd = &cobra.Command{
 		Use:   "update",
 		Short: "Update the cre CLI to the latest version",
@@ -422,9 +432,12 @@ On Linux, the signature is verified using GPG.
 On macOS, the signature is verified using codesign.
 On Windows, the signature is verified using Authenticode.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return Run(version.Version)
+			return Run(version.Version, force)
 		},
 	}
+
+	versionCmd.Flags().BoolVarP(&force, "force", "f", false,
+		"Proceed with the update even if the current or latest version cannot be parsed for comparison")
 
 	return versionCmd
 }

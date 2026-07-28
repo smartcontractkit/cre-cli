@@ -59,8 +59,10 @@ func BuiltInTemplates() []TemplateSummary {
 }
 
 // ScaffoldBuiltIn extracts the appropriate embedded hello-world template to destDir,
-// renaming the workflow directory to the user's workflow name.
-func ScaffoldBuiltIn(logger *zerolog.Logger, templateName, destDir, workflowName string) error {
+// renaming the workflow directory to the user's workflow name. When preserveExisting is
+// true, files that already exist at the target path are left untouched (used when adding
+// a workflow to an existing project, so project-level files are not overwritten).
+func ScaffoldBuiltIn(logger *zerolog.Logger, templateName, destDir, workflowName string, preserveExisting bool) error {
 	var embeddedFS embed.FS
 	var templateRoot string
 
@@ -112,6 +114,13 @@ func ScaffoldBuiltIn(logger *zerolog.Logger, templateName, destDir, workflowName
 		if d.IsDir() {
 			logger.Debug().Msgf("Extracting dir: %s -> %s", path, targetPath)
 			return os.MkdirAll(targetPath, 0755)
+		}
+
+		if preserveExisting {
+			if _, statErr := os.Stat(targetPath); statErr == nil {
+				logger.Debug().Msgf("Preserving existing file, skipping: %s", targetPath)
+				return nil
+			}
 		}
 
 		// Read from embed

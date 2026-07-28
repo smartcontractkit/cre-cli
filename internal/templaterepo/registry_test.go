@@ -165,7 +165,7 @@ func TestScaffoldBuiltInGo(t *testing.T) {
 	destDir := t.TempDir()
 	workflowName := "my-wf"
 
-	err := ScaffoldBuiltIn(logger, "hello-world-go", destDir, workflowName)
+	err := ScaffoldBuiltIn(logger, "hello-world-go", destDir, workflowName, false)
 	require.NoError(t, err)
 
 	// Check that key files were extracted
@@ -187,7 +187,7 @@ func TestScaffoldBuiltInTS(t *testing.T) {
 	destDir := t.TempDir()
 	workflowName := "my-ts-wf"
 
-	err := ScaffoldBuiltIn(logger, "hello-world-ts", destDir, workflowName)
+	err := ScaffoldBuiltIn(logger, "hello-world-ts", destDir, workflowName, false)
 	require.NoError(t, err)
 
 	// Check that key files were extracted

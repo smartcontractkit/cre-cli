@@ -33,6 +33,8 @@ cre workflow simulate ./my-workflow
       --listen                       Listen for HTTP requests or supported log triggers and run the simulator for each match (not supported by cron)
       --no-config                    Simulate without a config file
       --skip-type-checks             Skip TypeScript project typecheck during compilation (passes --skip-type-checks to cre-compile)
+      --solana-event-index int       Solana trigger event index (0-based, among 'Program data:' events in the tx) (default -1)
+      --solana-tx-sig string         Solana trigger transaction signature (base58)
       --trigger-index int            Index of the trigger to run (0-based) (default -1)
       --wasm string                  Path or URL to a pre-built WASM binary (skips compilation)
 ```

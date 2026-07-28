@@ -14,6 +14,7 @@ import (
 	cmdcommon "github.com/smartcontractkit/cre-cli/cmd/common"
 	workflowcommon "github.com/smartcontractkit/cre-cli/cmd/workflow/common"
 	"github.com/smartcontractkit/cre-cli/internal/accessrequest"
+	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
@@ -218,6 +219,8 @@ func (h *handler) Execute(ctx context.Context) error {
 		return h.accessRequester.PromptAndSubmitRequest(ctx)
 	}
 
+	h.warnIfDeployingWithPrivateKey()
+
 	adapter, err := newRegistryDeployStrategy(ctx, h.runtimeContext.ResolvedRegistry, h)
 	if err != nil {
 		return err
@@ -372,4 +375,11 @@ func warnIfPausedWorkflowUpdate(status *uint8) {
 	if status != nil && *status == workflowStatusPaused {
 		ui.Warning("Your workflow is paused and has been updated")
 	}
+}
+
+func (h *handler) warnIfDeployingWithPrivateKey() {
+	if h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerType != constants.WorkflowOwnerTypeEOA {
+		return
+	}
+	ui.Warning("Workflow deploy is using private-key ownership. Use multi-sig ownership with --unsigned or --changeset for more secure deployments.")
 }

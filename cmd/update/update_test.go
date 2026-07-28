@@ -48,9 +48,69 @@ func TestRun_abortsWhenSignatureVerificationFails(t *testing.T) {
 		)
 	}
 
-	err = Run("version v0.0.1")
+	err = Run("version v0.0.1", false)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "release signature verification failed")
+}
+
+func TestRun_failsClosedWhenLatestVersionUnparseable(t *testing.T) {
+	httpmock.ActivateNonDefault(httpClient)
+	t.Cleanup(httpmock.DeactivateAndReset)
+
+	latestURL := "https://api.github.com/repos/smartcontractkit/cre-cli/releases/latest"
+	httpmock.RegisterResponder("GET", latestURL,
+		func(_ *http.Request) (*http.Response, error) {
+			body, _ := json.Marshal(releaseInfo{TagName: "garbage-tag"})
+			return httpmock.NewBytesResponse(http.StatusOK, body), nil
+		},
+	)
+
+	err := Run("version v0.0.1", false)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "unable to parse version")
+
+	// No asset download should have been attempted: only the latest-release
+	// endpoint should have been hit.
+	callCounts := httpmock.GetCallCountInfo()
+	require.Equal(t, 1, callCounts["GET "+latestURL])
+	require.Len(t, callCounts, 1)
+}
+
+func TestRun_failsClosedWhenCurrentVersionUnparseable(t *testing.T) {
+	httpmock.ActivateNonDefault(httpClient)
+	t.Cleanup(httpmock.DeactivateAndReset)
+
+	latestURL := "https://api.github.com/repos/smartcontractkit/cre-cli/releases/latest"
+	httpmock.RegisterResponder("GET", latestURL,
+		func(_ *http.Request) (*http.Response, error) {
+			body, _ := json.Marshal(releaseInfo{TagName: "v9.9.9"})
+			return httpmock.NewBytesResponse(http.StatusOK, body), nil
+		},
+	)
+
+	err := Run("not-a-version", false)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "unable to parse version")
+}
+
+func TestRun_forceBypassesUnparseableVersionCheck(t *testing.T) {
+	httpmock.ActivateNonDefault(httpClient)
+	t.Cleanup(httpmock.DeactivateAndReset)
+
+	latestURL := "https://api.github.com/repos/smartcontractkit/cre-cli/releases/latest"
+	httpmock.RegisterResponder("GET", latestURL,
+		func(_ *http.Request) (*http.Response, error) {
+			body, _ := json.Marshal(releaseInfo{TagName: "garbage-tag"})
+			return httpmock.NewBytesResponse(http.StatusOK, body), nil
+		},
+	)
+
+	// With --force, the version-comparison guard is bypassed and execution
+	// proceeds into the download step, which fails against the unregistered
+	// asset URL. The important thing is that it is NOT the parse error.
+	err := Run("version v0.0.1", true)
+	require.Error(t, err)
+	require.NotContains(t, err.Error(), "unable to parse version")
 }
 
 func createTestArchiveBytes(t *testing.T, asset, tag, platform, archName string, content []byte) []byte {

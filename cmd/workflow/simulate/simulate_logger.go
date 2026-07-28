@@ -144,7 +144,7 @@ func (s *SimulationLogger) PrintWorkflowMetadata(metadata interface{}) {
 	// Use reflection to print metadata fields
 	// This is a generic implementation that works with any struct
 	v := reflect.ValueOf(metadata)
-	if v.Kind() == reflect.Ptr {
+	if v.Kind() == reflect.Pointer {
 		v = v.Elem()
 	}
 
