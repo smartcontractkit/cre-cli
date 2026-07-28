@@ -36,7 +36,7 @@ require (
 	github.com/smartcontractkit/chainlink-evm/gethwrappers v0.0.0-20260512150409-b4068bf735e6
 	github.com/smartcontractkit/chainlink-protos/cre/go v0.0.0-20260707195416-ca350beacd4b
 	github.com/smartcontractkit/chainlink-protos/workflows/go v0.0.0-20260630073003-fb8da7229930
-	github.com/smartcontractkit/chainlink-solana/contracts v0.0.0-20260702134003-26b16cb03cdc
+	github.com/smartcontractkit/chainlink-solana/contracts v0.0.0-20260728103735-85797664e5f1
 	github.com/smartcontractkit/chainlink-testing-framework/seth v1.51.5
 	github.com/smartcontractkit/chainlink/deployment v0.0.0-20260521170940-67f9a4b233f8
 	github.com/smartcontractkit/chainlink/v2 v2.29.1-cre-beta.0.0.20260714140112-3f1199c50293
@@ -330,6 +330,7 @@ require (
 	github.com/smartcontractkit/chainlink-protos/ring/go v0.0.0-20260331131315-f08a616d8dcd // indirect
 	github.com/smartcontractkit/chainlink-protos/storage-service v0.3.0 // indirect
 	github.com/smartcontractkit/chainlink-protos/svr v1.2.0 // indirect
+	github.com/smartcontractkit/chainlink-solana v1.3.1-0.20260728103735-85797664e5f1 // indirect
 	github.com/smartcontractkit/chainlink-sui v0.0.0-20260624134342-6bfb9c92859d // indirect
 	github.com/smartcontractkit/chainlink-testing-framework/framework v0.16.6-0.20260630120514-36abe27604df // indirect
 	github.com/smartcontractkit/chainlink-ton v1.0.5-0.20260629213843-c52e07523035 // indirect
