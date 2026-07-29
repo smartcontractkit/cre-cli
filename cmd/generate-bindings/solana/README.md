@@ -31,20 +31,28 @@ generating both languages at once — use `--language` to disambiguate).
 
 ## What gets generated (CRE-reachable surface)
 
-The Solana CRE capability is **write-only** through the keystone-forwarder: the
-on-chain entrypoint is always `on_report`, and the payload is a bare
-Borsh-encoded struct. Accordingly, both generators emit:
+Writes go through the keystone-forwarder: the on-chain entrypoint is always
+`on_report`, and the payload is a bare Borsh-encoded struct. Accordingly, both
+generators emit:
 
 - per-struct write methods: `writeReportFrom<Struct>` (single) and
   `writeReportFrom<Struct>s` (Borsh `Vec`, u32-LE count + concatenated elements),
 - a generic `writeReport(payload)` and `writeReportFromBorshEncodedVec(payloads)`,
 - pure account/event **decoders** (discriminator-checked) — there is no
   read/simulate capability, so these only decode bytes obtained elsewhere,
+- per-event **log-trigger bindings**: an `<Event>Filters` type,
+  `encode<Event>Subkeys` (EQ comparers, OR across filter rows), and a typed
+  `logTrigger<Event>Log(filterName, filters, opts)` method whose output adapts
+  the raw log into decoded event data (Go: `bindings.DecodedLog[T]`, TS:
+  `SolanaDecodedLog<T>`). `opts.cpi` targets Anchor `emit_cpi!` events. Only
+  top-level scalar fields with supported subkey encodings are auto-filterable;
+  nested structs, vecs, arrays, bool, u128, and i128 need a manual
+  `SubkeyConfig`.
 - a program mock (`new<Program>Mock`) that intercepts `writeReport` in the
   test framework.
 
 Native Anchor instruction builders and account fetchers are **not** generated
-for TypeScript: they are unreachable through the write-only capability.
+for TypeScript: they are unreachable through the CRE capability.
 
 The wire format mirrors the Go bindings (`cre-sdk-go` solana `bindings` package):
 

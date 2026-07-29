@@ -3,6 +3,7 @@ package solana
 import (
 	"bytes"
 	_ "embed"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -71,28 +72,51 @@ type tsDecoderDef struct {
 	Discriminator string // JS array body, e.g. "85, 240, 182, ..."
 }
 
+// tsTriggerFilterField is one auto-filterable event field of a log-trigger
+// filters type.
+type tsTriggerFilterField struct {
+	Name       string // camelCase TS property name
+	TSType     string // TS type of the filter value (option types unwrapped)
+	PathName   string // PascalCase subkey path element (matches the Go bindings)
+	EncodeExpr string // TS expression producing the comparator value bytes from `f.<Name>`
+}
+
+// tsTriggerDef describes the generated log-trigger surface for one IDL event.
+type tsTriggerDef struct {
+	EventName    string // IDL event name, sent verbatim as the request's eventName
+	Name         string // PascalCase TS name
+	TypeName     string // TS type the log data decodes into
+	FilterFields []tsTriggerFilterField
+}
+
 type tsBindingData struct {
-	ProgramName    string
-	ClassName      string
-	MockName       string
-	ProgramIDConst string
-	IdlConst       string
-	ProgramID      string
-	IdlJSON        string
-	CodecImports   []string
-	UsesAddress    bool
-	Types          []tsTypeDef
-	StructTypes    []tsTypeDef
-	Accounts       []tsDecoderDef
-	Events         []tsDecoderDef
+	ProgramName     string
+	ClassName       string
+	MockName        string
+	ProgramIDConst  string
+	IdlConst        string
+	IdlB64Const     string
+	ProgramID       string
+	IdlJSON         string
+	IdlB64          string
+	CodecImports    []string
+	UsesAddress     bool
+	UsesSubkeyValue bool
+	UsesFloatSubkey bool
+	Types           []tsTypeDef
+	StructTypes     []tsTypeDef
+	Accounts        []tsDecoderDef
+	Events          []tsDecoderDef
+	Triggers        []tsTriggerDef
 }
 
 // GenerateBindingsTS generates the TypeScript CRE binding (<Class>.ts) and its
 // mock (<Class>_mock.ts) for one Anchor IDL file. It mirrors the CRE-reachable
 // surface of the Go generator: per-struct writeReportFrom<Struct>(s) write
-// methods plus pure account/event decoders. Native instruction builders and
-// account fetchers are intentionally not generated — they are unreachable
-// through the write-only Solana CRE capability.
+// methods, pure account/event decoders, and per-event log-trigger bindings
+// (<Event>Filters + encode<Event>Subkeys + logTrigger<Event>Log). Native
+// instruction builders and account fetchers are intentionally not generated —
+// they are unreachable through the Solana CRE capability.
 func GenerateBindingsTS(
 	pathToIdl string,
 	programName string,
@@ -190,8 +214,10 @@ func buildTSBindingData(parsedIdl *idl.Idl, programName, idlJSON string) (*tsBin
 		MockName:       className + "Mock",
 		ProgramIDConst: toUpperSnake(programName) + "_PROGRAM_ID",
 		IdlConst:       toUpperSnake(programName) + "_IDL",
+		IdlB64Const:    toUpperSnake(programName) + "_IDL_BASE64",
 		ProgramID:      programID,
 		IdlJSON:        idlJSON,
+		IdlB64:         base64.StdEncoding.EncodeToString([]byte(idlJSON)),
 	}
 
 	typeNames := map[string]string{} // TS name -> IDL name (collision detection)
@@ -248,12 +274,96 @@ func buildTSBindingData(parsedIdl *idl.Idl, programName, idlJSON string) (*tsBin
 			return nil, err
 		}
 		data.Events = append(data.Events, *decoder)
+
+		trigger, err := buildTriggerDef(event.Name, decoder, mapper, typeNames)
+		if err != nil {
+			return nil, err
+		}
+		data.Triggers = append(data.Triggers, *trigger)
 	}
 
 	data.CodecImports = mapper.sortedImports()
 	data.UsesAddress = mapper.usesAddress
+	data.UsesSubkeyValue = mapper.usesSubkeyValue
+	data.UsesFloatSubkey = mapper.usesFloatSubkey
 
 	return data, nil
+}
+
+// buildTriggerDef builds the log-trigger binding data for one IDL event,
+// mirroring the Go generator's trigger bindings: only top-level scalar fields
+// with supported subkey encodings become filter fields (nested structs, vecs,
+// arrays, bool, u128, and i128 need a manual SubkeyConfig).
+func buildTriggerDef(
+	eventName string,
+	decoder *tsDecoderDef,
+	mapper *tsTypeMapper,
+	typeNames map[string]string,
+) (*tsTriggerDef, error) {
+	filtersTypeName := decoder.Name + "Filters"
+	if prev, exists := typeNames[filtersTypeName]; exists {
+		return nil, fmt.Errorf("event %q: filters type %q collides with IDL type %q", eventName, filtersTypeName, prev)
+	}
+
+	trigger := &tsTriggerDef{
+		EventName: eventName,
+		Name:      decoder.Name,
+		TypeName:  decoder.TypeName,
+	}
+
+	def, exists := mapper.defs[eventName]
+	if !exists {
+		// buildDecoderDef resolved the type via toPascalCase; find it the same way.
+		for idlName := range mapper.defs {
+			if toPascalCase(idlName) == decoder.Name {
+				def = mapper.defs[idlName]
+				break
+			}
+		}
+	}
+	if def == nil {
+		return nil, fmt.Errorf("event %q has no matching type definition in the IDL types section", eventName)
+	}
+
+	structTy, ok := def.Ty.(*idl.IdlTypeDefTyStruct)
+	if !ok {
+		return nil, fmt.Errorf("event %q: type %q is not a struct", eventName, def.Name)
+	}
+	var named idl.IdlDefinedFieldsNamed
+	if structTy.Fields != nil {
+		named, ok = structTy.Fields.(idl.IdlDefinedFieldsNamed)
+		if !ok {
+			return nil, fmt.Errorf("event %q: tuple struct fields are not supported by the TypeScript generator yet", eventName)
+		}
+	}
+
+	seen := map[string]string{}
+	for _, field := range named {
+		fieldName := toCamelCase(field.Name)
+		if jsReservedWords[fieldName] {
+			fieldName += "_"
+		}
+		tsType, encodeExpr, ok, err := mapper.filterField(field.Ty, "f."+fieldName, fmt.Sprintf("%s.%s", def.Name, field.Name))
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			continue
+		}
+		if prev, exists := seen[fieldName]; exists {
+			return nil, fmt.Errorf("event %q: fields %q and %q both map to %q", eventName, prev, field.Name, fieldName)
+		}
+		seen[fieldName] = field.Name
+
+		trigger.FilterFields = append(trigger.FilterFields, tsTriggerFilterField{
+			Name:       fieldName,
+			TSType:     tsType,
+			PathName:   toPascalCase(field.Name),
+			EncodeExpr: encodeExpr,
+		})
+	}
+
+	return trigger, nil
 }
 
 func buildDecoderDef(kind, name string, discriminator []byte, typesByName map[string]tsTypeDef) (*tsDecoderDef, error) {
@@ -367,9 +477,43 @@ func definedRefsOfTypeDef(def *idl.IdlTypeDef) ([]string, error) {
 }
 
 type tsTypeMapper struct {
-	defs        map[string]*idl.IdlTypeDef
-	imports     map[string]bool
-	usesAddress bool
+	defs            map[string]*idl.IdlTypeDef
+	imports         map[string]bool
+	usesAddress     bool
+	usesSubkeyValue bool
+	usesFloatSubkey bool
+}
+
+// filterField maps an event field to its TS filter-value type and the
+// expression encoding `access` (e.g. "f.caller") into the comparator value
+// bytes. ok=false means the field is not auto-filterable (mirrors the Go
+// generator's isFilterableField: scalars only, minus bool and 128/256-bit
+// integers; option wrappers are unwrapped). Encodings match the Go bindings'
+// PrepareSubkeyValue.
+func (m *tsTypeMapper) filterField(t idltype.IdlType, access, owner string) (tsType, encodeExpr string, ok bool, err error) {
+	switch typed := t.(type) {
+	case *idltype.Option:
+		return m.filterField(typed.Option, access, owner)
+	case *idltype.COption:
+		return m.filterField(typed.COption, access, owner)
+	case *idltype.U8, *idltype.I8, *idltype.U16, *idltype.I16, *idltype.U32, *idltype.I32,
+		*idltype.U64, *idltype.I64, *idltype.String, *idltype.Bytes:
+		m.usesSubkeyValue = true
+		encodeExpr = fmt.Sprintf("prepareSubkeyValue(%s)", access)
+	case *idltype.F32, *idltype.F64:
+		m.usesFloatSubkey = true
+		encodeExpr = fmt.Sprintf("prepareSubkeyFloatValue(%s)", access)
+	case *idltype.Pubkey:
+		encodeExpr = fmt.Sprintf("solanaAddressToBytes(%s)", access)
+	default:
+		return "", "", false, nil
+	}
+	// t is unwrapped here; mapType owns the TS type (and usesAddress for pubkey).
+	tsType, _, err = m.mapType(t, owner)
+	if err != nil {
+		return "", "", false, err
+	}
+	return tsType, encodeExpr, true, nil
 }
 
 func (m *tsTypeMapper) sortedImports() []string {
