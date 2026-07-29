@@ -2,7 +2,10 @@ package solana
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -99,25 +102,81 @@ func (ct *SolanaChainType) ResolveKey(s *settings.Settings, broadcast bool) (int
 	// will fail when the RPC tries to access a non-existent signer account.
 	// Solution: Mandate CRE_SOLANA_PRIVATE_KEY for all Solana workflow simulations.
 	if raw == "" {
-		return nil, fmt.Errorf(
+		return nil, errors.New(
 			"CRE_SOLANA_PRIVATE_KEY is required for Solana workflow simulation.\n\n" +
-				"The Solana test network requires the transmitter account (derived from your private key) to exist and be funded on-chain.\n" +
-				"Please set your private key in your .env file or system environment:\n\n" +
-				"  CRE_SOLANA_PRIVATE_KEY=<your-64-byte-base58-keypair>\n\n" +
-				"You can generate a test key using: solana-keygen new\n" +
-				"Then fund it on devnet: solana airdrop 10 <your-address> --url devnet",
+				"The Solana test network requires the transmitter account (derived from your private key) to exist and be funded on-chain.\n\n" +
+				"If you already have a Solana CLI keypair, point the variable at the file:\n\n" +
+				"  CRE_SOLANA_PRIVATE_KEY=~/.config/solana/id.json\n\n" +
+				"To create one:\n\n" +
+				"  solana-keygen new\n" +
+				"  solana airdrop 2 --url devnet\n\n" +
+				"Fund the account on the same cluster your RPC points at; an account funded on\n" +
+				"mainnet is invisible to a devnet simulation (it fails with AccountNotFound).\n" +
+				"Check with: solana balance --url devnet\n\n" +
+				"and then point the variable at the file:\n\n" +
+				"  CRE_SOLANA_PRIVATE_KEY=~/.config/solana/id.json\n\n" +
+				"A base58-encoded 64-byte keypair is also accepted:\n\n" +
+				"  CRE_SOLANA_PRIVATE_KEY=4wBqpZM9xaSheZzJSMawUHDgZ7miWfSsx...meRUJ1s",
 		)
 	}
 
-	// Try base58 (64-byte solana keypair, standard Solana CLI / wallet format).
-	if key, err := solana.PrivateKeyFromBase58(raw); err == nil && len(key) == 64 {
-		if broadcast && key.PublicKey().IsZero() {
-			return nil, fmt.Errorf("CRE_SOLANA_PRIVATE_KEY decodes to a zero key; refusing to broadcast")
+	key, err := parseSolanaKey(raw)
+	if err != nil {
+		return nil, err
+	}
+	if broadcast && key.PublicKey().IsZero() {
+		return nil, fmt.Errorf("CRE_SOLANA_PRIVATE_KEY decodes to a zero key; refusing to broadcast")
+	}
+	return key, nil
+}
+
+// parseSolanaKey accepts the three shapes a user is likely to have on hand:
+// the contents of a `solana-keygen` keyfile pasted inline, a base58-encoded
+// 64-byte keypair, or a path to a keyfile. `solana-keygen new` writes the JSON
+// byte-array form and has no flag to print the base58 secret, so requiring
+// base58 alone leaves users with no way to use a freshly generated key.
+// Base58 is tried before the path interpretation so existing configs resolve
+// exactly as they did before, and no path-shape guessing is needed.
+func parseSolanaKey(raw string) (solana.PrivateKey, error) {
+	if strings.HasPrefix(raw, "[") {
+		key, err := solana.PrivateKeyFromSolanaKeygenFileBytes([]byte(raw))
+		if err != nil {
+			return nil, keyFormatError(err)
 		}
 		return key, nil
 	}
 
-	return nil, fmt.Errorf("CRE_SOLANA_PRIVATE_KEY must be a 64-byte base58 keypair")
+	if key, err := solana.PrivateKeyFromBase58(raw); err == nil {
+		return key, nil
+	}
+
+	path, err := expandHome(raw)
+	if err != nil {
+		return nil, keyFormatError(err)
+	}
+	key, err := solana.PrivateKeyFromSolanaKeygenFile(path)
+	if err != nil {
+		return nil, keyFormatError(err)
+	}
+	return key, nil
+}
+
+func keyFormatError(err error) error {
+	return fmt.Errorf(
+		"CRE_SOLANA_PRIVATE_KEY must be a base58-encoded 64-byte keypair, a path to a "+
+			"solana-keygen keyfile (e.g. ~/.config/solana/id.json), or that file's JSON contents: %w", err)
+}
+
+// expandHome expands a leading ~ to the user's home directory.
+func expandHome(path string) (string, error) {
+	if !strings.HasPrefix(path, "~") {
+		return path, nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, path[1:]), nil
 }
 
 // ResolveTriggerData fetches the Solana log payload for the given selector by
