@@ -139,8 +139,9 @@ export const parseAnyEvent = (data: Uint8Array): {{range $i, $e := .Events}}{{if
 {{- range .Triggers}}
 
 /**
- * Optional filter values for {{.Name}} log triggers. Set a field to filter on
- * that value (OR across filter rows). Leave unset for wildcard. Only top-level
+ * Optional filter values for {{.Name}} log triggers. Set fields in one row to
+ * AND those predicates. Multiple rows are OR alternatives, but current trigger
+ * configuration supports only a single row. Leave unset for wildcard. Only top-level
  * scalar fields with supported subkey encodings are auto-filterable — nested
  * structs, vecs, arrays, bool, u128, and i128 need a manual SubkeyConfig.
  */
@@ -152,6 +153,9 @@ export type {{.Name}}Filters = {
 }
 
 export const encode{{.Name}}Subkeys = (filters: {{.Name}}Filters[]): SolanaSubkeyConfigJson[] => {
+  if (filters.length > 1) {
+    throw new Error('multiple filter rows are not supported for {{.Name}}; provide a single filter row')
+  }
 {{- range .FilterFields}}
   const {{.Name}}Comparers: SolanaValueComparatorJson[] = []
 {{- end}}
@@ -176,7 +180,12 @@ export const encode{{.Name}}Subkeys = (filters: {{.Name}}Filters[]): SolanaSubke
 {{- else}}
 export type {{.Name}}Filters = Record<string, never>
 
-export const encode{{.Name}}Subkeys = (_filters: {{.Name}}Filters[]): SolanaSubkeyConfigJson[] => []
+export const encode{{.Name}}Subkeys = (filters: {{.Name}}Filters[]): SolanaSubkeyConfigJson[] => {
+  if (filters.length > 1) {
+    throw new Error('multiple filter rows are not supported for {{.Name}}; provide a single filter row')
+  }
+  return []
+}
 {{- end}}
 {{- end}}
 {{- if or .Accounts .Events}}

@@ -167,8 +167,9 @@ export const parseAnyEvent = (data: Uint8Array): AccessLogged | DynamicEvent | N
 }
 
 /**
- * Optional filter values for AccessLogged log triggers. Set a field to filter on
- * that value (OR across filter rows). Leave unset for wildcard. Only top-level
+ * Optional filter values for AccessLogged log triggers. Set fields in one row to
+ * AND those predicates. Multiple rows are OR alternatives, but current trigger
+ * configuration supports only a single row. Leave unset for wildcard. Only top-level
  * scalar fields with supported subkey encodings are auto-filterable — nested
  * structs, vecs, arrays, bool, u128, and i128 need a manual SubkeyConfig.
  */
@@ -178,6 +179,9 @@ export type AccessLoggedFilters = {
 }
 
 export const encodeAccessLoggedSubkeys = (filters: AccessLoggedFilters[]): SolanaSubkeyConfigJson[] => {
+  if (filters.length > 1) {
+    throw new Error('multiple filter rows are not supported for AccessLogged; provide a single filter row')
+  }
   const callerComparers: SolanaValueComparatorJson[] = []
   const messageComparers: SolanaValueComparatorJson[] = []
   for (const f of filters) {
@@ -205,8 +209,9 @@ export const encodeAccessLoggedSubkeys = (filters: AccessLoggedFilters[]): Solan
 }
 
 /**
- * Optional filter values for DynamicEvent log triggers. Set a field to filter on
- * that value (OR across filter rows). Leave unset for wildcard. Only top-level
+ * Optional filter values for DynamicEvent log triggers. Set fields in one row to
+ * AND those predicates. Multiple rows are OR alternatives, but current trigger
+ * configuration supports only a single row. Leave unset for wildcard. Only top-level
  * scalar fields with supported subkey encodings are auto-filterable — nested
  * structs, vecs, arrays, bool, u128, and i128 need a manual SubkeyConfig.
  */
@@ -217,6 +222,9 @@ export type DynamicEventFilters = {
 }
 
 export const encodeDynamicEventSubkeys = (filters: DynamicEventFilters[]): SolanaSubkeyConfigJson[] => {
+  if (filters.length > 1) {
+    throw new Error('multiple filter rows are not supported for DynamicEvent; provide a single filter row')
+  }
   const keyComparers: SolanaValueComparatorJson[] = []
   const senderComparers: SolanaValueComparatorJson[] = []
   const metadataComparers: SolanaValueComparatorJson[] = []
@@ -254,14 +262,20 @@ export const encodeDynamicEventSubkeys = (filters: DynamicEventFilters[]): Solan
 }
 
 /**
- * Optional filter values for NoFields log triggers. Set a field to filter on
- * that value (OR across filter rows). Leave unset for wildcard. Only top-level
+ * Optional filter values for NoFields log triggers. Set fields in one row to
+ * AND those predicates. Multiple rows are OR alternatives, but current trigger
+ * configuration supports only a single row. Leave unset for wildcard. Only top-level
  * scalar fields with supported subkey encodings are auto-filterable — nested
  * structs, vecs, arrays, bool, u128, and i128 need a manual SubkeyConfig.
  */
 export type NoFieldsFilters = Record<string, never>
 
-export const encodeNoFieldsSubkeys = (_filters: NoFieldsFilters[]): SolanaSubkeyConfigJson[] => []
+export const encodeNoFieldsSubkeys = (filters: NoFieldsFilters[]): SolanaSubkeyConfigJson[] => {
+  if (filters.length > 1) {
+    throw new Error('multiple filter rows are not supported for NoFields; provide a single filter row')
+  }
+  return []
+}
 
 export class DataStorage {
   readonly programId: Uint8Array
