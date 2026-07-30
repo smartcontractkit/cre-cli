@@ -36,6 +36,7 @@ func TestE2EInit_DevPoRTemplateTS(t *testing.T) {
 		"--project-name", projectName,
 		"--template", templateName,
 		"--workflow-name", workflowName,
+		"--deployment-registry", "private",
 	}
 	var stdout, stderr bytes.Buffer
 	initCmd := exec.Command(CLIPath, initArgs...)

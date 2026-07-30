@@ -40,6 +40,7 @@ func TestE2EInit_ConvertToCustomBuild_TS(t *testing.T) {
 		"--project-name", projectName,
 		"--template-id", templateID,
 		"--workflow-name", workflowName,
+		"--deployment-registry", "private",
 	)
 	initCmd.Dir = tempDir
 	initCmd.Stdout = &stdout
