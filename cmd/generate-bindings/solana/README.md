@@ -41,7 +41,7 @@ generators emit:
 - pure account/event **decoders** (discriminator-checked) — there is no
   read/simulate capability, so these only decode bytes obtained elsewhere,
 - per-event **log-trigger bindings**: an `<Event>Filters` type,
-  `encode<Event>Subkeys` (EQ comparers, OR across filter rows), and a typed
+  `encode<Event>Subkeys` (EQ comparers; single-row input only), and a typed
   `logTrigger<Event>Log(filterName, filters, opts)` method whose output adapts
   the raw log into decoded event data (Go: `bindings.DecodedLog[T]`, TS:
   `SolanaDecodedLog<T>`). `opts.cpi` targets Anchor `emit_cpi!` events. Only
