@@ -18,16 +18,18 @@
 staging-settings:
   user-workflow:
     workflow-name: "{{WorkflowName}}-staging"
+{{DeploymentRegistryLine}}
   workflow-artifacts:
     workflow-path: "{{WorkflowPath}}"
     config-path: "{{ConfigPathStaging}}"
     secrets-path: "{{SecretsPath}}"
-    
+
 
 # ==========================================================================
 production-settings:
   user-workflow:
     workflow-name: "{{WorkflowName}}-production"
+{{DeploymentRegistryLine}}
   workflow-artifacts:
     workflow-path: "{{WorkflowPath}}"
     config-path: "{{ConfigPathProduction}}"
