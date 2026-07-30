@@ -190,17 +190,33 @@ func TestLogTrigger(t *testing.T) {
 		testPubKey2, err := solana.NewRandomPrivateKey()
 		require.NoError(t, err)
 		caller2 := testPubKey2.PublicKey()
+		messageFilter := "match me"
 
-		filters := []datastorage.AccessLoggedFilters{
+		multiRowFilters := []datastorage.AccessLoggedFilters{
 			{Caller: &testPubKey},
 			{Caller: &caller2},
 		}
 
+		_, err = ds.Codec.EncodeAccessLoggedSubkeys(multiRowFilters)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "multiple filter rows are not supported")
+
+		filters := []datastorage.AccessLoggedFilters{
+			{Caller: &testPubKey, Message: &messageFilter},
+		}
+
 		subkeys, err := ds.Codec.EncodeAccessLoggedSubkeys(filters)
 		require.NoError(t, err)
-		require.Len(t, subkeys, 1)
-		require.Equal(t, []string{"Caller"}, subkeys[0].Path)
-		require.Len(t, subkeys[0].Comparers, 2)
+		require.Len(t, subkeys, 2)
+
+		paths := map[string]bool{}
+		for _, subkey := range subkeys {
+			require.Len(t, subkey.Path, 1)
+			require.Len(t, subkey.Comparers, 1)
+			paths[subkey.Path[0]] = true
+		}
+		require.True(t, paths["Caller"])
+		require.True(t, paths["Message"])
 
 		trigger, err := ds.LogTriggerAccessLoggedLog(
 			anyChainSelector,
@@ -241,9 +257,7 @@ func TestLogTrigger(t *testing.T) {
 		metadata := []byte{0xde, 0xad, 0xbe, 0xef}
 
 		filters := []datastorage.DynamicEventFilters{
-			{Key: &key},
-			{Sender: &sender},
-			{Metadata: &metadata},
+			{Key: &key, Sender: &sender, Metadata: &metadata},
 		}
 
 		subkeys, err := ds.Codec.EncodeDynamicEventSubkeys(filters)
