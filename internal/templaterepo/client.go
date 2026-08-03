@@ -382,7 +382,7 @@ func (c *Client) extractTarball(r io.Reader, templatePath, destDir string, exclu
 
 	for {
 		header, err := tr.Next()
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break
 		}
 		if err != nil {
