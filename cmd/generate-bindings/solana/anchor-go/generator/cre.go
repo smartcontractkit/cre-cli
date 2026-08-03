@@ -20,6 +20,8 @@ const (
 	PkgPbSdk     = "github.com/smartcontractkit/chainlink-protos/cre/go/sdk"
 	PkgSolanaCre = "github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/solana"
 	PkgBindings  = "github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/solana/bindings"
+	// maxGeneratedSubkeysPerEvent mirrors backend support in the Solana log poller.
+	maxGeneratedSubkeysPerEvent = 4
 )
 
 // func (c *Codec) Decode<name>(data []byte) (*<name>, error) {

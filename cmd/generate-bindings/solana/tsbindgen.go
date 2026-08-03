@@ -28,6 +28,8 @@ var (
 	tsSolanaMockTemplate = template.Must(template.New("mockcontract.ts").Parse(tsSolanaMockTpl))
 )
 
+const maxGeneratedSubkeysPerEvent = 4
+
 // jsReservedWords are identifiers that cannot be used as TypeScript/JavaScript
 // names. Field names that collide get an underscore suffix; type/class names
 // that collide are rejected (they come from IDL type names, which are expected
@@ -361,6 +363,10 @@ func buildTriggerDef(
 			PathName:   toPascalCase(field.Name),
 			EncodeExpr: encodeExpr,
 		})
+	}
+
+	if len(trigger.FilterFields) > maxGeneratedSubkeysPerEvent {
+		return nil, fmt.Errorf("event %q has %d auto-filterable indexed fields; maximum supported is %d", eventName, len(trigger.FilterFields), maxGeneratedSubkeysPerEvent)
 	}
 
 	return trigger, nil

@@ -211,7 +211,6 @@ func TestGenerateBindingsTS_TriggerFilterEncodings(t *testing.T) {
     {"name": "maybe_tag", "type": {"option": "string"}},
     {"name": "flag", "type": "bool"},
     {"name": "huge", "type": "u128"},
-    {"name": "blob", "type": "bytes"},
     {"name": "list", "type": {"vec": "u8"}},
     {"name": "fixed", "type": {"array": ["u8", 32]}}
   ]}}]
@@ -231,7 +230,6 @@ func TestGenerateBindingsTS_TriggerFilterEncodings(t *testing.T) {
 	assert.Contains(t, source, "small?: number | null")
 	assert.Contains(t, source, "amount?: bigint | null")
 	assert.Contains(t, source, "ratio?: number | null")
-	assert.Contains(t, source, "blob?: Uint8Array | null")
 	// Option is unwrapped for the filter value type.
 	assert.Contains(t, source, "maybeTag?: string | null")
 	assert.Contains(t, source, "value: bytesToBase64(prepareSubkeyValue(f.amount))")
@@ -296,11 +294,38 @@ func TestGenerateBindingsTS_FailLoud(t *testing.T) {
 			]}}]`,
 			wantErr: "both map to",
 		},
+		{
+			name: "more than four indexed event fields",
+			typesJSON: `[{"name": "OverIndexed", "type": {"kind": "struct", "fields": [
+				{"name": "a", "type": "u8"},
+				{"name": "b", "type": "u16"},
+				{"name": "c", "type": "u32"},
+				{"name": "d", "type": "string"},
+				{"name": "e", "type": "bytes"}
+			]}},
+			{"name": "Unused", "type": {"kind": "struct", "fields": []}}]`,
+			wantErr: "maximum supported is 4",
+		},
 	}
 
 	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			idlPath := writeTestIdl(t, tc.typesJSON)
+			t.Run(tc.name, func(t *testing.T) {
+				idlPath := writeTestIdl(t, tc.typesJSON)
+				if tc.name == "more than four indexed event fields" {
+					idlWithEvent := `{
+  "address": "ECL8142j2YQAvs9R9geSsRnkVH2wLEi7soJCRyJ74cfL",
+  "metadata": {"name": "fail_loud", "version": "0.1.0", "spec": "0.1.0"},
+  "instructions": [
+    {"name": "on_report", "discriminator": [214,173,18,221,173,148,151,208], "accounts": [], "args": []}
+  ],
+  "accounts": [],
+  "events": [{"name": "OverIndexed", "discriminator": [1,2,3,4,5,6,7,8]}],
+  "errors": [],
+  "types": ` + tc.typesJSON + `
+}`
+					idlPath = filepath.Join(t.TempDir(), "over_indexed.json")
+					require.NoError(t, os.WriteFile(idlPath, []byte(idlWithEvent), 0o600))
+				}
 			_, err := GenerateBindingsTS(idlPath, "fail_loud", t.TempDir())
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), tc.wantErr)

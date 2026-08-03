@@ -33,6 +33,9 @@ func (g *Generator) genfile_triggers() (*OutputFile, error) {
 		}
 
 		filterFields := getEventFilterFields(fields)
+		if len(filterFields) > maxGeneratedSubkeysPerEvent {
+			return nil, fmt.Errorf("event %s has %d auto-filterable indexed fields; maximum supported is %d", event.Name, len(filterFields), maxGeneratedSubkeysPerEvent)
+		}
 
 		file.Add(creEventFiltersStruct(event.Name, filterFields))
 		file.Line()
