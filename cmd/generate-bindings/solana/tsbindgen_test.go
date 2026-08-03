@@ -162,6 +162,7 @@ func TestGenerateBindingsTS_LogTriggers(t *testing.T) {
 	assert.Contains(t, source, "): Trigger<SolanaLog, SolanaDecodedLog<AccessLogged>> {")
 	// Subkey paths use the Go bindings' PascalCase names.
 	assert.Contains(t, source, "subkeys.push({ path: ['Caller'], comparers: callerComparers })")
+	assert.Contains(t, source, "too many comparers for subkey Caller: maximum supported is 4")
 	// Pubkey filter values are converted from base58 before encoding.
 	assert.Contains(t, source, "value: bytesToBase64(solanaAddressToBytes(f.caller))")
 	// The compact IDL is embedded once as base64 and sent as contractIdlJson.

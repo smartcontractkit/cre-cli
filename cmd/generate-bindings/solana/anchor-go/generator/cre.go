@@ -22,6 +22,9 @@ const (
 	PkgBindings  = "github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/solana/bindings"
 	// maxGeneratedSubkeysPerEvent mirrors backend support in the Solana log poller.
 	maxGeneratedSubkeysPerEvent = 4
+	// maxGeneratedComparersPerSubkey limits per-subkey comparer fanout to match
+	// trigger registration guardrails.
+	maxGeneratedComparersPerSubkey = 4
 )
 
 // func (c *Codec) Decode<name>(data []byte) (*<name>, error) {
@@ -564,6 +567,16 @@ func creEncodeSubkeysForEvent(eventName string, filterFields []eventFilterField)
 					}
 				})
 				block.Line()
+			}
+
+			for _, field := range filterFields {
+				block.If(Len(Id(field.goName + "Comparers")).Op(">").Lit(maxGeneratedComparersPerSubkey)).Block(
+					Return(Nil(), Qual("fmt", "Errorf").Call(
+						Lit("too many comparers for subkey "+field.goName+": maximum supported is %d, got %d"),
+						Lit(maxGeneratedComparersPerSubkey),
+						Len(Id(field.goName+"Comparers")),
+					)),
+				)
 			}
 
 			block.Id("subkeys").Op(":=").Make(Index().Op("*").Qual(PkgSolanaCre, "SubkeyConfig"), Lit(0))
