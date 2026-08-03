@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"compress/gzip"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -24,6 +25,20 @@ const (
 	// templateMetadataFile is the conventional path to a template's metadata file
 	// within its directory (e.g., "my-template/.cre/template.yaml").
 	templateMetadataFile = ".cre/template.yaml"
+)
+
+// maxExtractTotalSize and maxExtractFileSize bound decompression (a "tar bomb"
+// can expand to far more bytes than the compressed download), and maxExtractFileCount
+// bounds the number of entries, mirroring the caps used by the update extractor.
+// maxTarballDownloadSize bounds the raw (still-compressed) tarball written to the
+// on-disk cache, guarding against disk exhaustion on the download side.
+// These are vars (not consts) so tests can shrink them instead of building
+// multi-hundred-megabyte fixtures.
+var (
+	maxExtractTotalSize    int64 = 500 * 1024 * 1024
+	maxExtractFileSize     int64 = 100 * 1024 * 1024
+	maxTarballDownloadSize int64 = 500 * 1024 * 1024
+	maxExtractFileCount          = 10000
 )
 
 // standardIgnores are files/dirs always excluded when extracting templates.
@@ -253,8 +268,19 @@ func (c *Client) DownloadTarball(source RepoSource, destPath string) error {
 	}
 	defer f.Close()
 
-	if _, err := io.Copy(f, resp.Body); err != nil {
+	// Cap the raw download so a compromised or malicious source cannot exhaust
+	// disk by streaming an unbounded tarball into the cache.
+	written, err := io.CopyN(f, resp.Body, maxTarballDownloadSize+1)
+	if err != nil && !errors.Is(err, io.EOF) {
 		return fmt.Errorf("failed to write tarball: %w", err)
+	}
+	if written > maxTarballDownloadSize {
+		// Drop the partial file so it can't poison the cache.
+		f.Close()
+		if rmErr := os.Remove(destPath); rmErr != nil {
+			c.logger.Warn().Err(rmErr).Msgf("Failed to remove oversized partial tarball %s", destPath)
+		}
+		return fmt.Errorf("tarball exceeds maximum allowed download size (limit %d bytes)", maxTarballDownloadSize)
 	}
 
 	return nil
@@ -346,9 +372,17 @@ func (c *Client) extractTarball(r io.Reader, templatePath, destDir string, exclu
 	// We need to detect it and strip it.
 	var topLevelPrefix string
 
+	absDestDir, err := filepath.Abs(destDir)
+	if err != nil {
+		return fmt.Errorf("failed to resolve destination directory: %w", err)
+	}
+
+	var totalSize int64
+	var fileCount int
+
 	for {
 		header, err := tr.Next()
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break
 		}
 		if err != nil {
@@ -363,6 +397,11 @@ func (c *Client) extractTarball(r io.Reader, templatePath, destDir string, exclu
 		// Prevent Zip Slip: reject archive entries containing ".."
 		if strings.Contains(header.Name, "..") {
 			return fmt.Errorf("illegal file path in archive: %s", header.Name)
+		}
+
+		fileCount++
+		if fileCount > maxExtractFileCount {
+			return fmt.Errorf("archive contains too many entries (limit: %d)", maxExtractFileCount)
 		}
 
 		// Detect top-level prefix from the first real directory entry
@@ -410,6 +449,17 @@ func (c *Client) extractTarball(r io.Reader, templatePath, destDir string, exclu
 
 		targetPath := filepath.Join(destDir, relPath)
 
+		// Belt-and-suspenders Zip Slip guard: verify the resolved path is still
+		// contained within destDir, in case the ".." check above is bypassed by
+		// some other means (e.g. an absolute path in the header).
+		absTargetPath, err := filepath.Abs(targetPath)
+		if err != nil {
+			return fmt.Errorf("failed to resolve target path for %s: %w", name, err)
+		}
+		if absTargetPath != absDestDir && !strings.HasPrefix(absTargetPath, absDestDir+string(os.PathSeparator)) {
+			return fmt.Errorf("resolved file path escapes destination directory: %s", header.Name)
+		}
+
 		switch header.Typeflag {
 		case tar.TypeDir:
 			c.logger.Debug().Msgf("Extracting dir: %s -> %s", name, targetPath)
@@ -429,16 +479,30 @@ func (c *Client) extractTarball(r io.Reader, templatePath, destDir string, exclu
 				return fmt.Errorf("failed to create parent directory: %w", err)
 			}
 
+			if header.Size > maxExtractFileSize {
+				return fmt.Errorf("file %s exceeds maximum allowed size (%d bytes, limit %d)", name, header.Size, maxExtractFileSize)
+			}
+
 			f, err := os.OpenFile(targetPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.FileMode(header.Mode)&0755|0600) //nolint:gosec // mode is masked to safe range
 			if err != nil {
 				return fmt.Errorf("failed to create file %s: %w", targetPath, err)
 			}
 
-			if _, err := io.Copy(f, tr); err != nil { //nolint:gosec // tar size is bounded by GitHub API tarball limits
+			written, err := io.CopyN(f, tr, maxExtractFileSize+1)
+			if err != nil && !errors.Is(err, io.EOF) {
 				f.Close()
 				return fmt.Errorf("failed to write file %s: %w", targetPath, err)
 			}
+			if written > maxExtractFileSize {
+				f.Close()
+				return fmt.Errorf("file %s exceeds maximum allowed size (limit %d bytes)", name, maxExtractFileSize)
+			}
 			f.Close()
+
+			totalSize += written
+			if totalSize > maxExtractTotalSize {
+				return fmt.Errorf("archive exceeds maximum total extracted size (limit %d bytes)", maxExtractTotalSize)
+			}
 		}
 	}
 
