@@ -1,6 +1,9 @@
 package templaterepo
 
 import (
+	"archive/tar"
+	"bytes"
+	"compress/gzip"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -13,6 +16,38 @@ import (
 
 	"github.com/smartcontractkit/cre-cli/internal/testutil"
 )
+
+// buildTarGz builds an in-memory gzip'd tarball with a synthetic top-level
+// prefix directory (mirroring GitHub's tarball layout) followed by the given
+// files, each written with the requested content.
+func buildTarGz(t *testing.T, files map[string]string) *bytes.Buffer {
+	t.Helper()
+
+	var buf bytes.Buffer
+	gw := gzip.NewWriter(&buf)
+	tw := tar.NewWriter(gw)
+
+	require.NoError(t, tw.WriteHeader(&tar.Header{
+		Name:     "owner-repo-abc123/",
+		Typeflag: tar.TypeDir,
+		Mode:     0755,
+	}))
+
+	for name, content := range files {
+		require.NoError(t, tw.WriteHeader(&tar.Header{
+			Name:     "owner-repo-abc123/" + name,
+			Typeflag: tar.TypeReg,
+			Mode:     0644,
+			Size:     int64(len(content)),
+		}))
+		_, err := tw.Write([]byte(content))
+		require.NoError(t, err)
+	}
+
+	require.NoError(t, tw.Close())
+	require.NoError(t, gw.Close())
+	return &buf
+}
 
 func TestDiscoverTemplates_FindsTemplateYaml(t *testing.T) {
 	logger := testutil.NewTestLogger()
@@ -142,4 +177,69 @@ func TestExtractTarball_BasicExtraction(t *testing.T) {
 	require.FileExists(t, testFile)
 
 	_ = client
+}
+
+func TestExtractTarball_EnforcesPerFileSizeLimit(t *testing.T) {
+	orig := maxExtractFileSize
+	maxExtractFileSize = 10
+	defer func() { maxExtractFileSize = orig }()
+
+	client := NewClient(testutil.NewTestLogger())
+	tarball := buildTarGz(t, map[string]string{
+		".cre/template.yaml": "kind: x\n",
+		"main.go":            "this file is way over the ten byte cap",
+	})
+
+	err := client.extractTarball(tarball, "", t.TempDir(), nil, false)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "exceeds maximum allowed size")
+}
+
+func TestExtractTarball_EnforcesTotalSizeLimit(t *testing.T) {
+	orig := maxExtractTotalSize
+	maxExtractTotalSize = 10
+	defer func() { maxExtractTotalSize = orig }()
+
+	client := NewClient(testutil.NewTestLogger())
+	tarball := buildTarGz(t, map[string]string{
+		"a.txt": "123456",
+		"b.txt": "789012",
+	})
+
+	err := client.extractTarball(tarball, "", t.TempDir(), nil, false)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "maximum total extracted size")
+}
+
+func TestExtractTarball_EnforcesFileCountLimit(t *testing.T) {
+	orig := maxExtractFileCount
+	maxExtractFileCount = 2
+	defer func() { maxExtractFileCount = orig }()
+
+	client := NewClient(testutil.NewTestLogger())
+	tarball := buildTarGz(t, map[string]string{
+		"a.txt": "1",
+		"b.txt": "2",
+		"c.txt": "3",
+	})
+
+	err := client.extractTarball(tarball, "", t.TempDir(), nil, false)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "too many entries")
+}
+
+func TestExtractTarball_RejectsPathTraversal(t *testing.T) {
+	client := NewClient(testutil.NewTestLogger())
+	destDir := t.TempDir()
+
+	tarball := buildTarGz(t, map[string]string{
+		"../../etc/passwd": "evil",
+	})
+
+	err := client.extractTarball(tarball, "", destDir, nil, false)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "illegal file path")
+
+	entries, _ := os.ReadDir(destDir)
+	assert.Empty(t, entries)
 }
