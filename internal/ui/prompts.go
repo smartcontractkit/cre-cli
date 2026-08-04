@@ -80,8 +80,10 @@ func Confirm(title string, opts ...ConfirmOption) (bool, error) {
 type InputOption func(*inputConfig)
 
 type inputConfig struct {
-	description string
-	placeholder string
+	description  string
+	placeholder  string
+	defaultValue string
+	validate     func(string) error
 }
 
 // WithInputDescription sets the description for an Input prompt.
@@ -98,6 +100,22 @@ func WithPlaceholder(placeholder string) InputOption {
 	}
 }
 
+// WithDefaultValue pre-fills the Input prompt with the given value, so pressing
+// Enter without editing submits the default.
+func WithDefaultValue(value string) InputOption {
+	return func(c *inputConfig) {
+		c.defaultValue = value
+	}
+}
+
+// WithValidate sets a validation function for an Input prompt. The form
+// will not submit until the function returns nil.
+func WithValidate(validate func(string) error) InputOption {
+	return func(c *inputConfig) {
+		c.validate = validate
+	}
+}
+
 // Input displays a single text input prompt and returns the entered value.
 func Input(title string, opts ...InputOption) (string, error) {
 	cfg := inputConfig{}
@@ -105,7 +123,7 @@ func Input(title string, opts ...InputOption) (string, error) {
 		o(&cfg)
 	}
 
-	var result string
+	result := cfg.defaultValue
 	input := huh.NewInput().
 		Title(title).
 		Value(&result)
@@ -115,6 +133,9 @@ func Input(title string, opts ...InputOption) (string, error) {
 	}
 	if cfg.placeholder != "" {
 		input = input.Placeholder(cfg.placeholder)
+	}
+	if cfg.validate != nil {
+		input = input.Validate(cfg.validate)
 	}
 
 	form := huh.NewForm(

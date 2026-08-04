@@ -175,7 +175,23 @@ func (h *handler) Execute(ctx context.Context, in Inputs) error {
 			)
 			return fmt.Errorf("missing required flags for --non-interactive mode")
 		}
-		label, err := ui.Input("Provide a label for your owner address")
+		defaultLabel := h.defaultOwnerLabel()
+
+		title := "Provide a label for your owner address"
+		if defaultLabel != "" {
+			title = fmt.Sprintf("%s [%s]", title, defaultLabel)
+		}
+
+		label, err := ui.Input(
+			title,
+			ui.WithDefaultValue(defaultLabel),
+			ui.WithValidate(func(s string) error {
+				if strings.TrimSpace(s) == "" {
+					return fmt.Errorf("a label is required")
+				}
+				return nil
+			}),
+		)
 		if err != nil {
 			return err
 		}
@@ -406,6 +422,20 @@ func (h *handler) checkIfAlreadyLinked() (bool, error) {
 
 	ui.Success("No existing link found for this address")
 	return false, nil
+}
+
+// defaultOwnerLabel derives a suggested label from the authenticated user's
+// email address (the portion before the "@"). Returns "" if no email is available.
+func (h *handler) defaultOwnerLabel() string {
+	email, err := h.credentials.GetEmail()
+	if err != nil || email == "" {
+		return ""
+	}
+
+	if idx := strings.Index(email, "@"); idx > 0 {
+		return email[:idx]
+	}
+	return email
 }
 
 func (h *handler) displayDetails() {
