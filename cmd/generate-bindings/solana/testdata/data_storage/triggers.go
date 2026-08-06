@@ -60,6 +60,12 @@ func (c *Codec) EncodeAccessLoggedSubkeys(filters []AccessLoggedFilters) ([]*sol
 		}
 	}
 
+	if len(CallerComparers) > 4 {
+		return nil, fmt.Errorf("too many comparers for subkey Caller: maximum supported is %d, got %d", 4, len(CallerComparers))
+	}
+	if len(MessageComparers) > 4 {
+		return nil, fmt.Errorf("too many comparers for subkey Message: maximum supported is %d, got %d", 4, len(MessageComparers))
+	}
 	subkeys := make([]*solana.SubkeyConfig, 0)
 	if len(CallerComparers) > 0 {
 		subkeys = append(subkeys, &solana.SubkeyConfig{
@@ -168,6 +174,15 @@ func (c *Codec) EncodeDynamicEventSubkeys(filters []DynamicEventFilters) ([]*sol
 		}
 	}
 
+	if len(KeyComparers) > 4 {
+		return nil, fmt.Errorf("too many comparers for subkey Key: maximum supported is %d, got %d", 4, len(KeyComparers))
+	}
+	if len(SenderComparers) > 4 {
+		return nil, fmt.Errorf("too many comparers for subkey Sender: maximum supported is %d, got %d", 4, len(SenderComparers))
+	}
+	if len(MetadataComparers) > 4 {
+		return nil, fmt.Errorf("too many comparers for subkey Metadata: maximum supported is %d, got %d", 4, len(MetadataComparers))
+	}
 	subkeys := make([]*solana.SubkeyConfig, 0)
 	if len(KeyComparers) > 0 {
 		subkeys = append(subkeys, &solana.SubkeyConfig{

@@ -251,6 +251,41 @@ func TestLogTrigger(t *testing.T) {
 		require.Equal(t, mockLog, decodedLog.Log)
 	})
 
+	t.Run("AccessLogged subkey comparer limit", func(t *testing.T) {
+		pk1, err := solana.NewRandomPrivateKey()
+		require.NoError(t, err)
+		pk2, err := solana.NewRandomPrivateKey()
+		require.NoError(t, err)
+		pk3, err := solana.NewRandomPrivateKey()
+		require.NoError(t, err)
+		pk4, err := solana.NewRandomPrivateKey()
+		require.NoError(t, err)
+		pk5, err := solana.NewRandomPrivateKey()
+		require.NoError(t, err)
+
+		caller1 := pk1.PublicKey()
+		caller2 := pk2.PublicKey()
+		caller3 := pk3.PublicKey()
+		caller4 := pk4.PublicKey()
+		caller5 := pk5.PublicKey()
+
+		filters := []datastorage.AccessLoggedFilters{
+			{Caller: &caller1},
+			{Caller: &caller2},
+			{Caller: &caller3},
+			{Caller: &caller4},
+			{Caller: &caller5},
+		}
+
+		_, err = ds.Codec.EncodeAccessLoggedSubkeys(filters)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "too many comparers for subkey Caller")
+
+		_, err = ds.LogTriggerAccessLoggedLog(anyChainSelector, "too-many-comparers", filters, nil)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "too many comparers for subkey Caller")
+	})
+
 	t.Run("DynamicEvent scalar filters exclude nested and vec fields", func(t *testing.T) {
 		key := "lookup-key"
 		sender := "alice"

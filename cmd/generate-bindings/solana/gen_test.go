@@ -46,3 +46,29 @@ func TestGenerateBindings_MissingAddress(t *testing.T) {
 	_, statErr := os.Stat(filepath.Join(outDir, "program_id.go"))
 	assert.True(t, os.IsNotExist(statErr), "program_id.go should not be generated when IDL has no address")
 }
+
+func TestGenerateBindings_RejectsMoreThanFourIndexedFields(t *testing.T) {
+	idl := `{
+	"address": "ECL8142j2YQAvs9R9geSsRnkVH2wLEi7soJCRyJ74cfL",
+	"metadata": {"name": "over_indexed", "version": "0.1.0", "spec": "0.1.0"},
+	"instructions": [
+		{"name": "on_report", "discriminator": [214,173,18,221,173,148,151,208], "accounts": [], "args": []}
+	],
+	"accounts": [],
+	"events": [{"name": "OverIndexed", "discriminator": [1,2,3,4,5,6,7,8]}],
+	"errors": [],
+	"types": [{"name": "OverIndexed", "type": {"kind": "struct", "fields": [
+		{"name": "a", "type": "u8"},
+		{"name": "b", "type": "u16"},
+		{"name": "c", "type": "u32"},
+		{"name": "d", "type": "string"},
+		{"name": "e", "type": "bytes"}
+	]}}]
+}`
+	idlPath := filepath.Join(t.TempDir(), "over_indexed.json")
+	require.NoError(t, os.WriteFile(idlPath, []byte(idl), 0o600))
+
+	err := solana.GenerateBindings(idlPath, "over_indexed", t.TempDir())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "maximum supported is 4")
+}

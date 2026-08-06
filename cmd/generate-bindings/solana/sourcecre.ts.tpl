@@ -171,6 +171,9 @@ export const encode{{.Name}}Subkeys = (filters: {{.Name}}Filters[]): SolanaSubke
   }
   const subkeys: SolanaSubkeyConfigJson[] = []
 {{- range .FilterFields}}
+  if ({{.Name}}Comparers.length > 4) {
+    throw new Error(`too many comparers for subkey {{.PathName}}: maximum supported is 4, got ${ {{.Name}}Comparers.length }`)
+  }
   if ({{.Name}}Comparers.length > 0) {
     subkeys.push({ path: ['{{.PathName}}'], comparers: {{.Name}}Comparers })
   }

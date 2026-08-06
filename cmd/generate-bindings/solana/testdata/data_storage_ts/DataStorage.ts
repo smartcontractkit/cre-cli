@@ -199,8 +199,14 @@ export const encodeAccessLoggedSubkeys = (filters: AccessLoggedFilters[]): Solan
     }
   }
   const subkeys: SolanaSubkeyConfigJson[] = []
+  if (callerComparers.length > 4) {
+    throw new Error(`too many comparers for subkey Caller: maximum supported is 4, got ${ callerComparers.length }`)
+  }
   if (callerComparers.length > 0) {
     subkeys.push({ path: ['Caller'], comparers: callerComparers })
+  }
+  if (messageComparers.length > 4) {
+    throw new Error(`too many comparers for subkey Message: maximum supported is 4, got ${ messageComparers.length }`)
   }
   if (messageComparers.length > 0) {
     subkeys.push({ path: ['Message'], comparers: messageComparers })
@@ -249,11 +255,20 @@ export const encodeDynamicEventSubkeys = (filters: DynamicEventFilters[]): Solan
     }
   }
   const subkeys: SolanaSubkeyConfigJson[] = []
+  if (keyComparers.length > 4) {
+    throw new Error(`too many comparers for subkey Key: maximum supported is 4, got ${ keyComparers.length }`)
+  }
   if (keyComparers.length > 0) {
     subkeys.push({ path: ['Key'], comparers: keyComparers })
   }
+  if (senderComparers.length > 4) {
+    throw new Error(`too many comparers for subkey Sender: maximum supported is 4, got ${ senderComparers.length }`)
+  }
   if (senderComparers.length > 0) {
     subkeys.push({ path: ['Sender'], comparers: senderComparers })
+  }
+  if (metadataComparers.length > 4) {
+    throw new Error(`too many comparers for subkey Metadata: maximum supported is 4, got ${ metadataComparers.length }`)
   }
   if (metadataComparers.length > 0) {
     subkeys.push({ path: ['Metadata'], comparers: metadataComparers })
