@@ -514,7 +514,8 @@ func creEventFiltersStruct(eventName string, filterFields []eventFilterField) Co
 	st := Empty()
 	st.Commentf("%sFilters holds optional filter values for %s log triggers.", exportedName, exportedName)
 	st.Line()
-	st.Comment("Set a field to filter on that value (OR across filter rows). Leave nil for wildcard.")
+	st.Comment("Set fields within one row to AND those predicates. Multiple rows are OR alternatives, but current")
+	st.Comment("trigger configuration supports only a single row, so encoding rejects multi-row input.")
 	st.Line()
 	st.Type().Id(exportedName + "Filters").StructFunc(func(g *Group) {
 		for _, field := range filterFields {
@@ -532,6 +533,16 @@ func creEncodeSubkeysForEvent(eventName string, filterFields []eventFilterField)
 		Params(Id("filters").Index().Id(exportedName+"Filters")).
 		Params(Index().Op("*").Qual(PkgSolanaCre, "SubkeyConfig"), Error()).
 		BlockFunc(func(block *Group) {
+			block.If(Len(Id("filters")).Op(">").Lit(1)).Block(
+				Return(
+					Nil(),
+					Qual("fmt", "Errorf").Call(
+						Lit("multiple filter rows are not supported for "+exportedName+"; provide a single filter row"),
+					),
+				),
+			)
+			block.Line()
+
 			for _, field := range filterFields {
 				block.Id(field.goName+"Comparers").Op(":=").Make(
 					Index().Op("*").Qual(PkgSolanaCre, "ValueComparator"), Lit(0),

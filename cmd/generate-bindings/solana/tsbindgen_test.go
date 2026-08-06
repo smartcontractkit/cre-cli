@@ -158,6 +158,7 @@ func TestGenerateBindingsTS_LogTriggers(t *testing.T) {
 	assert.Contains(t, source, "export type AccessLoggedFilters = {")
 	assert.Contains(t, source, "caller?: Address | null")
 	assert.Contains(t, source, "export const encodeAccessLoggedSubkeys = (filters: AccessLoggedFilters[]): SolanaSubkeyConfigJson[] =>")
+	assert.Contains(t, source, "multiple filter rows are not supported for AccessLogged; provide a single filter row")
 	assert.Contains(t, source, "logTriggerAccessLoggedLog(")
 	assert.Contains(t, source, "): Trigger<SolanaLog, SolanaDecodedLog<AccessLogged>> {")
 	// Subkey paths use the Go bindings' PascalCase names.
@@ -176,7 +177,8 @@ func TestGenerateBindingsTS_LogTriggers(t *testing.T) {
 	assert.NotContains(t, source, "metadataArray?:")
 	// An event with no filterable fields still gets a trigger with empty filters.
 	assert.Contains(t, source, "export type NoFieldsFilters = Record<string, never>")
-	assert.Contains(t, source, "export const encodeNoFieldsSubkeys = (_filters: NoFieldsFilters[]): SolanaSubkeyConfigJson[] => []")
+	assert.Contains(t, source, "export const encodeNoFieldsSubkeys = (filters: NoFieldsFilters[]): SolanaSubkeyConfigJson[] => {")
+	assert.Contains(t, source, "multiple filter rows are not supported for NoFields; provide a single filter row")
 	assert.Contains(t, source, "logTriggerNoFieldsLog(")
 
 	// An IDL without events must not emit trigger code or its imports.

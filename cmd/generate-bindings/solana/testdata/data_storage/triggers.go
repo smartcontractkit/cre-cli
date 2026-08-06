@@ -23,13 +23,17 @@ var (
 // Nested structs, vecs, arrays, bool, u128, and i128 require manual SubkeyConfig.
 
 // AccessLoggedFilters holds optional filter values for AccessLogged log triggers.
-// Set a field to filter on that value (OR across filter rows). Leave nil for wildcard.
+// Set fields within one row to AND those predicates. Multiple rows are OR alternatives, but current // trigger configuration supports only a single row, so encoding rejects multi-row input.
 type AccessLoggedFilters struct {
 	Caller  *solanago.PublicKey
 	Message *string
 }
 
 func (c *Codec) EncodeAccessLoggedSubkeys(filters []AccessLoggedFilters) ([]*solana.SubkeyConfig, error) {
+	if len(filters) > 1 {
+		return nil, fmt.Errorf("multiple filter rows are not supported for AccessLogged; provide a single filter row")
+	}
+
 	CallerComparers := make([]*solana.ValueComparator, 0)
 	MessageComparers := make([]*solana.ValueComparator, 0)
 
@@ -115,7 +119,7 @@ func (c *DataStorage) LogTriggerAccessLoggedLog(
 }
 
 // DynamicEventFilters holds optional filter values for DynamicEvent log triggers.
-// Set a field to filter on that value (OR across filter rows). Leave nil for wildcard.
+// Set fields within one row to AND those predicates. Multiple rows are OR alternatives, but current // trigger configuration supports only a single row, so encoding rejects multi-row input.
 type DynamicEventFilters struct {
 	Key      *string
 	Sender   *string
@@ -123,6 +127,10 @@ type DynamicEventFilters struct {
 }
 
 func (c *Codec) EncodeDynamicEventSubkeys(filters []DynamicEventFilters) ([]*solana.SubkeyConfig, error) {
+	if len(filters) > 1 {
+		return nil, fmt.Errorf("multiple filter rows are not supported for DynamicEvent; provide a single filter row")
+	}
+
 	KeyComparers := make([]*solana.ValueComparator, 0)
 	SenderComparers := make([]*solana.ValueComparator, 0)
 	MetadataComparers := make([]*solana.ValueComparator, 0)
@@ -225,10 +233,14 @@ func (c *DataStorage) LogTriggerDynamicEventLog(
 }
 
 // NoFieldsFilters holds optional filter values for NoFields log triggers.
-// Set a field to filter on that value (OR across filter rows). Leave nil for wildcard.
+// Set fields within one row to AND those predicates. Multiple rows are OR alternatives, but current // trigger configuration supports only a single row, so encoding rejects multi-row input.
 type NoFieldsFilters struct{}
 
 func (c *Codec) EncodeNoFieldsSubkeys(filters []NoFieldsFilters) ([]*solana.SubkeyConfig, error) {
+	if len(filters) > 1 {
+		return nil, fmt.Errorf("multiple filter rows are not supported for NoFields; provide a single filter row")
+	}
+
 	subkeys := make([]*solana.SubkeyConfig, 0)
 	return subkeys, nil
 }
