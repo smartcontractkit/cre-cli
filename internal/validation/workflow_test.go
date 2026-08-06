@@ -415,7 +415,7 @@ func TestValidationMessagesEscapeControlCharacters(t *testing.T) {
 		{name: "ansi escape in owner label", input: S{OwnerLabel: "a\x1b[31mRED"}},
 		{name: "newline in owner label", input: S{OwnerLabel: "a\ninjected: true"}},
 		{name: "carriage return in owner label", input: S{OwnerLabel: "a\rb"}},
-		{name: "bidi override in owner label", input: S{OwnerLabel: "a‮b"}},
+		{name: "bidi override in owner label", input: S{OwnerLabel: "a\u202eb"}},
 		{name: "ansi escape in workflow name", input: S{WorkflowName: "a\x1b[31mRED"}},
 		{name: "newline in workflow name", input: S{WorkflowName: "a\ninjected: true"}},
 	}
