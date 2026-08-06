@@ -13,6 +13,7 @@ import (
 
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/rpc"
+	"github.com/smartcontractkit/cre-cli/internal/validation"
 )
 
 // GetWorkflowPathFromFile reads workflow-path from a workflow.yaml file (same value deploy/simulate get from Settings).
@@ -137,6 +138,13 @@ func loadWorkflowSettings(logger *zerolog.Logger, v *viper.Viper, cmd *cobra.Com
 	}
 
 	workflowSettings.UserWorkflowSettings.WorkflowName = getSetting(WorkflowNameSettingName)
+	// Validate the name here rather than per-command so every consumer of the setting inherits
+	// the check. Only enforced when set, so commands that run without a workflow.yaml still work.
+	if name := workflowSettings.UserWorkflowSettings.WorkflowName; name != "" {
+		if err := validation.IsValidWorkflowName(name); err != nil {
+			return WorkflowSettings{}, errors.Wrapf(err, "invalid %s in workflow.yaml for target %q", WorkflowNameSettingName, target)
+		}
+	}
 	workflowSettings.WorkflowArtifactSettings.WorkflowPath = getSetting(WorkflowPathSettingName)
 	workflowSettings.WorkflowArtifactSettings.ConfigPath = getSetting(ConfigPathSettingName)
 	workflowSettings.WorkflowArtifactSettings.SecretsPath = getSetting(SecretsPathSettingName)

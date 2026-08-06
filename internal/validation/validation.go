@@ -4,6 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strconv"
+	"strings"
+	"unicode"
 
 	"github.com/go-playground/locales/en"
 	ut "github.com/go-playground/universal-translator"
@@ -17,6 +20,7 @@ var customValidators = map[string]validator.Func{
 	"ecdsa_private_key":  isECDSAPrivateKey,
 	"uint8_string_array": isUint8Array,
 	"json":               files.IsValidJSON,
+	"owner_label":        isOwnerLabel,
 	"path_read":          files.HasReadAccessToPath,
 	"project_name":       isProjectName,
 	"wasm":               files.IsValidWASM,
@@ -37,6 +41,7 @@ var customTranslations = map[string]string{
 	"http_url":           "{0} must be a valid HTTP URL: {1}",
 	"http_url|eq=":       "{0} must be empty or a valid HTTP URL: {1}",
 	"json":               "{0} must be a valid JSON file: {1}",
+	"owner_label":        "{0} must be non-empty, no longer than 64 characters, start with a letter or number, and contain only letters (a-z, A-Z), numbers (0-9), spaces, dots (.), dashes (-), and underscores (_): {1}",
 	"path_read":          "{0} must have read access to path: {1}",
 	"workflow_path_read": "{0} must have read access to path: {1}",
 	"project_name":       "{0} must be non-empty, no longer than 64 characters, and contain only letters (a-z, A-Z), numbers (0-9), dashes (-), and underscores (_): {1}",
@@ -121,7 +126,7 @@ func (v *Validator) RegisterCustomTranslation(tag, msg string) error {
 			return ut.Add(tag, msg, true)
 		},
 		func(ut ut.Translator, fe validator.FieldError) string {
-			t, _ := ut.T(tag, fe.Field(), fmt.Sprintf("%v", fe.Value()))
+			t, _ := ut.T(tag, fe.Field(), safeErrorValue(fe.Value()))
 			return t
 		},
 	)
@@ -174,6 +179,21 @@ func (v *Validator) ParseValidationErrors(err error) ValidationErrors {
 	return ves
 }
 
+// safeErrorValue renders a rejected value for inclusion in a validation message.
+// These messages reach the terminal and the logs, and the rejected value is
+// attacker-influenced — it can come from a workflow.yaml in a cloned repo, not
+// just a flag the user typed. Emitting it verbatim would let control characters
+// (ESC sequences, newlines, bidi overrides) rewrite terminal output on the error
+// path, so any value containing non-printable runes is quoted and escaped.
+// Ordinary values are returned unchanged to keep messages readable.
+func safeErrorValue(value interface{}) string {
+	s := fmt.Sprintf("%v", value)
+	if strings.ContainsFunc(s, func(r rune) bool { return !unicode.IsPrint(r) }) {
+		return strconv.Quote(s)
+	}
+	return s
+}
+
 func registerDefaultTranslations(v *validator.Validate, trans ut.Translator) error {
 	// Register default translations for all built-in tags
 	if err := en_translations.RegisterDefaultTranslations(v, trans); err != nil {
@@ -186,7 +206,7 @@ func registerDefaultTranslations(v *validator.Validate, trans ut.Translator) err
 				return ut.Add(tag, message, true)
 			},
 			func(ut ut.Translator, fe validator.FieldError) string {
-				t, _ := ut.T(tag, fe.Field(), fmt.Sprintf("%v", fe.Value()))
+				t, _ := ut.T(tag, fe.Field(), safeErrorValue(fe.Value()))
 				return t
 			},
 		); err != nil {

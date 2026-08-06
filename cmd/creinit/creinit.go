@@ -167,6 +167,19 @@ func (h *handler) ValidateInputs(inputs Inputs) error {
 	return nil
 }
 
+// validateTemplateWorkflowDirs checks every workflow directory declared by a template manifest.
+// The manifest comes from a remote repository, and each dir is used both as a path segment during
+// scaffolding and as the workflow name substituted into workflow.yaml, so each must satisfy the
+// same rules as a user-supplied workflow name.
+func validateTemplateWorkflowDirs(tmpl *templaterepo.TemplateSummary) error {
+	for _, wf := range tmpl.Workflows {
+		if err := validation.IsValidWorkflowName(wf.Dir); err != nil {
+			return fmt.Errorf("template %q declares an invalid workflow directory %q: %w", tmpl.Name, wf.Dir, err)
+		}
+	}
+	return nil
+}
+
 func (h *handler) Execute(inputs Inputs) error {
 	if !h.validated {
 		return fmt.Errorf("handler inputs not validated")
@@ -336,6 +349,13 @@ func (h *handler) Execute(inputs Inputs) error {
 	}
 	if selectedTemplate == nil {
 		return fmt.Errorf("no template selected")
+	}
+
+	// Template manifests are fetched from a remote repo, so their declared workflow dirs are
+	// untrusted input: each becomes a path segment during scaffolding and the workflow name
+	// substituted into workflow.yaml. Check them all before anything is written to disk.
+	if err := validateTemplateWorkflowDirs(selectedTemplate); err != nil {
+		return err
 	}
 
 	// Store for telemetry (flag will be set in RunE)
