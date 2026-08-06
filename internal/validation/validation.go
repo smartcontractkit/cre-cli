@@ -4,6 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strconv"
+	"strings"
+	"unicode"
 
 	"github.com/go-playground/locales/en"
 	ut "github.com/go-playground/universal-translator"
@@ -123,7 +126,7 @@ func (v *Validator) RegisterCustomTranslation(tag, msg string) error {
 			return ut.Add(tag, msg, true)
 		},
 		func(ut ut.Translator, fe validator.FieldError) string {
-			t, _ := ut.T(tag, fe.Field(), fmt.Sprintf("%v", fe.Value()))
+			t, _ := ut.T(tag, fe.Field(), safeErrorValue(fe.Value()))
 			return t
 		},
 	)
@@ -176,6 +179,21 @@ func (v *Validator) ParseValidationErrors(err error) ValidationErrors {
 	return ves
 }
 
+// safeErrorValue renders a rejected value for inclusion in a validation message.
+// These messages reach the terminal and the logs, and the rejected value is
+// attacker-influenced — it can come from a workflow.yaml in a cloned repo, not
+// just a flag the user typed. Emitting it verbatim would let control characters
+// (ESC sequences, newlines, bidi overrides) rewrite terminal output on the error
+// path, so any value containing non-printable runes is quoted and escaped.
+// Ordinary values are returned unchanged to keep messages readable.
+func safeErrorValue(value interface{}) string {
+	s := fmt.Sprintf("%v", value)
+	if strings.ContainsFunc(s, func(r rune) bool { return !unicode.IsPrint(r) }) {
+		return strconv.Quote(s)
+	}
+	return s
+}
+
 func registerDefaultTranslations(v *validator.Validate, trans ut.Translator) error {
 	// Register default translations for all built-in tags
 	if err := en_translations.RegisterDefaultTranslations(v, trans); err != nil {
@@ -188,7 +206,7 @@ func registerDefaultTranslations(v *validator.Validate, trans ut.Translator) err
 				return ut.Add(tag, message, true)
 			},
 			func(ut ut.Translator, fe validator.FieldError) string {
-				t, _ := ut.T(tag, fe.Field(), fmt.Sprintf("%v", fe.Value()))
+				t, _ := ut.T(tag, fe.Field(), safeErrorValue(fe.Value()))
 				return t
 			},
 		); err != nil {

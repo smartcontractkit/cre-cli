@@ -1,10 +1,13 @@
 package validation
 
 import (
+	"strconv"
 	"strings"
 	"testing"
+	"unicode"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestValidateWorkflowOwner(t *testing.T) {
@@ -389,6 +392,74 @@ func TestValidateOwnerLabel(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Validation messages echo the rejected value, and that value can come from a
+// workflow.yaml in a cloned repo rather than a flag the user typed. Control
+// characters must never reach the terminal verbatim on the error path.
+func TestValidationMessagesEscapeControlCharacters(t *testing.T) {
+	t.Parallel()
+
+	validator, err := NewValidator()
+	assert.NoError(t, err, "Expected no error during validator initialization")
+
+	type S struct {
+		OwnerLabel   string `validate:"omitempty,owner_label"`
+		WorkflowName string `validate:"omitempty,workflow_name"`
+	}
+
+	tests := []struct {
+		name  string
+		input S
+	}{
+		{name: "ansi escape in owner label", input: S{OwnerLabel: "a\x1b[31mRED"}},
+		{name: "newline in owner label", input: S{OwnerLabel: "a\ninjected: true"}},
+		{name: "carriage return in owner label", input: S{OwnerLabel: "a\rb"}},
+		{name: "bidi override in owner label", input: S{OwnerLabel: "a‮b"}},
+		{name: "ansi escape in workflow name", input: S{WorkflowName: "a\x1b[31mRED"}},
+		{name: "newline in workflow name", input: S{WorkflowName: "a\ninjected: true"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := validator.Struct(tt.input)
+			require.Error(t, err, "value should be rejected")
+
+			errs := validator.ParseValidationErrors(err)
+			require.NotEmpty(t, errs)
+
+			for _, ve := range errs {
+				for _, r := range ve.Detail {
+					assert.True(t, unicode.IsPrint(r),
+						"message must not contain non-printable rune %q: %s",
+						r, strconv.Quote(ve.Detail))
+				}
+			}
+		})
+	}
+}
+
+// Values without control characters must render unchanged, so ordinary messages
+// stay readable and are not gratuitously quoted.
+func TestValidationMessagesLeavePrintableValuesUnquoted(t *testing.T) {
+	t.Parallel()
+
+	validator, err := NewValidator()
+	assert.NoError(t, err, "Expected no error during validator initialization")
+
+	type S struct {
+		OwnerLabel string `validate:"owner_label"`
+	}
+
+	err = validator.Struct(S{OwnerLabel: `bad"; echo pwned`})
+	require.Error(t, err)
+
+	errs := validator.ParseValidationErrors(err)
+	require.Len(t, errs, 1)
+	assert.Contains(t, errs[0].Detail, `bad"; echo pwned`,
+		"printable values should appear verbatim, not escaped")
 }
 
 func TestOwnerLabelPanicOnNonString(t *testing.T) {
