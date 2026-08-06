@@ -1042,3 +1042,94 @@ func TestInitProjectRootFlagFindsExistingProject(t *testing.T) {
 		GetTemplateFileListGo(),
 	)
 }
+
+// maliciousDirTemplate builds a template whose second declared workflow dir is untrusted. Two
+// workflows are declared so the wizard skips the workflow-name step (which would need a TTY),
+// and so the unsafe dir is reached through the multi-workflow scaffolding path.
+func maliciousDirTemplate(name, dir string) templaterepo.TemplateSummary {
+	return templaterepo.TemplateSummary{
+		TemplateMetadata: templaterepo.TemplateMetadata{
+			Kind:        "starter-template",
+			Name:        name,
+			Title:       "Malicious",
+			Description: "Template declaring an unsafe workflow dir",
+			Language:    "go",
+			Category:    "workflow",
+			Author:      "Test",
+			License:     "MIT",
+			Networks:    []string{"ethereum-testnet-sepolia"},
+			Workflows: []templaterepo.WorkflowDirEntry{
+				{Dir: "safe", Description: "safe"},
+				{Dir: dir, Description: "unsafe"},
+			},
+		},
+		Path:   "starter-templates/malicious",
+		Source: templaterepo.RepoSource{Owner: "test", Repo: "templates", Ref: "main"},
+	}
+}
+
+func TestTemplateWorkflowDirIsValidated(t *testing.T) {
+	tests := []struct {
+		name string
+		dir  string
+	}{
+		{name: "parent traversal", dir: "../escape"},
+		{name: "absolute path", dir: "/tmp/escape"},
+		{name: "nested path", dir: "a/b"},
+		{name: "double quote breaks yaml scalar", dir: `a" injected: true`},
+		{name: "newline", dir: "a\ninjected: true"},
+		{name: "command substitution", dir: "a$(id)"},
+		{name: "empty", dir: ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sim := chainsim.NewSimulatedEnvironment(t)
+			defer sim.Close()
+
+			tempDir := t.TempDir()
+			restoreCwd, err := testutil.ChangeWorkingDirectory(tempDir)
+			require.NoError(t, err)
+			defer restoreCwd()
+
+			const templateName = "malicious-template"
+			registry := &mockRegistry{
+				templates: []templaterepo.TemplateSummary{maliciousDirTemplate(templateName, tt.dir)},
+			}
+
+			inputs := Inputs{
+				ProjectName:        "victimProj",
+				TemplateName:       templateName,
+				WorkflowName:       "",
+				RpcURLs:            map[string]string{"ethereum-testnet-sepolia": "https://rpc.example.com"},
+				DeploymentRegistry: "private",
+			}
+
+			h := newHandlerWithRegistry(sim.NewRuntimeContext(), registry)
+			require.NoError(t, h.ValidateInputs(inputs))
+
+			err = h.Execute(inputs)
+			require.Error(t, err, "template dir %q should be rejected", tt.dir)
+			require.Contains(t, err.Error(), "invalid workflow directory")
+
+			// Nothing may be written, in or out of the project root: the check runs before
+			// the project directory is created and before the template is scaffolded.
+			require.False(t, pathExistsForTest(filepath.Join(tempDir, "victimProj")),
+				"project root should not be created when the template is rejected")
+			entries, err := os.ReadDir(tempDir)
+			require.NoError(t, err)
+			require.Empty(t, entries, "no files should be written outside the project root")
+		})
+	}
+}
+
+func TestTemplateWorkflowDirsAcceptValidNames(t *testing.T) {
+	t.Parallel()
+
+	tmpl := testMultiWorkflowTemplate
+	require.NoError(t, validateTemplateWorkflowDirs(&tmpl),
+		"the multi-workflow fixture declares valid dirs and must keep loading")
+
+	single := testGoTemplate
+	require.NoError(t, validateTemplateWorkflowDirs(&single))
+}

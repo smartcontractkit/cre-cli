@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
@@ -38,7 +39,7 @@ type Inputs struct {
 	OutputPath   string `validate:"omitempty,filepath,ascii,max=97" cli:"--output"`
 	WasmPath     string `validate:"omitempty,file,ascii,max=2048" cli:"--wasm"`
 
-	OwnerLabel       string `validate:"omitempty"`
+	OwnerLabel       string `validate:"omitempty,owner_label" cli:"--owner-label"`
 	SkipConfirmation bool
 	NonInteractive   bool
 	// SkipTypeChecks passes --skip-type-checks to cre-compile for TypeScript workflows.
@@ -163,7 +164,7 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 		OutputPath: v.GetString("output"),
 		WasmPath:   v.GetString("wasm"),
 
-		OwnerLabel:       v.GetString("owner-label"),
+		OwnerLabel:       strings.TrimSpace(v.GetString("owner-label")),
 		SkipConfirmation: v.GetBool(settings.Flags.SkipConfirmation.Name),
 		NonInteractive:   v.GetBool(settings.Flags.NonInteractive.Name),
 		SkipTypeChecks:   v.GetBool(cmdcommon.SkipTypeChecksCLIFlag),
