@@ -54,7 +54,7 @@ type Inputs struct {
 	SecretsPath  string `validate:"omitempty,file,ascii,max=97"`
 	EngineLogs   bool   `validate:"omitempty" cli:"--engine-logs"`
 	Broadcast    bool   `validate:"-"`
-	WorkflowName string `validate:"required"`
+	WorkflowName string `validate:"required,workflow_name"`
 	// Chain-type-specific fields
 	ChainTypeClients map[string]map[uint64]chain.ChainClient `validate:"omitempty"`
 	ChainTypeKeys    map[string]interface{}                  `validate:"-"`

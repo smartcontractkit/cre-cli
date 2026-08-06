@@ -39,8 +39,7 @@ const (
 )
 
 type Inputs struct {
-	// TODO: Add validation for WorkflowOwnerLabel
-	WorkflowOwnerLabel              string `validate:"omitempty"`
+	WorkflowOwnerLabel              string `validate:"omitempty,owner_label" cli:"--owner-label"`
 	WorkflowOwner                   string `validate:"required,workflow_owner"`
 	WorkflowRegistryContractAddress string `validate:"required"`
 	NonInteractive                  bool
@@ -138,7 +137,7 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 	return Inputs{
 		WorkflowOwner:                   h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerAddress,
 		WorkflowRegistryContractAddress: h.environmentSet.WorkflowRegistryAddress,
-		WorkflowOwnerLabel:              v.GetString("owner-label"),
+		WorkflowOwnerLabel:              strings.TrimSpace(v.GetString("owner-label")),
 		NonInteractive:                  v.GetBool(settings.Flags.NonInteractive.Name),
 	}, nil
 }
@@ -185,14 +184,19 @@ func (h *handler) Execute(ctx context.Context, in Inputs) error {
 		label, err := ui.Input(
 			title,
 			ui.WithDefaultValue(defaultLabel),
+			// IsValidOwnerLabel rejects the empty string, so this also enforces
+			// that a label is required.
 			ui.WithValidate(func(s string) error {
-				if strings.TrimSpace(s) == "" {
-					return fmt.Errorf("a label is required")
-				}
-				return nil
+				return validation.IsValidOwnerLabel(strings.TrimSpace(s))
 			}),
 		)
 		if err != nil {
+			return err
+		}
+		// Re-check after the prompt: Execute runs after ValidateInputs, so a
+		// prompt-supplied label would otherwise never reach the validator.
+		label = strings.TrimSpace(label)
+		if err := validation.IsValidOwnerLabel(label); err != nil {
 			return err
 		}
 		in.WorkflowOwnerLabel = label
@@ -425,17 +429,25 @@ func (h *handler) checkIfAlreadyLinked() (bool, error) {
 }
 
 // defaultOwnerLabel derives a suggested label from the authenticated user's
-// email address (the portion before the "@"). Returns "" if no email is available.
+// email address (the portion before the "@"). Returns "" if no email is
+// available, or if the derived value is not a valid owner label — an email
+// local part may contain characters a label may not, and pre-filling the
+// prompt with a value the validator rejects would block submission.
 func (h *handler) defaultOwnerLabel() string {
 	email, err := h.credentials.GetEmail()
 	if err != nil || email == "" {
 		return ""
 	}
 
+	label := email
 	if idx := strings.Index(email, "@"); idx > 0 {
-		return email[:idx]
+		label = email[:idx]
 	}
-	return email
+
+	if validation.IsValidOwnerLabel(label) != nil {
+		return ""
+	}
+	return label
 }
 
 func (h *handler) displayDetails() {

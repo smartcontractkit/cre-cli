@@ -101,6 +101,30 @@ func TestWorkflowDeployCommand(t *testing.T) {
 				wantDetail: "DonFamily is a required field",
 			},
 			{
+				name: "Owner Label With Quote Breaks Out Of YAML Scalar",
+				inputs: Inputs{
+					WorkflowName:  "valid_workflow",
+					WorkflowOwner: chainsim.TestAddress,
+					DonFamily:     "test_label",
+					OwnerLabel:    `bad"; echo pwned`,
+				},
+				wantErr:    true,
+				wantKey:    "Inputs.OwnerLabel",
+				wantDetail: `--owner-label must be non-empty, no longer than 64 characters, start with a letter or number, and contain only letters (a-z, A-Z), numbers (0-9), spaces, dots (.), dashes (-), and underscores (_): bad"; echo pwned`,
+			},
+			{
+				name: "Owner Label With Command Substitution",
+				inputs: Inputs{
+					WorkflowName:  "valid_workflow",
+					WorkflowOwner: chainsim.TestAddress,
+					DonFamily:     "test_label",
+					OwnerLabel:    "bad$(id)",
+				},
+				wantErr:    true,
+				wantKey:    "Inputs.OwnerLabel",
+				wantDetail: "--owner-label must be non-empty, no longer than 64 characters, start with a letter or number, and contain only letters (a-z, A-Z), numbers (0-9), spaces, dots (.), dashes (-), and underscores (_): bad$(id)",
+			},
+			{
 				name: "Invalid Binary URL",
 				inputs: Inputs{
 					WorkflowName:  "valid_workflow",
