@@ -8,6 +8,7 @@ import (
 	caperrors "github.com/smartcontractkit/chainlink-common/pkg/capabilities/errors"
 	solcap "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/chain-capabilities/solana"
 	solanaserver "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/chain-capabilities/solana/server"
+	capmon "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/monitoring"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/core"
 
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain"
@@ -89,7 +90,10 @@ func (l *LimitedSolanaChain) AckEvent(ctx context.Context, triggerID, eventID, m
 
 // --- Lifecycle: delegate ---
 
-func (l *LimitedSolanaChain) ChainSelector() uint64           { return l.inner.ChainSelector() }
+func (l *LimitedSolanaChain) ChainSelector() uint64 { return l.inner.ChainSelector() }
+func (l *LimitedSolanaChain) MonitoringContext() capmon.MonitoringContext {
+	return l.inner.MonitoringContext()
+}
 func (l *LimitedSolanaChain) Start(ctx context.Context) error { return l.inner.Start(ctx) }
 func (l *LimitedSolanaChain) Close() error                    { return l.inner.Close() }
 func (l *LimitedSolanaChain) HealthReport() map[string]error  { return l.inner.HealthReport() }
