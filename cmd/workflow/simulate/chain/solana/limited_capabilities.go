@@ -90,7 +90,7 @@ func (l *LimitedSolanaChain) AckEvent(ctx context.Context, triggerID, eventID, m
 
 // --- Lifecycle: delegate ---
 
-func (l *LimitedSolanaChain) ChainSelector() uint64           { return l.inner.ChainSelector() }
+func (l *LimitedSolanaChain) ChainSelector() uint64 { return l.inner.ChainSelector() }
 func (l *LimitedSolanaChain) MonitoringContext() capmon.MonitoringContext {
 	return l.inner.MonitoringContext()
 }
