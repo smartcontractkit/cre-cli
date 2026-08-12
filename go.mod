@@ -32,15 +32,15 @@ require (
 	github.com/smartcontractkit/chainlink-common v0.11.2-0.20260806135013-71242167dd64
 	github.com/smartcontractkit/chainlink-common/keystore v1.2.1-0.20260623104656-f39eba3e2bc6
 	github.com/smartcontractkit/chainlink-evm/gethwrappers v0.0.0-20260512150409-b4068bf735e6
-	github.com/smartcontractkit/chainlink-protos/cre/go v0.0.0-20260804200254-c1accce563a8
+	github.com/smartcontractkit/chainlink-protos/cre/go v0.0.0-20260812164709-12e39591442b
 	github.com/smartcontractkit/chainlink-protos/workflows/go v0.0.0-20260716141634-c0cc05ed05d8
 	github.com/smartcontractkit/chainlink-solana v1.3.1-0.20260722124945-1fb87a829114
 	github.com/smartcontractkit/chainlink-solana/contracts v0.0.0-20260807135521-86656a07cfa7
 	github.com/smartcontractkit/chainlink-testing-framework/seth v1.51.5
 	github.com/smartcontractkit/chainlink/deployment v0.0.0-20260521170940-67f9a4b233f8
 	github.com/smartcontractkit/chainlink/v2 v2.29.1-cre-beta.0.0.20260721144940-aa2a70309776
-	github.com/smartcontractkit/cre-sdk-go v1.18.0
-	github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm v1.0.0-beta.15.0.20260806122424-24d22c8dc5bd
+	github.com/smartcontractkit/cre-sdk-go v1.19.0
+	github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/evm v1.0.0-beta.17
 	github.com/smartcontractkit/cre-sdk-go/capabilities/blockchain/solana v0.1.0-beta.1
 	github.com/smartcontractkit/mcms v0.45.0
 	github.com/smartcontractkit/tdh2/go/tdh2 v0.0.0-20251120172354-e8ec0386b06c
