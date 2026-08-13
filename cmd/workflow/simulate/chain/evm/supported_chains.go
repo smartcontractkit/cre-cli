@@ -150,5 +150,18 @@ var SupportedChains = []chain.ChainConfig{
 	{Selector: chainselectors.PRIVATE_TESTNET_QUARTZITE.Selector, Forwarder: "0xBefF2190E6F56C108cD748844Bbd18D4a70F1E21"},
 
 	// Monad
+	{Selector: chainselectors.MONAD_TESTNET.Selector, Forwarder: "0xB9F79d863261869B234c481D1f9A7af84AeAd192"},
 	{Selector: chainselectors.MONAD_MAINNET.Selector, Forwarder: "0x9eF6468C5f37b976E57d52054c693269479A784d"},
+
+	// T-REX
+	{Selector: chainselectors.T_REX_TESTNET.Selector, Forwarder: "0x53bC8B33F9Fd9cf5323b260CC078967cC3f30297"},
+
+	// Robinhood
+	{Selector: chainselectors.ROBINHOOD_TESTNET.Selector, Forwarder: "0x0b93082D9b3C7C97fAcd250082899BAcf3af3885"},
+
+	// Stable
+	{Selector: chainselectors.STABLE_TESTNET.Selector, Forwarder: "0x9081624a30231767C3093A5F2Ae1C57A4457C88F"},
+
+	// Tempo
+	{Selector: chainselectors.TEMPO_TESTNET_MODERATO.Selector, Forwarder: "0x9eF6468C5f37b976E57d52054c693269479A784d"},
 }
