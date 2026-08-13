@@ -1,5 +1,11 @@
 # cre-cli
 
+## 1.9.0
+
+### Minor Changes
+
+- [#566](https://github.com/smartcontractkit/cre-cli/pull/566) [`7276be0`](https://github.com/smartcontractkit/cre-cli/commit/7276be0eb801037fd04527c990f75f0e745c013d) Thanks [@russell-stern](https://github.com/russell-stern)! - Bump cre-sdk-go to v1.17.0 and @chainlink/cre-sdk to ^1.18.0
+
 ## 1.8.2
 
 ### Patch Changes
