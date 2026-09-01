@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain/evm"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
@@ -21,6 +22,7 @@ type ChainForwarderRow struct {
 	ChainName     string `json:"chainName"`
 	ChainSelector uint64 `json:"chainSelector"`
 	Address       string `json:"address"`
+	MockAddress   string `json:"mockAddress"`
 }
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
@@ -28,8 +30,8 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "supported-chains",
-		Short: "List chains and mock forwarder addresses for your tenant",
-		Long: "Lists chain selectors and mock Keystone forwarder contract addresses returned by the platform " +
+		Short: "List chains, forwarder addresses and mock forwarder addresses for your tenant",
+		Long: "Lists chain selectors, Keystone forwarder contract addresses and mock forwarder addresses returned by the platform " +
 			"for the current tenant (from cre login / CRE_API_KEY). Chains are those enabled for your tenant.",
 		Example: "cre workflow supported-chains\n" +
 			"  cre workflow supported-chains --output json",
@@ -56,10 +58,17 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 				if n, err := settings.GetChainNameByChainSelector(f.ChainSelector); err == nil {
 					name = n
 				}
+				var mockForwarderAddress string
+				for _, chain := range evm.SupportedChains {
+					if chain.Selector == f.ChainSelector {
+						mockForwarderAddress = chain.Forwarder
+					}
+				}
 				rows = append(rows, ChainForwarderRow{
 					ChainName:     name,
 					ChainSelector: f.ChainSelector,
 					Address:       f.Address,
+					MockAddress:   mockForwarderAddress,
 				})
 			}
 			sort.Slice(rows, func(i, j int) bool {
@@ -78,16 +87,16 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 				return nil
 			}
 
-			ui.Print("Chains and mock forwarders (tenant-scoped):")
+			ui.Print("Tenant-scoped chains, forwarders and mock forwarders:")
 			ui.Line()
 
 			var buf strings.Builder
 			w := tabwriter.NewWriter(&buf, 0, 0, 2, ' ', 0)
-			if _, err := fmt.Fprintln(w, "CHAIN\tSELECTOR\tMOCK FORWARDER"); err != nil {
+			if _, err := fmt.Fprintln(w, "CHAIN\tSELECTOR\tFORWARDER ADDRESS\tMOCK FORWARDER ADDRESS"); err != nil {
 				return err
 			}
 			for _, r := range rows {
-				if _, err := fmt.Fprintf(w, "%s\t%d\t%s\n", r.ChainName, r.ChainSelector, r.Address); err != nil {
+				if _, err := fmt.Fprintf(w, "%s\t%d\t%s\t%s\n", r.ChainName, r.ChainSelector, r.Address, r.MockAddress); err != nil {
 					return err
 				}
 			}
