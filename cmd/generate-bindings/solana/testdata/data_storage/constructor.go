@@ -85,4 +85,7 @@ type DataStorageCodec interface {
 	EncodeNoFieldsStruct(in NoFields) ([]byte, error)
 	EncodeUpdateReservesStruct(in UpdateReserves) ([]byte, error)
 	EncodeUserDataStruct(in UserData) ([]byte, error)
+	EncodeAccessLoggedSubkeys(filters []AccessLoggedFilters) ([]*solana.SubkeyConfig, error)
+	EncodeDynamicEventSubkeys(filters []DynamicEventFilters) ([]*solana.SubkeyConfig, error)
+	EncodeNoFieldsSubkeys(filters []NoFieldsFilters) ([]*solana.SubkeyConfig, error)
 }
