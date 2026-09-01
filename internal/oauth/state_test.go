@@ -16,16 +16,6 @@ func TestRandomState(t *testing.T) {
 	assert.NotEqual(t, s, s2)
 }
 
-func TestStateFromAuthorizeURL(t *testing.T) {
-	s, err := StateFromAuthorizeURL("https://id.example/authorize?state=abc&client_id=x")
-	require.NoError(t, err)
-	assert.Equal(t, "abc", s)
-
-	s, err = StateFromAuthorizeURL("https://id.example/authorize")
-	require.NoError(t, err)
-	assert.Equal(t, "", s)
-}
-
 func TestClientIDFromAuthorizeURL(t *testing.T) {
 	c, err := ClientIDFromAuthorizeURL("https://auth0.example/authorize?client_id=myapp&response_type=code")
 	require.NoError(t, err)

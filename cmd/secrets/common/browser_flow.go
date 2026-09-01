@@ -151,6 +151,13 @@ func (h *Handler) ExecuteBrowserVaultAuthorization(ctx context.Context, method s
 		return err
 	}
 
+	// Generated up front so the platform can bind it into the pushed authorization request.
+	// State appended to the authorize URL afterwards is ignored and never returned.
+	state, err := oauth.RandomState()
+	if err != nil {
+		return err
+	}
+
 	gqlClient := graphqlclient.New(h.Credentials, h.EnvironmentSet, h.Log)
 	gqlReq := graphql.NewRequest(createVaultAuthURLMutation)
 	reqVars := map[string]any{
@@ -158,6 +165,7 @@ func (h *Handler) ExecuteBrowserVaultAuthorization(ctx context.Context, method s
 		"redirectUri":   constants.AuthRedirectURI,
 		"requestDigest": digestHexString(digest),
 		"permission":    perm,
+		"state":         state,
 	}
 	// Bind authorization to the JWT-derived workflow owner so digests align with gateway validation.
 	if w := strings.TrimSpace(workflowOwner); w != "" {
@@ -178,10 +186,8 @@ func (h *Handler) ExecuteBrowserVaultAuthorization(ctx context.Context, method s
 		return fmt.Errorf("could not complete the authorization request")
 	}
 
-	platformState, _ := oauth.StateFromAuthorizeURL(authURL)
-
 	codeCh := make(chan string, 1)
-	server, listener, err := oauth.NewCallbackHTTPServer(constants.AuthListenAddr, oauth.SecretsCallbackHandler(codeCh, platformState, h.Log))
+	server, listener, err := oauth.NewCallbackHTTPServer(constants.AuthListenAddr, oauth.SecretsCallbackHandler(codeCh, state, h.Log))
 	if err != nil {
 		return fmt.Errorf("could not start local callback server: %w", err)
 	}
