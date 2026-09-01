@@ -6,8 +6,11 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
+	"os/signal"
 	rt "runtime"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -204,10 +207,16 @@ func (h *handler) startAuthFlow() (string, error) {
 	// Static waiting message (no spinner - user will see this when they return)
 	ui.Dim("Waiting for authentication... (Press Ctrl+C to cancel)")
 
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(sigCh)
+
 	select {
 	case code := <-codeCh:
 		ui.Line()
 		return code, nil
+	case sig := <-sigCh:
+		return "", fmt.Errorf("login cancelled (%s)", sig)
 	case <-time.After(500 * time.Second):
 		return "", fmt.Errorf("timeout waiting for authorization code")
 	}
