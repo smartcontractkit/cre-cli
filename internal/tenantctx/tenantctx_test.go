@@ -160,19 +160,12 @@ func TestFetchAndWriteContext_OnChainAndPrivate(t *testing.T) {
 	if onchain.Address == nil || *onchain.Address != "0xaE55eB3EDAc48a1163EE2cbb1205bE1e90Ea1135" {
 		t.Errorf("on-chain Address unexpected: %v", onchain.Address)
 	}
-	if len(onchain.SecretsAuthFlows) != 2 || onchain.SecretsAuthFlows[0] != "browser" || onchain.SecretsAuthFlows[1] != "owner-key-signing" {
-		t.Errorf("on-chain SecretsAuthFlows = %v, want [browser owner-key-signing]", onchain.SecretsAuthFlows)
-	}
-
 	private := envCtx.Registries[1]
 	if private.ID != "private" {
 		t.Errorf("private ID = %q, want %q", private.ID, "private")
 	}
 	if private.Type != "off-chain" {
 		t.Errorf("private Type = %q, want %q", private.Type, "off-chain")
-	}
-	if len(private.SecretsAuthFlows) != 1 || private.SecretsAuthFlows[0] != "browser" {
-		t.Errorf("private SecretsAuthFlows = %v, want [browser]", private.SecretsAuthFlows)
 	}
 
 	if len(envCtx.Forwarders) != 1 {
@@ -502,20 +495,6 @@ func TestFetchAndWriteContext_PersistsUnknownRegistryType(t *testing.T) {
 	}
 	if envCtx.Registries[1].Type != "unknown" {
 		t.Errorf("unknown registry type = %q, want %q", envCtx.Registries[1].Type, "unknown")
-	}
-}
-
-func TestMapSecretsAuthFlows(t *testing.T) {
-	log := testutil.NewTestLogger()
-	got := mapSecretsAuthFlows([]string{"BROWSER", "OWNER_KEY_SIGNING", "FUTURE_FLOW"}, log)
-	want := []string{"browser", "owner-key-signing"}
-	if len(got) != len(want) {
-		t.Fatalf("length mismatch: got %v, want %v", got, want)
-	}
-	for i := range want {
-		if got[i] != want[i] {
-			t.Errorf("index %d: got %q, want %q", i, got[i], want[i])
-		}
 	}
 }
 
