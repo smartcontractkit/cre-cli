@@ -26,12 +26,11 @@ const ContextFile = "context.yaml"
 
 // Registry represents a single available workflow registry.
 type Registry struct {
-	ID               string   `yaml:"id" json:"id"`
-	Label            string   `yaml:"label" json:"label"`
-	Type             string   `yaml:"type" json:"type"`
-	ChainSelector    *string  `yaml:"chain_selector,omitempty" json:"chainSelector,omitempty"`
-	Address          *string  `yaml:"address,omitempty" json:"address,omitempty"`
-	SecretsAuthFlows []string `yaml:"secrets_auth_flows" json:"secretsAuthFlows"`
+	ID            string  `yaml:"id" json:"id"`
+	Label         string  `yaml:"label" json:"label"`
+	Type          string  `yaml:"type" json:"type"`
+	ChainSelector *string `yaml:"chain_selector,omitempty" json:"chainSelector,omitempty"`
+	Address       *string `yaml:"address,omitempty" json:"address,omitempty"`
 }
 
 // Forwarder is a chain selector and mock forwarder contract address for the tenant.
@@ -73,12 +72,11 @@ type getTenantConfigResponse struct {
 		VaultGatewayURL      string             `json:"vaultGatewayUrl"`
 		CapabilitiesRegistry gqlOnChainContract `json:"capabilitiesRegistry"`
 		Registries           []struct {
-			ID               string   `json:"id"`
-			Label            string   `json:"label"`
-			Type             string   `json:"type"`
-			ChainSelector    *string  `json:"chainSelector"`
-			Address          *string  `json:"address"`
-			SecretsAuthFlows []string `json:"secretsAuthFlows"`
+			ID            string  `json:"id"`
+			Label         string  `json:"label"`
+			Type          string  `json:"type"`
+			ChainSelector *string `json:"chainSelector"`
+			Address       *string `json:"address"`
 		} `json:"registries"`
 		Forwarders []gqlForwarder `json:"forwarders"`
 	} `json:"getTenantConfig"`
@@ -99,7 +97,6 @@ const getTenantConfigQuery = `query GetTenantConfig {
       type
       chainSelector
       address
-      secretsAuthFlows
     }
     forwarders {
       chainSelector
@@ -137,12 +134,11 @@ func FetchAndWriteContext(ctx context.Context, gqlClient *graphqlclient.Client, 
 		}
 
 		registries = append(registries, &Registry{
-			ID:               id,
-			Label:            label,
-			Type:             string(regType),
-			ChainSelector:    r.ChainSelector,
-			Address:          r.Address,
-			SecretsAuthFlows: mapSecretsAuthFlows(r.SecretsAuthFlows, log),
+			ID:            id,
+			Label:         label,
+			Type:          string(regType),
+			ChainSelector: r.ChainSelector,
+			Address:       r.Address,
 		})
 	}
 
@@ -187,21 +183,6 @@ func FetchAndWriteContext(ctx context.Context, gqlClient *graphqlclient.Client, 
 	}
 
 	return writeContextFile(contextMap, log)
-}
-
-func mapSecretsAuthFlows(gqlFlows []string, log *zerolog.Logger) []string {
-	flows := make([]string, 0, len(gqlFlows))
-	for _, f := range gqlFlows {
-		switch f {
-		case "BROWSER":
-			flows = append(flows, "browser")
-		case "OWNER_KEY_SIGNING":
-			flows = append(flows, "owner-key-signing")
-		default:
-			log.Debug().Str("flow", f).Msg("unknown secrets auth flow, skipping")
-		}
-	}
-	return flows
 }
 
 func abbreviateAddress(addr string) string {
