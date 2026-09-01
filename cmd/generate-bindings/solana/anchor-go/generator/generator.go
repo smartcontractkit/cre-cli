@@ -12,8 +12,8 @@ import (
 var Debug = false // Set to true to enable debug logging.
 
 type Generator struct {
-	options            *GeneratorOptions
-	idl                *idl.Idl
+	options             *GeneratorOptions
+	idl                 *idl.Idl
 	complexEnumRegistry map[string]struct{}
 }
 
@@ -89,6 +89,12 @@ func (g *Generator) Generate() (*Output, error) {
 		}
 		if len(g.idl.Events) > 0 {
 			file, err := g.genfile_events()
+			if err != nil {
+				return nil, err
+			}
+			output.Files = append(output.Files, file)
+
+			file, err = g.genfile_triggers()
 			if err != nil {
 				return nil, err
 			}
