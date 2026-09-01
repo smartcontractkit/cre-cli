@@ -1,10 +1,10 @@
 ## cre workflow supported-chains
 
-List chains and mock forwarder addresses for your tenant
+List chains, forwarder addresses and mock forwarder addresses for your tenant
 
 ### Synopsis
 
-Lists chain selectors and mock Keystone forwarder contract addresses returned by the platform for the current tenant (from cre login / CRE_API_KEY). Chains are those enabled for your tenant.
+Lists chain selectors, Keystone forwarder contract addresses and mock forwarder addresses returned by the platform for the current tenant (from cre login / CRE_API_KEY). Chains are those enabled for your tenant.
 
 ```
 cre workflow supported-chains [optional flags]
