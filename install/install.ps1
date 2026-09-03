@@ -157,6 +157,9 @@ function Test-UnsafeZipEntry {
     if ($EntryName -match '^[/\\]') {
         return $true
     }
+    if ($EntryName -match '^[A-Za-z]:') {
+        return $true
+    }
     return $false
 }
 
@@ -174,17 +177,22 @@ function Extract-ExpectedZipEntry {
     $zip = [System.IO.Compression.ZipFile]::OpenRead($ZipPath)
     try {
         $matches = @()
+        $memberCount = 0
         foreach ($entry in $zip.Entries) {
             if (Test-UnsafeZipEntry -EntryName $entry.FullName) {
                 throw "Unsafe zip entry: $($entry.FullName)"
             }
-            if ($entry.Name -eq $ExpectedEntryName) {
+            $memberCount++
+            if ($entry.FullName -eq $ExpectedEntryName) {
                 $matches += $entry
             }
         }
 
+        if ($memberCount -ne 1) {
+            throw "Expected exactly one archive member, found $memberCount."
+        }
         if ($matches.Count -ne 1) {
-            throw "Expected exactly one zip entry named $ExpectedEntryName, found $($matches.Count)."
+            throw "Expected archive member $ExpectedEntryName not found."
         }
 
         $entry = $matches[0]
