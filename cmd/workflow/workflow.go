@@ -16,6 +16,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/simulate"
 	supported_chains "github.com/smartcontractkit/cre-cli/cmd/workflow/supported_chains"
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/test"
+	"github.com/smartcontractkit/cre-cli/cmd/workflow/validate"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 )
 
@@ -39,6 +40,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	workflowCmd.AddCommand(limits.New())
 	workflowCmd.AddCommand(workflowlist.New(runtimeContext))
 	workflowCmd.AddCommand(workflowget.New(runtimeContext))
+	workflowCmd.AddCommand(validate.New(runtimeContext))
 
 	return workflowCmd
 }
