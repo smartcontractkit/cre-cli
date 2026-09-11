@@ -109,7 +109,7 @@ func TestPrintReportPayload(t *testing.T) {
 
 	relPkgDir, err := filepath.Rel(repoRoot, pkgDir)
 	require.NoError(t, err)
-	cmd := exec.Command("go", "test", "./"+filepath.ToSlash(relPkgDir), "-run", "TestPrintReportPayload", "-v")
+	cmd := exec.Command("go", "test", "./"+filepath.ToSlash(relPkgDir), "-run", "TestPrintReportPayload", "-v") //nolint:gosec // G204 -- relPkgDir is a test-created temp package under this repo.
 	cmd.Dir = repoRoot
 	output, err := cmd.CombinedOutput()
 	require.NoError(t, err, string(output))
