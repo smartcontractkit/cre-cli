@@ -35,6 +35,9 @@ func TestGenerateBindingsCrossLanguageReportPayloadGolden(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(repoRoot, "node_modules", "viem")); err != nil {
 		t.Skip("node_modules/viem is required for TypeScript report payload golden test")
 	}
+	if _, err := os.Stat(filepath.Join(repoRoot, "node_modules", "typescript")); err != nil {
+		t.Skip("node_modules/typescript is required for TypeScript report payload golden test")
+	}
 
 	tempDir, err := os.MkdirTemp(wd, "golden-report-payload-")
 	require.NoError(t, err)
@@ -119,20 +122,27 @@ func generatedTSReportPayloadHex(t *testing.T, repoRoot, tsFile string) string {
 	writeGeneratedTSSDKStub(t, filepath.Dir(tsFile))
 
 	jsOutDir := filepath.Join(filepath.Dir(tsFile), "js")
-	cmd := exec.Command(
-		filepath.Join(repoRoot, "node_modules", ".bin", "tsc"),
-		tsFile,
-		"--target", "ES2022",
-		"--module", "NodeNext",
-		"--moduleResolution", "NodeNext",
-		"--outDir", jsOutDir,
-		"--skipLibCheck",
-	)
+	require.NoError(t, os.MkdirAll(jsOutDir, 0o755))
+
+	compiledFile := filepath.Join(jsOutDir, filepath.Base(strings.TrimSuffix(tsFile, ".ts")+".js"))
+	transpileScript := `
+import { readFileSync, writeFileSync } from 'node:fs'
+import ts from 'typescript'
+
+const src = readFileSync(process.argv[1], 'utf8')
+const result = ts.transpileModule(src, {
+  compilerOptions: {
+    module: ts.ModuleKind.ES2022,
+    target: ts.ScriptTarget.ES2022,
+  },
+})
+writeFileSync(process.argv[2], result.outputText)
+`
+	cmd := exec.Command("node", "--input-type=module", "-e", transpileScript, tsFile, compiledFile)
 	cmd.Dir = repoRoot
 	output, err := cmd.CombinedOutput()
 	require.NoError(t, err, string(output))
 
-	compiledFile := filepath.Join(jsOutDir, filepath.Base(strings.TrimSuffix(tsFile, ".ts")+".js"))
 	script := `
 import { pathToFileURL } from 'node:url'
 
@@ -181,39 +191,13 @@ func writeGeneratedTSSDKStub(t *testing.T, dir string) {
   }
 }`), 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(sdkDir, "index.js"), []byte(`
-export const zeroAddress = '0x0000000000000000000000000000000000000000'
-export const LAST_FINALIZED_BLOCK_NUMBER = {}
-export class EVMClient {}
-export const bytesToHex = (bytes) => '0x' + Buffer.from(bytes).toString('hex')
 export const hexToBase64 = (hex) => Buffer.from(hex.slice(2), 'hex').toString('base64')
-export const encodeCallMsg = (call) => call
 export const prepareReportRequest = (hexPayload) => ({
   encodedPayload: Buffer.from(hexPayload.slice(2), 'hex').toString('base64'),
   encoderName: 'evm',
   signingAlgo: 'ecdsa',
   hashingAlgo: 'keccak256',
 })
-`), 0o600))
-	require.NoError(t, os.WriteFile(filepath.Join(sdkDir, "index.d.ts"), []byte(`
-export type Runtime<T> = {
-  report(request: unknown): { result(): unknown }
-}
-export type EVMLog = { data: Uint8Array; topics: Uint8Array[] }
-export declare const zeroAddress: '0x0000000000000000000000000000000000000000'
-export declare const LAST_FINALIZED_BLOCK_NUMBER: unknown
-export declare class EVMClient {
-  callContract(runtime: unknown, input: unknown): { result(): { data: Uint8Array } }
-  writeReport(runtime: unknown, input: unknown): { result(): unknown }
-}
-export declare const bytesToHex: (bytes: Uint8Array) => `+"`0x${string}`"+`
-export declare const hexToBase64: (hex: `+"`0x${string}`"+`) => string
-export declare const encodeCallMsg: <T>(call: T) => T
-export declare const prepareReportRequest: (hexPayload: `+"`0x${string}`"+`) => {
-  encodedPayload: string
-  encoderName: string
-  signingAlgo: string
-  hashingAlgo: string
-}
 `), 0o600))
 }
 
