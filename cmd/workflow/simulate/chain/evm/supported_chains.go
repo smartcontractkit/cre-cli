@@ -164,4 +164,7 @@ var SupportedChains = []chain.ChainConfig{
 
 	// Tempo
 	{Selector: chainselectors.TEMPO_TESTNET_MODERATO.Selector, Forwarder: "0x9eF6468C5f37b976E57d52054c693269479A784d"},
+
+	// Basalt (private testnet)
+	{Selector: chainselectors.PRIVATE_TESTNET_BASALT.Selector, Forwarder: "0xBefF2190E6F56C108cD748844Bbd18D4a70F1E21"},
 }
