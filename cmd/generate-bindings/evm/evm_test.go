@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/rs/zerolog"
@@ -384,6 +385,55 @@ func TestEndToEnd_TypeScriptGeneration(t *testing.T) {
 	require.FileExists(t, filepath.Join(tsOutDir, "JsonContract.ts"))
 	require.FileExists(t, filepath.Join(tsOutDir, "JsonContract_mock.ts"))
 	require.FileExists(t, filepath.Join(tsOutDir, "index.ts"))
+}
+
+func TestGenerateBindingsTS_WriteReportHelperEncodesArgsOnly(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "generate-bindings-ts-report-test")
+	require.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	abiContent := `[
+		{
+			"type": "function",
+			"name": "updatePrices",
+			"inputs": [{
+				"name": "priceData",
+				"type": "tuple",
+				"internalType": "struct PriceUpdater.PriceData",
+				"components": [
+					{"name": "ethPrice", "type": "uint256"},
+					{"name": "btcPrice", "type": "uint256"}
+				]
+			}],
+			"outputs": [],
+			"stateMutability": "nonpayable"
+		},
+		{
+			"type": "function",
+			"name": "latestPrice",
+			"inputs": [],
+			"outputs": [{"name": "", "type": "uint256"}],
+			"stateMutability": "view"
+		}
+	]`
+
+	abiFile := filepath.Join(tempDir, "PriceUpdater.abi")
+	err = os.WriteFile(abiFile, []byte(abiContent), 0600)
+	require.NoError(t, err)
+
+	outFile := filepath.Join(tempDir, "PriceUpdater.ts")
+	err = GenerateBindingsTS(abiFile, "PriceUpdater", outFile)
+	require.NoError(t, err)
+
+	content, err := os.ReadFile(outFile)
+	require.NoError(t, err)
+	src := string(content)
+
+	assert.Contains(t, src, "encodeAbiParameters")
+	assert.Contains(t, src, "getFunctionInputs(PriceUpdaterABI, 'updatePrices')")
+	assert.Contains(t, src, ".report(prepareReportRequest(encodedPayload))")
+	assert.Contains(t, src, "const callData = encodeFunctionData({")
+	assert.Equal(t, 1, strings.Count(src, "const callData = encodeFunctionData({"), "only view calls should build calldata in this fixture")
 }
 
 func TestResolveEvmInputs_CustomProjectRoot(t *testing.T) {
