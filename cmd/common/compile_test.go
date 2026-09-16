@@ -73,7 +73,7 @@ func TestCompileWorkflowToWasm_Go_Malformed_Fails(t *testing.T) {
 	_, err := CompileWorkflowToWasm(context.Background(), path, WorkflowCompileOptions{StripSymbols: true})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to compile workflow")
-	assert.Contains(t, err.Error(), "undefined: sdk.RemovedFunctionThatFailsCompilation")
+	assert.Contains(t, err.Error(), "undefined: cre.RemovedFunctionThatFailsCompilation")
 }
 
 func TestCompileWorkflowToWasm_Wasm_Success(t *testing.T) {

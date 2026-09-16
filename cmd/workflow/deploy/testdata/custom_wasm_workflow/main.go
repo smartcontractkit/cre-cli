@@ -1,74 +1,47 @@
+//go:build wasip1
+
 package main
-
-/*
-This file contains the entry point for the WebAssembly (Wasm) executable.
-To ensure the code compiles and runs correctly for Wasm (wasip1 target), we must follow these requirements:
-
-1) **File Name**:
-   The file must be named `main.go`. This is a Go convention for executables that defines where the program's entry point (`main()` function) is located.
-
-2) **Package Name**:
-   The package name must be `main`. This is essential for building an executable in Go. Go's compiler looks for a package named `main` that contains the `main()` function, which acts as the entry point of the program when the Wasm executable is run.
-*/
 
 import (
 	"errors"
-	"log"
+	"fmt"
+	"log/slog"
 
-	"gopkg.in/yaml.v3"
-
-	"github.com/smartcontractkit/chainlink-common/pkg/capabilities/cli/cmd/testdata/fixtures/capabilities/basictrigger"
-	"github.com/smartcontractkit/chainlink-common/pkg/workflows/sdk"
-	"github.com/smartcontractkit/chainlink-common/pkg/workflows/wasm"
+	"github.com/smartcontractkit/cre-sdk-go/capabilities/scheduler/cron"
+	"github.com/smartcontractkit/cre-sdk-go/cre"
+	"github.com/smartcontractkit/cre-sdk-go/cre/wasm"
 )
 
 type Config struct {
-	WorkflowName         string `yaml:"workflowName"`
-	WorkflowOwner        string `yaml:"workflowOwner"`
-	BasicTriggerInterval uint64 `yaml:"basicTriggerInterval"`
+	WorkflowName  string `json:"workflowName"`
+	WorkflowOwner string `json:"workflowOwner"`
+	Schedule      string `json:"schedule"`
 }
 
-func BuildWorkflow(config []byte) *sdk.WorkflowSpecFactory {
-	// Unmarshal the config bytes into the Config struct
-	var parsedConfig Config
-	err := yaml.Unmarshal(config, &parsedConfig)
-	if err != nil {
-		log.Fatalf("Failed to parse config: %v", err)
-	}
-	log.Printf("WorkflowName from config: %v", parsedConfig.WorkflowName)
-	log.Printf("WorkflowOwner from config: %v", parsedConfig.WorkflowOwner)
-	log.Printf("BasicTriggerInterval from config: %v", parsedConfig.BasicTriggerInterval)
-
-	// interval is a mandatory field, throw an error if empty
-	if parsedConfig.BasicTriggerInterval == 0 {
-		log.Fatalf("Error: BasicTriggerInterval is missing in the YAML file")
+func InitWorkflow(config *Config, logger *slog.Logger, secretsProvider cre.SecretsProvider) (cre.Workflow[*Config], error) {
+	if config.Schedule == "" {
+		return nil, errors.New("schedule is missing in the workflow config")
 	}
 
-	workflow := sdk.NewWorkflowSpecFactory()
+	cronTrigger := cron.Trigger(&cron.Config{Schedule: config.Schedule})
 
-	// Trigger
-	triggerCfg := basictrigger.TriggerConfig{Name: "trigger", Number: parsedConfig.BasicTriggerInterval}
-	trigger := triggerCfg.New(workflow)
+	return cre.Workflow[*Config]{
+		cre.Handler(cronTrigger, onCronTrigger),
+	}, nil
+}
 
-	// Action
-	sdk.Compute1[basictrigger.TriggerOutputs, bool](
-		workflow,
-		"transform",
-		sdk.Compute1Inputs[basictrigger.TriggerOutputs]{Arg0: trigger},
-		func(sdk sdk.Runtime, outputs basictrigger.TriggerOutputs) (bool, error) {
-			log.Printf("Output from the basic trigger: %v", outputs.CoolOutput)
-			if outputs.CoolOutput == "cool" {
-				return false, errors.New("it is cool, not good")
-			}
-			return true, nil
-		})
+func onCronTrigger(config *Config, runtime cre.Runtime, trigger *cron.Payload) (string, error) {
+	logger := runtime.Logger()
+	scheduledTime := trigger.ScheduledExecutionTime.AsTime()
+	logger.Info("Cron trigger fired", "workflowName", config.WorkflowName, "scheduledTime", scheduledTime)
 
-	return workflow
+	if config.WorkflowOwner == "" {
+		return "", errors.New("it is cool, not good")
+	}
+
+	return fmt.Sprintf("Fired at %s", scheduledTime), nil
 }
 
 func main() {
-	runner := wasm.NewRunner()
-
-	workflow := BuildWorkflow(runner.Config())
-	runner.Run(workflow)
+	wasm.NewRunner(cre.ParseJSON[Config]).Run(InitWorkflow)
 }
