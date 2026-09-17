@@ -167,4 +167,7 @@ var SupportedChains = []chain.ChainConfig{
 
 	// Basalt (private testnet)
 	{Selector: chainselectors.PRIVATE_TESTNET_BASALT.Selector, Forwarder: "0xBefF2190E6F56C108cD748844Bbd18D4a70F1E21"},
+
+	// Ethereum Hoodi testnet
+	{Selector: chainselectors.ETHEREUM_TESTNET_HOODI.Selector, Forwarder: "0x9eF6468C5f37b976E57d52054c693269479A784d"},
 }

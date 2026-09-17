@@ -8,7 +8,7 @@
   },
   "license": "UNLICENSED",
   "dependencies": {
-    "@chainlink/cre-sdk": "^1.21.1"
+    "@chainlink/cre-sdk": "^1.22.0"
   },
   "devDependencies": {
     "typescript": "5.9.3"

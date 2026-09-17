@@ -2,4 +2,4 @@
 "cre-cli": minor
 ---
 
-Bump cre-sdk-go to v1.19.0 and @chainlink/cre-sdk to ^1.19.1
+Bump cre-sdk-go to v1.20.0 and @chainlink/cre-sdk to ^1.20.0
