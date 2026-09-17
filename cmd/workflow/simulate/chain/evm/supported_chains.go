@@ -29,6 +29,7 @@ var SupportedChains = []chain.ChainConfig{
 	// Ethereum
 	{Selector: chainselectors.ETHEREUM_TESTNET_SEPOLIA.Selector, Forwarder: "0x15fC6ae953E024d975e77382eEeC56A9101f9F88"},
 	{Selector: chainselectors.ETHEREUM_MAINNET.Selector, Forwarder: "0xa3d1ad4ac559a6575a114998affb2fb2ec97a7d9"},
+	{Selector: chainselectors.ETHEREUM_TESTNET_HOODI.Selector, Forwarder: "0x9eF6468C5f37b976E57d52054c693269479A784d"},
 
 	// Base
 	{Selector: chainselectors.ETHEREUM_TESTNET_SEPOLIA_BASE_1.Selector, Forwarder: "0x82300bd7c3958625581cc2f77bc6464dcecdf3e5"},
