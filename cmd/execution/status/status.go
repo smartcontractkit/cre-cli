@@ -81,6 +81,7 @@ func (h *Handler) Execute(ctx context.Context, inputs Inputs) error {
 		var events []workflowdataclient.ExecutionEvent
 		events, err = h.wdc.ListExecutionEvents(ctx, workflowdataclient.ListEventsInput{ExecutionUUID: uuid})
 		if err != nil {
+			spinner.Stop()
 			return err
 		}
 		failEvents = eventsWithErrors(events)
