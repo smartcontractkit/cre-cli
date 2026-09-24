@@ -126,6 +126,201 @@ func TestStatus_FailureShowsErrors(t *testing.T) {
 	assert.NotContains(t, out, "cre execution")
 }
 
+func TestStatus_CompletedWithErrorsShowsCapabilityErrors(t *testing.T) {
+	started := time.Date(2026, 5, 29, 14, 0, 5, 0, time.UTC)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		query, _ := body["query"].(string)
+
+		if strings.Contains(query, "ListExecutionEvents") {
+			gqlRespond(w, map[string]any{
+				"workflowExecutionEvents": map[string]any{
+					"data": []any{
+						map[string]any{
+							"capabilityID": "http-actions@1.0.0-alpha",
+							"status":       "success",
+							"method":       "SendRequest",
+							"startedAt":    started.Format(time.RFC3339),
+							"errors": []any{
+								map[string]any{"error": "context deadline exceeded", "count": 1},
+							},
+						},
+						map[string]any{
+							"capabilityID": "consensus@1.0.0-alpha",
+							"status":       "success",
+							"method":       "Simple",
+							"startedAt":    started.Format(time.RFC3339),
+							"errors":       []any{},
+						},
+					},
+				},
+			})
+			return
+		}
+
+		gqlRespond(w, map[string]any{
+			"workflowExecution": map[string]any{
+				"data": map[string]any{
+					"uuid":             "exec-uuid-1",
+					"workflowUUID":     "wf-uuid-1",
+					"workflowName":     "Price-Feed",
+					"status":           "SUCCESS",
+					"detailedStatus":   "COMPLETED_WITH_ERRORS",
+					"classifiedStatus": "SUCCESS",
+					"startedAt":        started.Format(time.RFC3339),
+					"errors":           []any{},
+				},
+			},
+		})
+	}))
+	t.Cleanup(srv.Close)
+
+	h := execStatus.NewHandlerWithClient(rtCtxFor(t, srv.URL), wdcFor(t, srv.URL))
+
+	out := captureStdout(t, func() {
+		err := h.Execute(context.Background(), execStatus.Inputs{
+			ExecutionRef: "05ace5cf-85ae-448b-9f42-270d42974d35",
+			OutputFormat: "json",
+		})
+		require.NoError(t, err)
+	})
+
+	var result map[string]any
+	require.NoError(t, json.Unmarshal([]byte(out), &result))
+	assert.Equal(t, "SUCCESS", result["status"])
+	assert.Equal(t, "COMPLETED_WITH_ERRORS", result["detailedStatus"])
+	// Top-level errors is empty — the capability error only shows up via failedEvents.
+	errs, _ := result["errors"].([]any)
+	assert.Len(t, errs, 0)
+	fevs, _ := result["failedEvents"].([]any)
+	require.Len(t, fevs, 1)
+	fev, _ := fevs[0].(map[string]any)
+	assert.Equal(t, "http-actions@1.0.0-alpha", fev["capabilityID"])
+}
+
+func TestStatus_SystemErrorShowsSupportMessage(t *testing.T) {
+	started := time.Date(2026, 5, 29, 14, 0, 5, 0, time.UTC)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		query, _ := body["query"].(string)
+
+		if strings.Contains(query, "ListExecutionEvents") {
+			gqlRespond(w, map[string]any{
+				"workflowExecutionEvents": map[string]any{"data": []any{}},
+			})
+			return
+		}
+
+		gqlRespond(w, map[string]any{
+			"workflowExecution": map[string]any{
+				"data": map[string]any{
+					"uuid":             "exec-uuid-1",
+					"workflowUUID":     "wf-uuid-1",
+					"workflowName":     "Price-Feed",
+					"status":           "FAILURE",
+					"detailedStatus":   "FAILED",
+					"classifiedStatus": "SYSTEM_ERROR",
+					"startedAt":        started.Format(time.RFC3339),
+					"errors": []any{
+						map[string]any{"error": "context deadline exceeded", "count": 1},
+					},
+				},
+			},
+		})
+	}))
+	t.Cleanup(srv.Close)
+
+	h := execStatus.NewHandlerWithClient(rtCtxFor(t, srv.URL), wdcFor(t, srv.URL))
+
+	const supportMessage = "This wasn't caused by your workflow. Try running it again — if it keeps happening, contact support."
+
+	jsonOut := captureStdout(t, func() {
+		err := h.Execute(context.Background(), execStatus.Inputs{
+			ExecutionRef: "05ace5cf-85ae-448b-9f42-270d42974d35",
+			OutputFormat: "json",
+		})
+		require.NoError(t, err)
+	})
+	var result map[string]any
+	require.NoError(t, json.Unmarshal([]byte(jsonOut), &result))
+	assert.Equal(t, supportMessage, result["hint"])
+
+	tableOut := captureStdout(t, func() {
+		err := h.Execute(context.Background(), execStatus.Inputs{
+			ExecutionRef: "05ace5cf-85ae-448b-9f42-270d42974d35",
+		})
+		require.NoError(t, err)
+	})
+	assert.Contains(t, tableOut, supportMessage)
+}
+
+func TestStatus_FailureAllEventsSuccessStillShowsCapabilityErrors(t *testing.T) {
+	started := time.Date(2026, 5, 29, 14, 0, 5, 0, time.UTC)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		query, _ := body["query"].(string)
+
+		if strings.Contains(query, "ListExecutionEvents") {
+			// Every event reports "success" even though the execution failed.
+			gqlRespond(w, map[string]any{
+				"workflowExecutionEvents": map[string]any{
+					"data": []any{
+						map[string]any{
+							"capabilityID": "evm:ChainSelector:1@1.0.0",
+							"status":       "success",
+							"method":       "WriteReport",
+							"startedAt":    started.Format(time.RFC3339),
+							"errors": []any{
+								map[string]any{"error": "PerWorkflow.ChainWrite.TargetsLimit limited: cannot use 11, limit is 10", "count": 7},
+							},
+						},
+					},
+				},
+			})
+			return
+		}
+
+		gqlRespond(w, map[string]any{
+			"workflowExecution": map[string]any{
+				"data": map[string]any{
+					"uuid":         "exec-uuid-1",
+					"workflowUUID": "wf-uuid-1",
+					"workflowName": "Price-Feed",
+					"status":       "FAILURE",
+					"startedAt":    started.Format(time.RFC3339),
+					"errors": []any{
+						map[string]any{"error": "PerWorkflow.ChainWrite.TargetsLimit limited: cannot use 11, limit is 10", "count": 7},
+					},
+				},
+			},
+		})
+	}))
+	t.Cleanup(srv.Close)
+
+	h := execStatus.NewHandlerWithClient(rtCtxFor(t, srv.URL), wdcFor(t, srv.URL))
+
+	out := captureStdout(t, func() {
+		err := h.Execute(context.Background(), execStatus.Inputs{
+			ExecutionRef: "05ace5cf-85ae-448b-9f42-270d42974d35",
+			OutputFormat: "json",
+		})
+		require.NoError(t, err)
+	})
+
+	var result map[string]any
+	require.NoError(t, json.Unmarshal([]byte(out), &result))
+	fevs, _ := result["failedEvents"].([]any)
+	require.Len(t, fevs, 1)
+	fev, _ := fevs[0].(map[string]any)
+	assert.Equal(t, "evm:ChainSelector:1@1.0.0", fev["capabilityID"])
+}
+
 func TestStatus_TableShowsDebugHints(t *testing.T) {
 	started := time.Date(2026, 5, 29, 14, 0, 5, 0, time.UTC)
 	finished := time.Date(2026, 5, 29, 14, 0, 17, 0, time.UTC)

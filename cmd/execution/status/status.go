@@ -3,6 +3,7 @@ package status
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/spf13/cobra"
@@ -76,14 +77,13 @@ func (h *Handler) Execute(ctx context.Context, inputs Inputs) error {
 	}()
 	wg.Wait()
 
-	if execErr == nil && exec.Status == workflowdataclient.ExecutionStatusFailure {
-		failEvents, err = h.wdc.ListExecutionEvents(ctx, workflowdataclient.ListEventsInput{
-			ExecutionUUID: uuid,
-			Status:        new(string(workflowdataclient.ExecutionStatusFailure)),
-		})
+	if execErr == nil && shouldFetchCapabilityErrors(*exec) {
+		var events []workflowdataclient.ExecutionEvent
+		events, err = h.wdc.ListExecutionEvents(ctx, workflowdataclient.ListEventsInput{ExecutionUUID: uuid})
 		if err != nil {
 			return err
 		}
+		failEvents = eventsWithErrors(events)
 	}
 
 	spinner.Stop()
@@ -96,6 +96,30 @@ func (h *Handler) Execute(ctx context.Context, inputs Inputs) error {
 	}
 	workflowresolve.PrintExecutionDetailTable(*exec, failEvents)
 	return nil
+}
+
+// shouldFetchCapabilityErrors reports whether it's worth listing this execution's events
+// to look for capability errors: any FAILURE, or a SUCCESS the platform derived as
+// COMPLETED_WITH_ERRORS.
+func shouldFetchCapabilityErrors(exec workflowdataclient.Execution) bool {
+	if exec.Status == workflowdataclient.ExecutionStatusFailure {
+		return true
+	}
+	return exec.DetailedStatus != nil && *exec.DetailedStatus == workflowdataclient.DetailedStatusCompletedWithErrors
+}
+
+// eventsWithErrors returns the events worth showing as capability errors: anything that
+// carries an error, or that reports failure itself even without one. Not filtered to
+// Status=="failure" alone — a capability can carry an error while its own status still
+// reads "success".
+func eventsWithErrors(events []workflowdataclient.ExecutionEvent) []workflowdataclient.ExecutionEvent {
+	out := make([]workflowdataclient.ExecutionEvent, 0, len(events))
+	for _, ev := range events {
+		if len(ev.Errors) > 0 || strings.EqualFold(ev.Status, "failure") {
+			out = append(out, ev)
+		}
+	}
+	return out
 }
 
 // New returns the cobra command.
