@@ -83,6 +83,10 @@ func Execute() {
 }
 
 func newRootCommand() *cobra.Command {
+	// Without this, a subcommand-level PersistentPreRunE would silently shadow
+	// root's, skipping credential loading and telemetry for that whole subtree.
+	cobra.EnableTraverseRunHooks = true
+
 	rootLogger := createLogger()
 	rootViper := createViper()
 	runtimeContext := runtime.NewContext(rootLogger, rootViper)
@@ -592,37 +596,39 @@ func isLoadSettings(cmd *cobra.Command) bool {
 	return !exists
 }
 
-func isLoadCredentials(cmd *cobra.Command) bool {
-	// It is not expected to have the credentials loaded when running the following commands
-	var excludedCommands = map[string]struct{}{
-		"cre version":                  {},
-		"cre login":                    {},
-		"cre logout":                   {},
-		"cre completion bash":          {},
-		"cre completion fish":          {},
-		"cre completion powershell":    {},
-		"cre completion zsh":           {},
-		"cre help":                     {},
-		"cre generate-bindings":        {},
-		"cre generate-bindings evm":    {},
-		"cre generate-bindings solana": {},
-		"cre update":                   {},
-		"cre workflow":                 {},
-		"cre execution":                {},
-		"cre workflow limits":          {},
-		"cre workflow limits export":   {},
-		"cre account":                  {},
-		"cre secrets":                  {},
-		"cre workflow build":           {},
-		"cre workflow hash":            {},
-		"cre templates":                {},
-		"cre templates list":           {},
-		"cre templates add":            {},
-		"cre templates remove":         {},
-		"cre":                          {},
-	}
+// LoginExemptCommands are excluded from credential loading/validation in
+// isLoadCredentials. They still get best-effort credentials via
+// TryAttachCredentials so telemetry keeps working.
+var LoginExemptCommands = map[string]struct{}{
+	"cre version":                  {},
+	"cre login":                    {},
+	"cre logout":                   {},
+	"cre completion bash":          {},
+	"cre completion fish":          {},
+	"cre completion powershell":    {},
+	"cre completion zsh":           {},
+	"cre help":                     {},
+	"cre generate-bindings":        {},
+	"cre generate-bindings evm":    {},
+	"cre generate-bindings solana": {},
+	"cre update":                   {},
+	"cre workflow":                 {},
+	"cre execution":                {},
+	"cre workflow limits":          {},
+	"cre workflow limits export":   {},
+	"cre account":                  {},
+	"cre secrets":                  {},
+	"cre workflow build":           {},
+	"cre workflow hash":            {},
+	"cre templates":                {},
+	"cre templates list":           {},
+	"cre templates add":            {},
+	"cre templates remove":         {},
+	"cre":                          {},
+}
 
-	_, exists := excludedCommands[cmd.CommandPath()]
+func isLoadCredentials(cmd *cobra.Command) bool {
+	_, exists := LoginExemptCommands[cmd.CommandPath()]
 	return !exists
 }
 
