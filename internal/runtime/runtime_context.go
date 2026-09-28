@@ -120,6 +120,21 @@ func (ctx *Context) AttachCredentials(validationCtx context.Context, skipValidat
 	return nil
 }
 
+// TryAttachCredentials silently loads credentials from the environment or disk
+// without validation, prompting, or failing. It is used for commands that do
+// not require authentication so their telemetry events can still be attributed
+// to the logged-in user; telemetry is skipped when no usable credentials exist.
+func (ctx *Context) TryAttachCredentials() {
+	creds, err := credentials.New(ctx.Logger)
+	if err != nil || creds == nil {
+		return
+	}
+	if creds.APIKey == "" && (creds.Tokens == nil || creds.Tokens.AccessToken == "") {
+		return
+	}
+	ctx.Credentials = creds
+}
+
 // AttachTenantContext loads the user context for the current environment.
 // If the manifest is missing, it is fetched from the service first.
 func (ctx *Context) AttachTenantContext(validationCtx context.Context) error {

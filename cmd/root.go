@@ -259,6 +259,12 @@ func newRootCommand() *cobra.Command {
 						return err
 					}
 				}
+			} else {
+				// Commands that don't require login (e.g. generate-bindings, workflow
+				// build) still emit telemetry, which the server only accepts when
+				// authenticated. Attach credentials silently when they exist so those
+				// events can be sent; never validate, prompt, or fail.
+				runtimeContext.TryAttachCredentials()
 			}
 
 			// load settings from yaml files
