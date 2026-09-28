@@ -28,7 +28,7 @@ func TestWorkflowUpsert(t *testing.T) {
 					WorkflowName:  "test_workflow",
 					WorkflowOwner: chainsim.TestAddress,
 					WorkflowPath:  filepath.Join("testdata", "basic_workflow", "main.go"),
-					ConfigPath:    filepath.Join("testdata", "basic_workflow", "config.yml"),
+					ConfigPath:    filepath.Join("testdata", "basic_workflow", "config.json"),
 					DonFamily:     "zone-a",
 					BinaryURL:     "https://example.com/binary",
 					KeepAlive:     true,

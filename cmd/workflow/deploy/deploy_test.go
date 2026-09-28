@@ -264,8 +264,8 @@ func TestResolveInputs_TagTruncation(t *testing.T) {
 func TestResolveInputs_ConfigFlags(t *testing.T) {
 	t.Parallel()
 
-	settingsConfigPath := "testdata/basic_workflow/config.yml"
-	overrideConfigPath := "testdata/basic_workflow/config.yml"
+	settingsConfigPath := "testdata/basic_workflow/config.json"
+	overrideConfigPath := "testdata/basic_workflow/config.json"
 
 	tests := []struct {
 		name               string

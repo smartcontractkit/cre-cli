@@ -79,7 +79,10 @@ func PrintWorkflowStatusTable(v WorkflowStatusView) {
 		ui.Line()
 		ui.Bold("Last execution")
 		ui.Dim(fmt.Sprintf("   ID:             %s", e.ID))
-		ui.Dim(fmt.Sprintf("   Status:         %s", e.Status))
+		ui.Dim(fmt.Sprintf("   Status:         %s", StatusLabel(*e)))
+		if hint := ExecutionHint(*e); hint != "" {
+			ui.Print(ui.RenderWarning("   " + hint))
+		}
 		ui.Dim(fmt.Sprintf("   Started:        %s", e.StartedAt.UTC().Format("2006-01-02 15:04:05 UTC")))
 		if e.FinishedAt != nil {
 			ui.Dim(fmt.Sprintf("   Duration:       %s", formatDuration(e.FinishedAt.Sub(e.StartedAt))))
@@ -137,13 +140,23 @@ func PrintWorkflowStatusJSON(v WorkflowStatusView) error {
 		for _, err := range e.Errors {
 			errs = append(errs, map[string]any{"error": err.Error, "count": err.Count})
 		}
-		out["lastExecution"] = map[string]any{
+		lastExec := map[string]any{
 			"uuid":       e.UUID,
 			"status":     string(e.Status),
 			"startedAt":  e.StartedAt.UTC().Format(time.RFC3339),
 			"finishedAt": timeOrNil(e.FinishedAt),
 			"errors":     errs,
 		}
+		if e.DetailedStatus != nil {
+			lastExec["detailedStatus"] = string(*e.DetailedStatus)
+		}
+		if e.ClassifiedStatus != nil {
+			lastExec["classifiedStatus"] = string(*e.ClassifiedStatus)
+		}
+		if hint := ExecutionHint(*e); hint != "" {
+			lastExec["hint"] = hint
+		}
+		out["lastExecution"] = lastExec
 	}
 
 	data, err := json.MarshalIndent(out, "", "  ")

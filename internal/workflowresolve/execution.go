@@ -10,17 +10,57 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
+// ---- status labels ----
+
+// StatusLabel returns a short, human-readable status string for an execution, spelling
+// out the detailedStatus refinements the raw ExecutionStatus can't express on its own.
+func StatusLabel(e workflowdataclient.Execution) string {
+	if e.DetailedStatus == nil {
+		return string(e.Status)
+	}
+	switch *e.DetailedStatus {
+	case workflowdataclient.DetailedStatusCompletedWithErrors:
+		return "SUCCESS (completed with errors)"
+	case workflowdataclient.DetailedStatusFailedNoDetail:
+		return "FAILURE (no error details reported)"
+	default:
+		return string(e.Status)
+	}
+}
+
+// ExecutionHint returns a one-line explanation to show alongside an execution's status,
+// or "" when none applies. A classifiedStatus of SYSTEM_ERROR takes priority over
+// detailedStatus, since "whose fault" matters more to the reader than "what happened".
+func ExecutionHint(e workflowdataclient.Execution) string {
+	if e.ClassifiedStatus != nil && *e.ClassifiedStatus == workflowdataclient.ClassifiedStatusSystemError {
+		return "This wasn't caused by your workflow. Try running it again — if it keeps happening, contact support."
+	}
+	if e.DetailedStatus == nil {
+		return ""
+	}
+	switch *e.DetailedStatus {
+	case workflowdataclient.DetailedStatusCompletedWithErrors:
+		return "The workflow finished, but one or more capability calls returned an error — see below."
+	case workflowdataclient.DetailedStatusFailedNoDetail:
+		return "The execution failed without reporting a reason. Check `cre execution logs` for clues."
+	default:
+		return ""
+	}
+}
+
 // ---- List executions ----
 
 type executionJSON struct {
-	UUID         string  `json:"uuid"`
-	WorkflowUUID string  `json:"workflowUUID"`
-	WorkflowName string  `json:"workflowName"`
-	Status       string  `json:"status"`
-	StartedAt    string  `json:"startedAt"`
-	FinishedAt   *string `json:"finishedAt,omitempty"`
-	DurationSec  *string `json:"duration,omitempty"`
-	CreditUsed   *string `json:"creditUsed,omitempty"`
+	UUID             string  `json:"uuid"`
+	WorkflowUUID     string  `json:"workflowUUID"`
+	WorkflowName     string  `json:"workflowName"`
+	Status           string  `json:"status"`
+	DetailedStatus   *string `json:"detailedStatus,omitempty"`
+	ClassifiedStatus *string `json:"classifiedStatus,omitempty"`
+	StartedAt        string  `json:"startedAt"`
+	FinishedAt       *string `json:"finishedAt,omitempty"`
+	DurationSec      *string `json:"duration,omitempty"`
+	CreditUsed       *string `json:"creditUsed,omitempty"`
 }
 
 func toExecutionJSON(e workflowdataclient.Execution) executionJSON {
@@ -32,6 +72,14 @@ func toExecutionJSON(e workflowdataclient.Execution) executionJSON {
 		Status:       string(e.Status),
 		StartedAt:    started,
 		CreditUsed:   e.CreditUsed,
+	}
+	if e.DetailedStatus != nil {
+		s := string(*e.DetailedStatus)
+		j.DetailedStatus = &s
+	}
+	if e.ClassifiedStatus != nil {
+		s := string(*e.ClassifiedStatus)
+		j.ClassifiedStatus = &s
 	}
 	if e.FinishedAt != nil {
 		f := e.FinishedAt.UTC().Format(time.RFC3339)
@@ -71,7 +119,7 @@ func PrintExecutionsTable(rows []workflowdataclient.Execution) {
 	for i, e := range rows {
 		ui.Bold(fmt.Sprintf("%d. %s", i+1, e.ID))
 		ui.Dim(fmt.Sprintf("   Workflow:  %s", e.WorkflowName))
-		ui.Dim(fmt.Sprintf("   Status:    %s", e.Status))
+		ui.Dim(fmt.Sprintf("   Status:    %s", StatusLabel(e)))
 		ui.Dim(fmt.Sprintf("   Started:   %s", e.StartedAt.UTC().Format("2006-01-02 15:04:05 UTC")))
 		if e.FinishedAt != nil {
 			ui.Dim(fmt.Sprintf("   Finished:  %s (%s)", e.FinishedAt.UTC().Format("2006-01-02 15:04:05 UTC"), formatDuration(e.FinishedAt.Sub(e.StartedAt))))
@@ -113,6 +161,7 @@ func PrintExecutionDetailJSON(e workflowdataclient.Execution, failedEvents []wor
 	}
 	type detailJSON struct {
 		executionDetailJSON
+		Hint         string            `json:"hint,omitempty"`
 		FailedEvents []failedEventJSON `json:"failedEvents,omitempty"`
 	}
 	detail := detailJSON{
@@ -120,6 +169,7 @@ func PrintExecutionDetailJSON(e workflowdataclient.Execution, failedEvents []wor
 			executionJSON: toExecutionJSON(e),
 			Errors:        errs,
 		},
+		Hint:         ExecutionHint(e),
 		FailedEvents: fevs,
 	}
 	data, err := json.MarshalIndent(detail, "", "  ")
@@ -136,7 +186,10 @@ func PrintExecutionDetailTable(e workflowdataclient.Execution, failedEvents []wo
 	ui.Bold(fmt.Sprintf("Execution: %s", e.ID))
 	ui.Dim(fmt.Sprintf("   Workflow:    %s", e.WorkflowName))
 	ui.Dim(fmt.Sprintf("   Workflow ID: %s", e.WorkflowID))
-	ui.Dim(fmt.Sprintf("   Status:    %s", e.Status))
+	ui.Dim(fmt.Sprintf("   Status:    %s", StatusLabel(e)))
+	if hint := ExecutionHint(e); hint != "" {
+		ui.Print(ui.RenderWarning("   " + hint))
+	}
 
 	timeStr := e.StartedAt.UTC().Format("2006-01-02 15:04:05 UTC")
 	if e.FinishedAt != nil {

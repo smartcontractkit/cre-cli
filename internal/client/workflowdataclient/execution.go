@@ -29,6 +29,29 @@ var ValidExecutionStatuses = []ExecutionStatus{
 	ExecutionStatusFailure,
 }
 
+// DetailedStatus refines ExecutionStatus with whether the execution carried any error
+// detail. Nullable on the platform; a nil value means "not derived yet, fall back to Status".
+type DetailedStatus string
+
+const (
+	DetailedStatusUnspecified         DetailedStatus = "UNSPECIFIED"
+	DetailedStatusCompleted           DetailedStatus = "COMPLETED"
+	DetailedStatusCompletedWithErrors DetailedStatus = "COMPLETED_WITH_ERRORS"
+	DetailedStatusFailed              DetailedStatus = "FAILED"
+	DetailedStatusFailedNoDetail      DetailedStatus = "FAILED_NO_DETAIL"
+)
+
+// ClassifiedStatus says whose fault a terminal execution was: the user's workflow, or the
+// platform. Nullable on the platform.
+type ClassifiedStatus string
+
+const (
+	ClassifiedStatusUnspecified ClassifiedStatus = "UNSPECIFIED"
+	ClassifiedStatusSuccess     ClassifiedStatus = "SUCCESS"
+	ClassifiedStatusUserError   ClassifiedStatus = "USER_ERROR"
+	ClassifiedStatusSystemError ClassifiedStatus = "SYSTEM_ERROR"
+)
+
 // ExecutionError is a top-level error on a workflow execution.
 type ExecutionError struct {
 	Error string
@@ -37,16 +60,18 @@ type ExecutionError struct {
 
 // Execution is a single workflow execution record.
 type Execution struct {
-	UUID         string
-	ID           string // on-chain execution ID shown in the Explorer UI
-	WorkflowUUID string
-	WorkflowID   string // on-chain workflow hash (workflowId scalar)
-	WorkflowName string
-	Status       ExecutionStatus
-	StartedAt    time.Time
-	FinishedAt   *time.Time
-	CreditUsed   *string // CreditAmount scalar serialised as a string
-	Errors       []ExecutionError
+	UUID             string
+	ID               string // on-chain execution ID shown in the Explorer UI
+	WorkflowUUID     string
+	WorkflowID       string // on-chain workflow hash (workflowId scalar)
+	WorkflowName     string
+	Status           ExecutionStatus
+	DetailedStatus   *DetailedStatus   // nil if the platform doesn't derive it yet
+	ClassifiedStatus *ClassifiedStatus // nil if the platform doesn't derive it yet
+	StartedAt        time.Time
+	FinishedAt       *time.Time
+	CreditUsed       *string // CreditAmount scalar serialised as a string
+	Errors           []ExecutionError
 }
 
 // CapabilityExecutionError is an error attached to a capability event.
@@ -103,6 +128,33 @@ query ListExecutions($input: WorkflowExecutionsInput!) {
       workflowId
       workflowName
       status
+      detailedStatus
+      classifiedStatus
+      startedAt
+      finishedAt
+      creditUsed
+      errors {
+        error
+        count
+      }
+    }
+    count
+  }
+}
+`
+
+// listExecutionsQueryWithoutDerivedStatus omits detailedStatus/classifiedStatus for
+// platform versions where WorkflowExecution doesn't have those fields yet.
+const listExecutionsQueryWithoutDerivedStatus = `
+query ListExecutions($input: WorkflowExecutionsInput!) {
+  workflowExecutions(input: $input) {
+    data {
+      uuid
+      id
+      workflowUUID
+      workflowId
+      workflowName
+      status
       startedAt
       finishedAt
       creditUsed
@@ -117,6 +169,32 @@ query ListExecutions($input: WorkflowExecutionsInput!) {
 `
 
 const getExecutionQuery = `
+query GetExecution($input: WorkflowExecutionInput!) {
+  workflowExecution(input: $input) {
+    data {
+      uuid
+      id
+      workflowUUID
+      workflowId
+      workflowName
+      status
+      detailedStatus
+      classifiedStatus
+      startedAt
+      finishedAt
+      creditUsed
+      errors {
+        error
+        count
+      }
+    }
+  }
+}
+`
+
+// getExecutionQueryWithoutDerivedStatus omits detailedStatus/classifiedStatus for
+// platform versions where WorkflowExecution doesn't have those fields yet.
+const getExecutionQueryWithoutDerivedStatus = `
 query GetExecution($input: WorkflowExecutionInput!) {
   workflowExecution(input: $input) {
     data {
@@ -176,16 +254,18 @@ type gqlExecutionError struct {
 }
 
 type gqlExecution struct {
-	UUID         string              `json:"uuid"`
-	ID           string              `json:"id"`
-	WorkflowUUID string              `json:"workflowUUID"`
-	WorkflowID   string              `json:"workflowId"`
-	WorkflowName string              `json:"workflowName"`
-	Status       string              `json:"status"`
-	StartedAt    time.Time           `json:"startedAt"`
-	FinishedAt   *time.Time          `json:"finishedAt"`
-	CreditUsed   *string             `json:"creditUsed"`
-	Errors       []gqlExecutionError `json:"errors"`
+	UUID             string              `json:"uuid"`
+	ID               string              `json:"id"`
+	WorkflowUUID     string              `json:"workflowUUID"`
+	WorkflowID       string              `json:"workflowId"`
+	WorkflowName     string              `json:"workflowName"`
+	Status           string              `json:"status"`
+	DetailedStatus   *string             `json:"detailedStatus"`
+	ClassifiedStatus *string             `json:"classifiedStatus"`
+	StartedAt        time.Time           `json:"startedAt"`
+	FinishedAt       *time.Time          `json:"finishedAt"`
+	CreditUsed       *string             `json:"creditUsed"`
+	Errors           []gqlExecutionError `json:"errors"`
 }
 
 type listExecutionsEnvelope struct {
@@ -238,9 +318,6 @@ type listLogsEnvelope struct {
 // ListExecutions fetches workflow executions matching the given filters.
 // At most one page of results is returned; Limit controls page size (max 100).
 func (c *Client) ListExecutions(parent context.Context, in ListExecutionsInput) ([]Execution, error) {
-	ctx, cancel := c.CreateServiceContextWithTimeout(parent)
-	defer cancel()
-
 	limit := in.Limit
 	if limit <= 0 {
 		limit = 20
@@ -275,15 +352,30 @@ func (c *Client) ListExecutions(parent context.Context, in ListExecutionsInput) 
 		input["search"] = *in.Search
 	}
 
-	req := graphql.NewRequest(listExecutionsQuery)
-	req.Var("input", input)
-
-	var env listExecutionsEnvelope
-	if err := c.graphql.Execute(ctx, req, &env); err != nil {
+	env, err := c.fetchExecutionsWithQuery(parent, input, listExecutionsQuery)
+	if err != nil && isUnknownFieldGraphQLError(err) {
+		c.log.Debug().Msg("ListExecutions detailedStatus/classifiedStatus unavailable; retrying without them")
+		env, err = c.fetchExecutionsWithQuery(parent, input, listExecutionsQueryWithoutDerivedStatus)
+	}
+	if err != nil {
 		return nil, fmt.Errorf("list executions: %w", err)
 	}
 
 	return toExecutions(env.WorkflowExecutions.Data), nil
+}
+
+func (c *Client) fetchExecutionsWithQuery(parent context.Context, input map[string]any, query string) (*listExecutionsEnvelope, error) {
+	ctx, cancel := c.CreateServiceContextWithTimeout(parent)
+	defer cancel()
+
+	req := graphql.NewRequest(query)
+	req.Var("input", input)
+
+	var env listExecutionsEnvelope
+	if err := c.graphql.Execute(ctx, req, &env); err != nil {
+		return nil, err
+	}
+	return &env, nil
 }
 
 // FindExecutionByOnChainID resolves the platform UUID for an execution given its
@@ -325,7 +417,7 @@ func (c *Client) CountExecutions(parent context.Context, workflowUUID string, st
 		input["status"] = ss
 	}
 
-	req := graphql.NewRequest(listExecutionsQuery)
+	req := graphql.NewRequest(listExecutionsQueryWithoutDerivedStatus)
 	req.Var("input", input)
 
 	var env listExecutionsEnvelope
@@ -337,14 +429,12 @@ func (c *Client) CountExecutions(parent context.Context, workflowUUID string, st
 
 // GetExecution fetches a single execution by its UUID.
 func (c *Client) GetExecution(parent context.Context, uuid string) (*Execution, error) {
-	ctx, cancel := c.CreateServiceContextWithTimeout(parent)
-	defer cancel()
-
-	req := graphql.NewRequest(getExecutionQuery)
-	req.Var("input", map[string]any{"uuid": uuid})
-
-	var env getExecutionEnvelope
-	if err := c.graphql.Execute(ctx, req, &env); err != nil {
+	env, err := c.fetchExecutionWithQuery(parent, uuid, getExecutionQuery)
+	if err != nil && isUnknownFieldGraphQLError(err) {
+		c.log.Debug().Msg("GetExecution detailedStatus/classifiedStatus unavailable; retrying without them")
+		env, err = c.fetchExecutionWithQuery(parent, uuid, getExecutionQueryWithoutDerivedStatus)
+	}
+	if err != nil {
 		return nil, fmt.Errorf("get execution: %w", err)
 	}
 
@@ -354,6 +444,20 @@ func (c *Client) GetExecution(parent context.Context, uuid string) (*Execution, 
 
 	e := toExecution(*env.WorkflowExecution.Data)
 	return &e, nil
+}
+
+func (c *Client) fetchExecutionWithQuery(parent context.Context, uuid, query string) (*getExecutionEnvelope, error) {
+	ctx, cancel := c.CreateServiceContextWithTimeout(parent)
+	defer cancel()
+
+	req := graphql.NewRequest(query)
+	req.Var("input", map[string]any{"uuid": uuid})
+
+	var env getExecutionEnvelope
+	if err := c.graphql.Execute(ctx, req, &env); err != nil {
+		return nil, err
+	}
+	return &env, nil
 }
 
 // ListExecutionEvents fetches all node/capability events for an execution.
@@ -419,22 +523,41 @@ func (c *Client) ListExecutionLogs(parent context.Context, executionUUID string)
 
 // ---- helpers ----
 
+// isUnknownFieldGraphQLError reports whether err is a query-validation failure caused by
+// requesting a field the server's schema doesn't have (e.g. an older platform release
+// without detailedStatus/classifiedStatus on WorkflowExecution yet).
+func isUnknownFieldGraphQLError(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "Cannot query field")
+}
+
 func toExecution(g gqlExecution) Execution {
 	errs := make([]ExecutionError, 0, len(g.Errors))
 	for _, e := range g.Errors {
 		errs = append(errs, ExecutionError(e))
 	}
+	var detailedStatus *DetailedStatus
+	if g.DetailedStatus != nil {
+		ds := DetailedStatus(*g.DetailedStatus)
+		detailedStatus = &ds
+	}
+	var classifiedStatus *ClassifiedStatus
+	if g.ClassifiedStatus != nil {
+		cs := ClassifiedStatus(*g.ClassifiedStatus)
+		classifiedStatus = &cs
+	}
 	return Execution{
-		UUID:         g.UUID,
-		ID:           g.ID,
-		WorkflowUUID: g.WorkflowUUID,
-		WorkflowID:   g.WorkflowID,
-		WorkflowName: g.WorkflowName,
-		Status:       ExecutionStatus(g.Status),
-		StartedAt:    g.StartedAt,
-		FinishedAt:   g.FinishedAt,
-		CreditUsed:   g.CreditUsed,
-		Errors:       errs,
+		UUID:             g.UUID,
+		ID:               g.ID,
+		WorkflowUUID:     g.WorkflowUUID,
+		WorkflowID:       g.WorkflowID,
+		WorkflowName:     g.WorkflowName,
+		Status:           ExecutionStatus(g.Status),
+		DetailedStatus:   detailedStatus,
+		ClassifiedStatus: classifiedStatus,
+		StartedAt:        g.StartedAt,
+		FinishedAt:       g.FinishedAt,
+		CreditUsed:       g.CreditUsed,
+		Errors:           errs,
 	}
 }
 

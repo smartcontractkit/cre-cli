@@ -226,6 +226,73 @@ func TestListExecutionEvents_PassesFilters(t *testing.T) {
 	assert.Equal(t, method, *got[0].Method)
 }
 
+func TestGetExecution_MapsDetailedAndClassifiedStatus(t *testing.T) {
+	started := time.Date(2026, 5, 29, 14, 0, 5, 0, time.UTC)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gqlData(w, map[string]any{
+			"workflowExecution": map[string]any{
+				"data": map[string]any{
+					"uuid": "exec-uuid-1", "id": "0xabc",
+					"workflowUUID": "wf-1", "workflowName": "wf",
+					"status":           "SUCCESS",
+					"detailedStatus":   "COMPLETED_WITH_ERRORS",
+					"classifiedStatus": "SUCCESS",
+					"startedAt":        started.Format(time.RFC3339),
+					"errors":           []any{},
+				},
+			},
+		})
+	}))
+	defer srv.Close()
+
+	client := newTestClient(t, srv.URL)
+	got, err := client.GetExecution(context.Background(), "exec-uuid-1")
+	require.NoError(t, err)
+	require.NotNil(t, got.DetailedStatus)
+	assert.Equal(t, DetailedStatusCompletedWithErrors, *got.DetailedStatus)
+	require.NotNil(t, got.ClassifiedStatus)
+	assert.Equal(t, ClassifiedStatusSuccess, *got.ClassifiedStatus)
+}
+
+func TestGetExecution_FallsBackWhenDerivedStatusFieldsUnknown(t *testing.T) {
+	started := time.Date(2026, 5, 29, 14, 0, 5, 0, time.UTC)
+	var calls int
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if calls == 1 {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"errors": []map[string]any{{
+					"message": `Cannot query field "detailedStatus" on type "WorkflowExecution".`,
+				}},
+			})
+			return
+		}
+
+		gqlData(w, map[string]any{
+			"workflowExecution": map[string]any{
+				"data": map[string]any{
+					"uuid": "exec-uuid-1", "id": "0xabc",
+					"workflowUUID": "wf-1", "workflowName": "wf",
+					"status":    "SUCCESS",
+					"startedAt": started.Format(time.RFC3339),
+					"errors":    []any{},
+				},
+			},
+		})
+	}))
+	defer srv.Close()
+
+	client := newTestClient(t, srv.URL)
+	got, err := client.GetExecution(context.Background(), "exec-uuid-1")
+	require.NoError(t, err)
+	assert.Nil(t, got.DetailedStatus)
+	assert.Nil(t, got.ClassifiedStatus)
+	assert.Equal(t, 2, calls)
+}
+
 func TestListExecutionLogs_MapsRows(t *testing.T) {
 	ts := time.Date(2026, 5, 29, 14, 0, 10, 0, time.UTC)
 

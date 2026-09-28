@@ -180,7 +180,7 @@ func TestCompileCmd(t *testing.T) {
 			}, constants.WorkflowOwnerTypeEOA)
 			require.Error(t, err)
 			assert.ErrorContains(t, err, "failed to compile workflow")
-			assert.ErrorContains(t, err, "undefined: sdk.RemovedFunctionThatFailsCompilation")
+			assert.ErrorContains(t, err, "undefined: cre.RemovedFunctionThatFailsCompilation")
 		})
 	})
 }
@@ -192,7 +192,7 @@ func TestCompileOutputMatchesUnderlying(t *testing.T) {
 		WorkflowOwner: chainsim.TestAddress,
 		DonFamily:     "test_label",
 		WorkflowPath:  filepath.Join("testdata", "basic_workflow", "main.go"),
-		ConfigPath:    filepath.Join("testdata", "basic_workflow", "config.yml"),
+		ConfigPath:    filepath.Join("testdata", "basic_workflow", "config.json"),
 	}
 
 	t.Run("default output path", func(t *testing.T) {
@@ -524,7 +524,7 @@ func TestCustomWasmWorkflowRunsMakeBuild(t *testing.T) {
 		WorkflowOwner: chainsim.TestAddress,
 		DonFamily:     "test_label",
 		WorkflowPath:  wasmPath,
-		ConfigPath:    filepath.Join(customWasmDir, "config.yml"),
+		ConfigPath:    filepath.Join(customWasmDir, "config.json"),
 		OutputPath:    outputPath,
 	}
 
