@@ -36,7 +36,7 @@ func TestTelemetryForLoginExemptCommands(t *testing.T) {
 	cmd.RootCmd.InitDefaultHelpCmd()
 	cmd.RootCmd.InitDefaultCompletionCmd()
 
-	for _, path := range cmd.LoginExemptCommands {
+	for path := range cmd.LoginExemptCommands {
 		t.Run(path, func(t *testing.T) {
 			if reason, skip := commandsSkippedFromTelemetryE2E[path]; skip {
 				t.Skipf("skipped: %s", reason)
