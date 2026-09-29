@@ -47,7 +47,7 @@ func EmitCommandEvent(cmd *cobra.Command, args []string, exitCode int, runtimeCt
 		}
 
 		// Check if this command should be excluded
-		if shouldExcludeCommand(cmd) {
+		if ShouldExcludeCommand(cmd) {
 			debugLog("command %s excluded from telemetry", cmd.Name())
 			return
 		}
@@ -81,8 +81,8 @@ func debugLog(format string, args ...interface{}) {
 	}
 }
 
-// shouldExcludeCommand determines if a command should not emit telemetry events
-func shouldExcludeCommand(cmd *cobra.Command) bool {
+// ShouldExcludeCommand determines if a command should not emit telemetry events.
+func ShouldExcludeCommand(cmd *cobra.Command) bool {
 	if cmd == nil {
 		return true
 	}
