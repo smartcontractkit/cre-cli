@@ -2,11 +2,12 @@
 import {
   decodeEventLog,
   decodeFunctionResult,
+  encodeAbiParameters,
   encodeEventTopics,
   encodeFunctionData,
   zeroAddress,
 } from 'viem'
-import type { Address, Hex } from 'viem'
+import type { Abi, AbiFunction, Address, Hex } from 'viem'
 import {
   bytesToHex,
   encodeCallMsg,
@@ -24,6 +25,14 @@ const encodeTopicValue = (t: Hex | Hex[] | null): string[] => {
   if (t == null) return []
   if (Array.isArray(t)) return t.map(hexToBase64)
   return [hexToBase64(t)]
+}
+
+const getFunctionInputs = (abi: Abi, functionName: string): AbiFunction['inputs'] => {
+  const fn = abi.find(
+    (item): item is AbiFunction => item.type === 'function' && item.name === functionName,
+  )
+  if (!fn) throw new Error(`function ${functionName} not found in ABI`)
+  return fn.inputs
 }
 
 {{range $contract := .Contracts}}
@@ -104,14 +113,13 @@ export class {{$contract.Type}} {
     {{- end}}
     gasConfig?: { gasLimit?: string },
   ) {
-    const callData = encodeFunctionData({
-      abi: {{$contract.Type}}ABI,
-      functionName: '{{$call.Original.Name}}' as const,
-      args: [{{range $idx, $param := $call.Normalized.Inputs}}{{if $idx}}, {{end}}{{$param.Name}}{{end}}],
-    })
+    const encodedPayload = encodeAbiParameters(
+      getFunctionInputs({{$contract.Type}}ABI, '{{$call.Original.Name}}'),
+      [{{range $idx, $param := $call.Normalized.Inputs}}{{if $idx}}, {{end}}{{$param.Name}}{{end}}],
+    )
 
     const reportResponse = runtime
-      .report(prepareReportRequest(callData))
+      .report(prepareReportRequest(encodedPayload))
       .result()
 
     return this.client
