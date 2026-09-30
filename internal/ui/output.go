@@ -2,7 +2,9 @@ package ui
 
 import (
 	"fmt"
+	"io"
 	"os"
+	"sync/atomic"
 )
 
 // verbose disables animated UI components (spinners) to avoid
@@ -14,17 +16,34 @@ func SetVerbose(v bool) {
 	verbose = v
 }
 
+// stdoutToStderr is read on every write so tests that swap os.Stdout/os.Stderr keep working.
+var stdoutToStderr atomic.Bool
+
+func stdout() io.Writer {
+	if stdoutToStderr.Load() {
+		return os.Stderr
+	}
+	return os.Stdout
+}
+
+// RedirectStdoutToStderr sends the stdout helpers below to stderr so machine-readable
+// output can be the only thing on stdout. Call the returned func to restore.
+func RedirectStdoutToStderr() (restore func()) {
+	prev := stdoutToStderr.Swap(true)
+	return func() { stdoutToStderr.Store(prev) }
+}
+
 // Output helpers - use these for consistent styled output across commands.
 // These functions make it easy to migrate from raw fmt.Println calls.
 
 // Title prints a styled title/header (high visibility - Chainlink Blue)
 func Title(text string) {
-	fmt.Println(TitleStyle.Render(text))
+	fmt.Fprintln(stdout(), TitleStyle.Render(text))
 }
 
 // Success prints a success message with checkmark (Green)
 func Success(text string) {
-	fmt.Println(SuccessStyle.Render("✓ " + text))
+	fmt.Fprintln(stdout(), SuccessStyle.Render("✓ "+text))
 }
 
 // Error prints an error message to stderr (Orange - high contrast)
@@ -67,7 +86,7 @@ func WarningWithSuggestions(text string, suggestions []string) {
 
 // Dim prints dimmed/secondary text (Gray - less important)
 func Dim(text string) {
-	fmt.Println(DimStyle.Render("  " + text))
+	fmt.Fprintln(stdout(), DimStyle.Render("  "+text))
 }
 
 // EnvContext prints a dim "Environment: <label>" line when the label is
@@ -82,47 +101,47 @@ func EnvContext(envLabel string) {
 
 // Step prints a step instruction (Light Blue - visible)
 func Step(text string) {
-	fmt.Println(StepStyle.Render(text))
+	fmt.Fprintln(stdout(), StepStyle.Render(text))
 }
 
 // Command prints a CLI command (Bold Light Blue - prominent)
 func Command(text string) {
-	fmt.Println(CommandStyle.Render(text))
+	fmt.Fprintln(stdout(), CommandStyle.Render(text))
 }
 
 // Box prints text in a bordered box (Chainlink Blue border)
 func Box(text string) {
-	fmt.Println(BoxStyle.Render(text))
+	fmt.Fprintln(stdout(), BoxStyle.Render(text))
 }
 
 // Bold prints bold text
 func Bold(text string) {
-	fmt.Println(BoldStyle.Render(text))
+	fmt.Fprintln(stdout(), BoldStyle.Render(text))
 }
 
 // Code prints text styled as code (Light Blue)
 func Code(text string) {
-	fmt.Println(CodeStyle.Render(text))
+	fmt.Fprintln(stdout(), CodeStyle.Render(text))
 }
 
 // URL prints a styled URL (Chainlink Blue, underlined)
 func URL(text string) {
-	fmt.Println(URLStyle.Render(text))
+	fmt.Fprintln(stdout(), URLStyle.Render(text))
 }
 
 // Line prints an empty line
 func Line() {
-	fmt.Println()
+	fmt.Fprintln(stdout())
 }
 
 // Print prints plain text (for gradual migration - can be replaced later)
 func Print(text string) {
-	fmt.Println(text)
+	fmt.Fprintln(stdout(), text)
 }
 
 // Printf prints formatted plain text
 func Printf(format string, args ...interface{}) {
-	fmt.Printf(format, args...)
+	fmt.Fprintf(stdout(), format, args...)
 }
 
 // Indent returns text with indentation
