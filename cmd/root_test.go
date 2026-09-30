@@ -1,10 +1,12 @@
 package cmd
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // buildCommandPath constructs a minimal cobra command hierarchy so that
@@ -52,4 +54,30 @@ func TestIsRegistryRPCCommand(t *testing.T) {
 				"isRegistryRPCCommand(%q)", cmd.CommandPath())
 		})
 	}
+}
+
+func TestWorkflowTriggerHTTP_HiddenFromHelpButWired(t *testing.T) {
+	workflowCmd, _, err := RootCmd.Find([]string{"workflow"})
+	require.NoError(t, err)
+
+	var help bytes.Buffer
+	workflowCmd.SetOut(&help)
+	t.Cleanup(func() { workflowCmd.SetOut(nil) })
+	require.NoError(t, workflowCmd.Help())
+	assert.Contains(t, help.String(), "simulate", "workflow help should still render its commands")
+	assert.NotContains(t, help.String(), "trigger", "trigger must stay out of `cre workflow --help`")
+
+	httpCmd, _, err := RootCmd.Find([]string{"workflow", "trigger", "http"})
+	require.NoError(t, err)
+	assert.Equal(t, "cre workflow trigger http", httpCmd.CommandPath())
+	assert.True(t, httpCmd.Hidden)
+	assert.True(t, httpCmd.Parent().Hidden)
+}
+
+func TestWorkflowTriggerHTTP_NeedsLoginAndWorkflowSettings(t *testing.T) {
+	httpCmd := buildCommandPath("cre", "workflow", "trigger", "http")
+
+	assert.True(t, isLoadCredentials(httpCmd), "workflow lookup and the tenant gateway URL need a logged-in session")
+	assert.True(t, isLoadSettings(httpCmd), "the target, workflow name and wallet key come from workflow settings")
+	assert.False(t, isRegistryRPCCommand(httpCmd), "triggering must not require a registry RPC URL")
 }
