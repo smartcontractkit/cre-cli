@@ -6,11 +6,20 @@ Lists secret identifiers for the current owner address in the given namespace.
 cre secrets list [optional flags]
 ```
 
+### Examples
+
+```
+cre secrets list
+  cre secrets list --namespace main --json
+```
+
 ### Options
 
 ```
   -h, --help               help for list
+      --json               Output as JSON (shorthand for --output=json)
       --namespace string   Namespace to list (default: main) (default "main")
+      --output string      Output format: "json" prints a JSON object to stdout
       --unsigned           If set, the command will either return the raw transaction instead of sending it to the network or execute the second step of secrets operations using a previously generated raw transaction
       --yes                If set, the command will skip the confirmation prompt and proceed with the operation even if it is potentially destructive
 ```

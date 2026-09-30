@@ -26,15 +26,52 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/types"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
+	"github.com/smartcontractkit/cre-cli/internal/workflowresolve"
 )
+
+// secretsListJSON is the stable JSON contract for `cre secrets list --json`.
+type secretsListJSON struct {
+	Owner     string                 `json:"owner"`
+	Namespace string                 `json:"namespace"`
+	Secrets   []secretIdentifierJSON `json:"secrets"`
+}
+
+type secretIdentifierJSON struct {
+	ID        string `json:"id"`
+	Namespace string `json:"namespace"`
+	Owner     string `json:"owner"`
+}
+
+func printSecretsJSON(owner, namespace string, resp *vault.ListSecretIdentifiersResponse) error {
+	if !resp.GetSuccess() {
+		return fmt.Errorf("secret list failed: %s", resp.GetError())
+	}
+
+	secrets := make([]secretIdentifierJSON, 0, len(resp.GetIdentifiers()))
+	for _, id := range resp.GetIdentifiers() {
+		if id == nil {
+			continue
+		}
+		secrets = append(secrets, secretIdentifierJSON{
+			ID:        id.GetKey(),
+			Namespace: id.GetNamespace(),
+			Owner:     id.GetOwner(),
+		})
+	}
+	return workflowresolve.PrintJSON(secretsListJSON{Owner: owner, Namespace: namespace, Secrets: secrets})
+}
 
 // cre secrets list --timeout 1h
 func New(ctx *runtime.Context) *cobra.Command {
 	var namespace string
+	var outputFormat string
+	var jsonFlag bool
 
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "Lists secret identifiers for the current owner address in the given namespace.",
+		Example: "cre secrets list\n" +
+			"  cre secrets list --namespace main --json",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if ctx.Viper.GetBool(settings.Flags.NonInteractive.Name) && !ctx.Viper.GetBool(settings.Flags.SkipConfirmation.Name) {
 				ui.ErrorWithSuggestions(
@@ -42,6 +79,11 @@ func New(ctx *runtime.Context) *cobra.Command {
 					[]string{"--yes"},
 				)
 				return fmt.Errorf("missing required flags for --non-interactive mode")
+			}
+
+			format, err := workflowresolve.ResolveOutputFormat(outputFormat, jsonFlag)
+			if err != nil {
+				return err
 			}
 
 			secretsAuth, err := cmd.Flags().GetString("secrets-auth")
@@ -74,11 +116,13 @@ func New(ctx *runtime.Context) *cobra.Command {
 				return fmt.Errorf("invalid --timeout: must be greater than 0 and less than %dh (%dd)", maxHours, maxDays)
 			}
 
-			return Execute(cmd.Context(), h, namespace, duration, secretsAuth)
+			return Execute(cmd.Context(), h, namespace, duration, secretsAuth, format)
 		},
 	}
 
 	cmd.Flags().StringVar(&namespace, "namespace", "main", "Namespace to list (default: main)")
+	cmd.Flags().StringVar(&outputFormat, "output", "", `Output format: "json" prints a JSON object to stdout`)
+	cmd.Flags().BoolVar(&jsonFlag, "json", false, "Output as JSON (shorthand for --output=json)")
 	settings.AddTxnTypeFlags(cmd)
 	settings.AddSkipConfirmation(cmd)
 
@@ -86,8 +130,14 @@ func New(ctx *runtime.Context) *cobra.Command {
 }
 
 // Execute performs: build request → (MSIG step 1 bundle OR EOA allowlist+post) → parse.
-func Execute(ctx context.Context, h *common.Handler, namespace string, duration time.Duration, secretsAuth string) error {
+// With outputFormat "json", progress goes to stderr and only the list result is written to stdout.
+func Execute(ctx context.Context, h *common.Handler, namespace string, duration time.Duration, secretsAuth, outputFormat string) error {
 	defer h.CloseCapRegClient()
+
+	if outputFormat == workflowresolve.OutputFormatJSON {
+		restore := ui.RedirectStdoutToStderr()
+		defer restore()
+	}
 
 	if _, err := h.EnsureVaultValidationOrConsent(ctx); err != nil {
 		return err
@@ -113,6 +163,12 @@ func Execute(ctx context.Context, h *common.Handler, namespace string, duration 
 	owner, err := h.ResolveVaultIdentifierOwnerForAuth(secretsAuth)
 	if err != nil {
 		return err
+	}
+
+	if outputFormat == workflowresolve.OutputFormatJSON {
+		h.ListResponseHandler = func(resp *vault.ListSecretIdentifiersResponse) error {
+			return printSecretsJSON(owner, namespace, resp)
+		}
 	}
 
 	// Fresh request ID
