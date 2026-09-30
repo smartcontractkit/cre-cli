@@ -127,7 +127,11 @@ func (h *Handler) Execute(ctx context.Context, inputs Inputs) error {
 		out := whoamiJSON{
 			OrganizationID:   respEnvelope.GetOrganization.OrganizationID,
 			OrganizationName: respEnvelope.GetOrganization.DisplayName,
-			Environment:      h.environmentSet.EnvLabel(),
+			Environment:      h.environmentSet.EnvName,
+		}
+		// EnvLabel is blank for production; scripts need the canonical name.
+		if out.Environment == "" {
+			out.Environment = environments.DefaultEnv
 		}
 		if respEnvelope.GetAccountDetails != nil {
 			out.Email = respEnvelope.GetAccountDetails.EmailAddress

@@ -222,7 +222,7 @@ func TestWhoami_JSONOutput_APIKeyOmitsEmail(t *testing.T) {
 	assert.NotContains(t, got, "email")
 	assert.Equal(t, "org-42", got["organizationId"])
 	assert.Equal(t, "Alice's Org", got["organizationName"])
-	assert.Equal(t, "", got["environment"], "production has no env label")
+	assert.Equal(t, "PRODUCTION", got["environment"])
 }
 
 func TestWhoami_InvalidOutputFormat(t *testing.T) {
