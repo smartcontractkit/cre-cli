@@ -244,6 +244,20 @@ func contextFileHasEnv(envName string) bool {
 	return err == nil
 }
 
+// ClearContext removes the cached registry manifest from the CLI config
+// directory, forcing the next command to refetch the user context.
+// A missing file is not an error.
+func ClearContext() error {
+	path, err := creconfig.FilePath(ContextFile)
+	if err != nil {
+		return fmt.Errorf("resolve %s path: %w", ContextFile, err)
+	}
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("delete %s: %w", ContextFile, err)
+	}
+	return nil
+}
+
 // EnsureContext guarantees the registry manifest exists for the current environment.
 // API key users always fetch fresh; bearer token users use the cached file from login.
 func EnsureContext(ctx context.Context, creds *credentials.Credentials, envSet *environments.EnvironmentSet, log *zerolog.Logger) error {

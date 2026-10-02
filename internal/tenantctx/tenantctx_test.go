@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/smartcontractkit/cre-cli/internal/client/graphqlclient"
+	"github.com/smartcontractkit/cre-cli/internal/creconfig"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/testutil"
@@ -353,6 +354,37 @@ func TestLoadContextFromPath_UnknownEnvironment(t *testing.T) {
 	_, err := LoadContextFromPath(path, "STAGING")
 	if err == nil {
 		t.Fatal("expected error for unknown environment")
+	}
+}
+
+// --- ClearContext ---
+
+func TestClearContext_RemovesFile(t *testing.T) {
+	tmpHome := t.TempDir()
+	t.Setenv("HOME", tmpHome)
+
+	dir, err := creconfig.EnsureDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, ContextFile)
+	if err := os.WriteFile(path, []byte("PRODUCTION:\n  tenant_id: \"1\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := ClearContext(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Errorf("expected %s to be removed", ContextFile)
+	}
+}
+
+func TestClearContext_MissingFile(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+
+	if err := ClearContext(); err != nil {
+		t.Fatalf("expected no error for missing file, got %v", err)
 	}
 }
 
