@@ -7,11 +7,15 @@ import (
 	"compress/gzip"
 	"encoding/json"
 	"net/http"
+	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/jarcoal/httpmock"
 	"github.com/stretchr/testify/require"
+
+	"github.com/smartcontractkit/cre-cli/internal/tenantctx"
+	"github.com/smartcontractkit/cre-cli/internal/testutil"
 )
 
 func TestRun_abortsWhenSignatureVerificationFails(t *testing.T) {
@@ -48,7 +52,7 @@ func TestRun_abortsWhenSignatureVerificationFails(t *testing.T) {
 		)
 	}
 
-	err = Run("version v0.0.1", false)
+	err = Run("version v0.0.1", false, testutil.NewTestLogger())
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "release signature verification failed")
 }
@@ -65,7 +69,7 @@ func TestRun_failsClosedWhenLatestVersionUnparseable(t *testing.T) {
 		},
 	)
 
-	err := Run("version v0.0.1", false)
+	err := Run("version v0.0.1", false, testutil.NewTestLogger())
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "unable to parse version")
 
@@ -88,7 +92,7 @@ func TestRun_failsClosedWhenCurrentVersionUnparseable(t *testing.T) {
 		},
 	)
 
-	err := Run("not-a-version", false)
+	err := Run("not-a-version", false, testutil.NewTestLogger())
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "unable to parse version")
 }
@@ -108,9 +112,34 @@ func TestRun_forceBypassesUnparseableVersionCheck(t *testing.T) {
 	// With --force, the version-comparison guard is bypassed and execution
 	// proceeds into the download step, which fails against the unregistered
 	// asset URL. The important thing is that it is NOT the parse error.
-	err := Run("version v0.0.1", true)
+	err := Run("version v0.0.1", true, testutil.NewTestLogger())
 	require.Error(t, err)
 	require.NotContains(t, err.Error(), "unable to parse version")
+}
+
+func TestRun_alreadyLatestKeepsTenantsCache(t *testing.T) {
+	httpmock.ActivateNonDefault(httpClient)
+	t.Cleanup(httpmock.DeactivateAndReset)
+
+	tmpHome := t.TempDir()
+	t.Setenv("HOME", tmpHome)
+
+	contextPath := filepath.Join(tmpHome, ".cre", tenantctx.ContextFile)
+	require.NoError(t, os.MkdirAll(filepath.Dir(contextPath), 0o700))
+	require.NoError(t, os.WriteFile(contextPath, []byte("PRODUCTION:\n  tenant_id: \"1\"\n"), 0o600))
+
+	httpmock.RegisterResponder("GET", "https://api.github.com/repos/smartcontractkit/cre-cli/releases/latest",
+		func(_ *http.Request) (*http.Response, error) {
+			body, _ := json.Marshal(releaseInfo{TagName: "v1.2.3"})
+			return httpmock.NewBytesResponse(http.StatusOK, body), nil
+		},
+	)
+
+	err := Run("version v1.2.3", false, testutil.NewTestLogger())
+	require.NoError(t, err)
+
+	_, statErr := os.Stat(contextPath)
+	require.NoError(t, statErr, "expected tenants cache to be kept when no update was installed")
 }
 
 func createTestArchiveBytes(t *testing.T, asset, tag, platform, archName string, content []byte) []byte {
