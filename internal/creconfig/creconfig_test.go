@@ -69,6 +69,35 @@ func TestFilePathHint_FallsBackToRelPath(t *testing.T) {
 	}
 }
 
+func TestRemoveFile(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	dir, err := EnsureDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, ContextFile)
+	if err := os.WriteFile(path, []byte("data"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := RemoveFile(ContextFile); err != nil {
+		t.Fatalf("RemoveFile() error: %v", err)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("expected %s to be removed", ContextFile)
+	}
+}
+
+func TestRemoveFile_MissingFile(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+
+	if err := RemoveFile(ContextFile); err != nil {
+		t.Fatalf("expected no error for missing file, got %v", err)
+	}
+}
+
 func TestEnsureDir(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

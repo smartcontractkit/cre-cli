@@ -22,7 +22,7 @@ import (
 )
 
 // ContextFile is the filename for the local registry manifest.
-const ContextFile = "context.yaml"
+const ContextFile = creconfig.ContextFile
 
 // Registry represents a single available workflow registry.
 type Registry struct {
@@ -248,14 +248,7 @@ func contextFileHasEnv(envName string) bool {
 // directory, forcing the next command to refetch the user context.
 // A missing file is not an error.
 func ClearContext() error {
-	path, err := creconfig.FilePath(ContextFile)
-	if err != nil {
-		return fmt.Errorf("resolve %s path: %w", ContextFile, err)
-	}
-	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("delete %s: %w", ContextFile, err)
-	}
-	return nil
+	return creconfig.RemoveFile(ContextFile)
 }
 
 // EnsureContext guarantees the registry manifest exists for the current environment.
