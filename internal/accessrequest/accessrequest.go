@@ -23,6 +23,14 @@ mutation RequestDeploymentAccess($input: RequestDeploymentAccessInput!) {
   }
 }`
 
+type DeploymentType string
+
+const (
+	DeploymentTypeHackathon             DeploymentType = "Hackathon"
+	DeploymentTypeEvaluation            DeploymentType = "Evaluation"
+	DeploymentTypeProductionIntegration DeploymentType = "Production Integration"
+)
+
 type Requester struct {
 	credentials    *credentials.Credentials
 	environmentSet *environments.EnvironmentSet
@@ -62,8 +70,23 @@ func (r *Requester) PromptAndSubmitRequest(ctx context.Context) error {
 	}
 
 	var useCase string
+	var deploymentType string
 	inputForm := huh.NewForm(
 		huh.NewGroup(
+			huh.NewSelect[string]().
+				Title("Purpose of this request").
+				Options(
+					huh.NewOption(string(DeploymentTypeHackathon), string(DeploymentTypeHackathon)),
+					huh.NewOption(string(DeploymentTypeEvaluation), string(DeploymentTypeEvaluation)),
+					huh.NewOption(string(DeploymentTypeProductionIntegration), string(DeploymentTypeProductionIntegration)),
+				).
+				Value(&deploymentType).
+				Validate(func(s string) error {
+					if s == "" {
+						return fmt.Errorf("request type is required")
+					}
+					return nil
+				}),
 			huh.NewText().
 				Title("Briefly describe your use case").
 				Description("If possible, include your repository to help us validate your request.").
@@ -79,14 +102,14 @@ func (r *Requester) PromptAndSubmitRequest(ctx context.Context) error {
 	).WithTheme(ui.ChainlinkTheme())
 
 	if err := inputForm.Run(); err != nil {
-		return fmt.Errorf("failed to read use case: %w", err)
+		return fmt.Errorf("failed to read access request input: %w", err)
 	}
 
 	ui.Line()
 	spinner := ui.NewSpinner()
 	spinner.Start("Submitting access request...")
 
-	if err := r.SubmitAccessRequest(ctx, useCase); err != nil {
+	if err := r.SubmitAccessRequest(ctx, useCase, deploymentType); err != nil {
 		spinner.Stop()
 		return fmt.Errorf("failed to submit access request: %w", err)
 	}
@@ -102,12 +125,12 @@ func (r *Requester) PromptAndSubmitRequest(ctx context.Context) error {
 	return nil
 }
 
-func (r *Requester) SubmitAccessRequest(ctx context.Context, useCase string) error {
+func (r *Requester) SubmitAccessRequest(ctx context.Context, useCase string, deploymentType string) error {
 	client := graphqlclient.New(r.credentials, r.environmentSet, r.log)
 
 	req := graphql.NewRequest(requestDeploymentAccessMutation)
 	req.Var("input", map[string]any{
-		"description": useCase + " (Request from CLI)",
+		"description": useCase + " (Deployment type: " + deploymentType + ") (Request from CLI)",
 	})
 
 	var resp struct {
