@@ -130,7 +130,7 @@ func (r *Requester) SubmitAccessRequest(ctx context.Context, useCase string, dep
 
 	req := graphql.NewRequest(requestDeploymentAccessMutation)
 	req.Var("input", map[string]any{
-		"description": useCase + " (Deployment type: " + deploymentType + ") (Request from CLI)",
+		"description": useCase + " (Request reason: " + deploymentType + ")",
 	})
 
 	var resp struct {

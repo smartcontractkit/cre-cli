@@ -39,8 +39,11 @@ func TestSubmitAccessRequest(t *testing.T) {
 				if !strings.Contains(bodyStr, "Building a cross-chain DeFi protocol") {
 					t.Errorf("expected use case description in body, got: %s", bodyStr)
 				}
-				if !strings.Contains(bodyStr, "Deployment type: Evaluation") {
-					t.Errorf("expected deployment type in body, got: %s", bodyStr)
+				if !strings.Contains(bodyStr, "Request reason: Evaluation") {
+					t.Errorf("expected request reason in body, got: %s", bodyStr)
+				}
+				if strings.Contains(bodyStr, "Request from CLI") {
+					t.Errorf("expected no 'Request from CLI' suffix in body, got: %s", bodyStr)
 				}
 
 				resp := map[string]interface{}{
