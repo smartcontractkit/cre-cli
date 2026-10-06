@@ -8,9 +8,6 @@ import (
 
 const Dir = ".cre"
 
-// Lives here rather than in tenantctx so graphqlclient can reference it without an import cycle.
-const ContextFile = "context.yaml"
-
 // DirPath returns the absolute path to the CLI config directory.
 func DirPath() (string, error) {
 	home, err := os.UserHomeDir()
@@ -57,16 +54,4 @@ func JoinPath(elem ...string) (string, error) {
 		return "", err
 	}
 	return filepath.Join(append([]string{dir}, elem...)...), nil
-}
-
-// A missing file is not an error so callers can clear caches idempotently.
-func RemoveFile(name string) error {
-	path, err := FilePath(name)
-	if err != nil {
-		return err
-	}
-	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("remove %s: %w", path, err)
-	}
-	return nil
 }

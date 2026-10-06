@@ -17,12 +17,10 @@ import (
 	"time"
 
 	"github.com/Masterminds/semver/v3"
-	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 
 	"github.com/smartcontractkit/cre-cli/cmd/version"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
-	"github.com/smartcontractkit/cre-cli/internal/tenantctx"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
 
@@ -304,7 +302,7 @@ func replaceSelf(newBin string) error {
 
 // Run accepts the currentVersion string and a force flag that overrides the
 // fail-closed behavior when versions cannot be compared.
-func Run(currentVersion string, force bool, log *zerolog.Logger) error {
+func Run(currentVersion string, force bool) error {
 	spinner := ui.NewSpinner()
 	spinner.Start("Checking for updates...")
 
@@ -411,8 +409,6 @@ func Run(currentVersion string, force bool, log *zerolog.Logger) error {
 	ui.Success(fmt.Sprintf("CRE CLI updated to %s", tag))
 	ui.Line()
 
-	clearTenantsCache(log)
-
 	cmd := exec.Command(cliName, "version")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -422,16 +418,8 @@ func Run(currentVersion string, force bool, log *zerolog.Logger) error {
 	return nil
 }
 
-// A new release may add environments or context fields, so force a refetch
-// rather than requiring a manual login; failure must not fail the update.
-func clearTenantsCache(log *zerolog.Logger) {
-	if err := tenantctx.ClearContext(); err != nil {
-		log.Debug().Err(err).Msg("failed to clear cached user context")
-	}
-}
-
 // New is modified to use the version package
-func New(runtimeCtx *runtime.Context) *cobra.Command {
+func New(_ *runtime.Context) *cobra.Command { // <-- No longer uses rt
 	var force bool
 	var versionCmd = &cobra.Command{
 		Use:   "update",
@@ -444,7 +432,7 @@ On Linux, the signature is verified using GPG.
 On macOS, the signature is verified using codesign.
 On Windows, the signature is verified using Authenticode.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return Run(version.Version, force, runtimeCtx.Logger)
+			return Run(version.Version, force)
 		},
 	}
 

@@ -22,7 +22,13 @@ import (
 )
 
 // ContextFile is the filename for the local registry manifest.
-const ContextFile = creconfig.ContextFile
+const ContextFile = "context.yaml"
+
+// Bounds how long server-side tenant changes stay invisible to bearer users.
+const contextTTL = 24 * time.Hour
+
+// Set by the root command; importing cmd/version here would create a cycle.
+var CLIVersion = "development"
 
 // Registry represents a single available workflow registry.
 type Registry struct {
@@ -53,6 +59,8 @@ type EnvironmentContext struct {
 	CapabilitiesRegistry *OnChainContract `yaml:"capabilities_registry,omitempty"`
 	Registries           []*Registry      `yaml:"registries"`
 	Forwarders           []Forwarder      `yaml:"forwarders,omitempty"`
+	FetchedAt            time.Time        `yaml:"fetched_at,omitempty"`
+	CLIVersion           string           `yaml:"cli_version,omitempty"`
 }
 
 type gqlForwarder struct {
@@ -176,6 +184,8 @@ func FetchAndWriteContext(ctx context.Context, gqlClient *graphqlclient.Client, 
 		},
 		Registries: registries,
 		Forwarders: forwarders,
+		FetchedAt:  time.Now().UTC(),
+		CLIVersion: CLIVersion,
 	}
 
 	contextMap := map[string]*EnvironmentContext{
@@ -239,18 +249,25 @@ func LoadContextFromPath(path string, envName string) (*EnvironmentContext, erro
 	return envCtx, nil
 }
 
-func contextFileHasEnv(envName string) bool {
-	_, err := LoadContext(envName)
-	return err == nil
-}
-
 // ClearContext forces the next command to refetch the user context.
 func ClearContext() error {
-	return creconfig.RemoveFile(ContextFile)
+	path, err := creconfig.FilePath(ContextFile)
+	if err != nil {
+		return err
+	}
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("remove %s: %w", path, err)
+	}
+	return nil
 }
 
-// EnsureContext guarantees the registry manifest exists for the current environment.
-// API key users always fetch fresh; bearer token users use the cached file from login.
+// A different CLI version may expect fields or environments the cache predates.
+func isFresh(envCtx *EnvironmentContext, now time.Time) bool {
+	return envCtx.CLIVersion == CLIVersion && now.Sub(envCtx.FetchedAt) < contextTTL
+}
+
+// EnsureContext guarantees a fresh registry manifest exists for the current environment.
+// API key users always fetch; bearer users reuse the cache until it is stale.
 func EnsureContext(ctx context.Context, creds *credentials.Credentials, envSet *environments.EnvironmentSet, log *zerolog.Logger) error {
 	envName := envSet.EnvName
 	if envName == "" {
@@ -258,14 +275,22 @@ func EnsureContext(ctx context.Context, creds *credentials.Credentials, envSet *
 	}
 
 	alwaysFetch := creds.AuthType == credentials.AuthTypeApiKey
+	cached, cacheErr := LoadContext(envName)
+	hasCache := !alwaysFetch && cacheErr == nil
 
-	if !alwaysFetch && contextFileHasEnv(envName) {
+	if hasCache && isFresh(cached, time.Now()) {
 		return nil
 	}
 
 	log.Debug().Str("env", envName).Bool("api_key", alwaysFetch).Msg("fetching user context")
 	gqlClient := graphqlclient.New(creds, envSet, log)
-	return FetchAndWriteContext(ctx, gqlClient, envName, log)
+	err := FetchAndWriteContext(ctx, gqlClient, envName, log)
+	if err != nil && hasCache {
+		// A stale cache beats failing every command while the API is unreachable.
+		log.Debug().Err(err).Msg("failed to refresh user context; using cached copy")
+		return nil
+	}
+	return err
 }
 
 func writeContextFile(data map[string]*EnvironmentContext, log *zerolog.Logger) error {
@@ -280,11 +305,21 @@ func writeContextFile(data map[string]*EnvironmentContext, log *zerolog.Logger) 
 	}
 
 	path := filepath.Join(dir, ContextFile)
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, out, 0o600); err != nil {
+	// Unique temp name so concurrent cre processes refreshing at once don't clobber each other.
+	tmp, err := os.CreateTemp(dir, ContextFile+".*.tmp")
+	if err != nil {
+		return fmt.Errorf("create temp file: %w", err)
+	}
+	defer func() { _ = os.Remove(tmp.Name()) }()
+
+	if _, err := tmp.Write(out); err != nil {
+		_ = tmp.Close()
 		return fmt.Errorf("write temp file: %w", err)
 	}
-	if err := os.Rename(tmp, path); err != nil {
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("close temp file: %w", err)
+	}
+	if err := os.Rename(tmp.Name(), path); err != nil {
 		return fmt.Errorf("rename temp file: %w", err)
 	}
 

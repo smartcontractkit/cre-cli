@@ -2,22 +2,15 @@ package graphqlclient
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/machinebox/graphql"
 	"github.com/rs/zerolog"
 
-	"github.com/smartcontractkit/cre-cli/internal/creconfig"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
-	"github.com/smartcontractkit/cre-cli/internal/testutil"
-	"github.com/smartcontractkit/cre-cli/internal/testutil/testjwt"
 )
 
 func TestRedactSensitiveHeaders(t *testing.T) {
@@ -98,58 +91,4 @@ func TestExecute_ErrorPrefixReplacement(t *testing.T) {
 	if err.Error() != expectedErr {
 		t.Errorf("expected error %q, got %q", expectedErr, err.Error())
 	}
-}
-
-func TestExecute_TokenRefreshClearsTenantsCache(t *testing.T) {
-	tmpHome := testutil.IsolateCLIHome(t)
-
-	contextPath := filepath.Join(tmpHome, creconfig.Dir, creconfig.ContextFile)
-	if err := os.MkdirAll(filepath.Dir(contextPath), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(contextPath, []byte("PRODUCTION:\n  tenant_id: \"1\"\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-
-	authSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprintf(w, `{"access_token": %q, "refresh_token": "new-refresh", "expires_in": 3600, "token_type": "Bearer"}`, jwtExpiringAt(time.Now().Add(time.Hour)))
-	}))
-	defer authSrv.Close()
-
-	gqlSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"data": {"test": true}}`))
-	}))
-	defer gqlSrv.Close()
-
-	creds := &credentials.Credentials{
-		AuthType: credentials.AuthTypeBearer,
-		Tokens: &credentials.CreLoginTokenSet{
-			AccessToken:  jwtExpiringAt(time.Now().Add(-time.Hour)), // expired, forces refresh
-			RefreshToken: "old-refresh",
-		},
-	}
-	envSet := &environments.EnvironmentSet{
-		GraphQLURL: gqlSrv.URL,
-		AuthBase:   authSrv.URL,
-		ClientID:   "test-client",
-	}
-	logger := zerolog.Nop()
-
-	client := New(creds, envSet, &logger)
-
-	req := graphql.NewRequest(`query { test }`)
-	var resp interface{}
-	if err := client.Execute(context.Background(), req, &resp); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	if _, err := os.Stat(contextPath); !os.IsNotExist(err) {
-		t.Error("expected tenants cache to be cleared after token refresh")
-	}
-}
-
-func jwtExpiringAt(exp time.Time) string {
-	return testjwt.CreateTestJWTWithClaims(map[string]interface{}{"exp": exp.Unix()})
 }

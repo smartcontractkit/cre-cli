@@ -450,6 +450,105 @@ func TestEnsureContext_BearerUsesCached(t *testing.T) {
 	}
 }
 
+func TestFetchAndWriteContext_StampsVersionAndTime(t *testing.T) {
+	srv := newMockGQLServer(t, gqlResponsePrivateOnly())
+	defer srv.Close()
+	testutil.IsolateCLIHome(t)
+	origVersion := CLIVersion
+	t.Cleanup(func() { CLIVersion = origVersion })
+	CLIVersion = "v9.9.9"
+
+	before := time.Now().UTC()
+	if err := FetchAndWriteContext(context.Background(), newGQLClient(t, srv.URL), "STAGING", testutil.NewTestLogger()); err != nil {
+		t.Fatal(err)
+	}
+
+	envCtx, err := LoadContext("STAGING")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if envCtx.CLIVersion != "v9.9.9" {
+		t.Errorf("CLIVersion = %q, want v9.9.9", envCtx.CLIVersion)
+	}
+	if envCtx.FetchedAt.Before(before.Add(-time.Second)) {
+		t.Errorf("FetchedAt = %v, want >= %v", envCtx.FetchedAt, before)
+	}
+}
+
+func TestEnsureContext_BearerRefetchesStaleCache(t *testing.T) {
+	tests := []struct {
+		name   string
+		cached EnvironmentContext
+	}{
+		{"expired", EnvironmentContext{TenantID: "old", CLIVersion: CLIVersion, FetchedAt: time.Now().Add(-contextTTL - time.Minute)}},
+		{"different CLI version", EnvironmentContext{TenantID: "old", CLIVersion: "v0.0.1", FetchedAt: time.Now()}},
+		{"pre-stamp cache file", EnvironmentContext{TenantID: "old"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var callCount atomic.Int32
+			srv := newCountingGQLServer(t, &callCount, gqlResponsePrivateOnly())
+			defer srv.Close()
+			testutil.IsolateCLIHome(t)
+
+			log := testutil.NewTestLogger()
+			cached := tt.cached
+			if err := writeContextFile(map[string]*EnvironmentContext{"STAGING": &cached}, log); err != nil {
+				t.Fatal(err)
+			}
+
+			creds := &credentials.Credentials{
+				AuthType: credentials.AuthTypeBearer,
+				Tokens:   &credentials.CreLoginTokenSet{AccessToken: fakeJWT(t)},
+			}
+			envSet := &environments.EnvironmentSet{EnvName: "STAGING", GraphQLURL: srv.URL}
+			if err := EnsureContext(context.Background(), creds, envSet, log); err != nil {
+				t.Fatal(err)
+			}
+			if callCount.Load() != 1 {
+				t.Fatalf("expected 1 GQL call for stale cache, got %d", callCount.Load())
+			}
+			envCtx, err := LoadContext("STAGING")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if envCtx.TenantID != "99" {
+				t.Errorf("TenantID = %q, want refetched value 99", envCtx.TenantID)
+			}
+		})
+	}
+}
+
+func TestEnsureContext_BearerFallsBackToStaleCacheOnFetchError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer srv.Close()
+	testutil.IsolateCLIHome(t)
+
+	log := testutil.NewTestLogger()
+	stale := &EnvironmentContext{TenantID: "old", CLIVersion: "v0.0.1"}
+	if err := writeContextFile(map[string]*EnvironmentContext{"STAGING": stale}, log); err != nil {
+		t.Fatal(err)
+	}
+
+	creds := &credentials.Credentials{
+		AuthType: credentials.AuthTypeBearer,
+		Tokens:   &credentials.CreLoginTokenSet{AccessToken: fakeJWT(t)},
+	}
+	envSet := &environments.EnvironmentSet{EnvName: "STAGING", GraphQLURL: srv.URL}
+	if err := EnsureContext(context.Background(), creds, envSet, log); err != nil {
+		t.Fatalf("expected fallback to cached context, got %v", err)
+	}
+	envCtx, err := LoadContext("STAGING")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if envCtx.TenantID != "old" {
+		t.Errorf("TenantID = %q, want cached value old", envCtx.TenantID)
+	}
+}
+
 func TestEnsureContext_DefaultsToProduction(t *testing.T) {
 	srv := newMockGQLServer(t, gqlResponsePrivateOnly())
 	defer srv.Close()

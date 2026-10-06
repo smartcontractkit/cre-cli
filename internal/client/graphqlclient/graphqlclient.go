@@ -14,7 +14,6 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/smartcontractkit/cre-cli/internal/auth"
-	"github.com/smartcontractkit/cre-cli/internal/creconfig"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 )
@@ -90,12 +89,6 @@ func (c *Client) refreshTokens(ctx context.Context) error {
 		return err
 	}
 	c.log.Debug().Msg("refreshed tokens saved to disk")
-
-	// Clear the cached user context so environment or tenant changes are
-	// picked up on the next command without requiring a manual login.
-	if err := creconfig.RemoveFile(creconfig.ContextFile); err != nil {
-		c.log.Debug().Err(err).Msg("failed to clear cached user context")
-	}
 	return nil
 }
 
