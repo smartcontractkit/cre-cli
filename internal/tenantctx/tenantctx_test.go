@@ -360,8 +360,7 @@ func TestLoadContextFromPath_UnknownEnvironment(t *testing.T) {
 // --- ClearContext ---
 
 func TestClearContext_RemovesFile(t *testing.T) {
-	tmpHome := t.TempDir()
-	t.Setenv("HOME", tmpHome)
+	testutil.IsolateCLIHome(t)
 
 	dir, err := creconfig.EnsureDir()
 	if err != nil {
@@ -381,7 +380,7 @@ func TestClearContext_RemovesFile(t *testing.T) {
 }
 
 func TestClearContext_MissingFile(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	testutil.IsolateCLIHome(t)
 
 	if err := ClearContext(); err != nil {
 		t.Fatalf("expected no error for missing file, got %v", err)

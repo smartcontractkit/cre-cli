@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/smartcontractkit/cre-cli/internal/testutil"
 )
 
 func TestDirPath(t *testing.T) {
@@ -70,8 +72,7 @@ func TestFilePathHint_FallsBackToRelPath(t *testing.T) {
 }
 
 func TestRemoveFile(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	testutil.IsolateCLIHome(t)
 
 	dir, err := EnsureDir()
 	if err != nil {
@@ -91,7 +92,7 @@ func TestRemoveFile(t *testing.T) {
 }
 
 func TestRemoveFile_MissingFile(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	testutil.IsolateCLIHome(t)
 
 	if err := RemoveFile(ContextFile); err != nil {
 		t.Fatalf("expected no error for missing file, got %v", err)

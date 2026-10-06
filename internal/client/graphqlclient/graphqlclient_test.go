@@ -2,7 +2,6 @@ package graphqlclient
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -17,6 +16,8 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/creconfig"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
+	"github.com/smartcontractkit/cre-cli/internal/testutil"
+	"github.com/smartcontractkit/cre-cli/internal/testutil/testjwt"
 )
 
 func TestRedactSensitiveHeaders(t *testing.T) {
@@ -100,8 +101,7 @@ func TestExecute_ErrorPrefixReplacement(t *testing.T) {
 }
 
 func TestExecute_TokenRefreshClearsTenantsCache(t *testing.T) {
-	tmpHome := t.TempDir()
-	t.Setenv("HOME", tmpHome)
+	tmpHome := testutil.IsolateCLIHome(t)
 
 	contextPath := filepath.Join(tmpHome, creconfig.Dir, creconfig.ContextFile)
 	if err := os.MkdirAll(filepath.Dir(contextPath), 0o700); err != nil {
@@ -113,7 +113,7 @@ func TestExecute_TokenRefreshClearsTenantsCache(t *testing.T) {
 
 	authSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprintf(w, `{"access_token": %q, "refresh_token": "new-refresh", "expires_in": 3600, "token_type": "Bearer"}`, fakeJWT(time.Now().Add(time.Hour)))
+		fmt.Fprintf(w, `{"access_token": %q, "refresh_token": "new-refresh", "expires_in": 3600, "token_type": "Bearer"}`, jwtExpiringAt(time.Now().Add(time.Hour)))
 	}))
 	defer authSrv.Close()
 
@@ -126,7 +126,7 @@ func TestExecute_TokenRefreshClearsTenantsCache(t *testing.T) {
 	creds := &credentials.Credentials{
 		AuthType: credentials.AuthTypeBearer,
 		Tokens: &credentials.CreLoginTokenSet{
-			AccessToken:  fakeJWT(time.Now().Add(-time.Hour)), // expired, forces refresh
+			AccessToken:  jwtExpiringAt(time.Now().Add(-time.Hour)), // expired, forces refresh
 			RefreshToken: "old-refresh",
 		},
 	}
@@ -150,9 +150,6 @@ func TestExecute_TokenRefreshClearsTenantsCache(t *testing.T) {
 	}
 }
 
-// fakeJWT builds an unsigned JWT-shaped token with the given expiration.
-func fakeJWT(exp time.Time) string {
-	header := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"none"}`))
-	payload := base64.RawURLEncoding.EncodeToString([]byte(fmt.Sprintf(`{"exp":%d}`, exp.Unix())))
-	return header + "." + payload + ".sig"
+func jwtExpiringAt(exp time.Time) string {
+	return testjwt.CreateTestJWTWithClaims(map[string]interface{}{"exp": exp.Unix()})
 }

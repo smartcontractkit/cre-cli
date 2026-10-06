@@ -8,7 +8,7 @@ import (
 
 const Dir = ".cre"
 
-// ContextFile is the filename for the cached user context (tenant) manifest.
+// Lives here rather than in tenantctx so graphqlclient can reference it without an import cycle.
 const ContextFile = "context.yaml"
 
 // DirPath returns the absolute path to the CLI config directory.
@@ -59,8 +59,7 @@ func JoinPath(elem ...string) (string, error) {
 	return filepath.Join(append([]string{dir}, elem...)...), nil
 }
 
-// RemoveFile removes a file directly under the CLI config directory.
-// A missing file is not an error.
+// A missing file is not an error so callers can clear caches idempotently.
 func RemoveFile(name string) error {
 	path, err := FilePath(name)
 	if err != nil {

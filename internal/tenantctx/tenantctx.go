@@ -244,9 +244,7 @@ func contextFileHasEnv(envName string) bool {
 	return err == nil
 }
 
-// ClearContext removes the cached registry manifest from the CLI config
-// directory, forcing the next command to refetch the user context.
-// A missing file is not an error.
+// ClearContext forces the next command to refetch the user context.
 func ClearContext() error {
 	return creconfig.RemoveFile(ContextFile)
 }

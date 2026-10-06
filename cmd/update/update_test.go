@@ -121,8 +121,7 @@ func TestRun_alreadyLatestKeepsTenantsCache(t *testing.T) {
 	httpmock.ActivateNonDefault(httpClient)
 	t.Cleanup(httpmock.DeactivateAndReset)
 
-	tmpHome := t.TempDir()
-	t.Setenv("HOME", tmpHome)
+	tmpHome := testutil.IsolateCLIHome(t)
 
 	contextPath := filepath.Join(tmpHome, ".cre", tenantctx.ContextFile)
 	require.NoError(t, os.MkdirAll(filepath.Dir(contextPath), 0o700))

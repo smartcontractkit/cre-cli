@@ -422,9 +422,8 @@ func Run(currentVersion string, force bool, log *zerolog.Logger) error {
 	return nil
 }
 
-// clearTenantsCache removes the cached tenant context so the next command
-// refetches it, making new environments or config changes visible without
-// requiring a manual login. Failures are non-fatal and only logged at debug level.
+// A new release may add environments or context fields, so force a refetch
+// rather than requiring a manual login; failure must not fail the update.
 func clearTenantsCache(log *zerolog.Logger) {
 	if err := tenantctx.ClearContext(); err != nil {
 		log.Debug().Err(err).Msg("failed to clear cached user context")
