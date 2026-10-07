@@ -183,6 +183,9 @@ func (ct *StellarChainType) RegisterCapabilities(ctx context.Context, cfg chain.
 		if err != nil {
 			return nil, fmt.Errorf("stellar: selector %d: %w", sel, err)
 		}
+		if err := dc.Start(ctx); err != nil {
+			return nil, fmt.Errorf("stellar: failed to start chain for selector %d: %w", sel, err)
+		}
 		server := stellarserver.NewClientServer(NewLimitedStellarChain(dc, lim))
 		if err := cfg.Registry.Add(ctx, server); err != nil {
 			return nil, fmt.Errorf("register stellar capability for selector %d: %w", sel, err)
