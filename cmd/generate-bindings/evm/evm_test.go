@@ -436,6 +436,60 @@ func TestGenerateBindingsTS_WriteReportHelperEncodesArgsOnly(t *testing.T) {
 	assert.Equal(t, 1, strings.Count(src, "const callData = encodeFunctionData({"), "only view calls should build calldata in this fixture")
 }
 
+func TestIncludeFunctionSelector(t *testing.T) {
+	for _, mode := range []struct {
+		name            string
+		flags           []string
+		includeSelector bool
+	}{
+		{name: "default"},
+		{name: "legacy", flags: []string{"--include-function-selector"}, includeSelector: true},
+		{name: "explicit false", flags: []string{"--include-function-selector=false"}},
+	} {
+		for _, singleFile := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/singleFile=%t", mode.name, singleFile), func(t *testing.T) {
+				projectRoot := t.TempDir()
+				abiDir := filepath.Join(projectRoot, "contracts", "evm", "src", "abi")
+				require.NoError(t, os.MkdirAll(abiDir, 0o755))
+				abiFile := filepath.Join(abiDir, "Counter.abi")
+				require.NoError(t, os.WriteFile(abiFile, []byte(`[
+					{"type":"function","name":"setValue","inputs":[{"name":"value","type":"uint256"}],"outputs":[],"stateMutability":"nonpayable"},
+					{"type":"function","name":"getValue","inputs":[],"outputs":[{"name":"","type":"uint256"}],"stateMutability":"view"}
+				]`), 0o600))
+				v := viper.New()
+				ctx := &runtime.Context{Viper: v}
+				cmd := New(ctx)
+				flags := append([]string{"--project-root", projectRoot, "--language", "typescript"}, mode.flags...)
+				if singleFile {
+					flags = append(flags, "--abi", abiFile)
+				}
+				require.NoError(t, cmd.ParseFlags(flags))
+				require.NoError(t, v.BindPFlags(cmd.Flags()))
+				inputs, err := newHandler(ctx).ResolveInputs(v)
+				require.NoError(t, err)
+				require.Equal(t, mode.includeSelector, inputs.IncludeFunctionSelector)
+				require.NoError(t, cmd.RunE(cmd, nil))
+
+				content, err := os.ReadFile(filepath.Join(inputs.TSOutPath, "Counter.ts"))
+				require.NoError(t, err)
+				src := string(content)
+				if mode.includeSelector {
+					assert.Contains(t, src, "const encodedPayload = encodeFunctionData({")
+					assert.NotContains(t, src, "encodeAbiParameters")
+					assert.NotContains(t, src, "getFunctionInputs")
+				} else {
+					assert.Contains(t, src, "const encodedPayload = encodeAbiParameters(")
+					assert.Contains(t, src, "getFunctionInputs(CounterABI, 'setValue')")
+				}
+				assert.Contains(t, src, ".report(prepareReportRequest(encodedPayload))")
+				assert.Equal(t, 1, strings.Count(src, "const callData = encodeFunctionData({"), "view calls must retain their selector")
+				assert.Contains(t, src, ".report(prepareReportRequest(callData))", "raw writeReport payloads must remain unchanged")
+				require.FileExists(t, filepath.Join(inputs.TSOutPath, "Counter_mock.ts"))
+			})
+		}
+	}
+}
+
 func TestResolveEvmInputs_CustomProjectRoot(t *testing.T) {
 	tempDir, err := os.MkdirTemp("", "generate-bindings-test")
 	require.NoError(t, err)

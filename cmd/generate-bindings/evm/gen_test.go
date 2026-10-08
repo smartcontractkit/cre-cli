@@ -77,6 +77,15 @@ func TestGenerateBindingsCrossLanguageReportPayloadGolden(t *testing.T) {
 	require.Equal(t, goPayload, tsPayload)
 	require.Equal(t, 64, len(goPayload)/2)
 	require.NotEqual(t, "6adc10b0", goPayload[:8])
+
+	legacyDir := filepath.Join(tempDir, "legacy")
+	require.NoError(t, os.MkdirAll(legacyDir, 0o755))
+	legacyFile := filepath.Join(legacyDir, "PriceUpdater.ts")
+	require.NoError(t, evm.GenerateBindingsTS(abiFile, "PriceUpdater", legacyFile,
+		evm.TSBindingOptions{IncludeFunctionSelector: true}))
+	legacyPayload := generatedTSReportPayloadHex(t, repoRoot, legacyFile)
+	require.Equal(t, "6adc10b0"+goPayload, legacyPayload, "legacy reports must contain the selector followed by the same encoded arguments")
+	require.Equal(t, 68, len(legacyPayload)/2)
 }
 
 func generatedGoReportPayloadHex(t *testing.T, repoRoot, pkgDir string) string {
