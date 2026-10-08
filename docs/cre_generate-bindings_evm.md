@@ -54,3 +54,4 @@ cre generate-bindings evm [optional flags]
 ### SEE ALSO
 
 * [cre generate-bindings](cre_generate-bindings.md)	 - Generate bindings for contracts
+
