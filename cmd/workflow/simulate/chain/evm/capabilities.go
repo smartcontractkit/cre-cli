@@ -7,9 +7,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
 
+	capreg "github.com/smartcontractkit/chainlink-common/pkg/capabilities/registry"
 	evmserver "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/chain-capabilities/evm/server"
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
-	"github.com/smartcontractkit/chainlink/v2/core/capabilities"
 	"github.com/smartcontractkit/chainlink/v2/core/capabilities/fakes"
 
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain"
@@ -26,7 +26,7 @@ type EVMChainCapabilities struct {
 func NewEVMChainCapabilities(
 	ctx context.Context,
 	lggr logger.Logger,
-	registry *capabilities.Registry,
+	registry *capreg.Registry,
 	clients map[uint64]*ethclient.Client,
 	forwarders map[uint64]string,
 	privateKey *ecdsa.PrivateKey,

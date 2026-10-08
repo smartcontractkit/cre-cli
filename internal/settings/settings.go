@@ -36,8 +36,12 @@ var (
 		Name:          string(corekeys.Solana),
 		PrivateKeyEnv: "CRE_SOLANA_PRIVATE_KEY",
 	}
+	Stellar = ChainType{
+		Name:          string(corekeys.Stellar),
+		PrivateKeyEnv: "CRE_STELLAR_PRIVATE_KEY",
+	}
 
-	AllChainTypes = []ChainType{EVM, Solana}
+	AllChainTypes = []ChainType{EVM, Solana, Stellar}
 )
 
 // Backwards-compat aliases; prefer EVM.PrivateKeyEnv / Aptos.PrivateKeyEnv /

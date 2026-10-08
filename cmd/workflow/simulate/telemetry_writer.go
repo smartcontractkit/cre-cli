@@ -151,9 +151,16 @@ func (w *telemetryWriter) Write(p []byte) (n int, err error) {
 	return len(p), nil
 }
 
+// isBytesBody reports whether a log record body holds base64-encoded bytes.
+// The stdout log exporter labels bytes "Bytes" up to v0.19 (log.Kind names)
+// and "BYTESLICE" from v0.22 (attribute.Type names).
+func isBytesBody(bodyType string) bool {
+	return bodyType == "Bytes" || bodyType == "BYTESLICE"
+}
+
 // handleUserLogs processes UserLogs telemetry events
 func (w *telemetryWriter) handleUserLogs(telLog TelemetryLog) {
-	if telLog.Body.Type == "Bytes" && telLog.Body.Value != "" {
+	if isBytesBody(telLog.Body.Type) && telLog.Body.Value != "" {
 		decoded, err := base64.StdEncoding.DecodeString(telLog.Body.Value)
 		if err != nil {
 			w.lggr.Errorf("Failed to decode userLogs body: %v", err)
@@ -173,7 +180,7 @@ func (w *telemetryWriter) handleUserLogs(telLog TelemetryLog) {
 
 // handleWorkflowEvent processes workflow execution events (started/finished)
 func (w *telemetryWriter) handleWorkflowEvent(telLog TelemetryLog, eventType string) {
-	if telLog.Body.Type == "Bytes" && telLog.Body.Value != "" {
+	if isBytesBody(telLog.Body.Type) && telLog.Body.Value != "" {
 		decoded, err := base64.StdEncoding.DecodeString(telLog.Body.Value)
 		if err != nil {
 			w.lggr.Errorf("Failed to decode workflow event body: %v", err)
@@ -215,7 +222,7 @@ func (w *telemetryWriter) handleWorkflowEvent(telLog TelemetryLog, eventType str
 
 // handleCapabilityEvent processes capability execution events (started/finished)
 func (w *telemetryWriter) handleCapabilityEvent(telLog TelemetryLog, eventType string) {
-	if telLog.Body.Type == "Bytes" && telLog.Body.Value != "" {
+	if isBytesBody(telLog.Body.Type) && telLog.Body.Value != "" {
 		decoded, err := base64.StdEncoding.DecodeString(telLog.Body.Value)
 		if err != nil {
 			w.lggr.Errorf("Failed to decode capability event body: %v", err)

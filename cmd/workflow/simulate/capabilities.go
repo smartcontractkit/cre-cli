@@ -7,6 +7,7 @@ import (
 
 	corekeys "github.com/smartcontractkit/chainlink-common/keystore/corekeys"
 	"github.com/smartcontractkit/chainlink-common/keystore/corekeys/ocr2key"
+	capreg "github.com/smartcontractkit/chainlink-common/pkg/capabilities/registry"
 	confhttpserver "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/actions/confidentialhttp/server"
 	httpserver "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/actions/http/server"
 	consensusserver "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/consensus/server"
@@ -15,7 +16,6 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/config"
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	"github.com/smartcontractkit/chainlink-common/pkg/services"
-	"github.com/smartcontractkit/chainlink/v2/core/capabilities"
 	"github.com/smartcontractkit/chainlink/v2/core/capabilities/fakes"
 )
 
@@ -27,7 +27,7 @@ type ManualTriggers struct {
 
 // NewManualTriggerCapabilities creates and registers cron and HTTP trigger capabilities.
 // These are chain-agnostic and shared across all chain types.
-func NewManualTriggerCapabilities(ctx context.Context, lggr logger.Logger, registry *capabilities.Registry, httpTriggerPort int, limits *SimulationLimits) (*ManualTriggers, error) {
+func NewManualTriggerCapabilities(ctx context.Context, lggr logger.Logger, registry *capreg.Registry, httpTriggerPort int, limits *SimulationLimits) (*ManualTriggers, error) {
 	manualCronTrigger, err := fakes.NewManualCronTriggerService(lggr)
 	if err != nil {
 		return nil, err
@@ -85,7 +85,7 @@ func (m *ManualTriggers) Close() error {
 }
 
 // NewFakeActionCapabilities builds faked capabilities, then registers them with the capability registry.
-func NewFakeActionCapabilities(ctx context.Context, lggr logger.Logger, registry *capabilities.Registry, secretsPath string, limits *SimulationLimits) ([]services.Service, error) {
+func NewFakeActionCapabilities(ctx context.Context, lggr logger.Logger, registry *capreg.Registry, secretsPath string, limits *SimulationLimits) ([]services.Service, error) {
 	caps := make([]services.Service, 0)
 
 	// Consensus
