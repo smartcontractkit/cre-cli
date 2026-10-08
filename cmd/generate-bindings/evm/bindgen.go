@@ -142,10 +142,16 @@ func GenerateBindings(
 	return nil
 }
 
+// TSBindingOptions controls TypeScript binding generation.
+type TSBindingOptions = abigen.TSBindingOptions
+
+// GenerateBindingsTS generates args-only report helpers by default. Pass options
+// with IncludeFunctionSelector enabled to restore legacy full-calldata reports.
 func GenerateBindingsTS(
 	abiPath string,
 	typeName string,
 	outPath string,
+	options ...TSBindingOptions,
 ) error {
 	if abiPath == "" {
 		return errors.New("must provide abiPath")
@@ -166,7 +172,7 @@ func GenerateBindingsTS(
 	libs := make(map[string]string)
 	aliases := make(map[string]string)
 
-	outSrc, err := abigen.BindV2TS(types, abis, bins, "", libs, aliases, tsTpl)
+	outSrc, err := abigen.BindV2TS(types, abis, bins, "", libs, aliases, tsTpl, options...)
 	if err != nil {
 		return fmt.Errorf("BindV2TS: %w", err)
 	}
