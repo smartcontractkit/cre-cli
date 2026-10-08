@@ -107,11 +107,17 @@ func (h *handler) tryAutoLink(ctx context.Context, onChain *settings.OnChainRegi
 		EnvironmentSet: h.environmentSet,
 	}
 
-	return linkkey.Exec(ctx, rtx, linkkey.Inputs{
+	return linkkey.Exec(ctx, rtx, h.autoLinkInputs(onChain))
+}
+
+func (h *handler) autoLinkInputs(onChain *settings.OnChainRegistry) linkkey.Inputs {
+	return linkkey.Inputs{
 		WorkflowOwner:                   h.inputs.WorkflowOwner,
 		WorkflowRegistryContractAddress: onChain.Address(),
 		WorkflowOwnerLabel:              h.inputs.OwnerLabel,
-	})
+		NonInteractive:                  h.inputs.NonInteractive,
+		SkipConfirmation:                h.inputs.SkipConfirmation,
+	}
 }
 
 // checkLinkStatusViaGraphQL checks if the owner is linked and verified by querying the service
