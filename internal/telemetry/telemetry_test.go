@@ -110,7 +110,7 @@ func TestShouldExcludeCommand(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cmd := &cobra.Command{Use: tt.cmdName}
-			assert.Equal(t, tt.shouldExclude, shouldExcludeCommand(cmd))
+			assert.Equal(t, tt.shouldExclude, ShouldExcludeCommand(cmd))
 		})
 	}
 }

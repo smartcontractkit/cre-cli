@@ -1,10 +1,16 @@
 package runtime
 
 import (
+	"io"
+	"os"
+	"path/filepath"
 	"testing"
 
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 
+	"github.com/smartcontractkit/cre-cli/internal/creconfig"
+	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 )
@@ -80,5 +86,49 @@ func TestValidateOnchainRegistryRPC(t *testing.T) {
 		err := ctx.ValidateOnchainRegistryRPC()
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "missing RPC URL")
+	})
+}
+
+func TestTryAttachCredentials(t *testing.T) {
+	discardLogger := zerolog.New(io.Discard)
+
+	t.Run("attaches API key credentials from environment", func(t *testing.T) {
+		t.Setenv(credentials.CreApiKeyVar, "test-api-key")
+
+		ctx := &Context{Logger: &discardLogger}
+		ctx.TryAttachCredentials()
+
+		require.NotNil(t, ctx.Credentials)
+		require.Equal(t, "test-api-key", ctx.Credentials.APIKey)
+		require.Equal(t, credentials.AuthTypeApiKey, ctx.Credentials.AuthType)
+	})
+
+	t.Run("attaches bearer credentials from config file", func(t *testing.T) {
+		t.Setenv(credentials.CreApiKeyVar, "")
+		home := t.TempDir()
+		require.NoError(t, os.MkdirAll(filepath.Join(home, creconfig.Dir), 0o700))
+		require.NoError(t, os.WriteFile(
+			filepath.Join(home, creconfig.Dir, credentials.ConfigFile),
+			[]byte("AccessToken: test-access-token\n"),
+			0o600,
+		))
+		t.Setenv("HOME", home)
+
+		ctx := &Context{Logger: &discardLogger}
+		ctx.TryAttachCredentials()
+
+		require.NotNil(t, ctx.Credentials)
+		require.NotNil(t, ctx.Credentials.Tokens)
+		require.Equal(t, "test-access-token", ctx.Credentials.Tokens.AccessToken)
+	})
+
+	t.Run("leaves credentials nil when none exist", func(t *testing.T) {
+		t.Setenv(credentials.CreApiKeyVar, "")
+		t.Setenv("HOME", t.TempDir())
+
+		ctx := &Context{Logger: &discardLogger}
+		ctx.TryAttachCredentials()
+
+		require.Nil(t, ctx.Credentials)
 	})
 }
