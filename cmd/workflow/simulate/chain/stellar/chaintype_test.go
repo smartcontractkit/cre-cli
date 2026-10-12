@@ -270,3 +270,19 @@ func TestStellarChainType_RegisterCapabilities_InvalidInputs(t *testing.T) {
 		require.ErrorContains(t, err, "forwarder")
 	})
 }
+
+func TestStellarChainType_RegisterCapabilities_RegistryFailureStartsNothing(t *testing.T) {
+	t.Parallel()
+	sel := chainselectors.STELLAR_TESTNET.Selector
+	cfg, _ := registerCfg(t, testForwarder, false, nil)
+
+	// The first registration takes the capability ID, so the second Add fails.
+	_, err := newStellarChainType().RegisterCapabilities(context.Background(), cfg)
+	require.NoError(t, err)
+
+	ct := newStellarChainType()
+	srvcs, err := ct.RegisterCapabilities(context.Background(), cfg)
+	require.ErrorContains(t, err, "register stellar capability")
+	assert.Nil(t, srvcs)
+	assert.False(t, ct.Supports(sel), "a failed registration must not report the chain as supported")
+}

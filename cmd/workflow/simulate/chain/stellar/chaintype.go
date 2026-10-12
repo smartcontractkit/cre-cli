@@ -139,7 +139,7 @@ func (ct *StellarChainType) ResolveTriggerData(context.Context, uint64, chain.Tr
 	return nil, fmt.Errorf("stellar triggers are not supported in simulation; use a cron or HTTP trigger")
 }
 
-func (ct *StellarChainType) RegisterCapabilities(ctx context.Context, cfg chain.CapabilityConfig) ([]services.Service, error) {
+func (ct *StellarChainType) RegisterCapabilities(ctx context.Context, cfg chain.CapabilityConfig) (_ []services.Service, err error) {
 	var transmitter *keypair.Full
 	if cfg.PrivateKey != nil {
 		kp, ok := cfg.PrivateKey.(*keypair.Full)
@@ -154,8 +154,8 @@ func (ct *StellarChainType) RegisterCapabilities(ctx context.Context, cfg chain.
 		lim = ExtractLimits(cfg.Limits)
 	}
 
-	ct.chains = make(map[uint64]*fakes.FakeStellarChain, len(cfg.Clients))
-	out := make([]services.Service, 0, len(cfg.Clients))
+	ct.chains = map[uint64]*fakes.FakeStellarChain{}
+	built := make(map[uint64]*fakes.FakeStellarChain, len(cfg.Clients))
 	for sel, c := range cfg.Clients {
 		client, ok := c.(*rpcclient.Client)
 		if !ok {
@@ -183,16 +183,28 @@ func (ct *StellarChainType) RegisterCapabilities(ctx context.Context, cfg chain.
 		if err != nil {
 			return nil, fmt.Errorf("stellar: selector %d: %w", sel, err)
 		}
-		if err := dc.Start(ctx); err != nil {
-			return nil, fmt.Errorf("stellar: failed to start chain for selector %d: %w", sel, err)
-		}
 		server := stellarserver.NewClientServer(NewLimitedStellarChain(dc, lim))
-		if err := cfg.Registry.Add(ctx, server); err != nil {
+		if err = cfg.Registry.Add(ctx, server); err != nil {
 			return nil, fmt.Errorf("register stellar capability for selector %d: %w", sel, err)
 		}
-		ct.chains[sel] = dc
+		built[sel] = dc
+	}
+
+	out := make([]services.Service, 0, len(built))
+	defer func() {
+		if err != nil {
+			for _, s := range out {
+				_ = s.Close()
+			}
+		}
+	}()
+	for sel, dc := range built {
+		if err = dc.Start(ctx); err != nil {
+			return nil, fmt.Errorf("stellar: failed to start chain for selector %d: %w", sel, err)
+		}
 		out = append(out, dc)
 	}
+	ct.chains = built
 	return out, nil
 }
 
