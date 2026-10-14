@@ -12,6 +12,8 @@ import (
 	"testing"
 
 	"github.com/rs/zerolog"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/smartcontractkit/cre-cli/cmd/whoami"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
@@ -124,7 +126,7 @@ func TestHandlerExecute(t *testing.T) {
 			os.Stdout = w
 
 			h := whoami.NewHandler(rtCtx)
-			err := h.Execute(context.Background())
+			err := h.Execute(context.Background(), whoami.Inputs{})
 
 			w.Close()
 			os.Stdout = oldStdout
@@ -154,4 +156,78 @@ func TestHandlerExecute(t *testing.T) {
 			}
 		})
 	}
+}
+
+func captureStdout(t *testing.T, fn func()) string {
+	t.Helper()
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
+	old := os.Stdout
+	os.Stdout = w
+	fn()
+	w.Close()
+	os.Stdout = old
+	var buf strings.Builder
+	_, _ = io.Copy(&buf, r)
+	return buf.String()
+}
+
+func runWhoami(t *testing.T, creds *credentials.Credentials, envName string, resp map[string]any, args ...string) (string, error) {
+	t.Helper()
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": resp})
+	}))
+	t.Cleanup(ts.Close)
+
+	logger := zerolog.Nop()
+	cmd := whoami.New(&runtime.Context{
+		Credentials:    creds,
+		Logger:         &logger,
+		EnvironmentSet: &environments.EnvironmentSet{GraphQLURL: ts.URL, EnvName: envName},
+	})
+	cmd.SetArgs(args)
+
+	var err error
+	out := captureStdout(t, func() { err = cmd.Execute() })
+	return out, err
+}
+
+func TestWhoami_JSONOutput(t *testing.T) {
+	out, err := runWhoami(t, &credentials.Credentials{}, "STAGING", map[string]any{
+		"getAccountDetails": map[string]string{"emailAddress": "alice@example.com"},
+		"getOrganization":   map[string]string{"organizationId": "org-42", "displayName": "Alice's Org"},
+	}, "--json")
+	require.NoError(t, err)
+
+	var got map[string]any
+	require.NoError(t, json.Unmarshal([]byte(out), &got), "stdout must be only JSON, got %q", out)
+	assert.Equal(t, map[string]any{
+		"organizationId":   "org-42",
+		"organizationName": "Alice's Org",
+		"email":            "alice@example.com",
+		"environment":      "STAGING",
+	}, got)
+}
+
+func TestWhoami_JSONOutput_APIKeyOmitsEmail(t *testing.T) {
+	creds := &credentials.Credentials{AuthType: credentials.AuthTypeApiKey, APIKey: "test-key"}
+	out, err := runWhoami(t, creds, "", map[string]any{
+		"getOrganization": map[string]string{"organizationId": "org-42", "displayName": "Alice's Org"},
+	}, "--output", "json")
+	require.NoError(t, err)
+
+	var got map[string]any
+	require.NoError(t, json.Unmarshal([]byte(out), &got), "stdout must be only JSON, got %q", out)
+	assert.NotContains(t, got, "email")
+	assert.Equal(t, "org-42", got["organizationId"])
+	assert.Equal(t, "Alice's Org", got["organizationName"])
+	assert.Equal(t, "PRODUCTION", got["environment"])
+}
+
+func TestWhoami_InvalidOutputFormat(t *testing.T) {
+	out, err := runWhoami(t, &credentials.Credentials{}, "", map[string]any{}, "--output", "csv")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "csv")
+	assert.Empty(t, out)
 }

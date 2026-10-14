@@ -10,10 +10,19 @@ Fetches workflow owners linked to your organisation
 cre account list-key [optional flags]
 ```
 
+### Examples
+
+```
+cre account list-key
+  cre account list-key --json
+```
+
 ### Options
 
 ```
-  -h, --help   help for list-key
+  -h, --help            help for list-key
+      --json            Output as JSON (shorthand for --output=json)
+      --output string   Output format: "json" prints a JSON array to stdout
 ```
 
 ### Options inherited from parent commands

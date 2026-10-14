@@ -10,10 +10,19 @@ Fetches your account details (email and organization ID).
 cre whoami [optional flags]
 ```
 
+### Examples
+
+```
+cre whoami
+  cre whoami --json
+```
+
 ### Options
 
 ```
-  -h, --help   help for whoami
+  -h, --help            help for whoami
+      --json            Output as JSON (shorthand for --output=json)
+      --output string   Output format: "json" prints a JSON object to stdout
 ```
 
 ### Options inherited from parent commands

@@ -84,6 +84,9 @@ type Handler struct {
 	Settings             *settings.Settings
 	execCtx              context.Context
 
+	// ListResponseHandler, when set, receives the decoded secrets/list response instead of the default printer.
+	ListResponseHandler func(*vault.ListSecretIdentifiersResponse) error
+
 	vaultValidationDecided bool
 	skipVaultValidation    bool
 	capRegRPCURL           string
@@ -771,6 +774,10 @@ func (h *Handler) ParseVaultGatewayResponse(method, requestID string, respBody [
 		var p vault.ListSecretIdentifiersResponse
 		if err := unmarshalVaultResponsePayload(rpcResp.Result.Payload, &p); err != nil {
 			return fmt.Errorf("failed to decode list payload: %w", err)
+		}
+
+		if h.ListResponseHandler != nil {
+			return h.ListResponseHandler(&p)
 		}
 
 		if !p.GetSuccess() {

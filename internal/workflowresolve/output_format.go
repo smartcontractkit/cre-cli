@@ -1,6 +1,9 @@
 package workflowresolve
 
-import "fmt"
+import (
+	"encoding/json"
+	"fmt"
+)
 
 const OutputFormatJSON = "json"
 
@@ -13,4 +16,14 @@ func ResolveOutputFormat(outputFormat string, jsonFlag bool) (string, error) {
 		return "", fmt.Errorf("--output %q is not supported; only %q is accepted", outputFormat, OutputFormatJSON)
 	}
 	return outputFormat, nil
+}
+
+// PrintJSON writes v to stdout as indented JSON.
+func PrintJSON(v any) error {
+	data, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return err
+	}
+	fmt.Println(string(data))
+	return nil
 }

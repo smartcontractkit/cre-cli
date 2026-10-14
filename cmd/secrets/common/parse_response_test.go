@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"os"
 	"strings"
@@ -433,5 +434,38 @@ func TestParseVaultGatewayResponse_BadPayloadForList(t *testing.T) {
 	err := h.ParseVaultGatewayResponse(vaulttypes.MethodSecretsList, "", raw)
 	if err == nil || !strings.Contains(err.Error(), "failed to decode list payload") {
 		t.Fatalf("expected decode error for list payload, got: %v", err)
+	}
+}
+
+func TestParseVaultGatewayResponse_List_ListResponseHandler(t *testing.T) {
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	var buf bytes.Buffer
+	h := newTestHandler(&buf)
+
+	var got *vault.ListSecretIdentifiersResponse
+	h.ListResponseHandler = func(resp *vault.ListSecretIdentifiersResponse) error {
+		got = resp
+		return errors.New("handler error")
+	}
+
+	body := encodeRPCBodyFromPayload(buildListPayloadProtoSuccessWithItems(t))
+	err := h.ParseVaultGatewayResponse(vaulttypes.MethodSecretsList, "", body)
+
+	w.Close()
+	os.Stdout = oldStdout
+	var output strings.Builder
+	_, _ = io.Copy(&output, r)
+
+	if err == nil || !strings.Contains(err.Error(), "handler error") {
+		t.Fatalf("expected handler error to propagate, got: %v", err)
+	}
+	if got == nil || len(got.GetIdentifiers()) != 2 || got.GetIdentifiers()[0].GetKey() != "l1" {
+		t.Fatalf("expected decoded list response with 2 identifiers, got: %v", got)
+	}
+	if output.Len() != 0 {
+		t.Fatalf("expected default printer to be bypassed, got stdout:\n%s", output.String())
 	}
 }
