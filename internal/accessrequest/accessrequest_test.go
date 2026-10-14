@@ -20,13 +20,15 @@ func TestSubmitAccessRequest(t *testing.T) {
 	tests := []struct {
 		name           string
 		useCase        string
+		deploymentType string
 		graphqlHandler http.HandlerFunc
 		wantErr        bool
 		wantErrMsg     string
 	}{
 		{
-			name:    "successful request",
-			useCase: "Building a cross-chain DeFi protocol",
+			name:           "successful request",
+			useCase:        "Building a cross-chain DeFi protocol",
+			deploymentType: string(accessrequest.DeploymentTypeEvaluation),
 			graphqlHandler: func(w http.ResponseWriter, r *http.Request) {
 				body, _ := io.ReadAll(r.Body)
 				bodyStr := string(body)
@@ -36,6 +38,12 @@ func TestSubmitAccessRequest(t *testing.T) {
 				}
 				if !strings.Contains(bodyStr, "Building a cross-chain DeFi protocol") {
 					t.Errorf("expected use case description in body, got: %s", bodyStr)
+				}
+				if !strings.Contains(bodyStr, "Request reason: Evaluation") {
+					t.Errorf("expected request reason in body, got: %s", bodyStr)
+				}
+				if strings.Contains(bodyStr, "Request from CLI") {
+					t.Errorf("expected no 'Request from CLI' suffix in body, got: %s", bodyStr)
 				}
 
 				resp := map[string]interface{}{
@@ -125,7 +133,7 @@ func TestSubmitAccessRequest(t *testing.T) {
 			logger := zerolog.New(io.Discard)
 
 			requester := accessrequest.NewRequester(creds, envSet, &logger)
-			err := requester.SubmitAccessRequest(context.Background(), tc.useCase)
+			err := requester.SubmitAccessRequest(context.Background(), tc.useCase, tc.deploymentType)
 
 			if tc.wantErr {
 				if err == nil {

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"os"
 
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
@@ -92,10 +91,7 @@ func (h *handler) execute() error {
 		return fmt.Errorf("failed to delete credentials file %s: %w", credPath, err)
 	}
 
-	contextPath, err := creconfig.FilePath(tenantctx.ContextFile)
-	if err != nil {
-		h.log.Warn().Err(err).Msgf("failed to resolve %s path", tenantctx.ContextFile)
-	} else if err := os.Remove(contextPath); err != nil && !os.IsNotExist(err) {
+	if err := tenantctx.ClearContext(); err != nil {
 		h.log.Warn().Err(err).Msgf("failed to delete %s", tenantctx.ContextFile)
 	}
 

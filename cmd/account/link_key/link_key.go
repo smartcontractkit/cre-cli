@@ -43,6 +43,7 @@ type Inputs struct {
 	WorkflowOwner                   string `validate:"required,workflow_owner"`
 	WorkflowRegistryContractAddress string `validate:"required"`
 	NonInteractive                  bool
+	SkipConfirmation                bool
 }
 
 type initiateLinkingResponse struct {
@@ -139,6 +140,7 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 		WorkflowRegistryContractAddress: h.environmentSet.WorkflowRegistryAddress,
 		WorkflowOwnerLabel:              strings.TrimSpace(v.GetString("owner-label")),
 		NonInteractive:                  v.GetBool(settings.Flags.NonInteractive.Name),
+		SkipConfirmation:                v.GetBool(settings.Flags.SkipConfirmation.Name),
 	}, nil
 }
 
@@ -215,6 +217,10 @@ func (h *handler) Execute(ctx context.Context, in Inputs) error {
 		return nil
 	}
 
+	if err := confirmPermanentLink(in); err != nil {
+		return err
+	}
+
 	ui.Dim(fmt.Sprintf("Starting linking: owner=%s, label=%s", in.WorkflowOwner, in.WorkflowOwnerLabel))
 
 	resp, err := h.callInitiateLinking(h.execCtx, in)
@@ -241,6 +247,31 @@ func (h *handler) Execute(ctx context.Context, in Inputs) error {
 		return fmt.Errorf("linking failed: %w", err)
 	}
 
+	return nil
+}
+
+func confirmPermanentLink(in Inputs) error {
+	ui.Warning("Linking this address is permanent. Once linked, it cannot be transferred to or reused in another organization.")
+
+	if in.NonInteractive && !in.SkipConfirmation {
+		ui.ErrorWithSuggestions(
+			"Non-interactive mode requires all inputs via flags",
+			[]string{"--yes"},
+		)
+		return fmt.Errorf("missing required flags for --non-interactive mode")
+	}
+
+	if in.SkipConfirmation {
+		return nil
+	}
+
+	confirm, err := ui.Confirm("Do you want to link this address permanently?")
+	if err != nil {
+		return err
+	}
+	if !confirm {
+		return fmt.Errorf("linking aborted by user")
+	}
 	return nil
 }
 

@@ -90,6 +90,7 @@ func newRootCommand() *cobra.Command {
 	rootLogger := createLogger()
 	rootViper := createViper()
 	runtimeContext := runtime.NewContext(rootLogger, rootViper)
+	tenantctx.CLIVersion = version.Version
 
 	runtimeContextForTelemetry = runtimeContext
 

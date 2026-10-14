@@ -368,4 +368,25 @@ func TestTryAutoLinkUsesOnChainRegistry(t *testing.T) {
 		assert.Equal(t, "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266", h.inputs.WorkflowOwner)
 		assert.Equal(t, "my-label", h.inputs.OwnerLabel)
 	})
+
+	t.Run("confirmation flags are forwarded to link-key", func(t *testing.T) {
+		simulatedEnvironment := chainsim.NewSimulatedEnvironment(t)
+		defer simulatedEnvironment.Close()
+
+		ctx, _ := simulatedEnvironment.NewRuntimeContextWithBufferedOutput()
+		h := newHandler(ctx, nil)
+		h.inputs.WorkflowOwner = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+		h.inputs.OwnerLabel = "my-label"
+		h.inputs.NonInteractive = true
+		h.inputs.SkipConfirmation = true
+
+		onChain, err := settings.AsOnChain(ctx.ResolvedRegistry, "test")
+		assert.NoError(t, err)
+
+		in := h.autoLinkInputs(onChain)
+		assert.Equal(t, onChain.Address(), in.WorkflowRegistryContractAddress)
+		assert.Equal(t, "my-label", in.WorkflowOwnerLabel)
+		assert.True(t, in.NonInteractive)
+		assert.True(t, in.SkipConfirmation)
+	})
 }

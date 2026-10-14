@@ -74,3 +74,30 @@ func TestNonInteractive_WithOwnerLabel_AllowsProceeding(t *testing.T) {
 	assert.False(t, in.NonInteractive && in.WorkflowOwnerLabel == "",
 		"should allow proceeding when --owner-label is set")
 }
+
+func TestConfirmPermanentLink(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		in        Inputs
+		wantError string
+	}{
+		{name: "non-interactive without --yes is rejected", in: Inputs{NonInteractive: true}, wantError: "--non-interactive"},
+		{name: "--yes skips the prompt", in: Inputs{SkipConfirmation: true}},
+		{name: "non-interactive with --yes proceeds", in: Inputs{NonInteractive: true, SkipConfirmation: true}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			err := confirmPermanentLink(tt.in)
+			if tt.wantError != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.wantError)
+				return
+			}
+			require.NoError(t, err)
+		})
+	}
+}
