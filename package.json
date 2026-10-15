@@ -1,7 +1,7 @@
 {
   "name": "cre-cli",
   "private": true,
-  "version": "1.8.2",
+  "version": "1.9.0",
   "scripts": {
     "ci:changeset:publish": "bash ./scripts/tag-and-push.sh",
     "ci:changeset:version": "pnpm changeset version"

@@ -1,5 +1,17 @@
 # cre-cli
 
+## 1.9.0
+
+### Minor Changes
+
+- [#566](https://github.com/smartcontractkit/cre-cli/pull/566) [`7276be0`](https://github.com/smartcontractkit/cre-cli/commit/7276be0eb801037fd04527c990f75f0e745c013d) Thanks [@russell-stern](https://github.com/russell-stern)! - Bump cre-sdk-go to v1.21.0 and @chainlink/cre-sdk to ^1.22.0
+
+### Patch Changes
+
+- [#607](https://github.com/smartcontractkit/cre-cli/pull/607) [`29b8ebb`](https://github.com/smartcontractkit/cre-cli/commit/29b8ebb7b14c12486396fde646143cc62d97960c) Thanks [@ejacquier](https://github.com/ejacquier)! - Fix telemetry for commands that don't require login (`cre generate-bindings`, `cre workflow build`, `cre workflow hash`, etc.). Credentials are now attached silently when they exist on disk, so usage events from logged-in users are sent instead of being dropped. Commands remain fully usable while logged out.
+
+- [#618](https://github.com/smartcontractkit/cre-cli/pull/618) [`831d425`](https://github.com/smartcontractkit/cre-cli/commit/831d42573aaf574ec06c55d28d4d73086e55f343) Thanks [@anirudhwarrier](https://github.com/anirudhwarrier)! - `cre secrets create`, `update`, `delete` and `list` now exit non-zero when the Vault rejects a request (for example "key does not exist" on update). Previously the failure was only printed and the command exited 0, so scripts and CI treated it as success.
+
 ## 1.8.2
 
 ### Patch Changes
