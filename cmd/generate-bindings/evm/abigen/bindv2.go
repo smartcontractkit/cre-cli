@@ -489,9 +489,19 @@ func tsBindType(kind abi.Type, structs map[string]*tmplStruct) string {
 	}
 }
 
+// TSBindingOptions controls TypeScript binding generation.
+type TSBindingOptions struct {
+	// IncludeFunctionSelector restores legacy full-calldata report payloads.
+	IncludeFunctionSelector bool
+}
+
 // BindV2TS generates TypeScript bindings using the same ABI parsing as BindV2
 // but with TypeScript-specific template functions and no Go formatting.
-func BindV2TS(types []string, abis []string, bytecodes []string, pkg string, libs map[string]string, aliases map[string]string, templateContent string) (string, error) {
+func BindV2TS(types []string, abis []string, bytecodes []string, pkg string, libs map[string]string, aliases map[string]string, templateContent string, options ...TSBindingOptions) (string, error) {
+	var opts TSBindingOptions
+	if len(options) > 0 {
+		opts = options[0]
+	}
 	b := binder{
 		contracts: make(map[string]*tmplContractV2),
 		structs:   make(map[string]*tmplStruct),
@@ -562,7 +572,10 @@ func BindV2TS(types []string, abis []string, bytecodes []string, pkg string, lib
 		},
 	}
 	tmpl := template.Must(template.New("").Funcs(funcs).Parse(templateContent))
-	if err := tmpl.Execute(buffer, data); err != nil {
+	if err := tmpl.Execute(buffer, struct {
+		tmplDataV2
+		TSBindingOptions
+	}{data, opts}); err != nil {
 		return "", err
 	}
 	return buffer.String(), nil
