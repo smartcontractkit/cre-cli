@@ -19,6 +19,7 @@ var (
 		"env":                    {},
 		"public-env":             {},
 		"http-payload":           {},
+		"input":                  {},
 		"public_key":             {},
 		"ledger-derivation-path": {},
 		"config":                 {},

@@ -67,6 +67,7 @@ func TestFlag(t *testing.T) {
 		{name: "env path", flagName: "env", value: "/home/user/project/.env", want: RedactedValue},
 		{name: "public env path", flagName: "public-env", value: "/tmp/.env.public", want: RedactedValue},
 		{name: "http payload", flagName: "http-payload", value: `{"secret":"value"}`, want: RedactedValue},
+		{name: "trigger input file", flagName: "input", value: "@/home/user/payload.json", want: RedactedValue},
 		{name: "public key flag", flagName: "public_key", value: "0xabc", want: RedactedValue},
 		{name: "config path", flagName: "config", value: "./config.yaml", want: RedactedValue},
 		{name: "limits default", flagName: "limits", value: "default", want: "default"},
