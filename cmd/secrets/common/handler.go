@@ -687,6 +687,7 @@ func (h *Handler) Execute(
 // ParseVaultGatewayResponse parses the JSON-RPC response, optionally verifies OCR signatures
 // and the JSON-RPC response id, decodes the SignedOCRResponse payload into the appropriate proto
 // type, and logs one line per secret with id/owner/namespace/success/error.
+// It returns an error when the vault rejects any secret, so the command exits non-zero.
 func (h *Handler) ParseVaultGatewayResponse(method, requestID string, respBody []byte) error {
 	// Unmarshal JSON-RPC envelope with SignedOCRResponse result
 	var rpcResp jsonrpc2.Response[vaulttypes.SignedOCRResponse]
@@ -717,6 +718,7 @@ func (h *Handler) ParseVaultGatewayResponse(method, requestID string, respBody [
 			return fmt.Errorf("failed to decode create payload: %w", err)
 		}
 
+		failed := 0
 		for _, r := range p.GetResponses() {
 			id := r.GetId()
 			// Safeguard for nil id
@@ -727,15 +729,20 @@ func (h *Handler) ParseVaultGatewayResponse(method, requestID string, respBody [
 			if r.GetSuccess() {
 				ui.Success(fmt.Sprintf("Secret created: secret_id=%s, owner=%s, namespace=%s", key, owner, ns))
 			} else {
+				failed++
 				ui.Error(fmt.Sprintf("Secret create failed: secret_id=%s owner=%s namespace=%s error=%s",
 					key, owner, ns, r.GetError()))
 			}
+		}
+		if err := secretFailuresErr("create", failed, len(p.GetResponses())); err != nil {
+			return err
 		}
 	case vaulttypes.MethodSecretsUpdate:
 		var p vault.UpdateSecretsResponse
 		if err := unmarshalVaultResponsePayload(rpcResp.Result.Payload, &p); err != nil {
 			return fmt.Errorf("failed to decode update payload: %w", err)
 		}
+		failed := 0
 		for _, r := range p.GetResponses() {
 			id := r.GetId()
 			key, owner, ns := "", "", ""
@@ -745,15 +752,20 @@ func (h *Handler) ParseVaultGatewayResponse(method, requestID string, respBody [
 			if r.GetSuccess() {
 				ui.Success(fmt.Sprintf("Secret updated: secret_id=%s, owner=%s, namespace=%s", key, owner, ns))
 			} else {
+				failed++
 				ui.Error(fmt.Sprintf("Secret update failed: secret_id=%s owner=%s namespace=%s error=%s",
 					key, owner, ns, r.GetError()))
 			}
+		}
+		if err := secretFailuresErr("update", failed, len(p.GetResponses())); err != nil {
+			return err
 		}
 	case vaulttypes.MethodSecretsDelete:
 		var p vault.DeleteSecretsResponse
 		if err := unmarshalVaultResponsePayload(rpcResp.Result.Payload, &p); err != nil {
 			return fmt.Errorf("failed to decode delete payload: %w", err)
 		}
+		failed := 0
 		for _, r := range p.GetResponses() {
 			id := r.GetId()
 			key, owner, ns := "", "", ""
@@ -763,9 +775,13 @@ func (h *Handler) ParseVaultGatewayResponse(method, requestID string, respBody [
 			if r.GetSuccess() {
 				ui.Success(fmt.Sprintf("Secret deleted: secret_id=%s, owner=%s, namespace=%s", key, owner, ns))
 			} else {
+				failed++
 				ui.Error(fmt.Sprintf("Secret delete failed: secret_id=%s owner=%s namespace=%s error=%s",
 					key, owner, ns, r.GetError()))
 			}
+		}
+		if err := secretFailuresErr("delete", failed, len(p.GetResponses())); err != nil {
+			return err
 		}
 	case vaulttypes.MethodSecretsList:
 		var p vault.ListSecretIdentifiersResponse
@@ -775,7 +791,7 @@ func (h *Handler) ParseVaultGatewayResponse(method, requestID string, respBody [
 
 		if !p.GetSuccess() {
 			ui.Error(fmt.Sprintf("Secret list failed: error=%s", p.GetError()))
-			break
+			return fmt.Errorf("secret list failed: %s", p.GetError())
 		}
 
 		ids := p.GetIdentifiers()
@@ -798,6 +814,13 @@ func (h *Handler) ParseVaultGatewayResponse(method, requestID string, respBody [
 	}
 
 	return nil
+}
+
+func secretFailuresErr(op string, failed, total int) error {
+	if failed == 0 {
+		return nil
+	}
+	return fmt.Errorf("%d of %d secret(s) failed to %s", failed, total, op)
 }
 
 // EnsureOwnerLinkedOrFail TODO this reuses the same logic as in auto_link.go which is tied to deploy; consider refactoring to avoid duplication

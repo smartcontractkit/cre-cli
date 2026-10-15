@@ -81,7 +81,7 @@ func TestPostVaultGatewayWithBearer_CreateParsesResponse(t *testing.T) {
 	var out strings.Builder
 	_, _ = io.Copy(&out, r)
 
-	require.NoError(t, err)
+	require.EqualError(t, err, "1 of 3 secret(s) failed to create")
 	assert.Contains(t, out.String(), "Secret created")
 }
 
