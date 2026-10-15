@@ -3,9 +3,9 @@ package chain
 import (
 	"google.golang.org/protobuf/types/known/anypb"
 
+	capreg "github.com/smartcontractkit/chainlink-common/pkg/capabilities/registry"
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	"github.com/smartcontractkit/chainlink-common/pkg/settings/cresettings"
-	"github.com/smartcontractkit/chainlink/v2/core/capabilities"
 )
 
 // ChainClient is an opaque handle to a chain-specific RPC client.
@@ -39,7 +39,7 @@ type ResolvedChains struct {
 
 // CapabilityConfig holds everything a chain type needs to register capabilities.
 type CapabilityConfig struct {
-	Registry   *capabilities.Registry
+	Registry   *capreg.Registry
 	Clients    map[uint64]ChainClient
 	Forwarders map[uint64]string
 	PrivateKey interface{} // chain-type-specific key type; EVM uses *ecdsa.PrivateKey
