@@ -10,7 +10,9 @@ import (
 	"testing"
 
 	"github.com/rs/zerolog"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/capabilities/actions/vault"
 	"github.com/smartcontractkit/chainlink/v2/core/capabilities/vault/vaulttypes"
@@ -134,8 +136,9 @@ func TestParseVaultGatewayResponse_Create_LogsPerItem(t *testing.T) {
 	h := newTestHandler(&buf)
 
 	body := encodeRPCBodyFromPayload(buildCreatePayloadProto(t))
-	if err := h.ParseVaultGatewayResponse(vaulttypes.MethodSecretsCreate, "", body); err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	err := h.ParseVaultGatewayResponse(vaulttypes.MethodSecretsCreate, "", body)
+	if err == nil || err.Error() != "1 of 3 secret(s) failed to create" {
+		t.Fatalf("expected the rejected secret to fail the command, got: %v", err)
 	}
 
 	wOut.Close()
@@ -403,8 +406,9 @@ func TestParseVaultGatewayResponse_List_Failure(t *testing.T) {
 	h := newTestHandler(&buf)
 
 	body := encodeRPCBodyFromPayload(buildListPayloadProtoFailure(t, "boom"))
-	if err := h.ParseVaultGatewayResponse(vaulttypes.MethodSecretsList, "", body); err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	err := h.ParseVaultGatewayResponse(vaulttypes.MethodSecretsList, "", body)
+	if err == nil || !strings.Contains(err.Error(), "secret list failed: boom") {
+		t.Fatalf("expected list failure error, got: %v", err)
 	}
 
 	wErr.Close()
@@ -434,4 +438,61 @@ func TestParseVaultGatewayResponse_BadPayloadForList(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "failed to decode list payload") {
 		t.Fatalf("expected decode error for list payload, got: %v", err)
 	}
+}
+
+// Scripts rely on the exit code, so a vault rejection must surface as an error for every mutating method.
+func TestParseVaultGatewayResponse_RejectedSecretsReturnError(t *testing.T) {
+	rejected := func(t *testing.T, msg proto.Message) []byte {
+		t.Helper()
+		b, err := protojson.Marshal(msg)
+		require.NoError(t, err)
+		return encodeRPCBodyFromPayload(b)
+	}
+	id := &vault.SecretIdentifier{Key: "E2E_API_TOKEN", Owner: "0xabc", Namespace: "main"}
+
+	tests := []struct {
+		name    string
+		method  string
+		body    []byte
+		wantErr string
+	}{
+		{
+			name:   "update of missing key",
+			method: vaulttypes.MethodSecretsUpdate,
+			body: rejected(t, &vault.UpdateSecretsResponse{Responses: []*vault.UpdateSecretResponse{
+				{Id: id, Success: false, Error: "could not write update to key value store: key does not exist"},
+			}}),
+			wantErr: "1 of 1 secret(s) failed to update",
+		},
+		{
+			name:   "delete of missing key",
+			method: vaulttypes.MethodSecretsDelete,
+			body: rejected(t, &vault.DeleteSecretsResponse{Responses: []*vault.DeleteSecretResponse{
+				{Id: id, Success: false, Error: "key does not exist"},
+			}}),
+			wantErr: "1 of 1 secret(s) failed to delete",
+		},
+		{
+			name:   "create of existing key",
+			method: vaulttypes.MethodSecretsCreate,
+			body: rejected(t, &vault.CreateSecretsResponse{Responses: []*vault.CreateSecretResponse{
+				{Id: id, Success: false, Error: "key already exists"},
+			}}),
+			wantErr: "1 of 1 secret(s) failed to create",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			h := newTestHandler(&buf)
+			err := h.ParseVaultGatewayResponse(tt.method, "", tt.body)
+			require.EqualError(t, err, tt.wantErr)
+		})
+	}
+}
+
+func TestParseVaultGatewayResponse_AllSucceededReturnsNil(t *testing.T) {
+	var buf bytes.Buffer
+	h := newTestHandler(&buf)
+	require.NoError(t, h.ParseVaultGatewayResponse(vaulttypes.MethodSecretsDelete, "", encodeRPCBodyFromPayload(buildDeletePayloadProto(t))))
 }
