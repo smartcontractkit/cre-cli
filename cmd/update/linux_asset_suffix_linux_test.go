@@ -64,10 +64,22 @@ func TestLinuxAssetSuffixFromGlibcVersion(t *testing.T) {
 		want   string
 	}{
 		{
+			// Ubuntu 22.04 (glibc 2.35) â€” cannot run the default glibc-2.38 binary.
 			output: "ldd (Ubuntu GLIBC 2.35-0ubuntu3.8) 2.35\n",
 			want:   linuxLdd235Suffix,
 		},
 		{
+			// Debian 12 (glibc 2.36) â€” cannot run the default glibc-2.38 binary.
+			output: "ldd (Debian GLIBC 2.36-9+deb12u14) 2.36\n",
+			want:   linuxLdd235Suffix,
+		},
+		{
+			// glibc 2.38 â€” the exact minimum required by the default binary.
+			output: "ldd (GNU libc) 2.38\n",
+			want:   "",
+		},
+		{
+			// Ubuntu 24.04 (glibc 2.39) â€” can run the default binary.
 			output: "ldd (Ubuntu GLIBC 2.39-0ubuntu8.4) 2.39\n",
 			want:   "",
 		},

@@ -13,7 +13,7 @@ import (
 
 const (
 	linuxLdd235Suffix   = "_ldd2-35"
-	linuxGlibcThreshold = "2.36"
+	linuxGlibcThreshold = "2.38"
 )
 
 var glibcVersionPattern = regexp.MustCompile(`(\d+\.\d+)(?:\.\d+)?`)

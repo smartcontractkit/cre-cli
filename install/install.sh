@@ -196,7 +196,7 @@ verify_release_binary() {
 }
 
 LINUX_LDD235_SUFFIX="_ldd2-35"
-LINUX_GLIBC_THRESHOLD="2.36"
+LINUX_GLIBC_THRESHOLD="2.38"
 
 parse_glibc_version_from_ldd_output() {
   local output=$1
