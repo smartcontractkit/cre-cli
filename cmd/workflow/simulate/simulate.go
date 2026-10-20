@@ -21,6 +21,7 @@ import (
 	"go.uber.org/zap/zapcore"
 
 	"github.com/smartcontractkit/chainlink-common/pkg/beholder"
+	capreg "github.com/smartcontractkit/chainlink-common/pkg/capabilities/registry"
 	httptypedapi "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/triggers/http"
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	"github.com/smartcontractkit/chainlink-common/pkg/services"
@@ -28,14 +29,14 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/settings/cresettings"
 	pb "github.com/smartcontractkit/chainlink-protos/cre/go/sdk"
 	"github.com/smartcontractkit/chainlink-protos/cre/go/values"
-	"github.com/smartcontractkit/chainlink/v2/core/capabilities"
 	simulator "github.com/smartcontractkit/chainlink/v2/core/services/workflows/cmd/cre/utils"
 	v2 "github.com/smartcontractkit/chainlink/v2/core/services/workflows/v2"
 
 	cmdcommon "github.com/smartcontractkit/cre-cli/cmd/common"
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain"
-	_ "github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain/evm"    // register EVM chain family via package init
-	_ "github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain/solana" // register Solana chain family via package init
+	_ "github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain/evm"     // register EVM chain family via package init
+	_ "github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain/solana"  // register Solana chain family via package init
+	_ "github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain/stellar" // register Stellar chain family via package init
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
@@ -498,12 +499,12 @@ func run(
 
 	var manualTriggerCaps *ManualTriggers
 	var beholderStarted bool
-	simulatorInitialize := func(ctx context.Context, cfg simulator.RunnerConfig) (*capabilities.Registry, []services.Service) {
+	simulatorInitialize := func(ctx context.Context, cfg simulator.RunnerConfig) (*capreg.Registry, []services.Service) {
 		lggr := logger.Sugared(cfg.Lggr)
 		// Create the registry and fake capabilities with specific loggers
 		registryLggr := lggr.Named("Registry")
-		registry := capabilities.NewRegistry(registryLggr)
-		registry.SetLocalRegistry(&capabilities.TestMetadataRegistry{})
+		registry := capreg.NewRegistry(registryLggr)
+		registry.SetRegistryMetadata(&capreg.TestRegistryMetadata{})
 
 		srvcs := []services.Service{}
 		if cfg.EnableBilling {
@@ -607,7 +608,7 @@ func run(
 		triggerInfoAndBeforeStart.BeforeStart = makeBeforeStartInteractive(triggerInfoAndBeforeStart, inputs, getManualTriggerCaps, setLifecycleErr, limitsWorkflows)
 	}
 
-	waitFn := func(context.Context, simulator.RunnerConfig, *capabilities.Registry, []services.Service) {
+	waitFn := func(context.Context, simulator.RunnerConfig, *capreg.Registry, []services.Service) {
 		// Wait for the engine to initialize, or bail out if a lifecycle error occurred.
 		select {
 		case <-initializedCh:
@@ -678,7 +679,7 @@ func run(
 			}
 		}
 	}
-	simulatorCleanup := func(ctx context.Context, cfg simulator.RunnerConfig, registry *capabilities.Registry, services []services.Service) {
+	simulatorCleanup := func(ctx context.Context, cfg simulator.RunnerConfig, registry *capreg.Registry, services []services.Service) {
 		for _, service := range services {
 			if service.Name() == "WorkflowEngine.WorkflowEngineV2" {
 				simLogger.Info("Skipping WorkflowEngineV2")
@@ -695,7 +696,7 @@ func run(
 			simLogger.Warn("Failed to cleanup beholder", "error", err)
 		}
 	}
-	emptyHook := func(context.Context, simulator.RunnerConfig, *capabilities.Registry, []services.Service) {}
+	emptyHook := func(context.Context, simulator.RunnerConfig, *capreg.Registry, []services.Service) {}
 
 	simulator.NewRunner(&simulator.RunnerHooks{
 		Initialize:  simulatorInitialize,
@@ -996,17 +997,17 @@ type TriggerInfoAndBeforeStart struct {
 	TriggerWithPayload func(*httptypedapi.Payload) error
 	ListenSupported    bool
 	TriggerToRun       *pb.TriggerSubscription
-	BeforeStart        func(ctx context.Context, cfg simulator.RunnerConfig, registry *capabilities.Registry, services []services.Service, triggerSub []*pb.TriggerSubscription)
+	BeforeStart        func(ctx context.Context, cfg simulator.RunnerConfig, registry *capreg.Registry, services []services.Service, triggerSub []*pb.TriggerSubscription)
 }
 
 // makeBeforeStartInteractive builds the interactive BeforeStart closure.
 // onErr is called instead of os.Exit when a fatal error occurs; it records
 // the error and cancels the hook context so Run() unblocks and returns.
-func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs, manualTriggerCapsGetter func() *ManualTriggers, onErr func(error), limits *cresettings.Workflows) func(context.Context, simulator.RunnerConfig, *capabilities.Registry, []services.Service, []*pb.TriggerSubscription) {
+func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs, manualTriggerCapsGetter func() *ManualTriggers, onErr func(error), limits *cresettings.Workflows) func(context.Context, simulator.RunnerConfig, *capreg.Registry, []services.Service, []*pb.TriggerSubscription) {
 	return func(
 		ctx context.Context,
 		cfg simulator.RunnerConfig,
-		registry *capabilities.Registry,
+		registry *capreg.Registry,
 		services []services.Service,
 		triggerSub []*pb.TriggerSubscription,
 	) {
@@ -1161,11 +1162,11 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 // makeBeforeStartNonInteractive builds the non-interactive BeforeStart closure.
 // onErr is called instead of os.Exit when a fatal error occurs; it records
 // the error and cancels the hook context so Run() unblocks and returns.
-func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs, manualTriggerCapsGetter func() *ManualTriggers, onErr func(error), limits *cresettings.Workflows) func(context.Context, simulator.RunnerConfig, *capabilities.Registry, []services.Service, []*pb.TriggerSubscription) {
+func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs, manualTriggerCapsGetter func() *ManualTriggers, onErr func(error), limits *cresettings.Workflows) func(context.Context, simulator.RunnerConfig, *capreg.Registry, []services.Service, []*pb.TriggerSubscription) {
 	return func(
 		ctx context.Context,
 		cfg simulator.RunnerConfig,
-		registry *capabilities.Registry,
+		registry *capreg.Registry,
 		services []services.Service,
 		triggerSub []*pb.TriggerSubscription,
 	) {

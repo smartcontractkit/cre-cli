@@ -7,10 +7,10 @@ import (
 	"github.com/gagliardetto/solana-go"
 	"github.com/gagliardetto/solana-go/rpc"
 
+	capreg "github.com/smartcontractkit/chainlink-common/pkg/capabilities/registry"
 	solanaserver "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/chain-capabilities/solana/server"
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	solanafakes "github.com/smartcontractkit/chainlink-solana/contracts/capabilities/fakes"
-	"github.com/smartcontractkit/chainlink/v2/core/capabilities"
 
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain"
 )
@@ -27,7 +27,7 @@ type SolanaChainCapabilities struct {
 func NewSolanaChainCapabilities(
 	ctx context.Context,
 	lggr logger.Logger,
-	registry *capabilities.Registry,
+	registry *capreg.Registry,
 	clients map[uint64]*rpc.Client,
 	forwarderProgramIDs map[uint64]solana.PublicKey,
 	forwarderStateAccounts map[uint64]solana.PublicKey,

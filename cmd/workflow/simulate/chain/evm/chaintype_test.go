@@ -16,8 +16,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	capreg "github.com/smartcontractkit/chainlink-common/pkg/capabilities/registry"
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
-	"github.com/smartcontractkit/chainlink/v2/core/capabilities"
 
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
@@ -28,9 +28,9 @@ func nopCommonLogger() logger.Logger {
 	return lg
 }
 
-func newRegistry(t *testing.T) *capabilities.Registry {
+func newRegistry(t *testing.T) *capreg.Registry {
 	t.Helper()
-	r := capabilities.NewRegistry(logger.Test(t))
+	r := capreg.NewRegistry(logger.Test(t))
 	return r
 }
 
