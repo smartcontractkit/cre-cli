@@ -21,7 +21,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@3041bf56c941b39c61721a86cd11f3bb1338122a # actions/setup-go@v5.2.0
         with:
-          go-version: "1.25"
+          go-version-file: go.mod
 
       - name: Install Dependencies
         run: |
@@ -72,7 +72,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@3041bf56c941b39c61721a86cd11f3bb1338122a # actions/setup-go@v5.2.0
         with:
-          go-version: "1.25"
+          go-version-file: go.mod
 
       - name: Build the Go Binary
         env:
@@ -107,7 +107,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@3041bf56c941b39c61721a86cd11f3bb1338122a # stup-go@v5.2.0
         with:
-          go-version: "1.25"
+          go-version-file: go.mod
 
       - name: Install Dependencies
         shell: pwsh

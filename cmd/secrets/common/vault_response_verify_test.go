@@ -137,8 +137,9 @@ func TestVerifyVaultGatewayResponse_EmptySignaturesPassThrough(t *testing.T) {
 	body, err := json.Marshal(resp)
 	require.NoError(t, err)
 
+	// Verification passes; the error comes from the fixture's rejected secret, not from signatures.
 	err = h.ParseVaultGatewayResponse(vaulttypes.MethodSecretsCreate, requestID, body)
-	require.NoError(t, err)
+	require.EqualError(t, err, "1 of 3 secret(s) failed to create")
 }
 
 func TestVerifyVaultGatewayResponse_ValidSignatures(t *testing.T) {
@@ -160,8 +161,9 @@ func TestVerifyVaultGatewayResponse_ValidSignatures(t *testing.T) {
 		"c7517c188d297093a6f602046fad7feafe19454ee9dc269b19c8e6c01268037d1f7b423eeecbc495dd2d9a65e106bc3eab849ddfd74a10cbd4ad50c7d953bd4b01",
 	)
 
+	// The signed payload carries one rejected secret; the signatures still verify.
 	err := h.ParseVaultGatewayResponse(vaulttypes.MethodSecretsCreate, requestID, body)
-	require.NoError(t, err)
+	require.EqualError(t, err, "1 of 1 secret(s) failed to create")
 }
 
 func TestVerifyVaultGatewayResponse_InvalidSignatures(t *testing.T) {
