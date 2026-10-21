@@ -1,5 +1,9 @@
 # cre-cli
 
+## 1.38.0
+
+Versions 1.9.0 to 1.38.0 were released from manually created tags, so they don't have changeset entries. See the [GitHub releases](https://github.com/smartcontractkit/cre-cli/releases) for their notes. This entry brings the changesets version back in line with the release tags.
+
 ## 1.8.2
 
 ### Patch Changes
