@@ -130,14 +130,15 @@ func DownloadWithProgress(resp io.ReadCloser, contentLength int64, destFile *os.
 		// Bubble Tea itself failed. Close the response body to unblock the
 		// download goroutine, then drain the channel so it can exit.
 		resp.Close()
-		<-errCh
+		_ = <-errCh
 		return err
 	}
 
 	// Close the response body so the download goroutine's io.Copy finishes.
 	// For a completed download this is a no-op; for Ctrl+C it unblocks io.Copy.
+	// The copy error was already sent to the model as progressErrMsg.
 	resp.Close()
-	<-errCh
+	_ = <-errCh
 
 	// If the user pressed Ctrl+C, the model is not done — treat as cancellation
 	if fm, ok := finalModel.(downloadModel); ok && !fm.done {
