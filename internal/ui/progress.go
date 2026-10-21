@@ -112,33 +112,33 @@ func DownloadWithProgress(resp io.ReadCloser, contentLength int64, destFile *os.
 		},
 	}
 
-	// Start download in goroutine
-	errCh := make(chan error, 1)
+	// Start download in goroutine. The result is reported to the model via
+	// p.Send; copyDone only signals that the goroutine has exited.
+	copyDone := make(chan struct{})
 	go func() {
+		defer close(copyDone)
 		_, err := io.Copy(pw, resp)
 		if err != nil {
 			p.Send(progressErrMsg{err: err})
 		} else {
 			p.Send(progressDoneMsg{})
 		}
-		errCh <- err
 	}()
 
 	// Run the UI — blocks until done, error, or Ctrl+C
 	finalModel, err := p.Run()
 	if err != nil {
 		// Bubble Tea itself failed. Close the response body to unblock the
-		// download goroutine, then drain the channel so it can exit.
+		// download goroutine, then wait for it to exit.
 		resp.Close()
-		_ = <-errCh
+		<-copyDone
 		return err
 	}
 
 	// Close the response body so the download goroutine's io.Copy finishes.
 	// For a completed download this is a no-op; for Ctrl+C it unblocks io.Copy.
-	// The copy error was already sent to the model as progressErrMsg.
 	resp.Close()
-	_ = <-errCh
+	<-copyDone
 
 	// If the user pressed Ctrl+C, the model is not done — treat as cancellation
 	if fm, ok := finalModel.(downloadModel); ok && !fm.done {
