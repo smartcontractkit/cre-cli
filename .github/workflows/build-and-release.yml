@@ -24,7 +24,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@3041bf56c941b39c61721a86cd11f3bb1338122a # actions/setup-go@v5.2.0
         with:
-          go-version: "1.25"
+          go-version-file: go.mod
 
       - name: Setup GitHub Token
         id: setup-github-token
@@ -149,7 +149,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@3041bf56c941b39c61721a86cd11f3bb1338122a # actions/setup-go@v5.2.0
         with:
-          go-version: "1.25"
+          go-version-file: go.mod
 
       - name: Setup GitHub Token
         id: setup-github-token
@@ -250,7 +250,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@3041bf56c941b39c61721a86cd11f3bb1338122a # actions/stup-go@v5.2.0
         with:
-          go-version: "1.25"
+          go-version-file: go.mod
 
       - name: Setup GitHub Token
         id: setup-github-token
