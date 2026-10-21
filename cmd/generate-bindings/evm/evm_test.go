@@ -422,7 +422,7 @@ func TestGenerateBindingsTS_WriteReportHelperEncodesArgsOnly(t *testing.T) {
 	require.NoError(t, err)
 
 	outFile := filepath.Join(tempDir, "PriceUpdater.ts")
-	err = GenerateBindingsTS(abiFile, "PriceUpdater", outFile)
+	err = GenerateBindingsTS(abiFile, "PriceUpdater", outFile, TSBindingOptions{})
 	require.NoError(t, err)
 
 	content, err := os.ReadFile(outFile)
@@ -430,7 +430,7 @@ func TestGenerateBindingsTS_WriteReportHelperEncodesArgsOnly(t *testing.T) {
 	src := string(content)
 
 	assert.Contains(t, src, "encodeAbiParameters")
-	assert.Contains(t, src, "getFunctionInputs(PriceUpdaterABI, 'updatePrices')")
+	assert.Contains(t, src, "getFunctionBySignature(PriceUpdaterABI, 'updatePrices((uint256,uint256))').inputs")
 	assert.Contains(t, src, ".report(prepareReportRequest(encodedPayload))")
 	assert.Contains(t, src, "const callData = encodeFunctionData({")
 	assert.Equal(t, 1, strings.Count(src, "const callData = encodeFunctionData({"), "only view calls should build calldata in this fixture")
@@ -476,10 +476,10 @@ func TestIncludeFunctionSelector(t *testing.T) {
 				if mode.includeSelector {
 					assert.Contains(t, src, "const encodedPayload = encodeFunctionData({")
 					assert.NotContains(t, src, "encodeAbiParameters")
-					assert.NotContains(t, src, "getFunctionInputs")
+					assert.Contains(t, src, "abi: [getFunctionBySignature(CounterABI, 'setValue(uint256)')]")
 				} else {
 					assert.Contains(t, src, "const encodedPayload = encodeAbiParameters(")
-					assert.Contains(t, src, "getFunctionInputs(CounterABI, 'setValue')")
+					assert.Contains(t, src, "getFunctionBySignature(CounterABI, 'setValue(uint256)').inputs")
 				}
 				assert.Contains(t, src, ".report(prepareReportRequest(encodedPayload))")
 				assert.Equal(t, 1, strings.Count(src, "const callData = encodeFunctionData({"), "view calls must retain their selector")

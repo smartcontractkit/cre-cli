@@ -1,6 +1,7 @@
 package evm_test
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -29,15 +30,7 @@ func TestGenerateBindingsCrossLanguageReportPayloadGolden(t *testing.T) {
 	require.NoError(t, err)
 	repoRoot := filepath.Clean(filepath.Join(wd, "../../.."))
 
-	if _, err := exec.LookPath("node"); err != nil {
-		t.Skip("node is required for TypeScript report payload golden test")
-	}
-	if _, err := os.Stat(filepath.Join(repoRoot, "node_modules", "viem")); err != nil {
-		t.Skip("node_modules/viem is required for TypeScript report payload golden test")
-	}
-	if _, err := os.Stat(filepath.Join(repoRoot, "node_modules", "typescript")); err != nil {
-		t.Skip("node_modules/typescript is required for TypeScript report payload golden test")
-	}
+	requireTSReportTestDependencies(t, repoRoot)
 
 	tempDir, err := os.MkdirTemp(wd, "golden-report-payload-")
 	require.NoError(t, err)
@@ -69,7 +62,7 @@ func TestGenerateBindingsCrossLanguageReportPayloadGolden(t *testing.T) {
 	require.NoError(t, evm.GenerateBindings("", abiFile, "priceupdater", "PriceUpdater", goOutFile))
 
 	tsOutFile := filepath.Join(tempDir, "PriceUpdater.ts")
-	require.NoError(t, evm.GenerateBindingsTS(abiFile, "PriceUpdater", tsOutFile))
+	require.NoError(t, evm.GenerateBindingsTS(abiFile, "PriceUpdater", tsOutFile, evm.TSBindingOptions{}))
 
 	goPayload := generatedGoReportPayloadHex(t, repoRoot, goOutDir)
 	tsPayload := generatedTSReportPayloadHex(t, repoRoot, tsOutFile)
@@ -86,6 +79,87 @@ func TestGenerateBindingsCrossLanguageReportPayloadGolden(t *testing.T) {
 	legacyPayload := generatedTSReportPayloadHex(t, repoRoot, legacyFile)
 	require.Equal(t, "6adc10b0"+goPayload, legacyPayload, "legacy reports must contain the selector followed by the same encoded arguments")
 	require.Equal(t, 68, len(legacyPayload)/2)
+}
+
+func TestGenerateBindingsTS_OverloadedReportPayloads(t *testing.T) {
+	wd, err := os.Getwd()
+	require.NoError(t, err)
+	repoRoot := filepath.Clean(filepath.Join(wd, "../../.."))
+	requireTSReportTestDependencies(t, repoRoot)
+
+	tempDir, err := os.MkdirTemp(wd, "overloaded-report-payload-")
+	require.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	abiFile := filepath.Join(tempDir, "Overloaded.abi")
+	require.NoError(t, os.WriteFile(abiFile, []byte(`[
+		{"type":"function","name":"setValue","inputs":[{"name":"value","type":"uint128"}],"outputs":[],"stateMutability":"nonpayable"},
+		{"type":"function","name":"setValue","inputs":[{"name":"value","type":"uint256"}],"outputs":[],"stateMutability":"nonpayable"},
+		{"type":"function","name":"setValue","inputs":[{"name":"value","type":"string"}],"outputs":[],"stateMutability":"nonpayable"},
+		{"type":"function","name":"setValue","inputs":[{"name":"values","type":"tuple[]","internalType":"struct Overloaded.Value[]","components":[{"name":"count","type":"uint256"},{"name":"label","type":"string"}]}],"outputs":[],"stateMutability":"nonpayable"}
+	]`), 0o600))
+
+	for _, includeSelector := range []bool{false, true} {
+		t.Run(fmt.Sprintf("includeSelector=%t", includeSelector), func(t *testing.T) {
+			outDir := filepath.Join(tempDir, fmt.Sprintf("selector-%t", includeSelector))
+			require.NoError(t, os.MkdirAll(outDir, 0o755))
+			tsFile := filepath.Join(outDir, "Overloaded.ts")
+			require.NoError(t, evm.GenerateBindingsTS(abiFile, "Overloaded", tsFile,
+				evm.TSBindingOptions{IncludeFunctionSelector: includeSelector}))
+			compiledFile := compileGeneratedTS(t, repoRoot, tsFile)
+
+			script := `
+import assert from 'node:assert/strict'
+import { pathToFileURL } from 'node:url'
+import { encodeAbiParameters, encodeFunctionData } from 'viem'
+
+const { Overloaded, OverloadedABI } = await import(pathToFileURL(process.argv[1]).href)
+const includeSelector = process.argv[2] === 'true'
+let capturedRequest
+const runtime = {
+  report(request) {
+    capturedRequest = request
+    return { result: () => ({}) }
+  },
+}
+const client = { writeReport: () => ({ result: () => ({}) }) }
+const binding = new Overloaded(client, '0x0000000000000000000000000000000000000001')
+const cases = [
+  ['writeReportFromSetValue', [7n]],
+  ['writeReportFromSetValue0', [1n << 200n]],
+  ['writeReportFromSetValue1', ['hello']],
+  ['writeReportFromSetValue2', [[{ count: 123n, label: 'nested tuple' }]]],
+]
+for (const [index, [method, args]] of cases.entries()) {
+  capturedRequest = undefined
+  binding[method](runtime, ...args)
+  assert.ok(capturedRequest?.encodedPayload, method + ' must request a report')
+  const fn = OverloadedABI[index]
+  const expected = includeSelector
+    ? encodeFunctionData({ abi: [fn], functionName: 'setValue', args })
+    : encodeAbiParameters(fn.inputs, args)
+  const actual = '0x' + Buffer.from(capturedRequest.encodedPayload, 'base64').toString('hex')
+  assert.equal(actual, expected, method + ' must encode its own overload')
+}
+`
+			cmd := exec.Command("node", "--input-type=module", "-e", script, compiledFile, fmt.Sprint(includeSelector))
+			cmd.Dir = repoRoot
+			output, err := cmd.CombinedOutput()
+			require.NoError(t, err, string(output))
+		})
+	}
+}
+
+func requireTSReportTestDependencies(t *testing.T, repoRoot string) {
+	t.Helper()
+	if _, err := exec.LookPath("node"); err != nil {
+		t.Skip("node is required for TypeScript report payload tests")
+	}
+	for _, name := range []string{"viem", "typescript"} {
+		if _, err := os.Stat(filepath.Join(repoRoot, "node_modules", name)); err != nil {
+			t.Skipf("node_modules/%s is required for TypeScript report payload tests", name)
+		}
+	}
 }
 
 func generatedGoReportPayloadHex(t *testing.T, repoRoot, pkgDir string) string {
@@ -125,7 +199,7 @@ func TestPrintReportPayload(t *testing.T) {
 	return extractPayloadHex(t, string(output))
 }
 
-func generatedTSReportPayloadHex(t *testing.T, repoRoot, tsFile string) string {
+func compileGeneratedTS(t *testing.T, repoRoot, tsFile string) string {
 	t.Helper()
 
 	writeGeneratedTSSDKStub(t, filepath.Dir(tsFile))
@@ -151,6 +225,12 @@ writeFileSync(process.argv[2], result.outputText)
 	cmd.Dir = repoRoot
 	output, err := cmd.CombinedOutput()
 	require.NoError(t, err, string(output))
+	return compiledFile
+}
+
+func generatedTSReportPayloadHex(t *testing.T, repoRoot, tsFile string) string {
+	t.Helper()
+	compiledFile := compileGeneratedTS(t, repoRoot, tsFile)
 
 	script := `
 import { pathToFileURL } from 'node:url'
@@ -176,9 +256,9 @@ binding.writeReportFromUpdatePrices(runtime, { ethPrice: 123n, btcPrice: 456n })
 if (!capturedRequest?.encodedPayload) throw new Error('report request payload not captured')
 console.log('REPORT_PAYLOAD_HEX=' + Buffer.from(capturedRequest.encodedPayload, 'base64').toString('hex'))
 `
-	cmd = exec.Command("node", "--input-type=module", "-e", script, compiledFile)
+	cmd := exec.Command("node", "--input-type=module", "-e", script, compiledFile)
 	cmd.Dir = repoRoot
-	output, err = cmd.CombinedOutput()
+	output, err := cmd.CombinedOutput()
 	require.NoError(t, err, string(output))
 	return extractPayloadHex(t, string(output))
 }
