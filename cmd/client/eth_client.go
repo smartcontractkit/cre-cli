@@ -2,13 +2,16 @@ package client
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"strconv"
 	"time"
 
 	"github.com/BurntSushi/toml"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/ethclient/simulated"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/rs/zerolog"
@@ -131,13 +134,13 @@ func NewSethClient(
 
 func NewSethClientWithSimulated(
 	configFile string,
-	rpc string,
+	rpcURL string,
 	privateKeys []string,
 	chainId uint64,
 	backend *simulated.Backend,
 ) (*seth.Client, error) {
 	var sethClientBuilder *seth.ClientBuilder
-	var err error
+	var rpcHeaders http.Header
 	// if a config file is provided, we will use it to create the client
 	if configFile != "" {
 		sethConfig, readErr := readSethConfigFromFile(configFile)
@@ -146,8 +149,12 @@ func NewSethClientWithSimulated(
 		}
 
 		sethClientBuilder = seth.NewClientBuilderWithConfig(sethConfig).
-			UseNetworkWithChainId(chainId).
-			WithRpcUrl(rpc)
+			UseNetworkWithChainId(chainId)
+		rpcHeaders = sethConfig.RPCHeaders
+		// The RPC connection is passed in through WithEthClient below, and seth rejects configs that set both.
+		if sethConfig.Network != nil {
+			sethConfig.Network.URLs = nil
+		}
 	} else {
 		// if full flexibility is not needed we create a client with reasonable defaults
 		// if you need to further tweak them, please refer to https://github.com/smartcontractkit/chainlink-testing-framework/blob/main/seth/README.md
@@ -156,11 +163,23 @@ func NewSethClientWithSimulated(
 			// Auto priority will use what the blockchain node suggests
 			// estimationBlocks and attemptCount can be disregarded for Auto priority
 			WithGasPriceEstimations(false, 20, seth.Priority_Auto, 1)
-		if rpc != "" {
-			sethClientBuilder.WithRpcUrl(rpc)
-		} else {
-			sethClientBuilder.WithEthClient(backend.Client())
+	}
+
+	// Never let seth dial the RPC URL itself: its transport sets InsecureSkipVerify, so TLS certificates
+	// would not be checked. We dial with go-ethereum's default transport instead, which verifies them.
+	var rpcClient *rpc.Client
+	switch {
+	case rpcURL != "":
+		var dialErr error
+		rpcClient, dialErr = dialRPC(rpcURL, rpcHeaders)
+		if dialErr != nil {
+			return nil, dialErr
 		}
+		sethClientBuilder.WithEthClient(ethclient.NewClient(rpcClient))
+	case backend != nil:
+		sethClientBuilder.WithEthClient(backend.Client())
+	default:
+		return nil, errors.New("no RPC URL provided")
 	}
 
 	// if private key is provided, we will use it to sign transactions
@@ -172,8 +191,50 @@ func NewSethClientWithSimulated(
 	}
 
 	sethClient, err := sethClientBuilder.Build()
+	if err != nil {
+		if rpcClient != nil {
+			rpcClient.Close()
+		}
+		return nil, err
+	}
 
-	return sethClient, err
+	if rpcURL != "" {
+		if err := restoreRPCURL(sethClient, rpcURL); err != nil {
+			rpcClient.Close()
+			return nil, err
+		}
+	}
+
+	return sethClient, nil
+}
+
+// dialRPC connects to the RPC node using go-ethereum's default HTTP transport, which verifies TLS certificates.
+func dialRPC(rpcURL string, headers http.Header) (*rpc.Client, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	rpcClient, err := rpc.DialOptions(ctx, rpcURL, rpc.WithHeaders(headers))
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect RPC client to '%s': %w", crpc.RedactURL(rpcURL), err)
+	}
+	return rpcClient, nil
+}
+
+// restoreRPCURL puts back what seth only sets up when it dials the URL itself: the client URL and the tracer
+// used to decode reverted transactions. The tracer opens its own connection with go-ethereum's default
+// transport, so certificates are verified there too.
+func restoreRPCURL(sethClient *seth.Client, rpcURL string) error {
+	sethClient.URL = rpcURL
+	sethClient.Cfg.Network.URLs = []string{rpcURL}
+
+	if sethClient.Cfg.TracingLevel == seth.TracingLevel_None || sethClient.Tracer != nil {
+		return nil
+	}
+	tracer, err := seth.NewTracer(sethClient.ContractStore, sethClient.ABIFinder, sethClient.Cfg, sethClient.ContractAddressToNameMap, sethClient.Addresses)
+	if err != nil {
+		return fmt.Errorf("failed to create tracer: %w", err)
+	}
+	sethClient.Tracer = tracer
+	return nil
 }
 
 func readSethConfigFromFile(configPath string) (*seth.Config, error) {
