@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
@@ -17,26 +18,44 @@ import (
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 	"github.com/smartcontractkit/cre-cli/internal/validation"
+	"github.com/smartcontractkit/cre-cli/internal/workflowresolve"
 )
 
 type Inputs struct {
 	WorkflowName     string `validate:"workflow_name"`
 	WorkflowOwner    string `validate:"workflow_owner"`
+	WorkflowID       string
+	RPCURL           string
 	SkipConfirmation bool
 	NonInteractive   bool
 }
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
 	deleteCmd := &cobra.Command{
-		Use:     "delete <workflow-folder-path>",
-		Short:   "Deletes all versions of a workflow from the Workflow Registry",
-		Long:    "Deletes all workflow versions matching the given name and owner address.",
-		Args:    cobra.ExactArgs(1),
-		Example: `cre workflow delete ./my-workflow`,
+		Use:   "delete [workflow-name-or-id | workflow-folder-path]",
+		Short: "Deletes all versions of a workflow from the Workflow Registry",
+		Long: `Deletes all workflow versions matching the given name and owner address.
+
+The argument can be a workflow folder path (project-based flow), a workflow
+name, or an on-chain workflow ID. When the argument is a name or ID — or is
+omitted for an interactive picker — no project folder is needed; the workflow
+is resolved from the CRE platform. On-chain workflows additionally require
+--rpc-url and CRE_ETH_PRIVATE_KEY in that mode.`,
+		Args: cobra.MaximumNArgs(1),
+		Example: `cre workflow delete ./my-workflow
+  cre workflow delete my-workflow
+  cre workflow delete 00da21b8b3e117e31f3a3e8a0795225cbde6c00283a84395117669691f2b7856
+  cre workflow delete my-workflow --rpc-url https://...
+  cre workflow delete   # interactive picker`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			handler := newHandler(runtimeContext, cmd.InOrStdin())
 
-			inputs, err := handler.ResolveInputs(runtimeContext.Viper)
+			arg := ""
+			if len(args) == 1 {
+				arg = args[0]
+			}
+
+			inputs, err := handler.ResolveInputs(cmd.Context(), runtimeContext.Viper, arg)
 			if err != nil {
 				return err
 			}
@@ -51,6 +70,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 
 	settings.AddTxnTypeFlags(deleteCmd)
 	settings.AddSkipConfirmation(deleteCmd)
+	settings.AddFolderlessLifecycleFlags(deleteCmd)
 
 	return deleteCmd
 }
@@ -65,6 +85,10 @@ type handler struct {
 	environmentSet *environments.EnvironmentSet
 	inputs         Inputs
 	runtimeContext *runtime.Context
+
+	// folderlessRow is the platform workflow row when running without a project
+	// folder; nil in the legacy project-based flow.
+	folderlessRow *workflowresolve.Workflow
 
 	validated bool
 	execCtx   context.Context
@@ -86,18 +110,62 @@ func newHandler(ctx *runtime.Context, stdin io.Reader) *handler {
 	return &h
 }
 
-func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
+func (h *handler) ResolveInputs(ctx context.Context, v *viper.Viper, arg string) (Inputs, error) {
+	inputs := Inputs{
+		SkipConfirmation: v.GetBool(settings.Flags.SkipConfirmation.Name),
+		NonInteractive:   v.GetBool(settings.Flags.NonInteractive.Name),
+		RPCURL:           strings.TrimSpace(v.GetString(settings.Flags.RPCURL.Name)),
+	}
+
+	// Folder-less mode: settings were not loaded; resolve everything from the platform.
+	if h.runtimeContext.Settings == nil {
+		return h.resolveFolderlessInputs(ctx, v, arg, inputs)
+	}
+
 	resolvedWorkflowOwner, err := h.resolveWorkflowOwner()
 	if err != nil {
 		return Inputs{}, fmt.Errorf("failed to resolve workflow owner: %w", err)
 	}
 
-	return Inputs{
-		WorkflowName:     h.settings.Workflow.UserWorkflowSettings.WorkflowName,
-		WorkflowOwner:    resolvedWorkflowOwner,
-		SkipConfirmation: v.GetBool(settings.Flags.SkipConfirmation.Name),
-		NonInteractive:   v.GetBool(settings.Flags.NonInteractive.Name),
-	}, nil
+	inputs.WorkflowName = h.settings.Workflow.UserWorkflowSettings.WorkflowName
+	inputs.WorkflowOwner = resolvedWorkflowOwner
+	return inputs, nil
+}
+
+func (h *handler) resolveFolderlessInputs(ctx context.Context, v *viper.Viper, arg string, inputs Inputs) (Inputs, error) {
+	if err := workflowcommon.GuardFolderlessTxnType(v); err != nil {
+		return Inputs{}, err
+	}
+
+	target, err := workflowcommon.ResolveFolderlessTarget(ctx, h.runtimeContext, arg, workflowresolve.RowResolveOptions{
+		OwnerFilter:    strings.TrimSpace(v.GetString(settings.Flags.Owner.Name)),
+		RegistryFilter: strings.TrimSpace(v.GetString(settings.Flags.Registry.Name)),
+		NonInteractive: inputs.NonInteractive,
+		PickerTitle:    "Select a workflow to delete",
+	})
+	if err != nil {
+		return Inputs{}, err
+	}
+
+	h.runtimeContext.ResolvedRegistry = target.Registry
+	h.folderlessRow = &target.Workflow
+	inputs.WorkflowName = target.Workflow.Name
+	inputs.WorkflowOwner = target.Workflow.OwnerAddress
+	inputs.WorkflowID = target.Workflow.WorkflowID
+
+	if onChain, ok := target.Registry.(*settings.OnChainRegistry); ok {
+		if err := workflowcommon.VerifyEOAOwner(v, target.Workflow.OwnerAddress); err != nil {
+			return Inputs{}, err
+		}
+		if inputs.RPCURL == "" {
+			return Inputs{}, fmt.Errorf(
+				"missing RPC URL for chain %q: pass --%s to delete an on-chain workflow without a project folder",
+				onChain.ChainName(), settings.Flags.RPCURL.Name,
+			)
+		}
+	}
+
+	return inputs, nil
 }
 
 // resolveWorkflowOwner returns the effective owner address for workflow ID computation.

@@ -34,7 +34,7 @@ func newOnchainRegistryPauseStrategy(h *handler) (*onchainRegistryPauseStrategy,
 	a.wg.Add(1)
 	go func() {
 		defer a.wg.Done()
-		wrc, err := h.clientFactory.NewWorkflowRegistryV2Client(h.execCtx)
+		wrc, err := newWorkflowRegistryClient(h)
 		if err != nil {
 			a.initErr = fmt.Errorf("failed to create workflow registry client: %w", err)
 			return
@@ -42,6 +42,19 @@ func newOnchainRegistryPauseStrategy(h *handler) (*onchainRegistryPauseStrategy,
 		a.wrc = wrc
 	}()
 	return a, nil
+}
+
+// newWorkflowRegistryClient builds the registry client, using the explicit
+// --rpc-url when running folder-less (no project settings on disk).
+func newWorkflowRegistryClient(h *handler) (*client.WorkflowRegistryV2Client, error) {
+	onChain, err := settings.AsOnChain(h.runtimeContext.ResolvedRegistry, "pause")
+	if err != nil {
+		return nil, err
+	}
+	if h.inputs.RPCURL != "" {
+		return h.clientFactory.NewWorkflowRegistryV2ClientWithRPC(h.execCtx, h.inputs.RPCURL, onChain.Address())
+	}
+	return h.clientFactory.NewWorkflowRegistryV2Client(h.execCtx)
 }
 
 func (a *onchainRegistryPauseStrategy) Pause() error {

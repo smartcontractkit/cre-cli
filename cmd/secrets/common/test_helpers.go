@@ -54,6 +54,15 @@ func (m *MockClientFactory) NewWorkflowRegistryV2Client(ctx context.Context) (*c
 	return c, args.Error(1)
 }
 
+func (m *MockClientFactory) NewWorkflowRegistryV2ClientWithRPC(ctx context.Context, rpcURL, registryAddress string) (*client.WorkflowRegistryV2Client, error) {
+	args := m.Called(ctx, rpcURL, registryAddress)
+	var c *client.WorkflowRegistryV2Client
+	if v := args.Get(0); v != nil {
+		c = v.(*client.WorkflowRegistryV2Client)
+	}
+	return c, args.Error(1)
+}
+
 func (m *MockClientFactory) GetTxType() client.TxType {
 	panic("not used in these tests")
 }

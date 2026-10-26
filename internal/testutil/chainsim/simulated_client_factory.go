@@ -33,6 +33,12 @@ func (f *testFactoryImpl) NewWorkflowRegistryV2Client(ctx context.Context) (*cli
 	return client.NewWorkflowRegistryV2Client(f.logger, f.ethClient, f.simulatedContracts.WorkflowRegistry.Contract.Hex(), txcConfig), nil
 }
 
+func (f *testFactoryImpl) NewWorkflowRegistryV2ClientWithRPC(ctx context.Context, rpcURL, registryAddress string) (*client.WorkflowRegistryV2Client, error) {
+	// The simulated environment ignores rpcURL/registryAddress and always
+	// targets the simulated registry contract.
+	return f.NewWorkflowRegistryV2Client(ctx)
+}
+
 func (f *testFactoryImpl) GetTxType() client.TxType {
 	return client.Regular
 }
