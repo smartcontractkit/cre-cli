@@ -10,7 +10,8 @@ The argument can be a workflow folder path (project-based flow), a workflow
 name, or an on-chain workflow ID. When the argument is a name or ID — or is
 omitted for an interactive picker — no project folder is needed; the workflow
 is resolved from the CRE platform. On-chain workflows additionally require
---rpc-url and CRE_ETH_PRIVATE_KEY in that mode.
+--rpc-url and CRE_ETH_PRIVATE_KEY in that mode. --target and --project-root
+are ignored in this mode.
 
 ```
 cre workflow delete [workflow-name-or-id | workflow-folder-path] [flags]

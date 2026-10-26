@@ -86,7 +86,7 @@ func newFolderlessMockServer(t *testing.T, pauseCalled, deleteCalled, activateCa
 								"uuid":           "9f2e7b6a-1111-4222-8333-444455556666",
 								"name":           folderlessWorkflowName,
 								"workflowId":     folderlessWorkflowID,
-								"ownerAddress":   privateRegistryOwnerAddress,
+								"ownerAddress":   MockDerivedWorkflowOwnerHex, // raw, no 0x — as the platform returns it
 								"status":         "ACTIVE",
 								"workflowSource": "reg-test",
 							},
@@ -94,7 +94,7 @@ func newFolderlessMockServer(t *testing.T, pauseCalled, deleteCalled, activateCa
 								"uuid":           "8f1e6b5a-2222-4333-8444-555566667777",
 								"name":           folderlessPausedWorkflowName,
 								"workflowId":     folderlessPausedWorkflowID,
-								"ownerAddress":   privateRegistryOwnerAddress,
+								"ownerAddress":   MockDerivedWorkflowOwnerHex,
 								"status":         "PAUSED",
 								"workflowSource": "reg-test",
 							},

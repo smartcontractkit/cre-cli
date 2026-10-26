@@ -34,7 +34,15 @@ func newOnchainRegistryPauseStrategy(h *handler) (*onchainRegistryPauseStrategy,
 	a.wg.Add(1)
 	go func() {
 		defer a.wg.Done()
-		wrc, err := newWorkflowRegistryClient(h)
+		var wrc *client.WorkflowRegistryV2Client
+		var err error
+		// Folder-less mode passes an explicit --rpc-url; the project-based flow
+		// resolves the RPC URL from settings.
+		if h.inputs.RPCURL != "" {
+			wrc, err = h.clientFactory.NewWorkflowRegistryV2ClientWithRPC(h.execCtx, h.inputs.RPCURL, onChain.Address())
+		} else {
+			wrc, err = h.clientFactory.NewWorkflowRegistryV2Client(h.execCtx)
+		}
 		if err != nil {
 			a.initErr = fmt.Errorf("failed to create workflow registry client: %w", err)
 			return
@@ -42,19 +50,6 @@ func newOnchainRegistryPauseStrategy(h *handler) (*onchainRegistryPauseStrategy,
 		a.wrc = wrc
 	}()
 	return a, nil
-}
-
-// newWorkflowRegistryClient builds the registry client, using the explicit
-// --rpc-url when running folder-less (no project settings on disk).
-func newWorkflowRegistryClient(h *handler) (*client.WorkflowRegistryV2Client, error) {
-	onChain, err := settings.AsOnChain(h.runtimeContext.ResolvedRegistry, "pause")
-	if err != nil {
-		return nil, err
-	}
-	if h.inputs.RPCURL != "" {
-		return h.clientFactory.NewWorkflowRegistryV2ClientWithRPC(h.execCtx, h.inputs.RPCURL, onChain.Address())
-	}
-	return h.clientFactory.NewWorkflowRegistryV2Client(h.execCtx)
 }
 
 func (a *onchainRegistryPauseStrategy) Pause() error {

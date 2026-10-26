@@ -118,6 +118,14 @@ func ResolveFolderlessTarget(
 		return nil, err
 	}
 
+	// The platform API returns private-registry owners without a 0x prefix;
+	// normalize to the checksummed form the command validators expect.
+	owner, err := ethkeys.FormatWorkflowOwnerAddress(row.OwnerAddress)
+	if err != nil {
+		return nil, fmt.Errorf("platform returned invalid owner address for workflow %q: %w", row.Name, err)
+	}
+	row.OwnerAddress = owner
+
 	registry, err := RegistryFromWorkflowSource(runtimeContext, row.WorkflowSource)
 	if err != nil {
 		return nil, err
