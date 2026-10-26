@@ -5,14 +5,48 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/smartcontractkit/cre-cli/internal/constants"
+	"github.com/smartcontractkit/cre-cli/internal/runtime"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
+	"github.com/smartcontractkit/cre-cli/internal/testutil"
 	"github.com/smartcontractkit/cre-cli/internal/testutil/chainsim"
 	"github.com/smartcontractkit/cre-cli/internal/validation"
 )
+
+// folderlessRuntimeContext builds a runtime context with no settings attached,
+// which is how activate runs when the workflow is resolved by name/ID without a
+// project folder.
+func folderlessRuntimeContext(v *viper.Viper) *runtime.Context {
+	return &runtime.Context{
+		Logger: testutil.NewTestLogger(),
+		Viper:  v,
+	}
+}
+
+func TestFolderless_UnsignedFlag_ReturnsError(t *testing.T) {
+	t.Parallel()
+	v := viper.New()
+	v.Set(settings.Flags.RawTxFlag.Name, true)
+
+	h := newHandler(folderlessRuntimeContext(v))
+	_, err := h.ResolveInputs(context.Background(), v, "my-workflow")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "require a project folder")
+}
+
+func TestFolderless_WithoutCredentials_ReturnsError(t *testing.T) {
+	t.Parallel()
+	v := viper.New()
+
+	h := newHandler(folderlessRuntimeContext(v))
+	_, err := h.ResolveInputs(context.Background(), v, "my-workflow")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "credentials not available")
+}
 
 func TestNonInteractive_WithoutYes_ReturnsError(t *testing.T) {
 	t.Parallel()

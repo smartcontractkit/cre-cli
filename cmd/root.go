@@ -552,14 +552,14 @@ func newRootCommand() *cobra.Command {
 	return rootCmd
 }
 
-// isFolderlessLifecycleInvocation reports whether a workflow pause/delete
+// isFolderlessLifecycleInvocation reports whether a workflow pause/delete/activate
 // invocation resolves its workflow remotely (by name, on-chain ID, or
 // interactive picker) instead of reading project and workflow settings from
 // disk. Folder-less invocations skip the settings load entirely, like
 // `cre workflow list` does.
 func isFolderlessLifecycleInvocation(cmd *cobra.Command, args []string, projectRootFlag string) bool {
 	switch cmd.CommandPath() {
-	case "cre workflow pause", "cre workflow delete":
+	case "cre workflow pause", "cre workflow delete", "cre workflow activate":
 		return workflowcommon.IsFolderlessInvocation(args, projectRootFlag)
 	default:
 		return false

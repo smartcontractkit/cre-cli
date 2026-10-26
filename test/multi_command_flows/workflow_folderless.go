@@ -19,14 +19,17 @@ import (
 
 // Folder-less workflow IDs/names used by the mock platform API.
 const (
-	folderlessWorkflowName = "folderless-wf"
-	folderlessWorkflowID   = "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+	folderlessWorkflowName       = "folderless-wf"
+	folderlessWorkflowID         = "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+	folderlessPausedWorkflowName = "folderless-wf-paused"
+	folderlessPausedWorkflowID   = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
 )
 
 // newFolderlessMockServer mocks the platform GraphQL API for folder-less
-// pause/delete: org info, tenant config (off-chain registry "reg-test"), the
-// workflows list query, and the pause/delete mutations. Any other query fails.
-func newFolderlessMockServer(t *testing.T, pauseCalled, deleteCalled *atomic.Bool) *httptest.Server {
+// pause/delete/activate: org info, tenant config (off-chain registry
+// "reg-test"), the workflows list query, and the lifecycle mutations. Any
+// other query fails.
+func newFolderlessMockServer(t *testing.T, pauseCalled, deleteCalled, activateCalled *atomic.Bool) *httptest.Server {
 	t.Helper()
 
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -87,8 +90,16 @@ func newFolderlessMockServer(t *testing.T, pauseCalled, deleteCalled *atomic.Boo
 								"status":         "ACTIVE",
 								"workflowSource": "reg-test",
 							},
+							{
+								"uuid":           "8f1e6b5a-2222-4333-8444-555566667777",
+								"name":           folderlessPausedWorkflowName,
+								"workflowId":     folderlessPausedWorkflowID,
+								"ownerAddress":   privateRegistryOwnerAddress,
+								"status":         "PAUSED",
+								"workflowSource": "reg-test",
+							},
 						},
-						"count": 1,
+						"count": 2,
 					},
 				},
 			})
@@ -107,6 +118,28 @@ func newFolderlessMockServer(t *testing.T, pauseCalled, deleteCalled *atomic.Boo
 							"binaryUrl":      "https://example.test/binary.wasm",
 							"configUrl":      "",
 							"tag":            folderlessWorkflowName,
+							"attributes":     "",
+							"donFamily":      "test-don",
+							"organizationId": "test-org-id",
+						},
+					},
+				},
+			})
+
+		case strings.Contains(req.Query, "ActivateOffchainWorkflow"):
+			activateCalled.Store(true)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"data": map[string]any{
+					"activateOffchainWorkflow": map[string]any{
+						"workflow": map[string]any{
+							"workflowId":     folderlessPausedWorkflowID,
+							"owner":          privateRegistryOwnerAddress,
+							"createdAt":      "2025-01-01T00:00:00Z",
+							"status":         "WORKFLOW_STATUS_ACTIVE",
+							"workflowName":   folderlessPausedWorkflowName,
+							"binaryUrl":      "https://example.test/binary.wasm",
+							"configUrl":      "",
+							"tag":            folderlessPausedWorkflowName,
 							"attributes":     "",
 							"donFamily":      "test-don",
 							"organizationId": "test-org-id",
@@ -157,14 +190,14 @@ func runFolderlessCLI(t *testing.T, gqlURL string, args ...string) string {
 	return StripANSI(stdout.String() + stderr.String())
 }
 
-// RunFolderlessPauseDeleteHappyPath pauses and deletes a workflow without a
-// project folder: by name, by on-chain ID, and with the picker-less default
-// resolution path.
+// RunFolderlessPauseDeleteHappyPath pauses, activates, and deletes workflows
+// without a project folder: by name, by on-chain ID, and with the picker-less
+// default resolution path.
 func RunFolderlessPauseDeleteHappyPath(t *testing.T) {
 	t.Helper()
 
-	var pauseCalled, deleteCalled atomic.Bool
-	srv := newFolderlessMockServer(t, &pauseCalled, &deleteCalled)
+	var pauseCalled, deleteCalled, activateCalled atomic.Bool
+	srv := newFolderlessMockServer(t, &pauseCalled, &deleteCalled, &activateCalled)
 	defer srv.Close()
 	gqlURL := srv.URL + "/graphql"
 
@@ -182,6 +215,14 @@ func RunFolderlessPauseDeleteHappyPath(t *testing.T) {
 		"workflow", "pause", folderlessWorkflowID, "--"+settings.Flags.SkipConfirmation.Name)
 	require.True(t, pauseCalled.Load(), "expected PauseOffchainWorkflow to be called for ID resolution")
 	require.Contains(t, out, "Workflow paused successfully", "expected pause success for ID resolution.\nCLI OUTPUT:\n%s", out)
+
+	// Activate by workflow name (the paused workflow; the ACTIVE one must be
+	// filtered out by the PAUSED-only candidate filter).
+	out = runFolderlessCLI(t, gqlURL,
+		"workflow", "activate", folderlessPausedWorkflowName, "--"+settings.Flags.SkipConfirmation.Name)
+	require.True(t, activateCalled.Load(), "expected ActivateOffchainWorkflow to be called")
+	require.Contains(t, out, "Workflow activated successfully", "expected activate success.\nCLI OUTPUT:\n%s", out)
+	require.Contains(t, out, "Workflow Name:    "+folderlessPausedWorkflowName, "expected workflow name in details.\nCLI OUTPUT:\n%s", out)
 
 	// Delete by workflow name.
 	out = runFolderlessCLI(t, gqlURL,
