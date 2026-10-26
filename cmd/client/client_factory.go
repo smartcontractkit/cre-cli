@@ -17,6 +17,9 @@ import (
 
 type Factory interface {
 	NewWorkflowRegistryV2Client(ctx context.Context) (*WorkflowRegistryV2Client, error)
+	// NewWorkflowRegistryV2ClientWithRPC builds a registry client against an explicit
+	// RPC URL and registry contract address, for flows that run without project settings.
+	NewWorkflowRegistryV2ClientWithRPC(ctx context.Context, rpcURL, registryAddress string) (*WorkflowRegistryV2Client, error)
 	GetTxType() TxType
 	GetSkipConfirmation() bool
 }
@@ -48,6 +51,19 @@ func (f *factoryImpl) NewWorkflowRegistryV2Client(ctx context.Context) (*Workflo
 		return nil, fmt.Errorf("failed to create client for chain %q: %w", environmentSet.WorkflowRegistryChainName, err)
 	}
 
+	return f.newRegistryClient(ctx, ethClient, environmentSet.WorkflowRegistryAddress)
+}
+
+func (f *factoryImpl) NewWorkflowRegistryV2ClientWithRPC(ctx context.Context, rpcURL, registryAddress string) (*WorkflowRegistryV2Client, error) {
+	ethClient, err := NewEthClientFromEnv(f.viper, f.logger, rpcURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create client for registry chain via --%s: %w", settings.Flags.RPCURL.Name, err)
+	}
+
+	return f.newRegistryClient(ctx, ethClient, registryAddress)
+}
+
+func (f *factoryImpl) newRegistryClient(ctx context.Context, ethClient *seth.Client, registryAddress string) (*WorkflowRegistryV2Client, error) {
 	txcConfig := TxClientConfig{
 		TxType:       f.GetTxType(),
 		LedgerConfig: f.getLedgerConfig(),
@@ -57,13 +73,13 @@ func (f *factoryImpl) NewWorkflowRegistryV2Client(ctx context.Context) (*Workflo
 	workflowRegistryV2Client := NewWorkflowRegistryV2Client(
 		f.logger,
 		ethClient,
-		environmentSet.WorkflowRegistryAddress,
+		registryAddress,
 		txcConfig,
 	)
 
 	typeAndVersion, err := workflowRegistryV2Client.TypeAndVersion(ctx)
 	if err != nil {
-		return workflowRegistryV2Client, fmt.Errorf("failed to get type and version of workflow registry contract at %s: %w", environmentSet.WorkflowRegistryAddress, err)
+		return workflowRegistryV2Client, fmt.Errorf("failed to get type and version of workflow registry contract at %s: %w", registryAddress, err)
 	}
 
 	if !strings.Contains(typeAndVersion, constants.WorkflowRegistryV2TypeAndVersion) {

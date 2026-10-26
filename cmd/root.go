@@ -28,6 +28,7 @@ import (
 	"github.com/smartcontractkit/cre-cli/cmd/version"
 	"github.com/smartcontractkit/cre-cli/cmd/whoami"
 	"github.com/smartcontractkit/cre-cli/cmd/workflow"
+	workflowcommon "github.com/smartcontractkit/cre-cli/cmd/workflow/common"
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/context"
 	"github.com/smartcontractkit/cre-cli/internal/creconfig"
@@ -273,7 +274,7 @@ func newRootCommand() *cobra.Command {
 			}
 
 			// load settings from yaml files
-			if isLoadSettings(cmd) {
+			if isLoadSettings(cmd) && !isFolderlessLifecycleInvocation(cmd, args, v.GetString(settings.Flags.ProjectRoot.Name)) {
 				if showSpinner {
 					spinner.Update("Loading settings...")
 				}
@@ -549,6 +550,20 @@ func newRootCommand() *cobra.Command {
 	)
 
 	return rootCmd
+}
+
+// isFolderlessLifecycleInvocation reports whether a workflow pause/delete/activate
+// invocation resolves its workflow remotely (by name, on-chain ID, or
+// interactive picker) instead of reading project and workflow settings from
+// disk. Folder-less invocations skip the settings load entirely, like
+// `cre workflow list` does.
+func isFolderlessLifecycleInvocation(cmd *cobra.Command, args []string, projectRootFlag string) bool {
+	switch cmd.CommandPath() {
+	case "cre workflow pause", "cre workflow delete", "cre workflow activate":
+		return workflowcommon.IsFolderlessInvocation(args, projectRootFlag)
+	default:
+		return false
+	}
 }
 
 func isLoadSettings(cmd *cobra.Command) bool {

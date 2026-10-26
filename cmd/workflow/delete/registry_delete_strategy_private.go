@@ -28,6 +28,20 @@ func (a *privateRegistryDeleteStrategy) FetchWorkflows() ([]WorkflowToDelete, er
 	a.ensureClient()
 
 	h := a.h
+
+	// Folder-less flow: the platform row already identifies the exact registry
+	// workflow ID, so no name lookup is needed.
+	if row := h.folderlessRow; row != nil {
+		return []WorkflowToDelete{
+			{
+				ID:     row.WorkflowID,
+				Owner:  row.OwnerAddress,
+				Status: row.Status,
+				RawID:  row.WorkflowID,
+			},
+		}, nil
+	}
+
 	workflowName := h.inputs.WorkflowName
 
 	ui.Dim(fmt.Sprintf("Fetching workflow to delete... Name=%s", workflowName))
