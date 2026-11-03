@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
+	"strings"
+	"time"
 
 	"github.com/rs/zerolog"
 )
@@ -20,6 +23,7 @@ const (
 type HTTPStatusError struct {
 	StatusCode int
 	Message    string
+	RetryAfter time.Duration
 }
 
 func (e *HTTPStatusError) Error() string {
@@ -53,7 +57,7 @@ func (t *statusCheckTransport) RoundTrip(req *http.Request) (*http.Response, err
 		if ctxErr := req.Context().Err(); ctxErr != nil {
 			return nil, ctxErr
 		}
-		return nil, &HTTPStatusError{StatusCode: res.StatusCode}
+		return nil, &HTTPStatusError{StatusCode: res.StatusCode, RetryAfter: parseRetryAfter(res.Header)}
 	}
 	t.log.Debug().Int("status", res.StatusCode).Str("body", truncate(body)).Msg("CRE API returned non-2xx response")
 
@@ -64,7 +68,21 @@ func (t *statusCheckTransport) RoundTrip(req *http.Request) (*http.Response, err
 		return res, nil
 	}
 
-	return nil, &HTTPStatusError{StatusCode: res.StatusCode, Message: gqlMessage}
+	return nil, &HTTPStatusError{StatusCode: res.StatusCode, Message: gqlMessage, RetryAfter: parseRetryAfter(res.Header)}
+}
+
+func parseRetryAfter(h http.Header) time.Duration {
+	v := strings.TrimSpace(h.Get("Retry-After"))
+	if v == "" {
+		return 0
+	}
+	if secs, err := strconv.Atoi(v); err == nil {
+		return max(time.Duration(secs)*time.Second, 0)
+	}
+	if t, err := http.ParseTime(v); err == nil {
+		return max(time.Until(t), 0)
+	}
+	return 0
 }
 
 func isSuccess(code int) bool {

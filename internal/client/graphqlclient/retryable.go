@@ -11,7 +11,8 @@ import (
 // IsRetryable reports whether a failed request is worth repeating.
 // Context errors are excluded so callers' cancellations and deadlines are honoured.
 func IsRetryable(err error) bool {
-	if err == nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+	if err == nil || errors.Is(err, ErrTokenRefresh) ||
+		errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return false
 	}
 

@@ -83,6 +83,11 @@ func (v *Validator) ValidateCredentials(validationCtx context.Context, creds *cr
 		return nil, nil
 	}
 
+	// Refreshing inside the retry loop would apply the per-attempt timeout and could replay a rotated refresh token.
+	if err := v.gqlClient.RefreshTokenIfNeeded(ctx); err != nil {
+		return nil, fmt.Errorf("authentication failed: %w", err)
+	}
+
 	var lastErr error
 	result, err := retry.DoWithData(
 		func() (*ValidationResult, error) {
@@ -93,8 +98,11 @@ func (v *Validator) ValidateCredentials(validationCtx context.Context, creds *cr
 		retry.Attempts(v.maxAttempts),
 		retry.Delay(v.retryBaseDelay),
 		retry.MaxJitter(v.retryBaseDelay/2),
-		retry.DelayType(retry.CombineDelay(retry.BackOffDelay, retry.RandomDelay)),
+		retry.DelayType(retryDelay),
 		retry.RetryIf(func(err error) bool {
+			if errors.Is(err, graphqlclient.ErrTokenRefresh) || retryAfterExceedsDeadline(ctx, err) {
+				return false
+			}
 			return graphqlclient.IsRetryable(err) || isAttemptTimeout(ctx, err)
 		}),
 		retry.LastErrorOnly(true),
@@ -153,6 +161,27 @@ func (v *Validator) fetchOrganizationInfo(ctx context.Context) (*ValidationResul
 // isAttemptTimeout distinguishes a per-attempt deadline (retryable) from the overall validation deadline.
 func isAttemptTimeout(ctx context.Context, err error) bool {
 	return errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil
+}
+
+func retryDelay(n uint, err error, config *retry.Config) time.Duration {
+	if d := retryAfter(err); d > 0 {
+		return d
+	}
+	return retry.CombineDelay(retry.BackOffDelay, retry.RandomDelay)(n, err, config)
+}
+
+// Failing now beats sleeping into the deadline only to fail anyway.
+func retryAfterExceedsDeadline(ctx context.Context, err error) bool {
+	deadline, ok := ctx.Deadline()
+	return ok && retryAfter(err) > time.Until(deadline)
+}
+
+func retryAfter(err error) time.Duration {
+	var statusErr *graphqlclient.HTTPStatusError
+	if errors.As(err, &statusErr) {
+		return statusErr.RetryAfter
+	}
+	return 0
 }
 
 func orgInfoUnavailableError(reason string) error {

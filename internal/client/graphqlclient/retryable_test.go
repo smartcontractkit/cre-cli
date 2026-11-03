@@ -34,6 +34,7 @@ func TestIsRetryable(t *testing.T) {
 		{"tls verification", urlErr(x509.UnknownAuthorityError{}), false},
 		{"context canceled", urlErr(context.Canceled), false},
 		{"context deadline", urlErr(context.DeadlineExceeded), false},
+		{"token refresh timeout", fmt.Errorf("%w: %w", ErrTokenRefresh, urlErr(&net.OpError{Op: "read", Err: syscall.ECONNRESET})), false},
 		{"graphql error", errors.New("cre api error: invalid api key"), false},
 	}
 	for _, tt := range tests {

@@ -24,8 +24,9 @@ type reply struct {
 	status int
 	body   string
 	// dropConn closes the connection without a response; hang blocks until the client gives up.
-	dropConn bool
-	hang     bool
+	dropConn   bool
+	hang       bool
+	retryAfter string
 }
 
 func newTestValidator(t *testing.T, replies ...reply) (*Validator, *credentials.Credentials, *atomic.Int32) {
@@ -50,6 +51,9 @@ func newTestValidator(t *testing.T, replies ...reply) (*Validator, *credentials.
 			case <-release:
 			}
 			return
+		}
+		if replies[i].retryAfter != "" {
+			w.Header().Set("Retry-After", replies[i].retryAfter)
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(replies[i].status)
@@ -204,5 +208,37 @@ func TestValidateCredentials_PreservesLastErrorWithCustomCancelCause(t *testing.
 	var statusErr *graphqlclient.HTTPStatusError
 	if !errors.As(err, &statusErr) {
 		t.Errorf("expected last API error to be preserved, got %v", err)
+	}
+}
+
+func TestValidateCredentials_HonoursRetryAfter(t *testing.T) {
+	v, creds, calls := newTestValidator(t,
+		reply{status: http.StatusTooManyRequests, body: `{}`, retryAfter: "1"},
+		reply{status: http.StatusOK, body: okBody},
+	)
+
+	start := time.Now()
+	if _, err := v.ValidateCredentials(context.Background(), creds); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if elapsed := time.Since(start); elapsed < time.Second {
+		t.Errorf("retried after %v, want >= 1s", elapsed)
+	}
+	if calls.Load() != 2 {
+		t.Errorf("calls = %d, want 2", calls.Load())
+	}
+}
+
+func TestValidateCredentials_RetryAfterBeyondDeadlineFailsFast(t *testing.T) {
+	v, creds, calls := newTestValidator(t, reply{status: http.StatusTooManyRequests, body: `{}`, retryAfter: "120"})
+
+	start := time.Now()
+	_, err := v.ValidateCredentials(context.Background(), creds)
+	var statusErr *graphqlclient.HTTPStatusError
+	if !errors.As(err, &statusErr) || statusErr.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("expected HTTP 429 error, got %v", err)
+	}
+	if calls.Load() != 1 || time.Since(start) > 5*time.Second {
+		t.Errorf("calls=%d elapsed=%v, want a single fast attempt", calls.Load(), time.Since(start))
 	}
 }

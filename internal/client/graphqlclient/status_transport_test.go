@@ -187,3 +187,30 @@ func TestExecute_CancelledWhileReadingErrorBodyReturnsContextError(t *testing.T)
 		t.Errorf("cancellation misreported as HTTP status error: %v", err)
 	}
 }
+
+func TestParseRetryAfter(t *testing.T) {
+	future := time.Now().Add(30 * time.Second).UTC().Format(http.TimeFormat)
+	tests := []struct {
+		name     string
+		value    string
+		min, max time.Duration
+	}{
+		{"empty", "", 0, 0},
+		{"seconds", "5", 5 * time.Second, 5 * time.Second},
+		{"negative seconds", "-3", 0, 0},
+		{"http date", future, 28 * time.Second, 30 * time.Second},
+		{"past http date", "Mon, 02 Jan 2006 15:04:05 GMT", 0, 0},
+		{"garbage", "soon", 0, 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := http.Header{}
+			if tt.value != "" {
+				h.Set("Retry-After", tt.value)
+			}
+			if got := parseRetryAfter(h); got < tt.min || got > tt.max {
+				t.Errorf("parseRetryAfter(%q) = %v, want [%v, %v]", tt.value, got, tt.min, tt.max)
+			}
+		})
+	}
+}
