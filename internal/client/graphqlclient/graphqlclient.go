@@ -29,7 +29,7 @@ type Client struct {
 }
 
 func New(creds *credentials.Credentials, environmentSet *environments.EnvironmentSet, l *zerolog.Logger) *Client {
-	httpClient := &http.Client{Transport: &statusCheckTransport{base: http.DefaultTransport}}
+	httpClient := &http.Client{Transport: &statusCheckTransport{base: http.DefaultTransport, log: l}}
 	gqlClient := graphql.NewClient(environmentSet.GraphQLURL, graphql.WithHTTPClient(httpClient))
 	gqlClient.Log = func(s string) {
 		// Redact Authorization header to prevent token leakage in logs

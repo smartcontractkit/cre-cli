@@ -67,6 +67,7 @@ func TestValidateCredentials_RecoversFromTransientFailures(t *testing.T) {
 	}{
 		{"gateway 503", reply{http.StatusServiceUnavailable, `{"message":"Service Unavailable"}`}},
 		{"rate limited", reply{http.StatusTooManyRequests, `{}`}},
+		{"503 with graphql errors", reply{http.StatusServiceUnavailable, `{"errors":[{"message":"temporarily unavailable"}]}`}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
