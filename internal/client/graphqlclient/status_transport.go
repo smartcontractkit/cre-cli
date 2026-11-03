@@ -30,11 +30,6 @@ func (e *HTTPStatusError) Error() string {
 	return msg
 }
 
-// Retryable reports whether the status indicates a transient server-side condition.
-func (e *HTTPStatusError) Retryable() bool {
-	return isRetryableStatus(e.StatusCode)
-}
-
 func isRetryableStatus(code int) bool {
 	return code == http.StatusTooManyRequests || code >= http.StatusInternalServerError
 }

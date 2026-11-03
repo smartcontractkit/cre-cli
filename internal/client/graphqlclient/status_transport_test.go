@@ -58,8 +58,8 @@ func TestExecute_NonOKWithoutGraphQLErrorsReturnsHTTPStatusError(t *testing.T) {
 			if statusErr.StatusCode != tt.status {
 				t.Errorf("status = %d, want %d", statusErr.StatusCode, tt.status)
 			}
-			if statusErr.Retryable() != tt.retryable {
-				t.Errorf("Retryable() = %v, want %v", statusErr.Retryable(), tt.retryable)
+			if IsRetryable(err) != tt.retryable {
+				t.Errorf("IsRetryable() = %v, want %v", IsRetryable(err), tt.retryable)
 			}
 		})
 	}
@@ -88,7 +88,7 @@ func TestExecute_TransientStatusWithGraphQLErrorsIsRetryable(t *testing.T) {
 	if !errors.As(err, &statusErr) {
 		t.Fatalf("expected HTTPStatusError, got %v", err)
 	}
-	if !statusErr.Retryable() || statusErr.Message != "temporarily unavailable" {
+	if !IsRetryable(err) || statusErr.Message != "temporarily unavailable" {
 		t.Errorf("unexpected error: %+v", statusErr)
 	}
 }

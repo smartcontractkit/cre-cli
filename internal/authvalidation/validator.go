@@ -37,11 +37,14 @@ type Validator struct {
 	timeout        time.Duration
 	maxAttempts    uint
 	retryBaseDelay time.Duration
+	attemptTimeout time.Duration
 }
 
 const (
 	defaultMaxAttempts    = 3
 	defaultRetryBaseDelay = time.Second
+	// Keeps one hung request from consuming the whole validation timeout and starving retries.
+	defaultAttemptTimeout = 20 * time.Second
 )
 
 // NewValidator creates a new credential validator
@@ -53,6 +56,7 @@ func NewValidator(creds *credentials.Credentials, environmentSet *environments.E
 		timeout:        time.Minute,
 		maxAttempts:    defaultMaxAttempts,
 		retryBaseDelay: defaultRetryBaseDelay,
+		attemptTimeout: defaultAttemptTimeout,
 	}
 }
 
@@ -81,11 +85,18 @@ func (v *Validator) ValidateCredentials(validationCtx context.Context, creds *cr
 
 	var lastErr error
 	result, err := retry.DoWithData(
-		func() (*ValidationResult, error) { return v.fetchOrganizationInfo(ctx) },
+		func() (*ValidationResult, error) {
+			attemptCtx, cancelAttempt := context.WithTimeout(ctx, v.attemptTimeout)
+			defer cancelAttempt()
+			return v.fetchOrganizationInfo(attemptCtx)
+		},
 		retry.Attempts(v.maxAttempts),
 		retry.Delay(v.retryBaseDelay),
-		retry.DelayType(retry.BackOffDelay),
-		retry.RetryIf(isRetryable),
+		retry.MaxJitter(v.retryBaseDelay/2),
+		retry.DelayType(retry.CombineDelay(retry.BackOffDelay, retry.RandomDelay)),
+		retry.RetryIf(func(err error) bool {
+			return graphqlclient.IsRetryable(err) || isAttemptTimeout(ctx, err)
+		}),
 		retry.LastErrorOnly(true),
 		retry.Context(ctx),
 		retry.OnRetry(func(n uint, err error) {
@@ -95,7 +106,7 @@ func (v *Validator) ValidateCredentials(validationCtx context.Context, creds *cr
 	)
 	if err != nil {
 		// retry-go returns only the context error on cancellation; keep the API error that caused the retries.
-		if lastErr != nil && errors.Is(err, ctx.Err()) {
+		if lastErr != nil && errors.Is(err, context.Cause(ctx)) {
 			return nil, fmt.Errorf("%w (retry aborted: %w)", lastErr, err)
 		}
 		return nil, err
@@ -139,10 +150,9 @@ func (v *Validator) fetchOrganizationInfo(ctx context.Context) (*ValidationResul
 	}, nil
 }
 
-// isRetryable excludes empty org info so unprovisioned accounts fail fast.
-func isRetryable(err error) bool {
-	var statusErr *graphqlclient.HTTPStatusError
-	return errors.As(err, &statusErr) && statusErr.Retryable()
+// isAttemptTimeout distinguishes a per-attempt deadline (retryable) from the overall validation deadline.
+func isAttemptTimeout(ctx context.Context, err error) bool {
+	return errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil
 }
 
 func orgInfoUnavailableError(reason string) error {
