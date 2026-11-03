@@ -184,7 +184,7 @@ func newRootCommand() *cobra.Command {
 					}
 
 					if errors.Is(err, runtime.ErrValidationFailed) {
-						// Credentials exist but validation failed (likely network).
+						// Credentials exist but validation failed (network, API error, or incomplete org info).
 						// Do NOT prompt for re-login -- that causes an infinite loop.
 						ui.Line()
 						if runtimeContext.EnvironmentSet != nil && runtimeContext.EnvironmentSet.RequiresVPN() {

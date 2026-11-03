@@ -2,7 +2,9 @@ package authvalidation
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/machinebox/graphql"
@@ -29,18 +31,27 @@ type ValidationResult struct {
 
 // Validator validates authentication credentials
 type Validator struct {
-	gqlClient *graphqlclient.Client
-	log       *zerolog.Logger
-	timeout   time.Duration
+	gqlClient      *graphqlclient.Client
+	log            *zerolog.Logger
+	timeout        time.Duration
+	maxAttempts    int
+	retryBaseDelay time.Duration
 }
+
+const (
+	defaultMaxAttempts    = 3
+	defaultRetryBaseDelay = time.Second
+)
 
 // NewValidator creates a new credential validator
 func NewValidator(creds *credentials.Credentials, environmentSet *environments.EnvironmentSet, log *zerolog.Logger) *Validator {
 	gqlClient := graphqlclient.New(creds, environmentSet, log)
 	return &Validator{
-		gqlClient: gqlClient,
-		log:       log,
-		timeout:   time.Minute,
+		gqlClient:      gqlClient,
+		log:            log,
+		timeout:        time.Minute,
+		maxAttempts:    defaultMaxAttempts,
+		retryBaseDelay: defaultRetryBaseDelay,
 	}
 }
 
@@ -67,31 +78,72 @@ func (v *Validator) ValidateCredentials(validationCtx context.Context, creds *cr
 		return nil, nil
 	}
 
-	req := graphql.NewRequest(queryCreOrganizationInfo)
+	var lastErr error
+	for attempt := 0; attempt < v.maxAttempts; attempt++ {
+		if attempt > 0 {
+			delay := v.retryBaseDelay << (attempt - 1)
+			v.log.Debug().Err(lastErr).Int("attempt", attempt+1).Dur("delay", delay).Msg("retrying organization info lookup")
+			select {
+			case <-ctx.Done():
+				return nil, fmt.Errorf("%w (retry aborted: %w)", lastErr, ctx.Err())
+			case <-time.After(delay):
+			}
+		}
 
+		result, err := v.fetchOrganizationInfo(ctx)
+		if err == nil {
+			creds.OrgID = result.OrgID
+			return result, nil
+		}
+		lastErr = err
+		if !isRetryable(err) {
+			return nil, err
+		}
+	}
+
+	return nil, lastErr
+}
+
+func (v *Validator) fetchOrganizationInfo(ctx context.Context) (*ValidationResult, error) {
 	var respEnvelope struct {
-		GetCreOrganizationInfo struct {
+		GetCreOrganizationInfo *struct {
 			OrgID                 string   `json:"orgId"`
 			DerivedWorkflowOwners []string `json:"derivedWorkflowOwners"`
 		} `json:"getCreOrganizationInfo"`
 	}
 
-	if err := v.gqlClient.Execute(ctx, req, &respEnvelope); err != nil {
-		return nil, fmt.Errorf("authentication failed: unable to retrieve organization info. Your account may not be fully set up yet — please try again in a few minutes: %w", err)
+	if err := v.gqlClient.Execute(ctx, graphql.NewRequest(queryCreOrganizationInfo), &respEnvelope); err != nil {
+		return nil, fmt.Errorf("authentication failed: unable to retrieve organization info: %w", err)
 	}
 
 	info := respEnvelope.GetCreOrganizationInfo
-
-	if info.OrgID == "" || len(info.DerivedWorkflowOwners) == 0 {
-		return nil, fmt.Errorf("authentication failed: unable to retrieve organization info. Your account may not be fully set up yet — please try again in a few minutes")
+	if info == nil {
+		return nil, orgInfoUnavailableError("the CRE API returned no organization for this account")
 	}
 
-	result := &ValidationResult{
+	var missing []string
+	if info.OrgID == "" {
+		missing = append(missing, "orgId")
+	}
+	if len(info.DerivedWorkflowOwners) == 0 {
+		missing = append(missing, "derivedWorkflowOwners")
+	}
+	if len(missing) > 0 {
+		return nil, orgInfoUnavailableError("organization info is missing " + strings.Join(missing, ", "))
+	}
+
+	return &ValidationResult{
 		OrgID:                info.OrgID,
 		DerivedWorkflowOwner: info.DerivedWorkflowOwners[0],
-	}
+	}, nil
+}
 
-	creds.OrgID = result.OrgID
+// isRetryable excludes empty org info so unprovisioned accounts fail fast.
+func isRetryable(err error) bool {
+	var statusErr *graphqlclient.HTTPStatusError
+	return errors.As(err, &statusErr) && statusErr.Retryable()
+}
 
-	return result, nil
+func orgInfoUnavailableError(reason string) error {
+	return fmt.Errorf("authentication failed: %s. Your account may not be fully set up yet — please try again in a few minutes", reason)
 }

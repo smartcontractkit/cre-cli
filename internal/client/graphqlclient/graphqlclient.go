@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"regexp"
 	"strings"
 	"time"
@@ -28,7 +29,8 @@ type Client struct {
 }
 
 func New(creds *credentials.Credentials, environmentSet *environments.EnvironmentSet, l *zerolog.Logger) *Client {
-	gqlClient := graphql.NewClient(environmentSet.GraphQLURL)
+	httpClient := &http.Client{Transport: &statusCheckTransport{base: http.DefaultTransport}}
+	gqlClient := graphql.NewClient(environmentSet.GraphQLURL, graphql.WithHTTPClient(httpClient))
 	gqlClient.Log = func(s string) {
 		// Redact Authorization header to prevent token leakage in logs
 		redacted := redactSensitiveHeaders(s)
@@ -65,6 +67,10 @@ func (c *Client) Execute(ctx context.Context, req *graphql.Request, resp any) er
 	}
 	err = c.client.Run(ctx, req, resp)
 	if err != nil {
+		var statusErr *HTTPStatusError
+		if errors.As(err, &statusErr) {
+			return statusErr
+		}
 		if strings.HasPrefix(err.Error(), "graphql: ") {
 			return errors.New(strings.Replace(err.Error(), "graphql: ", "cre api error: ", 1))
 		}
