@@ -78,7 +78,12 @@ func isSuccess(code int) bool {
 
 // isFollowableRedirect lets http.Client follow redirects, which it does only after the transport returns.
 func isFollowableRedirect(res *http.Response) bool {
-	return res.StatusCode >= 300 && res.StatusCode < 400 && res.Header.Get("Location") != ""
+	switch res.StatusCode {
+	case http.StatusMovedPermanently, http.StatusFound, http.StatusSeeOther,
+		http.StatusTemporaryRedirect, http.StatusPermanentRedirect:
+		return res.Header.Get("Location") != ""
+	}
+	return false
 }
 
 func firstGraphQLErrorMessage(body []byte) string {

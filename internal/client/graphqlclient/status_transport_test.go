@@ -135,6 +135,28 @@ func TestExecute_FollowsRedirects(t *testing.T) {
 	}
 }
 
+func TestExecute_UnfollowedRedirectIsError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Location", "/elsewhere")
+		w.WriteHeader(http.StatusMultipleChoices)
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	logger := zerolog.Nop()
+	client := New(
+		&credentials.Credentials{AuthType: credentials.AuthTypeApiKey, APIKey: "k"},
+		&environments.EnvironmentSet{GraphQLURL: srv.URL},
+		&logger,
+	)
+	var resp map[string]any
+	err := client.Execute(context.Background(), graphql.NewRequest("query { x }"), &resp)
+	var statusErr *HTTPStatusError
+	if !errors.As(err, &statusErr) || statusErr.StatusCode != http.StatusMultipleChoices {
+		t.Fatalf("expected HTTPStatusError 300, got %v", err)
+	}
+}
+
 func TestExecute_CancelledWhileReadingErrorBodyReturnsContextError(t *testing.T) {
 	release := make(chan struct{})
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
