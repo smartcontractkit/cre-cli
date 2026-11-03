@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/avast/retry-go/v4"
 	"github.com/machinebox/graphql"
 	"github.com/rs/zerolog"
 
@@ -34,7 +35,7 @@ type Validator struct {
 	gqlClient      *graphqlclient.Client
 	log            *zerolog.Logger
 	timeout        time.Duration
-	maxAttempts    int
+	maxAttempts    uint
 	retryBaseDelay time.Duration
 }
 
@@ -79,29 +80,29 @@ func (v *Validator) ValidateCredentials(validationCtx context.Context, creds *cr
 	}
 
 	var lastErr error
-	for attempt := 0; attempt < v.maxAttempts; attempt++ {
-		if attempt > 0 {
-			delay := v.retryBaseDelay << (attempt - 1)
-			v.log.Debug().Err(lastErr).Int("attempt", attempt+1).Dur("delay", delay).Msg("retrying organization info lookup")
-			select {
-			case <-ctx.Done():
-				return nil, fmt.Errorf("%w (retry aborted: %w)", lastErr, ctx.Err())
-			case <-time.After(delay):
-			}
+	result, err := retry.DoWithData(
+		func() (*ValidationResult, error) { return v.fetchOrganizationInfo(ctx) },
+		retry.Attempts(v.maxAttempts),
+		retry.Delay(v.retryBaseDelay),
+		retry.DelayType(retry.BackOffDelay),
+		retry.RetryIf(isRetryable),
+		retry.LastErrorOnly(true),
+		retry.Context(ctx),
+		retry.OnRetry(func(n uint, err error) {
+			lastErr = err
+			v.log.Debug().Err(err).Uint("attempt", n+1).Msg("organization info lookup failed")
+		}),
+	)
+	if err != nil {
+		// retry-go returns only the context error on cancellation; keep the API error that caused the retries.
+		if lastErr != nil && errors.Is(err, ctx.Err()) {
+			return nil, fmt.Errorf("%w (retry aborted: %w)", lastErr, err)
 		}
-
-		result, err := v.fetchOrganizationInfo(ctx)
-		if err == nil {
-			creds.OrgID = result.OrgID
-			return result, nil
-		}
-		lastErr = err
-		if !isRetryable(err) {
-			return nil, err
-		}
+		return nil, err
 	}
 
-	return nil, lastErr
+	creds.OrgID = result.OrgID
+	return result, nil
 }
 
 func (v *Validator) fetchOrganizationInfo(ctx context.Context) (*ValidationResult, error) {

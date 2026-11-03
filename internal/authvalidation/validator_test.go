@@ -132,6 +132,10 @@ func TestValidateCredentials_StopsRetryingWhenContextCancelled(t *testing.T) {
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("expected deadline exceeded, got %v", err)
 	}
+	var statusErr *graphqlclient.HTTPStatusError
+	if !errors.As(err, &statusErr) {
+		t.Errorf("expected last API error to be preserved, got %v", err)
+	}
 	if calls.Load() != 1 {
 		t.Errorf("calls = %d, want 1", calls.Load())
 	}
