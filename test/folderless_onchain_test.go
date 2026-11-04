@@ -13,11 +13,11 @@ import (
 	"strings"
 	"testing"
 
-	chainselectors "github.com/smartcontractkit/chain-selectors"
-	workflowUtils "github.com/smartcontractkit/chainlink-common/pkg/workflows"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/require"
+
+	chainselectors "github.com/smartcontractkit/chain-selectors"
+	workflowUtils "github.com/smartcontractkit/chainlink-common/pkg/workflows"
 
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/environments"

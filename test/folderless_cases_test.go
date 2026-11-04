@@ -28,12 +28,12 @@ import (
 // ---- configurable mock platform ----
 
 type folderlessRow struct {
-	uuid     string
-	name     string
-	id       string
-	owner    string
-	status   string
-	source   string
+	uuid   string
+	name   string
+	id     string
+	owner  string
+	status string
+	source string
 }
 
 type folderlessMock struct {
