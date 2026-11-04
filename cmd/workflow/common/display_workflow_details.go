@@ -24,7 +24,11 @@ func DisplayWorkflowDetails(
 	ui.Title(fmt.Sprintf("%s Workflow: %s", action, workflowName))
 	ui.Dim(fmt.Sprintf("Registry:      %s", runtimeContext.ResolvedRegistry.ID()))
 	ui.Dim(fmt.Sprintf("DON Family:    %s", runtimeContext.ResolvedRegistry.DonFamily()))
-	ui.Dim(fmt.Sprintf("Target:        %s", cfg.User.TargetName))
+	// cfg is nil when running folder-less (workflow resolved by name/ID without
+	// project settings); there is no target in that mode.
+	if cfg != nil && cfg.User.TargetName != "" {
+		ui.Dim(fmt.Sprintf("Target:        %s", cfg.User.TargetName))
+	}
 	ui.Dim(fmt.Sprintf("Owner Address: %s", displayOwnerAddress))
 	ui.Line()
 }

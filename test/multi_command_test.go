@@ -153,6 +153,15 @@ func TestMultiCommandHappyPaths(t *testing.T) {
 		multi_command_flows.RunPrivateRegistryE2E(t, tc, tc.EnvFile, filepath.Join(tc.ProjectDirectory, "blank_workflow"))
 	})
 
+	// Folder-less lifecycle: pause/delete resolved from the platform by name and
+	// by on-chain ID, running from a directory with no CRE project at all.
+	t.Run("WorkflowFolderless_PauseDelete", func(t *testing.T) {
+		t.Setenv(environments.EnvVarEnv, "STAGING")
+		t.Setenv(environments.EnvVarDonFamily, "test-don")
+
+		multi_command_flows.RunFolderlessPauseDeleteHappyPath(t)
+	})
+
 	// Run Account Happy Path: Link -> List -> Unlink -> List (verify unlinked)
 	t.Run("AccountHappyPath_LinkListUnlinkList", func(t *testing.T) {
 		anvilProc, testEthUrl := initTestEnv(t, "anvil-state.json")

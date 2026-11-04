@@ -49,6 +49,8 @@ type flagNames struct {
 	ChangesetFile        Flag
 	AllowUnknownChains   Flag
 	AllowInsecureRPC     Flag
+	RPCURL               Flag
+	Registry             Flag
 }
 
 var Flags = flagNames{
@@ -68,6 +70,8 @@ var Flags = flagNames{
 	ChangesetFile:        Flag{"changeset-file", ""},
 	AllowUnknownChains:   Flag{"allow-unknown-chains", ""},
 	AllowInsecureRPC:     Flag{"allow-insecure-rpc", ""},
+	RPCURL:               Flag{"rpc-url", ""},
+	Registry:             Flag{"registry", ""},
 }
 
 func AddTxnTypeFlags(cmd *cobra.Command) {
@@ -82,6 +86,14 @@ func AddTxnTypeFlags(cmd *cobra.Command) {
 
 func AddSkipConfirmation(cmd *cobra.Command) {
 	cmd.Flags().Bool(Flags.SkipConfirmation.Name, false, "If set, the command will skip the confirmation prompt and proceed with the operation even if it is potentially destructive")
+}
+
+// AddFolderlessLifecycleFlags adds the flags used by workflow pause/delete when
+// resolving a workflow by name or ID without a project folder.
+func AddFolderlessLifecycleFlags(cmd *cobra.Command) {
+	cmd.Flags().String(Flags.RPCURL.Name, "", "RPC URL of the workflow registry chain (required for on-chain workflows when no project folder is used)")
+	cmd.Flags().String(Flags.Registry.Name, "", "Scope workflow resolution to a registry ID (see 'cre workflow list')")
+	cmd.Flags().StringP(Flags.Owner.Name, Flags.Owner.Short, "", "Scope workflow name resolution to this owner address")
 }
 
 func mergeConfigToViper(v *viper.Viper, filePath string) error {

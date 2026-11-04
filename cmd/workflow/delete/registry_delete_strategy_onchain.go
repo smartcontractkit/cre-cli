@@ -35,7 +35,15 @@ func newOnchainRegistryDeleteStrategy(h *handler) (*onchainRegistryDeleteStrateg
 	a.wg.Add(1)
 	go func() {
 		defer a.wg.Done()
-		wrc, err := h.clientFactory.NewWorkflowRegistryV2Client(h.execCtx)
+		var wrc *client.WorkflowRegistryV2Client
+		var err error
+		// Folder-less mode passes an explicit --rpc-url; the project-based flow
+		// resolves the RPC URL from settings.
+		if h.inputs.RPCURL != "" {
+			wrc, err = h.clientFactory.NewWorkflowRegistryV2ClientWithRPC(h.execCtx, h.inputs.RPCURL, onChain.Address())
+		} else {
+			wrc, err = h.clientFactory.NewWorkflowRegistryV2Client(h.execCtx)
+		}
 		if err != nil {
 			a.initErr = fmt.Errorf("failed to create workflow registry client: %w", err)
 			return

@@ -28,24 +28,31 @@ func (a *privateRegistryPauseStrategy) Pause() error {
 	a.ensureClient()
 
 	h := a.h
-	workflowName := h.inputs.WorkflowName
+	workflowID := h.inputs.WorkflowID
 
-	ui.Dim(fmt.Sprintf("Fetching workflow to pause... Name=%s", workflowName))
+	if workflowID == "" {
+		// Project-based flow: resolve the registry workflow ID by name.
+		workflowName := h.inputs.WorkflowName
 
-	workflow, err := a.prc.GetWorkflowByName(a.h.execCtx, workflowName)
-	if err != nil {
-		return fmt.Errorf("failed to get workflow: %w", err)
+		ui.Dim(fmt.Sprintf("Fetching workflow to pause... Name=%s", workflowName))
+
+		workflow, err := a.prc.GetWorkflowByName(a.h.execCtx, workflowName)
+		if err != nil {
+			return fmt.Errorf("failed to get workflow: %w", err)
+		}
+
+		if workflow.Status == privateregistryclient.WorkflowStatusPaused {
+			return fmt.Errorf("workflow is already paused, cancelling transaction")
+		}
+
+		workflowID = workflow.WorkflowID
 	}
 
-	if workflow.Status == privateregistryclient.WorkflowStatusPaused {
-		return fmt.Errorf("workflow is already paused, cancelling transaction")
-	}
+	h.runtimeContext.Workflow.ID = workflowID
 
-	h.runtimeContext.Workflow.ID = workflow.WorkflowID
+	ui.Dim(fmt.Sprintf("Processing pause for workflow ID %s...", workflowID))
 
-	ui.Dim(fmt.Sprintf("Processing pause for workflow ID %s...", workflow.WorkflowID))
-
-	result, err := a.prc.PauseWorkflowInRegistry(a.h.execCtx, workflow.WorkflowID)
+	result, err := a.prc.PauseWorkflowInRegistry(a.h.execCtx, workflowID)
 	if err != nil {
 		return fmt.Errorf("failed to pause workflow in private registry: %w", err)
 	}
