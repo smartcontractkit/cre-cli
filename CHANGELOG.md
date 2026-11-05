@@ -1,5 +1,11 @@
 # cre-cli
 
+## 1.39.1
+
+### Patch Changes
+
+- [#628](https://github.com/smartcontractkit/cre-cli/pull/628) [`85ddf4f`](https://github.com/smartcontractkit/cre-cli/commit/85ddf4fa22d8b8a9970d1cf31adb88440d9b4df9) Thanks [@anirudhwarrier](https://github.com/anirudhwarrier)! - Fix intermittent "unable to retrieve organization info" errors during credential validation. Non-2xx responses from the CRE API are now reported with their HTTP status instead of being decoded as empty organization data, transient failures (429, 5xx, connection resets, timeouts) are retried with jittered backoff, and the error now states which organization fields were missing.
+
 ## 1.39.0
 
 ### Minor Changes
