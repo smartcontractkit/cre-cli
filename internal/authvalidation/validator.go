@@ -38,13 +38,17 @@ type Validator struct {
 	maxAttempts    uint
 	retryBaseDelay time.Duration
 	attemptTimeout time.Duration
+	onRetry        RetryNotifier
 }
+
+// RetryNotifier lets callers show progress, since retries can stretch validation to most of a minute.
+type RetryNotifier func(nextAttempt, maxAttempts uint, err error)
 
 const (
 	defaultMaxAttempts    = 3
 	defaultRetryBaseDelay = time.Second
-	// Keeps one hung request from consuming the whole validation timeout and starving retries.
-	defaultAttemptTimeout = 20 * time.Second
+	// Sized so all attempts plus backoff fit in the 1-minute validation timeout.
+	defaultAttemptTimeout = 15 * time.Second
 )
 
 // NewValidator creates a new credential validator
@@ -58,6 +62,10 @@ func NewValidator(creds *credentials.Credentials, environmentSet *environments.E
 		retryBaseDelay: defaultRetryBaseDelay,
 		attemptTimeout: defaultAttemptTimeout,
 	}
+}
+
+func (v *Validator) SetRetryNotifier(fn RetryNotifier) {
+	v.onRetry = fn
 }
 
 func (v *Validator) SetServiceTimeout(timeout time.Duration) {
@@ -110,6 +118,10 @@ func (v *Validator) ValidateCredentials(validationCtx context.Context, creds *cr
 		retry.OnRetry(func(n uint, err error) {
 			lastErr = err
 			v.log.Debug().Err(err).Uint("attempt", n+1).Msg("organization info lookup failed")
+			// retry-go also calls OnRetry after the final attempt, when nothing will follow.
+			if v.onRetry != nil && n+1 < v.maxAttempts {
+				v.onRetry(n+2, v.maxAttempts, err)
+			}
 		}),
 	)
 	if err != nil {
@@ -182,6 +194,19 @@ func retryAfter(err error) time.Duration {
 		return statusErr.RetryAfter
 	}
 	return 0
+}
+
+// DescribeRetryCause gives a short user-facing reason; full errors are too long for a spinner line.
+func DescribeRetryCause(err error) string {
+	var statusErr *graphqlclient.HTTPStatusError
+	switch {
+	case errors.As(err, &statusErr):
+		return fmt.Sprintf("returned HTTP %d", statusErr.StatusCode)
+	case errors.Is(err, context.DeadlineExceeded):
+		return "timed out"
+	default:
+		return "was unreachable"
+	}
 }
 
 func orgInfoUnavailableError(reason string) error {

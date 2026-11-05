@@ -28,6 +28,8 @@ import (
 	"github.com/smartcontractkit/cre-cli/cmd/version"
 	"github.com/smartcontractkit/cre-cli/cmd/whoami"
 	"github.com/smartcontractkit/cre-cli/cmd/workflow"
+	"github.com/smartcontractkit/cre-cli/internal/authvalidation"
+	"github.com/smartcontractkit/cre-cli/internal/client/graphqlclient"
 	"github.com/smartcontractkit/cre-cli/internal/constants"
 	"github.com/smartcontractkit/cre-cli/internal/context"
 	"github.com/smartcontractkit/cre-cli/internal/creconfig"
@@ -177,7 +179,7 @@ func newRootCommand() *cobra.Command {
 					spinner.Update("Validating credentials...")
 				}
 				skipValidation := shouldSkipValidation(cmd)
-				err := runtimeContext.AttachCredentials(cmd.Context(), skipValidation)
+				err := runtimeContext.AttachCredentials(cmd.Context(), skipValidation, credentialRetryNotifier(spinner, showSpinner))
 				if err != nil {
 					if showSpinner {
 						spinner.Stop()
@@ -187,12 +189,16 @@ func newRootCommand() *cobra.Command {
 						// Credentials exist but validation failed (network, API error, or incomplete org info).
 						// Do NOT prompt for re-login -- that causes an infinite loop.
 						ui.Line()
-						if runtimeContext.EnvironmentSet != nil && runtimeContext.EnvironmentSet.RequiresVPN() {
+						switch {
+						case graphqlclient.IsAuthError(err):
+							// Suggest rather than prompt: an automatic re-login here previously caused a login loop.
+							ui.ErrorWithSuggestions("Credential validation failed: credentials were rejected", rejectedCredentialSuggestions(runtimeContext.Credentials))
+						case runtimeContext.EnvironmentSet != nil && runtimeContext.EnvironmentSet.RequiresVPN():
 							ui.ErrorWithSuggestions("Credential validation failed", []string{
 								fmt.Sprintf("The %s environment requires Tailscale VPN.", runtimeContext.EnvironmentSet.EnvName),
 								"Ensure Tailscale is connected to the smartcontract.com network, then retry.",
 							})
-						} else {
+						default:
 							ui.Error("Credential validation failed")
 						}
 						ui.EnvContext(runtimeContext.EnvironmentSet.EnvLabel())
@@ -308,7 +314,7 @@ func newRootCommand() *cobra.Command {
 					if showSpinner {
 						spinner.Update("Loading credentials...")
 					}
-					err := runtimeContext.AttachCredentials(cmd.Context(), shouldSkipValidation(cmd))
+					err := runtimeContext.AttachCredentials(cmd.Context(), shouldSkipValidation(cmd), credentialRetryNotifier(spinner, showSpinner))
 					if err != nil {
 						ui.Warning("Failed to load credentials for workflow hash")
 					} else {
@@ -648,6 +654,27 @@ func isRegistryRPCCommand(cmd *cobra.Command) bool {
 	}
 	_, exists := includedCommands[cmd.CommandPath()]
 	return exists
+}
+
+func rejectedCredentialSuggestions(creds *credentials.Credentials) []string {
+	if creds != nil && creds.AuthType == credentials.AuthTypeApiKey {
+		return []string{
+			"Your API key may be invalid or revoked.",
+			"Set CRE_API_KEY to a valid key, or unset it and run 'cre login'.",
+		}
+	}
+	return []string{"Your session may have expired or been revoked.", "Run 'cre login' to sign in again."}
+}
+
+func credentialRetryNotifier(spinner *ui.Spinner, showSpinner bool) authvalidation.RetryNotifier {
+	return func(nextAttempt, maxAttempts uint, err error) {
+		msg := fmt.Sprintf("CRE API %s, retrying credential validation (attempt %d of %d)...", authvalidation.DescribeRetryCause(err), nextAttempt, maxAttempts)
+		if showSpinner {
+			spinner.Update(msg)
+			return
+		}
+		ui.Warning(msg)
+	}
 }
 
 func shouldSkipValidation(cmd *cobra.Command) bool {

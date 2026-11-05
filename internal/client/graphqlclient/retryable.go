@@ -39,3 +39,9 @@ func isTransientNetworkError(err error) bool {
 		errors.Is(err, syscall.ECONNRESET) ||
 		errors.Is(err, syscall.ECONNREFUSED)
 }
+
+// IsAuthError reports whether the CRE API rejected the credentials themselves.
+func IsAuthError(err error) bool {
+	var statusErr *HTTPStatusError
+	return errors.As(err, &statusErr) && isAuthStatus(statusErr.StatusCode)
+}

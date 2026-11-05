@@ -3,6 +3,7 @@ package authvalidation
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -240,5 +241,61 @@ func TestValidateCredentials_RetryAfterBeyondDeadlineFailsFast(t *testing.T) {
 	}
 	if calls.Load() != 1 || time.Since(start) > 5*time.Second {
 		t.Errorf("calls=%d elapsed=%v, want a single fast attempt", calls.Load(), time.Since(start))
+	}
+}
+
+func TestValidateCredentials_NotifiesBeforeEachRetry(t *testing.T) {
+	v, creds, _ := newTestValidator(t, reply{status: http.StatusBadGateway, body: `{}`})
+	type call struct{ next, max uint }
+	var calls []call
+	v.SetRetryNotifier(func(next, maxAttempts uint, err error) {
+		var statusErr *graphqlclient.HTTPStatusError
+		if !errors.As(err, &statusErr) {
+			t.Errorf("notifier got %v, want HTTPStatusError", err)
+		}
+		calls = append(calls, call{next, maxAttempts})
+	})
+
+	if _, err := v.ValidateCredentials(context.Background(), creds); err == nil {
+		t.Fatal("expected error")
+	}
+	want := []call{{2, defaultMaxAttempts}, {3, defaultMaxAttempts}}
+	if len(calls) != len(want) || calls[0] != want[0] || calls[1] != want[1] {
+		t.Errorf("notifier calls = %v, want %v", calls, want)
+	}
+}
+
+func TestValidateCredentials_NoNotificationWithoutRetry(t *testing.T) {
+	v, creds, _ := newTestValidator(t, reply{status: http.StatusOK, body: okBody})
+	v.SetRetryNotifier(func(uint, uint, error) { t.Error("notifier called on success") })
+	if _, err := v.ValidateCredentials(context.Background(), creds); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestDescribeRetryCause(t *testing.T) {
+	tests := []struct {
+		err  error
+		want string
+	}{
+		{&graphqlclient.HTTPStatusError{StatusCode: http.StatusServiceUnavailable}, "returned HTTP 503"},
+		{fmt.Errorf("post: %w", context.DeadlineExceeded), "timed out"},
+		{errors.New("connection reset by peer"), "was unreachable"},
+	}
+	for _, tt := range tests {
+		if got := DescribeRetryCause(tt.err); got != tt.want {
+			t.Errorf("DescribeRetryCause(%v) = %q, want %q", tt.err, got, tt.want)
+		}
+	}
+}
+
+func TestDefaultRetryBudgetFitsValidationTimeout(t *testing.T) {
+	v := &Validator{timeout: time.Minute}
+	var backoff time.Duration
+	for i := uint(0); i+1 < defaultMaxAttempts; i++ {
+		backoff += defaultRetryBaseDelay<<i + defaultRetryBaseDelay/2
+	}
+	if worst := defaultMaxAttempts*defaultAttemptTimeout + backoff; worst > v.timeout {
+		t.Errorf("worst case %v exceeds validation timeout %v", worst, v.timeout)
 	}
 }

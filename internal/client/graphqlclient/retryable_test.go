@@ -45,3 +45,24 @@ func TestIsRetryable(t *testing.T) {
 		})
 	}
 }
+
+func TestIsAuthError(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{"401", &HTTPStatusError{StatusCode: http.StatusUnauthorized}, true},
+		{"wrapped 403", fmt.Errorf("auth: %w", &HTTPStatusError{StatusCode: http.StatusForbidden}), true},
+		{"503", &HTTPStatusError{StatusCode: http.StatusServiceUnavailable}, false},
+		{"graphql error", errors.New("cre api error: invalid api key"), false},
+		{"nil", nil, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := IsAuthError(tt.err); got != tt.want {
+				t.Errorf("IsAuthError(%v) = %v, want %v", tt.err, got, tt.want)
+			}
+		})
+	}
+}

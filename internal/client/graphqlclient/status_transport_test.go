@@ -66,9 +66,22 @@ func TestExecute_NonOKWithoutGraphQLErrorsReturnsHTTPStatusError(t *testing.T) {
 }
 
 func TestExecute_NonOKWithGraphQLErrorsPreservesMessage(t *testing.T) {
-	_, err := runAgainst(t, http.StatusUnauthorized, `{"errors":[{"message":"invalid api key"}]}`)
-	if err == nil || err.Error() != "cre api error: invalid api key" {
+	_, err := runAgainst(t, http.StatusBadRequest, `{"errors":[{"message":"invalid workflow name"}]}`)
+	if err == nil || err.Error() != "cre api error: invalid workflow name" {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestExecute_AuthStatusWithGraphQLErrorsKeepsStatus(t *testing.T) {
+	for _, status := range []int{http.StatusUnauthorized, http.StatusForbidden} {
+		_, err := runAgainst(t, status, `{"errors":[{"message":"invalid api key"}]}`)
+		var statusErr *HTTPStatusError
+		if !errors.As(err, &statusErr) || statusErr.StatusCode != status || statusErr.Message != "invalid api key" {
+			t.Fatalf("status %d: unexpected error: %v", status, err)
+		}
+		if !IsAuthError(err) || IsRetryable(err) {
+			t.Errorf("status %d: IsAuthError=%v IsRetryable=%v", status, IsAuthError(err), IsRetryable(err))
+		}
 	}
 }
 

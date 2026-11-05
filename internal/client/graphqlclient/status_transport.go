@@ -34,6 +34,10 @@ func (e *HTTPStatusError) Error() string {
 	return msg
 }
 
+func isAuthStatus(code int) bool {
+	return code == http.StatusUnauthorized || code == http.StatusForbidden
+}
+
 func isRetryableStatus(code int) bool {
 	return code == http.StatusTooManyRequests || code >= http.StatusInternalServerError
 }
@@ -62,8 +66,8 @@ func (t *statusCheckTransport) RoundTrip(req *http.Request) (*http.Response, err
 	t.log.Debug().Int("status", res.StatusCode).Str("body", truncate(body)).Msg("CRE API returned non-2xx response")
 
 	gqlMessage := firstGraphQLErrorMessage(body)
-	// Non-transient GraphQL errors (e.g. 401 invalid api key) keep their existing "cre api error" form.
-	if gqlMessage != "" && !isRetryableStatus(res.StatusCode) {
+	// Other GraphQL errors (e.g. 400 validation) keep their "cre api error" form; retryable and auth statuses need the code.
+	if gqlMessage != "" && !isRetryableStatus(res.StatusCode) && !isAuthStatus(res.StatusCode) {
 		res.Body = io.NopCloser(bytes.NewReader(body))
 		return res, nil
 	}
