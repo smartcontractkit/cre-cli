@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"regexp"
 	"strings"
 	"time"
@@ -28,7 +29,8 @@ type Client struct {
 }
 
 func New(creds *credentials.Credentials, environmentSet *environments.EnvironmentSet, l *zerolog.Logger) *Client {
-	gqlClient := graphql.NewClient(environmentSet.GraphQLURL)
+	httpClient := &http.Client{Transport: &statusCheckTransport{base: http.DefaultTransport, log: l}}
+	gqlClient := graphql.NewClient(environmentSet.GraphQLURL, graphql.WithHTTPClient(httpClient))
 	gqlClient.Log = func(s string) {
 		// Redact Authorization header to prevent token leakage in logs
 		redacted := redactSensitiveHeaders(s)
@@ -48,9 +50,8 @@ func (c *Client) Execute(ctx context.Context, req *graphql.Request, resp any) er
 		return fmt.Errorf("credentials not provided")
 	}
 	req.Header.Set("User-Agent", "cre-cli")
-	err := c.refreshTokenIfNeeded(ctx)
-	if err != nil {
-		return fmt.Errorf("token validity check failed: %w", err)
+	if err := c.RefreshTokenIfNeeded(ctx); err != nil {
+		return err
 	}
 
 	switch c.creds.AuthType {
@@ -63,8 +64,12 @@ func (c *Client) Execute(ctx context.Context, req *graphql.Request, resp any) er
 			req.Header.Set("Authorization", "Bearer "+c.creds.Tokens.AccessToken)
 		}
 	}
-	err = c.client.Run(ctx, req, resp)
+	err := c.client.Run(ctx, req, resp)
 	if err != nil {
+		var statusErr *HTTPStatusError
+		if errors.As(err, &statusErr) {
+			return statusErr
+		}
 		if strings.HasPrefix(err.Error(), "graphql: ") {
 			return errors.New(strings.Replace(err.Error(), "graphql: ", "cre api error: ", 1))
 		}
@@ -92,7 +97,17 @@ func (c *Client) refreshTokens(ctx context.Context) error {
 	return nil
 }
 
-func (c *Client) refreshTokenIfNeeded(ctx context.Context) error {
+// ErrTokenRefresh marks refresh failures, which must not be retried: a rotated refresh token can't be reused.
+var ErrTokenRefresh = errors.New("token validity check failed")
+
+func (c *Client) RefreshTokenIfNeeded(ctx context.Context) error {
+	if err := c.refreshIfExpiring(ctx); err != nil {
+		return fmt.Errorf("%w: %w", ErrTokenRefresh, err)
+	}
+	return nil
+}
+
+func (c *Client) refreshIfExpiring(ctx context.Context) error {
 	if c.creds == nil || c.creds.Tokens == nil || c.creds.Tokens.AccessToken == "" {
 		return nil
 	}

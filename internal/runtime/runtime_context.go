@@ -88,7 +88,7 @@ func (ctx *Context) FinalizeDeferredWorkflowOwner(cmd *cobra.Command) error {
 	)
 }
 
-func (ctx *Context) AttachCredentials(validationCtx context.Context, skipValidation bool) error {
+func (ctx *Context) AttachCredentials(validationCtx context.Context, skipValidation bool, onRetry authvalidation.RetryNotifier) error {
 	var err error
 
 	ctx.Credentials, err = credentials.New(ctx.Logger)
@@ -102,6 +102,7 @@ func (ctx *Context) AttachCredentials(validationCtx context.Context, skipValidat
 		}
 
 		validator := authvalidation.NewValidator(ctx.Credentials, ctx.EnvironmentSet, ctx.Logger)
+		validator.SetRetryNotifier(onRetry)
 		result, err := validator.ValidateCredentials(validationCtx, ctx.Credentials)
 		if err != nil {
 			return fmt.Errorf("%w: %w", ErrValidationFailed, err)

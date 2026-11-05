@@ -1,10 +1,13 @@
 package cmd
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/smartcontractkit/cre-cli/internal/credentials"
 )
 
 // buildCommandPath constructs a minimal cobra command hierarchy so that
@@ -51,5 +54,16 @@ func TestIsRegistryRPCCommand(t *testing.T) {
 			assert.Equal(t, tc.wantRPC, isRegistryRPCCommand(cmd),
 				"isRegistryRPCCommand(%q)", cmd.CommandPath())
 		})
+	}
+}
+
+func TestRejectedCredentialSuggestions(t *testing.T) {
+	t.Parallel()
+
+	apiKey := rejectedCredentialSuggestions(&credentials.Credentials{AuthType: credentials.AuthTypeApiKey})
+	assert.Contains(t, strings.Join(apiKey, " "), "CRE_API_KEY")
+
+	for _, creds := range []*credentials.Credentials{nil, {AuthType: credentials.AuthTypeBearer}} {
+		assert.Contains(t, strings.Join(rejectedCredentialSuggestions(creds), " "), "cre login")
 	}
 }
