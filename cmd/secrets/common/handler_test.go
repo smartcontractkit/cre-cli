@@ -152,6 +152,34 @@ func TestEncryptSecrets(t *testing.T) {
 		require.Len(t, enc, 1)
 	})
 
+	t.Run("success - on-chain key without HArray matches gateway key with HArray", func(t *testing.T) {
+		h, _, _ := newMockHandler(t)
+		h.OwnerAddress = "0xabc"
+		attachGatewayPublicKeyMock(t, h, vaultPublicKeyHex)
+		attachMockVaultDONResolver(t, h, stripHArrayHex(t, vaultPublicKeyHex))
+
+		enc, err := h.EncryptSecrets(UpsertSecretsInputs{{ID: "s", Value: []byte("v"), Namespace: "n"}}, "0xabc")
+		require.NoError(t, err)
+		require.Len(t, enc, 1)
+	})
+
+	t.Run("failure - same shape but different H does not match", func(t *testing.T) {
+		h, _, _ := newMockHandler(t)
+		h.OwnerAddress = "0xabc"
+		attachGatewayPublicKeyMock(t, h, vaultPublicKeyHex)
+		raw, err := hex.DecodeString(stripHArrayHex(t, vaultPublicKeyHex))
+		require.NoError(t, err)
+		var m map[string]any
+		require.NoError(t, json.Unmarshal(raw, &m))
+		m["H"] = m["G_bar"]
+		tampered, err := json.Marshal(m)
+		require.NoError(t, err)
+		attachMockVaultDONResolver(t, h, hex.EncodeToString(tampered))
+
+		_, err = h.EncryptSecrets(UpsertSecretsInputs{{ID: "s", Value: []byte("v"), Namespace: "n"}}, "0xabc")
+		require.ErrorContains(t, err, "does not match CapabilitiesRegistry")
+	})
+
 	t.Run("failure - gateway key does not match CapabilitiesRegistry", func(t *testing.T) {
 		h, _, _ := newMockHandler(t)
 		h.OwnerAddress = "0xabc"
@@ -493,4 +521,17 @@ func TestNewHandler_GatewayURL(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, "http://127.0.0.1:1234", h.GatewayURL)
 	})
+}
+
+func stripHArrayHex(t *testing.T, keyHex string) string {
+	t.Helper()
+	raw, err := hex.DecodeString(keyHex)
+	require.NoError(t, err)
+	var m map[string]any
+	require.NoError(t, json.Unmarshal(raw, &m))
+	require.Contains(t, m, "HArray")
+	delete(m, "HArray")
+	out, err := json.Marshal(m)
+	require.NoError(t, err)
+	return hex.EncodeToString(out)
 }

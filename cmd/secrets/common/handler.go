@@ -1,6 +1,7 @@
 package common
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"encoding/hex"
@@ -367,10 +368,67 @@ func (h *Handler) vaultMasterPublicKeyHex(ctx context.Context) (string, error) {
 	if !compare {
 		return gatewayKey, nil
 	}
-	if !strings.EqualFold(gatewayKey, onChainKey) {
+	if !vaultPublicKeysEqual(gatewayKey, onChainKey) {
 		return "", fmt.Errorf("vault public key from gateway does not match CapabilitiesRegistry")
 	}
 	return gatewayKey, nil
+}
+
+// tdh2PublicKeyJSON mirrors the JSON layout of a TDH2 public key (hex-encoded on the wire).
+// HArray (per-share verification points) is optional and not used for encryption, so the
+// gateway and CapabilitiesRegistry may legitimately differ in whether they include it.
+type tdh2PublicKeyJSON struct {
+	Group  string   `json:"Group"`
+	GBar   []byte   `json:"G_bar"`
+	H      []byte   `json:"H"`
+	HArray [][]byte `json:"HArray"`
+}
+
+// vaultPublicKeysEqual reports whether two hex-encoded TDH2 public keys describe the same key.
+// Raw hex equality is tried first; otherwise the keys are decoded and Group, G_bar and H are
+// compared (HArray only when both keys carry it), so differing serializations of the same key match.
+func vaultPublicKeysEqual(a, b string) bool {
+	if strings.EqualFold(a, b) {
+		return true
+	}
+	ka, err := decodeTDH2PublicKeyJSON(a)
+	if err != nil {
+		return false
+	}
+	kb, err := decodeTDH2PublicKeyJSON(b)
+	if err != nil {
+		return false
+	}
+	if ka.Group != kb.Group || !bytes.Equal(ka.GBar, kb.GBar) || !bytes.Equal(ka.H, kb.H) {
+		return false
+	}
+	if len(ka.HArray) == 0 || len(kb.HArray) == 0 {
+		return true
+	}
+	if len(ka.HArray) != len(kb.HArray) {
+		return false
+	}
+	for i := range ka.HArray {
+		if !bytes.Equal(ka.HArray[i], kb.HArray[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+func decodeTDH2PublicKeyJSON(keyHex string) (*tdh2PublicKeyJSON, error) {
+	raw, err := hex.DecodeString(keyHex)
+	if err != nil {
+		return nil, err
+	}
+	var k tdh2PublicKeyJSON
+	if err := json.Unmarshal(raw, &k); err != nil {
+		return nil, err
+	}
+	if k.Group == "" || len(k.GBar) == 0 || len(k.H) == 0 {
+		return nil, fmt.Errorf("incomplete TDH2 public key")
+	}
+	return &k, nil
 }
 
 // ResolveEffectiveOwner returns the checksummed workflow owner address for owner-key vault operations.
