@@ -5,13 +5,13 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 
+	cronservice "github.com/smartcontractkit/capabilities/scheduler/cron/service"
 	corekeys "github.com/smartcontractkit/chainlink-common/keystore/corekeys"
 	"github.com/smartcontractkit/chainlink-common/keystore/corekeys/ocr2key"
 	capreg "github.com/smartcontractkit/chainlink-common/pkg/capabilities/registry"
 	confhttpserver "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/actions/confidentialhttp/server"
 	httpserver "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/actions/http/server"
 	consensusserver "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/consensus/server"
-	crontrigger "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/triggers/cron/server"
 	httptrigger "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/triggers/http/server"
 	"github.com/smartcontractkit/chainlink-common/pkg/config"
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
@@ -21,19 +21,15 @@ import (
 
 // ManualTriggers holds chain-agnostic trigger services used in simulation.
 type ManualTriggers struct {
-	ManualCronTrigger *fakes.ManualCronTriggerService
+	// Capabilities are the capabilities from the capabilities repo.
+	Capabilities      *Capabilities
 	ManualHTTPTrigger *ManualHTTPTriggerService
 }
 
 // NewManualTriggerCapabilities creates and registers cron and HTTP trigger capabilities.
 // These are chain-agnostic and shared across all chain types.
-func NewManualTriggerCapabilities(ctx context.Context, lggr logger.Logger, registry *capreg.Registry, httpTriggerPort int, limits *SimulationLimits) (*ManualTriggers, error) {
-	manualCronTrigger, err := fakes.NewManualCronTriggerService(lggr)
-	if err != nil {
-		return nil, err
-	}
-	manualCronTriggerServer := crontrigger.NewCronServer(manualCronTrigger)
-	if err := registry.Add(ctx, manualCronTriggerServer); err != nil {
+func NewManualTriggerCapabilities(ctx context.Context, lggr logger.Logger, registry *capreg.Registry, caps *Capabilities, httpTriggerPort int, limits *SimulationLimits) (*ManualTriggers, error) {
+	if err := caps.Add(ctx, registry, cronservice.New); err != nil {
 		return nil, err
 	}
 
@@ -49,39 +45,19 @@ func NewManualTriggerCapabilities(ctx context.Context, lggr logger.Logger, regis
 	}
 
 	return &ManualTriggers{
-		ManualCronTrigger: manualCronTrigger,
+		Capabilities:      caps,
 		ManualHTTPTrigger: manualHTTPTrigger,
 	}, nil
 }
 
-// Start starts cron and HTTP trigger services.
+// Start starts the HTTP trigger service. Capabilities from the capabilities repo are started when they are built.
 func (m *ManualTriggers) Start(ctx context.Context) error {
-	err := m.ManualCronTrigger.Start(ctx)
-	if err != nil {
-		return err
-	}
-
-	err = m.ManualHTTPTrigger.Start(ctx)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return m.ManualHTTPTrigger.Start(ctx)
 }
 
-// Close closes cron and HTTP trigger services.
+// Close closes the HTTP trigger service. Capabilities from the capabilities repo are closed with their services.
 func (m *ManualTriggers) Close() error {
-	err := m.ManualCronTrigger.Close()
-	if err != nil {
-		return err
-	}
-
-	err = m.ManualHTTPTrigger.Close()
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return m.ManualHTTPTrigger.Close()
 }
 
 // NewFakeActionCapabilities builds faked capabilities, then registers them with the capability registry.
