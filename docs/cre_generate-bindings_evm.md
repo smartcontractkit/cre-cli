@@ -14,6 +14,10 @@ For example, IERC20.abi generates bindings in generated/ierc20/ package.
 Both raw ABI files (*.abi) and JSON artifact files (*.json) are supported.
 For JSON files the ABI is read from the top-level "abi" field.
 
+TypeScript report helpers sign ABI-encoded arguments by default.
+Use --include-function-selector to restore legacy full-calldata reports
+for receivers that expect the 4-byte function selector. Go bindings are unaffected.
+
 ```
 cre generate-bindings evm [optional flags]
 ```
@@ -27,11 +31,12 @@ cre generate-bindings evm [optional flags]
 ### Options
 
 ```
-  -a, --abi string            Path to ABI directory (defaults to contracts/evm/src/abi/). Supports *.abi and *.json files
-  -h, --help                  help for evm
-  -l, --language string       Target language: go, typescript (auto-detected from project files when omitted)
-  -k, --pkg string            Base package name (each contract gets its own subdirectory) (default "bindings")
-  -p, --project-root string   Path to project root directory (defaults to current directory)
+  -a, --abi string                  Path to ABI directory (defaults to contracts/evm/src/abi/). Supports *.abi and *.json files
+  -h, --help                        help for evm
+      --include-function-selector   Include the function selector in TypeScript report payloads (legacy behavior)
+  -l, --language string             Target language: go, typescript (auto-detected from project files when omitted)
+  -k, --pkg string                  Base package name (each contract gets its own subdirectory) (default "bindings")
+  -p, --project-root string         Path to project root directory (defaults to current directory)
 ```
 
 ### Options inherited from parent commands
