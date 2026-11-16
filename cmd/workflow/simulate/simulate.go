@@ -121,7 +121,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	simulateCmd.Flags().Int("trigger-index", -1, "Index of the trigger to run (0-based)")
 	simulateCmd.Flags().String("http-payload", "", "HTTP trigger payload as JSON string or path to JSON file")
 	simulateCmd.Flags().Int("http-trigger-port", defaultHTTPTriggerServerPort, "Port used by the local HTTP trigger server")
-	simulateCmd.Flags().Bool("listen", false, "Listen for HTTP requests or supported log triggers and run the simulator for each match (not supported by cron)")
+	simulateCmd.Flags().Bool("listen", false, "Listen for HTTP requests, cron schedules or supported log triggers and run the simulator for each match")
 
 	// Register chain-type-specific CLI flags (e.g., --evm-tx-hash).
 	chain.RegisterAllCLIFlags(simulateCmd)
@@ -529,15 +529,18 @@ func run(
 			beholderStarted = true
 		}
 
+		caps := initCapabilities(lggr.Named("Capabilities"))
+
 		// Register chain-agnostic cron and HTTP triggers
 		triggerLggr := lggr.Named("TriggerCapabilities")
 		var err error
-		manualTriggerCaps, err = NewManualTriggerCapabilities(ctx, triggerLggr, registry, inputs.HTTPTriggerPort, simLimits)
+		manualTriggerCaps, err = NewManualTriggerCapabilities(ctx, triggerLggr, registry, caps, inputs.HTTPTriggerPort, simLimits)
+		srvcs = append(srvcs, caps.Services...)
 		if err != nil {
 			setLifecycleErr(fmt.Errorf("failed to create trigger capabilities: %w", err))
 			return registry, srvcs
 		}
-		srvcs = append(srvcs, manualTriggerCaps.ManualCronTrigger, manualTriggerCaps.ManualHTTPTrigger)
+		srvcs = append(srvcs, manualTriggerCaps.ManualHTTPTrigger)
 
 		// nil capLimits disables enforcement.
 		var capLimits *cresettings.Workflows
@@ -1044,24 +1047,27 @@ func makeBeforeStartInteractive(holder *TriggerInfoAndBeforeStart, inputs Inputs
 		triggerRegistrationID := fmt.Sprintf("trigger_reg_1111111111111111111111111111111111111111111111111111111111111111_%d", triggerIndex)
 		trigger := holder.TriggerToRun.Id
 		manualTriggerCaps := manualTriggerCapsGetter()
+		manualTriggerCaps.Capabilities.Select(triggerRegistrationID)
 
 		switch trigger {
 		case "cron-trigger@1.0.0":
+			caps := manualTriggerCaps.Capabilities
+			holder.ListenSupported = true
 			holder.TriggerFunc = func() error {
-				skipWaitSignal := make(chan struct{}, 1)
-
 				userPromptCtx, cancel := context.WithCancel(ctx)
 				defer cancel()
 
-				go func() {
-					ui.Line()
-					pressed := ui.WaitForEnter(userPromptCtx, "Cron scheduler started. Press Enter to skip waiting...")
-					if pressed {
-						skipWaitSignal <- struct{}{}
-					}
-				}()
+				// Listening runs on the schedule, so only a single run can skip ahead to it.
+				if !inputs.Listen {
+					go func() {
+						ui.Line()
+						if ui.WaitForEnter(userPromptCtx, "Cron scheduler started. Press Enter to skip waiting...") {
+							caps.Clock.Skip()
+						}
+					}()
+				}
 
-				return manualTriggerCaps.ManualCronTrigger.ManualTrigger(ctx, triggerRegistrationID, skipWaitSignal)
+				return caps.WaitForTrigger(ctx)
 			}
 		case "http-trigger@1.0.0-alpha":
 			payload, err := getHTTPTriggerPayloadFromInput(inputs.InvocationDir, inputs.HTTPPayload)
@@ -1187,14 +1193,19 @@ func makeBeforeStartNonInteractive(holder *TriggerInfoAndBeforeStart, inputs Inp
 		triggerRegistrationID := fmt.Sprintf("trigger_reg_1111111111111111111111111111111111111111111111111111111111111111_%d", inputs.TriggerIndex)
 		trigger := holder.TriggerToRun.Id
 		manualTriggerCaps := manualTriggerCapsGetter()
+		manualTriggerCaps.Capabilities.Select(triggerRegistrationID)
 
 		switch trigger {
 		case "cron-trigger@1.0.0":
+			caps := manualTriggerCaps.Capabilities
+			holder.ListenSupported = true
 			holder.TriggerFunc = func() error {
-				skipWaitSignal := make(chan struct{}, 1)
-				// With cron schedule on non-interactive mode
-				skipWaitSignal <- struct{}{}
-				return manualTriggerCaps.ManualCronTrigger.ManualTrigger(ctx, triggerRegistrationID, skipWaitSignal)
+				// A single non-interactive run does not wait for the schedule. Listening runs on it.
+				if !inputs.Listen {
+					caps.Clock.Skip()
+				}
+
+				return caps.WaitForTrigger(ctx)
 			}
 		case "http-trigger@1.0.0-alpha":
 			if strings.TrimSpace(inputs.HTTPPayload) == "" {

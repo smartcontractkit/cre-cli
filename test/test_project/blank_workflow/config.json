@@ -1,5 +1,5 @@
 {
-  "schedule": "*/3 * * * * *",
+  "schedule": "*/30 * * * * *",
   "url": "https://api.real-time-reserves.verinumus.io",
   "evms": [
     {
