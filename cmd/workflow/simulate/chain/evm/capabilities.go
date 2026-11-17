@@ -13,6 +13,7 @@ import (
 	"github.com/smartcontractkit/chainlink/v2/core/capabilities/fakes"
 
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain"
+	"github.com/smartcontractkit/cre-cli/internal/migration"
 )
 
 // EVMChainCapabilities holds the EVM chain capability servers created for simulation.
@@ -54,7 +55,7 @@ func NewEVMChainCapabilities(
 
 		manualEVM := NewManualEVMChain(evmCap)
 		evmServer := evmserver.NewClientServer(manualEVM)
-		if err := registry.Add(ctx, evmServer); err != nil {
+		if err := registry.Add(ctx, migration.Wrap(evmServer)); err != nil {
 			return nil, err
 		}
 

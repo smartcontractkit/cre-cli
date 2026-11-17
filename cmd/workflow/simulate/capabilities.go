@@ -17,6 +17,8 @@ import (
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	"github.com/smartcontractkit/chainlink-common/pkg/services"
 	"github.com/smartcontractkit/chainlink/v2/core/capabilities/fakes"
+
+	"github.com/smartcontractkit/cre-cli/internal/migration"
 )
 
 // ManualTriggers holds chain-agnostic trigger services used in simulation.
@@ -40,7 +42,7 @@ func NewManualTriggerCapabilities(ctx context.Context, lggr logger.Logger, regis
 	}
 	manualHTTPTrigger := NewManualHTTPTriggerService(lggr, httpTriggerPort, httpTriggerRateLimit)
 	manualHTTPTriggerServer := httptrigger.NewHTTPServer(manualHTTPTrigger)
-	if err := registry.Add(ctx, manualHTTPTriggerServer); err != nil {
+	if err := registry.Add(ctx, migration.Wrap(manualHTTPTriggerServer)); err != nil {
 		return nil, err
 	}
 
@@ -79,7 +81,7 @@ func NewFakeActionCapabilities(ctx context.Context, lggr logger.Logger, registry
 		consensusCap = NewLimitedConsensusNoDAG(fakeConsensusNoDAG, limits)
 	}
 	fakeConsensusServer := consensusserver.NewConsensusServer(consensusCap)
-	if err := registry.Add(ctx, fakeConsensusServer); err != nil {
+	if err := registry.Add(ctx, migration.Wrap(fakeConsensusServer)); err != nil {
 		return nil, err
 	}
 	caps = append(caps, fakeConsensusServer)
@@ -91,7 +93,7 @@ func NewFakeActionCapabilities(ctx context.Context, lggr logger.Logger, registry
 		httpCap = NewLimitedHTTPAction(httpAction, limits)
 	}
 	httpActionServer := httpserver.NewClientServer(httpCap)
-	if err := registry.Add(ctx, httpActionServer); err != nil {
+	if err := registry.Add(ctx, migration.Wrap(httpActionServer)); err != nil {
 		return nil, err
 	}
 	caps = append(caps, httpActionServer)
@@ -103,7 +105,7 @@ func NewFakeActionCapabilities(ctx context.Context, lggr logger.Logger, registry
 		confHTTPCap = NewLimitedConfidentialHTTPAction(confHTTPAction, limits, lggr)
 	}
 	confHTTPActionServer := confhttpserver.NewClientServer(confHTTPCap)
-	if err := registry.Add(ctx, confHTTPActionServer); err != nil {
+	if err := registry.Add(ctx, migration.Wrap(confHTTPActionServer)); err != nil {
 		return nil, err
 	}
 	caps = append(caps, confHTTPActionServer)

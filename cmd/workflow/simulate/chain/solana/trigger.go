@@ -11,6 +11,7 @@ import (
 	solanarpc "github.com/gagliardetto/solana-go/rpc"
 	"google.golang.org/protobuf/types/known/anypb"
 
+	"github.com/smartcontractkit/capabilities/libs/capability/feature"
 	solcap "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/chain-capabilities/solana"
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	"github.com/smartcontractkit/chainlink-solana/pkg/solana/logpoller"
@@ -168,7 +169,7 @@ func decodeLogTriggerConfig(payload *anypb.Any) (*solcap.FilterLogTriggerRequest
 		return nil, fmt.Errorf("trigger subscription has no payload")
 	}
 	cfg := &solcap.FilterLogTriggerRequest{}
-	if err := payload.UnmarshalTo(cfg); err != nil {
+	if _, err := feature.UnmarshalAny(payload, cfg); err != nil {
 		return nil, fmt.Errorf("payload is not a FilterLogTriggerRequest: %w", err)
 	}
 	return cfg, nil
