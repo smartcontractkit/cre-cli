@@ -3,6 +3,7 @@ package registry
 import (
 	"github.com/spf13/cobra"
 
+	"github.com/smartcontractkit/cre-cli/cmd/registry/limits"
 	"github.com/smartcontractkit/cre-cli/cmd/registry/list"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
 )
@@ -15,6 +16,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 	}
 
 	registryCmd.AddCommand(list.New(runtimeContext))
+	registryCmd.AddCommand(limits.New(runtimeContext))
 
 	return registryCmd
 }

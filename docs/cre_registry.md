@@ -32,5 +32,6 @@ cre registry [optional flags]
 ### SEE ALSO
 
 * [cre](cre.md)	 - CRE CLI tool
+* [cre registry limits](cre_registry_limits.md)	 - Shows workflow usage and limits for the current registries
 * [cre registry list](cre_registry_list.md)	 - Lists available workflow registries for the current environment
 
