@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/smartcontractkit/cre-cli/cmd/client"
+	cmdcommon "github.com/smartcontractkit/cre-cli/cmd/common"
 	workflowcommon "github.com/smartcontractkit/cre-cli/cmd/workflow/common"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
 	"github.com/smartcontractkit/cre-cli/internal/runtime"
@@ -123,6 +124,8 @@ func (h *handler) Execute(ctx context.Context) error {
 		)
 		return fmt.Errorf("missing required flags for --non-interactive mode")
 	}
+
+	cmdcommon.WarnIfPrivateKeyOwner(h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerType, "Workflow pause")
 
 	workflowcommon.DisplayWorkflowDetails(
 		h.settings,

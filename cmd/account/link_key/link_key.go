@@ -167,6 +167,7 @@ func (h *handler) Execute(ctx context.Context, in Inputs) error {
 	}
 
 	h.displayDetails()
+	cmdCommon.WarnIfPrivateKeyOwner(h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerType, "Key linking")
 
 	if in.WorkflowOwnerLabel == "" {
 		if in.NonInteractive {

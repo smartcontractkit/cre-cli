@@ -247,3 +247,15 @@ func WriteChangesetFile(fileName string, changesetFile *inttypes.ChangesetFile, 
 	ui.Line()
 	return nil
 }
+
+// WarnIfPrivateKeyOwner warns that the operation is signed with a private key (EOA)
+// and suggests multi-sig ownership instead. It is a no-op for any other owner type.
+func WarnIfPrivateKeyOwner(ownerType, operation string) {
+	if ownerType != constants.WorkflowOwnerTypeEOA {
+		return
+	}
+	ui.Warning(fmt.Sprintf(
+		"%s is using private-key ownership. Use multi-sig ownership with --unsigned or --changeset for better security.",
+		operation,
+	))
+}
