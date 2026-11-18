@@ -16,6 +16,7 @@ import (
 	"golang.org/x/time/rate"
 	"google.golang.org/protobuf/types/known/anypb"
 
+	"github.com/smartcontractkit/capabilities/libs/capability/feature"
 	evmpb "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/chain-capabilities/evm"
 	"github.com/smartcontractkit/chainlink-common/pkg/config"
 	valuespb "github.com/smartcontractkit/chainlink-protos/cre/go/values/pb"
@@ -247,7 +248,7 @@ func decodeLogTriggerConfig(payload *anypb.Any) (*evmpb.FilterLogTriggerRequest,
 		return nil, fmt.Errorf("trigger subscription has no payload")
 	}
 	cfg := &evmpb.FilterLogTriggerRequest{}
-	if err := payload.UnmarshalTo(cfg); err != nil {
+	if _, err := feature.UnmarshalAny(payload, cfg); err != nil {
 		return nil, fmt.Errorf("payload is not a FilterLogTriggerRequest: %w", err)
 	}
 	return cfg, nil

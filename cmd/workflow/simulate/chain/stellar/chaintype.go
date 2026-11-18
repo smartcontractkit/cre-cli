@@ -19,6 +19,7 @@ import (
 	"github.com/smartcontractkit/chainlink-stellar/capabilities/fakes"
 
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain"
+	"github.com/smartcontractkit/cre-cli/internal/migration"
 	crpc "github.com/smartcontractkit/cre-cli/internal/rpc"
 	"github.com/smartcontractkit/cre-cli/internal/settings"
 	"github.com/smartcontractkit/cre-cli/internal/ui"
@@ -184,7 +185,7 @@ func (ct *StellarChainType) RegisterCapabilities(ctx context.Context, cfg chain.
 			return nil, fmt.Errorf("stellar: selector %d: %w", sel, err)
 		}
 		server := stellarserver.NewClientServer(NewLimitedStellarChain(dc, lim))
-		if err = cfg.Registry.Add(ctx, server); err != nil {
+		if err = cfg.Registry.Add(ctx, migration.Wrap(server)); err != nil {
 			return nil, fmt.Errorf("register stellar capability for selector %d: %w", sel, err)
 		}
 		built[sel] = dc

@@ -13,6 +13,7 @@ import (
 	solanafakes "github.com/smartcontractkit/chainlink-solana/contracts/capabilities/fakes"
 
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain"
+	"github.com/smartcontractkit/cre-cli/internal/migration"
 )
 
 // SolanaChainCapabilities holds the per-selector FakeSolanaChain instances
@@ -53,7 +54,7 @@ func NewSolanaChainCapabilities(
 		}
 		capability := NewLimitedSolanaChain(fc, limits)
 		server := solanaserver.NewClientServer(capability)
-		if err := registry.Add(ctx, server); err != nil {
+		if err := registry.Add(ctx, migration.Wrap(server)); err != nil {
 			return nil, fmt.Errorf("register solana capability for selector %d: %w", sel, err)
 		}
 		chains[sel] = fc
