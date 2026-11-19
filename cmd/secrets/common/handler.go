@@ -582,6 +582,8 @@ func (h *Handler) Execute(
 		return fmt.Errorf("unsupported method %q (expected %q or %q)", method, vaulttypes.MethodSecretsCreate, vaulttypes.MethodSecretsUpdate)
 	}
 
+	cmdCommon.WarnIfPrivateKeyOwner(h.Settings.Workflow.UserWorkflowSettings.WorkflowOwnerType, "Secrets request")
+
 	ownerAddr := common.HexToAddress(owner)
 
 	allowlisted, err := h.Wrc.IsRequestAllowlisted(ctx, ownerAddr, digest)

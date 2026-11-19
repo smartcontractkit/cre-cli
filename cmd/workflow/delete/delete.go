@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/smartcontractkit/cre-cli/cmd/client"
+	cmdcommon "github.com/smartcontractkit/cre-cli/cmd/common"
 	workflowcommon "github.com/smartcontractkit/cre-cli/cmd/workflow/common"
 	"github.com/smartcontractkit/cre-cli/internal/credentials"
 	"github.com/smartcontractkit/cre-cli/internal/environments"
@@ -141,6 +142,8 @@ func (h *handler) Execute(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+
+	cmdcommon.WarnIfPrivateKeyOwner(h.settings.Workflow.UserWorkflowSettings.WorkflowOwnerType, "Workflow delete")
 
 	workflowcommon.DisplayWorkflowDetails(
 		h.settings,

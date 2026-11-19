@@ -144,6 +144,8 @@ func Execute(ctx context.Context, h *common.Handler, namespace string, duration 
 		return h.ExecuteBrowserVaultAuthorization(context.Background(), vaulttypes.MethodSecretsList, digest, body, owner)
 	}
 
+	cmdCommon.WarnIfPrivateKeyOwner(h.Settings.Workflow.UserWorkflowSettings.WorkflowOwnerType, "Secrets list")
+
 	ownerAddr := ethcommon.HexToAddress(owner)
 
 	allowlisted, err := h.Wrc.IsRequestAllowlisted(ctx, ownerAddr, digest)

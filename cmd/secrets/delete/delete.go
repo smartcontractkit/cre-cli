@@ -191,6 +191,8 @@ func Execute(ctx context.Context, h *common.Handler, inputs DeleteSecretsInputs,
 		return h.ParseVaultGatewayResponse(vaulttypes.MethodSecretsDelete, requestID, respBody)
 	}
 
+	cmdCommon.WarnIfPrivateKeyOwner(h.Settings.Workflow.UserWorkflowSettings.WorkflowOwnerType, "Secrets delete")
+
 	ownerAddr := ethcommon.HexToAddress(owner)
 
 	allowlisted, err := h.Wrc.IsRequestAllowlisted(ctx, ownerAddr, digest)
