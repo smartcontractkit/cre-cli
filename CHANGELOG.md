@@ -1,5 +1,13 @@
 # cre-cli
 
+## 1.39.1
+
+### Patch Changes
+
+- [#628](https://github.com/smartcontractkit/cre-cli/pull/628) [`85ddf4f`](https://github.com/smartcontractkit/cre-cli/commit/85ddf4fa22d8b8a9970d1cf31adb88440d9b4df9) Thanks [@anirudhwarrier](https://github.com/anirudhwarrier)! - Fix intermittent "unable to retrieve organization info" errors during credential validation. Non-2xx responses from the CRE API are now reported with their HTTP status instead of being decoded as empty organization data, transient failures (429, 5xx, connection resets, timeouts) are retried with jittered backoff, and the error now states which organization fields were missing.
+
+- [#639](https://github.com/smartcontractkit/cre-cli/pull/639) [`ffe77b4`](https://github.com/smartcontractkit/cre-cli/commit/ffe77b43e892b3fa151b7ff7ef2effcd84195b62) Thanks [@timothyF95](https://github.com/timothyF95)! - Warn about private-key (EOA) ownership on every command that signs with `CRE_ETH_PRIVATE_KEY`, not just `workflow deploy`. `workflow pause`, `workflow activate`, `workflow delete`, `account link-key`, and `secrets create/update/delete/list` now print a warning that suggests multi-sig ownership with `--unsigned` or `--changeset`.
+
 ## 1.39.0
 
 ### Minor Changes
