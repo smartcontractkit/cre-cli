@@ -19,13 +19,14 @@ import (
 )
 
 type Inputs struct {
-	ProjectRoot string `validate:"required,dir" cli:"--project-root"`
-	GoLang      bool
-	TypeScript  bool
-	AbiPath     string `validate:"required,path_read" cli:"--abi"`
-	PkgName     string `validate:"required" cli:"--pkg"`
-	GoOutPath   string // contracts/evm/src/generated — set when GoLang is true
-	TSOutPath   string // contracts/evm/ts/generated — set when TypeScript is true
+	ProjectRoot             string `validate:"required,dir" cli:"--project-root"`
+	GoLang                  bool
+	TypeScript              bool
+	IncludeFunctionSelector bool
+	AbiPath                 string `validate:"required,path_read" cli:"--abi"`
+	PkgName                 string `validate:"required" cli:"--pkg"`
+	GoOutPath               string // contracts/evm/src/generated — set when GoLang is true
+	TSOutPath               string // contracts/evm/ts/generated — set when TypeScript is true
 }
 
 func New(runtimeContext *runtime.Context) *cobra.Command {
@@ -40,7 +41,11 @@ Each contract gets its own package subdirectory to avoid naming conflicts.
 For example, IERC20.abi generates bindings in generated/ierc20/ package.
 
 Both raw ABI files (*.abi) and JSON artifact files (*.json) are supported.
-For JSON files the ABI is read from the top-level "abi" field.`,
+For JSON files the ABI is read from the top-level "abi" field.
+
+TypeScript report helpers sign ABI-encoded arguments by default.
+Use --include-function-selector to restore legacy full-calldata reports
+for receivers that expect the 4-byte function selector. Go bindings are unaffected.`,
 		Example: "  cre generate-bindings evm",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			handler := newHandler(runtimeContext)
@@ -60,6 +65,7 @@ For JSON files the ABI is read from the top-level "abi" field.`,
 	generateBindingsCmd.Flags().StringP("language", "l", "", "Target language: go, typescript (auto-detected from project files when omitted)")
 	generateBindingsCmd.Flags().StringP("abi", "a", "", "Path to ABI directory (defaults to contracts/evm/src/abi/). Supports *.abi and *.json files")
 	generateBindingsCmd.Flags().StringP("pkg", "k", "bindings", "Base package name (each contract gets its own subdirectory)")
+	generateBindingsCmd.Flags().Bool("include-function-selector", false, "Include the function selector in TypeScript report payloads (legacy behavior)")
 
 	return generateBindingsCmd
 }
@@ -150,13 +156,14 @@ func (h *handler) ResolveInputs(v *viper.Viper) (Inputs, error) {
 	}
 
 	return Inputs{
-		ProjectRoot: projectRoot,
-		GoLang:      goLang,
-		TypeScript:  typescript,
-		AbiPath:     abiPath,
-		PkgName:     pkgName,
-		GoOutPath:   goOutPath,
-		TSOutPath:   tsOutPath,
+		ProjectRoot:             projectRoot,
+		GoLang:                  goLang,
+		TypeScript:              typescript,
+		IncludeFunctionSelector: v.GetBool("include-function-selector"),
+		AbiPath:                 abiPath,
+		PkgName:                 pkgName,
+		GoOutPath:               goOutPath,
+		TSOutPath:               tsOutPath,
 	}, nil
 }
 
@@ -305,6 +312,7 @@ func (h *handler) processAbiDirectory(inputs Inputs) error {
 				abiFile,
 				contractName,
 				outputFile,
+				TSBindingOptions{IncludeFunctionSelector: inputs.IncludeFunctionSelector},
 			)
 			if err != nil {
 				return fmt.Errorf("failed to generate TypeScript bindings for %s: %w", contractName, err)
@@ -363,6 +371,7 @@ func (h *handler) processSingleAbi(inputs Inputs) error {
 			inputs.AbiPath,
 			contractName,
 			outputFile,
+			TSBindingOptions{IncludeFunctionSelector: inputs.IncludeFunctionSelector},
 		); err != nil {
 			return err
 		}
