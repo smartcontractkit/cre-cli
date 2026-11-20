@@ -34,9 +34,6 @@ const query = `query GetRegistryQuotas {
   }
 }`
 
-// ErrNotSupported is returned when the CRE API does not serve registry quotas yet.
-var ErrNotSupported = errors.New("registry quotas are not available from the CRE API yet")
-
 // ErrPermissionDenied is returned when the caller lacks the platform:limits:read permission.
 var ErrPermissionDenied = errors.New("you do not have permission to read registry quotas (requires platform:limits:read)")
 
@@ -126,7 +123,7 @@ func (e *PartialError) Unwrap() error { return e.Err }
 //
 // On success it returns the quotas and a nil error. When the API returned data with
 // errors, it returns the quotas and a *PartialError. Otherwise it returns nil and an
-// error, which is ErrNotSupported or ErrPermissionDenied where those apply.
+// error, which is ErrPermissionDenied when the caller lacks the permission.
 func Fetch(ctx context.Context, client Executor) (*Quotas, error) {
 	var resp struct {
 		GetRegistryQuotas *Quotas `json:"getRegistryQuotas"`
@@ -148,12 +145,8 @@ func Fetch(ctx context.Context, client Executor) (*Quotas, error) {
 
 func classify(err error) error {
 	msg := err.Error()
-	switch {
-	case strings.Contains(msg, "Cannot query field") && strings.Contains(msg, "getRegistryQuotas"):
-		return fmt.Errorf("%w: %w", ErrNotSupported, err)
-	case strings.Contains(msg, "platform:limits:read"):
+	if strings.Contains(msg, "platform:limits:read") {
 		return fmt.Errorf("%w: %w", ErrPermissionDenied, err)
-	default:
-		return fmt.Errorf("fetch registry quotas: %w", err)
 	}
+	return fmt.Errorf("fetch registry quotas: %w", err)
 }

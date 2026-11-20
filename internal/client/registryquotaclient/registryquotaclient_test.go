@@ -69,13 +69,6 @@ func TestFetch_PartialData(t *testing.T) {
 }
 
 func TestFetch_Errors(t *testing.T) {
-	t.Run("server without the query", func(t *testing.T) {
-		_, err := registryquotaclient.Fetch(context.Background(), &fakeExecutor{
-			err: errors.New(`cre api error: Cannot query field "getRegistryQuotas" on type "Query".`),
-		})
-		require.ErrorIs(t, err, registryquotaclient.ErrNotSupported)
-	})
-
 	t.Run("missing permission", func(t *testing.T) {
 		_, err := registryquotaclient.Fetch(context.Background(), &fakeExecutor{
 			data: `{"getRegistryQuotas": null}`,
@@ -87,7 +80,7 @@ func TestFetch_Errors(t *testing.T) {
 	t.Run("other error", func(t *testing.T) {
 		_, err := registryquotaclient.Fetch(context.Background(), &fakeExecutor{err: errors.New("connection refused")})
 		require.ErrorContains(t, err, "fetch registry quotas: connection refused")
-		assert.NotErrorIs(t, err, registryquotaclient.ErrNotSupported)
+		assert.NotErrorIs(t, err, registryquotaclient.ErrPermissionDenied)
 	})
 
 	t.Run("no data and no error", func(t *testing.T) {

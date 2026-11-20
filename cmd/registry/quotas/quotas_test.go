@@ -212,9 +212,4 @@ func TestQuotas_FetchErrors(t *testing.T) {
 		_, _, err := run(t, &fakeExecutor{err: errors.New("cre api error: unauthorized: user does not have platform:limits:read permission")}, "", "")
 		require.ErrorIs(t, err, registryquotaclient.ErrPermissionDenied)
 	})
-
-	t.Run("older API", func(t *testing.T) {
-		_, _, err := run(t, &fakeExecutor{err: errors.New(`cre api error: Cannot query field "getRegistryQuotas" on type "Query".`)}, "", "")
-		require.ErrorIs(t, err, registryquotaclient.ErrNotSupported)
-	})
 }
