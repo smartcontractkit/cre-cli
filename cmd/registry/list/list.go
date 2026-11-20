@@ -56,6 +56,8 @@ under the ` + "`deployment-registry`" + ` key to target that registry, e.g.:
 			ui.Code("    user-workflow:")
 			ui.Code(fmt.Sprintf("      deployment-registry: %q", registries[0].ID))
 			ui.Line()
+			ui.Dim("Run `cre registry quotas` to see your usage against registry quotas.")
+			ui.Line()
 
 			return nil
 		},

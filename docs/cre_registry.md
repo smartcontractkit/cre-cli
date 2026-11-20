@@ -4,7 +4,7 @@ Manages workflow registries
 
 ### Synopsis
 
-The registry command lets you view and inspect the workflow registries available for your organization.
+The registry command lets you view and inspect the workflow registries available for your organization, and your usage against their quotas.
 
 ```
 cre registry [optional flags]
@@ -33,4 +33,5 @@ cre registry [optional flags]
 
 * [cre](cre.md)	 - CRE CLI tool
 * [cre registry list](cre_registry_list.md)	 - Lists available workflow registries for the current environment
+* [cre registry quotas](cre_registry_quotas.md)	 - Shows workflow and linked-owner usage against your registry quotas
 
