@@ -282,24 +282,6 @@ func unzip(assetPath string) (string, error) {
 	return "", errors.New("binary not found in zip")
 }
 
-func replaceSelf(newBin string) error {
-	self, err := os.Executable()
-	if err != nil {
-		return err
-	}
-	// On Windows, need to move after process exit
-	if osruntime.GOOS == "windows" {
-		ui.Warning("Automatic replacement not supported on Windows")
-		ui.Dim("Please close all running cre processes and manually replace the binary at:")
-		ui.Code(self)
-		ui.Dim("New binary downloaded at:")
-		ui.Code(newBin)
-		return fmt.Errorf("automatic replacement not supported on Windows")
-	}
-	// On Unix, can replace in-place
-	return os.Rename(newBin, self)
-}
-
 // Run accepts the currentVersion string and a force flag that overrides the
 // fail-closed behavior when versions cannot be compared.
 func Run(currentVersion string, force bool) error {
@@ -395,11 +377,21 @@ func Run(currentVersion string, force bool) error {
 		return fmt.Errorf("release signature verification failed: %w", err)
 	}
 
-	spinner.Update("Installing...")
 	if err := os.Chmod(binPath, 0755); err != nil {
 		spinner.Stop()
 		return fmt.Errorf("failed to set permissions: %w", err)
 	}
+
+	spinner.Update("Verifying binary...")
+	if err := verifyBinaryRuns(binPath); err != nil {
+		spinner.Stop()
+		if osruntime.GOOS == "linux" {
+			return fmt.Errorf("pre-install binary verification failed: %w; try downloading the compatible build manually: cre_linux_amd64_ldd2-35", err)
+		}
+		return fmt.Errorf("pre-install binary verification failed: %w", err)
+	}
+
+	spinner.Update("Installing...")
 	if err := replaceSelf(binPath); err != nil {
 		spinner.Stop()
 		return fmt.Errorf("failed to replace binary: %w", err)
