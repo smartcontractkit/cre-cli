@@ -596,6 +596,7 @@ func isLoadSettings(cmd *cobra.Command) bool {
 		"cre templates remove":          {},
 		"cre registry":                  {},
 		"cre registry list":             {},
+		"cre registry quotas":           {},
 		"cre":                           {},
 	}
 
