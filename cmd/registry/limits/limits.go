@@ -84,7 +84,7 @@ func (h *handler) run(cmd *cobra.Command, _ []string) error {
 	for _, registry := range registries {
 		switch registrytype.Type(registry.Type) {
 		case registrytype.OffChain:
-			if private := findPrivateQuota(quotas, registry); private != nil {
+			if private := findPrivateQuota(quotas); private != nil {
 				ui.Bold(registry.Label)
 				renderWorkflows(private.Workflows)
 				ui.Line()

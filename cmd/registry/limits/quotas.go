@@ -21,11 +21,9 @@ const queryRegistryQuotas = `
 query RegistryQuotas {
   registryQuotas {
     privateRegistry {
-      registryId
       workflows { donFamily active limit }
     }
     onchainRegistries {
-      registryId
       chainSelector
       address
       linkedOwners { linked pending limit }
@@ -52,12 +50,10 @@ type ownerWorkflowQuota struct {
 }
 
 type privateRegistryQuota struct {
-	RegistryID string          `json:"registryId"`
-	Workflows  []quotaWorkflow `json:"workflows"`
+	Workflows []quotaWorkflow `json:"workflows"`
 }
 
 type onchainRegistryQuota struct {
-	RegistryID    string               `json:"registryId"`
 	ChainSelector string               `json:"chainSelector"`
 	Address       string               `json:"address"`
 	LinkedOwners  linkedOwnersQuota    `json:"linkedOwners"`
@@ -104,32 +100,22 @@ func remaining(limit, used int) int {
 	return limit - used
 }
 
-func findPrivateQuota(quotas *registryQuotas, registry *tenantctx.Registry) *privateRegistryQuota {
-	if quotas == nil || quotas.PrivateRegistry == nil || registry == nil {
+func findPrivateQuota(quotas *registryQuotas) *privateRegistryQuota {
+	if quotas == nil {
 		return nil
 	}
-	// The CLI exposes the private registry as "private"; tolerate a renamed label by falling back
-	// to the only off-chain quota there is.
-	if quotas.PrivateRegistry.RegistryID == registry.ID || quotas.PrivateRegistry.RegistryID == "private" {
-		return quotas.PrivateRegistry
-	}
-	return nil
+	return quotas.PrivateRegistry
 }
 
 func findOnchainQuota(quotas *registryQuotas, registry *tenantctx.Registry) *onchainRegistryQuota {
-	if quotas == nil || registry == nil {
+	if quotas == nil || registry == nil || registry.ChainSelector == nil || registry.Address == nil {
 		return nil
 	}
 
 	for i := range quotas.OnchainRegistries {
 		candidate := &quotas.OnchainRegistries[i]
-		// Compare chain selectors, not IDs: the CLI prefixes on-chain IDs with "onchain:" while the
-		// API returns the bare chain name.
-		if registry.ChainSelector != nil && candidate.ChainSelector != "" &&
-			candidate.ChainSelector == *registry.ChainSelector {
-			return candidate
-		}
-		if registry.Address != nil && strings.EqualFold(candidate.Address, *registry.Address) {
+		if candidate.ChainSelector == *registry.ChainSelector &&
+			strings.EqualFold(candidate.Address, *registry.Address) {
 			return candidate
 		}
 	}

@@ -75,7 +75,6 @@ const onchainRegistryFixture = `{
   "registryQuotas": {
     "privateRegistry": null,
     "onchainRegistries": [{
-      "registryId": "ethereum-mainnet",
       "chainSelector": "5009297550715157269",
       "address": "0x4ac54353fa4fa961afcc5ec4b118596d3305e7e5",
       "linkedOwners": {"linked": ["0xaaa"], "pending": [], "limit": 1},
@@ -87,7 +86,7 @@ const onchainRegistryFixture = `{
   }
 }`
 
-func TestLimits_JoinsOnchainQuotaByChainSelector(t *testing.T) {
+func TestLimits_JoinsOnchainQuotaByChainSelectorAndAddress(t *testing.T) {
 	rtCtx := newTestRuntime([]*tenantctx.Registry{{
 		ID:            "onchain:ethereum-mainnet",
 		Label:         "Ethereum Mainnet (0x4Ac5…E7e5)",
@@ -112,6 +111,71 @@ func TestLimits_JoinsOnchainQuotaByChainSelector(t *testing.T) {
 	}
 }
 
+func TestLimits_TwoOnchainRegistriesOnSameChainUseTheirOwnQuota(t *testing.T) {
+	rtCtx := newTestRuntime([]*tenantctx.Registry{
+		{
+			ID:            "onchain:ethereum-mainnet:a",
+			Label:         "Registry A",
+			Type:          string(registrytype.OnChain),
+			ChainSelector: strPtr("5009297550715157269"),
+			Address:       strPtr("0x00000000000000000000000000000000000000AA"),
+		},
+		{
+			ID:            "onchain:ethereum-mainnet:b",
+			Label:         "Registry B",
+			Type:          string(registrytype.OnChain),
+			ChainSelector: strPtr("5009297550715157269"),
+			Address:       strPtr("0x00000000000000000000000000000000000000BB"),
+		},
+	})
+
+	fixture := `{
+	  "registryQuotas": {
+	    "privateRegistry": null,
+	    "onchainRegistries": [
+	      {
+	        "chainSelector": "5009297550715157269",
+	        "address": "0x00000000000000000000000000000000000000aa",
+	        "linkedOwners": {"linked": [], "pending": [], "limit": 1},
+	        "owners": [{"owner": "0xaaa", "workflows": [
+	          {"donFamily": "zone-a", "active": 1, "limit": 3}
+	        ]}]
+	      },
+	      {
+	        "chainSelector": "5009297550715157269",
+	        "address": "0x00000000000000000000000000000000000000bb",
+	        "linkedOwners": {"linked": [], "pending": [], "limit": 1},
+	        "owners": [{"owner": "0xbbb", "workflows": [
+	          {"donFamily": "zone-a", "active": 7, "limit": 9}
+	        ]}]
+	      }
+	    ]
+	  }
+	}`
+
+	out, err := runCommand(t, rtCtx, &fakeExecutor{response: fixture})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	first := strings.Index(out, "Registry A")
+	second := strings.Index(out, "Registry B")
+	if first < 0 || second < 0 || second <= first {
+		t.Fatalf("expected both registries in order, got:\n%s", out)
+	}
+
+	firstSection, secondSection := out[first:second], out[second:]
+	if !strings.Contains(firstSection, "1 / 3 used") {
+		t.Fatalf("registry A did not get its own quota:\n%s", out)
+	}
+	if !strings.Contains(secondSection, "7 / 9 used") {
+		t.Fatalf("registry B did not get its own quota:\n%s", out)
+	}
+	if strings.Contains(firstSection, "7 / 9 used") || strings.Contains(secondSection, "1 / 3 used") {
+		t.Fatalf("registries on the same chain got the wrong quota:\n%s", out)
+	}
+}
+
 func TestLimits_RendersPrivateWorkflows(t *testing.T) {
 	rtCtx := newTestRuntime([]*tenantctx.Registry{{
 		ID:    "private",
@@ -122,7 +186,6 @@ func TestLimits_RendersPrivateWorkflows(t *testing.T) {
 	fixture := `{
 	  "registryQuotas": {
 	    "privateRegistry": {
-	      "registryId": "private",
 	      "workflows": [{"donFamily": "zone-a", "active": 1, "limit": 3}]
 	    },
 	    "onchainRegistries": []
@@ -143,6 +206,7 @@ func TestLimits_GatedFamilyRendersNoHeadroom(t *testing.T) {
 		ID:            "onchain:ethereum-mainnet",
 		Type:          string(registrytype.OnChain),
 		ChainSelector: strPtr("5009297550715157269"),
+		Address:       strPtr("0x4Ac54353FA4Fa961AfcC5ec4B118596d3305E7e5"),
 	}})
 
 	out, err := runCommand(t, rtCtx, &fakeExecutor{response: onchainRegistryFixture})
@@ -164,13 +228,13 @@ func TestLimits_PartialQuotasWarnAndSucceed(t *testing.T) {
 		ID:            "onchain:ethereum-mainnet",
 		Type:          string(registrytype.OnChain),
 		ChainSelector: strPtr("5009297550715157269"),
+		Address:       strPtr("0x4ac5"),
 	}})
 
 	partial := `{
 	  "registryQuotas": {
 	    "privateRegistry": null,
 	    "onchainRegistries": [{
-	      "registryId": "ethereum-mainnet",
 	      "chainSelector": "5009297550715157269",
 	      "address": "0x4ac5",
 	      "linkedOwners": {"linked": ["0xaaa"], "pending": [], "limit": 2},
