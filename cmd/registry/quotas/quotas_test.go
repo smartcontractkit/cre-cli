@@ -111,7 +111,6 @@ func TestQuotas_Text(t *testing.T) {
 		"Private (Chainlink-hosted)",
 		"zone-a  4 / 5 active, 1 remaining",
 		"zone-b  disabled (4 active)",
-		"every DON family shows the same total",
 		"ethereum-mainnet (0x4Ac5...7e5)",
 		ownerAddress,
 		"4 / 3 active (over limit)",

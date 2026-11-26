@@ -467,9 +467,6 @@ func printOffChain(workflows []DonFamilyQuota) {
 		return
 	}
 	printFamilies(workflows, "  ")
-	if len(workflows) > 1 {
-		ui.Dim("  Workflows are counted per organization, so every DON family shows the same total.")
-	}
 }
 
 func printOnChain(owners []OwnerQuota) {
