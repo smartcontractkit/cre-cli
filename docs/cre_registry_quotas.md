@@ -6,7 +6,7 @@ Shows workflow and linked-owner usage against your registry quotas
 
 Shows, for each workflow registry available to your organization, how many
 workflows are active against the limit of each DON family, and how many owner
-addresses are linked against the linked-owner limit.
+addresses are linked or pending against the linked-owner limit.
 
 Pass a registry ID from `cre registry list` to show a single registry.
 

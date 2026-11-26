@@ -28,7 +28,7 @@ func New(runtimeContext *runtime.Context) *cobra.Command {
 		Short: "Shows workflow and linked-owner usage against your registry quotas",
 		Long: `Shows, for each workflow registry available to your organization, how many
 workflows are active against the limit of each DON family, and how many owner
-addresses are linked against the linked-owner limit.
+addresses are linked or pending against the linked-owner limit.
 
 Pass a registry ID from ` + "`cre registry list`" + ` to show a single registry.
 
@@ -85,14 +85,21 @@ func (h *Handler) Execute(ctx context.Context, registryID, format string) error 
 	quotas, err := registryquotaclient.Fetch(ctx, h.client)
 	spinner.Stop()
 
-	// A partial result is rendered with unreadable parts shown as unavailable; any
+	// A partial result is rendered with unreadable quotas shown as unavailable; any
 	// other error means there is nothing to show.
 	var partial *registryquotaclient.PartialError
 	if err != nil && !errors.As(err, &partial) {
 		return err
 	}
 
-	report := buildReport(h.tenantContext.Registries, quotas, registryID)
+	failed := map[string]bool{}
+	if partial != nil {
+		for _, key := range registryquotaclient.FailedQuotaKeys(partial) {
+			failed[key] = true
+		}
+	}
+
+	report := buildReport(h.tenantContext.Registries, quotas, registryID, failed)
 	if partial != nil {
 		report.Warnings = append(report.Warnings, partial.Error())
 	}
@@ -114,7 +121,7 @@ type Report struct {
 	Registries []RegistryReport `json:"registries"`
 	// LinkedOwners covers the whole organization across on-chain registries. Absent
 	// when no on-chain registry is shown; null when it could not be read.
-	LinkedOwners    *registryquotaclient.LinkedOwners `json:"linkedOwners"`
+	LinkedOwners    *LinkedOwnersReport `json:"linkedOwners"`
 	hasLinkedOwners bool
 	Warnings        []string `json:"warnings,omitempty"`
 }
@@ -135,22 +142,55 @@ func (r Report) MarshalJSON() ([]byte, error) {
 // RegistryReport is one registry with its quota. Workflows is set for off-chain
 // registries and Owners for on-chain ones; either is null when it could not be read.
 type RegistryReport struct {
-	ID            string                                `json:"id"`
-	Label         string                                `json:"label"`
-	Type          string                                `json:"type"`
-	ChainSelector string                                `json:"chainSelector,omitempty"`
-	Address       string                                `json:"address,omitempty"`
-	Workflows     *[]registryquotaclient.DonFamilyQuota `json:"workflows,omitempty"`
-	Owners        *[]registryquotaclient.OwnerQuota     `json:"owners,omitempty"`
+	ID            string            `json:"id"`
+	Label         string            `json:"label"`
+	Type          string            `json:"type"`
+	ChainSelector string            `json:"chainSelector,omitempty"`
+	Address       string            `json:"address,omitempty"`
+	Workflows     *[]DonFamilyQuota `json:"workflows,omitempty"`
+	Owners        *[]OwnerQuota     `json:"owners,omitempty"`
 	// InUserContext is false for a registry the API returned that the cached user
 	// context does not know about yet.
 	InUserContext bool `json:"-"`
 }
 
-func buildReport(registries []*tenantctx.Registry, quotas *registryquotaclient.Quotas, registryID string) Report {
+// DonFamilyQuota is the usage and limit of one DON family.
+type DonFamilyQuota struct {
+	DonFamily string                      `json:"donFamily"`
+	Active    *registryquotaclient.Amount `json:"active"`
+	Limit     registryquotaclient.Amount  `json:"limit"`
+}
+
+// OwnerQuota is the usage and limit of one owner in one on-chain registry.
+type OwnerQuota struct {
+	Owner     string           `json:"owner"`
+	Workflows []DonFamilyQuota `json:"workflows"`
+}
+
+// LinkedOwnersReport is the linked-owner quota of the organization, across all
+// on-chain registries. Used is null when usage is not measured.
+type LinkedOwnersReport struct {
+	Used      *registryquotaclient.Amount `json:"used"`
+	Limit     registryquotaclient.Amount  `json:"limit"`
+	Remaining *registryquotaclient.Amount `json:"remaining"`
+}
+
+// onchainGroup is the quota of one on-chain registry, keyed by the quota dimensions
+// the API returns. It may not be in the cached user context yet.
+type onchainGroup struct {
+	registry        string
+	registryAddress string
+	owners          map[string][]DonFamilyQuota
+	ownerOrder      []string
+}
+
+func buildReport(registries []*tenantctx.Registry, quotas *registryquotaclient.Quotas, registryID string, failed map[string]bool) Report {
 	report := Report{Registries: []RegistryReport{}}
-	usedOnChain := make([]bool, len(quotas.OnChainRegistries))
-	offChainIdx := 0
+
+	private := privateQuotas(quotas.RegistryLimits)
+	onchain := onchainQuotas(quotas.RegistryLimits)
+	usedPrivate := false
+	usedOnChain := make([]bool, len(onchain))
 
 	for _, reg := range registries {
 		entry := RegistryReport{ID: reg.ID, Label: reg.Label, Type: reg.Type, InUserContext: true}
@@ -163,20 +203,33 @@ func buildReport(registries []*tenantctx.Registry, quotas *registryquotaclient.Q
 
 		switch registrytype.Type(reg.Type) {
 		case registrytype.OffChain:
-			if offChainIdx >= len(quotas.OffChainRegistries) {
-				continue
+			usedPrivate = true
+			if failed[registryquotaclient.QuotaKeyPrivateWorkflowLimit] && len(private) == 0 {
+				// A pointer to a nil slice renders as null: the quota could not be read.
+				var unavailable []DonFamilyQuota
+				entry.Workflows = &unavailable
+			} else {
+				workflows := private
+				entry.Workflows = &workflows
 			}
-			workflows := quotas.OffChainRegistries[offChainIdx].Workflows
-			offChainIdx++
-			entry.Workflows = &workflows
 		case registrytype.OnChain:
-			i := matchOnChain(quotas.OnChainRegistries, entry.ChainSelector, entry.Address)
-			if i < 0 {
-				continue
+			i := matchOnChain(onchain, reg)
+			if i >= 0 {
+				usedOnChain[i] = true
+				owners := onchain[i].ownerList()
+				if failed[registryquotaclient.QuotaKeyOnchainWorkflowLimit] && len(owners) == 0 {
+					var unavailable []OwnerQuota
+					entry.Owners = &unavailable
+				} else {
+					entry.Owners = &owners
+				}
+			} else if failed[registryquotaclient.QuotaKeyOnchainWorkflowLimit] {
+				var unavailable []OwnerQuota
+				entry.Owners = &unavailable
+			} else {
+				owners := []OwnerQuota{}
+				entry.Owners = &owners
 			}
-			usedOnChain[i] = true
-			owners := quotas.OnChainRegistries[i].Owners
-			entry.Owners = &owners
 		default:
 			continue
 		}
@@ -186,20 +239,28 @@ func buildReport(registries []*tenantctx.Registry, quotas *registryquotaclient.Q
 		}
 	}
 
-	// On-chain registries the cached user context does not know about yet.
+	// Registries the cached user context does not know about yet.
 	if registryID == "" {
-		for i, q := range quotas.OnChainRegistries {
+		if !usedPrivate && len(private) > 0 {
+			workflows := private
+			report.Registries = append(report.Registries, RegistryReport{
+				ID:        "private",
+				Label:     "Private (Chainlink-hosted)",
+				Type:      string(registrytype.OffChain),
+				Workflows: &workflows,
+			})
+		}
+		for i, g := range onchain {
 			if usedOnChain[i] {
 				continue
 			}
-			owners := q.Owners
+			owners := g.ownerList()
 			report.Registries = append(report.Registries, RegistryReport{
-				ID:            "onchain:" + string(q.ChainSelector),
-				Label:         fmt.Sprintf("chain %s (%s)", q.ChainSelector, abbreviate(q.Address)),
-				Type:          string(registrytype.OnChain),
-				ChainSelector: string(q.ChainSelector),
-				Address:       q.Address,
-				Owners:        &owners,
+				ID:      onchainID(g),
+				Label:   onchainLabel(g),
+				Type:    string(registrytype.OnChain),
+				Address: g.registryAddress,
+				Owners:  &owners,
 			})
 		}
 	}
@@ -207,22 +268,124 @@ func buildReport(registries []*tenantctx.Registry, quotas *registryquotaclient.Q
 	for _, r := range report.Registries {
 		if r.Type == string(registrytype.OnChain) {
 			report.hasLinkedOwners = true
-			report.LinkedOwners = quotas.LinkedOwners
+			report.LinkedOwners = linkedOwners(quotas, failed)
 			break
 		}
 	}
 	return report
 }
 
-func matchOnChain(regs []registryquotaclient.OnChainRegistry, chainSelector, address string) int {
-	for i, q := range regs {
-		if !strings.EqualFold(q.Address, address) {
+// privateQuotas returns the per-DON-family quota of the private registry. The API
+// repeats the organization-wide usage on every family.
+func privateQuotas(limits []registryquotaclient.ServiceUsageLimit) []DonFamilyQuota {
+	workflows := []DonFamilyQuota{}
+	for _, l := range limits {
+		if l.QuotaKey != registryquotaclient.QuotaKeyPrivateWorkflowLimit {
 			continue
 		}
-		if chainSelector != "" && string(q.ChainSelector) != chainSelector {
+		workflows = append(workflows, donFamilyQuota(l))
+	}
+	return workflows
+}
+
+// onchainQuotas groups the per-owner quotas by on-chain registry. A registry may be
+// absent from the cached user context, so it is identified by its address when set.
+func onchainQuotas(limits []registryquotaclient.ServiceUsageLimit) []*onchainGroup {
+	groups := []*onchainGroup{}
+	index := map[string]*onchainGroup{}
+	for _, l := range limits {
+		if l.QuotaKey != registryquotaclient.QuotaKeyOnchainWorkflowLimit {
 			continue
 		}
-		return i
+		registry := l.Dimension(registryquotaclient.DimensionRegistry)
+		address := l.Dimension(registryquotaclient.DimensionRegistryAddress)
+		key := strings.ToLower(address)
+		if key == "" {
+			key = "registry:" + registry
+		}
+		g, ok := index[key]
+		if !ok {
+			g = &onchainGroup{registry: registry, registryAddress: address, owners: map[string][]DonFamilyQuota{}}
+			index[key] = g
+			groups = append(groups, g)
+		}
+		owner := l.Dimension(registryquotaclient.DimensionOwner)
+		if _, ok := g.owners[owner]; !ok {
+			g.ownerOrder = append(g.ownerOrder, owner)
+		}
+		g.owners[owner] = append(g.owners[owner], donFamilyQuota(l))
+	}
+	return groups
+}
+
+func donFamilyQuota(l registryquotaclient.ServiceUsageLimit) DonFamilyQuota {
+	return DonFamilyQuota{
+		DonFamily: l.Dimension(registryquotaclient.DimensionDonFamily),
+		Active:    l.CurrentValue,
+		Limit:     l.TotalLimit,
+	}
+}
+
+func (g *onchainGroup) ownerList() []OwnerQuota {
+	owners := make([]OwnerQuota, 0, len(g.ownerOrder))
+	for _, owner := range g.ownerOrder {
+		owners = append(owners, OwnerQuota{Owner: owner, Workflows: g.owners[owner]})
+	}
+	sort.Slice(owners, func(i, j int) bool { return owners[i].Owner < owners[j].Owner })
+	return owners
+}
+
+func onchainID(g *onchainGroup) string {
+	if g.registry != "" {
+		return "onchain:" + g.registry
+	}
+	return "onchain:" + strings.ToLower(g.registryAddress)
+}
+
+func onchainLabel(g *onchainGroup) string {
+	switch {
+	case g.registry != "":
+		return fmt.Sprintf("%s (%s)", g.registry, abbreviate(g.registryAddress))
+	default:
+		return abbreviate(g.registryAddress)
+	}
+}
+
+func linkedOwners(quotas *registryquotaclient.Quotas, failed map[string]bool) *LinkedOwnersReport {
+	if failed[registryquotaclient.QuotaKeyLinkedOwnersLimit] {
+		return nil
+	}
+	for _, l := range quotas.OwnerLimits {
+		if l.QuotaKey != registryquotaclient.QuotaKeyLinkedOwnersLimit {
+			continue
+		}
+		report := &LinkedOwnersReport{Limit: l.TotalLimit}
+		if l.CurrentValue != nil {
+			used := *l.CurrentValue
+			remaining := l.TotalLimit.Sub(used)
+			report.Used = &used
+			report.Remaining = &remaining
+		}
+		return report
+	}
+	return nil
+}
+
+func matchOnChain(groups []*onchainGroup, reg *tenantctx.Registry) int {
+	chainName := strings.TrimPrefix(reg.ID, "onchain:")
+	address := ""
+	if reg.Address != nil {
+		address = *reg.Address
+	}
+	for i, g := range groups {
+		if g.registryAddress != "" && address != "" && strings.EqualFold(g.registryAddress, address) {
+			return i
+		}
+	}
+	for i, g := range groups {
+		if g.registry != "" && chainName != "" && strings.EqualFold(g.registry, chainName) {
+			return i
+		}
 	}
 	return -1
 }
@@ -254,7 +417,6 @@ func printReport(report Report) {
 		return
 	}
 
-	ownerStatus := linkStatusByAddress(report.LinkedOwners)
 	staleContext := false
 	for _, r := range report.Registries {
 		ui.Bold(r.Label)
@@ -271,7 +433,11 @@ func printReport(report Report) {
 		case r.Workflows != nil:
 			printOffChain(*r.Workflows)
 		case r.Owners != nil:
-			printOnChain(*r.Owners, ownerStatus)
+			printOnChain(*r.Owners)
+		case r.Type == string(registrytype.OffChain):
+			ui.Warning("Workflow quota unavailable")
+		default:
+			ui.Warning("On-chain workflow quota unavailable")
 		}
 		ui.Line()
 	}
@@ -290,7 +456,7 @@ func printReport(report Report) {
 	}
 }
 
-func printOffChain(workflows []registryquotaclient.DonFamilyQuota) {
+func printOffChain(workflows []DonFamilyQuota) {
 	if workflows == nil {
 		ui.Warning("Workflow quota unavailable")
 		return
@@ -306,7 +472,7 @@ func printOffChain(workflows []registryquotaclient.DonFamilyQuota) {
 	}
 }
 
-func printOnChain(owners []registryquotaclient.OwnerQuota, status map[string]string) {
+func printOnChain(owners []OwnerQuota) {
 	if owners == nil {
 		ui.Warning("On-chain workflow quota unavailable")
 		return
@@ -317,11 +483,7 @@ func printOnChain(owners []registryquotaclient.OwnerQuota, status map[string]str
 		return
 	}
 	for _, o := range owners {
-		label := o.Owner
-		if s, ok := status[strings.ToLower(o.Owner)]; ok {
-			label = fmt.Sprintf("%s (%s)", o.Owner, s)
-		}
-		ui.Print("  " + label)
+		ui.Print("  " + o.Owner)
 		if len(o.Workflows) == 0 {
 			ui.Dim("    No DON families available to this owner")
 			continue
@@ -330,8 +492,8 @@ func printOnChain(owners []registryquotaclient.OwnerQuota, status map[string]str
 	}
 }
 
-func printFamilies(workflows []registryquotaclient.DonFamilyQuota, indent string) {
-	sorted := append([]registryquotaclient.DonFamilyQuota(nil), workflows...)
+func printFamilies(workflows []DonFamilyQuota, indent string) {
+	sorted := append([]DonFamilyQuota(nil), workflows...)
 	sort.Slice(sorted, func(i, j int) bool { return sorted[i].DonFamily < sorted[j].DonFamily })
 
 	width := 0
@@ -343,54 +505,39 @@ func printFamilies(workflows []registryquotaclient.DonFamilyQuota, indent string
 	}
 }
 
-func formatUsage(active, limit int) string {
+func formatUsage(active *registryquotaclient.Amount, limit registryquotaclient.Amount) string {
 	switch {
-	case limit == 0:
-		return fmt.Sprintf("disabled (%d active)", active)
-	case active > limit:
-		return fmt.Sprintf("%d / %d active (over limit)", active, limit)
+	case limit.IsZero():
+		if active == nil {
+			return "disabled"
+		}
+		return fmt.Sprintf("disabled (%s active)", active)
+	case active == nil:
+		return fmt.Sprintf("usage not measured, %s limit", limit)
+	case active.Cmp(limit) > 0:
+		return fmt.Sprintf("%s / %s active (over limit)", active, limit)
 	default:
-		return fmt.Sprintf("%d / %d active, %d remaining", active, limit, limit-active)
+		return fmt.Sprintf("%s / %s active, %s remaining", active, limit, limit.Sub(*active))
 	}
 }
 
-func printLinkedOwners(lo *registryquotaclient.LinkedOwners) {
+func printLinkedOwners(lo *LinkedOwnersReport) {
 	ui.Bold("Linked owners (all on-chain registries)")
 	if lo == nil {
 		ui.Warning("Linked-owner quota unavailable")
 		return
 	}
-	used := len(lo.Linked) + len(lo.Pending)
-	summary := fmt.Sprintf("%d / %d used (%d linked, %d pending)", used, lo.Limit, len(lo.Linked), len(lo.Pending))
-	if used <= lo.Limit {
-		summary += fmt.Sprintf(", %d remaining", lo.Limit-used)
+	if lo.Used == nil {
+		ui.Print(fmt.Sprintf("Usage not measured (limit %s)", lo.Limit))
+		return
+	}
+	used := *lo.Used
+	if used.Cmp(lo.Limit) > 0 {
+		ui.Print(fmt.Sprintf("%s / %s used, over limit", used, lo.Limit))
 	} else {
-		summary += ", over limit"
+		ui.Print(fmt.Sprintf("%s / %s used, %s remaining", used, lo.Limit, lo.Limit.Sub(used)))
 	}
-	ui.Print(summary)
-	for _, o := range lo.Linked {
-		ui.Dim(fmt.Sprintf("  %s  linked", o.Address))
-	}
-	for _, o := range lo.Pending {
-		ui.Dim(fmt.Sprintf("  %s  pending", o.Address))
-	}
-	if len(lo.Pending) > 0 {
-		ui.Dim("Pending link requests count against the limit until they expire.")
-	}
-}
-
-func linkStatusByAddress(lo *registryquotaclient.LinkedOwners) map[string]string {
-	status := map[string]string{}
-	if lo == nil {
-		return status
-	}
-	for _, o := range lo.Linked {
-		status[strings.ToLower(o.Address)] = "linked"
-	}
-	for _, o := range lo.Pending {
-		status[strings.ToLower(o.Address)] = "pending"
-	}
-	return status
+	ui.Dim("Pending link requests count against the limit until they expire.")
 }
 
 func abbreviate(addr string) string {

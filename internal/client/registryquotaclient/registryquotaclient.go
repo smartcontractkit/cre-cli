@@ -7,111 +7,129 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/machinebox/graphql"
+	"github.com/shopspring/decimal"
 )
 
 const query = `query GetRegistryQuotas {
   getRegistryQuotas {
-    offChainRegistries {
-      workflows { donFamily active limit }
+    registryLimits {
+      quotaKey
+      service
+      dimensions { key value }
+      currentValue
+      totalLimit
     }
-    onChainRegistries {
-      chainSelector
-      address
-      owners {
-        owner
-        workflows { donFamily active limit }
-      }
-    }
-    linkedOwners {
-      linked { address chainSelector workflowRegistryAddress }
-      pending { address chainSelector workflowRegistryAddress }
-      limit
+    ownerLimits {
+      quotaKey
+      service
+      dimensions { key value }
+      currentValue
+      totalLimit
     }
   }
 }`
 
-// ErrPermissionDenied is returned when the caller lacks the platform:limits:read permission.
-var ErrPermissionDenied = errors.New("you do not have permission to read registry quotas (requires platform:limits:read)")
+// Quota keys, see https://docs.chain.link/cre/service-quotas.
+const (
+	QuotaKeyPrivateWorkflowLimit = "PerOrg.PrivateRegistry.WorkflowLimit"
+	QuotaKeyOnchainWorkflowLimit = "PerOwner.OnchainRegistry.WorkflowLimit"
+	QuotaKeyLinkedOwnersLimit    = "PerOrg.OnchainRegistry.LinkedKeyLimit"
+)
+
+// Quota dimension keys. Each limit identifies where it applies by these.
+const (
+	DimensionRegistry        = "registry"
+	DimensionRegistryAddress = "registryAddress"
+	DimensionOwner           = "owner"
+	DimensionDonFamily       = "donFamily"
+)
+
+// ErrPermissionDenied is returned when the caller lacks both the CRE limits and the
+// owner address permissions.
+var ErrPermissionDenied = errors.New("you do not have permission to read registry quotas (requires platform:limits:read/cre or platform:owner_address:read)")
 
 // Executor runs a GraphQL request. It is satisfied by graphqlclient.Client.
 type Executor interface {
 	Execute(ctx context.Context, req *graphql.Request, resp any) error
 }
 
-// Quotas is the getRegistryQuotas result. A nil slice or pointer on a field the
-// server resolves separately (OffChainRegistry.Workflows, OnChainRegistry.Owners,
-// LinkedOwners) means the server could not read it; an empty slice means there is
-// nothing to show. LinkedOwners is also nil when there is no on-chain registry.
+// Quotas is the getRegistryQuotas result. A quota that could not be read is left out of
+// its list; a *PartialError names at least one such quota.
 type Quotas struct {
-	OffChainRegistries []OffChainRegistry `json:"offChainRegistries"`
-	OnChainRegistries  []OnChainRegistry  `json:"onChainRegistries"`
-	LinkedOwners       *LinkedOwners      `json:"linkedOwners"`
+	RegistryLimits []ServiceUsageLimit `json:"registryLimits"`
+	OwnerLimits    []ServiceUsageLimit `json:"ownerLimits"`
 }
 
-type OffChainRegistry struct {
-	Workflows []DonFamilyQuota `json:"workflows"`
+// ServiceUsageLimit is one registry quota: usage and limit for a set of dimensions.
+type ServiceUsageLimit struct {
+	QuotaKey     string           `json:"quotaKey"`
+	Service      string           `json:"service"`
+	Dimensions   []QuotaDimension `json:"dimensions"`
+	CurrentValue *Amount          `json:"currentValue"`
+	TotalLimit   Amount           `json:"totalLimit"`
 }
 
-type OnChainRegistry struct {
-	ChainSelector ChainSelector `json:"chainSelector"`
-	Address       string        `json:"address"`
-	Owners        []OwnerQuota  `json:"owners"`
-}
-
-type OwnerQuota struct {
-	Owner     string           `json:"owner"`
-	Workflows []DonFamilyQuota `json:"workflows"`
-}
-
-type DonFamilyQuota struct {
-	DonFamily string `json:"donFamily"`
-	Active    int    `json:"active"`
-	Limit     int    `json:"limit"`
-}
-
-type LinkedOwners struct {
-	Linked  []LinkedOwner `json:"linked"`
-	Pending []LinkedOwner `json:"pending"`
-	Limit   int           `json:"limit"`
-}
-
-type LinkedOwner struct {
-	Address                 string        `json:"address"`
-	ChainSelector           ChainSelector `json:"chainSelector"`
-	WorkflowRegistryAddress string        `json:"workflowRegistryAddress"`
-}
-
-// ChainSelector is a chain selector as a decimal string. The API may send it as a
-// JSON string or number; it is kept as a string to avoid precision loss.
-type ChainSelector string
-
-func (c *ChainSelector) UnmarshalJSON(raw []byte) error {
-	if string(raw) == "null" {
-		*c = ""
-		return nil
+// Dimension returns the value of a dimension, or "" when it is not set.
+func (l ServiceUsageLimit) Dimension(key string) string {
+	for _, d := range l.Dimensions {
+		if d.Key == key {
+			return d.Value
+		}
 	}
+	return ""
+}
+
+// QuotaDimension places a limit, e.g. registry or donFamily.
+type QuotaDimension struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
+// Amount is a non-negative decimal amount of quota units, sent by the API as a string
+// (e.g. "25" or "0.5"). It marshals as a JSON number.
+type Amount struct {
+	decimal.Decimal
+}
+
+// UnmarshalJSON reads the API's string form of a decimal amount.
+func (a *Amount) UnmarshalJSON(raw []byte) error {
 	var s string
-	if err := json.Unmarshal(raw, &s); err == nil {
-		*c = ChainSelector(s)
-		return nil
+	if err := json.Unmarshal(raw, &s); err != nil {
+		return fmt.Errorf("invalid quota amount %s: %w", raw, err)
 	}
-	var n json.Number
-	if err := json.Unmarshal(raw, &n); err != nil {
-		return fmt.Errorf("invalid chain selector %s: %w", raw, err)
+	d, err := decimal.NewFromString(s)
+	if err != nil {
+		return fmt.Errorf("invalid quota amount %s: %w", raw, err)
 	}
-	if _, err := strconv.ParseUint(n.String(), 10, 64); err != nil {
-		return fmt.Errorf("invalid chain selector %s: %w", raw, err)
-	}
-	*c = ChainSelector(n.String())
+	a.Decimal = d
 	return nil
 }
 
+// MarshalJSON writes the amount as a JSON number.
+func (a Amount) MarshalJSON() ([]byte, error) {
+	return []byte(a.Decimal.String()), nil
+}
+
+// Sub returns a-b.
+func (a Amount) Sub(b Amount) Amount {
+	return Amount{a.Decimal.Sub(b.Decimal)}
+}
+
+// Cmp compares a and b, returning -1, 0 or +1.
+func (a Amount) Cmp(b Amount) int {
+	return a.Decimal.Cmp(b.Decimal)
+}
+
+// IsZero reports whether the amount is zero.
+func (a Amount) IsZero() bool {
+	return a.Decimal.IsZero()
+}
+
 // PartialError is returned together with the quotas when the API returned data but
-// could not read every part of it. Unreadable parts are nil in the returned Quotas.
+// could not read at least one quota. Unreadable quotas are missing from the lists.
 type PartialError struct {
 	Err error
 }
@@ -119,11 +137,31 @@ type PartialError struct {
 func (e *PartialError) Error() string { return e.Err.Error() }
 func (e *PartialError) Unwrap() error { return e.Err }
 
+// FailedQuotaKeys returns the quotas named in a partial error. The GraphQL client keeps
+// only the error message, and every quota error names its quota key.
+func FailedQuotaKeys(err error) []string {
+	if err == nil {
+		return nil
+	}
+	msg := err.Error()
+	keys := []string{}
+	for _, key := range []string{
+		QuotaKeyPrivateWorkflowLimit,
+		QuotaKeyOnchainWorkflowLimit,
+		QuotaKeyLinkedOwnersLimit,
+	} {
+		if strings.Contains(msg, key) {
+			keys = append(keys, key)
+		}
+	}
+	return keys
+}
+
 // Fetch reads the registry quotas of the caller's organization.
 //
 // On success it returns the quotas and a nil error. When the API returned data with
 // errors, it returns the quotas and a *PartialError. Otherwise it returns nil and an
-// error, which is ErrPermissionDenied when the caller lacks the permission.
+// error, which is ErrPermissionDenied when the caller lacks the required permission.
 func Fetch(ctx context.Context, client Executor) (*Quotas, error) {
 	var resp struct {
 		GetRegistryQuotas *Quotas `json:"getRegistryQuotas"`
@@ -145,7 +183,7 @@ func Fetch(ctx context.Context, client Executor) (*Quotas, error) {
 
 func classify(err error) error {
 	msg := err.Error()
-	if strings.Contains(msg, "platform:limits:read") {
+	if strings.Contains(msg, "platform:limits:read") || strings.Contains(msg, "platform:owner_address:read") {
 		return fmt.Errorf("%w: %w", ErrPermissionDenied, err)
 	}
 	return fmt.Errorf("fetch registry quotas: %w", err)
