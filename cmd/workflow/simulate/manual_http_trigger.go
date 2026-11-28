@@ -134,7 +134,7 @@ func (f *ManualHTTPTriggerService) ManualTrigger(ctx context.Context, triggerID 
 		f.lggr.Errorw("failed to generate execution ID", "err", err)
 		workflowExecutionID = ""
 	}
-	if err := events.EmitTriggerExecutionStarted(ctx, map[string]string{}, triggerEvent.Id, workflowExecutionID); err != nil {
+	if err := events.DefaultEmitter().EmitTriggerExecutionStarted(ctx, map[string]string{}, triggerEvent.Id, workflowExecutionID); err != nil {
 		f.lggr.Errorw("failed to emit trigger execution started event", "err", err)
 	}
 

@@ -8,6 +8,7 @@ import (
 	caperrors "github.com/smartcontractkit/chainlink-common/pkg/capabilities/errors"
 	stellarcap "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/chain-capabilities/stellar"
 	stellarserver "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/chain-capabilities/stellar/server"
+	capmon "github.com/smartcontractkit/chainlink-common/pkg/capabilities/v2/monitoring"
 	"github.com/smartcontractkit/chainlink-common/pkg/types/core"
 
 	"github.com/smartcontractkit/cre-cli/cmd/workflow/simulate/chain"
@@ -48,7 +49,10 @@ func (l *LimitedStellarChain) ReadContract(ctx context.Context, m commonCap.Requ
 
 // --- Lifecycle: delegate ---
 
-func (l *LimitedStellarChain) ChainSelector() uint64           { return l.inner.ChainSelector() }
+func (l *LimitedStellarChain) ChainSelector() uint64 { return l.inner.ChainSelector() }
+func (l *LimitedStellarChain) MonitoringContext() capmon.MonitoringContext {
+	return l.inner.MonitoringContext()
+}
 func (l *LimitedStellarChain) Start(ctx context.Context) error { return l.inner.Start(ctx) }
 func (l *LimitedStellarChain) Close() error                    { return l.inner.Close() }
 func (l *LimitedStellarChain) HealthReport() map[string]error  { return l.inner.HealthReport() }

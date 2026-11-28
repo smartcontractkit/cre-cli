@@ -10,6 +10,7 @@ import (
 
 	"github.com/smartcontractkit/chainlink-common/pkg/logger"
 	pb "github.com/smartcontractkit/chainlink-protos/workflows/go/events"
+	pbv2 "github.com/smartcontractkit/chainlink-protos/workflows/go/v2"
 
 	"github.com/smartcontractkit/cre-cli/internal/ui"
 )
@@ -17,6 +18,7 @@ import (
 // entity types for clarity and organization
 const (
 	entityUserLogs           = "workflows.v1.UserLogs"
+	entityUserLogsV2         = "workflows.v2.WorkflowUserLog"
 	entityWorkflowStarted    = "workflows.v1.WorkflowExecutionStarted"
 	entityWorkflowFinished   = "workflows.v1.WorkflowExecutionFinished"
 	entityCapabilityStarted  = "workflows.v1.CapabilityExecutionStarted"
@@ -112,7 +114,7 @@ func (w *telemetryWriter) Write(p []byte) (n int, err error) {
 		}
 
 		// When not verbose, only print UserLogs and skip the rest
-		if !w.verbose && entityType != entityUserLogs {
+		if !w.verbose && entityType != entityUserLogs && entityType != entityUserLogsV2 {
 			return len(p), nil
 		}
 
@@ -120,6 +122,9 @@ func (w *telemetryWriter) Write(p []byte) (n int, err error) {
 		switch entityType {
 		case entityUserLogs:
 			w.handleUserLogs(telLog)
+			return len(p), nil
+		case entityUserLogsV2:
+			w.handleUserLogsV2(telLog)
 			return len(p), nil
 		case "BaseMessage":
 			return len(p), nil
@@ -175,6 +180,26 @@ func (w *telemetryWriter) handleUserLogs(telLog TelemetryLog) {
 
 		// Format and display the user logs
 		w.formatUserLogs(&userLogs)
+	}
+}
+
+// handleUserLogsV2 processes workflows.v2.WorkflowUserLog events. Engines that emit
+// only the v2 schema (no v1 UserLogs) deliver each user log line as its own event.
+func (w *telemetryWriter) handleUserLogsV2(telLog TelemetryLog) {
+	if isBytesBody(telLog.Body.Type) && telLog.Body.Value != "" {
+		decoded, err := base64.StdEncoding.DecodeString(telLog.Body.Value)
+		if err != nil {
+			w.lggr.Errorf("Failed to decode userLogs v2 body: %v", err)
+			return
+		}
+
+		var userLog pbv2.WorkflowUserLog
+		if err := proto.Unmarshal(decoded, &userLog); err != nil {
+			w.lggr.Errorf("Failed to unmarshal WorkflowUserLog protobuf: %v", err)
+			return
+		}
+
+		w.printUserLog(userLog.Msg)
 	}
 }
 
@@ -263,17 +288,22 @@ func (w *telemetryWriter) handleCapabilityEvent(telLog TelemetryLog, eventType s
 func (w *telemetryWriter) formatUserLogs(logs *pb.UserLogs) {
 	// Display each log line
 	for _, logLine := range logs.LogLines {
-		// Format the log message
-		level := GetLogLevel(logLine.Message)
-		msg := CleanLogMessage(logLine.Message)
-		levelStyle := GetStyle(level)
-
-		// Highlight level keywords in the message
-		highlightedMsg := HighlightLogLevels(msg, levelStyle)
-
-		// Always use current timestamp for consistency with other logs
-		w.simLogger.PrintTimestampedLog(time.Now().Format("2006-01-02T15:04:05Z"), "USER LOG", highlightedMsg, StyleBrightCyan)
+		w.printUserLog(logLine.Message)
 	}
+}
+
+// printUserLog formats and prints a single user log message
+func (w *telemetryWriter) printUserLog(message string) {
+	// Format the log message
+	level := GetLogLevel(message)
+	msg := CleanLogMessage(message)
+	levelStyle := GetStyle(level)
+
+	// Highlight level keywords in the message
+	highlightedMsg := HighlightLogLevels(msg, levelStyle)
+
+	// Always use current timestamp for consistency with other logs
+	w.simLogger.PrintTimestampedLog(time.Now().Format("2006-01-02T15:04:05Z"), "USER LOG", highlightedMsg, StyleBrightCyan)
 }
 
 // Helper functions for formatting
